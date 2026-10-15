@@ -5,10 +5,15 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local fs = require("@lune/fs")
+
 local Crafting = require("../src/ReplicatedStorage/Shared/Crafting")
 local CraftingLevel = require("../src/ReplicatedStorage/Shared/CraftingLevel")
 local Drops = require("../src/ReplicatedStorage/Shared/Drops")
+local ItemBases = require("../src/ReplicatedStorage/Shared/ItemBases")
 local Materials = require("../src/ReplicatedStorage/Shared/Materials")
+local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
+local Recipes = require("../src/ReplicatedStorage/Shared/Recipes")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 
 local function zeroRng()
@@ -86,10 +91,17 @@ describe("Crafting phase 1", function()
 
 		local crawler = Drops.roll("vine_crawler", zeroRng())
 		expect(crawler.verdant_bark).toEqual(1)
+		expect(crawler.vine).toEqual(1)
+		expect(crawler.wood).toEqual(1)
 		expect(crawler.heartwood).toBeNil()
+
+		local bat = Drops.roll("spore_bat", zeroRng())
+		expect(bat.verdant_bark).toEqual(1)
+		expect(bat.spore).toEqual(1)
 
 		local elite = Drops.roll("root_brute", zeroRng())
 		expect(elite.heartwood).toEqual(1)
+		expect(elite.bark).toEqual(1)
 		expect(elite.scroll_thornbound).toEqual(1)
 
 		local boss = Drops.roll("grandmother_gnarl", zeroRng())
@@ -232,4 +244,106 @@ describe("Crafting phase 1", function()
 			expect(profile.inventory.locked.name).toEqual("Iron Dagger")
 		end
 	)
+
+	it("can obtain every recipe input from a drop table or salvage", function()
+		local covered: { [string]: boolean } = {}
+		for enemyId in pairs(Drops.ENEMIES) do
+			local entries = Drops.entries(enemyId)
+			assert(entries ~= nil, enemyId)
+			for _, entry in ipairs(entries) do
+				covered[entry.id] = true
+			end
+		end
+		for _, base in ipairs(ItemBases.all()) do
+			if base.kind == "Weapon" or base.kind == "Armor" then
+				for _, rarity in ipairs(Rarities.ORDER) do
+					local yield = Crafting.salvageYield({
+						templateId = base.id,
+						rarity = rarity,
+					})
+					for materialId, count in pairs(yield) do
+						if count > 0 then
+							covered[materialId] = true
+						end
+					end
+				end
+			end
+		end
+		for _, recipe in ipairs(Recipes.all()) do
+			for materialId, count in pairs(recipe.costs) do
+				if count > 0 and covered[materialId] ~= true then
+					error(
+						recipe.name
+							.. " needs "
+							.. Materials.displayName(materialId)
+							.. ", which is not in a drop table or salvage yield",
+						2
+					)
+				end
+			end
+			if recipe.scroll ~= nil and covered[recipe.scroll] ~= true then
+				error(
+					recipe.name
+						.. " needs "
+						.. Materials.displayName(recipe.scroll)
+						.. ", which is not in a drop table or salvage yield",
+					2
+				)
+			end
+		end
+		expect(covered.vine).toEqual(true)
+		expect(covered.wood).toEqual(true)
+		expect(covered.spore).toEqual(true)
+		expect(covered.bark).toEqual(true)
+		expect(covered.gnarl_seed).toEqual(true)
+	end)
+
+	it("lists a clear as name x quantity and includes Gnarl's Seed", function()
+		local counts: { [string]: number } = {}
+		Materials.merge(counts, { wood = 4, vine = 3, spore = 2, bark = 1 })
+		Materials.merge(counts, Drops.roll("grandmother_gnarl", zeroRng()))
+		local lines = Materials.gainLines(counts)
+		local joined = table.concat(lines, "\n")
+		expect(string.find(joined, "/", 1, true)).toBeNil()
+		local foundSeed = false
+		local foundWood = false
+		for _, line in ipairs(lines) do
+			if line == "Gnarl's Seed x1" then
+				foundSeed = true
+			end
+			if line == "Verdant Wood x4" then
+				foundWood = true
+			end
+		end
+		expect(foundSeed).toBeTrue()
+		expect(foundWood).toBeTrue()
+		expect(Materials.rarityName("verdant_bark")).toEqual("Common")
+		expect(Materials.rarityName("heartwood")).toEqual("Rare")
+		expect(Materials.rarityName("gnarl_seed")).toEqual("Legendary")
+		expect(Materials.rarityName("scroll_thornbound")).toEqual("Epic")
+	end)
+
+	it("spells Verdant the same way in player-facing text", function()
+		local function walk(dir: string)
+			for _, name in ipairs(fs.readDir(dir)) do
+				local path = dir .. "/" .. name
+				if fs.isDir(path) then
+					walk(path)
+				elseif string.sub(name, -5) == ".luau" then
+					local source = fs.readFile(path)
+					if string.find(source, "Verdent", 1, true) ~= nil then
+						error("Spell Verdant in " .. path, 2)
+					end
+					if string.find(source, "Draema", 1, true) ~= nil then
+						error("Unexpected name in " .. path, 2)
+					end
+				end
+			end
+		end
+		walk("src")
+		expect(Materials.DEFS.wood.name).toEqual("Verdant Wood")
+		expect(Materials.DEFS.verdant_bark.name).toEqual("Verdant Bark")
+		expect(Materials.DEFS.wood.realm).toEqual("Verdant Wilds")
+		expect(Materials.DEFS.vine.name).toEqual("Living Vine")
+	end)
 end)

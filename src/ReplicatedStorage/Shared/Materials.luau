@@ -226,6 +226,15 @@ local REALM_BY_ASCENSION = {
 	[4] = "Void Rift",
 }
 
+-- Grade shown with the same colors as gear rarity. Boss materials use
+-- Legendary gold. Scrolls use Epic.
+local GRADE_RARITY: { [string]: string } = {
+	common = "Common",
+	rare = "Rare",
+	boss = "Legendary",
+	scroll = "Epic",
+}
+
 function Materials.displayName(id: string): string
 	local definition = Materials.DEFS[id]
 	if definition == nil then
@@ -308,6 +317,45 @@ function Materials.sanitize(source: any): { [string]: number }
 	return counts
 end
 
+function Materials.rarityName(id: string): string
+	local definition = Materials.DEFS[id]
+	if definition == nil then
+		return "Common"
+	end
+	local rarity = GRADE_RARITY[definition.grade]
+	if rarity == nil then
+		return "Common"
+	end
+	return rarity
+end
+
+function Materials.merge(into: { [string]: number }, source: { [string]: number }?)
+	if type(source) ~= "table" then
+		return
+	end
+	for id, count in pairs(source) do
+		if Materials.DEFS[id] ~= nil and type(count) == "number" and count > 0 then
+			into[id] = (into[id] or 0) + count
+		end
+	end
+end
+
+-- "Verdant Wood x4". Used by the clear dialog so a grant is a quantity,
+-- not an owned/needed counter.
+function Materials.gainLines(counts: { [string]: number }): { string }
+	local lines = {}
+	for _, id in ipairs(Materials.ORDER) do
+		local count = counts[id]
+		if type(count) == "number" and count > 0 then
+			table.insert(
+				lines,
+				string.format("%s x%d", Materials.displayName(id), math.floor(count))
+			)
+		end
+	end
+	return lines
+end
+
 function Materials.sanitizeCounts(source: any, keys: { string }): { [string]: number }
 	local counts = {}
 	for _, id in ipairs(keys) do
@@ -330,5 +378,6 @@ table.freeze(Materials.ORDER)
 table.freeze(Materials.REALMS)
 table.freeze(Materials.VOUCHER_AREAS)
 table.freeze(REALM_BY_ASCENSION)
+table.freeze(GRADE_RARITY)
 
 return Materials

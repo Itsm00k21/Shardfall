@@ -30,6 +30,7 @@ local Drops = require(ReplicatedStorage.Shared.Drops)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
+local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local CombatService = require(script.Parent.CombatService)
@@ -83,6 +84,9 @@ type Run = {
 	advanceShown: number?,
 	yielding: boolean?,
 	walking: boolean?,
+	-- Kill drops collected this run. The clear card lists these with the
+	-- room rewards, including Gnarl's Seed from Grandmother Gnarl.
+	loot: { [string]: number },
 }
 
 type Restart = {
@@ -138,18 +142,27 @@ local function teleport(player: Player, cframe: CFrame)
 	if character == nil then
 		return
 	end
-	-- Rooms sit thousands of studs from the plaza. With streaming on, the
-	-- floor has to exist before the character moves or the player falls.
-	pcall(function()
-		if workspace.StreamingEnabled == true then
-			player:RequestStreamAroundAsync(cframe.Position, 5)
-		end
-	end)
 	local hrp = rootPart(player)
+	local anchored = false
+	if hrp ~= nil then
+		anchored = hrp.Anchored
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+		-- Hold still while the destination streams. A free character falls
+		-- into the void for the frames before the hub floor arrives.
+		hrp.Anchored = true
+	end
+	-- Always request the stream. Reading StreamingEnabled can fail in the
+	-- same contexts that cannot write it, and skipping the request is what
+	-- drops the camera into the black gap on the way out of a room.
+	pcall(function()
+		player:RequestStreamAroundAsync(cframe.Position, 5)
+	end)
 	character:PivotTo(cframe)
 	if hrp ~= nil then
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
+		hrp.Anchored = anchored
 	end
 end
 
@@ -448,6 +461,53 @@ local function paintEnemy(enemy: Enemy)
 	end
 end
 
+local function dropPickup(parent: Instance, position: Vector3, landed: { [string]: number })
+	local index = 0
+	for _, materialId in ipairs(Materials.ORDER) do
+		local count = landed[materialId]
+		if type(count) ~= "number" or count <= 0 then
+			continue
+		end
+		index += 1
+		local rarity = Materials.rarityName(materialId)
+		local red, green, blue = Rarities.rgb(rarity)
+		local anchor = Instance.new("Part")
+		anchor.Name = Materials.displayName(materialId)
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.CanTouch = false
+		anchor.Transparency = 1
+		anchor.Size = Vector3.new(0.2, 0.2, 0.2)
+		anchor.Position = position + Vector3.new(0, 2.4 + (index - 1) * 0.9, 0)
+		anchor.Parent = parent
+
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "DropLabel"
+		gui.Size = UDim2.fromOffset(180, 28)
+		gui.AlwaysOnTop = true
+		gui.LightInfluence = 0
+		gui.Parent = anchor
+
+		local label = Instance.new("TextLabel")
+		label.Name = "Material"
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, 1)
+		label.Font = Enum.Font.BuilderSansBold
+		label.TextSize = 16
+		label.TextColor3 = Color3.fromRGB(red, green, blue)
+		label.TextStrokeTransparency = 0.35
+		label.Text = string.format("%s x%d", Materials.displayName(materialId), count)
+		label.Parent = gui
+
+		task.delay(8, function()
+			if anchor.Parent ~= nil then
+				anchor:Destroy()
+			end
+		end)
+	end
+end
+
 local function enemyBar(part: BasePart, name: string, color: Color3)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "ShardfallBar"
@@ -682,10 +742,13 @@ local function grant(
 		return false
 	end
 
+	local gained: { [string]: number } = {}
+	Materials.merge(gained, rolled.materials)
+	Materials.merge(gained, run.loot)
 	local lines = {}
 	for _, materialId in ipairs(Materials.ORDER) do
-		local count = rolled.materials[materialId]
-		if count ~= nil and count > 0 then
+		local count = gained[materialId]
+		if type(count) == "number" and count > 0 then
 			table.insert(lines, {
 				name = Materials.displayName(materialId),
 				count = count,
@@ -756,9 +819,11 @@ local function finish(player: Player, victory: boolean)
 				else Dungeons.VICTORY_CARD_SECONDS,
 		})
 	end
-	destroyRun(player, run)
+	-- Move onto the hub before the run folder goes away, and only after
+	-- teleport() has asked the client to stream that spot.
 	CombatService.revive(player)
 	teleport(player, hubCFrame())
+	destroyRun(player, run)
 	local note = "Defeated."
 	if victory and saved then
 		note = if endless then "Waves ended." else "Rootvault cleared."
@@ -831,21 +896,26 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 			for _, materialId in ipairs(Materials.ORDER) do
 				local count = landed[materialId]
 				if count ~= nil and count > 0 then
+					run.loot[materialId] = (run.loot[materialId] or 0) + count
 					table.insert(
 						bits,
-						string.format("+%d %s", count, Materials.displayName(materialId))
+						string.format("%s x%d", Materials.displayName(materialId), count)
 					)
 				end
 			end
 			if #bits > 0 then
+				-- The world label is the material, never the enemy that dropped it.
+				dropPickup(run.folder, enemy.part.Position, landed)
 				fx(player, {
 					kind = "hint",
-					text = enemy.name .. " dropped " .. table.concat(bits, ", ") .. ".",
+					text = "Picked up " .. table.concat(bits, ", ") .. ".",
 				})
 			end
 		else
 			warn("[Shardfall] Drop failed:", saveErr)
 		end
+		enemy.part.Name = "Remains"
+		enemy.part:SetAttribute("ShardfallName", "")
 		enemy.part.Transparency = 0.55
 		local bar = enemy.part:FindFirstChild("ShardfallBar")
 		if bar ~= nil then
@@ -1229,6 +1299,7 @@ function DungeonService.enter(player: Player, dungeonId: any)
 		advanceShown = nil,
 		yielding = false,
 		walking = false,
+		loot = {},
 	}
 	runs[player] = run
 	CombatService.refresh(player)
@@ -1279,9 +1350,9 @@ function DungeonService.leave(player: Player)
 	if run.resolving then
 		return { ok = true, run = publicRun(player) }
 	end
-	destroyRun(player, run)
 	CombatService.revive(player)
 	teleport(player, hubCFrame())
+	destroyRun(player, run)
 	pushRun(player, "Left the Rootvault.")
 	return { ok = true, run = publicRun(player) }
 end

@@ -3,7 +3,9 @@
 --[[
 	Kill drops. Normal enemies pay the realm's common material, elites the
 	rare, bosses the boss material. Elites and bosses can also drop a recipe
-	scroll. Auto-Farm kills go through the same table as a manual swing.
+	scroll. Verdant enemies also drop the older forage (wood, vine, spore,
+	bark) so every recipe cost is something a player can pick up. Auto-Farm
+	kills go through the same table as a manual swing.
 ]]
 
 local Materials = require("./Materials")
@@ -69,6 +71,21 @@ Drops.ENEMIES = {
 	grandmother_gnarl = { realm = "verdant", role = "boss" },
 } :: { [string]: EnemyDrop }
 
+-- Extra forage on top of the realm bundle. Living Vine is a Vine Crawler
+-- drop, including Auto-Farm, because the older recipes still spend it.
+local BONUS: { [string]: { Entry } } = {
+	vine_crawler = {
+		row("vine", 1, 1, 2),
+		row("wood", 1, 1, 1),
+	},
+	spore_bat = {
+		row("spore", 1, 1, 2),
+	},
+	root_brute = {
+		row("bark", 1, 1, 1),
+	},
+}
+
 function Drops.entries(enemyId: string): { Entry }?
 	local enemy = Drops.ENEMIES[enemyId]
 	if enemy == nil then
@@ -78,7 +95,16 @@ function Drops.entries(enemyId: string): { Entry }?
 	if realm == nil then
 		return nil
 	end
-	return realm[enemy.role]
+	local base = realm[enemy.role]
+	local bonus = BONUS[enemyId]
+	if bonus == nil then
+		return base
+	end
+	local rows = table.clone(base)
+	for _, entry in ipairs(bonus) do
+		table.insert(rows, entry)
+	end
+	return rows
 end
 
 function Drops.roll(enemyId: string, rng: any): { [string]: number }
@@ -134,5 +160,12 @@ for _, enemy in pairs(Drops.ENEMIES) do
 	table.freeze(enemy)
 end
 table.freeze(Drops.ENEMIES)
+for _, entries in pairs(BONUS) do
+	for _, entry in ipairs(entries) do
+		table.freeze(entry)
+	end
+	table.freeze(entries)
+end
+table.freeze(BONUS)
 
 return Drops
