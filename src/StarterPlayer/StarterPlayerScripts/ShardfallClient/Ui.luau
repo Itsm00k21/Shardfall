@@ -542,6 +542,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		crack.BackgroundColor3 = if isBusy then COLORS.buttonDim else COLORS.button
 	end
 
+	function controller.setNotice(text: string)
+		notice.Text = text
+	end
+
 	function controller.setStatus(text: string, kind: string)
 		status.Text = text
 		if kind == "error" then

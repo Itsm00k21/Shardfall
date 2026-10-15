@@ -15,6 +15,9 @@
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local MemoryStore = require(ReplicatedStorage.Shared.MemoryStore)
 
 local StoreAdapter = {}
 
@@ -26,22 +29,6 @@ export type Adapter = {
 	persistent: boolean,
 	updateAsync: (self: Adapter, key: string, transform: (any) -> any) -> any,
 }
-
-local function memoryAdapter(): Adapter
-	local stored: { [string]: any } = {}
-	local adapter = {} :: Adapter
-	function adapter:updateAsync(key: string, transform: (any) -> any)
-		local current = stored[key]
-		local updated = transform(current)
-		if updated == nil then
-			return current
-		end
-		stored[key] = updated
-		return updated
-	end
-	adapter.persistent = false
-	return adapter
-end
 
 local function withRetries(callback: () -> any): any
 	local lastError = nil
@@ -80,7 +67,8 @@ function StoreAdapter.connect(): (Adapter, string?)
 	if ok then
 		return dataStoreAdapter(), nil
 	end
-	return memoryAdapter(), tostring(err)
+	local memory = MemoryStore.new() :: Adapter
+	return memory, tostring(err)
 end
 
 return StoreAdapter

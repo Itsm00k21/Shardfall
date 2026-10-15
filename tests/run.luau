@@ -14,5 +14,7 @@ require("./RollMath.spec")
 require("./Schema.spec")
 require("./SessionLock.spec")
 require("./PaidRollPolicy.spec")
+require("./RemoteCaller.spec")
+require("./MemoryRoll.spec")
 
 process.exit(framework.run())

@@ -21,6 +21,7 @@ local InventoryService = require(script.Parent.InventoryService)
 local RateLimiter = require(script.Parent.RateLimiter)
 local RollService = require(script.Parent.RollService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
+local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 
 local Remotes = {}
@@ -58,9 +59,22 @@ function Remotes.pushProfile(player: Player, snapshot: any, saving: boolean)
 	eventRemote("ProfileUpdated"):FireClient(player, snapshot, saving)
 end
 
-local function respond(player: Player, result: any)
+local function firstLine(detail: string): string
+	local line = string.match(detail, "^[^\r\n]+") or detail
+	if #line > 300 then
+		line = string.sub(line, 1, 300)
+	end
+	return line
+end
+
+local function fail(action: string, detail: string)
+	warn(string.format("[Shardfall] %s: %s", action, detail))
+	return { ok = false, error = firstLine(detail) }
+end
+
+local function respond(player: Player, action: string, result: any)
 	if type(result) ~= "table" then
-		return { ok = false, error = "Something went wrong." }
+		return fail(action, string.format("handler returned %s, expected a table", typeof(result)))
 	end
 	result.saving = DataService.isPersistent()
 	local snapshot = DataService.snapshot(player)
@@ -71,18 +85,24 @@ local function respond(player: Player, result: any)
 end
 
 local function guard(player: Player, action: string, callback: () -> any)
-	if type(player) ~= "Instance" or not player:IsA("Player") then
-		return { ok = false, error = "Something went wrong." }
+	-- typeof, not type. type(player) is "userdata", so a type() check
+	-- rejects every real caller before the handler runs.
+	local reported = typeof(player)
+	local isPlayer = reported == "Instance" and player:IsA("Player")
+	local accepted, why = RemoteCaller.accept(reported, isPlayer)
+	if not accepted then
+		return fail(action, why)
 	end
 	if not RateLimiter.take(player.UserId, action) then
-		return { ok = false, error = "Slow down a moment." }
+		return fail(action, "Slow down a moment.")
 	end
-	local ok, result = pcall(callback)
+	local ok, result = xpcall(callback, function(err)
+		return debug.traceback(tostring(err), 2)
+	end)
 	if not ok then
-		warn("[Shardfall] Remote", action, "failed:", result)
-		return { ok = false, error = "Something went wrong." }
+		return fail(action, tostring(result))
 	end
-	return respond(player, result)
+	return respond(player, action, result)
 end
 
 local function validUid(uid: any): boolean

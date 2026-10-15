@@ -38,15 +38,38 @@ local function invoke(name: string, ...: any)
 	return remote:InvokeServer(...)
 end
 
+-- nil when the remote succeeded. Otherwise the text to show, also warned
+-- on the client so Output is not empty when a button appears to do nothing.
+local function remoteError(ok: boolean, result: any, fallback: string): string?
+	if not ok then
+		local message = tostring(result)
+		warn("[Shardfall] " .. message)
+		return message
+	end
+	if type(result) ~= "table" then
+		local message = fallback .. " (remote returned " .. typeof(result) .. ")"
+		warn("[Shardfall] " .. message)
+		return message
+	end
+	if result.ok ~= true then
+		local message = tostring(result.error or fallback)
+		warn("[Shardfall] " .. message)
+		return message
+	end
+	return nil
+end
+
 local function refreshOdds()
 	local ok, result = pcall(function()
 		return invoke("GetOdds", Pools.STARTER_ID)
 	end)
-	if ok and type(result) == "table" and result.ok == true then
-		ui.setOdds(result.odds)
-	elseif not ok then
-		ui.setStatus("Could not load odds.", "error")
+	local message = remoteError(ok, result, "Could not load odds.")
+	if message ~= nil then
+		ui.setStatus(message, "error")
+		ui.setNotice(message)
+		return
 	end
+	ui.setOdds((result :: any).odds)
 end
 
 local function applyProfile(profile: any, saving: any)
@@ -76,17 +99,14 @@ ui = Ui.mount(playerGui, {
 				return invoke("RollShard", Pools.STARTER_ID)
 			end)
 			ui.setBusy(false)
-			if not ok or type(result) ~= "table" then
-				ui.setStatus("Could not reach the server.", "error")
+			local message = remoteError(ok, result, "Roll failed.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
 				return
 			end
 			applyResult(result)
-			if result.ok ~= true then
-				ui.setStatus(tostring(result.error or "Roll failed."), "error")
-				return
-			end
 			ui.showRoll(result)
-			local item = result.item
+			local item = (result :: any).item
 			local name = if type(item) == "table" then item.name else "a drop"
 			ui.setStatus("Received " .. tostring(name) .. ".", "ok")
 		end)
@@ -97,13 +117,16 @@ ui = Ui.mount(playerGui, {
 			local ok, result = pcall(function()
 				return invoke("RollPaid", Pools.STARTER_ID)
 			end)
-			if not ok or type(result) ~= "table" then
-				ui.setStatus("Could not reach the server.", "error")
-				return
+			local message = remoteError(ok, result, "Paid roll blocked.")
+			if type(result) == "table" and type(result.code) == "string" and message ~= nil then
+				message ..= " (" .. result.code .. ")"
 			end
-			applyResult(result)
-			local code = if type(result.code) == "string" then " (" .. result.code .. ")" else ""
-			ui.setStatus(tostring(result.error or "Paid roll blocked.") .. code, "error")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			end
+			if ok and type(result) == "table" then
+				applyResult(result)
+			end
 		end)
 	end,
 	onEquip = function(uid: string)
@@ -111,15 +134,12 @@ ui = Ui.mount(playerGui, {
 			local ok, result = pcall(function()
 				return invoke("EquipItem", uid)
 			end)
-			if not ok or type(result) ~= "table" then
-				ui.setStatus("Could not equip that.", "error")
+			local message = remoteError(ok, result, "Could not equip that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
 				return
 			end
 			applyResult(result)
-			if result.ok ~= true then
-				ui.setStatus(tostring(result.error or "Could not equip that."), "error")
-				return
-			end
 			ui.setStatus("Equipped.", "ok")
 		end)
 	end,
@@ -128,15 +148,12 @@ ui = Ui.mount(playerGui, {
 			local ok, result = pcall(function()
 				return invoke("UnequipItem", uid)
 			end)
-			if not ok or type(result) ~= "table" then
-				ui.setStatus("Could not unequip that.", "error")
+			local message = remoteError(ok, result, "Could not unequip that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
 				return
 			end
 			applyResult(result)
-			if result.ok ~= true then
-				ui.setStatus(tostring(result.error or "Could not unequip that."), "error")
-				return
-			end
 			ui.setStatus("Unequipped.", "ok")
 		end)
 	end,
@@ -145,16 +162,13 @@ ui = Ui.mount(playerGui, {
 			local ok, result = pcall(function()
 				return invoke("RemoveItem", uid)
 			end)
-			if not ok or type(result) ~= "table" then
-				ui.setStatus("Could not drop that.", "error")
+			local message = remoteError(ok, result, "Could not drop that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
 				return
 			end
 			applyResult(result)
-			if result.ok ~= true then
-				ui.setStatus(tostring(result.error or "Could not drop that."), "error")
-				return
-			end
-			ui.setStatus("Dropped " .. tostring(result.removedName or "item") .. ".", "ok")
+			ui.setStatus("Dropped " .. tostring((result :: any).removedName or "item") .. ".", "ok")
 		end)
 	end,
 	onDev = function(kind: string)
@@ -162,15 +176,12 @@ ui = Ui.mount(playerGui, {
 			local ok, result = pcall(function()
 				return invoke("DevGrant", kind)
 			end)
-			if not ok or type(result) ~= "table" then
-				ui.setStatus("Dev grant failed.", "error")
+			local message = remoteError(ok, result, "Dev grant failed.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
 				return
 			end
 			applyResult(result)
-			if result.ok ~= true then
-				ui.setStatus(tostring(result.error or "Dev grant failed."), "error")
-				return
-			end
 			ui.setStatus("Dev grant applied. Odds follow Shard Luck.", "ok")
 		end)
 	end,
@@ -187,10 +198,11 @@ task.spawn(function()
 	local ok, result = pcall(function()
 		return invoke("GetProfile")
 	end)
-	if not ok or type(result) ~= "table" or result.ok ~= true then
-		ui.setStatus("Could not load your profile. Read the Output window.", "error")
+	local message = remoteError(ok, result, "Could not load your profile.")
+	if message ~= nil then
+		ui.setStatus(message, "error")
 		refreshOdds()
 		return
 	end
-	applyProfile(result.profile, result.saving)
+	applyProfile((result :: any).profile, (result :: any).saving)
 end)

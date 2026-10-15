@@ -311,6 +311,8 @@ Point `default.project.json` at the folder Wally created (`Packages` for shared,
 
 **Play starts and there is no panel.** In Explorer, confirm `StarterPlayerScripts.ShardfallClient` and `ReplicatedStorage.Remotes` synced. The Output window prints a warning if the client never sees the remotes.
 
+**Level and tokens show, but every button does nothing and odds stay on "Loading…".** The numbers arrive on a RemoteEvent. The buttons are RemoteFunctions, and they all share one caller check. Output prints a `[Shardfall]` line with the reason, and the panel shows that same text. The check uses `typeof` (an Instance), not `type` (`type(player)` is `"userdata"` and rejects every real player).
+
 **The banner says not saving.** Expected until the place is published and Studio API access is enabled. Playtesting still works. Data is thrown away when you stop.
 
 **Kicked the moment you join.** Read the kick reason. The usual ones are: data still locked by another session, DataStores erroring after the probe thought they worked, or a profile saved by a newer `schemaVersion`.
