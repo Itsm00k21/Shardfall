@@ -204,7 +204,7 @@ local function hubCFrame(): CFrame
 	local spawn = Haven.SPAWN
 	return CFrame.lookAt(
 		Vector3.new(spawn.x, spawn.y, spawn.z),
-		Vector3.new(spawn.lookX, 8, spawn.lookZ)
+		Vector3.new(spawn.lookX, spawn.y + 12, spawn.lookZ)
 	)
 end
 
@@ -305,10 +305,16 @@ local function buildWorld()
 	world.Parent = workspace
 	worldFolder = world
 
+	local staleHaven = workspace:FindFirstChild("Haven")
+	if staleHaven ~= nil then
+		staleHaven:Destroy()
+	end
+	-- Persistent before the model is parented, and a direct Workspace child
+	-- so it shows up next to Terrain instead of inside a folder.
 	local hub = Instance.new("Model")
-	hub.Name = "Hub"
+	hub.Name = "Haven"
 	hub.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-	hub.Parent = world
+	hub.Parent = workspace
 	local built, hubResult = pcall(HavenBuilder.build, hub)
 	if built then
 		local count = if type(hubResult) == "number" then hubResult else 0
@@ -1247,11 +1253,7 @@ local function debounce(player: Player): boolean
 	return true
 end
 
-local function bindTouches()
-	local world = worldFolder
-	if world == nil then
-		return
-	end
+local function bindTouchRoot(world: Instance)
 	for _, descendant in ipairs(world:GetDescendants()) do
 		if descendant:IsA("BasePart") and descendant.Name == "Portal" then
 			descendant.Touched:Connect(function(hit)
@@ -1286,6 +1288,20 @@ local function bindTouches()
 				end
 			end)
 		end
+	end
+end
+
+local function bindTouches()
+	local roots = {}
+	if worldFolder ~= nil then
+		table.insert(roots, worldFolder)
+	end
+	local haven = workspace:FindFirstChild("Haven")
+	if haven ~= nil then
+		table.insert(roots, haven)
+	end
+	for _, world in ipairs(roots) do
+		bindTouchRoot(world)
 	end
 end
 
@@ -1328,21 +1344,30 @@ function DungeonService.start()
 		end)
 	end
 
+	local function placeCharacter(player: Player)
+		task.defer(function()
+			if player.Parent == nil then
+				return
+			end
+			local run = runs[player]
+			if run ~= nil and not run.resolving then
+				teleport(player, roomSpawn(run.placeIndex))
+			else
+				teleport(player, hubCFrame())
+			end
+		end)
+	end
+
 	local function hook(player: Player)
 		watchIdle(player)
 		player.CharacterAdded:Connect(function()
-			task.defer(function()
-				if player.Parent == nil then
-					return
-				end
-				local run = runs[player]
-				if run ~= nil and not run.resolving then
-					teleport(player, roomSpawn(run.placeIndex))
-				else
-					teleport(player, hubCFrame())
-				end
-			end)
+			placeCharacter(player)
 		end)
+		-- CharacterAdded does not fire for a character already standing
+		-- on the default baseplate when this script starts.
+		if player.Character ~= nil then
+			placeCharacter(player)
+		end
 	end
 
 	Players.PlayerAdded:Connect(hook)

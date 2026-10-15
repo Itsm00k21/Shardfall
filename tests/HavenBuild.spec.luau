@@ -83,6 +83,22 @@ local function cframe(
 	end
 
 	return setmetatable(self, {
+		__add = function(left, offset)
+			return cframe(
+				left.Position.X + offset.X,
+				left.Position.Y + offset.Y,
+				left.Position.Z + offset.Z,
+				left.r00,
+				left.r01,
+				left.r02,
+				left.r10,
+				left.r11,
+				left.r12,
+				left.r20,
+				left.r21,
+				left.r22
+			)
+		end,
 		__mul = function(left, right)
 			local xAxis = left:VectorToWorldSpace(right.XVector)
 			local yAxis = left:VectorToWorldSpace(right.YVector)
@@ -210,6 +226,16 @@ local function instance(className: string): Mock
 
 	function methods:Destroy()
 		self.Parent = nil
+	end
+
+	if className == "ProximityPrompt" then
+		rawset(object, "Triggered", {
+			Connect = function(_signal, _callback)
+				return {
+					Disconnect = function() end,
+				}
+			end,
+		})
 	end
 
 	return setmetatable(object, {
@@ -430,18 +456,26 @@ end
 describe("HavenBuilder", function()
 	it("builds the plaza, districts, and arches without writing streaming", function()
 		local builder, heartbeats, workspace = loadBuilder()
+		local baseplate = instance("Part")
+		baseplate.Name = "Baseplate"
+		baseplate.Parent = workspace
 		local baseplateSpawn = instance("SpawnLocation")
 		baseplateSpawn.Name = "SpawnLocation"
 		baseplateSpawn.Parent = workspace
 
 		local hub = instance("Model")
-		hub.Name = "Hub"
-		hub.Parent = workspace
+		hub.Name = "Haven"
+		local buried = instance("Folder")
+		buried.Name = "ShardfallWorld"
+		buried.Parent = workspace
+		hub.Parent = buried
 		local count = builder.build(hub)
 
 		expect(type(count) == "number" and count >= 40).toBeTrue()
 		expect(workspace.StreamingEnabled).toEqual(true)
+		expect(hub.Parent).toEqual(workspace)
 		expect(hub.ModelStreamingMode.__enum).toEqual("Enum.ModelStreamingMode.Persistent")
+		expect(baseplate.Parent).toBeNil()
 		expect(findNamed(hub, "LumenHeart") ~= nil).toBeTrue()
 		expect(findNamed(hub, "BossPlaza") ~= nil).toBeTrue()
 		expect(findNamed(hub, "HubSpawn") ~= nil).toBeTrue()
@@ -459,8 +493,7 @@ describe("HavenBuilder", function()
 		local enter = findNamed(hub, "EnterPad")
 		expect(enter ~= nil).toBeTrue()
 		expect(enter:GetAttribute("EnterDungeon")).toEqual(Dungeons.ROOTVAULT_ID)
-		expect(baseplateSpawn.Enabled).toEqual(false)
-		expect(baseplateSpawn.Transparency).toEqual(1)
+		expect(baseplateSpawn.Parent).toBeNil()
 		expect(findNamed(hub, "HubSpawn").Transparency ~= 1).toBeTrue()
 
 		expect(#heartbeats >= 1).toBeTrue()
@@ -481,13 +514,19 @@ describe("HavenBuilder", function()
 		local count = builder.build(hub)
 		expect(count >= 40).toBeTrue()
 
-		local function uprightCylinder(part: Mock, label: string)
-			local minX, minY, _minZ, maxX, maxY, _maxZ = worldBox(part)
-			requireNear(maxY - minY, part.Size.X, 0.75, label .. " length (must be vertical)")
-			requireNear(maxX - minX, part.Size.Y, 0.75, label .. " diameter")
-			if shapeName(part) ~= "Enum.PartType.Cylinder" then
-				error(label .. " is " .. shapeName(part) .. ", not a cylinder", 2)
+		local function floorBlock(part: Mock, label: string)
+			if shapeName(part) ~= "Enum.PartType.Block" then
+				error(label .. " is " .. shapeName(part) .. ", not a block", 2)
 			end
+			if part.Transparency ~= 0 then
+				error(label .. " is transparent", 2)
+			end
+			if part.CanCollide ~= true or part.Anchored ~= true then
+				error(label .. " is not a solid anchored floor", 2)
+			end
+			local _x0, minY, _z0, _x1, maxY = worldBox(part)
+			requireNear(maxY, Haven.FLOOR_Y, 0.25, label .. " top")
+			requireNear(maxY - minY, part.Size.Y, 0.25, label .. " thickness")
 		end
 
 		print("Haven top-down bounds (center xyz, top y, world extents xyz)")
@@ -581,9 +620,9 @@ describe("HavenBuilder", function()
 		end
 
 		local plaza = findNamed(hub, "BossPlaza"):FindFirstChild("Ground")
-		uprightCylinder(plaza, "plaza")
+		floorBlock(plaza, "plaza")
 		local _px0, _py0, _pz0, _px1, plazaTop, _pz1 = worldBox(plaza)
-		requireNear(plazaTop, 0, 0.2, "plaza top")
+		requireNear(plazaTop, Haven.FLOOR_Y, 0.2, "plaza top")
 		local spawn = findNamed(hub, "HubSpawn")
 		local _sx0, spawnBottom, _sz0, _sx1, _sy1, _sz1 = worldBox(spawn)
 		requireNear(spawnBottom, plazaTop, 0.2, "spawn sitting on the plaza")
@@ -603,9 +642,9 @@ describe("HavenBuilder", function()
 		for _, floor in ipairs(floors) do
 			local model = findNamed(hub, floor[1])
 			local ground = model:FindFirstChild("Ground")
-			uprightCylinder(ground, floor[1])
+			floorBlock(ground, floor[1])
 			local _a, _b, _c, _d, top = worldBox(ground)
-			requireNear(top, 0, 0.2, floor[1] .. " top")
+			requireNear(top, Haven.FLOOR_Y, 0.2, floor[1] .. " top")
 			local center = ground.CFrame.Position
 			requireNear(center.X, floor[2].x, 0.5, floor[1] .. " x")
 			requireNear(center.Z, floor[2].z, 0.5, floor[1] .. " z")
@@ -613,22 +652,46 @@ describe("HavenBuilder", function()
 
 		for _, part in ipairs(hub:GetDescendants()) do
 			if part:IsA("BasePart") and shapeName(part) == "Enum.PartType.Cylinder" then
-				uprightCylinder(part, part.Name)
+				error(part.Name .. " is still a cylinder", 2)
 			end
 		end
 
-		local function bridgeEnds(part: Mock): (Mock, Mock)
-			local half = part.Size.Z / 2
-			local axis = part.CFrame.ZVector
+		local function footprint(part: Mock)
 			local pos = part.CFrame.Position
-			return vector3(pos.X - axis.X * half, pos.Y, pos.Z - axis.Z * half),
-				vector3(pos.X + axis.X * half, pos.Y, pos.Z + axis.Z * half)
+			local size = part.Size
+			return {
+				x0 = pos.X - size.X / 2,
+				x1 = pos.X + size.X / 2,
+				z0 = pos.Z - size.Z / 2,
+				z1 = pos.Z + size.Z / 2,
+			}
 		end
 
-		local function inside(point: Mock, x: number, z: number, radius: number): boolean
-			local dx = point.X - x
-			local dz = point.Z - z
-			return dx * dx + dz * dz <= (radius + 1) * (radius + 1)
+		local function covers(part: Mock, x: number, z: number): boolean
+			local box = footprint(part)
+			return x >= box.x0 - 1 and x <= box.x1 + 1 and z >= box.z0 - 1 and z <= box.z1 + 1
+		end
+
+		local function boxesOverlap(left, right): boolean
+			return not (
+				left.x1 < right.x0 - 1
+				or right.x1 < left.x0 - 1
+				or left.z1 < right.z0 - 1
+				or right.z1 < left.z0 - 1
+			)
+		end
+
+		local function rim(
+			x1: number,
+			z1: number,
+			x2: number,
+			z2: number,
+			inset: number
+		): (number, number)
+			local dx = x2 - x1
+			local dz = z2 - z1
+			local distance = math.sqrt(dx * dx + dz * dz)
+			return x1 + dx / distance * inset, z1 + dz / distance * inset
 		end
 
 		local links = {
@@ -668,21 +731,33 @@ describe("HavenBuilder", function()
 		if #bridges < #resolved then
 			error("missing a bridge", 2)
 		end
+		for _, span in ipairs(bridges) do
+			floorBlock(span, "bridge")
+		end
 		for _, link in ipairs(resolved) do
+			local startX, startZ = rim(link[1], link[2], link[4], link[5], link[3])
+			local endX, endZ = rim(link[4], link[5], link[1], link[2], link[6])
+			local seen = {}
+			local queue = {}
+			for index, span in ipairs(bridges) do
+				if covers(span, startX, startZ) then
+					seen[index] = true
+					table.insert(queue, index)
+				end
+			end
 			local joined = false
-			for _, span in ipairs(bridges) do
-				requireNear(span.CFrame.YVector.Y, 1, 0.05, "bridge up")
-				requireNear(span.CFrame.ZVector.Y, 0, 0.05, "bridge not tipped")
-				local _b0, bridgeBottom, _b2, _b3, bridgeTop = worldBox(span)
-				requireNear(bridgeTop, 0, 0.2, "bridge top")
-				requireNear(bridgeTop - bridgeBottom, span.Size.Y, 0.3, "bridge thickness")
-				local one, two = bridgeEnds(span)
-				local oneFrom = inside(one, link[1], link[2], link[3])
-				local twoFrom = inside(two, link[1], link[2], link[3])
-				local oneTo = inside(one, link[4], link[5], link[6])
-				local twoTo = inside(two, link[4], link[5], link[6])
-				if (oneFrom and twoTo) or (twoFrom and oneTo) then
+			while #queue > 0 do
+				local index = table.remove(queue, 1)
+				if covers(bridges[index], endX, endZ) then
 					joined = true
+					break
+				end
+				local box = footprint(bridges[index])
+				for other, span in ipairs(bridges) do
+					if seen[other] ~= true and boxesOverlap(box, footprint(span)) then
+						seen[other] = true
+						table.insert(queue, other)
+					end
 				end
 			end
 			if not joined then
@@ -695,7 +770,7 @@ describe("HavenBuilder", function()
 			error("Lumen Heart is a cylinder", 2)
 		end
 		local _h0, heartBottom = worldBox(heart)
-		if heartBottom < -0.5 then
+		if heartBottom < Haven.FLOOR_Y - 1 then
 			error("Lumen Heart hangs below the plaza", 2)
 		end
 		local shards = findAll(hub, "CrystalShard")
@@ -707,7 +782,7 @@ describe("HavenBuilder", function()
 				error("crystal shard is a cylinder", 2)
 			end
 			local _s0, shardBottom, _s2, _s3, shardTop = worldBox(shard)
-			if shardBottom < -1 then
+			if shardBottom < Haven.FLOOR_Y - 1 then
 				error(string.format("crystal shard dips into the void at y=%.1f", shardBottom), 2)
 			end
 			if shardTop - shardBottom < 18 then
@@ -722,7 +797,7 @@ describe("HavenBuilder", function()
 		for index, orbit in ipairs(orbits) do
 			local pos = orbit.CFrame.Position
 			local radius = math.sqrt(pos.X * pos.X + pos.Z * pos.Z)
-			if radius < 14 or radius > 26 or pos.Y < 8 then
+			if radius < 14 or radius > 26 or pos.Y < Haven.FLOOR_Y + 8 then
 				error(string.format("orbit shard %d is not circling the heart", index), 2)
 			end
 		end
@@ -735,7 +810,7 @@ describe("HavenBuilder", function()
 				error(portal.id .. " is not an arch", 2)
 			end
 			local _a0, pillarBottom, _a2, _a3, pillarTop = worldBox(pillar)
-			requireNear(pillarBottom, 0, 0.5, portal.id .. " pillar base")
+			requireNear(pillarBottom, Haven.FLOOR_Y, 0.5, portal.id .. " pillar base")
 			if lintel.CFrame.Position.Y < pillarTop - 1 then
 				error(portal.id .. " lintel is not across the top", 2)
 			end

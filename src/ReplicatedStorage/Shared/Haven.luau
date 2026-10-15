@@ -17,6 +17,8 @@ local Haven = {}
 
 Haven.WALK_SPEED = 16
 Haven.PLAZA_RADIUS = 52
+-- Studio's default baseplate tops out at y=0. The whole hub sits above it.
+Haven.FLOOR_Y = 120
 
 export type Place = {
 	id: string,
@@ -40,7 +42,7 @@ Haven.CRYSTAL = {
 -- Spawn stands on the plaza, south of the crystal, looking north at it.
 Haven.SPAWN = {
 	x = 0,
-	y = 4,
+	y = 124,
 	z = 30,
 	lookX = 0,
 	lookZ = 0,

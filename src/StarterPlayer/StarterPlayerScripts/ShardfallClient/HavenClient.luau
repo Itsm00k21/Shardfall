@@ -3,11 +3,13 @@
 --[[
 	Haven prompts open the panels that already exist.
 
-	Armory and Pets switch the shard tab. Forge opens Craft. Anything marked
-	soon only writes its message. The Verdant arch is handled on the server.
-	StreamingEnabled can add the prompt after this script starts, so new
-	descendants are bound too.
+	ProximityPrompt.Triggered only reaches a listener connected on that
+	machine. The hold ring is drawn by the client either way, so a server
+	connection never opens this panel. PromptTriggered fires for prompts
+	that stream in later, and the attribute is read at trigger time.
 ]]
+
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local HavenClient = {}
 
@@ -17,37 +19,22 @@ export type Callbacks = {
 }
 
 function HavenClient.start(callbacks: Callbacks)
-	local function bind(prompt: ProximityPrompt)
-		if prompt:GetAttribute("HavenBound") == true then
-			return
-		end
+	print("[Shardfall] Haven prompts listening")
+	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt)
 		local action = prompt:GetAttribute("HavenAction")
+		print("[Shardfall] Client prompt triggered:", action)
 		if type(action) ~= "string" or action == "rootvault" then
 			return
 		end
-		prompt:SetAttribute("HavenBound", true)
-		prompt.Triggered:Connect(function()
-			if action == "armory" or action == "pets" then
-				callbacks.onPanel("shards", action)
-			elseif action == "craft" then
-				callbacks.onPanel("craft", nil)
-			elseif action == "soon" then
-				local message = prompt:GetAttribute("HavenMessage")
-				callbacks.onSoon(if type(message) == "string" then message else "Coming soon.")
-			end
-		end)
-	end
-
-	local function consider(instance: Instance)
-		if instance:IsA("ProximityPrompt") then
-			bind(instance)
+		if action == "armory" or action == "pets" then
+			callbacks.onPanel("shards", action)
+		elseif action == "craft" then
+			callbacks.onPanel("craft", nil)
+		elseif action == "soon" then
+			local message = prompt:GetAttribute("HavenMessage")
+			callbacks.onSoon(if type(message) == "string" then message else "Coming soon.")
 		end
-	end
-
-	workspace.DescendantAdded:Connect(consider)
-	for _, descendant in ipairs(workspace:GetDescendants()) do
-		consider(descendant)
-	end
+	end)
 end
 
 return HavenClient

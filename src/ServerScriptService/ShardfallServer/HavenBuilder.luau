@@ -13,9 +13,10 @@
 	replicated at spawn. Crawl rooms are outside this model and stream in
 	when the player is teleported.
 
-	A cylinder's length is its local X axis. Floors set that axis to world
-	up after Shape, then parent. Setting Shape afterwards drops the rotation,
-	which stood every island on edge and left only the spawn pad to walk on.
+	Floors are plain blocks. A cylinder's axis is local X, and Shape changes
+	were dropping that rotation in Studio, and the walk surface was also
+	buried in the default baseplate at y=0. Every part is lifted by
+	Haven.FLOOR_Y. The Haven model is parented directly under Workspace.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -39,61 +40,57 @@ local function part(
 	cframe: CFrame,
 	color: Color3,
 	material: Enum.Material,
-	collide: boolean
+	collide: boolean,
+	world: boolean?
 ): Part
 	local piece = Instance.new("Part")
 	piece.Name = name
+	piece.Shape = Enum.PartType.Block
 	piece.Size = size
-	piece.CFrame = cframe
 	piece.Anchored = true
 	piece.CanCollide = collide
 	piece.CanTouch = false
+	piece.Transparency = 0
 	piece.TopSurface = Enum.SurfaceType.Smooth
 	piece.BottomSurface = Enum.SurfaceType.Smooth
 	piece.Color = color
 	piece.Material = material
+	-- Local CFrames are lifted once. A CFrame taken from a part that
+	-- already went through here is already at hub height.
+	if world == true then
+		piece.CFrame = cframe
+	else
+		piece.CFrame = cframe + Vector3.new(0, Haven.FLOOR_Y, 0)
+	end
 	piece.Parent = parent
 	return piece
 end
 
--- Length runs along local X. Point that axis up so the disc is a floor,
--- and apply the CFrame after Shape and again after Parent.
-local function verticalCylinder(
+-- Square slab. yTop is the local walk height before FLOOR_Y is added.
+local function slab(
 	parent: Instance,
 	name: string,
 	x: number,
-	yCenter: number,
+	yTop: number,
 	z: number,
-	diameter: number,
-	length: number,
+	width: number,
+	depth: number,
+	thickness: number,
 	color: Color3,
 	material: Enum.Material,
 	collide: boolean
 ): Part
-	local piece = Instance.new("Part")
-	piece.Name = name
-	piece.Shape = Enum.PartType.Cylinder
-	piece.Size = Vector3.new(length, diameter, diameter)
-	piece.Anchored = true
-	piece.CanCollide = collide
-	piece.CanTouch = false
-	piece.TopSurface = Enum.SurfaceType.Smooth
-	piece.BottomSurface = Enum.SurfaceType.Smooth
-	piece.Color = color
-	piece.Material = material
-	local cf = CFrame.fromMatrix(
-		Vector3.new(x, yCenter, z),
-		Vector3.new(0, 1, 0),
-		Vector3.new(1, 0, 0),
-		Vector3.new(0, 0, -1)
+	return part(
+		parent,
+		name,
+		Vector3.new(width, thickness, depth),
+		CFrame.new(x, yTop - thickness / 2, z),
+		color,
+		material,
+		collide
 	)
-	piece.CFrame = cf
-	piece.Parent = parent
-	piece.CFrame = cf
-	return piece
 end
 
--- yTop is the walk surface. Thickness hangs below it.
 local function disc(
 	parent: Instance,
 	name: string,
@@ -106,18 +103,7 @@ local function disc(
 	material: Enum.Material,
 	collide: boolean
 ): Part
-	return verticalCylinder(
-		parent,
-		name,
-		x,
-		yTop - thickness / 2,
-		z,
-		diameter,
-		thickness,
-		color,
-		material,
-		collide
-	)
+	return slab(parent, name, x, yTop, z, diameter, diameter, thickness, color, material, collide)
 end
 
 local function ball(
@@ -202,38 +188,43 @@ local function approach(
 	return fromX + dx / distance * inset, fromZ + dz / distance * inset
 end
 
-local BRIDGE_WIDTH = 16
-local BRIDGE_THICKNESS = 2
-local BRIDGE_OVERLAP = 10
+local BRIDGE_WIDTH = 18
+local BRIDGE_THICKNESS = 8
+local BRIDGE_OVERLAP = 14
 local FLOOR_TOP = 0
 
--- Local +Z is the span, local +Y is world up. Extra length sits on both rims
--- so the walk doesn't end in a gap.
+-- Two axis-aligned blocks, an L from (x1,z1) to (x2,z2). No yaw, so the
+-- span is just Size and Position. Ends overlap both rims.
 local function bridge(parent: Instance, x1: number, z1: number, x2: number, z2: number)
 	local dx = x2 - x1
 	local dz = z2 - z1
-	local distance = math.sqrt(dx * dx + dz * dz)
-	if distance < 2 then
+	if math.abs(dx) < 1 and math.abs(dz) < 1 then
 		return
 	end
-	local forwardX = dx / distance
-	local forwardZ = dz / distance
-	local span = distance + BRIDGE_OVERLAP * 2
-	local cf = CFrame.fromMatrix(
-		Vector3.new((x1 + x2) / 2, FLOOR_TOP - BRIDGE_THICKNESS / 2, (z1 + z2) / 2),
-		Vector3.new(forwardZ, 0, -forwardX),
-		Vector3.new(0, 1, 0),
-		Vector3.new(forwardX, 0, forwardZ)
-	)
-	part(
-		parent,
-		"Bridge",
-		Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, span),
-		cf,
-		Color3.fromRGB(126, 122, 116),
-		Enum.Material.Cobblestone,
-		true
-	)
+	local color = Color3.fromRGB(126, 122, 116)
+	local yCenter = FLOOR_TOP - BRIDGE_THICKNESS / 2
+	if math.abs(dx) >= 1 then
+		part(
+			parent,
+			"Bridge",
+			Vector3.new(math.abs(dx) + BRIDGE_OVERLAP, BRIDGE_THICKNESS, BRIDGE_WIDTH),
+			CFrame.new((x1 + x2) / 2, yCenter, z1),
+			color,
+			Enum.Material.Cobblestone,
+			true
+		)
+	end
+	if math.abs(dz) >= 1 then
+		part(
+			parent,
+			"Bridge",
+			Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, math.abs(dz) + BRIDGE_OVERLAP),
+			CFrame.new(x2, yCenter, (z1 + z2) / 2),
+			color,
+			Enum.Material.Cobblestone,
+			true
+		)
+	end
 end
 
 local function island(
@@ -248,15 +239,15 @@ local function island(
 	local model = Instance.new("Model")
 	model.Name = name
 	model.Parent = parent
-	disc(model, "Ground", x, FLOOR_TOP, z, radius * 2, 4, top, topMaterial, true)
+	disc(model, "Ground", x, FLOOR_TOP, z, radius * 2, 8, top, topMaterial, true)
 	disc(
 		model,
 		"Rock",
 		x,
-		FLOOR_TOP - 4,
+		FLOOR_TOP - 8,
 		z,
-		radius * 2 + 8,
-		14,
+		radius * 2 + 16,
+		12,
 		Color3.fromRGB(92, 86, 78),
 		Enum.Material.Rock,
 		true
@@ -381,6 +372,7 @@ local function buildCrystal(parent: Instance)
 		orbitConnection:Disconnect()
 	end
 	local spin = 0
+	print(string.format("[Shardfall] Lumen Heart orbit started (%d shards)", #pieces))
 	orbitConnection = RunService.Heartbeat:Connect(function(dt)
 		if crystal.Parent == nil then
 			if orbitConnection ~= nil then
@@ -393,7 +385,7 @@ local function buildCrystal(parent: Instance)
 		for index, shard in ipairs(pieces) do
 			local angle = spin + (index - 1) * (math.pi * 2 / #pieces)
 			local radius = 18 + (index % 3)
-			local height = 15 + math.sin(spin * 1.4 + index) * 4
+			local height = Haven.FLOOR_Y + 15 + math.sin(spin * 1.4 + index) * 4
 			shard.CFrame = CFrame.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
 				* CFrame.Angles(0, -angle, math.rad(20))
 		end
@@ -406,8 +398,11 @@ local function buildPlaza(parent: Instance)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
 	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.CFrame = CFrame.new(Haven.SPAWN.x, FLOOR_TOP + 0.5, Haven.SPAWN.z)
+	spawn.CFrame = CFrame.new(Haven.SPAWN.x, Haven.FLOOR_Y + 0.5, Haven.SPAWN.z)
 	spawn.Anchored = true
+	spawn.CanCollide = true
+	spawn.Transparency = 0
+	spawn.Enabled = true
 	spawn.Neutral = true
 	spawn.Duration = 0
 	spawn.Color = Color3.fromRGB(186, 176, 140)
@@ -430,7 +425,8 @@ local function buildPlaza(parent: Instance)
 		stand.CFrame * CFrame.new(0, 1, -1.2),
 		Color3.fromRGB(196, 206, 214),
 		Enum.Material.Metal,
-		false
+		false,
+		true
 	)
 	promptOn(stand, "Armory", "Weapons and armor", "armory", nil)
 	sign(parent, CFrame.new(Haven.ARMORY.x, 8, Haven.ARMORY.z - 2), "ARMORY", 10)
@@ -464,6 +460,7 @@ local function buildForge(parent: Instance)
 		hall.CFrame * CFrame.new(0, 9, 0),
 		Color3.fromRGB(32, 30, 34),
 		Enum.Material.Basalt,
+		true,
 		true
 	)
 	for index, offset in ipairs({ -8, 8 }) do
@@ -474,6 +471,7 @@ local function buildForge(parent: Instance)
 			hall.CFrame * CFrame.new(offset, 14, -4),
 			Color3.fromRGB(36, 34, 38),
 			Enum.Material.Slate,
+			true,
 			true
 		).Name = "Chimney"
 			.. tostring(index)
@@ -547,6 +545,7 @@ local function buildGuild(parent: Instance)
 		hall.CFrame * CFrame.new(0, 11, 0),
 		Color3.fromRGB(78, 112, 176),
 		Enum.Material.Slate,
+		true,
 		true
 	)
 	part(
@@ -556,6 +555,7 @@ local function buildGuild(parent: Instance)
 		hall.CFrame * CFrame.new(0, -4, 10.5),
 		Color3.fromRGB(64, 52, 40),
 		Enum.Material.Wood,
+		true,
 		true
 	)
 	local closed = stationPad(model, place.x, place.z, Color3.fromRGB(180, 180, 190))
@@ -584,14 +584,11 @@ local function buildGarden(parent: Instance)
 	for index, spot in ipairs(trees) do
 		local tx = place.x + spot[1]
 		local tz = place.z + spot[2]
-		verticalCylinder(
+		part(
 			model,
 			"Trunk",
-			tx,
-			3.5,
-			tz,
-			1.8,
-			7,
+			Vector3.new(2, 7, 2),
+			CFrame.new(tx, 3.5, tz),
 			Color3.fromRGB(110, 78, 52),
 			Enum.Material.Wood,
 			true
@@ -617,14 +614,11 @@ local function buildObservatory(parent: Instance)
 	assert(place ~= nil and place.radius ~= nil, "Observatory is missing")
 	local model =
 		island(parent, "Observatory", place.x, place.z, place.radius, STONE, Enum.Material.Slate)
-	verticalCylinder(
+	part(
 		model,
 		"Drum",
-		place.x,
-		6,
-		place.z,
-		22,
-		12,
+		Vector3.new(22, 12, 22),
+		CFrame.new(place.x, 6, place.z),
 		Color3.fromRGB(150, 156, 168),
 		Enum.Material.Limestone,
 		true
@@ -785,21 +779,57 @@ local function buildRocks(parent: Instance)
 	end
 end
 
-local function hideForeignSpawns()
+local function clearDefaultPlace()
+	local plate = workspace:FindFirstChild("Baseplate")
+	if plate ~= nil then
+		pcall(function()
+			plate:Destroy()
+		end)
+		if plate.Parent ~= nil and plate:IsA("BasePart") then
+			pcall(function()
+				plate.Anchored = true
+				plate.CanCollide = false
+				plate.Transparency = 1
+			end)
+			print("[Shardfall] Default Baseplate could not be destroyed; it was hidden")
+		else
+			print("[Shardfall] Default Baseplate removed")
+		end
+	end
+
+	local doomed = {}
 	for _, descendant in ipairs(workspace:GetDescendants()) do
 		if descendant:IsA("SpawnLocation") and descendant.Name ~= "HubSpawn" then
-			descendant.Enabled = false
-			descendant.Transparency = 1
-			descendant.CanCollide = false
+			table.insert(doomed, descendant)
 		end
+	end
+	for _, spawn in ipairs(doomed) do
+		pcall(function()
+			spawn:Destroy()
+		end)
+		if spawn.Parent ~= nil and spawn:IsA("SpawnLocation") then
+			pcall(function()
+				spawn.Enabled = false
+				spawn.CanCollide = false
+				spawn.Transparency = 1
+			end)
+		end
+	end
+	if #doomed > 0 then
+		print(string.format("[Shardfall] Removed %d default SpawnLocation", #doomed))
 	end
 end
 
 function HavenBuilder.build(parent: Instance): number
+	-- Persistent before parenting, and a direct Workspace child. Kevin's
+	-- Explorer showed Camera, Terrain, and Baseplate, with no Haven.
 	if parent:IsA("Model") then
+		parent.Parent = nil
 		parent.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+		parent.Parent = workspace
 	end
 
+	clearDefaultPlace()
 	buildPlaza(parent)
 	buildCrystal(parent)
 	buildForge(parent)
@@ -810,32 +840,58 @@ function HavenBuilder.build(parent: Instance): number
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)
-	hideForeignSpawns()
+	clearDefaultPlace()
 
 	local count = 0
+	local prompts = 0
 	for _, descendant in ipairs(parent:GetDescendants()) do
 		if descendant:IsA("BasePart") then
 			count += 1
+		elseif descendant:IsA("ProximityPrompt") then
+			prompts += 1
+			local action = descendant:GetAttribute("HavenAction")
+			descendant.Triggered:Connect(function(player)
+				print(
+					string.format(
+						"[Shardfall] Server saw prompt %s from %s",
+						tostring(action),
+						player.Name
+					)
+				)
+			end)
 		end
 	end
+	print(
+		string.format(
+			"[Shardfall] Haven built under %s at floor y=%d (%d prompts)",
+			parent.Name,
+			Haven.FLOOR_Y,
+			prompts
+		)
+	)
 	return count
 end
 
 function HavenBuilder.bindRootvault(callback: (Player) -> ())
-	local world = workspace:FindFirstChild("ShardfallWorld")
-	if world == nil then
+	local haven = workspace:FindFirstChild("Haven")
+	if haven == nil then
+		warn("[Shardfall] Haven model missing; Verdant prompt not bound")
 		return
 	end
-	for _, descendant in ipairs(world:GetDescendants()) do
+	local bound = 0
+	for _, descendant in ipairs(haven:GetDescendants()) do
 		if
 			descendant:IsA("ProximityPrompt")
 			and descendant:GetAttribute("HavenAction") == "rootvault"
 		then
+			bound += 1
 			descendant.Triggered:Connect(function(player)
+				print("[Shardfall] Server rootvault prompt from", player.Name)
 				callback(player)
 			end)
 		end
 	end
+	print(string.format("[Shardfall] Rootvault prompts bound: %d", bound))
 end
 
 return HavenBuilder
