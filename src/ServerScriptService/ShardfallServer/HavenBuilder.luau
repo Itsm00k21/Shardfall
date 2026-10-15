@@ -194,48 +194,183 @@ local function promptOn(
 	prompt.Parent = host
 end
 
-local function approach(
-	fromX: number,
-	fromZ: number,
-	toX: number,
-	toZ: number,
-	inset: number
-): (number, number)
-	local dx = toX - fromX
-	local dz = toZ - fromZ
-	local distance = math.sqrt(dx * dx + dz * dz)
-	if distance < 0.1 then
-		return fromX, fromZ
-	end
-	return fromX + dx / distance * inset, fromZ + dz / distance * inset
-end
-
+-- Keep overlapping faces this far apart. Coplanar tops flicker in Studio.
+local SEAM = 0.08
 local BRIDGE_WIDTH = 14
 local BRIDGE_THICKNESS = 4
-local BRIDGE_OVERLAP = 8
 local FLOOR_TOP = 0
 local SHELF_DEPTH = 24
+local TONGUE = 6
 
--- One block along the real direction. lookAt points local -Z down the span,
--- so Size.Z is the length. Shape stays Block; the CFrame is applied after Size.
-local function bridge(parent: Instance, x1: number, z1: number, x2: number, z2: number)
+-- Top stays put. The bottom sinks SEAM into the floor so the contact faces
+-- are not coplanar.
+local function sunk(top: number, height: number): (number, number)
+	local sizeY = height + SEAM
+	return sizeY, top - sizeY / 2
+end
+
+local function faceDistance(halfX: number, halfZ: number, dirX: number, dirZ: number): number
+	local tx = if math.abs(dirX) > 1e-6 then halfX / math.abs(dirX) else math.huge
+	local tz = if math.abs(dirZ) > 1e-6 then halfZ / math.abs(dirZ) else math.huge
+	return math.min(tx, tz)
+end
+
+-- True when the bridge end still cuts the floor rectangle.
+local function endHits(
+	dirX: number,
+	dirZ: number,
+	rightX: number,
+	rightZ: number,
+	distance: number,
+	halfX: number,
+	halfZ: number,
+	width: number
+): boolean
+	local midX = dirX * distance
+	local midZ = dirZ * distance
+	local x1 = midX + rightX * (-width / 2)
+	local z1 = midZ + rightZ * (-width / 2)
+	local x2 = midX + rightX * (width / 2)
+	local z2 = midZ + rightZ * (width / 2)
+	local dx = x2 - x1
+	local dz = z2 - z1
+	local t0 = 0
+	local t1 = 1
+	local function clip(p: number, q: number): boolean
+		if math.abs(p) < 1e-9 then
+			return q >= 0
+		end
+		local r = q / p
+		if p < 0 then
+			if r > t1 then
+				return false
+			end
+			if r > t0 then
+				t0 = r
+			end
+		else
+			if r < t0 then
+				return false
+			end
+			if r < t1 then
+				t1 = r
+			end
+		end
+		return true
+	end
+	if not clip(-dx, x1 + halfX) then
+		return false
+	end
+	if not clip(dx, halfX - x1) then
+		return false
+	end
+	if not clip(-dz, z1 + halfZ) then
+		return false
+	end
+	if not clip(dz, halfZ - z1) then
+		return false
+	end
+	return t1 > t0 + 1e-4
+end
+
+-- How far from a floor center the full bridge width is clear of that floor.
+local function clearance(
+	dirX: number,
+	dirZ: number,
+	halfX: number,
+	halfZ: number,
+	width: number
+): number
+	local rightX = -dirZ
+	local rightZ = dirX
+	local lo = 0
+	local hi = math.max(halfX, halfZ) * 2 + width
+	for _ = 1, 28 do
+		local mid = (lo + hi) / 2
+		if endHits(dirX, dirZ, rightX, rightZ, mid, halfX, halfZ, width) then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	return hi
+end
+
+local function oriented(
+	parent: Instance,
+	name: string,
+	x1: number,
+	z1: number,
+	x2: number,
+	z2: number,
+	yTop: number
+)
 	local dx = x2 - x1
 	local dz = z2 - z1
 	local length = math.sqrt(dx * dx + dz * dz)
-	if length < 1 then
+	if length < 0.2 then
 		return
 	end
-	local yCenter = FLOOR_TOP - BRIDGE_THICKNESS / 2
-	local mid = Vector3.new((x1 + x2) / 2, yCenter, (z1 + z2) / 2)
-	local cf = CFrame.lookAt(mid, Vector3.new(x2, yCenter, z2))
+	local yCenter = yTop - BRIDGE_THICKNESS / 2
+	local cf = CFrame.lookAt(
+		Vector3.new((x1 + x2) / 2, yCenter, (z1 + z2) / 2),
+		Vector3.new(x2, yCenter, z2)
+	)
 	part(
 		parent,
-		"Bridge",
-		Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, length + BRIDGE_OVERLAP * 2),
+		name,
+		Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, length),
 		cf,
 		Color3.fromRGB(126, 122, 116),
 		Enum.Material.Cobblestone,
 		true
+	)
+end
+
+-- Flush deck stops at each rim. A tongue tucks under the floor, lower by
+-- SEAM, so the overlap still holds a foot and the tops do not flicker.
+local function bridge(
+	parent: Instance,
+	x1: number,
+	z1: number,
+	halfX1: number,
+	halfZ1: number,
+	x2: number,
+	z2: number,
+	halfX2: number,
+	halfZ2: number,
+	slot: number
+)
+	local dx = x2 - x1
+	local dz = z2 - z1
+	local distance = math.sqrt(dx * dx + dz * dz)
+	if distance < 1 then
+		return
+	end
+	local dirX = dx / distance
+	local dirZ = dz / distance
+	local clear1 = clearance(dirX, dirZ, halfX1, halfZ1, BRIDGE_WIDTH)
+	local clear2 = clearance(-dirX, -dirZ, halfX2, halfZ2, BRIDGE_WIDTH)
+	local face1 = faceDistance(halfX1, halfZ1, dirX, dirZ)
+	local face2 = faceDistance(halfX2, halfZ2, -dirX, -dirZ)
+	local deckAX = x1 + dirX * clear1
+	local deckAZ = z1 + dirZ * clear1
+	local deckBX = x2 - dirX * clear2
+	local deckBZ = z2 - dirZ * clear2
+	oriented(parent, "Landing", deckAX, deckAZ, deckBX, deckBZ, FLOOR_TOP)
+	-- Each tongue sits a little lower than the last so two tongues that
+	-- cross under the plaza do not share a top either.
+	local tongueDrop = SEAM + (slot - 1) * 0.02
+	local start1 = math.max(0, face1 - TONGUE)
+	local start2 = math.max(0, face2 - TONGUE)
+	oriented(
+		parent,
+		"Bridge",
+		x1 + dirX * start1,
+		z1 + dirZ * start1,
+		x2 - dirX * start2,
+		z2 - dirZ * start2,
+		FLOOR_TOP - tongueDrop
 	)
 end
 
@@ -256,7 +391,7 @@ local function island(
 		model,
 		"Rock",
 		x,
-		FLOOR_TOP - 8,
+		FLOOR_TOP - 8 - SEAM,
 		z,
 		radius * 2 + 16,
 		12,
@@ -267,7 +402,13 @@ local function island(
 	return model
 end
 
-local function stationPad(parent: Instance, x: number, z: number, color: Color3): Part
+local function stationPad(
+	parent: Instance,
+	x: number,
+	z: number,
+	color: Color3,
+	diameter: number?
+): Part
 	local dx = -x
 	local dz = -z
 	local distance = math.sqrt(dx * dx + dz * dz)
@@ -277,14 +418,26 @@ local function stationPad(parent: Instance, x: number, z: number, color: Color3)
 		px = x + dx / distance * 8
 		pz = z + dz / distance * 8
 	end
-	return disc(parent, "Station", px, 0.45, pz, 9, 0.45, color, Enum.Material.Neon, false)
+	local size = diameter or 9
+	return disc(
+		parent,
+		"Station",
+		px,
+		0.45,
+		pz,
+		size,
+		0.45 + SEAM,
+		color,
+		Enum.Material.Neon,
+		false
+	)
 end
 
 local STONE = Color3.fromRGB(138, 136, 130)
 local GRASS = Color3.fromRGB(78, 148, 72)
 
 local function buildCrystal(parent: Instance)
-	disc(parent, "Pedestal", 0, 2, 0, 22, 2, STONE, Enum.Material.Slate, true)
+	disc(parent, "Pedestal", 0, 2, 0, 22, 2 + SEAM, STONE, Enum.Material.Slate, true)
 
 	-- Rotated blocks, bases on the pedestal, leaning out. Not one tall cylinder.
 	local spikes = {
@@ -326,7 +479,7 @@ local function buildCrystal(parent: Instance)
 		parent,
 		"LumenHeart",
 		Vector3.new(6, 24, 6),
-		CFrame.new(0, 14, 0),
+		CFrame.new(0, 14 - SEAM, 0),
 		Color3.fromRGB(236, 220, 255),
 		Enum.Material.Neon,
 		true
@@ -409,8 +562,8 @@ local function buildPlaza(parent: Instance)
 	sign(parent, CFrame.new(0, 14, -Haven.PLAZA_RADIUS + 12), "Boss Plaza")
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.CFrame = CFrame.new(Haven.SPAWN.x, Haven.FLOOR_Y + 0.5, Haven.SPAWN.z)
+	spawn.Size = Vector3.new(12, 1 + SEAM, 12)
+	spawn.CFrame = CFrame.new(Haven.SPAWN.x, Haven.FLOOR_Y + 1 - (1 + SEAM) / 2, Haven.SPAWN.z)
 	spawn.Anchored = true
 	spawn.CanCollide = true
 	spawn.Transparency = 0
@@ -421,11 +574,12 @@ local function buildPlaza(parent: Instance)
 	spawn.Material = Enum.Material.Cobblestone
 	spawn.Parent = parent
 
+	local armoryHeight, armoryCenter = sunk(6, 6)
 	local stand = part(
 		parent,
 		"Armory",
-		Vector3.new(8, 6, 2),
-		CFrame.new(Haven.ARMORY.x, 3, Haven.ARMORY.z),
+		Vector3.new(8, armoryHeight, 2),
+		CFrame.new(Haven.ARMORY.x, armoryCenter, Haven.ARMORY.z),
 		Color3.fromRGB(92, 78, 64),
 		Enum.Material.Wood,
 		true
@@ -447,7 +601,7 @@ local function buildPlaza(parent: Instance)
 		0.45,
 		Haven.ARMORY.z + 6,
 		12,
-		0.45,
+		0.45 + SEAM,
 		Color3.fromRGB(212, 176, 96),
 		Enum.Material.Neon,
 		false
@@ -468,11 +622,12 @@ local function buildForge(parent: Instance)
 		Color3.fromRGB(54, 52, 58),
 		Enum.Material.Slate
 	)
+	local hallHeight, hallCenter = sunk(16, 16)
 	local hall = part(
 		model,
 		"Hall",
-		Vector3.new(28, 16, 22),
-		CFrame.new(place.x - 6, 8, place.z - 4),
+		Vector3.new(28, hallHeight, 22),
+		CFrame.new(place.x - 6, hallCenter, place.z - 4),
 		Color3.fromRGB(42, 40, 46),
 		Enum.Material.Slate,
 		true
@@ -521,14 +676,15 @@ local function buildMarket(parent: Instance)
 		{ x = -10, z = 8, color = { 240, 180, 50 } },
 		{ x = 10, z = 8, color = { 150, 80, 210 } },
 	}
+	local stallHeight, stallCenter = sunk(5, 5)
 	for index, stall in ipairs(awnings) do
 		local sx = place.x + stall.x
 		local sz = place.z + stall.z
 		part(
 			model,
 			"Stall" .. tostring(index),
-			Vector3.new(8, 5, 6),
-			CFrame.new(sx, 2.5, sz),
+			Vector3.new(8, stallHeight, 6),
+			CFrame.new(sx, stallCenter, sz),
 			Color3.fromRGB(120, 84, 58),
 			Enum.Material.Wood,
 			true
@@ -553,11 +709,12 @@ local function buildGuild(parent: Instance)
 	assert(place ~= nil and place.radius ~= nil, "Guild is missing")
 	local model =
 		island(parent, "GuildHall", place.x, place.z, place.radius, GRASS, Enum.Material.Grass)
+	local hallHeight, hallCenter = sunk(18, 18)
 	local hall = part(
 		model,
 		"Hall",
-		Vector3.new(26, 18, 20),
-		CFrame.new(place.x, 9, place.z - 4),
+		Vector3.new(26, hallHeight, 20),
+		CFrame.new(place.x, hallCenter, place.z - 4),
 		Color3.fromRGB(226, 220, 206),
 		Enum.Material.Limestone,
 		true
@@ -566,7 +723,7 @@ local function buildGuild(parent: Instance)
 		model,
 		"Roof",
 		Vector3.new(28, 4, 22),
-		hall.CFrame * CFrame.new(0, 11, 0),
+		hall.CFrame * CFrame.new(0, 11 + SEAM * 1.5, 0),
 		Color3.fromRGB(78, 112, 176),
 		Enum.Material.Slate,
 		true,
@@ -576,7 +733,7 @@ local function buildGuild(parent: Instance)
 		model,
 		"Door",
 		Vector3.new(6, 8, 1),
-		hall.CFrame * CFrame.new(0, -4, 10.5),
+		hall.CFrame * CFrame.new(0, -4, 10.5 + SEAM),
 		Color3.fromRGB(64, 52, 40),
 		Enum.Material.Wood,
 		true,
@@ -599,11 +756,12 @@ local function buildGarden(parent: Instance)
 		0.35,
 		place.z + 4,
 		16,
-		0.4,
+		0.35 + SEAM,
 		Color3.fromRGB(70, 160, 210),
 		Enum.Material.Glass,
 		false
 	)
+	local trunkHeight, trunkCenter = sunk(7, 7)
 	local trees = { { -12, -6 }, { 4, -12 }, { -8, 10 } }
 	for index, spot in ipairs(trees) do
 		local tx = place.x + spot[1]
@@ -611,8 +769,8 @@ local function buildGarden(parent: Instance)
 		part(
 			model,
 			"Trunk",
-			Vector3.new(2, 7, 2),
-			CFrame.new(tx, 3.5, tz),
+			Vector3.new(2, trunkHeight, 2),
+			CFrame.new(tx, trunkCenter, tz),
 			Color3.fromRGB(110, 78, 52),
 			Enum.Material.Wood,
 			true
@@ -628,8 +786,7 @@ local function buildGarden(parent: Instance)
 			Enum.Material.Grass
 		)
 	end
-	local pets = stationPad(model, place.x, place.z, Color3.fromRGB(255, 150, 196))
-	pets.Size = Vector3.new(12, 0.45, 12)
+	local pets = stationPad(model, place.x, place.z, Color3.fromRGB(255, 150, 196), 12)
 	promptOn(pets, "Pets", "Companions", "pets", nil)
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Pet Garden")
 end
@@ -639,11 +796,12 @@ local function buildObservatory(parent: Instance)
 	assert(place ~= nil and place.radius ~= nil, "Observatory is missing")
 	local model =
 		island(parent, "Observatory", place.x, place.z, place.radius, STONE, Enum.Material.Slate)
+	local drumHeight, drumCenter = sunk(12, 12)
 	part(
 		model,
 		"Drum",
-		Vector3.new(22, 12, 22),
-		CFrame.new(place.x, 6, place.z),
+		Vector3.new(22, drumHeight, 22),
+		CFrame.new(place.x, drumCenter, place.z),
 		Color3.fromRGB(150, 156, 168),
 		Enum.Material.Limestone,
 		true
@@ -663,24 +821,29 @@ local function buildObservatory(parent: Instance)
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Observatory")
 end
 
-local function buildPortals(parent: Instance)
-	local shelf = Instance.new("Model")
-	shelf.Name = "RealmArches"
-	shelf.Parent = parent
+-- Center x, center z, and width of the realm shelf. Bridges use the same span.
+local function shelfLayout(): (number, number, number)
 	local minX = math.huge
 	local maxX = -math.huge
-	local shelfZ = 0
+	local shelfZ = Haven.PORTALS[1].z
 	for _, portal in ipairs(Haven.PORTALS) do
 		minX = math.min(minX, portal.x)
 		maxX = math.max(maxX, portal.x)
 		shelfZ = portal.z
 	end
-	local width = (maxX - minX) + 48
+	return 0, shelfZ, (maxX - minX) + 48
+end
+
+local function buildPortals(parent: Instance)
+	local shelf = Instance.new("Model")
+	shelf.Name = "RealmArches"
+	shelf.Parent = parent
+	local shelfX, shelfZ, width = shelfLayout()
 	part(
 		shelf,
 		"Ground",
 		Vector3.new(width, 4, SHELF_DEPTH),
-		CFrame.new(0, -2, shelfZ),
+		CFrame.new(shelfX, -2, shelfZ),
 		GRASS,
 		Enum.Material.Grass,
 		true
@@ -689,11 +852,12 @@ local function buildPortals(parent: Instance)
 		shelf,
 		"Rock",
 		Vector3.new(width + 16, 10, SHELF_DEPTH + 16),
-		CFrame.new(0, -9, shelfZ),
+		CFrame.new(shelfX, -9 - SEAM, shelfZ),
 		Color3.fromRGB(92, 86, 78),
 		Enum.Material.Rock,
 		true
 	)
+	local pillarHeight, pillarCenter = sunk(18, 18)
 	for _, portal in ipairs(Haven.PORTALS) do
 		local color = rgb(portal.color :: { number })
 		local arch = Instance.new("Model")
@@ -702,8 +866,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"PillarL",
-			Vector3.new(3.5, 18, 3.5),
-			CFrame.new(portal.x - 7, 9, portal.z),
+			Vector3.new(3.5, pillarHeight, 3.5),
+			CFrame.new(portal.x - 7, pillarCenter, portal.z),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -711,8 +875,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"PillarR",
-			Vector3.new(3.5, 18, 3.5),
-			CFrame.new(portal.x + 7, 9, portal.z),
+			Vector3.new(3.5, pillarHeight, 3.5),
+			CFrame.new(portal.x + 7, pillarCenter, portal.z),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -721,7 +885,7 @@ local function buildPortals(parent: Instance)
 			arch,
 			"Lintel",
 			Vector3.new(18, 3, 4),
-			CFrame.new(portal.x, 19.5, portal.z),
+			CFrame.new(portal.x, 19.5 + SEAM, portal.z),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -744,7 +908,7 @@ local function buildPortals(parent: Instance)
 			part(
 				arch,
 				"Seal",
-				Vector3.new(10, 1.4, 1.4),
+				Vector3.new(10 - SEAM * 2, 1.4, 1.4),
 				CFrame.new(portal.x, 9, portal.z),
 				Color3.fromRGB(36, 34, 40),
 				Enum.Material.Metal,
@@ -754,20 +918,6 @@ local function buildPortals(parent: Instance)
 		end
 		sign(arch, CFrame.new(portal.x, 24, portal.z), portal.name)
 	end
-end
-
-local function link(
-	parent: Instance,
-	x1: number,
-	z1: number,
-	r1: number,
-	x2: number,
-	z2: number,
-	r2: number
-)
-	local ax, az = approach(x1, z1, x2, z2, r1)
-	local bx, bz = approach(x2, z2, x1, z1, r2)
-	bridge(parent, ax, az, bx, bz)
 end
 
 local function buildBridges(parent: Instance)
@@ -784,13 +934,26 @@ local function buildBridges(parent: Instance)
 	local bridges = Instance.new("Folder")
 	bridges.Name = "Bridges"
 	bridges.Parent = parent
-	local shelfZ = Haven.PORTALS[1].z
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, forge.x, forge.z, forge.radius)
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, market.x, market.z, market.radius)
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, guild.x, guild.z, guild.radius)
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, garden.x, garden.z, garden.radius)
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, observatory.x, observatory.z, observatory.radius)
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, 0, shelfZ, SHELF_DEPTH / 2)
+	local plaza = Haven.PLAZA_RADIUS
+	local shelfX, shelfZ, shelfWidth = shelfLayout()
+	-- Squares: the walkable face is the full half-extent, not the inscribed circle.
+	bridge(bridges, 0, 0, plaza, plaza, forge.x, forge.z, forge.radius, forge.radius, 1)
+	bridge(bridges, 0, 0, plaza, plaza, market.x, market.z, market.radius, market.radius, 2)
+	bridge(bridges, 0, 0, plaza, plaza, guild.x, guild.z, guild.radius, guild.radius, 3)
+	bridge(bridges, 0, 0, plaza, plaza, garden.x, garden.z, garden.radius, garden.radius, 4)
+	bridge(
+		bridges,
+		0,
+		0,
+		plaza,
+		plaza,
+		observatory.x,
+		observatory.z,
+		observatory.radius,
+		observatory.radius,
+		5
+	)
+	bridge(bridges, 0, 0, plaza, plaza, shelfX, shelfZ, shelfWidth / 2, SHELF_DEPTH / 2, 6)
 end
 
 local function buildRocks(parent: Instance)

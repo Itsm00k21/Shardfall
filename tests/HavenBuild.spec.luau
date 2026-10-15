@@ -586,6 +586,7 @@ describe("HavenBuilder", function()
 					descendant.Name == "Ground"
 					or descendant.Name == "Rock"
 					or descendant.Name == "Bridge"
+					or descendant.Name == "Landing"
 					or descendant.Name == "HubSpawn"
 					or descendant.Name == "LumenHeart"
 					or descendant.Name == "CrystalShard"
@@ -631,7 +632,7 @@ describe("HavenBuilder", function()
 							nextMark = "*"
 						elseif part.Name == "PillarL" then
 							nextMark = "A"
-						elseif part.Name == "Bridge" then
+						elseif part.Name == "Bridge" or part.Name == "Landing" then
 							nextMark = "="
 						elseif part.Name == "Ground" then
 							nextMark = "#"
@@ -761,25 +762,38 @@ describe("HavenBuilder", function()
 			return x1 + dx / distance * inset, z1 + dz / distance * inset
 		end
 
+		local function faceExit(halfX: number, halfZ: number, dirX: number, dirZ: number): number
+			local tx = if math.abs(dirX) > 1e-6 then halfX / math.abs(dirX) else math.huge
+			local tz = if math.abs(dirZ) > 1e-6 then halfZ / math.abs(dirZ) else math.huge
+			return math.min(tx, tz)
+		end
+
+		local function deckTop(part: Mock): number
+			local pos = part.CFrame.Position
+			return pos.Y + part.CFrame.YVector.Y * part.Size.Y / 2
+		end
+
 		local bridges = findAll(hub, "Bridge")
+		local landings = findAll(hub, "Landing")
 		local goals = {}
 		for _, district in ipairs(Haven.DISTRICTS) do
 			table.insert(goals, {
 				name = district.name,
 				x = district.x,
 				z = district.z,
-				radius = district.radius,
+				halfX = district.radius,
+				halfZ = district.radius,
 			})
 		end
-		local shelfZ = Haven.PORTALS[1].z
 		local shelf = findNamed(hub, "RealmArches"):FindFirstChild("Ground")
 		table.insert(goals, {
 			name = "portal shelf",
-			x = 0,
-			z = shelfZ,
-			radius = shelf.Size.Z / 2,
+			x = shelf.CFrame.Position.X,
+			z = shelf.CFrame.Position.Z,
+			halfX = shelf.Size.X / 2,
+			halfZ = shelf.Size.Z / 2,
 		})
-		if #bridges < #goals then
+		if #bridges < #goals or #landings < #goals then
 			error("missing a bridge", 2)
 		end
 		for _, span in ipairs(bridges) do
@@ -790,26 +804,158 @@ describe("HavenBuilder", function()
 					2
 				)
 			end
+			local drop = Haven.FLOOR_Y - deckTop(span)
+			if drop < 0.05 or drop > 0.25 then
+				error(string.format("bridge tongue sits %.3f below the floor", drop), 2)
+			end
+		end
+		for _, deck in ipairs(landings) do
+			floorBlock(deck, "landing")
+			if deck.Size.X < 8 or deck.Size.Y < 2 then
+				error(
+					string.format("landing is %.1f wide and %.1f thick", deck.Size.X, deck.Size.Y),
+					2
+				)
+			end
+			if math.abs(deckTop(deck) - Haven.FLOOR_Y) > 0.01 then
+				error("landing is not flush with the floor", 2)
+			end
 		end
 
 		walk(Haven.SPAWN.x, Haven.SPAWN.z, 0, 0, "spawn to plaza")
 		for _, goal in ipairs(goals) do
 			local rimX, rimZ = approach(0, 0, goal.x, goal.z, Haven.PLAZA_RADIUS)
-			local farX, farZ = approach(goal.x, goal.z, 0, 0, goal.radius)
 			walk(Haven.SPAWN.x, Haven.SPAWN.z, rimX, rimZ, "spawn to " .. goal.name)
 			walk(rimX, rimZ, goal.x, goal.z, goal.name)
-			local function onto(cx: number, cz: number, rx: number, rz: number)
-				local dx = cx - rx
-				local dz = cz - rz
+			local function onto(
+				cx: number,
+				cz: number,
+				halfX: number,
+				halfZ: number,
+				tx: number,
+				tz: number
+			)
+				local dx = tx - cx
+				local dz = tz - cz
 				local distance = math.sqrt(dx * dx + dz * dz)
-				local ox = rx + dx / distance * 2
-				local oz = rz + dz / distance * 2
+				local dirX = dx / distance
+				local dirZ = dz / distance
+				local face = faceExit(halfX, halfZ, dirX, dirZ)
+				local ox = cx + dirX * (face - 2)
+				local oz = cz + dirZ * (face - 2)
 				if not onBridge(ox, oz) then
-					error(goal.name .. " bridge overlaps the floor by less than 2 studs", 2)
+					error(goal.name .. " bridge tongue does not reach 2 studs under the floor", 2)
 				end
 			end
-			onto(0, 0, rimX, rimZ)
-			onto(goal.x, goal.z, farX, farZ)
+			onto(0, 0, Haven.PLAZA_RADIUS, Haven.PLAZA_RADIUS, goal.x, goal.z)
+			onto(goal.x, goal.z, goal.halfX, goal.halfZ, 0, 0)
+		end
+
+		-- Flat horizontal tops that overlap in XZ must not share a Y.
+		local function flatTop(part: Mock): boolean
+			if part.Transparency >= 1 then
+				return false
+			end
+			if shapeName(part) == "Enum.PartType.Ball" then
+				return false
+			end
+			return math.abs(part.CFrame.YVector.Y) > 0.99
+		end
+
+		local function xzCorners(part: Mock): { Mock }
+			local cf = part.CFrame
+			local hx = part.Size.X / 2
+			local hz = part.Size.Z / 2
+			local points = {}
+			for _, sx in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					table.insert(points, cf:PointToWorldSpace(vector3(sx * hx, 0, sz * hz)))
+				end
+			end
+			return points
+		end
+
+		local function overlapOn(
+			pointsA: { Mock },
+			pointsB: { Mock },
+			ax: number,
+			az: number
+		): number?
+			local function span(points: { Mock }): (number, number)
+				local lo = math.huge
+				local hi = -math.huge
+				for _, point in ipairs(points) do
+					local dot = point.X * ax + point.Z * az
+					lo = math.min(lo, dot)
+					hi = math.max(hi, dot)
+				end
+				return lo, hi
+			end
+			local a0, a1 = span(pointsA)
+			local b0, b1 = span(pointsB)
+			local overlap = math.min(a1, b1) - math.max(a0, b0)
+			if overlap <= 0 then
+				return nil
+			end
+			return overlap
+		end
+
+		local function penetration(a: Mock, b: Mock): number
+			local cornersA = xzCorners(a)
+			local cornersB = xzCorners(b)
+			local best = math.huge
+			local function consider(axis: Mock)
+				if best < 0 then
+					return
+				end
+				local mag = math.sqrt(axis.X * axis.X + axis.Z * axis.Z)
+				if mag < 1e-6 then
+					return
+				end
+				local hit = overlapOn(cornersA, cornersB, axis.X / mag, axis.Z / mag)
+				if hit == nil then
+					best = -1
+				else
+					best = math.min(best, hit)
+				end
+			end
+			consider(a.CFrame.XVector)
+			consider(a.CFrame.ZVector)
+			consider(b.CFrame.XVector)
+			consider(b.CFrame.ZVector)
+			return best
+		end
+
+		local function partLabel(part: Mock): string
+			local owner = if part.Parent ~= nil then part.Parent.Name else "?"
+			return owner .. "." .. part.Name
+		end
+
+		local flats = {}
+		for _, descendant in ipairs(hub:GetDescendants()) do
+			if descendant:IsA("BasePart") and flatTop(descendant) then
+				table.insert(flats, descendant)
+			end
+		end
+		for i = 1, #flats do
+			for j = i + 1, #flats do
+				local left = flats[i]
+				local right = flats[j]
+				if
+					math.abs(deckTop(left) - deckTop(right)) < 0.01
+					and penetration(left, right) > 0.05
+				then
+					error(
+						string.format(
+							"%s and %s share a top at y=%.3f",
+							partLabel(left),
+							partLabel(right),
+							deckTop(left)
+						),
+						2
+					)
+				end
+			end
 		end
 
 		local left = Haven.PORTALS[1]
