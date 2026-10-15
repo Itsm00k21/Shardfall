@@ -17,6 +17,7 @@ local expect = framework.expect
 
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
+local VerdantScatter = require("../src/ReplicatedStorage/Shared/VerdantScatter")
 
 type Mock = any
 
@@ -196,6 +197,7 @@ end
 
 local BASE_PART = {
 	Part = true,
+	WedgePart = true,
 	SpawnLocation = true,
 }
 
@@ -383,6 +385,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 	local havenModule = instance("ModuleScript")
 	havenModule.Name = "Haven"
 	havenModule.Parent = shared
+	local scatterModule = instance("ModuleScript")
+	scatterModule.Name = "VerdantScatter"
+	scatterModule.Parent = shared
 
 	local runService = {
 		Heartbeat = {
@@ -466,6 +471,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			end
 			if module == havenModule then
 				return Haven
+			end
+			if module == scatterModule then
+				return VerdantScatter
 			end
 			error("unexpected require", 2)
 		end,

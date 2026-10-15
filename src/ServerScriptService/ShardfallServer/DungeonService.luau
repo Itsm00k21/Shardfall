@@ -5,7 +5,7 @@
 
 	Studio does not need a hand-placed map. HavenBuilder creates the hub.
 	This module creates the crawl rooms in Workspace.ShardfallWorld, then
-	teleports the player between them. Enemies are anchored parts with a chase-and-swing loop. The boss
+	teleports the player between them. Enemies are anchored part rigs from ModelFactory with a chase-and-swing loop. The boss
 	adds a weak spot, then a fog that only the sunbeam saves you from.
 
 	A later realm is a row in Dungeons.luau with a higher ascension. Until
@@ -30,6 +30,9 @@ local Drops = require(ReplicatedStorage.Shared.Drops)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
+local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
+local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
+local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
@@ -233,11 +236,12 @@ local function buildRoom(
 	dungeon: Dungeons.DungeonDef,
 	index: number,
 	placeIndex: number?
-)
+): number
 	local room = dungeon.rooms[index]
 	local place = if placeIndex ~= nil then placeIndex else index
 	local model = Instance.new("Model")
 	model.Name = room.id
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = parent
 
 	local floorColor = if dungeon.endless == true
@@ -264,28 +268,23 @@ local function buildRoom(
 			true
 		)
 		path.Material = Enum.Material.Ground
-		local trees = { { -16, -14 }, { 16, -12 }, { -14, 14 }, { 18, 8 } }
-		for treeIndex, spot in ipairs(trees) do
-			local trunk = makePart(
-				"TreeTrunk",
-				Vector3.new(2, 7, 2),
-				roomCFrame(place, Vector3.new(spot[1], 3.5, spot[2])),
-				Color3.fromRGB(92, 64, 40),
-				model,
-				true
-			)
-			trunk.Material = Enum.Material.Wood
-			local canopy = makePart(
-				"TreeCanopy",
-				Vector3.new(7, 7, 7),
-				roomCFrame(place, Vector3.new(spot[1], 8.2, spot[2])),
-				Color3.fromRGB(46, 120, 58),
-				model,
-				false
-			)
-			canopy.Shape = Enum.PartType.Ball
-			canopy.Material = Enum.Material.Grass
-			canopy.Name = "TreeCanopy" .. tostring(treeIndex)
+	end
+
+	local dressing = Instance.new("Model")
+	dressing.Name = "Dressing"
+	dressing.Parent = model
+	local dressMode = if dungeon.endless == true
+		then "waves"
+		elseif index == #dungeon.rooms then "arena"
+		else "wild"
+	local placed = 0
+	for _, spot in ipairs(VerdantScatter.room(place * 9176 + 13, dungeon.floorSize / 2, dressMode)) do
+		local feet = roomCFrame(place, Vector3.new(spot.x, spot.y, spot.z))
+		local prop = ModelFactory.place(dressing, spot.kind, feet, spot.yaw, spot.scale)
+		if prop == nil then
+			warn("[Shardfall] Forest kit missing " .. spot.kind .. " in " .. room.id)
+		else
+			placed += 1
 		end
 	end
 
@@ -342,6 +341,7 @@ local function buildRoom(
 	portal:SetAttribute("RoomIndex", place)
 	portal:SetAttribute("DungeonId", dungeon.id)
 	sign(model, roomCFrame(place, Vector3.new(0, 3.2, 18)), "NEXT", 6)
+	return placed
 end
 
 local function buildWorld()
@@ -380,12 +380,14 @@ local function buildWorld()
 	print(string.format("[Shardfall] Rootvault rooms start at z=%.0f", roomZ))
 	local dungeon = Dungeons.get(Dungeons.ROOTVAULT_ID)
 	assert(dungeon ~= nil, "Rootvault is missing from Dungeons.luau")
+	local dressed = 0
 	for index = 1, #dungeon.rooms do
-		buildRoom(rooms, dungeon, index)
+		dressed += buildRoom(rooms, dungeon, index)
 	end
 	local waves = Dungeons.get(Dungeons.WAVES_ID)
 	assert(waves ~= nil, "Rootvault Waves is missing from Dungeons.luau")
-	buildRoom(rooms, waves, 1, Dungeons.WAVES_ROOM_INDEX)
+	dressed += buildRoom(rooms, waves, 1, Dungeons.WAVES_ROOM_INDEX)
+	print(string.format("[Shardfall] Rootvault forest kit placed %d models", dressed))
 
 	local active = Instance.new("Folder")
 	active.Name = "Active"
@@ -508,11 +510,11 @@ local function dropPickup(parent: Instance, position: Vector3, landed: { [string
 	end
 end
 
-local function enemyBar(part: BasePart, name: string, color: Color3)
+local function enemyBar(part: BasePart, name: string, color: Color3, lift: number)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "ShardfallBar"
 	gui.Size = UDim2.fromOffset(96, 28)
-	gui.StudsOffset = Vector3.new(0, part.Size.Y / 2 + 1.6, 0)
+	gui.StudsOffset = Vector3.new(0, lift, 0)
 	gui.AlwaysOnTop = true
 	gui.Parent = part
 	local label = Instance.new("TextLabel")
@@ -541,7 +543,12 @@ end
 
 local function clearEnemies(run: Run)
 	for _, enemy in pairs(run.enemies) do
-		enemy.part:Destroy()
+		local model = enemy.part.Parent
+		if model ~= nil and model:IsA("Model") then
+			model:Destroy()
+		else
+			enemy.part:Destroy()
+		end
 	end
 	run.enemies = {}
 	if run.sunbeam ~= nil then
@@ -580,18 +587,58 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		health, damage =
 			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
 	end
-	local part = makePart(
-		definition.name,
-		size,
-		roomCFrame(run.placeIndex, Vector3.new(offset.X, y, offset.Z)),
-		color,
-		run.folder,
-		false
-	)
-	part.Material = if definition.boss then Enum.Material.Slate else Enum.Material.Grass
+	local rootCFrame = roomCFrame(run.placeIndex, Vector3.new(offset.X, y, offset.Z))
+	local rigOk, rigOrErr = pcall(function()
+		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, definition.name)
+	end)
+	local part: BasePart
+	if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
+		part = rigOrErr :: BasePart
+	else
+		local reason = if rigOk then "no recipe" else tostring(rigOrErr)
+		warn(string.format("[Shardfall] %s rig failed (%s); anchored marker only", kind, reason))
+		-- Small, anchored, and non-colliding. The old fallback was a full-size
+		-- Grass block, which is what a failed rig looked like in play.
+		part = makePart(
+			definition.name,
+			Vector3.new(1.2, 1.2, 1.2),
+			rootCFrame,
+			color,
+			run.folder,
+			false
+		)
+		part.CanTouch = false
+		part.CanQuery = true
+		part.Massless = true
+		part:SetAttribute("ShardfallRigFailed", true)
+	end
+	local host = part.Parent
+	local rigModel = if host ~= nil and host:IsA("Model") then host else nil
+	if rigModel ~= nil then
+		local pieces = 0
+		for _, descendant in ipairs(rigModel:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				pieces += 1
+				if
+					descendant.Anchored ~= true
+					or descendant.CanCollide == true
+					or descendant.CanTouch == true
+				then
+					warn("[Shardfall] Clamped loose part " .. descendant.Name .. " on " .. kind)
+					descendant.Anchored = true
+					descendant.CanCollide = false
+					descendant.CanTouch = false
+				end
+			end
+		end
+		if pieces < 2 then
+			warn(string.format("[Shardfall] %s rig has %d parts", kind, pieces))
+		end
+	end
 	part:SetAttribute("ShardfallName", definition.name)
 	part:SetAttribute("EnemyId", id)
-	enemyBar(part, definition.name, color)
+	part:SetAttribute("ShardfallKind", kind)
+	enemyBar(part, definition.name, color, ModelFactory.barLift(kind))
 	local enemy: Enemy = {
 		id = id,
 		kind = kind,
@@ -687,7 +734,6 @@ local function spawnWave(player: Player, run: Run)
 		text ..= ". Boss wave. Slam, then the sunbeam at half HP."
 	end
 	pushRun(player, text)
-	teleport(player, roomSpawn(run.placeIndex))
 end
 
 local function destroyRun(player: Player, run: Run)
@@ -856,6 +902,67 @@ local function aliveCount(run: Run): number
 	return count
 end
 
+local function clearNamed(folder: Instance, name: string)
+	local existing = folder:FindFirstChild(name)
+	if existing ~= nil then
+		existing:Destroy()
+	end
+end
+
+local function marker(
+	run: Run,
+	name: string,
+	size: Vector3,
+	position: Vector3,
+	color: Color3,
+	life: number,
+	particle: string?
+)
+	clearNamed(run.folder, name)
+	local part = makePart(name, size, CFrame.new(position), color, run.folder, false)
+	part.Material = Enum.Material.Neon
+	part.Transparency = if particle ~= nil then 0.72 else 0.35
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	if particle ~= nil then
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Name = particle
+		emitter.Rate = 14
+		emitter.Lifetime = NumberRange.new(0.8, 1.6)
+		emitter.Speed = NumberRange.new(0.4, 1.4)
+		emitter.LightEmission = 0.8
+		emitter.Size = NumberSequence.new(0.8)
+		emitter.Color = ColorSequence.new(color)
+		emitter.Parent = part
+	end
+	task.delay(life, function()
+		if part.Parent ~= nil then
+			part:Destroy()
+		end
+	end)
+end
+
+local function summonSaplings(run: Run)
+	clearNamed(run.folder, "Saplings")
+	local folder = Instance.new("Folder")
+	folder.Name = "Saplings"
+	folder.Parent = run.folder
+	local marks = VerdantLook.MARKERS
+	local offsets = {
+		Vector3.new(-10, marks.slam.y, 6),
+		Vector3.new(10, marks.slam.y, 4),
+		Vector3.new(2, marks.slam.y, -8),
+	}
+	for index = 1, marks.saplingCount do
+		local offset = offsets[index]
+		if offset ~= nil then
+			local feet = roomCFrame(run.placeIndex, offset)
+			ModelFactory.place(folder, marks.sapling, feet, index * 0.6, marks.saplingScale)
+		end
+	end
+end
+
 function DungeonService.damageEnemy(player: Player, enemyId: string, amount: number, _crit: boolean)
 	local run = runs[player]
 	if run == nil or run.resolving then
@@ -870,17 +977,19 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 		enemy.hp = 0
 	end
 	paintEnemy(enemy)
+	pcall(ModelFactory.flash, enemy.part)
 	if enemy.boss then
 		local phase = Dungeons.bossPhase(enemy.hp, enemy.maxHp, enemy.phase2At)
 		if phase ~= enemy.phase and phase == 2 and enemy.hp > 0 then
 			enemy.phase = 2
 			enemy.weakUntil = 0
 			enemy.nextFog = os.clock() + enemy.fogInterval
-			enemy.part.Color = Color3.fromRGB(96, 48, 140)
+			ModelFactory.tintNamed(enemy.part, "Eye", Color3.fromRGB(176, 120, 255))
 			if run.sunbeam ~= nil then
 				run.sunbeam.Transparency = 0
 			end
 			placeSunbeam(run)
+			summonSaplings(run)
 			pushRun(player, "Spore fog. Stand in the sunbeam before it pulses.")
 		end
 	end
@@ -914,9 +1023,10 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 		else
 			warn("[Shardfall] Drop failed:", saveErr)
 		end
+		pcall(ModelFactory.dissolve, enemy.part)
 		enemy.part.Name = "Remains"
 		enemy.part:SetAttribute("ShardfallName", "")
-		enemy.part.Transparency = 0.55
+		enemy.part.Transparency = 1
 		local bar = enemy.part:FindFirstChild("ShardfallBar")
 		if bar ~= nil then
 			bar:Destroy()
@@ -984,6 +1094,18 @@ local function moveEnemy(
 	roomIndex: number,
 	floorSize: number
 )
+	if
+		enemy.part.Anchored ~= true
+		or enemy.part.CanCollide == true
+		or enemy.part.CanTouch == true
+	then
+		warn("[Shardfall] Re-anchored loose enemy " .. enemy.name)
+		enemy.part.AssemblyLinearVelocity = Vector3.zero
+		enemy.part.AssemblyAngularVelocity = Vector3.zero
+		enemy.part.Anchored = true
+		enemy.part.CanCollide = false
+		enemy.part.CanTouch = false
+	end
 	local position = enemy.part.Position
 	local goal = Vector3.new(playerPosition.X, position.Y, playerPosition.Z)
 	local offset = goal - position
@@ -1017,12 +1139,13 @@ local function tickEnemy(
 		return
 	end
 	moveEnemy(enemy, hrp.Position, dt, run.placeIndex, run.dungeon.floorSize)
+	pcall(ModelFactory.step, enemy.part, now, true)
 
 	if enemy.boss and enemy.phase == 1 then
 		if now < enemy.weakUntil then
-			enemy.part.Color = Color3.fromRGB(255, 196, 64)
+			ModelFactory.tintNamed(enemy.part, "WeakSpot", Color3.fromRGB(255, 196, 64))
 		else
-			enemy.part.Color = enemy.color
+			ModelFactory.tintNamed(enemy.part, "WeakSpot", nil)
 		end
 	end
 
@@ -1046,6 +1169,17 @@ local function tickEnemy(
 		end
 		run.sunbeamIndex = (run.sunbeamIndex % #Dungeons.SUNBEAM_OFFSETS) + 1
 		placeSunbeam(run)
+		local cloud = VerdantLook.MARKERS.spore
+		local originX, _, originZ = Dungeons.roomOrigin(run.placeIndex)
+		marker(
+			run,
+			cloud.name,
+			Vector3.new(cloud.size[1], cloud.size[2], cloud.size[3]),
+			Vector3.new(originX, cloud.y, originZ),
+			Color3.fromRGB(cloud.color[1], cloud.color[2], cloud.color[3]),
+			math.max(1.2, enemy.fogInterval * 0.85),
+			"spores"
+		)
 		enemy.nextFog = now + enemy.fogInterval
 		if runs[player] == nil then
 			return
@@ -1081,6 +1215,16 @@ local function tickEnemy(
 		)
 		if enemy.boss and enemy.phase == 1 and runs[player] ~= nil then
 			enemy.weakUntil = os.clock() + enemy.weakSeconds
+			local slam = VerdantLook.MARKERS.slam
+			marker(
+				run,
+				slam.name,
+				Vector3.new(slam.size[1], slam.size[2], slam.size[3]),
+				Vector3.new(hrp.Position.X, slam.y, hrp.Position.Z),
+				Color3.fromRGB(slam.color[1], slam.color[2], slam.color[3]),
+				0.85,
+				nil
+			)
 		end
 	end
 end
@@ -1303,11 +1447,13 @@ function DungeonService.enter(player: Player, dungeonId: any)
 	}
 	runs[player] = run
 	CombatService.refresh(player)
+	-- Arrive before the rigs exist so nothing simulates at the room while the
+	-- character is still streaming in from the hub.
+	teleport(player, roomSpawn(run.placeIndex))
 	if endless then
 		spawnWave(player, run)
 	else
 		spawnRoom(player, run)
-		teleport(player, roomSpawn(1))
 	end
 	-- Same payload the Enter Rootvault button's remote returns, so a portal
 	-- entry updates the panel instead of leaving that button stale.
@@ -1327,6 +1473,7 @@ function DungeonService.advance(player: Player)
 	run.advanceAt = nil
 	if run.dungeon.endless == true then
 		run.wave += 1
+		teleport(player, roomSpawn(run.placeIndex))
 		spawnWave(player, run)
 		return { ok = true, run = publicRun(player) }
 	end
@@ -1335,8 +1482,8 @@ function DungeonService.advance(player: Player)
 	end
 	run.roomIndex += 1
 	run.placeIndex = run.roomIndex
-	spawnRoom(player, run)
 	teleport(player, roomSpawn(run.placeIndex))
+	spawnRoom(player, run)
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1375,8 +1522,8 @@ function DungeonService.skipToBoss(player: Player)
 	run.placeIndex = run.roomIndex
 	run.advanceAt = nil
 	run.wave = 0
-	spawnRoom(player, run)
 	teleport(player, roomSpawn(run.placeIndex))
+	spawnRoom(player, run)
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1462,6 +1609,16 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
+	local litOk, lightResult = pcall(function()
+		return VerdantLook.apply(game:GetService("Lighting"))
+	end)
+	if not litOk then
+		warn("[Shardfall] Verdant lighting failed: " .. tostring(lightResult))
+	elseif lightResult ~= true then
+		warn("[Shardfall] Verdant lighting applied with errors")
+	else
+		print("[Shardfall] Verdant lighting on")
+	end
 	buildWorld()
 	bindTouches()
 	HavenBuilder.bindRootvault(function(player)
