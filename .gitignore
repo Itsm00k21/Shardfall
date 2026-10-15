@@ -1,0 +1,18 @@
+# Rojo / Studio output
+/build/
+*.rbxl
+*.rbxlx
+sourcemap.json
+
+# Toolchain caches
+.rokit/
+
+# Wally install output. Reinstall with `wally install`.
+/Packages/
+/DevPackages/
+/ServerPackages/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp

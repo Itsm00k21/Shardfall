@@ -1,0 +1,22 @@
+[package]
+name = "itsm00k21/shardfall"
+version = "0.1.0"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+description = "Shardfall — Roblox RPG + RNG foundation"
+
+# No packages yet. ProfileStore is not published on the official Wally index
+# (unofficial uploads are easy to tamper with), so saving lives in DataService
+# instead. When you want a dependency:
+#
+#   [dependencies]
+#   promise = "evaera/promise@4.0.0"
+#
+# Then run `wally install` and point default.project.json at the Packages folder.
+# Server-only libraries go under [server-dependencies].
+
+[dependencies]
+
+[server-dependencies]
+
+[dev-dependencies]

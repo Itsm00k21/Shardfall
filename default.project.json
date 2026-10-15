@@ -1,0 +1,62 @@
+{
+  "name": "Shardfall",
+  "globIgnorePaths": ["**/*.spec.luau", "tests/**"],
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true,
+      "Shared": {
+        "$path": "src/ReplicatedStorage/Shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "RollShard": {
+          "$className": "RemoteFunction"
+        },
+        "RollPaid": {
+          "$className": "RemoteFunction"
+        },
+        "GetProfile": {
+          "$className": "RemoteFunction"
+        },
+        "GetOdds": {
+          "$className": "RemoteFunction"
+        },
+        "EquipItem": {
+          "$className": "RemoteFunction"
+        },
+        "UnequipItem": {
+          "$className": "RemoteFunction"
+        },
+        "RemoveItem": {
+          "$className": "RemoteFunction"
+        },
+        "DevGrant": {
+          "$className": "RemoteFunction"
+        },
+        "ProfileUpdated": {
+          "$className": "RemoteEvent"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$ignoreUnknownInstances": true,
+      "ShardfallServer": {
+        "$path": "src/ServerScriptService/ShardfallServer"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$ignoreUnknownInstances": true,
+        "ShardfallClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/ShardfallClient"
+        }
+      }
+    }
+  }
+}

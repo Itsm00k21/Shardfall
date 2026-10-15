@@ -1,0 +1,5 @@
+std = "roblox"
+
+[rules]
+# DataStore and player handlers yield on purpose.
+incorrect_standard_library_use = "allow"
