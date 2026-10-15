@@ -1,18 +1,16 @@
 --!strict
 
 --[[
-	Roll areas. One area is one Crack button and one disclosed odds table.
+	Roll areas. One area is one Crack button and its own odds.
 
-	The starter area still rolls starter_shard, which mixes weapons, pets,
-	and materials. Splitting that later (one area for weapons and armor, one
-	for pets) means:
+	Armory rolls weapons and armor. Pets rolls companions. Each area has one
+	pool per ascension tier. Areas.pools lists them in ascension order. The
+	server refuses a pool above the player's ascension; the panel only offers
+	pools Pools.isUnlocked allows.
 
-	  1. Add a pool in Pools.luau.
-	  2. Add a row to `definitions` below.
-
-	Areas.all() is what the client lists. With one public area the panel
-	does not show a picker. With two or more, it does. Do not hard-code the
-	starter id in the UI.
+	A new realm is a pair of pools in Pools.luau (one armory, one pets) plus
+	the items in ItemBases.luau. This file does not need a new row unless you
+	add a third area.
 ]]
 
 local Pools = require("./Pools")
@@ -22,40 +20,31 @@ local Areas = {}
 export type Area = {
 	id: string,
 	name: string,
-	poolId: string,
 	summary: string,
-	pityLegendaryAt: number,
 }
 
 local definitions = {
 	{
-		id = "starter",
-		name = "Starter Shard",
-		poolId = Pools.STARTER_ID,
-		summary = "Weapons, pets, and materials",
+		id = "armory",
+		name = "Armory",
+		summary = "Weapons and armor",
+	},
+	{
+		id = "pets",
+		name = "Pets",
+		summary = "Companions",
 	},
 }
-
-local function publish(definition): Area?
-	local pool = Pools.get(definition.poolId)
-	if pool == nil or pool.public ~= true then
-		return nil
-	end
-	return {
-		id = definition.id,
-		name = definition.name,
-		poolId = definition.poolId,
-		summary = definition.summary,
-		pityLegendaryAt = pool.pityLegendaryAt,
-	}
-end
 
 function Areas.all(): { Area }
 	local result = {}
 	for _, definition in ipairs(definitions) do
-		local area = publish(definition)
-		if area ~= nil then
-			table.insert(result, area)
+		if #Pools.forArea(definition.id) > 0 then
+			table.insert(result, {
+				id = definition.id,
+				name = definition.name,
+				summary = definition.summary,
+			})
 		end
 	end
 	return result
@@ -68,6 +57,10 @@ function Areas.get(areaId: string): Area?
 		end
 	end
 	return nil
+end
+
+function Areas.pools(areaId: string)
+	return Pools.forArea(areaId)
 end
 
 for _, definition in ipairs(definitions) do

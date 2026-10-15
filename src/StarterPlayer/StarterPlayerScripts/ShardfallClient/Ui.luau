@@ -8,8 +8,9 @@
 	disclosure stays one click away without covering the panel. Saving is a
 	badge, not a paragraph. Studio dev grants sit in a collapsed section.
 
-	Roll areas come from Areas.all(). One area hides the picker. Two or more
-	show it above Crack. The client sends that area's pool id.
+	Armory and Pets are the roll areas. Each one lists realms, and a realm
+	above the player's ascension stays locked. The client sends the selected
+	pool id.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,8 +19,10 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(Shared:WaitForChild("Areas"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
+local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
+local Stats = require(Shared:WaitForChild("Stats"))
 
 local Ui = {}
 
@@ -266,7 +269,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(pityFill, 4)
 
 	local areas = Areas.all()
-	local selected: any = areas[1]
+	local selectedArea: any = areas[1]
+	local selectedPool: any = if selectedArea ~= nil then Areas.pools(selectedArea.id)[1] else nil
 	local latestProfile: any = nil
 
 	local areaRow = new("Frame", {
@@ -301,13 +305,36 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local function paintChips()
 		for _, chip in ipairs(chips) do
-			local active = selected ~= nil and chip.area.id == selected.id
+			local active = selectedArea ~= nil and chip.area.id == selectedArea.id
 			chip.button.BackgroundColor3 = if active then COLORS.gold else COLORS.buttonDim
 			chip.button.TextColor3 = if active then COLORS.ink else COLORS.text
 		end
 	end
 
-	local crack = makeButton(panel, "Crack a Shard", COLORS.gold, 7, 44)
+	local realmRow = new("Frame", {
+		Name = "Realms",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 18),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 7,
+	}, panel) :: Frame
+
+	local realmNext = new("TextLabel", {
+		Name = "NextRealm",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
+		Font = Enum.Font.BuilderSans,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = COLORS.muted,
+		Text = "",
+		Visible = false,
+		LayoutOrder = 8,
+	}, panel) :: TextLabel
+
+	local crack = makeButton(panel, "Crack a Shard", COLORS.gold, 9, 44)
 	crack.TextColor3 = COLORS.ink
 	crack.TextSize = 18
 
@@ -323,7 +350,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.danger,
 		Text = "Not enough tokens.",
 		Visible = false,
-		LayoutOrder = 8,
+		LayoutOrder = 10,
 	}, panel) :: TextLabel
 
 	local status = new("TextLabel", {
@@ -337,14 +364,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.muted,
 		Text = "",
 		Visible = false,
-		LayoutOrder = 9,
+		LayoutOrder = 11,
 	}, panel) :: TextLabel
 
 	local actions = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 30),
-		LayoutOrder = 10,
+		LayoutOrder = 12,
 	}, panel) :: Frame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -367,7 +394,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Visible = false,
-		LayoutOrder = 11,
+		LayoutOrder = 13,
 	}, panel) :: Frame
 	corner(oddsWrap, 8)
 	padding(oddsWrap, 8)
@@ -401,7 +428,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local loadout = new("TextLabel", {
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 62),
+		Size = UDim2.new(1, 0, 0, 78),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Font = Enum.Font.BuilderSans,
 		TextSize = 14,
@@ -409,8 +436,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
 		TextColor3 = COLORS.text,
-		Text = "Weapon   None\nPet   None\nBonus   None",
-		LayoutOrder = 12,
+		Text = "Weapon   None\nPet   None\nArmor   None\nBonus   None",
+		LayoutOrder = 14,
 	}, panel) :: TextLabel
 	corner(loadout, 8)
 	padding(loadout, 8)
@@ -424,7 +451,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.text,
 		Text = "Inventory",
-		LayoutOrder = 13,
+		LayoutOrder = 15,
 	}, panel)
 
 	local inventory = new("Frame", {
@@ -433,14 +460,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 14,
+		LayoutOrder = 16,
 	}, panel) :: Frame
 	list(inventory, 6)
 
 	local devToggle: TextButton? = nil
 	local devBody: Frame? = nil
 	if callbacks.showDev then
-		devToggle = makeButton(panel, "Dev", COLORS.buttonDim, 15, 28)
+		devToggle = makeButton(panel, "Dev", COLORS.buttonDim, 17, 28)
 		devToggle.TextSize = 13
 		devToggle.Font = Enum.Font.BuilderSansMedium
 		devToggle.TextXAlignment = Enum.TextXAlignment.Left
@@ -455,7 +482,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			Size = UDim2.fromScale(1, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Visible = false,
-			LayoutOrder = 16,
+			LayoutOrder = 18,
 		}, panel) :: Frame
 		list(devBody, 6)
 		local grantTokens = makeButton(devBody, "+5 tokens", COLORS.buttonDim, 1, 30)
@@ -467,6 +494,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		grantLuck.TextSize = 14
 		grantLuck.MouseButton1Click:Connect(function()
 			callbacks.onDev("luck")
+		end)
+		local grantAscension = makeButton(devBody, "+1 Ascension", COLORS.buttonDim, 3, 30)
+		grantAscension.TextSize = 14
+		grantAscension.MouseButton1Click:Connect(function()
+			callbacks.onDev("ascension")
 		end)
 		local devOpen = false
 		devToggle.MouseButton1Click:Connect(function()
@@ -484,7 +516,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Result",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(300, 200),
+		Size = UDim2.fromOffset(300, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		Visible = false,
@@ -519,7 +552,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, popup) :: TextLabel
 	local popupTraits = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 36),
+		Size = UDim2.new(1, 0, 0, 18),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		Font = Enum.Font.BuilderSans,
 		TextSize = 14,
 		TextWrapped = true,
@@ -586,13 +620,24 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		callbacks.onCrack()
 	end)
 
+	local function playerAscension(): number
+		if type(latestProfile) ~= "table" then
+			return 0
+		end
+		local level = latestProfile.ascension
+		if type(level) ~= "number" then
+			return 0
+		end
+		return level
+	end
+
 	local function renderPity(profile: any)
 		local goal = 50
 		local current = 0
-		if selected ~= nil then
-			goal = selected.pityLegendaryAt or 50
-			if type(profile.pity) == "table" and type(profile.pity[selected.poolId]) == "table" then
-				current = profile.pity[selected.poolId].rollsSinceLegendary or 0
+		if selectedPool ~= nil then
+			goal = selectedPool.pityLegendaryAt or 50
+			if type(profile.pity) == "table" and type(profile.pity[selectedPool.id]) == "table" then
+				current = profile.pity[selectedPool.id].rollsSinceLegendary or 0
 			end
 		end
 		pityLabel.Text = RollMath.pityText(current, goal)
@@ -603,31 +648,132 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		pityFill.Size = UDim2.fromScale(ratio, 1)
 	end
 
+	local function paintRealms()
+		for _, child in ipairs(realmRow:GetChildren()) do
+			child:Destroy()
+		end
+		local pools = if selectedArea ~= nil then Areas.pools(selectedArea.id) else {}
+		local unlocked = {}
+		local nextPool = nil
+		for _, pool in ipairs(pools) do
+			if Pools.isUnlocked(pool, playerAscension()) then
+				table.insert(unlocked, pool)
+			elseif nextPool == nil then
+				nextPool = pool
+			end
+		end
+		if #unlocked <= 1 then
+			local label = new("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 18),
+				Font = Enum.Font.BuilderSansMedium,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = COLORS.text,
+				Text = if selectedPool ~= nil then selectedPool.name else "",
+				LayoutOrder = 1,
+			}, realmRow) :: TextLabel
+			label.Name = "RealmName"
+		else
+			new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 6),
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+			}, realmRow)
+			for index, pool in ipairs(unlocked) do
+				local chip =
+					makeButton(realmRow, pool.short or pool.name, COLORS.buttonDim, index, 24)
+				chip.Size = UDim2.fromOffset(0, 24)
+				chip.AutomaticSize = Enum.AutomaticSize.X
+				chip.TextSize = 12
+				chip.Font = Enum.Font.BuilderSansMedium
+				local active = selectedPool ~= nil and selectedPool.id == pool.id
+				chip.BackgroundColor3 = if active then COLORS.gold else COLORS.buttonDim
+				chip.TextColor3 = if active then COLORS.ink else COLORS.text
+				new("UIPadding", {
+					PaddingLeft = UDim.new(0, 8),
+					PaddingRight = UDim.new(0, 8),
+				}, chip)
+				chip.MouseButton1Click:Connect(function()
+					if selectedPool ~= nil and selectedPool.id == pool.id then
+						return
+					end
+					selectedPool = pool
+					paintRealms()
+					if latestProfile ~= nil then
+						renderPity(latestProfile)
+					end
+					callbacks.onArea(pool.id)
+				end)
+			end
+		end
+		if nextPool ~= nil then
+			realmNext.Visible = true
+			realmNext.Text =
+				string.format("%s unlocks at Ascension %d", nextPool.name, nextPool.ascension)
+		else
+			realmNext.Visible = false
+			realmNext.Text = ""
+		end
+	end
+
+	local function highestUnlocked(area: any): any
+		local pick = nil
+		for _, pool in ipairs(Areas.pools(area.id)) do
+			if Pools.isUnlocked(pool, playerAscension()) then
+				pick = pool
+			end
+		end
+		return pick
+	end
+
 	local function selectArea(area: any, notify: boolean)
-		selected = area
+		selectedArea = area
 		paintChips()
+		local pool = if area ~= nil then highestUnlocked(area) else nil
+		if pool ~= nil then
+			selectedPool = pool
+		end
+		paintRealms()
 		if latestProfile ~= nil then
 			renderPity(latestProfile)
 		end
-		if notify and area ~= nil then
-			callbacks.onArea(area.poolId)
+		if notify and selectedPool ~= nil then
+			callbacks.onArea(selectedPool.id)
 		end
 	end
 	for _, chip in ipairs(chips) do
 		local area = chip.area
 		chip.button.MouseButton1Click:Connect(function()
-			if selected ~= nil and selected.id == area.id then
+			if selectedArea ~= nil and selectedArea.id == area.id then
 				return
 			end
 			selectArea(area, true)
 		end)
 	end
 	paintChips()
+	paintRealms()
 
 	local function renderInventory(profile: any)
 		clearGenerated(inventory)
 		local rows = {}
-		local function collect(bag: any, equippedUid: any)
+		local equipped = if type(profile.equipped) == "table" then profile.equipped else {}
+		local worn: { [string]: boolean } = {}
+		if type(equipped.weapon) == "string" then
+			worn[equipped.weapon] = true
+		end
+		if type(equipped.pet) == "string" then
+			worn[equipped.pet] = true
+		end
+		if type(equipped.armor) == "table" then
+			for _, uid in pairs(equipped.armor) do
+				if type(uid) == "string" then
+					worn[uid] = true
+				end
+			end
+		end
+		local function collect(bag: any)
 			if type(bag) ~= "table" then
 				return
 			end
@@ -635,14 +781,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				if type(item) == "table" then
 					table.insert(rows, {
 						item = item,
-						equipped = type(item.uid) == "string" and item.uid == equippedUid,
+						equipped = type(item.uid) == "string" and worn[item.uid] == true,
 					})
 				end
 			end
 		end
-		local equipped = if type(profile.equipped) == "table" then profile.equipped else {}
-		collect(profile.inventory, equipped.weapon)
-		collect(profile.pets, equipped.pet)
+		collect(profile.inventory)
+		collect(profile.pets)
 
 		local stacks = InventoryStacks.group(rows)
 		if #stacks == 0 then
@@ -678,6 +823,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			local title = if stack.count > 1
 				then string.format("%s x%d", stack.name, stack.count)
 				else stack.name
+			if type(stack.quality) == "number" then
+				title ..= "  " .. Stats.formatQuality(stack.quality)
+			end
 			local name = new("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.fromOffset(12, 6),
@@ -691,6 +839,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			paintRarity(name, stack.rarity)
 
 			local state = if stack.equipped then "Equipped · " else ""
+			local kindLabel = stack.kind
+			if type(stack.weaponType) == "string" and stack.weaponType ~= "" then
+				kindLabel = string.upper(string.sub(stack.weaponType, 1, 1))
+					.. string.sub(stack.weaponType, 2)
+			end
 			new("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.fromOffset(12, 26),
@@ -704,13 +857,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				Text = string.format(
 					"%s%s · Bonus: %s",
 					state,
-					stack.kind,
+					kindLabel,
 					InventoryStacks.bonusLine(stack.traits)
 				),
 			}, card)
 
 			local uid = stack.uids[1]
-			local canEquip = stack.kind == "Weapon" or stack.kind == "Pet"
+			local canEquip = stack.kind == "Weapon" or stack.kind == "Pet" or stack.kind == "Armor"
 			if canEquip and type(uid) == "string" then
 				local action = makeButton(
 					card,
@@ -794,8 +947,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		paintCrack()
 		renderPity(profile)
 		local gear = InventoryStacks.loadout(profile)
-		loadout.Text =
-			string.format("Weapon   %s\nPet   %s\nBonus   %s", gear.weapon, gear.pet, gear.bonus)
+		loadout.Text = string.format(
+			"Weapon   %s\nPet   %s\nArmor   %s\nBonus   %s",
+			gear.weapon,
+			gear.pet,
+			gear.armor,
+			gear.bonus
+		)
+		paintRealms()
 		renderInventory(profile)
 	end
 
@@ -837,7 +996,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			-- in a recording; the word stays in the string either way.
 			label.TextColor3 = rarityColor(rarity)
 		end
-		local areaName = if selected ~= nil then selected.name else "Odds"
+		local areaName = if selectedPool ~= nil then selectedPool.name else "Odds"
 		heading(areaName .. "  ·  totals")
 		if type(odds.rarities) == "table" then
 			for _, rarityRow in ipairs(odds.rarities) do
@@ -882,7 +1041,19 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		popupRarity.TextColor3 = rarityColor(item.rarity)
 		paintRarity(popupRarity, item.rarity)
 		popupName.Text = tostring(item.name)
-		popupTraits.Text = "Bonus: " .. InventoryStacks.bonusLine(item.traits)
+		local detail = {}
+		if type(item.quality) == "number" then
+			table.insert(detail, Stats.formatQuality(item.quality) .. " roll")
+		end
+		if type(item.stats) == "table" then
+			for _, stat in ipairs(item.stats) do
+				if type(stat) == "table" then
+					table.insert(detail, tostring(stat.name) .. "  " .. Stats.formatValue(stat))
+				end
+			end
+		end
+		table.insert(detail, "Bonus: " .. InventoryStacks.bonusLine(item.traits))
+		popupTraits.Text = table.concat(detail, "\n")
 		popupPity.Text = if result.pityTriggered then "Pity guaranteed this drop." else ""
 		popupStroke.Color = rarityColor(item.rarity)
 		if Rarities.isRainbow(item.rarity) then

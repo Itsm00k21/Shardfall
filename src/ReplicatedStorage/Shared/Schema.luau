@@ -16,7 +16,7 @@
 
 local Schema = {}
 
-Schema.VERSION = 1
+Schema.VERSION = 2
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -35,6 +35,11 @@ export type Item = {
 	kind: string,
 	rarity: string,
 	traits: { Trait },
+	stats: { any }?,
+	quality: number?,
+	weaponType: string?,
+	slot: string?,
+	setId: string?,
 	poolId: string,
 	obtainedAt: number,
 }
@@ -47,6 +52,14 @@ export type PityState = {
 export type Equipped = {
 	weapon: string?,
 	pet: string?,
+	armor: { [string]: string },
+}
+
+Schema.ARMOR_SLOTS = {
+	helm = true,
+	chest = true,
+	legs = true,
+	boots = true,
 }
 
 export type ProfileData = {
@@ -79,6 +92,7 @@ function Schema.template(): ProfileData
 		equipped = {
 			weapon = nil,
 			pet = nil,
+			armor = {},
 		},
 	}
 end
@@ -162,6 +176,15 @@ function Schema.reconcile(data: any): ProfileData
 	if data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
 		data.equipped.pet = nil
 	end
+	local armor = {}
+	if type(data.equipped.armor) == "table" then
+		for slot, uid in pairs(data.equipped.armor) do
+			if Schema.ARMOR_SLOTS[slot] == true and data.inventory[uid] ~= nil then
+				armor[slot] = uid
+			end
+		end
+	end
+	data.equipped.armor = armor
 	return data
 end
 
@@ -196,11 +219,23 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 1
 	end
 
+	if version < 2 then
+		-- Armor slots. Older saves only had a weapon and a pet.
+		if type(raw.equipped) ~= "table" then
+			raw.equipped = {}
+		end
+		if type(raw.equipped.armor) ~= "table" then
+			raw.equipped.armor = {}
+		end
+		raw.schemaVersion = 2
+		version = 2
+	end
+
 	-- Next version goes here, then bump Schema.VERSION and template():
-	-- if version < 2 then
+	-- if version < 3 then
 	--     raw.boosts = raw.boosts or {}
-	--     raw.schemaVersion = 2
-	--     version = 2
+	--     raw.schemaVersion = 3
+	--     version = 3
 	-- end
 
 	return Schema.reconcile(raw), nil
@@ -255,6 +290,53 @@ function Schema.insertItem(data: ProfileData, item: Item)
 	end
 end
 
+function Schema.isEquipped(data: ProfileData, uid: string): boolean
+	if data.equipped.weapon == uid or data.equipped.pet == uid then
+		return true
+	end
+	for _, slotUid in pairs(data.equipped.armor) do
+		if slotUid == uid then
+			return true
+		end
+	end
+	return false
+end
+
+function Schema.clearEquip(data: ProfileData, uid: string)
+	if data.equipped.weapon == uid then
+		data.equipped.weapon = nil
+	end
+	if data.equipped.pet == uid then
+		data.equipped.pet = nil
+	end
+	for slot, slotUid in pairs(data.equipped.armor) do
+		if slotUid == uid then
+			data.equipped.armor[slot] = nil
+		end
+	end
+end
+
+-- nil when the item is now equipped. Otherwise a reason.
+function Schema.equipItem(data: ProfileData, item: Item): string?
+	if item.kind == "Weapon" then
+		data.equipped.weapon = item.uid
+		return nil
+	end
+	if item.kind == "Pet" then
+		data.equipped.pet = item.uid
+		return nil
+	end
+	if item.kind == "Armor" then
+		local slot = item.slot
+		if type(slot) ~= "string" or Schema.ARMOR_SLOTS[slot] ~= true then
+			return "That armor has no slot."
+		end
+		data.equipped.armor[slot] = item.uid
+		return nil
+	end
+	return "That item cannot be equipped."
+end
+
 -- Allow-list copy sent to that player's client. Session locks are not in here.
 function Schema.snapshot(data: ProfileData)
 	return {
@@ -272,8 +354,11 @@ function Schema.snapshot(data: ProfileData)
 		equipped = {
 			weapon = data.equipped.weapon,
 			pet = data.equipped.pet,
+			armor = Schema.deepCopy(data.equipped.armor),
 		},
 	}
 end
+
+table.freeze(Schema.ARMOR_SLOTS)
 
 return Schema

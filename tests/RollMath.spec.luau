@@ -50,7 +50,7 @@ local function seededRng(seed: number)
 end
 
 local function starter()
-	local pool = Pools.get(Pools.STARTER_ID)
+	local pool = Pools.get(Pools.DEFAULT_POOL_ID)
 	assert(pool ~= nil, "starter pool missing")
 	return pool
 end
@@ -80,10 +80,10 @@ describe("RollMath odds", function()
 			weightSum += entry.weight
 		end
 		expect(weightSum).toEqual(10000)
-		expect(byId.splinter.chance).toBeCloseTo(3500 / 10000, 1e-12)
-		expect(byId.unnamed_edge.chance).toBeCloseTo(2 / 10000, 1e-12)
-		expect(RollMath.formatChance(byId.splinter.chance)).toEqual("35.00%")
-		expect(RollMath.formatChance(byId.unnamed_edge.chance)).toEqual("0.020%")
+		expect(byId.vinewood_sword.chance).toBeCloseTo(1000 / 10000, 1e-12)
+		expect(byId.unnamed_grove.chance).toBeCloseTo(2 / 10000, 1e-12)
+		expect(RollMath.formatChance(byId.vinewood_sword.chance)).toEqual("10.00%")
+		expect(RollMath.formatChance(byId.unnamed_grove.chance)).toEqual("0.020%")
 	end)
 
 	it("publishes rarity totals as the sum of those weights", function()
@@ -134,14 +134,6 @@ describe("RollMath odds", function()
 			end
 			error(rarity)
 		end
-		local function itemChance(templateId: string): string
-			for _, entry in ipairs(odds.entries) do
-				if entry.templateId == templateId then
-					return RollMath.formatChance(entry.chance)
-				end
-			end
-			error(templateId)
-		end
 		expect(formatted("Common")).toEqual("57.05%")
 		expect(formatted("Uncommon")).toEqual("25.70%")
 		expect(formatted("Rare")).toEqual("11.12%")
@@ -149,9 +141,17 @@ describe("RollMath odds", function()
 		expect(formatted("Legendary")).toEqual("1.04%")
 		expect(formatted("Mythic")).toEqual("0.253%")
 		expect(formatted("Secret")).toEqual("0.030%")
-		expect(itemChance("splinter")).toEqual("33.28%")
-		expect(itemChance("wooden_sword")).toEqual("23.77%")
-		expect(itemChance("unnamed_edge")).toEqual("0.030%")
+		local plain = RollMath.odds(starter(), 0)
+		local function chanceOf(odds, templateId: string): number
+			for _, entry in ipairs(odds.entries) do
+				if entry.templateId == templateId then
+					return entry.chance
+				end
+			end
+			error(templateId)
+		end
+		expect(chanceOf(odds, "vinewood_sword")).toBeLessThan(chanceOf(plain, "vinewood_sword"))
+		expect(chanceOf(odds, "unnamed_grove")).toBeGreaterThan(chanceOf(plain, "unnamed_grove"))
 	end)
 
 	it("describes pity as a count up toward the guarantee", function()
@@ -183,8 +183,8 @@ describe("RollMath odds", function()
 			end
 			error("missing " .. templateId)
 		end
-		expect(chanceOf(lucky, "unnamed_edge")).toBeGreaterThan(chanceOf(plain, "unnamed_edge"))
-		expect(chanceOf(lucky, "splinter")).toBeLessThan(chanceOf(plain, "splinter"))
+		expect(chanceOf(lucky, "unnamed_grove")).toBeGreaterThan(chanceOf(plain, "unnamed_grove"))
+		expect(chanceOf(lucky, "vinewood_sword")).toBeLessThan(chanceOf(plain, "vinewood_sword"))
 
 		local function averageRank(odds)
 			local total = 0
@@ -238,9 +238,15 @@ describe("RollMath rolls", function()
 	it("picks the first positive entry when the rng returns 0", function()
 		local pity = { rollsSinceLegendary = 0, totalRolls = 0 }
 		local result = RollMath.roll(starter(), pity, context("uid-1", 0), zeroRng())
-		expect(result.item.templateId).toEqual("splinter")
+		expect(result.item.templateId).toEqual("vinewood_sword")
 		expect(result.item.uid).toEqual("uid-1")
-		expect(result.item.kind).toEqual("Material")
+		expect(result.item.kind).toEqual("Weapon")
+		expect(result.item.weaponType).toEqual("sword")
+		expect(result.item.quality).toEqual(0)
+		expect(result.item.stats[1].id).toEqual("damage")
+		expect(result.item.stats[1].value).toEqual(10)
+		expect(result.item.stats[1].min).toEqual(10)
+		expect(result.item.stats[1].max).toEqual(14)
 		expect(#result.item.traits).toEqual(0)
 		expect(result.pityTriggered).toBeFalse()
 		expect(pity.rollsSinceLegendary).toEqual(1)
@@ -260,8 +266,8 @@ describe("RollMath rolls", function()
 		local forced = RollMath.roll(starter(), pity, context("pity", 0), rng)
 		expect(forced.pityTriggered).toBeTrue()
 		expect(Rarities.isLegendaryOrBetter(forced.item.rarity)).toBeTrue()
-		-- zeroRng selects the first Legendary-or-better row, which is a pet.
-		expect(forced.item.templateId).toEqual("dawn_wolf")
+		-- zeroRng selects the first Legendary-or-better row.
+		expect(forced.item.templateId).toEqual("antlerbrand")
 		expect(pity.rollsSinceLegendary).toEqual(0)
 		expect(pity.totalRolls).toEqual(50)
 	end)
@@ -320,6 +326,7 @@ describe("RollMath rolls", function()
 
 		expect(#rollKind("Material", "Secret").item.traits).toEqual(0)
 		expect(#rollKind("Pet", "Secret").item.traits).toEqual(0)
+		expect(#rollKind("Armor", "Rare").item.traits).toEqual(1)
 
 		local rare = rollKind("Weapon", "Rare")
 		expect(#rare.item.traits).toEqual(1)

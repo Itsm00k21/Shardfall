@@ -50,6 +50,9 @@ function RollService.rollFree(player: Player, poolId: any)
 	local captured: any = nil
 	local pityAfter: any = nil
 	local ok, err = DataService.mutate(player, function(data)
+		if not Pools.isUnlocked(pool, data.ascension) then
+			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
+		end
 		if data.shardTokens < 1 then
 			return "You need a shard token to crack a shard."
 		end
@@ -88,6 +91,11 @@ function RollService.rollPaid(player: Player, poolId: any)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")
+	end
+
+	local profile = DataService.get(player)
+	if profile == nil or not Pools.isUnlocked(pool, profile.ascension) then
+		return reject(string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name))
 	end
 
 	-- Policy first, always. A failed lookup does not become "allowed".
@@ -134,6 +142,16 @@ function RollService.devGrant(player: Player, kind: any)
 		end)
 		if not ok then
 			return reject(err or "Could not grant luck.")
+		end
+		return { ok = true }
+	end
+	if kind == "ascension" then
+		local ok, err = DataService.mutate(player, function(data)
+			data.ascension = math.min(Pools.MAX_ASCENSION, data.ascension + 1)
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not raise ascension.")
 		end
 		return { ok = true }
 	end

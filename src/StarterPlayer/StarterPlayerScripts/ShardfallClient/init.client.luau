@@ -11,9 +11,8 @@
 	the item plus a profile snapshot. ProfileUpdated covers anything that
 	changed without a button press (the first load, for example).
 
-	The pool id comes from the selected roll area (Areas.luau). With one
-	area that is the starter shard. Adding an area there is what the Crack
-	button and the odds popup follow.
+	The pool id is the realm selected in the current roll area. Armory and
+	Pets are separate. A realm above the player's ascension is not offered.
 ]]
 
 local Players = game:GetService("Players")
@@ -28,7 +27,9 @@ local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local areaList = Areas.all()
 local firstArea = areaList[1]
-local selectedPoolId = if firstArea ~= nil then firstArea.poolId else "starter_shard"
+local firstPools = if firstArea ~= nil then Areas.pools(firstArea.id) else {}
+local firstPool = firstPools[1]
+local selectedPoolId = if firstPool ~= nil then firstPool.id else "verdant_armory"
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes", 30)
 if remotes == nil then

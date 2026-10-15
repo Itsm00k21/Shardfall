@@ -17,7 +17,9 @@
 	  nextInteger(min, max) -> integer, inclusive on both ends
 ]]
 
+local ItemBases = require("./ItemBases")
 local Rarities = require("./Rarities")
+local Stats = require("./Stats")
 local Traits = require("./Traits")
 
 local RollMath = {}
@@ -292,8 +294,17 @@ function RollMath.roll(pool: Pool, pity: PityState, context: RollContext, rng: R
 	local weights, total = weighted(pool, context.luck, allowed)
 	local entry = pickFrom(pool, weights, total, rng)
 
+	local base = ItemBases.get(entry.templateId)
+	local stats = {}
+	local quality = nil
+	if base ~= nil and type(base.stats) == "table" and #base.stats > 0 then
+		stats, quality = Stats.roll(base.stats, entry.rarity, base.weaponType, rng)
+	end
+
+	-- Weapons and armor roll traits. Pets do not. Common and Uncommon have
+	-- zero trait slots, so those drops still come back with an empty list.
 	local traits = {}
-	if entry.kind == "Weapon" then
+	if entry.kind == "Weapon" or entry.kind == "Armor" then
 		traits = Traits.roll(entry.rarity, rng)
 	end
 
@@ -317,6 +328,11 @@ function RollMath.roll(pool: Pool, pity: PityState, context: RollContext, rng: R
 			kind = entry.kind,
 			rarity = entry.rarity,
 			traits = traits,
+			stats = stats,
+			quality = quality,
+			weaponType = if base ~= nil then base.weaponType else nil,
+			slot = if base ~= nil then base.slot else nil,
+			setId = if base ~= nil then base.setId else nil,
 			poolId = pool.id,
 			obtainedAt = obtainedAt,
 		},

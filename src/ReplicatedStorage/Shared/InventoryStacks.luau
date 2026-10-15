@@ -15,6 +15,7 @@
 ]]
 
 local Rarities = require("./Rarities")
+local Stats = require("./Stats")
 
 local InventoryStacks = {}
 
@@ -23,7 +24,9 @@ export type Stack = {
 	count: number,
 	rarity: string,
 	kind: string,
+	weaponType: string?,
 	traits: { any },
+	quality: number?,
 	uids: { string },
 	equipped: boolean,
 }
@@ -31,6 +34,7 @@ export type Stack = {
 export type Loadout = {
 	weapon: string,
 	pet: string,
+	armor: string,
 	bonus: string,
 }
 
@@ -72,13 +76,38 @@ function InventoryStacks.bonusLine(traits: any): string
 	return table.concat(parts, " · ")
 end
 
+local function statParts(stats: any): { string }
+	local parts = {}
+	if type(stats) ~= "table" then
+		return parts
+	end
+	for _, stat in ipairs(stats) do
+		if type(stat) == "table" then
+			local value = stat.value
+			local shown = if type(value) == "number" then string.format("%.4f", value) else "?"
+			table.insert(parts, tostring(stat.id) .. "=" .. shown)
+		end
+	end
+	table.sort(parts)
+	return parts
+end
+
 local function stackKey(item: any): string
 	return table.concat({
 		tostring(item.templateId),
 		tostring(item.kind),
 		tostring(item.rarity),
 		table.concat(traitParts(item.traits), ","),
+		table.concat(statParts(item.stats), ","),
 	}, "\0")
+end
+
+local function titled(item: any): string
+	local name = tostring(item.name)
+	if type(item.quality) == "number" then
+		name ..= "  " .. Stats.formatQuality(item.quality)
+	end
+	return name
 end
 
 local function singleton(item: any, equipped: boolean): Stack
@@ -88,7 +117,9 @@ local function singleton(item: any, equipped: boolean): Stack
 		count = 1,
 		rarity = tostring(item.rarity),
 		kind = tostring(item.kind),
+		weaponType = if type(item.weaponType) == "string" then item.weaponType else nil,
 		traits = if type(item.traits) == "table" then item.traits else {},
+		quality = if type(item.quality) == "number" then item.quality else nil,
 		uids = if type(uid) == "string" then { uid } else {},
 		equipped = equipped,
 	}
@@ -174,9 +205,28 @@ function InventoryStacks.loadout(profile: any): Loadout
 	end
 	take(weapon)
 	take(pet)
+	local armorLabel = "None"
+	local armorCount = 0
+	local loneArmor = nil
+	if type(equipped.armor) == "table" then
+		for _, uid in pairs(equipped.armor) do
+			local piece = findUid(profile, uid)
+			if piece ~= nil then
+				armorCount += 1
+				loneArmor = piece
+				take(piece)
+			end
+		end
+	end
+	if armorCount == 1 and loneArmor ~= nil then
+		armorLabel = titled(loneArmor)
+	elseif armorCount > 1 then
+		armorLabel = string.format("%d pieces", armorCount)
+	end
 	return {
-		weapon = if weapon ~= nil then tostring(weapon.name) else "None",
-		pet = if pet ~= nil then tostring(pet.name) else "None",
+		weapon = if weapon ~= nil then titled(weapon) else "None",
+		pet = if pet ~= nil then titled(pet) else "None",
+		armor = armorLabel,
 		bonus = InventoryStacks.bonusLine(traits),
 	}
 end

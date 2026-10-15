@@ -3,8 +3,8 @@
 --[[
 	Weapon traits rolled onto a shard drop.
 
-	Add a row to `list` to add a trait. RollMath only calls Traits.roll for
-	items whose kind is "Weapon". Values are rolled uniformly between min and
+	Add a row to `list` to add a trait. RollMath calls Traits.roll for weapons
+	and armor. Pets roll none. Values are rolled uniformly between min and
 	max. "percent" is stored as a fraction (0.05 = 5%) and "count" is an
 	integer. PLACEHOLDER ranges — combat does not read these yet.
 ]]

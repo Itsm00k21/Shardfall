@@ -39,12 +39,7 @@ function InventoryService.remove(player: Player, uid: string): (boolean, string?
 		end
 		removedName = item.name
 		bag[uid] = nil
-		if data.equipped.weapon == uid then
-			data.equipped.weapon = nil
-		end
-		if data.equipped.pet == uid then
-			data.equipped.pet = nil
-		end
+		Schema.clearEquip(data, uid)
 		return nil
 	end)
 	return ok, err, removedName
@@ -56,14 +51,7 @@ function InventoryService.equip(player: Player, uid: string): (boolean, string?)
 		if item == nil then
 			return "You do not have that item."
 		end
-		if item.kind == "Weapon" then
-			data.equipped.weapon = uid
-		elseif item.kind == "Pet" then
-			data.equipped.pet = uid
-		else
-			return "That item cannot be equipped."
-		end
-		return nil
+		return Schema.equipItem(data, item)
 	end)
 end
 
@@ -73,13 +61,10 @@ function InventoryService.unequip(player: Player, uid: string): (boolean, string
 		if item == nil then
 			return "You do not have that item."
 		end
-		if data.equipped.weapon == uid then
-			data.equipped.weapon = nil
-		elseif data.equipped.pet == uid then
-			data.equipped.pet = nil
-		else
+		if not Schema.isEquipped(data, uid) then
 			return "That item is not equipped."
 		end
+		Schema.clearEquip(data, uid)
 		return nil
 	end)
 end
