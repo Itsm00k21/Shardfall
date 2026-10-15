@@ -3,9 +3,9 @@
 --[[
 	Rootvault, built when the server starts.
 
-	Studio does not need a hand-placed map. This module creates a hub and
-	four rooms in Workspace.ShardfallWorld, then teleports the player between
-	them. Enemies are anchored parts with a chase-and-swing loop. The boss
+	Studio does not need a hand-placed map. HavenBuilder creates the hub.
+	This module creates the crawl rooms in Workspace.ShardfallWorld, then
+	teleports the player between them. Enemies are anchored parts with a chase-and-swing loop. The boss
 	adds a weak spot, then a fog that only the sunbeam saves you from.
 
 	A later realm is a row in Dungeons.luau with a higher ascension. Until
@@ -27,11 +27,13 @@ local RunService = game:GetService("RunService")
 
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
+local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
+local HavenBuilder = require(script.Parent.HavenBuilder)
 
 local DungeonService = {}
 
@@ -192,7 +194,11 @@ local function roomCFrame(index: number, localOffset: Vector3): CFrame
 end
 
 local function hubCFrame(): CFrame
-	return CFrame.lookAt(Vector3.new(0, 4, -12), Vector3.new(0, 3, 8))
+	local spawn = Haven.SPAWN
+	return CFrame.lookAt(
+		Vector3.new(spawn.x, spawn.y, spawn.z),
+		Vector3.new(spawn.lookX, 8, spawn.lookZ)
+	)
 end
 
 local function roomSpawn(index: number): CFrame
@@ -295,37 +301,7 @@ local function buildWorld()
 	local hub = Instance.new("Folder")
 	hub.Name = "Hub"
 	hub.Parent = world
-	makePart(
-		"Floor",
-		Vector3.new(48, 1, 48),
-		CFrame.new(0, -0.5, 0),
-		Color3.fromRGB(86, 120, 72),
-		hub,
-		true
-	)
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "HubSpawn"
-	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.CFrame = CFrame.new(0, 0.5, -12)
-	spawn.Anchored = true
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.Color = Color3.fromRGB(196, 176, 120)
-	spawn.Material = Enum.Material.SmoothPlastic
-	spawn.Parent = hub
-
-	local pad = makePart(
-		"EnterPad",
-		Vector3.new(8, 0.6, 8),
-		CFrame.new(0, 0.4, 8),
-		Color3.fromRGB(255, 196, 64),
-		hub,
-		false
-	)
-	pad.Material = Enum.Material.Neon
-	pad.CanTouch = true
-	pad:SetAttribute("EnterDungeon", Dungeons.ROOTVAULT_ID)
-	sign(hub, CFrame.new(0, 4, 8), "ENTER ROOTVAULT", 14)
+	HavenBuilder.build(hub)
 
 	local rooms = Instance.new("Folder")
 	rooms.Name = "Rooms"
@@ -1306,6 +1282,18 @@ end
 function DungeonService.start()
 	buildWorld()
 	bindTouches()
+	HavenBuilder.bindRootvault(function(player)
+		if not debounce(player) then
+			return
+		end
+		if runs[player] ~= nil then
+			return
+		end
+		local result = DungeonService.enter(player, Dungeons.ROOTVAULT_ID)
+		if result.ok ~= true then
+			pushRun(player, result.error)
+		end
+	end)
 
 	local function watchIdle(player: Player)
 		player.Idled:Connect(function(idleTime)

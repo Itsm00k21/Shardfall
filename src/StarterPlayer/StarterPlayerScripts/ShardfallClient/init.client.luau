@@ -20,6 +20,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local CombatHud = require(script.CombatHud)
+local HavenClient = require(script.HavenClient)
 local Ui = require(script.Ui)
 
 local player = Players.LocalPlayer
@@ -370,6 +371,22 @@ ui = Ui.mount(playerGui, {
 			local note = if type(feed) == "table" then feed.message else nil
 			ui.setStatus(if type(note) == "string" then note else "Fed.", "ok")
 		end)
+	end,
+})
+
+HavenClient.start({
+	onPanel = function(kind: string, areaId: string?)
+		ui.openPanel(kind, areaId)
+		if kind == "craft" then
+			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")
+		elseif areaId == "pets" then
+			ui.setStatus("Pet Garden. Companions.", "info")
+		else
+			ui.setStatus("Armory. Weapons and armor.", "info")
+		end
+	end,
+	onSoon = function(message: string)
+		ui.setStatus(message, "info")
 	end,
 })
 

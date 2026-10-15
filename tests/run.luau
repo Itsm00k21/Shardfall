@@ -24,6 +24,7 @@ require("./Catalog.spec")
 require("./CombatMath.spec")
 require("./Crafting.spec")
 require("./Dungeons.spec")
+require("./Haven.spec")
 require("./Stars.spec")
 
 process.exit(framework.run())

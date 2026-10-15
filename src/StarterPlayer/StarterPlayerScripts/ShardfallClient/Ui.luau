@@ -1451,6 +1451,28 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		paintFarm()
 	end
 
+	function controller.openPanel(kind: string, areaId: string?)
+		if kind == "craft" then
+			page = "craft"
+			applyPage()
+			return
+		end
+		page = "shards"
+		if type(areaId) == "string" then
+			for _, chip in ipairs(chips) do
+				if chip.area.id == areaId then
+					if selectedArea == nil or selectedArea.id ~= areaId then
+						selectArea(chip.area, true)
+					else
+						applyPage()
+					end
+					return
+				end
+			end
+		end
+		applyPage()
+	end
+
 	function controller.setStatus(text: string, kind: string)
 		status.Text = text
 		status.Visible = text ~= ""
