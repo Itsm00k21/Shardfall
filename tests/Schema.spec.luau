@@ -31,7 +31,7 @@ describe("Schema", function()
 		local profile, err = Schema.migrate(saved)
 		expect(err).toBeNil()
 		assert(profile ~= nil)
-		expect(profile.schemaVersion).toEqual(1)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
 		expect(profile.gold).toEqual(40)
 		expect(profile.shardLuck).toEqual(0)
 		expect(profile.shardTokens).toEqual(25)
@@ -158,5 +158,46 @@ describe("Schema", function()
 		assert(kept ~= nil)
 		expect(kept.equipped.weapon).toEqual("sword")
 		expect(kept.equipped.pet).toEqual("pup")
+		expect(kept.equipped.armor).toEqual({})
+	end)
+
+	it("equips armor into its slot and drops a slot that is not in the bag", function()
+		local profile = Schema.template()
+		local hood = {
+			uid = "hood",
+			templateId = "grovewarden_hood",
+			name = "Grovewarden Hood",
+			kind = "Armor",
+			rarity = "Epic",
+			slot = "helm",
+			setId = "grovewarden",
+			traits = {},
+			poolId = "verdant_armory",
+			obtainedAt = 1,
+		}
+		Schema.insertItem(profile, hood)
+		expect(Schema.equipItem(profile, hood)).toBeNil()
+		expect(profile.equipped.armor.helm).toEqual("hood")
+		expect(Schema.isEquipped(profile, "hood")).toBeTrue()
+
+		local migrated = Schema.migrate({
+			schemaVersion = 1,
+			equipped = { armor = { helm = "missing", ring = "nope" } },
+			inventory = { hood = hood },
+		})
+		assert(migrated ~= nil)
+		expect(migrated.schemaVersion).toEqual(2)
+		expect(migrated.equipped.armor.helm).toBeNil()
+		expect(migrated.equipped.armor.ring).toBeNil()
+
+		local kept = Schema.migrate({
+			schemaVersion = 1,
+			equipped = { armor = { helm = "hood" } },
+			inventory = { hood = hood },
+		})
+		assert(kept ~= nil)
+		expect(kept.equipped.armor.helm).toEqual("hood")
+		Schema.clearEquip(kept, "hood")
+		expect(kept.equipped.armor.helm).toBeNil()
 	end)
 end)

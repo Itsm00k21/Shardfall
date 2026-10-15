@@ -136,6 +136,21 @@ describe("InventoryStacks", function()
 		expect(held.bonus).toEqual("None")
 	end)
 
+	it("does not stack two rolls of the same weapon", function()
+		local function rolled(uid: string, damage: number)
+			local row = item(uid, "vinewood_sword", "Vinewood Sword", "Weapon", "Common")
+			row.stats = { { id = "damage", value = damage } }
+			row.quality = damage / 14
+			return row
+		end
+		local stacks = InventoryStacks.group({
+			{ item = rolled("a", 10), equipped = false },
+			{ item = rolled("b", 13), equipped = false },
+		})
+		expect(#stacks).toEqual(2)
+		expect(stacks[1].quality ~= stacks[2].quality).toBeTrue()
+	end)
+
 	it("lists trait bonuses or None", function()
 		expect(InventoryStacks.bonusLine({})).toEqual("None")
 		expect(InventoryStacks.bonusLine(nil)).toEqual("None")

@@ -18,5 +18,7 @@ require("./RemoteCaller.spec")
 require("./MemoryRoll.spec")
 require("./InventoryStacks.spec")
 require("./Areas.spec")
+require("./Stats.spec")
+require("./Catalog.spec")
 
 process.exit(framework.run())
