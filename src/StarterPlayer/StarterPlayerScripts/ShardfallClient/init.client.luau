@@ -23,6 +23,7 @@ local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
 local Ui = require(script.Ui)
+local VerdantLod = require(script.VerdantLod)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -529,6 +530,8 @@ HavenClient.start({
 		ui.setStatus(message, "info")
 	end,
 })
+
+VerdantLod.start()
 
 CombatHud.start(remotes :: Instance, {
 	onRun = function(run)

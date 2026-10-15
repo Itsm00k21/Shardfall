@@ -24,6 +24,7 @@ local RunService = game:GetService("RunService")
 
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
+local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 
 local HavenBuilder = {}
 
@@ -1018,6 +1019,50 @@ local function clearDefaultPlace()
 	end
 end
 
+local function dressHaven(parent: Instance)
+	local foliage = Instance.new("Model")
+	foliage.Name = "Foliage"
+	foliage.Parent = parent
+	for _, desc in ipairs(VerdantScatter.haven()) do
+		local className = if desc.className == "WedgePart" then "WedgePart" else "Part"
+		local piece = Instance.new(className)
+		piece.Name = desc.name
+		piece.Size = Vector3.new(desc.size[1], desc.size[2], desc.size[3])
+		piece.Anchored = true
+		piece.CanCollide = false
+		piece.CanTouch = false
+		piece.CanQuery = false
+		piece.CastShadow = desc.shadow == true
+		piece.Transparency = desc.transparency
+		piece.Color = Color3.fromRGB(desc.color[1], desc.color[2], desc.color[3])
+		piece.Material = (Enum.Material :: any)[desc.material]
+		piece.TopSurface = Enum.SurfaceType.Smooth
+		piece.BottomSurface = Enum.SurfaceType.Smooth
+		if desc.shape == "Ball" and piece:IsA("Part") then
+			piece.Shape = Enum.PartType.Ball
+		end
+		local spun = CFrame.new(desc.x, desc.y, desc.z) * CFrame.Angles(desc.rx, desc.ry, desc.rz)
+		piece.CFrame = spun + Vector3.new(0, Haven.FLOOR_Y, 0)
+		piece:SetAttribute("ShardfallLod", desc.lod)
+		piece.Parent = foliage
+		if desc.light then
+			local light = Instance.new("PointLight")
+			light.Color = piece.Color
+			light.Brightness = 1.2
+			light.Range = 10
+			light.Shadows = false
+			light.Parent = piece
+		end
+		if desc.particle ~= nil then
+			local emitter = Instance.new("ParticleEmitter")
+			emitter.Name = desc.particle
+			emitter.Rate = 4
+			emitter.LightEmission = 0.7
+			emitter.Parent = piece
+		end
+	end
+end
+
 function HavenBuilder.build(parent: Instance): number
 	-- Persistent before parenting, and a direct Workspace child. Kevin's
 	-- Explorer showed Camera, Terrain, and Baseplate, with no Haven.
@@ -1038,6 +1083,7 @@ function HavenBuilder.build(parent: Instance): number
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)
+	dressHaven(parent)
 	clearDefaultPlace()
 
 	local count = 0

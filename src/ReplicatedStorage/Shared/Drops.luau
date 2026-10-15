@@ -68,6 +68,8 @@ Drops.ENEMIES = {
 	vine_crawler = { realm = "verdant", role = "normal" },
 	spore_bat = { realm = "verdant", role = "normal" },
 	root_brute = { realm = "verdant", role = "elite" },
+	moss_crawler = { realm = "verdant", role = "normal" },
+	thorn_sprite = { realm = "verdant", role = "elite" },
 	grandmother_gnarl = { realm = "verdant", role = "boss" },
 } :: { [string]: EnemyDrop }
 
@@ -83,6 +85,12 @@ local BONUS: { [string]: { Entry } } = {
 	},
 	root_brute = {
 		row("bark", 1, 1, 1),
+	},
+	moss_crawler = {
+		row("spore", 1, 1, 2),
+	},
+	thorn_sprite = {
+		row("vine", 1, 1, 1),
 	},
 }
 

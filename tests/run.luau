@@ -28,6 +28,7 @@ require("./CraftingPhase.spec")
 require("./Dungeons.spec")
 require("./Haven.spec")
 require("./HavenBuild.spec")
+require("./VerdantVisuals.spec")
 require("./Stars.spec")
 
 process.exit(framework.run())
