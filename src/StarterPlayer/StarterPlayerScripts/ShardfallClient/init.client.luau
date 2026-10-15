@@ -229,7 +229,10 @@ ui = Ui.mount(playerGui, {
 				ui.setRun(result.run)
 			end
 			if action == "enter" then
-				ui.setStatus("Entered the Rootvault. Click the world or Attack.", "ok")
+				ui.setStatus(
+					"Entered the Rootvault. Auto Attack is on unless you turned it off.",
+					"ok"
+				)
 			elseif action == "advance" then
 				ui.setStatus("Next room.", "ok")
 			elseif action == "leave" then
@@ -259,6 +262,38 @@ ui = Ui.mount(playerGui, {
 	end,
 	onAttack = function()
 		CombatHud.swing()
+	end,
+	onAutoAttack = function(enabled: boolean)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetAutoAttack", enabled)
+			end)
+			local message = remoteError(ok, result, "Could not change auto attack.")
+			if message ~= nil then
+				ui.setAutoAttack(not enabled)
+				ui.setStatus(message, "error")
+				return
+			end
+			local flag = if type(result) == "table" then result.autoAttack else enabled
+			ui.setAutoAttack(flag == true)
+			ui.setStatus(if flag == true then "Auto Attack on." else "Auto Attack off.", "ok")
+		end)
+	end,
+	onFeed = function(keptUid: string, feederUid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("FeedItem", keptUid, feederUid)
+			end)
+			local message = remoteError(ok, result, "Could not feed that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local feed = if type(result) == "table" then result.feed else nil
+			local note = if type(feed) == "table" then feed.message else nil
+			ui.setStatus(if type(note) == "string" then note else "Fed.", "ok")
+		end)
 	end,
 })
 

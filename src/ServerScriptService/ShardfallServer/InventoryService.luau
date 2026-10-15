@@ -13,6 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local Stars = require(ReplicatedStorage.Shared.Stars)
 local DataService = require(script.Parent.DataService)
 
 local InventoryService = {}
@@ -43,6 +44,60 @@ function InventoryService.remove(player: Player, uid: string): (boolean, string?
 		return nil
 	end)
 	return ok, err, removedName
+end
+
+function InventoryService.feed(player: Player, keptUid: string, feederUid: string)
+	local summary = nil
+	local ok, err = DataService.mutate(player, function(data)
+		local kept, keptBag = Schema.findItem(data, keptUid)
+		local feeder, feederBag = Schema.findItem(data, feederUid)
+		if kept == nil or feeder == nil or keptBag == nil or feederBag == nil then
+			return "You do not have that item."
+		end
+		if keptBag ~= feederBag then
+			return "Feed a duplicate of the same item."
+		end
+		local previous = if type(kept.stars) == "number" then kept.stars else 0
+		local feederName = feeder.name
+		local feederQuality = feeder.quality
+		local preview, reason = Stars.commit(kept, feeder)
+		if preview == nil then
+			return reason or "Could not feed that."
+		end
+		feederBag[feederUid] = nil
+		Schema.clearEquip(data, feederUid)
+		local message: string
+		if preview.stars > previous then
+			message = string.format("%s is now ★%d.", tostring(kept.name), preview.stars)
+			if previous < 3 and preview.stars >= 3 then
+				message ..= " Starforged unlocked."
+			end
+			if previous < 5 and preview.stars >= 5 then
+				message ..= " Ascendant unlocked."
+			end
+		else
+			message = string.format(
+				"Fed %s into %s. %s toward the next star.",
+				tostring(feederName),
+				tostring(kept.name),
+				Stars.formatProgress(preview.starProgress)
+			)
+		end
+		summary = {
+			name = kept.name,
+			stars = kept.stars,
+			starProgress = kept.starProgress,
+			feederName = feederName,
+			feederQuality = feederQuality,
+			gained = preview.gained,
+			message = message,
+		}
+		return nil
+	end)
+	if not ok then
+		return { ok = false, error = err or "Could not feed that." }
+	end
+	return { ok = true, feed = summary }
 end
 
 function InventoryService.equip(player: Player, uid: string): (boolean, string?)

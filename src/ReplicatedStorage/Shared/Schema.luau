@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 3.
+	The player profile shape, version 4.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -15,10 +15,11 @@
 ]]
 
 local Materials = require("./Materials")
+local Stars = require("./Stars")
 
 local Schema = {}
 
-Schema.VERSION = 3
+Schema.VERSION = 4
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -44,6 +45,9 @@ export type Item = {
 	setId: string?,
 	poolId: string,
 	obtainedAt: number,
+	stars: number?,
+	starProgress: number?,
+	perks: { string }?,
 }
 
 export type PityState = {
@@ -196,6 +200,34 @@ function Schema.reconcile(data: any): ProfileData
 	data.materials = Materials.sanitize(data.materials)
 	data.consumables = Materials.sanitizeCounts(data.consumables, { Materials.TONIC_ID })
 	data.vouchers = Materials.sanitizeCounts(data.vouchers, Materials.VOUCHER_AREAS)
+	local function sanitizeGear(item: any)
+		if type(item) ~= "table" then
+			return
+		end
+		local stars = wholeNumber(item.stars, 0, 0)
+		if stars > Stars.MAX then
+			stars = Stars.MAX
+		end
+		item.stars = stars
+		local progress = tonumber(item.starProgress)
+		if progress == nil or progress ~= progress or progress < 0 then
+			progress = 0
+		elseif progress > 1 then
+			progress = 1
+		end
+		if stars >= Stars.MAX then
+			progress = 0
+		end
+		item.starProgress = progress
+		item.perks = Stars.perkIds(stars)
+		Stars.applyStats(item)
+	end
+	for _, item in pairs(data.inventory) do
+		sanitizeGear(item)
+	end
+	for _, item in pairs(data.pets) do
+		sanitizeGear(item)
+	end
 	return data
 end
 
@@ -257,11 +289,46 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 3
 	end
 
+	if version < 4 then
+		-- Star level. Older gear has no stars. The rolled number becomes
+		-- baseValue so a later feed can multiply it without compounding.
+		local function stamp(bag: any)
+			if type(bag) ~= "table" then
+				return
+			end
+			for _, item in pairs(bag) do
+				if type(item) == "table" then
+					if type(item.stars) ~= "number" then
+						item.stars = 0
+					end
+					if type(item.starProgress) ~= "number" then
+						item.starProgress = 0
+					end
+					if type(item.stats) == "table" then
+						for _, stat in ipairs(item.stats) do
+							if
+								type(stat) == "table"
+								and type(stat.baseValue) ~= "number"
+								and type(stat.value) == "number"
+							then
+								stat.baseValue = stat.value
+							end
+						end
+					end
+				end
+			end
+		end
+		stamp(raw.inventory)
+		stamp(raw.pets)
+		raw.schemaVersion = 4
+		version = 4
+	end
+
 	-- Next version goes here, then bump Schema.VERSION and template():
-	-- if version < 4 then
+	-- if version < 5 then
 	--     raw.boosts = raw.boosts or {}
-	--     raw.schemaVersion = 4
-	--     version = 4
+	--     raw.schemaVersion = 5
+	--     version = 5
 	-- end
 
 	return Schema.reconcile(raw), nil

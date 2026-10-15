@@ -27,6 +27,8 @@ export type Stack = {
 	weaponType: string?,
 	traits: { any },
 	quality: number?,
+	stars: number?,
+	starProgress: number?,
 	uids: { string },
 	equipped: boolean,
 }
@@ -99,15 +101,41 @@ local function stackKey(item: any): string
 		tostring(item.rarity),
 		table.concat(traitParts(item.traits), ","),
 		table.concat(statParts(item.stats), ","),
+		if type(item.stars) == "number" then tostring(math.floor(item.stars)) else "0",
+		if type(item.starProgress) == "number"
+			then string.format("%.4f", item.starProgress)
+			else "0",
 	}, "\0")
 end
 
-local function titled(item: any): string
-	local name = tostring(item.name)
-	if type(item.quality) == "number" then
-		name ..= "  " .. Stats.formatQuality(item.quality)
+function InventoryStacks.rowTitle(row: any): string
+	local name = tostring(row.name)
+	local stars = row.stars
+	local starred = type(stars) == "number" and stars >= 1
+	if starred then
+		local shown = math.floor(stars)
+		if shown > 5 then
+			shown = 5
+		end
+		name ..= string.format(" ★%d", shown)
+	end
+	if type(row.count) == "number" and row.count > 1 then
+		name ..= string.format(" x%d", row.count)
+	end
+	if type(row.quality) == "number" then
+		local gap = if starred then " " else "  "
+		name ..= gap .. Stats.formatQuality(row.quality)
 	end
 	return name
+end
+
+local function titled(item: any): string
+	return InventoryStacks.rowTitle({
+		name = item.name,
+		stars = item.stars,
+		quality = item.quality,
+		count = 1,
+	})
 end
 
 function InventoryStacks.petLine(pet: any): string
@@ -144,6 +172,8 @@ local function singleton(item: any, equipped: boolean): Stack
 		weaponType = if type(item.weaponType) == "string" then item.weaponType else nil,
 		traits = if type(item.traits) == "table" then item.traits else {},
 		quality = if type(item.quality) == "number" then item.quality else nil,
+		stars = if type(item.stars) == "number" then item.stars else 0,
+		starProgress = if type(item.starProgress) == "number" then item.starProgress else 0,
 		uids = if type(uid) == "string" then { uid } else {},
 		equipped = equipped,
 	}
@@ -211,6 +241,37 @@ local function findUid(profile: any, uid: any): any
 		return profile.pets[uid]
 	end
 	return nil
+end
+
+-- Highest-quality other copy of the kept item's catalog id, in the same bag.
+function InventoryStacks.bestFeeder(profile: any, keptUid: string): any?
+	if type(profile) ~= "table" or type(keptUid) ~= "string" then
+		return nil
+	end
+	local bag = nil
+	local kept = nil
+	if type(profile.inventory) == "table" and type(profile.inventory[keptUid]) == "table" then
+		bag = profile.inventory
+		kept = profile.inventory[keptUid]
+	elseif type(profile.pets) == "table" and type(profile.pets[keptUid]) == "table" then
+		bag = profile.pets
+		kept = profile.pets[keptUid]
+	end
+	if bag == nil or kept == nil or type(kept.templateId) ~= "string" then
+		return nil
+	end
+	local best = nil
+	local bestQuality = -1
+	for uid, item in pairs(bag) do
+		if uid ~= keptUid and type(item) == "table" and item.templateId == kept.templateId then
+			local quality = if type(item.quality) == "number" then item.quality else 0
+			if best == nil or quality > bestQuality then
+				best = item
+				bestQuality = quality
+			end
+		end
+	end
+	return best
 end
 
 function InventoryStacks.loadout(profile: any): Loadout

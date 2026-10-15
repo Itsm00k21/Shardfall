@@ -207,12 +207,33 @@ describe("Schema", function()
 			gold = 8,
 		})
 		assert(profile ~= nil)
-		expect(profile.schemaVersion).toEqual(3)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
 		expect(profile.gold).toEqual(8)
 		expect(profile.materials.wood).toEqual(0)
 		expect(profile.materials.heartwood).toEqual(0)
 		expect(profile.consumables.healing_tonic).toEqual(0)
 		expect(profile.vouchers.armory).toEqual(0)
 		expect(profile.vouchers.pets).toEqual(0)
+	end)
+
+	it("stamps star fields onto gear from an older save", function()
+		local profile = Schema.migrate({
+			schemaVersion = 3,
+			inventory = {
+				blade = {
+					uid = "blade",
+					templateId = "nightbriar",
+					name = "Nightbriar",
+					kind = "Weapon",
+					stats = { { id = "damage", value = 10 } },
+				},
+			},
+		})
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(4)
+		expect(profile.inventory.blade.stars).toEqual(0)
+		expect(profile.inventory.blade.starProgress).toEqual(0)
+		expect(profile.inventory.blade.stats[1].baseValue).toEqual(10)
+		expect(profile.inventory.blade.stats[1].value).toEqual(10)
 	end)
 end)

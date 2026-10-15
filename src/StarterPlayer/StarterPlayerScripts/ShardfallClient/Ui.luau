@@ -12,9 +12,10 @@
 	above the player's ascension stays locked. The client sends the selected
 	pool id.
 
-	Shards and Craft are tabs. Rootvault sits under them: Enter, Attack, and
-	a Healing Tonic button. The server still owns the rolls, the hits, and
-	the craft.
+	Shards and Craft are tabs. Rootvault sits under them: Enter, Attack, Auto
+	Attack, and a Healing Tonic button. Auto Attack defaults on. The server
+	still owns the rolls, the hits, and the craft. Feed spends a duplicate
+	into the kept copy.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,6 +30,7 @@ local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local Recipes = require(Shared:WaitForChild("Recipes"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
+local Stars = require(Shared:WaitForChild("Stars"))
 local Stats = require(Shared:WaitForChild("Stats"))
 
 local Ui = {}
@@ -46,6 +48,8 @@ export type Callbacks = {
 	onDungeon: (action: string) -> (),
 	onTonic: () -> (),
 	onAttack: () -> (),
+	onAutoAttack: (enabled: boolean) -> (),
+	onFeed: (keptUid: string, feederUid: string) -> (),
 }
 
 local COLORS = {
@@ -270,7 +274,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Dungeon",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 62),
+		Size = UDim2.new(1, 0, 0, 96),
 		LayoutOrder = 3,
 	}, panel) :: Frame
 	local runLabel = new("TextLabel", {
@@ -366,6 +370,23 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end)
 	tonicButton.MouseButton1Click:Connect(function()
 		callbacks.onTonic()
+	end)
+
+	local autoEnabled = true
+	local autoButton = makeButton(dungeonBar, "Auto Attack: On", COLORS.gold, 5, 26)
+	autoButton.Position = UDim2.fromOffset(0, 64)
+	autoButton.Size = UDim2.new(1, 0, 0, 26)
+	autoButton.TextSize = 13
+	autoButton.TextColor3 = COLORS.ink
+	local function paintAuto()
+		autoButton.Text = if autoEnabled then "Auto Attack: On" else "Auto Attack: Off"
+		autoButton.BackgroundColor3 = if autoEnabled then COLORS.gold else COLORS.buttonDim
+		autoButton.TextColor3 = if autoEnabled then COLORS.ink else COLORS.text
+	end
+	autoButton.MouseButton1Click:Connect(function()
+		autoEnabled = not autoEnabled
+		paintAuto()
+		callbacks.onAutoAttack(autoEnabled)
 	end)
 
 	local stats = new("TextLabel", {
@@ -766,6 +787,73 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 	dismiss.MouseButton1Click:Connect(hidePopup)
 
+	local pendingKept: string? = nil
+	local pendingFeeder: string? = nil
+	local feedDialog = new("Frame", {
+		Name = "FeedConfirm",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(320, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = COLORS.background,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 5,
+	}, screen) :: Frame
+	corner(feedDialog, 12)
+	new("UIStroke", { Color = COLORS.gold, Thickness = 2 }, feedDialog)
+	padding(feedDialog, 16)
+	list(feedDialog, 8)
+	local feedBody = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.BuilderSans,
+		TextSize = 14,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.text,
+		Text = "",
+		LayoutOrder = 1,
+		ZIndex = 5,
+	}, feedDialog) :: TextLabel
+	local feedActions = new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 30),
+		BorderSizePixel = 0,
+		LayoutOrder = 2,
+		ZIndex = 5,
+	}, feedDialog) :: Frame
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 8),
+	}, feedActions)
+	local feedYes = makeButton(feedActions, "Feed", COLORS.gold, 1, 30)
+	feedYes.Size = UDim2.new(0.5, -4, 1, 0)
+	feedYes.TextSize = 14
+	feedYes.TextColor3 = COLORS.ink
+	feedYes.ZIndex = 5
+	local feedNo = makeButton(feedActions, "Cancel", COLORS.buttonDim, 2, 30)
+	feedNo.Size = UDim2.new(0.5, -4, 1, 0)
+	feedNo.TextSize = 14
+	feedNo.ZIndex = 5
+	local function hideFeed()
+		feedDialog.Visible = false
+		pendingKept = nil
+		pendingFeeder = nil
+	end
+	feedNo.MouseButton1Click:Connect(hideFeed)
+	feedYes.MouseButton1Click:Connect(function()
+		local keptUid = pendingKept
+		local feederUid = pendingFeeder
+		hideFeed()
+		if keptUid ~= nil and feederUid ~= nil then
+			callbacks.onFeed(keptUid, feederUid)
+		end
+	end)
+
 	RunService.RenderStepped:Connect(function()
 		local rotation = (os.clock() * 48) % 360
 		for index = #gradients, 1, -1 do
@@ -973,6 +1061,41 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	paintChips()
 	paintRealms()
 
+	local function openFeed(profile: any, keptUid: string)
+		local kept = nil
+		if type(profile.inventory) == "table" then
+			kept = profile.inventory[keptUid]
+		end
+		if kept == nil and type(profile.pets) == "table" then
+			kept = profile.pets[keptUid]
+		end
+		local feeder = InventoryStacks.bestFeeder(profile, keptUid)
+		if type(kept) ~= "table" or type(feeder) ~= "table" then
+			return
+		end
+		local preview = Stars.advance(kept.stars, kept.starProgress, feeder.quality)
+		if preview == nil then
+			controller.setStatus("That item is already at five stars.", "error")
+			return
+		end
+		local equippedFeeder = false
+		if type(profile.equipped) == "table" then
+			equippedFeeder = profile.equipped.weapon == feeder.uid
+				or profile.equipped.pet == feeder.uid
+			if type(profile.equipped.armor) == "table" then
+				for _, uid in pairs(profile.equipped.armor) do
+					if uid == feeder.uid then
+						equippedFeeder = true
+					end
+				end
+			end
+		end
+		pendingKept = keptUid
+		pendingFeeder = feeder.uid
+		feedBody.Text = Stars.confirmText(kept, feeder, preview, equippedFeeder)
+		feedDialog.Visible = true
+	end
+
 	local function renderInventory(profile: any)
 		clearGenerated(inventory)
 		local rows = {}
@@ -1024,10 +1147,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 
 		for index, stack in ipairs(stacks) do
+			local uid = stack.uids[1]
+			local feeder = if type(uid) == "string"
+				then InventoryStacks.bestFeeder(profile, uid)
+				else nil
+			local showFeed = feeder ~= nil and (stack.stars or 0) < Stars.MAX
+			local cardHeight = if showFeed and not stack.equipped then 74 else 52
 			local card = new("Frame", {
 				BackgroundColor3 = COLORS.row,
 				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 52),
+				Size = UDim2.new(1, 0, 0, cardHeight),
 				ClipsDescendants = true,
 				LayoutOrder = index,
 			}, inventory) :: Frame
@@ -1038,12 +1167,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				Size = UDim2.new(0, 4, 1, 0),
 			}, card)
 
-			local title = if stack.count > 1
-				then string.format("%s x%d", stack.name, stack.count)
-				else stack.name
-			if type(stack.quality) == "number" then
-				title ..= "  " .. Stats.formatQuality(stack.quality)
-			end
+			local title = InventoryStacks.rowTitle(stack)
 			local name = new("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.fromOffset(12, 6),
@@ -1080,7 +1204,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				),
 			}, card)
 
-			local uid = stack.uids[1]
 			local canEquip = stack.kind == "Weapon" or stack.kind == "Pet" or stack.kind == "Armor"
 			if canEquip and type(uid) == "string" then
 				local action = makeButton(
@@ -1102,6 +1225,17 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 					end
 				end)
 			end
+			if showFeed and type(uid) == "string" then
+				local feed = makeButton(card, "Feed", COLORS.gold, 3, 20)
+				feed.AnchorPoint = Vector2.new(1, 0)
+				feed.Position = UDim2.new(1, -8, 0, if canEquip then 28 else 6)
+				feed.Size = UDim2.fromOffset(68, 20)
+				feed.TextSize = 12
+				feed.TextColor3 = COLORS.ink
+				feed.MouseButton1Click:Connect(function()
+					openFeed(profile, uid)
+				end)
+			end
 			if not stack.equipped and type(uid) == "string" then
 				local drop = makeButton(
 					card,
@@ -1111,7 +1245,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 					20
 				)
 				drop.AnchorPoint = Vector2.new(1, 0)
-				drop.Position = UDim2.new(1, -8, 0, if canEquip then 28 else 16)
+				drop.Position =
+					UDim2.new(1, -8, 0, if showFeed then 50 elseif canEquip then 28 else 16)
 				drop.Size = UDim2.fromOffset(68, 20)
 				drop.TextSize = 12
 				drop.TextColor3 = COLORS.danger
@@ -1129,6 +1264,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.setNotice(text: string)
 		oddsNotice.Text = text
+	end
+
+	function controller.setAutoAttack(enabled: boolean)
+		autoEnabled = enabled
+		paintAuto()
 	end
 
 	function controller.setStatus(text: string, kind: string)

@@ -845,6 +845,7 @@ local function onHeartbeat(dt: number)
 		end
 		if runs[player] ~= nil and not run.resolving then
 			CombatService.companionTick(player)
+			CombatService.autoTick(player)
 		end
 	end
 end

@@ -95,9 +95,9 @@ A panel named **SHARDFALL** sits on the right.
 - **View odds** opens the disclosure table for the realm you have selected. Those numbers are `RollMath.odds`. Pity is not inside the percentages. Every pool's rarity totals at 0 luck are Common 60%, Uncommon 25%, Rare 10%, Epic 4%, Legendary 0.80%, Mythic 0.18%, Secret 0.02%.
 - A **Not saved** badge means this session is memory-only. Click it for one line about publishing, then click it again to hide that line.
 - Out of tokens, Crack dims and a line under the button says "Not enough tokens."
-- Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`, `Fern Stag  72%`). The row under it lists the trait (`Bonus: Bonus Pet Damage 5.0%`). Common pets have zero trait slots, so that line stays `Bonus: None`. Equip and Drop use one id. Armor equips into helm, chest, legs, or boots.
+- Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`, `Fern Stag  72%`). A starred item reads `Nightbriar ★2 46%`. The row under it lists the trait (`Bonus: Bonus Pet Damage 5.0%`). Common pets have zero trait slots, so that line stays `Bonus: None`. Equip and Drop use one id. When you own a second copy of the same item, **Feed** asks you to confirm, shows the feeder's quality and the star progress that feed will reach, then consumes the feeder. Five stars is the cap. Each star is +8% to the rolled stats. ★3 unlocks Starforged and ★5 unlocks Ascendant (placeholder perks). Armor equips into helm, chest, legs, or boots.
 - **Paid roll** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
-- **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). Click the world, or press **Attack**. Swords, daggers, and hammers swing. Bows and staffs fire a shot. Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. An equipped pet hits the nearest enemy on its own timer using Pet Damage. Bonus Pet Damage on the pet or the weapon multiplies those hits. There is no pet model yet; the gold or white number is the swing. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
+- **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). **Auto Attack** starts on: the server swings at the nearest enemy inside your weapon's range, on that weapon's attack speed. Melee aims the arc at that enemy. Bows and staffs fire at it. Click the world, or press **Attack**, when you want to aim yourself. If nothing is in range the status line says "No target in range." Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. An equipped pet hits the nearest enemy on its own timer using Pet Damage. Bonus Pet Damage on the pet or the weapon multiplies those hits. There is no pet model yet; the gold or white number is the swing. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
 - The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got.
 - **Craft** shows each recipe with what you own and what it costs. Briar Edge makes a Thorn Dagger, Grovewarden Hood makes the helm, Healing Tonic restores 40% HP, and Wild Resin rerolls one trait on a Rare or better piece. The server spends the materials.
 - In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens, +25 Shard Luck, +1 Ascension, craft materials, or Skip to Rootvault boss. A live server rejects those grants. Ascension 1 unlocks Sunken Reach in both areas. Tidecrypt (the Sunken dungeon) stays locked until then, and it is not built yet.
@@ -223,7 +223,7 @@ The server that loads a player writes its job id into `Lock`. Another server see
 
 Those rules live in `SessionLock.luau` as plain functions, which is what the tests call. `DataService` is the only module that talks to `DataStoreService`. When you outgrow this (gifting, instant handoff between servers), replace the inside of `DataService` with [ProfileStore](https://madstudioroblox.github.io/ProfileStore/). ProfileStore is not on the official Wally index; unofficial copies are not worth the risk. The rest of the game already goes through `mutate`, `snapshot`, and `release`.
 
-Profile fields in version 3:
+Profile fields in version 4:
 
 | Field | Meaning |
 | --- | --- |
@@ -233,15 +233,15 @@ Profile fields in version 3:
 | `gold` | Soft currency. A Rootvault clear pays gold. Gold Find on the equipped weapon, armor, or pet adds a fraction. |
 | `shardTokens` | Spent by free cracks. New profiles start at 25. |
 | `shardLuck` | Luck stat passed into every roll. |
-| `inventory` | Weapons and armor, keyed by unique id. Each gear piece stores `stats` and `quality`. |
-| `pets` | Pets, keyed by unique id. |
+| `inventory` | Weapons and armor, keyed by unique id. Each gear piece stores `stats`, `quality`, `stars`, and `starProgress`. |
+| `pets` | Pets, keyed by unique id. They use the same star feed as gear. |
 | `pity` | Per-pool `{ rollsSinceLegendary, totalRolls }`. |
 | `equipped` | `{ weapon, pet, armor = { helm, chest, legs, boots } }`. Ids must exist in the bag. |
 | `materials` | Stack counts: Verdant Wood, Living Vine, Spore Cap, Ironbark, Heartwood. |
 | `consumables` | Healing Tonics. One drink restores 40% of max HP. |
 | `vouchers` | Free cracks for `armory` or `pets`. A dungeon clear can grant one. |
 
-`Schema.migrate` fills missing keys and will refuse a profile newer than this server instead of rolling it backwards. Version 2 added armor slots. Version 3 added materials, tonics, and vouchers. There is a commented example in that function for version 4.
+`Schema.migrate` fills missing keys and will refuse a profile newer than this server instead of rolling it backwards. Version 2 added armor slots. Version 3 added materials, tonics, and vouchers. Version 4 added star level on weapons, armor, and pets. There is a commented example in that function for version 5.
 
 ## Where to change things
 
@@ -260,6 +260,7 @@ Profile fields in version 3:
 | Change autosave timing | `AUTOSAVE_SECONDS` in `DataService.luau` |
 | Add a remote | `default.project.json` (the instance) and `Remotes.luau` (the handler) |
 | Change hit math or weapon reach | `CombatMath.luau` |
+| Change star feed or the per-star bonus | `Stars.luau` (`STAT_PER_STAR`, `MIN_FEED`, `MAX_FEED`) |
 | Add a material or tonic | `Materials.luau`, then the profile defaults |
 | Add a recipe | `Recipes.luau` |
 | Add a dungeon or enemy | `Dungeons.luau`. Set `ascension` and leave `implemented = false` until the rooms exist |
@@ -277,6 +278,7 @@ selene.toml / stylua.toml     Lint and format
 src/ReplicatedStorage/Shared/
     Rarities.luau             Ladder, colors, luck exponents, trait slots
     Stats.luau                Stat ranges, rarity scale, quality, class weights
+    Stars.luau                Duplicate feed, star level, stat multiplier
     ItemBases.luau            Weapon, armor, and pet catalog
     Traits.luau               Weapon and armor trait rolls
     Pools.luau                Per-realm drop tables (placeholder odds)

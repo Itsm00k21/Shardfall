@@ -176,6 +176,19 @@ describe("CombatMath", function()
 		expect(gold).toBeCloseTo(0.05, 1e-9)
 	end)
 
+	it("picks the nearest enemy inside weapon range and aims melee at them", function()
+		local picked = CombatMath.nearestInRange(0, 0, {
+			{ x = 0, z = 30 },
+			{ x = 3, z = 4 },
+		}, 8)
+		assert(picked ~= nil)
+		expect(picked.z).toEqual(4)
+		expect(CombatMath.nearestInRange(0, 0, { { x = 0, z = 30 } }, 8)).toBeNil()
+
+		local ax, _ay, az = CombatMath.aimAt(0, 0, 0, 3, 1, 4)
+		expect(CombatMath.hitsMelee(0, 0, ax, az, 3, 4, 8, 0.45)).toEqual(true)
+	end)
+
 	it("adds gold find as a fraction of the clear reward", function()
 		expect(CombatMath.bonusGold(45, 0.1)).toEqual(5)
 		expect(CombatMath.bonusGold(45, 0)).toEqual(0)
