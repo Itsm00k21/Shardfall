@@ -13,7 +13,9 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local HavenLife = require(Shared:WaitForChild("HavenLife"))
+local Quality = require(Shared:WaitForChild("Quality"))
 
 local VerdantLod = {}
 
@@ -38,10 +40,65 @@ local function applyLighting(tier: Quality.Tier)
 	if Lighting.FogStart > tier.fogEnd * 0.25 then
 		Lighting.FogStart = tier.fogEnd * 0.15
 	end
+	local exposure = HavenLife.exposure(Lighting.ClockTime)
 	local bloom = Lighting:FindFirstChild("VerdantBloom")
 	if bloom ~= nil and bloom:IsA("BloomEffect") then
-		bloom.Intensity = tier.bloom
+		bloom.Intensity = math.min(tier.bloom, exposure.bloomIntensity)
+		bloom.Size = exposure.bloomSize
+		bloom.Threshold = math.max(bloom.Threshold, exposure.bloomThreshold)
 	end
+	local rays = Lighting:FindFirstChild("VerdantSunRays")
+	if rays ~= nil and rays:IsA("SunRaysEffect") then
+		rays.Intensity = exposure.sunIntensity
+		rays.Spread = exposure.sunSpread
+	end
+end
+
+local artReported = false
+
+local function reportArt(trimmed: number)
+	if artReported then
+		return
+	end
+	local haven = Workspace:FindFirstChild("Haven")
+	if haven == nil then
+		return
+	end
+	local parts = 0
+	local waterfalls = 0
+	local npcs = 0
+	local waystones = 0
+	for _, descendant in ipairs(haven:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			parts += 1
+			if descendant.Name == "Waterfall" then
+				waterfalls += 1
+			end
+			if
+				descendant.Name == "Waystone"
+				or type(descendant:GetAttribute("WaystoneId")) == "string"
+			then
+				waystones += 1
+			end
+		elseif descendant:IsA("Model") and descendant.Name == "Townsfolk" then
+			npcs += 1
+		end
+	end
+	if parts < 10 then
+		return
+	end
+	artReported = true
+	print(
+		string.format(
+			"[HavenArt] built %d parts: waterfalls %d, npcs %d, waystones %d; trimmed %d by tier %s",
+			parts,
+			waterfalls,
+			npcs,
+			waystones,
+			trimmed,
+			tierId
+		)
+	)
 end
 
 function VerdantLod.start()
@@ -54,14 +111,27 @@ function VerdantLod.start()
 		local tier = Quality.get(tierId)
 		applyLighting(tier)
 		local camera = Workspace.CurrentCamera
-		local origin = if camera ~= nil then camera.CFrame.Position else Vector3.zero
 		local trimIndex = 0
 		local shown = 0
 		local particleIndex = 0
+		local trimmed = 0
 		for _, descendant in ipairs(Workspace:GetDescendants()) do
 			if descendant:IsA("BasePart") then
+				if
+					Quality.alwaysVisible(descendant.Name, descendant:GetAttribute("WaystoneId"))
+				then
+					descendant.LocalTransparencyModifier = 0
+					continue
+				end
 				local lod = descendant:GetAttribute("ShardfallLod")
 				local trim = descendant:GetAttribute("ShardfallTrim") == true or lod == "small"
+				if camera == nil then
+					if type(lod) == "string" or trim then
+						descendant.LocalTransparencyModifier = 0
+					end
+					continue
+				end
+				local origin = camera.CFrame.Position
 				if type(lod) == "string" or trim then
 					local distance = (descendant.Position - origin).Magnitude
 					local hide = false
@@ -78,6 +148,9 @@ function VerdantLod.start()
 						end
 					elseif lod == "large" then
 						hide = distance > tier.lodFar
+					end
+					if hide then
+						trimmed += 1
 					end
 					descendant.LocalTransparencyModifier = if hide then 1 else 0
 					local lodName = if type(lod) == "string" then lod else "large"
@@ -99,6 +172,7 @@ function VerdantLod.start()
 				end
 			end
 		end
+		reportArt(trimmed)
 	end)
 end
 

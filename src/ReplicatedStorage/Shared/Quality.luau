@@ -159,4 +159,12 @@ function Quality.ids(): { string }
 	return { "low", "med", "high" }
 end
 
+-- Waystones and waterfalls stay on every tier. Trim must not hide the hub landmarks.
+function Quality.alwaysVisible(name: string?, waystoneId: any): boolean
+	if type(waystoneId) == "string" and waystoneId ~= "" then
+		return true
+	end
+	return name == "Waystone" or name == "Waterfall"
+end
+
 return Quality

@@ -1089,6 +1089,7 @@ end
 local function dressHaven(parent: Instance)
 	local foliage = Instance.new("Model")
 	foliage.Name = "Foliage"
+	foliage.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	foliage.Parent = parent
 	for _, desc in ipairs(VerdantScatter.haven()) do
 		local className = if desc.className == "WedgePart" then "WedgePart" else "Part"
@@ -1168,6 +1169,7 @@ local function stampLife(parent: Instance)
 
 	local alive = Instance.new("Model")
 	alive.Name = "Alive"
+	alive.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	alive.Parent = parent
 
 	local skyDrift: { { part: BasePart, drift: number } } = {}
@@ -1256,7 +1258,7 @@ local function stampLife(parent: Instance)
 	for _, rig in ipairs(HavenLife.rigs()) do
 		local model = Instance.new("Model")
 		model.Name = rig.name
-		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 		model:SetAttribute("ShardfallKind", rig.kind)
 		model.Parent = alive
 		local mover: Mover = {
@@ -1354,9 +1356,10 @@ local function stampLife(parent: Instance)
 		local ok, err = pcall(function()
 			local hour = HavenLife.clock(elapsed)
 			local mood = HavenLife.mood(hour)
+			local exposure = HavenLife.exposure(hour)
 			local target = lighting :: any
 			target.ClockTime = hour
-			target.Brightness = mood.brightness
+			target.Brightness = math.min(mood.brightness, exposure.brightness)
 			target.Ambient = Color3.fromRGB(mood.ambient[1], mood.ambient[2], mood.ambient[3])
 			target.OutdoorAmbient =
 				Color3.fromRGB(mood.outdoor[1], mood.outdoor[2], mood.outdoor[3])
@@ -1370,6 +1373,21 @@ local function stampLife(parent: Instance)
 			local lampsOn = HavenLife.lanternsOn(hour)
 			for _, glow in ipairs(lanternLights) do
 				glow.Enabled = lampsOn
+			end
+			local bloom = target:FindFirstChild("VerdantBloom")
+			if bloom ~= nil then
+				if bloom.Intensity > exposure.bloomIntensity then
+					bloom.Intensity = exposure.bloomIntensity
+				end
+				bloom.Size = exposure.bloomSize
+				if bloom.Threshold < exposure.bloomThreshold then
+					bloom.Threshold = exposure.bloomThreshold
+				end
+			end
+			local rays = target:FindFirstChild("VerdantSunRays")
+			if rays ~= nil then
+				rays.Intensity = exposure.sunIntensity
+				rays.Spread = exposure.sunSpread
 			end
 		end)
 		if not ok and not cycleWarned then
@@ -1467,8 +1485,18 @@ function HavenBuilder.build(parent: Instance): number
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)
-	dressHaven(parent)
-	stampLife(parent)
+	local function guard(label: string, callback: () -> ())
+		local ok, err = pcall(callback)
+		if not ok then
+			warn("[Shardfall] " .. label .. " failed: " .. tostring(err))
+		end
+	end
+	guard("Haven dressing", function()
+		dressHaven(parent)
+	end)
+	guard("Haven life", function()
+		stampLife(parent)
+	end)
 	clearDefaultPlace()
 
 	local count = 0
@@ -1490,6 +1518,24 @@ function HavenBuilder.build(parent: Instance): number
 			end)
 		end
 	end
+	local waterfalls = 0
+	local npcs = 0
+	local waystones = 0
+	for _, descendant in ipairs(parent:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			if descendant.Name == "Waterfall" then
+				waterfalls += 1
+			end
+			if
+				descendant.Name == "Waystone"
+				or type(descendant:GetAttribute("WaystoneId")) == "string"
+			then
+				waystones += 1
+			end
+		elseif descendant:IsA("Model") and descendant.Name == "Townsfolk" then
+			npcs += 1
+		end
+	end
 	print(
 		string.format(
 			"[Shardfall] Haven built under %s at floor y=%d (%d parts, %d prompts)",
@@ -1497,6 +1543,15 @@ function HavenBuilder.build(parent: Instance): number
 			Haven.FLOOR_Y,
 			count,
 			prompts
+		)
+	)
+	print(
+		string.format(
+			"[HavenArt] built %d parts: waterfalls %d, npcs %d, waystones %d; trimmed 0 by tier server",
+			count,
+			waterfalls,
+			npcs,
+			waystones
 		)
 	)
 	return count

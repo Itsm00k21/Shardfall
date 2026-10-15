@@ -115,4 +115,18 @@ describe("HavenLife", function()
 			end
 		end
 	end)
+
+	it("clamps sunset bloom and sun rays below the midday values", function()
+		local day = HavenLife.exposure(12)
+		local sunset = HavenLife.exposure(18.2)
+		expect(day.bloomIntensity).toEqual(0.45)
+		expect(day.bloomSize).toEqual(22)
+		expect(sunset.bloomIntensity < day.bloomIntensity).toBeTrue()
+		expect(sunset.bloomIntensity <= 0.12).toBeTrue()
+		expect(sunset.bloomSize <= 12).toBeTrue()
+		expect(sunset.sunIntensity < day.sunIntensity).toBeTrue()
+		expect(sunset.sunIntensity <= 0.05).toBeTrue()
+		expect(sunset.sunSpread < day.sunSpread).toBeTrue()
+		expect(sunset.brightness < day.brightness).toBeTrue()
+	end)
 end)

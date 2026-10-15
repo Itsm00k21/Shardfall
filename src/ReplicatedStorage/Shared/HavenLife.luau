@@ -649,6 +649,41 @@ function HavenLife.mood(
 	}
 end
 
+-- Midday values match VerdantLook. The sun sits in the camera near 6:12 and
+-- 18:12, and an unclamped bloom size plus sun rays turns that into a yellow screen.
+function HavenLife.exposure(clockTime: number): {
+	bloomIntensity: number,
+	bloomSize: number,
+	bloomThreshold: number,
+	sunIntensity: number,
+	sunSpread: number,
+	brightness: number,
+}
+	local hour = 12
+	if type(clockTime) == "number" and clockTime == clockTime then
+		hour = clockTime % 24
+	end
+	local function band(center: number): number
+		local distance = math.abs(hour - center)
+		if distance > 12 then
+			distance = 24 - distance
+		end
+		if distance >= 1.8 then
+			return 0
+		end
+		return 1 - distance / 1.8
+	end
+	local glare = math.max(band(6.2), band(18.2))
+	return {
+		bloomIntensity = 0.45 - glare * 0.35,
+		bloomSize = 22 - glare * 12,
+		bloomThreshold = 0.85 + glare * 0.12,
+		sunIntensity = 0.14 - glare * 0.11,
+		sunSpread = 0.35 - glare * 0.18,
+		brightness = 2.15 - glare * 1.0,
+	}
+end
+
 function HavenLife.audioReady(id: string): boolean
 	return string.match(id, "^rbxassetid://%d+$") ~= nil
 end

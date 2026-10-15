@@ -212,13 +212,54 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, panel) :: Frame
 	new("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -84, 1, 0),
+		Size = UDim2.new(1, -176, 1, 0),
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.gold,
 		Text = "SHARDFALL",
 	}, header)
+	local minimize = new("TextButton", {
+		Name = "Minimize",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -104, 0.5, 0),
+		Size = UDim2.fromOffset(64, 44),
+		BackgroundColor3 = COLORS.buttonDim,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextColor3 = COLORS.text,
+		Text = "Hide",
+		AutoButtonColor = true,
+	}, header) :: TextButton
+	corner(minimize, 8)
+	local restore = new("TextButton", {
+		Name = "ShowPanel",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(120, 44),
+		BackgroundColor3 = COLORS.button,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextColor3 = COLORS.text,
+		Text = "SHARDFALL",
+		AutoButtonColor = true,
+		Visible = false,
+	}, screen) :: TextButton
+	corner(restore, 8)
+	local function paintChrome()
+		restore.Visible = not panel.Visible
+	end
+	paintChrome()
+	minimize.MouseButton1Click:Connect(function()
+		panel.Visible = false
+		paintChrome()
+	end)
+	restore.MouseButton1Click:Connect(function()
+		panel.Visible = true
+		paintChrome()
+	end)
 
 	local saveBadge = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1268,10 +1309,12 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.toggleMenu()
 		panel.Visible = not panel.Visible
+		paintChrome()
 	end
 
 	function controller.openPanel(kind: string, areaId: string?)
 		panel.Visible = true
+		paintChrome()
 		if kind == "craft" then
 			page = "craft"
 			applyPage()

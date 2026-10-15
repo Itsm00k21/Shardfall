@@ -8,7 +8,68 @@
 	tells the client the profile is ready. The listener is registered first
 	so a fast in-memory load still pushes a snapshot. Dungeon startup, including
 	the hub build, is isolated so a map error cannot skip that profile push.
+
+	The first statement is a print, before any require, so a broken module
+	still leaves `[Shardfall] build 917d688+ server` in Output.
 ]]
+
+print("[Shardfall] build 917d688+ server")
+
+local function silenceForeignScripts()
+	local services = {
+		"ServerScriptService",
+		"Workspace",
+		"StarterPlayer",
+		"StarterGui",
+		"StarterPack",
+		"ReplicatedFirst",
+	}
+	local found = 0
+	for _, serviceName in ipairs(services) do
+		local root = game:GetService(serviceName)
+		for _, descendant in ipairs(root:GetDescendants()) do
+			if descendant:IsA("BaseScript") then
+				local managed = false
+				local cursor: Instance? = descendant
+				while cursor ~= nil do
+					if cursor.Name == "ShardfallServer" or cursor.Name == "ShardfallClient" then
+						managed = true
+						break
+					end
+					cursor = cursor.Parent
+				end
+				if not managed then
+					found += 1
+					warn(
+						string.format(
+							"[Shardfall] foreign script %s (%s) is outside ShardfallServer/ShardfallClient. Disabled so it cannot spawn a second world.",
+							descendant:GetFullName(),
+							descendant.ClassName
+						)
+					)
+					descendant.Disabled = true
+				end
+			end
+		end
+	end
+	if found == 0 then
+		print("[Shardfall] foreign-script scan: none outside ShardfallServer and ShardfallClient")
+	else
+		warn(
+			string.format(
+				"[Shardfall] foreign-script scan: disabled %d script(s). Delete them in Explorer, then reconnect Rojo.",
+				found
+			)
+		)
+	end
+end
+
+do
+	local scanOk, scanErr = pcall(silenceForeignScripts)
+	if not scanOk then
+		warn("[Shardfall] foreign-script scan failed: " .. tostring(scanErr))
+	end
+end
 
 local CombatService = require(script.CombatService)
 local DataService = require(script.DataService)

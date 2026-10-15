@@ -596,7 +596,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		part = rigOrErr :: BasePart
 	else
 		local reason = if rigOk then "no recipe" else tostring(rigOrErr)
-		warn(string.format("[Shardfall] %s rig failed (%s); anchored marker only", kind, reason))
+		warn(string.format("[Rootvault] %s rig failed (%s); anchored marker only", kind, reason))
 		-- Small, anchored, and non-colliding. The old fallback was a full-size
 		-- Grass block, which is what a failed rig looked like in play.
 		part = makePart(
@@ -632,7 +632,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			end
 		end
 		if pieces < 2 then
-			warn(string.format("[Shardfall] %s rig has %d parts", kind, pieces))
+			warn(string.format("[Rootvault] %s rig has %d parts", kind, pieces))
 		end
 	end
 	part:SetAttribute("ShardfallName", definition.name)
@@ -1609,6 +1609,7 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
+	print("[Rootvault] build 917d688+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)

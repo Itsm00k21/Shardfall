@@ -114,7 +114,7 @@
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "$ignoreUnknownInstances": true,
+      "$ignoreUnknownInstances": false,
       "ShardfallServer": {
         "$path": "src/ServerScriptService/ShardfallServer"
       }
@@ -124,7 +124,7 @@
       "$ignoreUnknownInstances": true,
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
-        "$ignoreUnknownInstances": true,
+        "$ignoreUnknownInstances": false,
         "ShardfallClient": {
           "$path": "src/StarterPlayer/StarterPlayerScripts/ShardfallClient"
         }

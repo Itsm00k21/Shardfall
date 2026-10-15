@@ -12,8 +12,13 @@
 	changed without a button press (the first load, for example).
 
 	The pool id is the realm selected in the current roll area. Armory and
-	Pets are separate. A realm above the player's ascension is not offered.
+	Pets are separate. A realm above 	the player's ascension is not offered.
+
+	The first statement is a print, before any require, so a broken module
+	still leaves `[Shardfall] build 917d688+ client` in Output.
 ]]
+
+print("[Shardfall] build 917d688+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
