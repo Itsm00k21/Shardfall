@@ -95,9 +95,9 @@ A panel named **SHARDFALL** sits on the right.
 - **View odds** opens the disclosure table for the realm you have selected. Those numbers are `RollMath.odds`. Pity is not inside the percentages. Every pool's rarity totals at 0 luck are Common 60%, Uncommon 25%, Rare 10%, Epic 4%, Legendary 0.80%, Mythic 0.18%, Secret 0.02%.
 - A **Not saved** badge means this session is memory-only. Click it for one line about publishing, then click it again to hide that line.
 - Out of tokens, Crack dims and a line under the button says "Not enough tokens."
-- Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`). Equip and Drop use one id. Armor equips into helm, chest, legs, or boots.
+- Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`, `Fern Stag  72%`). The row under it lists the trait (`Bonus: Bonus Pet Damage 5.0%`). Common pets have zero trait slots, so that line stays `Bonus: None`. Equip and Drop use one id. Armor equips into helm, chest, legs, or boots.
 - **Paid roll** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
-- **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). Click the world, or press **Attack**. Swords, daggers, and hammers swing. Bows and staffs fire a shot. Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
+- **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). Click the world, or press **Attack**. Swords, daggers, and hammers swing. Bows and staffs fire a shot. Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. An equipped pet hits the nearest enemy on its own timer using Pet Damage. Bonus Pet Damage on the pet or the weapon multiplies those hits. There is no pet model yet; the gold or white number is the swing. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
 - The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got.
 - **Craft** shows each recipe with what you own and what it costs. Briar Edge makes a Thorn Dagger, Grovewarden Hood makes the helm, Healing Tonic restores 40% HP, and Wild Resin rerolls one trait on a Rare or better piece. The server spends the materials.
 - In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens, +25 Shard Luck, +1 Ascension, craft materials, or Skip to Rootvault boss. A live server rejects those grants. Ascension 1 unlocks Sunken Reach in both areas. Tidecrypt (the Sunken dungeon) stays locked until then, and it is not built yet.
@@ -195,9 +195,11 @@ The server rejects a roll when `ascension` is below the pool's ascension. The pa
 
 Each weapon and armor base in `ItemBases.luau` lists stat ranges (Damage, Attack Speed, Crit Chance, Crit Damage, HP, Defense). `Stats.roll` multiplies both ends by the rarity scale, then by `Stats.CLASS_WEIGHTS` for the weapon type. Those weights are all **1** today. That table is the class-system hook: a future class edits the numbers, and the roll already multiplies by them. Weapon type (`sword`, `bow`, `staff`, `dagger`, `hammer`) is stored on the item. There is no class yet.
 
-Quality is the average of how close each stat landed to its own maximum. `0%` is every minimum, `100%` is every maximum, `92%` is near the top of that item's range. It does not compare a Common to a Secret. The value is stored on the item with the rolled stats. Pets have no gear stats.
+Quality is the average of how close each stat landed to its own maximum. `0%` is every minimum, `100%` is every maximum, `92%` is near the top of that item's range. It does not compare a Common to a Secret. The value is stored on the item with the rolled stats.
 
-Weapon and armor trait slots: Rare and Epic roll 1, Legendary and Mythic roll 2, Secret rolls 3. Pets roll none. Common and Uncommon gear rolls none. The traits today are Lifesteal, Chain Lightning, Bonus Pet Damage, and Gold Find. Nothing in combat reads traits or stats yet.
+Pets use the same roll. Every pet base lists Pet Damage and Pet HP. Common pets stop there. Uncommon pets also roll Attack Speed and Crit Chance, and so do Rare, Epic, Legendary, Mythic, and Secret pets, with wider ranges on the last two. The class-weight key for that roll is `pet`, still all 1s. The item does not store a weapon type.
+
+Trait slots are shared: Rare and Epic roll 1, Legendary and Mythic roll 2, Secret rolls 3. Common and Uncommon roll none, pets included. Weapons and armor draw Lifesteal first. Pets draw the same four traits with Bonus Pet Damage first: Bonus Pet Damage, Lifesteal, Gold Find, Chain Lightning. Combat applies Pet Damage, Bonus Pet Damage, pet Lifesteal, and Gold Find. Chain Lightning is shown on the item and not simulated.
 
 ### Paid rolls
 
@@ -228,7 +230,7 @@ Profile fields in version 3:
 | `schemaVersion` | Migration version. Bump `Schema.VERSION` when the shape changes. |
 | `level`, `xp` | XP to next level is `100 * level`. A Rootvault clear grants XP and can level you up. |
 | `ascension` | Unlocks roll pools and, later, dungeons. 0 is Verdant Wilds. 4 is Void Rift. |
-| `gold` | Soft currency. A Rootvault clear pays gold. Gold Find on equipped gear adds a fraction. |
+| `gold` | Soft currency. A Rootvault clear pays gold. Gold Find on the equipped weapon, armor, or pet adds a fraction. |
 | `shardTokens` | Spent by free cracks. New profiles start at 25. |
 | `shardLuck` | Luck stat passed into every roll. |
 | `inventory` | Weapons and armor, keyed by unique id. Each gear piece stores `stats` and `quality`. |
@@ -335,7 +337,8 @@ Point `default.project.json` at the folder Wally created (`Packages` for shared,
 
 - Press Play, crack a shard, equip it, and clear the Rootvault. Then publish and confirm a rejoin keeps the inventory and the materials.
 - Fill in `Stats.CLASS_WEIGHTS` when a class exists. The weapon type already chooses melee or a projectile, and rolls already multiply by that table.
-- Chain Lightning and Bonus Pet Damage are stored on items and not applied in a fight yet. Lifesteal and Gold Find are.
+- Chain Lightning is stored on items and not simulated. Bonus Pet Damage multiplies the equipped pet's hits. Lifesteal heals the swing that rolled it. Gold Find adds to clear gold.
+- A floating pet model, once the timer companion is enough to playtest.
 - Build Tidecrypt by setting `implemented = true` and filling its rooms in `Dungeons.luau`. The ascension gate is already there.
 - Replace the dev token button with a real source (a daily, a quest, a drop).
 - When you sell a shard: a developer product, a receipt handler, and `rollPaid` after the policy check. Keep the disclosed odds exact.

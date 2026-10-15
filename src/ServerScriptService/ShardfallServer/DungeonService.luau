@@ -843,6 +843,9 @@ local function onHeartbeat(dt: number)
 			end
 			tickEnemy(player, run, enemy, hrp, step, now)
 		end
+		if runs[player] ~= nil and not run.resolving then
+			CombatService.companionTick(player)
+		end
 	end
 end
 

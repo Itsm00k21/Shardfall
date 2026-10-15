@@ -114,6 +114,68 @@ describe("CombatMath", function()
 		expect(CombatMath.bossTaken(10, 2, false, 0.45)).toEqual(10)
 	end)
 
+	it(
+		"scales pet damage by bonus pet damage and falls back when attack speed is missing",
+		function()
+			local offense = CombatMath.petOffense({
+				kind = "Pet",
+				stats = { { id = "pet_damage", value = 10 } },
+				traits = { { id = "lifesteal", value = 0.04 } },
+			}, 0.2)
+			assert(offense ~= nil)
+			expect(offense.damage).toBeCloseTo(12, 1e-9)
+			expect(offense.attackSpeed).toEqual(0.7)
+			expect(offense.critChance).toEqual(0)
+			expect(offense.critDamage).toEqual(1.5)
+			expect(offense.lifesteal).toEqual(0.04)
+			expect(offense.range).toEqual(16)
+			expect(CombatMath.petOffense(nil, 0)).toBeNil()
+			expect(CombatMath.petFromProfile(nil)).toBeNil()
+		end
+	)
+
+	it("adds weapon bonus pet damage to the pet and keeps pet lifesteal off the weapon", function()
+		local profile = {
+			equipped = { weapon = "w", pet = "p", armor = {} },
+			inventory = {
+				w = {
+					kind = "Weapon",
+					weaponType = "sword",
+					stats = {
+						{ id = "damage", value = 10 },
+						{ id = "attack_speed", value = 1 },
+						{ id = "crit_chance", value = 0 },
+						{ id = "crit_damage", value = 1.5 },
+					},
+					traits = {
+						{ id = "bonus_pet_damage", value = 0.2 },
+						{ id = "lifesteal", value = 0.05 },
+					},
+				},
+			},
+			pets = {
+				p = {
+					kind = "Pet",
+					stats = {
+						{ id = "pet_damage", value = 10 },
+						{ id = "attack_speed", value = 1 },
+					},
+					traits = {
+						{ id = "lifesteal", value = 0.1 },
+						{ id = "gold_find", value = 0.05 },
+					},
+				},
+			},
+		}
+		local petHit = CombatMath.petFromProfile(profile)
+		assert(petHit ~= nil)
+		expect(petHit.damage).toBeCloseTo(12, 1e-9)
+		expect(petHit.lifesteal).toEqual(0.1)
+		local weapon, _, gold = CombatMath.loadout(profile)
+		expect(weapon.lifesteal).toEqual(0.05)
+		expect(gold).toBeCloseTo(0.05, 1e-9)
+	end)
+
 	it("adds gold find as a fraction of the clear reward", function()
 		expect(CombatMath.bonusGold(45, 0.1)).toEqual(5)
 		expect(CombatMath.bonusGold(45, 0)).toEqual(0)

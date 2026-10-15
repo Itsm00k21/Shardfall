@@ -6,7 +6,8 @@
 	The client only sends which way the camera is looking. This module
 	decides if a melee swing reaches an enemy, or spawns the projectile a
 	bow or staff fires. Rolled weapon stats supply the damage. Armor supplies
-	HP and Defense. Nothing here trusts a damage number from the client.
+	HP and Defense. An equipped pet hits the nearest enemy on its own timer
+	using Pet Damage. Nothing here trusts a damage number from the client.
 
 	DungeonService registers the enemies. This file does not build the rooms.
 ]]
@@ -46,6 +47,7 @@ type State = {
 	maxHp: number,
 	defense: number,
 	nextAttack: number,
+	nextCompanion: number,
 	ready: boolean,
 }
 
@@ -126,6 +128,7 @@ local function ensure(player: Player): State
 			maxHp = CombatMath.BASE_HEALTH,
 			defense = 0,
 			nextAttack = 0,
+			nextCompanion = 0,
 			ready = false,
 		}
 		vitals[player] = state
@@ -398,6 +401,49 @@ local function swingFlash(origin: Vector3, look: Vector3, reach: number, crit: b
 	flash.CFrame = CFrame.lookAt(origin, origin + look) * CFrame.new(0, 0, -flash.Size.Z / 2)
 	flash.Parent = workspace
 	Debris:AddItem(flash, 0.12)
+end
+
+-- One pet swing when the timer is ready and an enemy is within PET_RANGE.
+-- No model: the floating damage number is the hit. Chain Lightning is not
+-- fired from here.
+function CombatService.companionTick(player: Player)
+	if not hooks.inRun(player) then
+		return
+	end
+	local hrp = rootPart(player)
+	if hrp == nil then
+		return
+	end
+	local offense = CombatMath.petFromProfile(DataService.get(player))
+	if offense == nil then
+		return
+	end
+	local state = ensure(player)
+	local now = os.clock()
+	if now < (state.nextCompanion or 0) then
+		return
+	end
+	local closest: EnemyView? = nil
+	local closestDistance = math.huge
+	for _, enemy in ipairs(hooks.enemies(player)) do
+		local distance = CombatMath.planarDistance(hrp.Position.X, hrp.Position.Z, enemy.x, enemy.z)
+		if distance <= offense.range and distance < closestDistance then
+			closest = enemy
+			closestDistance = distance
+		end
+	end
+	if closest == nil then
+		return
+	end
+	state.nextCompanion = now + CombatMath.cooldown(offense.attackSpeed)
+	strikeEnemy(
+		player,
+		closest,
+		offense.damage,
+		offense.critChance,
+		offense.critDamage,
+		offense.lifesteal
+	)
 end
 
 function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)

@@ -66,6 +66,31 @@ describe("Stats", function()
 		expect(rolled[1].value).toBeGreaterThan(10)
 	end)
 
+	it("rolls pet damage inside the rarity-scaled range and scores quality", function()
+		local fern = {
+			{ id = "pet_damage", min = 5, max = 8 },
+			{ id = "pet_health", min = 24, max = 42 },
+			{ id = "attack_speed", min = 0.55, max = 0.85 },
+			{ id = "crit_chance", min = 0.03, max = 0.07 },
+		}
+		local low, lowQuality = Stats.roll(fern, "Rare", "pet", rngAt(0))
+		expect(lowQuality).toEqual(0)
+		expect(low[1].id).toEqual("pet_damage")
+		expect(low[1].name).toEqual("Pet Damage")
+		expect(low[1].min).toBeCloseTo(5 * 1.35, 1e-12)
+		expect(low[1].value).toEqual(low[1].min)
+		expect(Stats.formatQuality(lowQuality)).toEqual("0%")
+		expect(Stats.classWeight("pet", "pet_damage")).toEqual(1)
+		expect(Stats.classWeight("pet", "pet_health")).toEqual(1)
+
+		local high, highQuality = Stats.roll(fern, "Rare", "pet", rngAt(1))
+		expect(highQuality).toEqual(1)
+		expect(high[1].value).toBeCloseTo(8 * 1.35, 1e-12)
+		expect(high[1].max).toBeCloseTo(8 * 1.35, 1e-12)
+		expect(Stats.formatQuality(highQuality)).toEqual("100%")
+		expect(Stats.formatValue(high[1])).toEqual("11")
+	end)
+
 	it("leaves every live class weight at 1 until a class exists", function()
 		for _, weaponType in ipairs(Stats.WEAPON_TYPES) do
 			for statId in pairs(Stats.DEFS) do

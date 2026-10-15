@@ -17,8 +17,11 @@
 
 	Attack speed is swings per second. The cooldown is 1 / attack speed.
 	Lifesteal, when a trait has it, heals for that fraction of the damage
-	dealt. Gold Find adds that fraction of a reward's gold. Other traits are
-	still only stored.
+	dealt. Gold Find adds that fraction of a reward's gold, including Gold
+	Find on the equipped pet. An equipped pet hits on its own timer using
+	Pet Damage, multiplied by Bonus Pet Damage from the pet, weapon, and
+	armor. Pet Lifesteal heals those hits only. Chain Lightning is still
+	only stored.
 ]]
 
 local CombatMath = {}
@@ -63,6 +66,15 @@ export type Vitality = {
 	defense: number,
 }
 
+export type PetOffense = {
+	damage: number,
+	attackSpeed: number,
+	critChance: number,
+	critDamage: number,
+	lifesteal: number,
+	range: number,
+}
+
 export type Hit = {
 	amount: number,
 	crit: boolean,
@@ -98,6 +110,12 @@ CombatMath.STYLES = {
 } :: { [string]: Style }
 
 CombatMath.PROJECTILE_RADIUS = 2.6
+
+-- Pets with no Attack Speed (the sprout style) still swing. Crits use a
+-- fixed multiplier because pets do not roll Crit Damage.
+CombatMath.PET_RANGE = 16
+CombatMath.PET_CRIT_DAMAGE = 1.5
+CombatMath.PET_ATTACK_SPEED = 0.7
 
 function CombatMath.readStat(stats: any, statId: string, fallback: number): number
 	if type(stats) ~= "table" then
@@ -383,7 +401,87 @@ function CombatMath.stepProjectile(
 	return x + dirX * step, y + dirY * step, z + dirZ * step, remaining - step
 end
 
--- Reads the equipped weapon and armor off a profile table. Pets are not gear.
+-- Pet Damage times (1 + Bonus Pet Damage). Attack speed falls back when the
+-- style omitted it. Lifesteal is only the pet's own trait.
+function CombatMath.petOffense(pet: Gear?, bonusFraction: number): PetOffense?
+	if type(pet) ~= "table" then
+		return nil
+	end
+	local damage = CombatMath.readStat(pet.stats, "pet_damage", 0)
+	if damage <= 0 then
+		return nil
+	end
+	local bonus = bonusFraction
+	if type(bonus) ~= "number" or bonus ~= bonus or bonus < 0 then
+		bonus = 0
+	end
+	damage *= 1 + bonus
+
+	local attackSpeed = CombatMath.readStat(pet.stats, "attack_speed", CombatMath.PET_ATTACK_SPEED)
+	if attackSpeed < 0.2 then
+		attackSpeed = 0.2
+	elseif attackSpeed > 4 then
+		attackSpeed = 4
+	end
+
+	local critChance = CombatMath.readStat(pet.stats, "crit_chance", 0)
+	if critChance < 0 then
+		critChance = 0
+	elseif critChance > 1 then
+		critChance = 1
+	end
+
+	return {
+		damage = damage,
+		attackSpeed = attackSpeed,
+		critChance = critChance,
+		critDamage = CombatMath.PET_CRIT_DAMAGE,
+		lifesteal = CombatMath.traitSum({ pet }, "lifesteal"),
+		range = CombatMath.PET_RANGE,
+	}
+end
+
+function CombatMath.petFromProfile(profile: any): PetOffense?
+	if
+		type(profile) ~= "table"
+		or type(profile.equipped) ~= "table"
+		or type(profile.pets) ~= "table"
+	then
+		return nil
+	end
+	local petId = profile.equipped.pet
+	if type(petId) ~= "string" then
+		return nil
+	end
+	local pet = profile.pets[petId]
+	if type(pet) ~= "table" or pet.kind ~= "Pet" then
+		return nil
+	end
+	local sources: { Gear } = { pet }
+	if type(profile.inventory) == "table" then
+		local weaponId = profile.equipped.weapon
+		if type(weaponId) == "string" then
+			local weapon = profile.inventory[weaponId]
+			if type(weapon) == "table" then
+				table.insert(sources, weapon)
+			end
+		end
+		if type(profile.equipped.armor) == "table" then
+			for _, uid in pairs(profile.equipped.armor) do
+				if type(uid) == "string" then
+					local piece = profile.inventory[uid]
+					if type(piece) == "table" then
+						table.insert(sources, piece)
+					end
+				end
+			end
+		end
+	end
+	return CombatMath.petOffense(pet, CombatMath.traitSum(sources, "bonus_pet_damage"))
+end
+
+-- Reads the equipped weapon and armor off a profile table. The pet is not
+-- part of the weapon swing. Its Gold Find is included in the third return.
 function CombatMath.loadout(profile: any): (Offense, Vitality, number)
 	local weapon: Gear? = nil
 	local armor: { Gear } = {}
@@ -413,6 +511,19 @@ function CombatMath.loadout(profile: any): (Offense, Vitality, number)
 	local worn: { Gear } = table.clone(armor)
 	if weapon ~= nil then
 		table.insert(worn, weapon)
+	end
+	if
+		type(profile) == "table"
+		and type(profile.pets) == "table"
+		and type(profile.equipped) == "table"
+	then
+		local petId = profile.equipped.pet
+		if type(petId) == "string" then
+			local pet = profile.pets[petId]
+			if type(pet) == "table" and pet.kind == "Pet" then
+				table.insert(worn, pet)
+			end
+		end
 	end
 	return CombatMath.offense(weapon, armor),
 		CombatMath.vitality(armor),

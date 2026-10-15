@@ -3,8 +3,9 @@
 --[[
 	Item catalog. Pools reference these ids; they do not restate names.
 
-	Weapon and armor `stats` are the Common, weight-1 ranges. Stats.roll
-	scales them by rarity when the item drops. Pets have no gear stats.
+	Weapon, armor, and pet `stats` are the Common, weight-1 ranges. Stats.roll
+	scales them by rarity when the item drops. Pets roll Pet Damage and Pet
+	HP, and some styles also roll Attack Speed and Crit Chance.
 
 	weaponType is the class-system hook (sword, bow, staff, dagger, hammer).
 	CombatMath reads it to choose a melee swing or a projectile. Class weights
@@ -30,6 +31,7 @@ export type Base = {
 	weaponType: string?,
 	slot: string?,
 	setId: string?,
+	petStyle: string?,
 	stats: { StatRange }?,
 }
 
@@ -84,6 +86,46 @@ local ARMOR_STATS: { [string]: { StatRange } } = {
 		{ id = "defense", min = 3, max = 7 },
 	},
 }
+
+-- PLACEHOLDER ranges at scale 1. Rarity still multiplies both ends.
+-- sprout omits attack speed and crit; combat falls back to a slow swing.
+local PET_STYLES: { [string]: { StatRange } } = {
+	sprout = {
+		{ id = "pet_damage", min = 3, max = 5 },
+		{ id = "pet_health", min = 16, max = 28 },
+	},
+	skitter = {
+		{ id = "pet_damage", min = 4, max = 6 },
+		{ id = "pet_health", min = 14, max = 24 },
+		{ id = "attack_speed", min = 0.9, max = 1.2 },
+		{ id = "crit_chance", min = 0.05, max = 0.1 },
+	},
+	beast = {
+		{ id = "pet_damage", min = 5, max = 8 },
+		{ id = "pet_health", min = 24, max = 42 },
+		{ id = "attack_speed", min = 0.55, max = 0.85 },
+		{ id = "crit_chance", min = 0.03, max = 0.07 },
+	},
+	myth = {
+		{ id = "pet_damage", min = 8, max = 13 },
+		{ id = "pet_health", min = 36, max = 64 },
+		{ id = "attack_speed", min = 0.5, max = 0.75 },
+		{ id = "crit_chance", min = 0.06, max = 0.12 },
+	},
+}
+
+local function styleFor(rarity: string): string
+	if rarity == "Common" then
+		return "sprout"
+	end
+	if rarity == "Uncommon" then
+		return "skitter"
+	end
+	if rarity == "Mythic" or rarity == "Secret" then
+		return "myth"
+	end
+	return "beast"
+end
 
 local function copyStats(source: { StatRange }): { StatRange }
 	local stats = {}
@@ -159,13 +201,20 @@ local function armor(
 	})
 end
 
-local function pet(id: string, name: string, rarity: string, ascension: number)
+local function pet(id: string, name: string, rarity: string, ascension: number, petStyle: string?)
+	local style = if petStyle ~= nil then petStyle else styleFor(rarity)
+	local ranges = PET_STYLES[style]
+	if ranges == nil then
+		error(id .. " needs a pet style", 2)
+	end
 	add({
 		id = id,
 		name = name,
 		kind = "Pet",
 		rarity = rarity,
 		ascension = ascension,
+		petStyle = style,
+		stats = copyStats(ranges),
 	})
 end
 

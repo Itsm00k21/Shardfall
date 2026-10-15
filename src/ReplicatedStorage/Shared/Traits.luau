@@ -4,14 +4,17 @@
 	Weapon traits rolled onto a shard drop.
 
 	Add a row to `list` to add a trait. RollMath calls Traits.roll for weapons
-	and armor. Pets roll none. Values are rolled uniformly between min and
-	max. "percent" is stored as a fraction (0.05 = 5%) and "count" is an
-	integer. PLACEHOLDER ranges.
+	and armor, and Traits.rollPet for pets. Both draw from the same four
+	definitions. The pet list is ordered so a minimum roll takes Bonus Pet
+	Damage first. Values are rolled uniformly between min and max. "percent"
+	is stored as a fraction (0.05 = 5%) and "count" is an integer.
+	PLACEHOLDER ranges.
 
-	Combat reads Lifesteal (heal for that fraction of damage dealt) and
-	Gold Find (extra gold on a dungeon clear). Chain Lightning and Bonus Pet
-	Damage are stored for later. Wild Resin calls Traits.pick to replace one
-	trait.
+	Combat reads Lifesteal on the swing that owns it (a weapon heals the
+	player's hits; a pet heals the pet's hits) and Gold Find (extra gold on
+	a dungeon clear, including a pet's Gold Find). Bonus Pet Damage multiplies
+	the equipped pet's Pet Damage. Chain Lightning is stored and shown, not
+	simulated. Wild Resin calls Traits.pick, which stays on the gear list.
 ]]
 
 local Rarities = require("./Rarities")
@@ -70,6 +73,24 @@ Traits.list = {
 	},
 } :: { TraitDefinition }
 
+local function traitById(id: string): TraitDefinition
+	for _, row in ipairs(Traits.list) do
+		if row.id == id then
+			return row
+		end
+	end
+	error("Missing trait '" .. id .. "'", 2)
+end
+
+-- Same traits as gear. Bonus Pet Damage is first so a Rare pet's one slot,
+-- and a zero roll, lands on the bonus combat already applies.
+Traits.pets = {
+	traitById("bonus_pet_damage"),
+	traitById("lifesteal"),
+	traitById("gold_find"),
+	traitById("chain_lightning"),
+} :: { TraitDefinition }
+
 function Traits.format(unit: string, value: number): string
 	if unit == "percent" then
 		return string.format("%.1f%%", value * 100)
@@ -86,8 +107,17 @@ function Traits.isKnown(id: string): boolean
 	return false
 end
 
--- Rolls `slots` distinct traits. The rarity's slot count comes from Rarities.
-function Traits.roll(rarity: string, rng: Rng): { RolledTrait }
+local function rollValue(picked: TraitDefinition, rng: Rng): number
+	if picked.unit == "count" then
+		return rng:nextInteger(picked.min, picked.max)
+	end
+	local alpha = rng:nextNumber()
+	return picked.min + (picked.max - picked.min) * alpha
+end
+
+-- Rolls `slots` distinct traits from `list`. The rarity's slot count comes
+-- from Rarities. Common and Uncommon have zero slots.
+local function rollFrom(list: { TraitDefinition }, rarity: string, rng: Rng): { RolledTrait }
 	local slots = Rarities.TRAIT_SLOTS[rarity]
 	if slots == nil then
 		error("Unknown rarity '" .. rarity .. "'", 2)
@@ -96,39 +126,33 @@ function Traits.roll(rarity: string, rng: Rng): { RolledTrait }
 		return {}
 	end
 
-	local bag = table.clone(Traits.list)
+	local bag = table.clone(list)
 	local rolled = {}
 	local picks = math.min(slots, #bag)
 	for _ = 1, picks do
 		local index = rng:nextInteger(1, #bag)
-		local definition = table.remove(bag, index)
-		if definition == nil then
+		local picked = table.remove(bag, index)
+		if picked == nil then
 			break
 		end
-		local value: number
-		if definition.unit == "count" then
-			value = rng:nextInteger(definition.min, definition.max)
-		else
-			local alpha = rng:nextNumber()
-			value = definition.min + (definition.max - definition.min) * alpha
-		end
+		local value = rollValue(picked, rng)
 		table.insert(rolled, {
-			id = definition.id,
-			name = definition.name,
+			id = picked.id,
+			name = picked.name,
 			value = value,
-			unit = definition.unit,
-			display = Traits.format(definition.unit, value),
+			unit = picked.unit,
+			display = Traits.format(picked.unit, value),
 		})
 	end
 	return rolled
 end
 
-local function rollValue(definition: TraitDefinition, rng: Rng): number
-	if definition.unit == "count" then
-		return rng:nextInteger(definition.min, definition.max)
-	end
-	local alpha = rng:nextNumber()
-	return definition.min + (definition.max - definition.min) * alpha
+function Traits.roll(rarity: string, rng: Rng): { RolledTrait }
+	return rollFrom(Traits.list, rarity, rng)
+end
+
+function Traits.rollPet(rarity: string, rng: Rng): { RolledTrait }
+	return rollFrom(Traits.pets, rarity, rng)
 end
 
 -- One trait, skipping ids in `banned` when another trait can replace them.
@@ -147,20 +171,21 @@ function Traits.pick(rng: Rng, banned: { [string]: boolean }?): RolledTrait
 		end
 	end
 	local index = rng:nextInteger(1, #bag)
-	local definition = bag[index]
-	local value = rollValue(definition, rng)
+	local picked = bag[index]
+	local value = rollValue(picked, rng)
 	return {
-		id = definition.id,
-		name = definition.name,
+		id = picked.id,
+		name = picked.name,
 		value = value,
-		unit = definition.unit,
-		display = Traits.format(definition.unit, value),
+		unit = picked.unit,
+		display = Traits.format(picked.unit, value),
 	}
 end
 
 table.freeze(Traits.list)
-for _, definition in ipairs(Traits.list) do
-	table.freeze(definition)
+table.freeze(Traits.pets)
+for _, row in ipairs(Traits.list) do
+	table.freeze(row)
 end
 
 return Traits
