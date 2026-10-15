@@ -65,6 +65,18 @@
         "Salvage": {
           "$className": "RemoteFunction"
         },
+        "BulkSalvage": {
+          "$className": "RemoteFunction"
+        },
+        "SetItemLock": {
+          "$className": "RemoteFunction"
+        },
+        "SetItemFavorite": {
+          "$className": "RemoteFunction"
+        },
+        "BuyInventoryExpansion": {
+          "$className": "RemoteFunction"
+        },
         "UseTonic": {
           "$className": "RemoteFunction"
         },

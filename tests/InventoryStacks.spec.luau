@@ -219,4 +219,21 @@ describe("InventoryStacks", function()
 		expect(feeder.uid).toEqual("strong")
 		expect(InventoryStacks.bestFeeder(profile, "missing")).toBeNil()
 	end)
+
+	it("will not offer a locked duplicate as feed", function()
+		local kept = item("kept", "nightbriar", "Nightbriar", "Weapon", "Rare")
+		kept.quality = 0.4
+		local locked = item("locked", "nightbriar", "Nightbriar", "Weapon", "Rare")
+		locked.quality = 0.95
+		locked.locked = true
+		local open = item("open", "nightbriar", "Nightbriar", "Weapon", "Rare")
+		open.quality = 0.3
+		local profile = {
+			inventory = { kept = kept, locked = locked, open = open },
+			pets = {},
+		}
+		local feeder = InventoryStacks.bestFeeder(profile, "kept")
+		assert(feeder ~= nil)
+		expect(feeder.uid).toEqual("open")
+	end)
 end)

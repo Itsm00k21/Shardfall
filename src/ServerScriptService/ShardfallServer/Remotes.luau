@@ -25,6 +25,7 @@ local RateLimiter = require(script.Parent.RateLimiter)
 local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
+local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 
@@ -267,6 +268,47 @@ function Remotes.bind()
 	functionRemote("BuyForgeBoost").OnServerInvoke = function(player)
 		return guard(player, "BuyForgeBoost", function()
 			return RollService.buyForgeBoost(player)
+		end)
+	end
+
+	functionRemote("BuyInventoryExpansion").OnServerInvoke = function(player)
+		return guard(player, "BuyInventoryExpansion", function()
+			return RollService.buyInventoryExpansion(player)
+		end)
+	end
+
+	functionRemote("SetItemLock").OnServerInvoke = function(player, uid, locked)
+		return guard(player, "SetItemLock", function()
+			if not validUid(uid) or type(locked) ~= "boolean" then
+				return { ok = false, error = "You do not have that item." }
+			end
+			local ok, err = InventoryService.setFlag(player, uid, "locked", locked)
+			if not ok then
+				return { ok = false, error = err }
+			end
+			return { ok = true }
+		end)
+	end
+
+	functionRemote("SetItemFavorite").OnServerInvoke = function(player, uid, favorite)
+		return guard(player, "SetItemFavorite", function()
+			if not validUid(uid) or type(favorite) ~= "boolean" then
+				return { ok = false, error = "You do not have that item." }
+			end
+			local ok, err = InventoryService.setFlag(player, uid, "favorite", favorite)
+			if not ok then
+				return { ok = false, error = err }
+			end
+			return { ok = true }
+		end)
+	end
+
+	functionRemote("BulkSalvage").OnServerInvoke = function(player, rarity)
+		return guard(player, "BulkSalvage", function()
+			if type(rarity) ~= "string" or Rarities.INDEX[rarity] == nil then
+				return { ok = false, error = "Unknown rarity." }
+			end
+			return CraftService.salvageRarity(player, rarity)
 		end)
 	end
 

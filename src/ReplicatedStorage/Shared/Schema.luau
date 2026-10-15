@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 6.
+	The player profile shape, version 7.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -20,7 +20,7 @@ local Stars = require("./Stars")
 
 local Schema = {}
 
-Schema.VERSION = 6
+Schema.VERSION = 7
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -49,6 +49,9 @@ export type Item = {
 	stars: number?,
 	starProgress: number?,
 	perks: { string }?,
+	locked: boolean?,
+	favorite: boolean?,
+	sockets: number?,
 }
 
 export type PityState = {
@@ -60,6 +63,7 @@ export type Equipped = {
 	weapon: string?,
 	pet: string?,
 	armor: { [string]: string },
+	accessories: { [string]: string },
 }
 
 Schema.ARMOR_SLOTS = {
@@ -67,6 +71,12 @@ Schema.ARMOR_SLOTS = {
 	chest = true,
 	legs = true,
 	boots = true,
+}
+
+Schema.ACCESSORY_SLOTS = {
+	ring = true,
+	amulet = true,
+	charm = true,
 }
 
 export type ProfileData = {
@@ -91,6 +101,7 @@ export type ProfileData = {
 	craftingMilestones: { number },
 	milestoneTable: { any },
 	forgeBoostUntil: number,
+	inventoryBonus: number,
 }
 
 function Schema.template(): ProfileData
@@ -112,6 +123,7 @@ function Schema.template(): ProfileData
 			weapon = nil,
 			pet = nil,
 			armor = {},
+			accessories = {},
 		},
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
@@ -121,6 +133,7 @@ function Schema.template(): ProfileData
 		craftingMilestones = {},
 		milestoneTable = CraftingLevel.copyTable(),
 		forgeBoostUntil = 0,
+		inventoryBonus = 0,
 	}
 end
 
@@ -203,6 +216,10 @@ function Schema.reconcile(data: any): ProfileData
 		data.craftingXp = 0
 	end
 	data.forgeBoostUntil = wholeNumber(data.forgeBoostUntil, 0, 0)
+	data.inventoryBonus = wholeNumber(data.inventoryBonus, 0, 0)
+	if data.inventoryBonus > 500 then
+		data.inventoryBonus = 500
+	end
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -231,6 +248,15 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.equipped.armor = armor
+	local accessories = {}
+	if type(data.equipped.accessories) == "table" then
+		for slot, uid in pairs(data.equipped.accessories) do
+			if Schema.ACCESSORY_SLOTS[slot] == true and data.inventory[uid] ~= nil then
+				accessories[slot] = uid
+			end
+		end
+	end
+	data.equipped.accessories = accessories
 	data.materials = Materials.sanitize(data.materials)
 	data.consumables = Materials.sanitizeCounts(data.consumables, { Materials.TONIC_ID })
 	data.vouchers = Materials.sanitizeCounts(data.vouchers, Materials.VOUCHER_AREAS)
@@ -254,6 +280,13 @@ function Schema.reconcile(data: any): ProfileData
 		end
 		item.starProgress = progress
 		item.perks = Stars.perkIds(stars)
+		item.locked = item.locked == true
+		item.favorite = item.favorite == true
+		local sockets = wholeNumber(item.sockets, 0, 0)
+		if sockets > 6 then
+			sockets = 6
+		end
+		item.sockets = sockets
 		Stars.applyStats(item)
 	end
 	for _, item in pairs(data.inventory) do
@@ -389,6 +422,43 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 6
 	end
 
+	if version < 7 then
+		-- Lock, favorite, and socket count live on each piece. Extra bag
+		-- slots from a future purchase start at zero. Accessories are a
+		-- separate equip map so rings do not occupy armor slots.
+		if type(raw.inventoryBonus) ~= "number" then
+			raw.inventoryBonus = 0
+		end
+		if type(raw.equipped) ~= "table" then
+			raw.equipped = {}
+		end
+		if type(raw.equipped.accessories) ~= "table" then
+			raw.equipped.accessories = {}
+		end
+		local function stampItem(bag: any)
+			if type(bag) ~= "table" then
+				return
+			end
+			for _, item in pairs(bag) do
+				if type(item) == "table" then
+					if item.locked ~= true then
+						item.locked = false
+					end
+					if item.favorite ~= true then
+						item.favorite = false
+					end
+					if type(item.sockets) ~= "number" then
+						item.sockets = 0
+					end
+				end
+			end
+		end
+		stampItem(raw.inventory)
+		stampItem(raw.pets)
+		raw.schemaVersion = 7
+		version = 7
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -450,6 +520,13 @@ function Schema.isEquipped(data: ProfileData, uid: string): boolean
 			return true
 		end
 	end
+	if type(data.equipped.accessories) == "table" then
+		for _, slotUid in pairs(data.equipped.accessories) do
+			if slotUid == uid then
+				return true
+			end
+		end
+	end
 	return false
 end
 
@@ -463,6 +540,13 @@ function Schema.clearEquip(data: ProfileData, uid: string)
 	for slot, slotUid in pairs(data.equipped.armor) do
 		if slotUid == uid then
 			data.equipped.armor[slot] = nil
+		end
+	end
+	if type(data.equipped.accessories) == "table" then
+		for slot, slotUid in pairs(data.equipped.accessories) do
+			if slotUid == uid then
+				data.equipped.accessories[slot] = nil
+			end
 		end
 	end
 end
@@ -485,7 +569,30 @@ function Schema.equipItem(data: ProfileData, item: Item): string?
 		data.equipped.armor[slot] = item.uid
 		return nil
 	end
+	if item.kind == "Accessory" then
+		local slot = item.slot
+		if type(slot) ~= "string" or Schema.ACCESSORY_SLOTS[slot] ~= true then
+			return "That accessory has no slot."
+		end
+		if type(data.equipped.accessories) ~= "table" then
+			data.equipped.accessories = {}
+		end
+		data.equipped.accessories[slot] = item.uid
+		return nil
+	end
 	return "That item cannot be equipped."
+end
+
+function Schema.inventoryCap(data: any): number
+	local bonus = 0
+	if
+		type(data) == "table"
+		and type(data.inventoryBonus) == "number"
+		and data.inventoryBonus > 0
+	then
+		bonus = math.floor(data.inventoryBonus)
+	end
+	return Schema.INVENTORY_CAP + bonus
 end
 
 -- Allow-list copy sent to that player's client. Session locks are not in here.
@@ -508,7 +615,10 @@ function Schema.snapshot(data: ProfileData)
 			weapon = data.equipped.weapon,
 			pet = data.equipped.pet,
 			armor = Schema.deepCopy(data.equipped.armor),
+			accessories = Schema.deepCopy(data.equipped.accessories),
 		},
+		inventoryBonus = data.inventoryBonus,
+		inventoryCap = Schema.inventoryCap(data),
 		materials = Schema.deepCopy(data.materials),
 		consumables = Schema.deepCopy(data.consumables),
 		vouchers = Schema.deepCopy(data.vouchers),
@@ -522,5 +632,6 @@ function Schema.snapshot(data: ProfileData)
 end
 
 table.freeze(Schema.ARMOR_SLOTS)
+table.freeze(Schema.ACCESSORY_SLOTS)
 
 return Schema

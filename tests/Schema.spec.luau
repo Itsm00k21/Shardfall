@@ -258,4 +258,44 @@ describe("Schema", function()
 		profile.prismTokens = 3
 		expect(profile.shardTokens).toEqual(12)
 	end)
+
+	it("keeps a lock, a favorite, and socket count across a version 7 migrate", function()
+		local profile = Schema.migrate({
+			schemaVersion = 6,
+			inventoryBonus = 10,
+			inventory = {
+				kept = {
+					uid = "kept",
+					templateId = "vinewood_sword",
+					name = "Vinewood Sword",
+					kind = "Weapon",
+					rarity = "Common",
+					locked = true,
+					favorite = true,
+					sockets = 2,
+				},
+				plain = {
+					uid = "plain",
+					templateId = "thorn_dagger",
+					name = "Thorn Dagger",
+					kind = "Weapon",
+					rarity = "Common",
+				},
+			},
+		})
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
+		expect(profile.inventoryBonus).toEqual(10)
+		expect(Schema.inventoryCap(profile)).toEqual(Schema.INVENTORY_CAP + 10)
+		expect(profile.inventory.kept.locked).toEqual(true)
+		expect(profile.inventory.kept.favorite).toEqual(true)
+		expect(profile.inventory.kept.sockets).toEqual(2)
+		expect(profile.inventory.plain.locked).toEqual(false)
+		expect(profile.inventory.plain.favorite).toEqual(false)
+		expect(profile.inventory.plain.sockets).toEqual(0)
+		expect(profile.equipped.accessories ~= nil).toBeTrue()
+		local copy = Schema.snapshot(profile)
+		expect(copy.inventory.kept.locked).toEqual(true)
+		expect(copy.inventoryCap).toEqual(Schema.INVENTORY_CAP + 10)
+	end)
 end)
