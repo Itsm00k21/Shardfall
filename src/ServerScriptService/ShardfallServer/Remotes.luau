@@ -222,6 +222,25 @@ function Remotes.bind()
 		end)
 	end
 
+	functionRemote("FeedItem").OnServerInvoke = function(player, keptUid, feederUid)
+		return guard(player, "FeedItem", function()
+			if not validUid(keptUid) or not validUid(feederUid) then
+				return { ok = false, error = "You do not have that item." }
+			end
+			return InventoryService.feed(player, keptUid, feederUid)
+		end)
+	end
+
+	functionRemote("SetAutoAttack").OnServerInvoke = function(player, enabled)
+		return guard(player, "SetAutoAttack", function()
+			if type(enabled) ~= "boolean" then
+				return { ok = false, error = "Auto attack needs on or off." }
+			end
+			CombatService.setAutoAttack(player, enabled)
+			return { ok = true, autoAttack = enabled }
+		end)
+	end
+
 	functionRemote("UseTonic").OnServerInvoke = function(player)
 		return guard(player, "UseTonic", function()
 			return CombatService.useTonic(player)

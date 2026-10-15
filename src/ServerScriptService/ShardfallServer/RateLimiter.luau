@@ -38,6 +38,8 @@ local RULES: { [string]: Rule } = {
 	Dungeon = { capacity = 4, perSecond = 1 },
 	Craft = { capacity = 4, perSecond = 1 },
 	UseTonic = { capacity = 3, perSecond = 1 },
+	FeedItem = { capacity = 4, perSecond = 2 },
+	SetAutoAttack = { capacity = 4, perSecond = 1 },
 }
 
 local buckets: { [string]: Bucket } = {}

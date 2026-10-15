@@ -195,4 +195,28 @@ describe("InventoryStacks", function()
 		expect(gear.pet).toEqual("Fern Stag  72% · Pet Damage 8 · Bonus Pet Damage 5.0%")
 		expect(gear.bonus).toEqual("Bonus Pet Damage 5.0%")
 	end)
+
+	it("marks stars on the row and picks the strongest duplicate to feed", function()
+		local kept = item("kept", "nightbriar", "Nightbriar", "Weapon", "Rare")
+		kept.quality = 0.46
+		kept.stars = 2
+		local weak = item("weak", "nightbriar", "Nightbriar", "Weapon", "Rare")
+		weak.quality = 0.2
+		local strong = item("strong", "nightbriar", "Nightbriar", "Weapon", "Rare")
+		strong.quality = 0.9
+		expect(InventoryStacks.rowTitle({
+			name = "Nightbriar",
+			stars = 2,
+			quality = 0.46,
+			count = 1,
+		})).toEqual("Nightbriar ★2 46%")
+		local profile = {
+			inventory = { kept = kept, weak = weak, strong = strong },
+			pets = {},
+		}
+		local feeder = InventoryStacks.bestFeeder(profile, "kept")
+		assert(feeder ~= nil)
+		expect(feeder.uid).toEqual("strong")
+		expect(InventoryStacks.bestFeeder(profile, "missing")).toBeNil()
+	end)
 end)

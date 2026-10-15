@@ -52,6 +52,12 @@
         },
         "UseTonic": {
           "$className": "RemoteFunction"
+        },
+        "FeedItem": {
+          "$className": "RemoteFunction"
+        },
+        "SetAutoAttack": {
+          "$className": "RemoteFunction"
         }
       }
     },

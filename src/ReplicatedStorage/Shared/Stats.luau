@@ -35,6 +35,7 @@ export type RolledStat = {
 	max: number,
 	unit: string,
 	roll: number,
+	baseValue: number?,
 }
 
 export type StatDefinition = {
@@ -224,6 +225,7 @@ function Stats.roll(
 			max = maxValue,
 			unit = definition.unit,
 			roll = Stats.rollPercent(value, minValue, maxValue),
+			baseValue = value,
 		})
 		table.insert(percents, Stats.rollPercent(value, minValue, maxValue))
 	end

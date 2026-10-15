@@ -6,8 +6,10 @@
 	The client only sends which way the camera is looking. This module
 	decides if a melee swing reaches an enemy, or spawns the projectile a
 	bow or staff fires. Rolled weapon stats supply the damage. Armor supplies
-	HP and Defense. An equipped pet hits the nearest enemy on its own timer
-	using Pet Damage. Nothing here trusts a damage number from the client.
+	HP and Defense. 	An equipped pet hits the nearest enemy on its own timer
+	using Pet Damage. Auto attack is a server timer: the client only sends
+	on or off, and this module picks the nearest enemy in weapon range.
+	Nothing here trusts a damage number from the client.
 
 	DungeonService registers the enemies. This file does not build the rooms.
 ]]
@@ -81,6 +83,7 @@ local hooks: Hooks = {
 }
 
 local vitals: { [Player]: State } = {}
+local autoOn: { [Player]: boolean } = {}
 local shots: { Shot } = {}
 local rng = Random.new()
 local lastHint: { [Player]: number } = {}
@@ -446,33 +449,31 @@ function CombatService.companionTick(player: Player)
 	)
 end
 
-function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)
-	if not hooks.inRun(player) then
-		hint(player, "Enter the Rootvault first. Click swings. Bows and staffs fire a shot.")
-		return
+function CombatService.autoEnabled(player: Player): boolean
+	local flag = autoOn[player]
+	if flag == nil then
+		return true
 	end
-	local hrp = rootPart(player)
-	if hrp == nil then
-		return
-	end
+	return flag
+end
+
+function CombatService.setAutoAttack(player: Player, enabled: boolean)
+	autoOn[player] = enabled
+end
+
+local function releaseSwing(
+	player: Player,
+	hrp: BasePart,
+	offense: CombatMath.Offense,
+	aim: Vector3,
+	flat: Vector3
+)
 	local state = ensure(player)
 	local now = os.clock()
 	if now < state.nextAttack then
 		return
 	end
-	local profile = DataService.get(player)
-	local offense = CombatMath.loadout(profile)
 	state.nextAttack = now + CombatMath.cooldown(offense.attackSpeed)
-
-	local facing = hrp.CFrame.LookVector
-	local aim = direction(lookX, lookY, lookZ, facing)
-	local flat = Vector3.new(aim.X, 0, aim.Z)
-	if flat.Magnitude < 0.05 then
-		flat = Vector3.new(facing.X, 0, facing.Z)
-	end
-	if flat.Magnitude < 0.05 then
-		flat = Vector3.new(0, 0, -1)
-	end
 
 	if offense.style == "projectile" then
 		local start = hrp.Position + aim * 3
@@ -501,7 +502,7 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 		return
 	end
 
-	swingFlash(hrp.Position, flat.Unit, offense.range, false)
+	swingFlash(hrp.Position, flat, offense.range, false)
 	local closest: EnemyView? = nil
 	local closestDistance = math.huge
 	for _, enemy in ipairs(hooks.enemies(player)) do
@@ -535,6 +536,62 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 			offense.lifesteal
 		)
 	end
+end
+
+function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)
+	if not hooks.inRun(player) then
+		hint(player, "Enter the Rootvault first. Click swings. Bows and staffs fire a shot.")
+		return
+	end
+	local hrp = rootPart(player)
+	if hrp == nil then
+		return
+	end
+	local offense = CombatMath.loadout(DataService.get(player))
+	local facing = hrp.CFrame.LookVector
+	local aim = direction(lookX, lookY, lookZ, facing)
+	local flat = Vector3.new(aim.X, 0, aim.Z)
+	if flat.Magnitude < 0.05 then
+		flat = Vector3.new(facing.X, 0, facing.Z)
+	end
+	if flat.Magnitude < 0.05 then
+		flat = Vector3.new(0, 0, -1)
+	end
+	releaseSwing(player, hrp, offense, aim, flat.Unit)
+end
+
+-- Nearest enemy inside the equipped weapon's range. Melee still uses that
+-- weapon's arc, aimed at the target. Projectiles fly at the target.
+function CombatService.autoTick(player: Player)
+	if not CombatService.autoEnabled(player) or not hooks.inRun(player) then
+		return
+	end
+	local hrp = rootPart(player)
+	if hrp == nil then
+		return
+	end
+	local state = ensure(player)
+	if os.clock() < state.nextAttack then
+		return
+	end
+	local enemies = hooks.enemies(player)
+	if #enemies == 0 then
+		return
+	end
+	local offense = CombatMath.loadout(DataService.get(player))
+	local enemy = CombatMath.nearestInRange(hrp.Position.X, hrp.Position.Z, enemies, offense.range)
+	if enemy == nil then
+		hint(player, "No target in range.")
+		return
+	end
+	local ax, ay, az =
+		CombatMath.aimAt(hrp.Position.X, hrp.Position.Y, hrp.Position.Z, enemy.x, enemy.y, enemy.z)
+	local aim = Vector3.new(ax, ay, az)
+	local flat = Vector3.new(ax, 0, az)
+	if flat.Magnitude < 0.05 then
+		flat = Vector3.new(0, 0, -1)
+	end
+	releaseSwing(player, hrp, offense, aim, flat.Unit)
 end
 
 function CombatService.launchEnemyShot(
@@ -717,6 +774,7 @@ function CombatService.start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		vitals[player] = nil
+		autoOn[player] = nil
 		lastHint[player] = nil
 		CombatService.clearShots(player)
 	end)

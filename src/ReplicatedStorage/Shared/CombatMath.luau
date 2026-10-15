@@ -322,6 +322,47 @@ function CombatMath.tonicHeal(
 	return healed, current + healed
 end
 
+function CombatMath.aimAt(
+	originX: number,
+	originY: number,
+	originZ: number,
+	targetX: number,
+	targetY: number,
+	targetZ: number
+): (number, number, number)
+	local dx = targetX - originX
+	local dy = targetY - originY
+	local dz = targetZ - originZ
+	local magnitude = math.sqrt(dx * dx + dy * dy + dz * dz)
+	if magnitude < 1e-4 then
+		return 0, 0, -1
+	end
+	return dx / magnitude, dy / magnitude, dz / magnitude
+end
+
+function CombatMath.nearestInRange(
+	originX: number,
+	originZ: number,
+	points: { any },
+	range: number
+): any?
+	if type(points) ~= "table" or type(range) ~= "number" then
+		return nil
+	end
+	local best = nil
+	local bestDistance = math.huge
+	for _, point in ipairs(points) do
+		if type(point) == "table" and type(point.x) == "number" and type(point.z) == "number" then
+			local distance = CombatMath.planarDistance(originX, originZ, point.x, point.z)
+			if distance <= range and distance < bestDistance then
+				best = point
+				bestDistance = distance
+			end
+		end
+	end
+	return best
+end
+
 function CombatMath.planarDistance(ax: number, az: number, bx: number, bz: number): number
 	local dx = bx - ax
 	local dz = bz - az
