@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 5.
+	The player profile shape, version 6.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -14,12 +14,13 @@
 	what DataStores can save and what a RemoteEvent can send.
 ]]
 
+local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Stars = require("./Stars")
 
 local Schema = {}
 
-Schema.VERSION = 5
+Schema.VERSION = 6
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -85,6 +86,11 @@ export type ProfileData = {
 	materials: { [string]: number },
 	consumables: { [string]: number },
 	vouchers: { [string]: number },
+	craftingLevel: number,
+	craftingXp: number,
+	craftingMilestones: { number },
+	milestoneTable: { any },
+	forgeBoostUntil: number,
 }
 
 function Schema.template(): ProfileData
@@ -110,6 +116,11 @@ function Schema.template(): ProfileData
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
 		vouchers = { armory = 0, pets = 0 },
+		craftingLevel = 1,
+		craftingXp = 0,
+		craftingMilestones = {},
+		milestoneTable = CraftingLevel.copyTable(),
+		forgeBoostUntil = 0,
 	}
 end
 
@@ -183,6 +194,23 @@ function Schema.reconcile(data: any): ProfileData
 	data.prismTokens = wholeNumber(data.prismTokens, 0, 0)
 	data.shardLuck = wholeNumber(data.shardLuck, 0, 0)
 	data.luckBoost = wholeNumber(data.luckBoost, 0, 0)
+	data.craftingLevel = wholeNumber(data.craftingLevel, 1, 1)
+	if data.craftingLevel > CraftingLevel.MAX then
+		data.craftingLevel = CraftingLevel.MAX
+	end
+	data.craftingXp = wholeNumber(data.craftingXp, 0, 0)
+	if data.craftingLevel >= CraftingLevel.MAX then
+		data.craftingXp = 0
+	end
+	data.forgeBoostUntil = wholeNumber(data.forgeBoostUntil, 0, 0)
+	local earned = {}
+	for _, row in ipairs(CraftingLevel.MILESTONES) do
+		if data.craftingLevel >= row.level then
+			table.insert(earned, row.level)
+		end
+	end
+	data.craftingMilestones = earned
+	data.milestoneTable = CraftingLevel.copyTable()
 	data.equipped.weapon = optionalUid(data.equipped.weapon)
 	data.equipped.pet = optionalUid(data.equipped.pet)
 	-- An equipped id that is not in the bag must not survive. The client
@@ -343,11 +371,23 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 5
 	end
 
-	-- Next version goes here, then bump Schema.VERSION and template():
-	-- if version < 6 then
-	--     raw.schemaVersion = 6
-	--     version = 6
-	-- end
+	if version < 6 then
+		-- Crafting Level, the milestone table, and a timed Forge Boost.
+		if type(raw.craftingLevel) ~= "number" then
+			raw.craftingLevel = 1
+		end
+		if type(raw.craftingXp) ~= "number" then
+			raw.craftingXp = 0
+		end
+		if type(raw.craftingMilestones) ~= "table" then
+			raw.craftingMilestones = {}
+		end
+		if type(raw.forgeBoostUntil) ~= "number" then
+			raw.forgeBoostUntil = 0
+		end
+		raw.schemaVersion = 6
+		version = 6
+	end
 
 	return Schema.reconcile(raw), nil
 end
@@ -472,6 +512,12 @@ function Schema.snapshot(data: ProfileData)
 		materials = Schema.deepCopy(data.materials),
 		consumables = Schema.deepCopy(data.consumables),
 		vouchers = Schema.deepCopy(data.vouchers),
+		craftingLevel = data.craftingLevel,
+		craftingXp = data.craftingXp,
+		craftingXpToNext = CraftingLevel.xpToNext(data.craftingLevel),
+		craftingMilestones = Schema.deepCopy(data.craftingMilestones),
+		milestoneTable = Schema.deepCopy(data.milestoneTable),
+		forgeBoostUntil = data.forgeBoostUntil,
 	}
 end
 

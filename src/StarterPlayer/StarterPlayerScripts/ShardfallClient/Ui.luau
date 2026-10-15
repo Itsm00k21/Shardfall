@@ -23,6 +23,8 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(Shared:WaitForChild("Areas"))
+local Crafting = require(Shared:WaitForChild("Crafting"))
+local CraftingLevel = require(Shared:WaitForChild("CraftingLevel"))
 local Currencies = require(Shared:WaitForChild("Currencies"))
 local Dungeons = require(Shared:WaitForChild("Dungeons"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
@@ -48,6 +50,8 @@ export type Callbacks = {
 	onDev: (kind: string) -> (),
 	onArea: (poolId: string) -> (),
 	onCraft: (recipeId: string, targetUid: string?) -> (),
+	onSalvage: (uid: string) -> (),
+	onBuyForge: () -> (),
 	onDungeon: (action: string, dungeonId: string?) -> (),
 	onTonic: () -> (),
 	onAttack: () -> (),
@@ -780,6 +784,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			callbacks.onDev("ascension")
 		end)
 		local grantMaterials = makeButton(devBody, "+ craft materials", COLORS.buttonDim, 4, 30)
+		local grantForge = makeButton(devBody, "Forge Boost 1h", COLORS.buttonDim, 9, 30)
+		grantForge.TextSize = 14
+		grantForge.MouseButton1Click:Connect(function()
+			callbacks.onDev("forgeboost")
+		end)
 		grantMaterials.TextSize = 14
 		grantMaterials.MouseButton1Click:Connect(function()
 			callbacks.onDev("materials")
@@ -830,25 +839,92 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	list(craftPage, 8)
 	local craftHint = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.gold,
+		Text = "Crafting Level 1",
+		LayoutOrder = 1,
+	}, craftPage) :: TextLabel
+	local xpTrack = new("Frame", {
+		BackgroundColor3 = COLORS.buttonDim,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 8),
+		LayoutOrder = 2,
+	}, craftPage) :: Frame
+	corner(xpTrack, 4)
+	local xpFill = new("Frame", {
+		BackgroundColor3 = COLORS.gold,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(0, 1),
+	}, xpTrack) :: Frame
+	corner(xpFill, 4)
+	local forgeNote = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 28),
 		Font = Enum.Font.BuilderSans,
 		TextSize = 12,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = COLORS.muted,
-		Text = "Recipes spend Verdant materials from the Rootvault. The server checks the cost.",
-		LayoutOrder = 1,
+		Text = "",
+		LayoutOrder = 3,
 	}, craftPage) :: TextLabel
+	local forgeBoostButton = makeButton(craftPage, "Forge Boost", COLORS.buttonDim, 4, 26)
+	forgeBoostButton.TextSize = 13
+	forgeBoostButton.MouseButton1Click:Connect(callbacks.onBuyForge)
+	local forgeTabs = new("Frame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 26),
+		LayoutOrder = 5,
+	}, craftPage) :: Frame
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+	}, forgeTabs)
+	local forgeTab = "craft"
+	local craftTabButton = makeButton(forgeTabs, "Craft", COLORS.gold, 1, 26)
+	craftTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
+	craftTabButton.TextSize = 13
+	local salvageTabButton = makeButton(forgeTabs, "Salvage", COLORS.buttonDim, 2, 26)
+	salvageTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
+	salvageTabButton.TextSize = 13
+	local materialTabButton = makeButton(forgeTabs, "Materials", COLORS.buttonDim, 3, 26)
+	materialTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
+	materialTabButton.TextSize = 13
 	local craftList = new("Frame", {
 		Name = "Recipes",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 2,
+		LayoutOrder = 6,
 	}, craftPage) :: Frame
 	list(craftList, 8)
+	local salvageList = new("Frame", {
+		Name = "Salvage",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		LayoutOrder = 7,
+	}, craftPage) :: Frame
+	list(salvageList, 8)
+	local materialList = new("Frame", {
+		Name = "Materials",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		LayoutOrder = 8,
+	}, craftPage) :: Frame
+	list(materialList, 6)
 
 	local popup = new("Frame", {
 		Name = "Result",
@@ -1519,25 +1595,52 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		return rows
 	end
 
+	local function paintForgeTabs()
+		craftTabButton.BackgroundColor3 = if forgeTab == "craft"
+			then COLORS.gold
+			else COLORS.buttonDim
+		craftTabButton.TextColor3 = if forgeTab == "craft" then COLORS.ink else COLORS.text
+		salvageTabButton.BackgroundColor3 = if forgeTab == "salvage"
+			then COLORS.gold
+			else COLORS.buttonDim
+		salvageTabButton.TextColor3 = if forgeTab == "salvage" then COLORS.ink else COLORS.text
+		materialTabButton.BackgroundColor3 = if forgeTab == "materials"
+			then COLORS.gold
+			else COLORS.buttonDim
+		materialTabButton.TextColor3 = if forgeTab == "materials" then COLORS.ink else COLORS.text
+		craftList.Visible = forgeTab == "craft"
+		salvageList.Visible = forgeTab == "salvage"
+		materialList.Visible = forgeTab == "materials"
+	end
+
 	local function renderCraft(profile: any)
 		clearGenerated(craftList)
+		clearGenerated(salvageList)
+		clearGenerated(materialList)
 		tonicButton.Text = string.format("Tonic %d", tonicCount(profile))
-		local owned = {}
-		local bag = if type(profile) == "table" then profile.materials else nil
-		if type(bag) == "table" then
-			for _, materialId in ipairs(Materials.ORDER) do
-				local count = bag[materialId]
-				if type(count) == "number" and count > 0 then
-					table.insert(
-						owned,
-						string.format("%s %d", Materials.displayName(materialId), count)
-					)
-				end
-			end
+		local level = if type(profile) == "table"
+				and type(profile.craftingLevel) == "number"
+			then profile.craftingLevel
+			else 1
+		local xp = if type(profile) == "table" and type(profile.craftingXp) == "number"
+			then profile.craftingXp
+			else 0
+		local xpNext = if type(profile) == "table"
+				and type(profile.craftingXpToNext) == "number"
+			then profile.craftingXpToNext
+			else CraftingLevel.xpToNext(level)
+		if level >= CraftingLevel.MAX then
+			craftHint.Text = "Crafting Level 100"
+			xpFill.Size = UDim2.fromScale(1, 1)
+		else
+			craftHint.Text = string.format("Crafting Level %d    %d / %d XP", level, xp, xpNext)
+			local ratio = if xpNext > 0 then math.clamp(xp / xpNext, 0, 1) else 0
+			xpFill.Size = UDim2.fromScale(ratio, 1)
 		end
-		craftHint.Text = if #owned > 0
-			then table.concat(owned, "   ·   ")
-			else "Clear the Rootvault for wood, vine, spore, bark, and heartwood."
+		local untilTime = if type(profile) == "table" then profile.forgeBoostUntil else 0
+		forgeNote.Text = Currencies.forgeBoostPitch(untilTime, os.time())
+		paintForgeTabs()
+		local bag = if type(profile) == "table" then profile.materials else nil
 		local gear = traitGear(profile)
 		local stillThere = false
 		for _, item in ipairs(gear) do
@@ -1561,13 +1664,22 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			padding(card, 8)
 			list(card, 4)
 
+			local locked = if type(profile) == "table"
+				then Crafting.lockReason(profile, recipe.id)
+				else "Unknown recipe."
+			local titleColor = COLORS.text
+			if locked ~= nil then
+				titleColor = COLORS.muted
+			elseif recipe.id == selectedRecipe then
+				titleColor = COLORS.gold
+			end
 			local title = new("TextButton", {
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, 18),
 				Font = Enum.Font.BuilderSansBold,
 				TextSize = 15,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				TextColor3 = if recipe.id == selectedRecipe then COLORS.gold else COLORS.text,
+				TextColor3 = titleColor,
 				Text = recipe.name,
 				LayoutOrder = 1,
 			}, card) :: TextButton
@@ -1662,21 +1774,154 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				end
 			end
 
+			if locked ~= nil then
+				new("TextLabel", {
+					BackgroundTransparency = 1,
+					Size = UDim2.new(1, 0, 0, 16),
+					Font = Enum.Font.BuilderSans,
+					TextSize = 12,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextColor3 = COLORS.muted,
+					Text = locked,
+					LayoutOrder = 4,
+				}, card)
+			end
 			local craftButton = makeButton(
 				card,
-				"Craft",
-				if canPay then COLORS.button else COLORS.buttonDim,
+				if locked ~= nil then "Locked" else "Craft",
+				if locked == nil and canPay then COLORS.button else COLORS.buttonDim,
 				20,
 				28
 			)
 			craftButton.TextSize = 14
+			craftButton.Active = locked == nil
+			craftButton.AutoButtonColor = locked == nil
+			craftButton.TextColor3 = if locked ~= nil then COLORS.muted else COLORS.text
 			craftButton.MouseButton1Click:Connect(function()
+				if locked ~= nil then
+					return
+				end
 				selectedRecipe = recipe.id
 				local target = if recipe.result.kind == "reroll" then selectedTarget else nil
 				callbacks.onCraft(recipe.id, target)
 			end)
 		end
+
+		local salvageRows = {}
+		if type(profile) == "table" and type(profile.inventory) == "table" then
+			for _, item in pairs(profile.inventory) do
+				if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
+					local equipped = false
+					if type(profile.equipped) == "table" then
+						if profile.equipped.weapon == item.uid then
+							equipped = true
+						end
+						if type(profile.equipped.armor) == "table" then
+							for _, slotUid in pairs(profile.equipped.armor) do
+								if slotUid == item.uid then
+									equipped = true
+								end
+							end
+						end
+					end
+					if not equipped and item.locked ~= true then
+						table.insert(salvageRows, item)
+					end
+				end
+			end
+		end
+		table.sort(salvageRows, function(a, b)
+			return tostring(a.name) < tostring(b.name)
+		end)
+		if #salvageRows == 0 then
+			new("TextLabel", {
+				Name = "Notice",
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 18),
+				Font = Enum.Font.BuilderSans,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = COLORS.muted,
+				Text = "Unequipped weapons and armor break down here.",
+				LayoutOrder = 1,
+			}, salvageList)
+		end
+		for index, item in ipairs(salvageRows) do
+			local row = new("Frame", {
+				BackgroundColor3 = COLORS.panel,
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 36),
+				LayoutOrder = index,
+			}, salvageList) :: Frame
+			corner(row, 8)
+			local label = new("TextLabel", {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(8, 0),
+				Size = UDim2.new(1, -88, 1, 0),
+				Font = Enum.Font.BuilderSans,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = rarityColor(tostring(item.rarity)),
+				Text = string.format("%s  ·  %s", tostring(item.name), tostring(item.rarity)),
+			}, row) :: TextLabel
+			label.Name = "Name"
+			local salvageButton = makeButton(row, "Salvage", COLORS.buttonDim, 1, 24)
+			salvageButton.AnchorPoint = Vector2.new(1, 0.5)
+			salvageButton.Position = UDim2.new(1, -6, 0.5, 0)
+			salvageButton.Size = UDim2.fromOffset(72, 24)
+			salvageButton.TextSize = 12
+			salvageButton.MouseButton1Click:Connect(function()
+				callbacks.onSalvage(item.uid)
+			end)
+		end
+
+		local materialOrder = 0
+		for _, materialId in ipairs(Materials.ORDER) do
+			local definition = Materials.DEFS[materialId]
+			local count = 0
+			if type(bag) == "table" and type(bag[materialId]) == "number" then
+				count = bag[materialId]
+			end
+			materialOrder += 1
+			local color = definition.color
+			local row = new("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 18),
+				Font = Enum.Font.BuilderSans,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = Color3.fromRGB(color[1], color[2], color[3]),
+				Text = string.format(
+					"%s    %d / %d    ·    %s",
+					definition.name,
+					count,
+					definition.stack,
+					definition.realm
+				),
+				LayoutOrder = materialOrder,
+			}, materialList)
+			row.Name = materialId
+		end
 	end
+
+	local function showForgeTab(name: string)
+		forgeTab = name
+		if latestProfile ~= nil then
+			renderCraft(latestProfile)
+		else
+			paintForgeTabs()
+		end
+	end
+	craftTabButton.MouseButton1Click:Connect(function()
+		showForgeTab("craft")
+	end)
+	salvageTabButton.MouseButton1Click:Connect(function()
+		showForgeTab("salvage")
+	end)
+	materialTabButton.MouseButton1Click:Connect(function()
+		showForgeTab("materials")
+	end)
 
 	function controller.setRun(run: any)
 		if type(run) == "table" then

@@ -7,7 +7,7 @@
 	scales them by rarity when the item drops. Pets roll Pet Damage and Pet
 	HP, and some styles also roll Attack Speed and Crit Chance.
 
-	weaponType is the class-system hook (sword, bow, staff, dagger, hammer).
+	weaponType is the class-system hook (sword, greatsword, bow, staff, dagger, hammer).
 	CombatMath reads it to choose a melee swing or a projectile. Class weights
 	still apply when the stats are rolled, not a second time on hit.
 ]]
@@ -59,6 +59,12 @@ local WEAPON_STATS: { [string]: { StatRange } } = {
 		{ id = "attack_speed", min = 1.2, max = 1.5 },
 		{ id = "crit_chance", min = 0.08, max = 0.16 },
 		{ id = "crit_damage", min = 1.45, max = 1.8 },
+	},
+	greatsword = {
+		{ id = "damage", min = 14, max = 20 },
+		{ id = "attack_speed", min = 0.7, max = 0.85 },
+		{ id = "crit_chance", min = 0.03, max = 0.06 },
+		{ id = "crit_damage", min = 1.5, max = 1.85 },
 	},
 	hammer = {
 		{ id = "damage", min = 16, max = 24 },
@@ -217,6 +223,15 @@ local function pet(id: string, name: string, rarity: string, ascension: number, 
 		stats = copyStats(ranges),
 	})
 end
+
+-- Forge defaults. Common gear the bench can make at Crafting Level 1.
+weapon("iron_sword", "Iron Sword", "Common", "sword", 0)
+weapon("iron_greatsword", "Iron Greatsword", "Common", "greatsword", 0)
+weapon("iron_bow", "Iron Bow", "Common", "bow", 0)
+weapon("iron_staff", "Iron Staff", "Common", "staff", 0)
+weapon("iron_dagger", "Iron Dagger", "Common", "dagger", 0)
+weapon("iron_hammer", "Iron Hammer", "Common", "hammer", 0)
+weapon("thornbound_blade", "Thornbound Blade", "Rare", "sword", 0)
 
 -- Ascension 0, Verdant Wilds. Nature, beasts, wood, vines.
 weapon("vinewood_sword", "Vinewood Sword", "Common", "sword", 0)

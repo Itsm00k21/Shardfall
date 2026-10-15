@@ -255,6 +255,21 @@ function Remotes.bind()
 		end)
 	end
 
+	functionRemote("Salvage").OnServerInvoke = function(player, targetUid)
+		return guard(player, "Salvage", function()
+			if not validUid(targetUid) then
+				return { ok = false, error = "You do not have that item." }
+			end
+			return CraftService.salvage(player, targetUid)
+		end)
+	end
+
+	functionRemote("BuyForgeBoost").OnServerInvoke = function(player)
+		return guard(player, "BuyForgeBoost", function()
+			return RollService.buyForgeBoost(player)
+		end)
+	end
+
 	functionRemote("FeedItem").OnServerInvoke = function(player, keptUid, feederUid)
 		return guard(player, "FeedItem", function()
 			if not validUid(keptUid) or not validUid(feederUid) then

@@ -103,6 +103,7 @@ CombatMath.UNARMED = {
 -- server-side part that flies `range` studs at `projectileSpeed` studs/sec.
 CombatMath.STYLES = {
 	sword = { style = "melee", range = 8, minDot = 0.25, projectileSpeed = 0 },
+	greatsword = { style = "melee", range = 10, minDot = 0.35, projectileSpeed = 0 },
 	dagger = { style = "melee", range = 6, minDot = 0.05, projectileSpeed = 0 },
 	hammer = { style = "melee", range = 11, minDot = 0.45, projectileSpeed = 0 },
 	bow = { style = "projectile", range = 80, minDot = -1, projectileSpeed = 95 },

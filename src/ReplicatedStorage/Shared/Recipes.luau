@@ -35,6 +35,12 @@ export type Recipe = {
 	blurb: string,
 	costs: { [string]: number },
 	result: ItemResult | ConsumableResult | RerollResult,
+	-- Crafting Level required. Missing means 1.
+	level: number?,
+	-- XP tier. Missing means 1. Higher tiers pay more crafting XP.
+	tier: number?,
+	-- Material id of a scroll that must be owned. The craft does not spend it.
+	scroll: string?,
 }
 
 local LIST: { Recipe } = {
@@ -66,6 +72,70 @@ local LIST: { Recipe } = {
 		costs = { heartwood = 1, spore = 2 },
 		result = { kind = "reroll" },
 	},
+	{
+		id = "iron_sword",
+		name = "Iron Sword",
+		blurb = "A plain sword. Stats roll with your Crafting Level.",
+		costs = { verdant_bark = 4 },
+		result = { kind = "item", templateId = "iron_sword" },
+		level = 1,
+		tier = 1,
+	},
+	{
+		id = "iron_greatsword",
+		name = "Iron Greatsword",
+		blurb = "A plain greatsword. Stats roll with your Crafting Level.",
+		costs = { verdant_bark = 6 },
+		result = { kind = "item", templateId = "iron_greatsword" },
+		level = 1,
+		tier = 1,
+	},
+	{
+		id = "iron_bow",
+		name = "Iron Bow",
+		blurb = "A plain bow. Stats roll with your Crafting Level.",
+		costs = { verdant_bark = 4 },
+		result = { kind = "item", templateId = "iron_bow" },
+		level = 1,
+		tier = 1,
+	},
+	{
+		id = "iron_staff",
+		name = "Iron Staff",
+		blurb = "A plain staff. Stats roll with your Crafting Level.",
+		costs = { verdant_bark = 4 },
+		result = { kind = "item", templateId = "iron_staff" },
+		level = 1,
+		tier = 1,
+	},
+	{
+		id = "iron_dagger",
+		name = "Iron Dagger",
+		blurb = "A plain dagger. Stats roll with your Crafting Level.",
+		costs = { verdant_bark = 3 },
+		result = { kind = "item", templateId = "iron_dagger" },
+		level = 1,
+		tier = 1,
+	},
+	{
+		id = "iron_hammer",
+		name = "Iron Hammer",
+		blurb = "A plain hammer. Stats roll with your Crafting Level.",
+		costs = { verdant_bark = 6 },
+		result = { kind = "item", templateId = "iron_hammer" },
+		level = 1,
+		tier = 1,
+	},
+	{
+		id = "thornbound_blade",
+		name = "Thornbound Blade",
+		blurb = "Verdant rare sword. Needs Crafting Level 10 and a Thornbound Scroll.",
+		costs = { verdant_bark = 6, heartwood = 2 },
+		result = { kind = "item", templateId = "thornbound_blade" },
+		level = 10,
+		tier = 2,
+		scroll = "scroll_thornbound",
+	},
 }
 
 local byId: { [string]: Recipe } = {}
@@ -81,6 +151,15 @@ for _, recipe in ipairs(LIST) do
 		if type(count) ~= "number" or count < 1 then
 			error(recipe.id .. " has a bad cost", 0)
 		end
+	end
+	if recipe.scroll ~= nil and Materials.DEFS[recipe.scroll] == nil then
+		error(recipe.id .. " needs an unknown scroll", 0)
+	end
+	if recipe.level ~= nil and (recipe.level < 1 or recipe.level > 100) then
+		error(recipe.id .. " has a bad crafting level", 0)
+	end
+	if recipe.tier ~= nil and (recipe.tier < 1 or recipe.tier > 5) then
+		error(recipe.id .. " has a bad tier", 0)
 	end
 	if recipe.result.kind == "item" then
 		if ItemBases.get(recipe.result.templateId) == nil then

@@ -255,12 +255,21 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		)
 		table.insert(lines, string.format("XP  %d", numberFrom(payload, "xp") or 0))
 		if type(payload.materials) == "table" then
+			local shown = {}
 			for _, row in ipairs(payload.materials) do
-				if type(row) == "table" then
-					table.insert(
-						lines,
-						string.format("%s  x%d", tostring(row.name), tonumber(row.count) or 0)
-					)
+				if type(row) == "string" then
+					table.insert(shown, row)
+				elseif type(row) == "table" and type(row.name) == "string" then
+					local count = tonumber(row.count)
+					if count ~= nil and count > 0 then
+						table.insert(shown, string.format("%s x%d", row.name, count))
+					end
+				end
+			end
+			if #shown > 0 then
+				table.insert(lines, "Materials")
+				for _, line in ipairs(shown) do
+					table.insert(lines, line)
 				end
 			end
 		end

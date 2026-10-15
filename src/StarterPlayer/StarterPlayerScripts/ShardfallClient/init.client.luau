@@ -270,7 +270,48 @@ ui = Ui.mount(playerGui, {
 			applyResult(result)
 			local craft = (result :: any).craft
 			local name = if type(craft) == "table" then craft.name else "recipe"
-			ui.setStatus("Crafted " .. tostring(name) .. ".", "ok")
+			local xp = if type(craft) == "table" then craft.xp else nil
+			local note = "Crafted " .. tostring(name) .. "."
+			if type(xp) == "number" and xp > 0 then
+				note ..= string.format(" +%d Crafting XP.", xp)
+			end
+			ui.setStatus(note, "ok")
+		end)
+	end,
+	onSalvage = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("Salvage", uid)
+			end)
+			local message = remoteError(ok, result, "Could not salvage that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local salvage = if type(result) == "table" then (result :: any).salvage else nil
+			local name = if type(salvage) == "table" then salvage.name else "gear"
+			local xp = if type(salvage) == "table" then salvage.xp else nil
+			local note = "Salvaged " .. tostring(name) .. "."
+			if type(xp) == "number" and xp > 0 then
+				note ..= string.format(" +%d Crafting XP.", xp)
+			end
+			ui.setStatus(note, "ok")
+		end)
+	end,
+	onBuyForge = function()
+		ui.setStatus(Currencies.forgeBoostPitch(0, os.time()), "info")
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyForgeBoost")
+			end)
+			local message = remoteError(ok, result, "Could not buy a Forge Boost.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			end
+			if ok and type(result) == "table" then
+				applyResult(result)
+			end
 		end)
 	end,
 	onDungeon = function(action: string, dungeonId: string?)

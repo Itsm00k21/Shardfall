@@ -9,11 +9,14 @@
 	Wild Resin, the item id to reroll.
 ]]
 
+local CraftingLevel = require("./CraftingLevel")
+local ItemBases = require("./ItemBases")
 local Materials = require("./Materials")
 local Rarities = require("./Rarities")
 local Recipes = require("./Recipes")
 local RollMath = require("./RollMath")
 local Schema = require("./Schema")
+local Stats = require("./Stats")
 local Traits = require("./Traits")
 
 local Crafting = {}
@@ -50,6 +53,103 @@ local function spend(materials: { [string]: number }, costs: { [string]: number 
 	end
 end
 
+local function craftingLevelOf(profile: any): number
+	local level = profile.craftingLevel
+	if type(level) ~= "number" or level ~= level or level < 1 then
+		return 1
+	end
+	return math.floor(level)
+end
+
+local function recipeLevel(recipe: Recipes.Recipe): number
+	if type(recipe.level) ~= "number" or recipe.level < 1 then
+		return 1
+	end
+	return recipe.level
+end
+
+local function recipeTier(recipe: Recipes.Recipe): number
+	if type(recipe.tier) ~= "number" or recipe.tier < 1 then
+		return 1
+	end
+	return recipe.tier
+end
+
+-- Nil means the recipe is unlocked. A short material pile is a separate check.
+function Crafting.lockReason(profile: any, recipeId: string): string?
+	local recipe = Recipes.get(recipeId)
+	if recipe == nil or type(profile) ~= "table" then
+		return "Unknown recipe."
+	end
+	local lines = {}
+	if craftingLevelOf(profile) < recipeLevel(recipe) then
+		table.insert(lines, string.format("Crafting Level %d.", recipeLevel(recipe)))
+	end
+	if type(recipe.scroll) == "string" then
+		local owned = 0
+		if type(profile.materials) == "table" then
+			owned = profile.materials[recipe.scroll] or 0
+		end
+		if owned < 1 then
+			table.insert(lines, "Needs a " .. Materials.displayName(recipe.scroll) .. ".")
+		end
+	end
+	if #lines == 0 then
+		return nil
+	end
+	return table.concat(lines, " ")
+end
+
+local YIELD: { [string]: { [string]: number } } = {
+	Common = { common = 2 },
+	Uncommon = { common = 3 },
+	Rare = { common = 1, rare = 1 },
+	Epic = { common = 2, rare = 2 },
+	Legendary = { rare = 2, boss = 1 },
+	Mythic = { rare = 2, boss = 2 },
+	Secret = { rare = 2, boss = 3 },
+}
+
+function Crafting.salvageYield(item: any): { [string]: number }
+	local counts = {}
+	if type(item) ~= "table" then
+		return counts
+	end
+	local base = if type(item.templateId) == "string" then ItemBases.get(item.templateId) else nil
+	local ascension = if base ~= nil then base.ascension else 0
+	local realm = Materials.realmForAscension(ascension)
+	local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
+	local grades = YIELD[rarity] or YIELD.Common
+	for grade, count in pairs(grades) do
+		local materialId = Materials.primary(realm, grade :: Materials.Grade)
+		if materialId ~= nil and count > 0 then
+			counts[materialId] = (counts[materialId] or 0) + count
+		end
+	end
+	return counts
+end
+
+local function shiftRng(rng: RollMath.Rng, bias: number): RollMath.Rng
+	if bias <= 0 then
+		return rng
+	end
+	return {
+		nextNumber = function()
+			local value = rng:nextNumber() + bias
+			if value > 1 then
+				return 1
+			end
+			if value < 0 then
+				return 0
+			end
+			return value
+		end,
+		nextInteger = function(_self, min: number, max: number)
+			return rng:nextInteger(min, max)
+		end,
+	}
+end
+
 function Crafting.needs(profile: any, recipeId: string): { Need }
 	local recipe = Recipes.get(recipeId)
 	if recipe == nil or type(profile) ~= "table" or type(profile.materials) ~= "table" then
@@ -79,6 +179,10 @@ function Crafting.validate(
 	local recipe = Recipes.get(recipeId)
 	if recipe == nil then
 		return nil, "Unknown recipe."
+	end
+	local locked = Crafting.lockReason(profile, recipeId)
+	if locked ~= nil then
+		return nil, locked
 	end
 	local gaps = missing(recipe, profile.materials)
 	if #gaps > 0 then
@@ -159,15 +263,55 @@ function Crafting.commit(
 		name = recipe.name,
 	}
 
+	local bonuses = CraftingLevel.bonusesAt(craftingLevelOf(profile))
+	local tier = recipeTier(recipe)
+
 	if recipe.result.kind == "item" then
 		local minted = RollMath.mint(recipe.result.templateId, {
 			uid = uid,
 			now = now,
 			poolId = "craft",
-		}, rng)
+		}, shiftRng(rng, bonuses.rollBias))
+		if bonuses.rarityUp > 0 and rng:nextNumber() < bonuses.rarityUp then
+			local raised = Rarities.next(minted.rarity)
+			local base = ItemBases.get(minted.templateId)
+			if raised ~= nil and base ~= nil and type(base.stats) == "table" then
+				minted.rarity = raised
+				local stats, quality =
+					Stats.roll(base.stats, raised, base.weaponType, shiftRng(rng, bonuses.rollBias))
+				minted.stats = stats
+				minted.quality = quality
+				local slots = Rarities.TRAIT_SLOTS[raised] or 0
+				while #minted.traits < slots do
+					local banned: { [string]: boolean } = {}
+					for _, trait in ipairs(minted.traits) do
+						if type(trait.id) == "string" then
+							banned[trait.id] = true
+						end
+					end
+					table.insert(minted.traits, Traits.pick(rng, banned))
+				end
+			end
+		end
+		if
+			bonuses.masterwork > 0
+			and rng:nextNumber() < bonuses.masterwork
+			and type(minted.stats) == "table"
+		then
+			local extra = Stats.roll(
+				{ { id = "health", min = 8, max = 16 } },
+				minted.rarity,
+				minted.weaponType,
+				shiftRng(rng, bonuses.rollBias)
+			)
+			table.insert(minted.stats, extra[1])
+		end
 		Schema.insertItem(profile, minted)
 		spend(profile.materials, recipe.costs)
+		local gained = CraftingLevel.grant(profile, CraftingLevel.craftXp(tier), now)
 		summary.item = minted
+		summary.xp = gained
+		summary.craftingLevel = profile.craftingLevel
 		return summary, nil
 	end
 
@@ -176,8 +320,11 @@ function Crafting.commit(
 		profile.consumables[id] =
 			math.min(Materials.TONIC_CAP, (profile.consumables[id] or 0) + recipe.result.count)
 		spend(profile.materials, recipe.costs)
+		local gained = CraftingLevel.grant(profile, CraftingLevel.craftXp(tier), now)
 		summary.consumable = id
 		summary.count = profile.consumables[id]
+		summary.xp = gained
+		summary.craftingLevel = profile.craftingLevel
 		return summary, nil
 	end
 
@@ -190,9 +337,49 @@ function Crafting.commit(
 		return nil, rerollError
 	end
 	spend(profile.materials, recipe.costs)
+	local gained = CraftingLevel.grant(profile, CraftingLevel.craftXp(tier), now)
 	summary.item = item
 	summary.rerolled = true
+	summary.xp = gained
+	summary.craftingLevel = profile.craftingLevel
 	return summary, nil
+end
+
+function Crafting.salvage(
+	profile: Schema.ProfileData,
+	targetUid: string?,
+	now: number
+): (any?, string?)
+	if type(targetUid) ~= "string" or targetUid == "" then
+		return nil, "Pick a weapon or armor piece to salvage."
+	end
+	local item, bag = Schema.findItem(profile, targetUid)
+	if item == nil or bag == nil then
+		return nil, "You do not have that item."
+	end
+	if item.kind ~= "Weapon" and item.kind ~= "Armor" then
+		return nil, "Only weapons and armor can be salvaged."
+	end
+	if (item :: any).locked == true then
+		return nil, "That item is locked."
+	end
+	if Schema.isEquipped(profile, targetUid) then
+		return nil, "Unequip it before salvaging."
+	end
+	local yield = Crafting.salvageYield(item)
+	for materialId, count in pairs(yield) do
+		Materials.add(profile.materials, materialId, count)
+	end
+	bag[targetUid] = nil
+	local gained = CraftingLevel.grant(profile, CraftingLevel.salvageXp(item.rarity), now)
+	return {
+		uid = targetUid,
+		name = item.name,
+		materials = yield,
+		xp = gained,
+		craftingLevel = profile.craftingLevel,
+	},
+		nil
 end
 
 return Crafting
