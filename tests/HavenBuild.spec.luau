@@ -82,6 +82,17 @@ local function cframe(
 		)
 	end
 
+	function self:PointToObjectSpace(point: Mock): Mock
+		local dx = point.X - self.Position.X
+		local dy = point.Y - self.Position.Y
+		local dz = point.Z - self.Position.Z
+		return vector3(
+			self.r00 * dx + self.r10 * dy + self.r20 * dz,
+			self.r01 * dx + self.r11 * dy + self.r21 * dz,
+			self.r02 * dx + self.r12 * dy + self.r22 * dz
+		)
+	end
+
 	return setmetatable(self, {
 		__add = function(left, offset)
 			return cframe(
@@ -147,6 +158,18 @@ local function cframeNew(x: any, y: number?, z: number?): Mock
 		return cframe(x.X, x.Y, x.Z, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 	end
 	return cframe(x or 0, y or 0, z or 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+end
+
+local function cross(a: Mock, b: Mock): Mock
+	return vector3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X)
+end
+
+local function unit(v: Mock): Mock
+	local magnitude = math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z)
+	if magnitude < 1e-8 then
+		return vector3(0, 1, 0)
+	end
+	return vector3(v.X / magnitude, v.Y / magnitude, v.Z / magnitude)
 end
 
 local function fromMatrix(pos: Mock, vx: Mock, vy: Mock, vz: Mock?): Mock
@@ -406,8 +429,12 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			new = cframeNew,
 			Angles = angles,
 			fromMatrix = fromMatrix,
-			lookAt = function(at, target, _up)
-				return cframeNew(at.X, at.Y, at.Z)
+			lookAt = function(at, target, up)
+				local upv = up or vector3(0, 1, 0)
+				local look = unit(vector3(target.X - at.X, target.Y - at.Y, target.Z - at.Z))
+				local right = unit(cross(upv, look))
+				local newUp = cross(look, right)
+				return fromMatrix(at, right, newUp, vector3(-look.X, -look.Y, -look.Z))
 			end,
 		},
 		UDim2 = {
@@ -656,32 +683,72 @@ describe("HavenBuilder", function()
 			end
 		end
 
-		local function footprint(part: Mock)
+		local function onDeck(part: Mock, x: number, z: number): boolean
+			if part.CanCollide ~= true or part.Anchored ~= true then
+				return false
+			end
 			local pos = part.CFrame.Position
 			local size = part.Size
-			return {
-				x0 = pos.X - size.X / 2,
-				x1 = pos.X + size.X / 2,
-				z0 = pos.Z - size.Z / 2,
-				z1 = pos.Z + size.Z / 2,
-			}
+			local topY = pos.Y + part.CFrame.YVector.Y * size.Y / 2
+			if topY < Haven.FLOOR_Y - 0.75 or topY > Haven.FLOOR_Y + 2 then
+				return false
+			end
+			local localPoint = part.CFrame:PointToObjectSpace(vector3(x, pos.Y, z))
+			return math.abs(localPoint.X) <= size.X / 2 + 0.5
+				and math.abs(localPoint.Z) <= size.Z / 2 + 0.5
 		end
 
-		local function covers(part: Mock, x: number, z: number): boolean
-			local box = footprint(part)
-			return x >= box.x0 - 1 and x <= box.x1 + 1 and z >= box.z0 - 1 and z <= box.z1 + 1
+		local decks = {}
+		for _, descendant in ipairs(hub:GetDescendants()) do
+			if descendant:IsA("BasePart") and descendant.Name ~= "Sign" then
+				table.insert(decks, descendant)
+			end
 		end
 
-		local function boxesOverlap(left, right): boolean
-			return not (
-				left.x1 < right.x0 - 1
-				or right.x1 < left.x0 - 1
-				or left.z1 < right.z0 - 1
-				or right.z1 < left.z0 - 1
-			)
+		local function supported(x: number, z: number): boolean
+			for _, deck in ipairs(decks) do
+				if onDeck(deck, x, z) then
+					return true
+				end
+			end
+			return false
 		end
 
-		local function rim(
+		local function onBridge(x: number, z: number): boolean
+			for _, deck in ipairs(decks) do
+				if deck.Name == "Bridge" and onDeck(deck, x, z) then
+					return true
+				end
+			end
+			return false
+		end
+
+		local function walk(x1: number, z1: number, x2: number, z2: number, label: string)
+			local dx = x2 - x1
+			local dz = z2 - z1
+			local distance = math.sqrt(dx * dx + dz * dz)
+			local steps = math.max(1, math.ceil(distance / 2))
+			for step = 0, steps do
+				local t = step / steps
+				local x = x1 + dx * t
+				local z = z1 + dz * t
+				if not supported(x, z) then
+					error(
+						string.format(
+							"%s has no floor at (%.1f, %.1f), step %d/%d",
+							label,
+							x,
+							z,
+							step,
+							steps
+						),
+						2
+					)
+				end
+			end
+		end
+
+		local function approach(
 			x1: number,
 			z1: number,
 			x2: number,
@@ -694,76 +761,124 @@ describe("HavenBuilder", function()
 			return x1 + dx / distance * inset, z1 + dz / distance * inset
 		end
 
-		local links = {
-			{ 0, 0, Haven.PLAZA_RADIUS, "market" },
-			{ "market", "forge" },
-			{ 0, 0, Haven.PLAZA_RADIUS, "guild" },
-			{ 0, 0, Haven.PLAZA_RADIUS, "garden" },
-			{ 0, 0, Haven.PLAZA_RADIUS, "observatory" },
-			{ 0, 0, Haven.PLAZA_RADIUS, 0, 228, 26, "portal shelf" },
-		}
-		local resolved = {}
-		for _, link in ipairs(links) do
-			if type(link[1]) == "string" then
-				local from = Haven.district(link[1])
-				local to = Haven.district(link[2])
-				table.insert(resolved, {
-					from.x,
-					from.z,
-					from.radius,
-					to.x,
-					to.z,
-					to.radius,
-					link[1] .. " to " .. link[2],
-				})
-			elseif link[7] ~= nil then
-				table.insert(resolved, link)
-			else
-				local to = Haven.district(link[4])
-				table.insert(
-					resolved,
-					{ link[1], link[2], link[3], to.x, to.z, to.radius, "plaza to " .. link[4] }
-				)
-			end
-		end
-
 		local bridges = findAll(hub, "Bridge")
-		if #bridges < #resolved then
+		local goals = {}
+		for _, district in ipairs(Haven.DISTRICTS) do
+			table.insert(goals, {
+				name = district.name,
+				x = district.x,
+				z = district.z,
+				radius = district.radius,
+			})
+		end
+		local shelfZ = Haven.PORTALS[1].z
+		local shelf = findNamed(hub, "RealmArches"):FindFirstChild("Ground")
+		table.insert(goals, {
+			name = "portal shelf",
+			x = 0,
+			z = shelfZ,
+			radius = shelf.Size.Z / 2,
+		})
+		if #bridges < #goals then
 			error("missing a bridge", 2)
 		end
 		for _, span in ipairs(bridges) do
 			floorBlock(span, "bridge")
+			if span.Size.X < 8 or span.Size.Y < 2 then
+				error(
+					string.format("bridge is %.1f wide and %.1f thick", span.Size.X, span.Size.Y),
+					2
+				)
+			end
 		end
-		for _, link in ipairs(resolved) do
-			local startX, startZ = rim(link[1], link[2], link[4], link[5], link[3])
-			local endX, endZ = rim(link[4], link[5], link[1], link[2], link[6])
-			local seen = {}
-			local queue = {}
-			for index, span in ipairs(bridges) do
-				if covers(span, startX, startZ) then
-					seen[index] = true
-					table.insert(queue, index)
+
+		walk(Haven.SPAWN.x, Haven.SPAWN.z, 0, 0, "spawn to plaza")
+		for _, goal in ipairs(goals) do
+			local rimX, rimZ = approach(0, 0, goal.x, goal.z, Haven.PLAZA_RADIUS)
+			local farX, farZ = approach(goal.x, goal.z, 0, 0, goal.radius)
+			walk(Haven.SPAWN.x, Haven.SPAWN.z, rimX, rimZ, "spawn to " .. goal.name)
+			walk(rimX, rimZ, goal.x, goal.z, goal.name)
+			local function onto(cx: number, cz: number, rx: number, rz: number)
+				local dx = cx - rx
+				local dz = cz - rz
+				local distance = math.sqrt(dx * dx + dz * dz)
+				local ox = rx + dx / distance * 2
+				local oz = rz + dz / distance * 2
+				if not onBridge(ox, oz) then
+					error(goal.name .. " bridge overlaps the floor by less than 2 studs", 2)
 				end
 			end
-			local joined = false
-			while #queue > 0 do
-				local index = table.remove(queue, 1)
-				if covers(bridges[index], endX, endZ) then
-					joined = true
-					break
+			onto(0, 0, rimX, rimZ)
+			onto(goal.x, goal.z, farX, farZ)
+		end
+
+		local left = Haven.PORTALS[1]
+		local right = Haven.PORTALS[#Haven.PORTALS]
+		walk(left.x, left.z, right.x, right.z, "portal row")
+		local names = {
+			verdant = "Verdant Wilds",
+			sunken = "Sunken Reach",
+			ember = "Emberforge",
+			frost = "Frostveil",
+			void = "Void Rift",
+		}
+		for _, portal in ipairs(Haven.PORTALS) do
+			local arch = findNamed(hub, portal.id)
+			local labeled = false
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:GetAttribute("HavenLabel") == names[portal.id] then
+					labeled = true
 				end
-				local box = footprint(bridges[index])
-				for other, span in ipairs(bridges) do
-					if seen[other] ~= true and boxesOverlap(box, footprint(span)) then
-						seen[other] = true
-						table.insert(queue, other)
+				if child.Name == "Sign" and child.CanCollide == true then
+					error(portal.name .. " sign can be stood on", 2)
+				end
+			end
+			if not labeled then
+				error(portal.id .. " is not labeled " .. names[portal.id], 2)
+			end
+			if not supported(portal.x, portal.z) then
+				error(portal.name .. " arch is not on the shelf", 2)
+			end
+		end
+		local districtLabels = {
+			Forge = "Forge",
+			Market = "Market",
+			GuildHall = "Guild Hall",
+			PetGarden = "Pet Garden",
+			Observatory = "Observatory",
+		}
+		for modelName, label in pairs(districtLabels) do
+			local model = findNamed(hub, modelName)
+			local found = false
+			for _, child in ipairs(model:GetDescendants()) do
+				if child:GetAttribute("HavenLabel") == label then
+					found = true
+					if child.CanCollide == true then
+						error(label .. " sign can be stood on", 2)
 					end
 				end
 			end
-			if not joined then
-				error(link[7] .. " bridge does not meet both edges", 2)
+			if not found then
+				error(modelName .. " has no " .. label .. " label", 2)
 			end
 		end
+		local armoryLabel = false
+		local armoryPrompt = false
+		local petsPrompt = false
+		for _, child in ipairs(hub:GetDescendants()) do
+			if child:GetAttribute("HavenLabel") == "Armory" then
+				armoryLabel = true
+			end
+			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "armory" then
+				armoryPrompt = true
+			end
+			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "pets" then
+				petsPrompt = true
+			end
+		end
+		expect(armoryLabel).toBeTrue()
+		expect(armoryPrompt).toBeTrue()
+		expect(petsPrompt).toBeTrue()
 
 		local heart = findNamed(hub, "LumenHeart")
 		if shapeName(heart) == "Enum.PartType.Cylinder" then

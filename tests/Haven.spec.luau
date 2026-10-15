@@ -39,6 +39,12 @@ describe("Haven", function()
 		expect(Haven.portal("void").open).toEqual(false)
 	end)
 
+	it("treats a fall below the sky island as leaving the hub", function()
+		expect(Haven.fellOffHub(59)).toBeTrue()
+		expect(Haven.fellOffHub(Haven.FLOOR_Y)).toBeFalse()
+		expect(Haven.fellOffHub(4)).toBeTrue()
+	end)
+
 	it("puts the spawn on the plaza and a 20 to 30 second walk across the hub", function()
 		expect(Haven.spawnOnPlaza()).toBeTrue()
 		local seconds = Haven.crossingSeconds(Haven.WALK_SPEED)

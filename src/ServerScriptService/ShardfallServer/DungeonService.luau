@@ -91,6 +91,7 @@ type Restart = {
 
 local runs: { [Player]: Run } = {}
 local touchAt: { [Player]: number } = {}
+local fallAt: { [Player]: number } = {}
 local farmOn: { [Player]: boolean } = {}
 local restartAt: { [Player]: Restart } = {}
 local idleNoted: { [Player]: boolean } = {}
@@ -228,9 +229,9 @@ local function buildRoom(
 	local floorColor = if dungeon.endless == true
 		then Color3.fromRGB(42, 58, 78)
 		elseif index == #dungeon.rooms then Color3.fromRGB(28, 48, 36)
-		else Color3.fromRGB(54, 86, 52)
+		else Color3.fromRGB(58, 112, 54)
 	local center = roomCFrame(place, Vector3.new(0, -0.5, 0))
-	makePart(
+	local floor = makePart(
 		"Floor",
 		Vector3.new(dungeon.floorSize, 1, dungeon.floorSize),
 		center,
@@ -238,6 +239,41 @@ local function buildRoom(
 		model,
 		true
 	)
+	floor.Material = if dungeon.endless == true then Enum.Material.Slate else Enum.Material.Grass
+	if dungeon.endless ~= true then
+		local path = makePart(
+			"Path",
+			Vector3.new(8, 0.35, dungeon.floorSize * 0.62),
+			roomCFrame(place, Vector3.new(0, 0.2, 0)),
+			Color3.fromRGB(112, 86, 52),
+			model,
+			true
+		)
+		path.Material = Enum.Material.Ground
+		local trees = { { -16, -14 }, { 16, -12 }, { -14, 14 }, { 18, 8 } }
+		for treeIndex, spot in ipairs(trees) do
+			local trunk = makePart(
+				"TreeTrunk",
+				Vector3.new(2, 7, 2),
+				roomCFrame(place, Vector3.new(spot[1], 3.5, spot[2])),
+				Color3.fromRGB(92, 64, 40),
+				model,
+				true
+			)
+			trunk.Material = Enum.Material.Wood
+			local canopy = makePart(
+				"TreeCanopy",
+				Vector3.new(7, 7, 7),
+				roomCFrame(place, Vector3.new(spot[1], 8.2, spot[2])),
+				Color3.fromRGB(46, 120, 58),
+				model,
+				false
+			)
+			canopy.Shape = Enum.PartType.Ball
+			canopy.Material = Enum.Material.Grass
+			canopy.Name = "TreeCanopy" .. tostring(treeIndex)
+		end
+	end
 
 	local half = dungeon.floorSize / 2
 	local wallColor = Color3.fromRGB(34, 58, 40)
@@ -326,6 +362,8 @@ local function buildWorld()
 	local rooms = Instance.new("Folder")
 	rooms.Name = "Rooms"
 	rooms.Parent = world
+	local _, _, roomZ = Dungeons.roomOrigin(1)
+	print(string.format("[Shardfall] Rootvault rooms start at z=%.0f", roomZ))
 	local dungeon = Dungeons.get(Dungeons.ROOTVAULT_ID)
 	assert(dungeon ~= nil, "Rootvault is missing from Dungeons.luau")
 	for index = 1, #dungeon.rooms do
@@ -1082,6 +1120,21 @@ local function onHeartbeat(dt: number)
 			end
 		end
 	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		if runs[player] ~= nil or player.Parent == nil then
+			continue
+		end
+		local hrp = rootPart(player)
+		if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
+			continue
+		end
+		if (fallAt[player] or 0) > now then
+			continue
+		end
+		fallAt[player] = now + 2
+		print("[Shardfall] " .. player.Name .. " fell off Haven; returning to HubSpawn")
+		teleport(player, hubCFrame())
+	end
 end
 
 local function reject(message: string)
@@ -1161,6 +1214,10 @@ function DungeonService.enter(player: Player, dungeonId: any)
 		spawnRoom(player, run)
 		teleport(player, roomSpawn(1))
 	end
+	-- Same payload the Enter Rootvault button's remote returns, so a portal
+	-- entry updates the panel instead of leaving that button stale.
+	local note = if endless then "Entered Rootvault Waves." else "Entered the Rootvault."
+	pushRun(player, note)
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1380,6 +1437,7 @@ function DungeonService.start()
 			destroyRun(player, run)
 		end
 		touchAt[player] = nil
+		fallAt[player] = nil
 		farmOn[player] = nil
 		restartAt[player] = nil
 		idleNoted[player] = nil

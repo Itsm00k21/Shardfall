@@ -363,6 +363,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			enterButton.Active = runState.cleared == true
 			enterButton.AutoButtonColor = runState.cleared == true
+			enterButton.BackgroundColor3 = if runState.cleared == true
+				then COLORS.button
+				else COLORS.buttonDim
 			wavesButton.Active = false
 			wavesButton.AutoButtonColor = false
 			wavesButton.Text = "Rootvault Waves"
@@ -376,6 +379,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			enterButton.Text = "Enter Rootvault"
 			enterButton.Active = true
 			enterButton.AutoButtonColor = true
+			enterButton.BackgroundColor3 = COLORS.button
 			wavesButton.Active = true
 			wavesButton.AutoButtonColor = true
 			wavesButton.Text = "Rootvault Waves"

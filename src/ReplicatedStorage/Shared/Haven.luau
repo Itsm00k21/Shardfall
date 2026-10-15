@@ -19,6 +19,8 @@ Haven.WALK_SPEED = 16
 Haven.PLAZA_RADIUS = 52
 -- Studio's default baseplate tops out at y=0. The whole hub sits above it.
 Haven.FLOOR_Y = 120
+-- Below this, a player who is not in a dungeon fell off the sky island.
+Haven.FALL_Y = 60
 
 export type Place = {
 	id: string,
@@ -108,7 +110,7 @@ Haven.PORTALS = {
 		id = "void",
 		name = "Void Rift",
 		x = -160,
-		z = 228,
+		z = 252,
 		open = false,
 		color = { 150, 70, 220 },
 		message = "Void Rift is coming soon.",
@@ -117,7 +119,7 @@ Haven.PORTALS = {
 		id = "sunken",
 		name = "Sunken Reach",
 		x = -80,
-		z = 228,
+		z = 252,
 		open = false,
 		color = { 50, 150, 255 },
 		message = "Sunken Reach is coming soon.",
@@ -126,7 +128,7 @@ Haven.PORTALS = {
 		id = "verdant",
 		name = "Verdant Wilds",
 		x = 0,
-		z = 228,
+		z = 252,
 		open = true,
 		dungeonId = "rootvault",
 		color = { 64, 196, 96 },
@@ -135,7 +137,7 @@ Haven.PORTALS = {
 		id = "ember",
 		name = "Emberforge",
 		x = 80,
-		z = 228,
+		z = 252,
 		open = false,
 		color = { 255, 150, 40 },
 		message = "Emberforge is coming soon.",
@@ -144,7 +146,7 @@ Haven.PORTALS = {
 		id = "frost",
 		name = "Frostveil",
 		x = 160,
-		z = 228,
+		z = 252,
 		open = false,
 		color = { 186, 228, 255 },
 		message = "Frostveil is coming soon.",
@@ -208,6 +210,10 @@ function Haven.crossingSeconds(walkSpeed: number?): number
 		speed = Haven.WALK_SPEED
 	end
 	return Haven.crossingStuds() / speed
+end
+
+function Haven.fellOffHub(y: number): boolean
+	return type(y) == "number" and y == y and y < Haven.FALL_Y
 end
 
 function Haven.spawnOnPlaza(): boolean

@@ -129,27 +129,48 @@ local function ball(
 	return piece
 end
 
-local function sign(parent: Instance, cframe: CFrame, text: string, width: number)
-	local board = part(
+-- Billboard, not a SurfaceGui board. A board on the walk was readable as
+-- giant letters and could sit where a bridge belonged. This anchor does not
+-- collide, and the text stays a fixed screen size.
+local function sign(parent: Instance, cframe: CFrame, text: string)
+	local anchor = part(
 		parent,
 		"Sign",
-		Vector3.new(width, 4, 0.4),
+		Vector3.new(0.4, 0.4, 0.4),
 		cframe,
 		Color3.fromRGB(48, 42, 36),
 		Enum.Material.Wood,
 		false
 	)
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.Parent = board
+	anchor.Transparency = 1
+	anchor:SetAttribute("HavenLabel", text)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(math.max(140, #text * 11), 32)
+	gui.StudsOffset = Vector3.new(0, 1.5, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 420
+	gui.Parent = anchor
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
 	label.Font = Enum.Font.BuilderSansBold
 	label.TextScaled = true
 	label.TextColor3 = Color3.fromRGB(236, 226, 190)
+	label.TextStrokeTransparency = 0.4
 	label.Text = text
 	label.Parent = gui
+end
+
+-- Far side of an island, past the center, so the label is not on the bridge.
+local function labelBehind(parent: Instance, x: number, z: number, reach: number, text: string)
+	local distance = math.sqrt(x * x + z * z)
+	local bx = x
+	local bz = z - reach
+	if distance > 1 then
+		bx = x + x / distance * reach
+		bz = z + z / distance * reach
+	end
+	sign(parent, CFrame.new(bx, 16, bz), text)
 end
 
 local function promptOn(
@@ -163,8 +184,9 @@ local function promptOn(
 	prompt.ActionText = actionText
 	prompt.ObjectText = objectText
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 14
+	prompt.MaxActivationDistance = 18
 	prompt.RequiresLineOfSight = false
+	prompt.MaxIndicatorDistance = 24
 	prompt:SetAttribute("HavenAction", action)
 	if message ~= nil then
 		prompt:SetAttribute("HavenMessage", message)
@@ -188,43 +210,33 @@ local function approach(
 	return fromX + dx / distance * inset, fromZ + dz / distance * inset
 end
 
-local BRIDGE_WIDTH = 18
-local BRIDGE_THICKNESS = 8
-local BRIDGE_OVERLAP = 14
+local BRIDGE_WIDTH = 14
+local BRIDGE_THICKNESS = 4
+local BRIDGE_OVERLAP = 8
 local FLOOR_TOP = 0
+local SHELF_DEPTH = 24
 
--- Two axis-aligned blocks, an L from (x1,z1) to (x2,z2). No yaw, so the
--- span is just Size and Position. Ends overlap both rims.
+-- One block along the real direction. lookAt points local -Z down the span,
+-- so Size.Z is the length. Shape stays Block; the CFrame is applied after Size.
 local function bridge(parent: Instance, x1: number, z1: number, x2: number, z2: number)
 	local dx = x2 - x1
 	local dz = z2 - z1
-	if math.abs(dx) < 1 and math.abs(dz) < 1 then
+	local length = math.sqrt(dx * dx + dz * dz)
+	if length < 1 then
 		return
 	end
-	local color = Color3.fromRGB(126, 122, 116)
 	local yCenter = FLOOR_TOP - BRIDGE_THICKNESS / 2
-	if math.abs(dx) >= 1 then
-		part(
-			parent,
-			"Bridge",
-			Vector3.new(math.abs(dx) + BRIDGE_OVERLAP, BRIDGE_THICKNESS, BRIDGE_WIDTH),
-			CFrame.new((x1 + x2) / 2, yCenter, z1),
-			color,
-			Enum.Material.Cobblestone,
-			true
-		)
-	end
-	if math.abs(dz) >= 1 then
-		part(
-			parent,
-			"Bridge",
-			Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, math.abs(dz) + BRIDGE_OVERLAP),
-			CFrame.new(x2, yCenter, (z1 + z2) / 2),
-			color,
-			Enum.Material.Cobblestone,
-			true
-		)
-	end
+	local mid = Vector3.new((x1 + x2) / 2, yCenter, (z1 + z2) / 2)
+	local cf = CFrame.lookAt(mid, Vector3.new(x2, yCenter, z2))
+	part(
+		parent,
+		"Bridge",
+		Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, length + BRIDGE_OVERLAP * 2),
+		cf,
+		Color3.fromRGB(126, 122, 116),
+		Enum.Material.Cobblestone,
+		true
+	)
 end
 
 local function island(
@@ -394,7 +406,7 @@ end
 
 local function buildPlaza(parent: Instance)
 	island(parent, "BossPlaza", 0, 0, Haven.PLAZA_RADIUS, STONE, Enum.Material.Cobblestone)
-	sign(parent, CFrame.new(0, 5, Haven.PLAZA_RADIUS - 6), "BOSS PLAZA", 16)
+	sign(parent, CFrame.new(0, 14, -Haven.PLAZA_RADIUS + 12), "Boss Plaza")
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
 	spawn.Size = Vector3.new(12, 1, 12)
@@ -428,8 +440,20 @@ local function buildPlaza(parent: Instance)
 		false,
 		true
 	)
-	promptOn(stand, "Armory", "Weapons and armor", "armory", nil)
-	sign(parent, CFrame.new(Haven.ARMORY.x, 8, Haven.ARMORY.z - 2), "ARMORY", 10)
+	local pad = disc(
+		parent,
+		"Station",
+		Haven.ARMORY.x,
+		0.45,
+		Haven.ARMORY.z + 6,
+		12,
+		0.45,
+		Color3.fromRGB(212, 176, 96),
+		Enum.Material.Neon,
+		false
+	)
+	promptOn(pad, "Armory", "Weapons and armor", "armory", nil)
+	sign(parent, CFrame.new(Haven.ARMORY.x, 12, Haven.ARMORY.z), "Armory")
 end
 
 local function buildForge(parent: Instance)
@@ -483,7 +507,7 @@ local function buildForge(parent: Instance)
 	light.Brightness = 1.5
 	light.Parent = forge
 	promptOn(forge, "Forge", "Craft, upgrade, reroll", "craft", nil)
-	sign(model, CFrame.new(place.x, 8, place.z + 8), "FORGE", 12)
+	labelBehind(model, place.x, place.z, place.radius * 0.62, "Forge")
 end
 
 local function buildMarket(parent: Instance)
@@ -521,7 +545,7 @@ local function buildMarket(parent: Instance)
 	end
 	local shop = stationPad(model, place.x, place.z, Color3.fromRGB(255, 196, 80))
 	promptOn(shop, "Coming Soon", "Daily shop", "soon", place.message)
-	sign(model, CFrame.new(place.x, 8, place.z - place.radius + 6), "MARKET", 12)
+	labelBehind(model, place.x, place.z, place.radius * 0.62, "Market")
 end
 
 local function buildGuild(parent: Instance)
@@ -560,7 +584,7 @@ local function buildGuild(parent: Instance)
 	)
 	local closed = stationPad(model, place.x, place.z, Color3.fromRGB(180, 180, 190))
 	promptOn(closed, "Coming Soon", "Guild Hall", "soon", place.message)
-	sign(model, CFrame.new(place.x, 12, place.z + 12), "COMING SOON", 14)
+	labelBehind(model, place.x, place.z, place.radius * 0.62, "Guild Hall")
 end
 
 local function buildGarden(parent: Instance)
@@ -605,8 +629,9 @@ local function buildGarden(parent: Instance)
 		)
 	end
 	local pets = stationPad(model, place.x, place.z, Color3.fromRGB(255, 150, 196))
+	pets.Size = Vector3.new(12, 0.45, 12)
 	promptOn(pets, "Pets", "Companions", "pets", nil)
-	sign(model, CFrame.new(place.x, 8, place.z - 10), "PET GARDEN", 14)
+	labelBehind(model, place.x, place.z, place.radius * 0.62, "Pet Garden")
 end
 
 local function buildObservatory(parent: Instance)
@@ -635,18 +660,27 @@ local function buildObservatory(parent: Instance)
 	)
 	local closed = stationPad(model, place.x, place.z, Color3.fromRGB(120, 160, 220))
 	promptOn(closed, "Coming Soon", "Observatory", "soon", place.message)
-	sign(model, CFrame.new(place.x, 8, place.z - 8), "COMING SOON", 12)
+	labelBehind(model, place.x, place.z, place.radius * 0.62, "Observatory")
 end
 
 local function buildPortals(parent: Instance)
 	local shelf = Instance.new("Model")
 	shelf.Name = "RealmArches"
 	shelf.Parent = parent
+	local minX = math.huge
+	local maxX = -math.huge
+	local shelfZ = 0
+	for _, portal in ipairs(Haven.PORTALS) do
+		minX = math.min(minX, portal.x)
+		maxX = math.max(maxX, portal.x)
+		shelfZ = portal.z
+	end
+	local width = (maxX - minX) + 48
 	part(
 		shelf,
 		"Ground",
-		Vector3.new(390, 2, 52),
-		CFrame.new(0, -1, 228),
+		Vector3.new(width, 4, SHELF_DEPTH),
+		CFrame.new(0, -2, shelfZ),
 		GRASS,
 		Enum.Material.Grass,
 		true
@@ -654,8 +688,8 @@ local function buildPortals(parent: Instance)
 	part(
 		shelf,
 		"Rock",
-		Vector3.new(410, 10, 68),
-		CFrame.new(0, -8, 228),
+		Vector3.new(width + 16, 10, SHELF_DEPTH + 16),
+		CFrame.new(0, -9, shelfZ),
 		Color3.fromRGB(92, 86, 78),
 		Enum.Material.Rock,
 		true
@@ -718,7 +752,7 @@ local function buildPortals(parent: Instance)
 			)
 			promptOn(fill, "Coming Soon", portal.name, "soon", portal.message)
 		end
-		sign(arch, CFrame.new(portal.x, 23, portal.z), string.upper(portal.name), 16)
+		sign(arch, CFrame.new(portal.x, 24, portal.z), portal.name)
 	end
 end
 
@@ -750,12 +784,13 @@ local function buildBridges(parent: Instance)
 	local bridges = Instance.new("Folder")
 	bridges.Name = "Bridges"
 	bridges.Parent = parent
+	local shelfZ = Haven.PORTALS[1].z
+	link(bridges, 0, 0, Haven.PLAZA_RADIUS, forge.x, forge.z, forge.radius)
 	link(bridges, 0, 0, Haven.PLAZA_RADIUS, market.x, market.z, market.radius)
-	link(bridges, market.x, market.z, market.radius, forge.x, forge.z, forge.radius)
 	link(bridges, 0, 0, Haven.PLAZA_RADIUS, guild.x, guild.z, guild.radius)
 	link(bridges, 0, 0, Haven.PLAZA_RADIUS, garden.x, garden.z, garden.radius)
 	link(bridges, 0, 0, Haven.PLAZA_RADIUS, observatory.x, observatory.z, observatory.radius)
-	link(bridges, 0, 0, Haven.PLAZA_RADIUS, 0, 228, 26)
+	link(bridges, 0, 0, Haven.PLAZA_RADIUS, 0, shelfZ, SHELF_DEPTH / 2)
 end
 
 local function buildRocks(parent: Instance)
