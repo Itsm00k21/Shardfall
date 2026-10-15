@@ -92,11 +92,11 @@ A panel named **SHARDFALL** sits on the right.
 - **Armory** and **Pets** are separate roll areas. You start in Verdant Wilds (Ascension 0). Sunken Reach, Emberforge, Frostveil, and Void Rift show as locked until your ascension reaches them.
 - **Crack a Shard** spends one token in the selected area. The popup shows the rarity color (Secret is a moving rainbow), the rolled stats, and a quality such as `92% roll`.
 - Pity counts **up**: `Pity 18 / 50 toward Legendary`. The bar fills with that same number. At 50, the next roll is Legendary or better, then the counter resets. Armory and pets keep separate counters.
-- **View odds** opens the disclosure table for the realm you have selected. Those numbers are `RollMath.odds`. Pity is not inside the percentages. Every pool's rarity totals at 0 luck are Common 60%, Uncommon 25%, Rare 10%, Epic 4%, Legendary 0.80%, Mythic 0.18%, Secret 0.02%.
+- **Odds** (the word, not an icon) opens the disclosure for the realm you have selected, above the Prism buttons. Those numbers are `RollMath.odds`. They include Shard Luck and an active Luck Boost. Pity stays out of the percentages until the next roll is the guarantee, and then the list is only Legendary or better and still sums to 100%. Every pool's rarity totals at 0 luck are Common 60%, Uncommon 25%, Rare 10%, Epic 4%, Legendary 0.80%, Mythic 0.18%, Secret 0.02%.
 - A **Not saved** badge means this session is memory-only. Click it for one line about publishing, then click it again to hide that line.
 - Out of tokens, Crack dims and a line under the button says "Not enough tokens."
 - Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`, `Fern Stag  72%`). A starred item reads `Nightbriar ★2 46%`. The row under it lists the trait (`Bonus: Bonus Pet Damage 5.0%`). Common pets have zero trait slots, so that line stays `Bonus: None`. Equip and Drop use one id. When you own a second copy of the same item, **Feed** asks you to confirm, shows the feeder's quality and the star progress that feed will reach, then consumes the feeder. Five stars is the cap. Each star is +8% to the rolled stats. ★3 unlocks Starforged and ★5 unlocks Ascendant (placeholder perks). Armor equips into helm, chest, legs, or boots.
-- **Paid roll** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
+- **Crack (Shard Token)** spends an earned Shard Token. **Crack (Prism Token)**, **Buy Prism Tokens**, and **Buy Luck Boost** are the paid random items. They stay hidden until the server has a policy result, and they stay hidden with a region line when `ArePaidRandomItemsRestricted` is true. Prism cracks spend Prism Tokens. The Robux pack (100 Robux for 10 Prism Tokens) and the Luck Boost (+25 Shard Luck) are stubs and do not charge.
 - **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). **Auto Attack** starts on: the server swings at the nearest enemy inside your weapon's range, on that weapon's attack speed. Melee aims the arc at that enemy. Bows and staffs fire at it. Click the world, or press **Attack**, when you want to aim yourself. If nothing is in range the status line says "No target in range." Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. An equipped pet hits the nearest enemy on its own timer using Pet Damage. Bonus Pet Damage on the pet or the weapon multiplies those hits. There is no pet model yet; the gold or white number is the swing. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
 - The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got, then hides itself after a few seconds.
 - A cleared room counts down about 3 seconds (the status line and the dungeon row both show it) and then teleports you to the next room. **Next room** still skips the wait. **Rootvault Waves** is a second entry: one arena, bigger packs, more HP and damage each wave, a boss every 5 waves, and a payout when the wave dies. It stops when you fall.
@@ -203,9 +203,15 @@ Pets use the same roll. Every pet base lists Pet Damage and Pet HP. Common pets 
 
 Trait slots are shared: Rare and Epic roll 1, Legendary and Mythic roll 2, Secret rolls 3. Common and Uncommon roll none, pets included. Weapons and armor draw Lifesteal first. Pets draw the same four traits with Bonus Pet Damage first: Bonus Pet Damage, Lifesteal, Gold Find, Chain Lightning. Combat applies Pet Damage, Bonus Pet Damage, pet Lifesteal, and Gold Find. Chain Lightning is shown on the item and not simulated.
 
-### Paid rolls
+### Paid random items
 
-Roblox requires you to check `PolicyService:GetPolicyInfoForPlayerAsync` and refuse when `ArePaidRandomItemsRestricted` is true, **before** a paid random item can be bought. `RollService.rollPaid` does that check first. A missing or non-boolean flag fails closed. When the flag is false, the function still returns "not for sale" and does not roll. That stub is where a developer-product receipt should go later. Free cracks do not consult the policy, because they are not paid.
+Roblox's Paid Random Items policy covers anything bought with Robux, or with a currency bought with Robux. Shard Tokens are earned, so a Shard Token crack is not a paid random item. Prism Tokens are the Robux wallet. A Prism crack, a Prism pack, and the Luck Boost are paid random items.
+
+`PolicyCache` calls `PolicyService:GetPolicyInfoForPlayerAsync` when the player joins and keeps `ArePaidRandomItemsRestricted` and `IsPaidItemTradingAllowed`. A failed call or a missing flag fails closed: paid buttons stay hidden and the server rejects the remote. Restricted players still crack with Shard Tokens. There is no trade UI. `PaidRollPolicy.canTrade` is the check to use if trading is added later, and it fails closed when `IsPaidItemTradingAllowed` is not true.
+
+The **Odds** button sits above the Prism buttons. The list is every drop, as a percentage, and the chances sum to 100%. Luck, an active Luck Boost, and a pity roll that is about to fire all change that list. No outcome is empty. The Robux buttons state the number before you press them: 100 Robux for 10 Prism Tokens, and +25 Shard Luck for the boost. Both purchases return "not for sale" after the policy check. That is where a developer-product receipt should go later.
+
+To test a restricted player without living in a regulated region, use Studio's **Player Emulator** (Test menu) and turn on `ArePaidRandomItemsRestricted`. You can also open **Dev** and press **Simulate restricted region**, which forces the same path in Studio only. `IsPaidItemTradingAllowed` is the other emulator toggle. When you publish, the **Maturity & Compliance Questionnaire** has to say this experience offers paid random items. Earned Shard Token cracks do not.
 
 `GetOdds` returns the same table `RollMath.odds` builds. Keep using that for anything a player can pay for. Do not hand-write a second percentage list.
 
@@ -225,7 +231,7 @@ The server that loads a player writes its job id into `Lock`. Another server see
 
 Those rules live in `SessionLock.luau` as plain functions, which is what the tests call. `DataService` is the only module that talks to `DataStoreService`. When you outgrow this (gifting, instant handoff between servers), replace the inside of `DataService` with [ProfileStore](https://madstudioroblox.github.io/ProfileStore/). ProfileStore is not on the official Wally index; unofficial copies are not worth the risk. The rest of the game already goes through `mutate`, `snapshot`, and `release`.
 
-Profile fields in version 4:
+Profile fields in version 5:
 
 | Field | Meaning |
 | --- | --- |
@@ -233,8 +239,10 @@ Profile fields in version 4:
 | `level`, `xp` | XP to next level is `100 * level`. A Rootvault clear grants XP and can level you up. |
 | `ascension` | Unlocks roll pools and, later, dungeons. 0 is Verdant Wilds. 4 is Void Rift. |
 | `gold` | Soft currency. A Rootvault clear pays gold. Gold Find on the equipped weapon, armor, or pet adds a fraction. |
-| `shardTokens` | Spent by free cracks. New profiles start at 25. |
-| `shardLuck` | Luck stat passed into every roll. |
+| `shardTokens` | Earned wallet. Spent by Shard Token cracks. New profiles start at 25. Not bought with Robux. |
+| `prismTokens` | Robux wallet. Spent by Prism Token cracks. New and migrated profiles start at 0. |
+| `shardLuck` | Earned luck stat passed into every roll. |
+| `luckBoost` | Purchased luck added on top of `shardLuck`. 0 until a Luck Boost is applied. The stub does not set this; the Studio dev button does, so you can see the odds move. |
 | `inventory` | Weapons and armor, keyed by unique id. Each gear piece stores `stats`, `quality`, `stars`, and `starProgress`. |
 | `pets` | Pets, keyed by unique id. They use the same star feed as gear. |
 | `pity` | Per-pool `{ rollsSinceLegendary, totalRolls }`. |
@@ -286,6 +294,8 @@ src/ReplicatedStorage/Shared/
     Pools.luau                Per-realm drop tables (placeholder odds)
     Areas.luau                Armory and Pets, the two roll areas
     RollMath.luau             Weights, pity, stats, disclosed odds
+    Currencies.luau           Shard Tokens and Prism Tokens, separate wallets
+    PaidRollPolicy.luau       ArePaidRandomItemsRestricted and trading flag
     CombatMath.luau           Damage, crits, defense, melee and projectile reach
     Materials.luau            Stackable dungeon materials and the tonic
     Recipes.luau              Crafting costs and results
@@ -294,12 +304,12 @@ src/ReplicatedStorage/Shared/
     InventoryStacks.luau      Display-only stacks and the loadout line
     Schema.luau               Profile shape, migrations, snapshots
     SessionLock.luau          Lock / save decisions, no DataStore calls
-    PaidRollPolicy.luau       Interprets ArePaidRandomItemsRestricted
 src/ServerScriptService/ShardfallServer/
     init.server.luau          Boots remotes, then profiles
     DataService.luau          Load, autosave, mutate, release
     StoreAdapter.luau         DataStore, or memory when it is unavailable
-    RollService.luau          Free rolls and the paid stub
+    RollService.luau          Shard cracks, Prism cracks, purchase stubs
+    PolicyCache.luau          Join-time PolicyService cache, fail closed
     InventoryService.luau     Add (server-only), equip, unequip, remove
     CombatService.luau        Swings, projectiles, player HP
     DungeonService.luau       Builds Rootvault and runs the enemy loop
@@ -317,7 +327,7 @@ tests/                        Lune specs and the tiny runner
 
 - Do not add a remote that grants items. `InventoryService.add` is server-only on purpose. A crack goes through `RollService`, which spends a token in the same update as the insert.
 - Check arguments and the rate limit in `Remotes.luau`. Services still check ownership and currency, because a remote is not a trust boundary.
-- If a roll can cost Robux, it has to go through `rollPaid` after `PaidRollPolicy.evaluate` returns `allowed`, and the odds you show have to be `RollMath.odds` for that player's luck. Set `placeholder = false` on the pool only when the numbers are the real ones.
+- If a roll can cost Robux or Prism Tokens, it has to go through `PolicyCache.allowPaid` first, and the odds you show have to be `RollMath.odds` for that player's luck, boost, and pity. Set `placeholder = false` on the pool only when the numbers are the real ones.
 - The dev grant remote checks `RunService:IsStudio()` on the server. Hiding the button on the client is not the security check.
 - Roblox kicks a player who sends no input for about 20 minutes. `Player.Idled` in `DungeonService.start` is the hook: after 15 minutes of idle it warns once. That is not a reward cap. If AFK payouts need a cutoff later, stop Auto Farm grants in that callback before the engine kick. Do not trust the client to report idle time.
 
@@ -346,7 +356,7 @@ Point `default.project.json` at the folder Wally created (`Packages` for shared,
 - A floating pet model, once the timer companion is enough to playtest.
 - Build Tidecrypt by setting `implemented = true` and filling its rooms in `Dungeons.luau`. The ascension gate is already there.
 - Replace the dev token button with a real source (a daily, a quest, a drop).
-- When you sell a shard: a developer product, a receipt handler, and `rollPaid` after the policy check. Keep the disclosed odds exact.
+- When you sell Prism Tokens or the Luck Boost: a developer product and a receipt handler inside the stubs, after `PolicyCache.allowPaid`. Keep the disclosed odds exact. Mark paid random items on the Maturity & Compliance Questionnaire.
 - Swap `DataService`'s storage for ProfileStore when you need cross-server gifting or faster lock handoff.
 - Pets that follow the character, once the test panel gets in the way.
 

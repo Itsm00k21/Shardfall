@@ -12,6 +12,7 @@
 local CombatService = require(script.CombatService)
 local DataService = require(script.DataService)
 local DungeonService = require(script.DungeonService)
+local PolicyCache = require(script.PolicyCache)
 local Remotes = require(script.Remotes)
 
 DataService.onChanged(function(player, snapshot, saving)
@@ -20,6 +21,10 @@ DataService.onChanged(function(player, snapshot, saving)
 end)
 
 Remotes.bind()
+PolicyCache.onChanged(function(player, policy)
+	Remotes.pushPolicy(player, policy)
+end)
+PolicyCache.start()
 CombatService.bindHooks({
 	enemies = function(player)
 		return DungeonService.enemyViews(player)

@@ -4,8 +4,8 @@
 	Test harness UI. Not the real game HUD.
 
 	The panel stays short on purpose: stats, a pity line that counts up, one
-	Crack button, and the inventory. Odds are behind View odds so the
-	disclosure stays one click away without covering the panel. Saving is a
+	Shard Token crack, and the inventory. Odds is a labeled button above the
+	Prism Token buttons. Saving is a
 	badge, not a paragraph. Studio dev grants sit in a collapsed section.
 
 	Armory and Pets are the roll areas. Each one lists realms, and a realm
@@ -23,6 +23,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(Shared:WaitForChild("Areas"))
+local Currencies = require(Shared:WaitForChild("Currencies"))
 local Dungeons = require(Shared:WaitForChild("Dungeons"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local Materials = require(Shared:WaitForChild("Materials"))
@@ -39,6 +40,8 @@ export type Callbacks = {
 	showDev: boolean,
 	onCrack: () -> (),
 	onPaid: () -> (),
+	onBuyPrism: () -> (),
+	onBuyBoost: () -> (),
 	onEquip: (uid: string) -> (),
 	onUnequip: (uid: string) -> (),
 	onRemove: (uid: string) -> (),
@@ -587,14 +590,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 6),
 	}, actions)
-	local viewOdds = makeButton(actions, "View odds", COLORS.buttonDim, 1, 30)
-	viewOdds.Size = UDim2.new(0.5, -3, 1, 0)
+	local viewOdds = makeButton(actions, "Odds", COLORS.button, 1, 30)
+	viewOdds.Size = UDim2.fromScale(1, 1)
 	viewOdds.TextSize = 14
-	viewOdds.Font = Enum.Font.BuilderSansMedium
-	local paid = makeButton(actions, "Paid roll", COLORS.buttonDim, 2, 30)
-	paid.Size = UDim2.new(0.5, -3, 1, 0)
-	paid.TextSize = 14
-	paid.Font = Enum.Font.BuilderSansMedium
+	viewOdds.Font = Enum.Font.BuilderSansBold
 
 	local oddsWrap = new("Frame", {
 		Name = "Odds",
@@ -627,12 +626,78 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local function setOddsOpen(open: boolean)
 		oddsOpen = open
 		oddsWrap.Visible = open
-		viewOdds.Text = if open then "Hide odds" else "View odds"
+		viewOdds.Text = if open then "Hide odds" else "Odds"
 	end
 	viewOdds.MouseButton1Click:Connect(function()
 		setOddsOpen(not oddsOpen)
 	end)
-	paid.MouseButton1Click:Connect(callbacks.onPaid)
+
+	local paidFrame = new("Frame", {
+		Name = "Paid",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 15,
+	}, panel) :: Frame
+	list(paidFrame, 6)
+	local paidNote = new("TextLabel", {
+		Name = "PaidNote",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 28),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.BuilderSans,
+		TextSize = 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.muted,
+		Text = "Shard Tokens are earned. Prism Tokens are bought with Robux.",
+		LayoutOrder = 1,
+	}, paidFrame) :: TextLabel
+	local regionLabel = new("TextLabel", {
+		Name = "Region",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 28),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.BuilderSansMedium,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.danger,
+		Text = "Checking purchase policy...",
+		Visible = true,
+		LayoutOrder = 2,
+	}, paidFrame) :: TextLabel
+	local prismButton = makeButton(paidFrame, "Crack (Prism Token)", COLORS.gold, 3, 32)
+	prismButton.TextSize = 14
+	prismButton.TextColor3 = COLORS.ink
+	prismButton.Visible = false
+	local buyPrism = makeButton(paidFrame, "Buy Prism Tokens", COLORS.buttonDim, 4, 30)
+	buyPrism.TextSize = 13
+	buyPrism.Visible = false
+	local boostLabel = new("TextLabel", {
+		Name = "BoostPitch",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 32),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.BuilderSans,
+		TextSize = 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.gold,
+		Text = "",
+		Visible = false,
+		LayoutOrder = 5,
+	}, paidFrame) :: TextLabel
+	local buyBoost = makeButton(paidFrame, "Buy Luck Boost", COLORS.buttonDim, 6, 30)
+	buyBoost.TextSize = 13
+	buyBoost.Visible = false
+	prismButton.MouseButton1Click:Connect(callbacks.onPaid)
+	buyPrism.MouseButton1Click:Connect(callbacks.onBuyPrism)
+	buyBoost.MouseButton1Click:Connect(callbacks.onBuyBoost)
 
 	local loadout = new("TextLabel", {
 		BackgroundColor3 = COLORS.panel,
@@ -646,7 +711,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextWrapped = true,
 		TextColor3 = COLORS.text,
 		Text = "Weapon   None\nPet   None\nArmor   None\nBonus   None",
-		LayoutOrder = 15,
+		LayoutOrder = 16,
 	}, panel) :: TextLabel
 	corner(loadout, 8)
 	padding(loadout, 8)
@@ -660,7 +725,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.text,
 		Text = "Inventory",
-		LayoutOrder = 16,
+		LayoutOrder = 17,
 	}, panel)
 
 	local inventory = new("Frame", {
@@ -669,12 +734,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 17,
+		LayoutOrder = 18,
 	}, panel) :: Frame
 	list(inventory, 6)
 
 	local devToggle: TextButton? = nil
 	local devBody: Frame? = nil
+	local restrictButton: TextButton? = nil
 	if callbacks.showDev then
 		devToggle = makeButton(panel, "Dev", COLORS.buttonDim, 19, 28)
 		devToggle.TextSize = 13
@@ -694,7 +760,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			LayoutOrder = 20,
 		}, panel) :: Frame
 		list(devBody, 6)
-		local grantTokens = makeButton(devBody, "+5 tokens", COLORS.buttonDim, 1, 30)
+		local grantTokens = makeButton(devBody, "+5 Shard Tokens", COLORS.buttonDim, 1, 30)
 		grantTokens.TextSize = 14
 		grantTokens.MouseButton1Click:Connect(function()
 			callbacks.onDev("tokens")
@@ -714,7 +780,24 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		grantMaterials.MouseButton1Click:Connect(function()
 			callbacks.onDev("materials")
 		end)
-		local skipBoss = makeButton(devBody, "Skip to Rootvault boss", COLORS.buttonDim, 5, 30)
+		local grantPrisms = makeButton(devBody, "+5 Prism Tokens", COLORS.buttonDim, 5, 30)
+		grantPrisms.TextSize = 14
+		grantPrisms.MouseButton1Click:Connect(function()
+			callbacks.onDev("prisms")
+		end)
+		local grantBoost = makeButton(devBody, "Apply +25 Luck Boost", COLORS.buttonDim, 6, 30)
+		grantBoost.TextSize = 14
+		grantBoost.MouseButton1Click:Connect(function()
+			callbacks.onDev("boost")
+		end)
+		local regionToggle =
+			makeButton(devBody, "Simulate restricted region", COLORS.buttonDim, 7, 30)
+		restrictButton = regionToggle
+		regionToggle.TextSize = 14
+		regionToggle.MouseButton1Click:Connect(function()
+			callbacks.onDev("restrict")
+		end)
+		local skipBoss = makeButton(devBody, "Skip to Rootvault boss", COLORS.buttonDim, 8, 30)
 		skipBoss.TextSize = 14
 		skipBoss.MouseButton1Click:Connect(function()
 			callbacks.onDungeon("skip")
@@ -918,7 +1001,15 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local busy = false
 	local tokens = 0
+	local prismTokens = 0
+	local luckBoost = 0
 	local profileLoaded = false
+	local policyState = {
+		ready = false,
+		paidRolls = false,
+		simulated = false,
+		message = "Checking purchase policy...",
+	}
 	local controller = {}
 
 	local function paintTabs()
@@ -939,6 +1030,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		realmNext.Visible = shards and realmNext.Text ~= ""
 		crack.Visible = shards
 		actions.Visible = shards
+		paidFrame.Visible = shards
 		oddsWrap.Visible = shards and oddsOpen
 		loadout.Visible = shards
 		inventoryHeader.Visible = shards
@@ -956,16 +1048,49 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		applyPage()
 	end)
 
+	local function paintPaid()
+		local showPaid = policyState.paidRolls == true
+		regionLabel.Visible = not showPaid
+		regionLabel.Text = if type(policyState.message) == "string"
+				and policyState.message ~= ""
+			then policyState.message
+			else "Paid random items are unavailable in your region."
+		prismButton.Visible = showPaid
+		buyPrism.Visible = showPaid
+		boostLabel.Visible = showPaid
+		buyBoost.Visible = showPaid
+		paidNote.Text = "Shard Tokens are earned. Prism Tokens are bought with Robux."
+		boostLabel.Text = Currencies.boostPitch(luckBoost)
+		buyPrism.Text = string.format(
+			"Buy %d Prism · %d Robux",
+			Currencies.PRISM_PACK_TOKENS,
+			Currencies.PRISM_PACK_ROBUX
+		)
+		local prismReady = showPaid and prismTokens > 0 and not busy
+		prismButton.Active = prismReady
+		prismButton.AutoButtonColor = prismReady
+		prismButton.Text = if busy then "Cracking..." else "Crack (Prism Token)"
+		prismButton.BackgroundColor3 = if prismReady then COLORS.gold else COLORS.buttonDim
+		prismButton.TextColor3 = if prismReady then COLORS.ink else COLORS.muted
+		if restrictButton ~= nil then
+			restrictButton.Text = if policyState.simulated == true
+				then "Clear restricted region"
+				else "Simulate restricted region"
+		end
+	end
+
 	local function paintCrack()
 		local ready = tokens > 0 and not busy
 		crack.Active = ready
 		crack.AutoButtonColor = ready
-		crack.Text = if busy then "Cracking..." else "Crack a Shard"
+		crack.Text = if busy then "Cracking..." else "Crack (Shard Token)"
 		crack.BackgroundColor3 = if ready then COLORS.gold else COLORS.buttonDim
 		crack.TextColor3 = if ready then COLORS.ink else COLORS.muted
 		if page == "shards" then
+			tokenHint.Text = "Not enough Shard Tokens."
 			tokenHint.Visible = profileLoaded and tokens < 1 and not busy
 		end
+		paintPaid()
 	end
 
 	crack.MouseButton1Click:Connect(function()
@@ -1554,11 +1679,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 		end
 		stats.Size = UDim2.new(1, 0, 0, if voucherNote == "" then 36 else 52)
+		local luckText = tostring(profile.shardLuck or 0)
+		if (profile.luckBoost or 0) > 0 then
+			luckText ..= string.format(" +%d", profile.luckBoost)
+		end
 		stats.Text = string.format(
-			"Lv %d    ·    %d tokens    ·    Luck %d\n%d/%d XP    ·    %d gold    ·    Asc %d%s",
+			"Lv %d    ·    %d Shard    ·    %d Prism    ·    Luck %s\n%d/%d XP    ·    %d gold    ·    Asc %d%s",
 			profile.level or 1,
 			profile.shardTokens or 0,
-			profile.shardLuck or 0,
+			profile.prismTokens or 0,
+			luckText,
 			profile.xp or 0,
 			profile.xpToNext or 100,
 			profile.gold or 0,
@@ -1566,6 +1696,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			voucherNote
 		)
 		tokens = profile.shardTokens or 0
+		prismTokens = profile.prismTokens or 0
+		luckBoost = profile.luckBoost or 0
 		paintCrack()
 		renderPity(profile)
 		renderCraft(profile)
@@ -1579,6 +1711,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		)
 		paintRealms()
 		renderInventory(profile)
+	end
+
+	function controller.setPolicy(policy: any)
+		if type(policy) ~= "table" then
+			return
+		end
+		policyState = policy
+		paintPaid()
 	end
 
 	function controller.setOdds(odds: any)

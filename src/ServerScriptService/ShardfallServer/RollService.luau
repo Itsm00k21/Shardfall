@@ -7,22 +7,22 @@
 	sends a pool id. The item, the pity update, and the token spend happen
 	inside DataService.mutate, which rolls back if anything fails.
 
-	rollPaid is a stub. It asks PolicyService whether paid random items are
-	restricted for this player, runs that result through PaidRollPolicy, and
-	then stops. It does not charge Robux and it does not roll. Wire a real
-	developer product here later, after evaluate() returns ok.
+	rollPaid spends one Prism Token after the cached policy check. It does
+	not charge Robux. buyPrismPack and buyLuckBoost are the Robux stubs:
+	they show the numeric offer, then refuse. Wire developer products there
+	later, and only after PolicyCache.allowPaid returns true.
 ]]
 
 local HttpService = game:GetService("HttpService")
-local PolicyService = game:GetService("PolicyService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local PaidRollPolicy = require(ReplicatedStorage.Shared.PaidRollPolicy)
+local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local DataService = require(script.Parent.DataService)
+local PolicyCache = require(script.Parent.PolicyCache)
 
 local RollService = {}
 
@@ -41,10 +41,20 @@ local function poolFromClient(poolId: any)
 	return pool
 end
 
-function RollService.rollFree(player: Player, poolId: any)
+local function crack(player: Player, poolId: any, currency: string)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")
+	end
+	if currency == Currencies.PRISM then
+		local allowed, reason, code = PolicyCache.allowPaid(player)
+		if not allowed then
+			return {
+				ok = false,
+				code = code,
+				error = reason,
+			}
+		end
 	end
 
 	local captured: any = nil
@@ -54,31 +64,34 @@ function RollService.rollFree(player: Player, poolId: any)
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
 		end
 		-- A dungeon voucher cracks that area once and does not spend a token.
-		local area = (pool :: any).area
+		-- It is an earned clear, so it never pays for a Prism roll.
 		local usedVoucher = false
-		if type(area) == "string" and type(data.vouchers) == "table" then
-			local stack = data.vouchers[area]
-			if type(stack) == "number" and stack >= 1 then
-				data.vouchers[area] = stack - 1
-				usedVoucher = true
+		if currency == Currencies.SHARD then
+			local area = (pool :: any).area
+			if type(area) == "string" and type(data.vouchers) == "table" then
+				local stack = data.vouchers[area]
+				if type(stack) == "number" and stack >= 1 then
+					data.vouchers[area] = stack - 1
+					usedVoucher = true
+				end
 			end
 		end
-		if not usedVoucher and data.shardTokens < 1 then
-			return "You need a shard token to crack a shard."
+		if not usedVoucher then
+			local spent, spendError = Currencies.take(data, currency)
+			if not spent then
+				return spendError or "You cannot pay for that crack."
+			end
 		end
 		if Schema.countItems(data) >= Schema.INVENTORY_CAP then
 			return "Inventory is full."
 		end
 		local pity = Schema.pityBucket(data, pool.id)
 		local result = RollMath.roll(pool, pity, {
-			luck = data.shardLuck,
+			luck = Currencies.effectiveLuck(data.shardLuck, data.luckBoost),
 			-- GenerateGUID does not need HttpService.HttpEnabled.
 			uid = HttpService:GenerateGUID(false),
 			now = os.time(),
 		}, RollMath.defaultRng())
-		if not usedVoucher then
-			data.shardTokens -= 1
-		end
 		Schema.insertItem(data, result.item)
 		captured = result
 		pityAfter = {
@@ -96,41 +109,42 @@ function RollService.rollFree(player: Player, poolId: any)
 		item = captured.item,
 		pityTriggered = captured.pityTriggered,
 		pity = pityAfter,
+		currency = currency,
 	}
 end
 
+function RollService.rollFree(player: Player, poolId: any)
+	return crack(player, poolId, Currencies.SHARD)
+end
+
 function RollService.rollPaid(player: Player, poolId: any)
-	local pool = poolFromClient(poolId)
-	if pool == nil then
-		return reject("Unknown shard.")
-	end
+	return crack(player, poolId, Currencies.PRISM)
+end
 
-	local profile = DataService.get(player)
-	if profile == nil or not Pools.isUnlocked(pool, profile.ascension) then
-		return reject(string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name))
-	end
-
-	-- Policy first, always. A failed lookup does not become "allowed".
-	-- `pool` is resolved now so a future receipt handler rolls the shard the
-	-- player actually asked for. The stub below does not roll it.
-	local lookupOk, policyInfo = pcall(function()
-		return PolicyService:GetPolicyInfoForPlayerAsync(player)
-	end)
-	local decision = PaidRollPolicy.evaluate(if lookupOk then policyInfo else nil)
-	if not decision.ok then
+local function paidStub(player: Player, pitch: string)
+	local allowed, reason, code = PolicyCache.allowPaid(player)
+	if not allowed then
 		return {
 			ok = false,
-			code = decision.code,
-			error = decision.error,
+			code = code,
+			error = reason,
 		}
 	end
-
-	-- Stub: do not prompt a purchase, do not spend tokens, do not roll.
 	return {
 		ok = false,
 		code = "stub",
-		error = "Paid shards are not for sale yet.",
+		error = pitch,
 	}
+end
+
+function RollService.buyPrismPack(player: Player)
+	return paidStub(player, Currencies.packPitch())
+end
+
+function RollService.buyLuckBoost(player: Player)
+	local profile = DataService.get(player)
+	local active = if profile ~= nil then profile.luckBoost else 0
+	return paidStub(player, Currencies.boostPitch(active))
 end
 
 function RollService.devGrant(player: Player, kind: any)
@@ -146,6 +160,34 @@ function RollService.devGrant(player: Player, kind: any)
 			return reject(err or "Could not grant tokens.")
 		end
 		return { ok = true }
+	end
+	if kind == "prisms" then
+		local ok, err = DataService.mutate(player, function(data)
+			data.prismTokens = math.min(9999, data.prismTokens + 5)
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not grant Prism Tokens.")
+		end
+		return { ok = true }
+	end
+	if kind == "boost" then
+		local ok, err = DataService.mutate(player, function(data)
+			data.luckBoost = Currencies.LUCK_BOOST
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not grant a Luck Boost.")
+		end
+		return { ok = true }
+	end
+	if kind == "restrict" then
+		local view = PolicyCache.public(player)
+		local nextRestricted = view.simulated ~= true
+		if not PolicyCache.setSimulatedRestriction(player, nextRestricted) then
+			return reject("Dev tools only work in Studio.")
+		end
+		return { ok = true, simulated = nextRestricted }
 	end
 	if kind == "luck" then
 		local ok, err = DataService.mutate(player, function(data)

@@ -27,6 +27,8 @@ type Bucket = {
 local RULES: { [string]: Rule } = {
 	RollShard = { capacity = 3, perSecond = 1 },
 	RollPaid = { capacity = 2, perSecond = 0.5 },
+	BuyPrism = { capacity = 2, perSecond = 0.5 },
+	BuyBoost = { capacity = 2, perSecond = 0.5 },
 	EquipItem = { capacity = 6, perSecond = 3 },
 	UnequipItem = { capacity = 6, perSecond = 3 },
 	RemoveItem = { capacity = 4, perSecond = 2 },

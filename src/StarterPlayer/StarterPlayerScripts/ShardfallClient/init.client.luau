@@ -26,6 +26,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
+local Currencies = require(shared:WaitForChild("Currencies"))
 local areaList = Areas.all()
 local firstArea = areaList[1]
 local firstPools = if firstArea ~= nil then Areas.pools(firstArea.id) else {}
@@ -38,7 +39,7 @@ if remotes == nil then
 	return
 end
 
-local shownLuck: number? = nil
+local shownOddsKey: string? = nil
 local ui
 
 local function invoke(name: string, ...: any)
@@ -81,20 +82,44 @@ local function refreshOdds()
 	ui.setOdds((result :: any).odds)
 end
 
+local function oddsKey(profile: any): string
+	local since = 0
+	if type(profile.pity) == "table" then
+		local bucket = profile.pity[selectedPoolId]
+		if type(bucket) == "table" then
+			since = bucket.rollsSinceLegendary or 0
+		end
+	end
+	return string.format(
+		"%s:%s:%s:%s",
+		selectedPoolId,
+		tostring(profile.shardLuck or 0),
+		tostring(profile.luckBoost or 0),
+		tostring(since)
+	)
+end
+
 local function applyProfile(profile: any, saving: any)
 	if type(profile) ~= "table" then
 		return
 	end
 	ui.setProfile(profile, saving == true)
-	if profile.shardLuck ~= shownLuck then
-		shownLuck = profile.shardLuck
+	local key = oddsKey(profile)
+	if key ~= shownOddsKey then
+		shownOddsKey = key
 		refreshOdds()
 	end
 end
 
 local function applyResult(result: any)
-	if type(result) == "table" and type(result.profile) == "table" then
+	if type(result) ~= "table" then
+		return
+	end
+	if type(result.profile) == "table" then
 		applyProfile(result.profile, result.saving)
+	end
+	if type(result.policy) == "table" then
+		ui.setPolicy(result.policy)
 	end
 end
 
@@ -121,15 +146,48 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onPaid = function()
-		ui.setStatus("Checking paid-roll policy...", "info")
+		ui.setStatus("Cracking with a Prism Token...", "info")
 		task.spawn(function()
 			local ok, result = pcall(function()
 				return invoke("RollPaid", selectedPoolId)
 			end)
-			local message = remoteError(ok, result, "Paid roll blocked.")
-			if type(result) == "table" and type(result.code) == "string" and message ~= nil then
-				message ..= " (" .. result.code .. ")"
+			local message = remoteError(ok, result, "Prism crack blocked.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			else
+				applyResult(result)
+				ui.showRoll(result)
+				local item = (result :: any).item
+				local name = if type(item) == "table" then item.name else "a drop"
+				ui.setStatus("Received " .. tostring(name) .. " for a Prism Token.", "ok")
 			end
+			if ok and type(result) == "table" and message ~= nil then
+				applyResult(result)
+			end
+		end)
+	end,
+	onBuyPrism = function()
+		ui.setStatus(Currencies.packPitch(), "info")
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyPrism")
+			end)
+			local message = remoteError(ok, result, "Could not buy Prism Tokens.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			end
+			if ok and type(result) == "table" then
+				applyResult(result)
+			end
+		end)
+	end,
+	onBuyBoost = function()
+		ui.setStatus(Currencies.boostPitch(0), "info")
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyBoost")
+			end)
+			local message = remoteError(ok, result, "Could not buy a Luck Boost.")
 			if message ~= nil then
 				ui.setStatus(message, "error")
 			end
@@ -328,6 +386,13 @@ local profileEvent = (remotes :: Instance):WaitForChild("ProfileUpdated")
 if profileEvent:IsA("RemoteEvent") then
 	profileEvent.OnClientEvent:Connect(function(profile, saving)
 		applyProfile(profile, saving)
+	end)
+end
+
+local policyEvent = (remotes :: Instance):WaitForChild("PolicyUpdated")
+if policyEvent:IsA("RemoteEvent") then
+	policyEvent.OnClientEvent:Connect(function(policy)
+		ui.setPolicy(policy)
 	end)
 end
 
