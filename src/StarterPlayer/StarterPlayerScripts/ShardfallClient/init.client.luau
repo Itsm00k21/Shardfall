@@ -22,6 +22,7 @@ local RunService = game:GetService("RunService")
 local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
+local TravelHud = require(script.TravelHud)
 local Ui = require(script.Ui)
 local VerdantLod = require(script.VerdantLod)
 
@@ -45,6 +46,7 @@ end
 local shownOddsKey: string? = nil
 local ui
 local inventory
+local travel
 
 local function invoke(name: string, ...: any)
 	local remote = (remotes :: Instance):WaitForChild(name)
@@ -110,6 +112,9 @@ local function applyProfile(profile: any, saving: any)
 	ui.setProfile(profile, saving == true)
 	if inventory ~= nil then
 		inventory.setProfile(profile)
+	end
+	if travel ~= nil then
+		travel.setProfile(profile)
 	end
 	local key = oddsKey(profile)
 	if key ~= shownOddsKey then
@@ -512,6 +517,36 @@ inventory = InventoryHud.start(playerGui, {
 	end,
 	onStatus = function(text: string, kind: string)
 		ui.setStatus(text, kind)
+	end,
+})
+
+travel = TravelHud.start(playerGui, {
+	onTravel = function(destinationId: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("Travel", destinationId)
+			end)
+			local message = remoteError(ok, result, "Could not travel.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Traveled.", "ok")
+		end)
+	end,
+	onBuyPass = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyTravelPass")
+			end)
+			local message = remoteError(ok, result, "Could not buy a travel pass.")
+			if message ~= nil then
+				ui.setStatus(message, "info")
+				return
+			end
+			applyResult(result)
+		end)
 	end,
 })
 

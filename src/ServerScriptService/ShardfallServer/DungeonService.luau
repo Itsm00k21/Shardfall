@@ -1621,6 +1621,8 @@ function DungeonService.start()
 	end
 	buildWorld()
 	bindTouches()
+	local TravelService = require(script.Parent.TravelService)
+	TravelService.bind()
 	HavenBuilder.bindRootvault(function(player)
 		if not debounce(player) then
 			return

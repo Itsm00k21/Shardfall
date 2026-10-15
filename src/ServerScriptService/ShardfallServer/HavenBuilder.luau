@@ -24,11 +24,14 @@ local RunService = game:GetService("RunService")
 
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
+local HavenLife = require(ReplicatedStorage.Shared.HavenLife)
+local Travel = require(ReplicatedStorage.Shared.Travel)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 
 local HavenBuilder = {}
 
 local orbitConnection: RBXScriptConnection? = nil
+local lifeConnection: RBXScriptConnection? = nil
 
 local function rgb(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
@@ -479,8 +482,8 @@ local function buildCrystal(parent: Instance)
 	local crystal = part(
 		parent,
 		"LumenHeart",
-		Vector3.new(6, 24, 6),
-		CFrame.new(0, 14 - SEAM, 0),
+		Vector3.new(8, 42, 8),
+		CFrame.new(0, 24 - SEAM, 0),
 		Color3.fromRGB(236, 220, 255),
 		Enum.Material.Neon,
 		true
@@ -488,20 +491,44 @@ local function buildCrystal(parent: Instance)
 	part(
 		parent,
 		"Crack",
-		Vector3.new(1.4, 16, 1.4),
-		CFrame.new(1.2, 13, 0.4),
+		Vector3.new(1.6, 28, 1.6),
+		CFrame.new(1.4, 22, 0.6),
 		Color3.fromRGB(210, 236, 255),
 		Enum.Material.Neon,
 		false
 	)
+	local beamColors = {
+		Color3.fromRGB(230, 210, 255),
+		Color3.fromRGB(186, 140, 255),
+		Color3.fromRGB(255, 228, 196),
+		Color3.fromRGB(160, 120, 240),
+	}
+	for index, beamColor in ipairs(beamColors) do
+		local yaw = (index - 1) * (math.pi / 2)
+		local height = 36
+		local cf = CFrame.new(0, 10, 0)
+			* CFrame.Angles(0, yaw, 0)
+			* CFrame.Angles(math.rad(22), 0, 0)
+			* CFrame.new(0, height / 2, 0)
+		local beam = part(
+			parent,
+			"LightBeam",
+			Vector3.new(1.1, height, 1.1),
+			cf,
+			beamColor,
+			Enum.Material.Neon,
+			false
+		)
+		beam.Transparency = 0.35
+	end
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(186, 140, 255)
-	light.Range = 48
-	light.Brightness = 2
+	light.Range = 64
+	light.Brightness = 2.4
 	light.Parent = crystal
 	local billboard = Instance.new("BillboardGui")
 	billboard.Size = UDim2.fromOffset(140, 28)
-	billboard.StudsOffset = Vector3.new(0, 16, 0)
+	billboard.StudsOffset = Vector3.new(0, 26, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = crystal
 	local label = Instance.new("TextLabel")
@@ -525,7 +552,7 @@ local function buildCrystal(parent: Instance)
 		local shard = part(
 			shards,
 			"OrbitShard",
-			Vector3.new(2.2, 6, 2.2),
+			Vector3.new(3.4, 14, 3.4),
 			CFrame.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
 				* CFrame.Angles(0, -angle, math.rad(18)),
 			Color3.fromRGB(186, 130, 255),
@@ -644,7 +671,7 @@ local function buildForge(parent: Instance)
 		true
 	)
 	for index, offset in ipairs({ -8, 8 }) do
-		part(
+		local chimney = part(
 			model,
 			"Chimney",
 			Vector3.new(4, 10, 4),
@@ -653,8 +680,16 @@ local function buildForge(parent: Instance)
 			Enum.Material.Slate,
 			true,
 			true
-		).Name = "Chimney"
-			.. tostring(index)
+		)
+		chimney.Name = "Chimney" .. tostring(index)
+		local embers = Instance.new("ParticleEmitter")
+		embers.Name = "embers"
+		embers.Rate = 7
+		embers.LightEmission = 0.9
+		embers.Lifetime = NumberRange.new(0.8, 1.6)
+		embers.Speed = NumberRange.new(2, 5)
+		embers.Color = ColorSequence.new(Color3.fromRGB(255, 140, 48))
+		embers.Parent = chimney
 	end
 	local forge = stationPad(model, place.x, place.z, Color3.fromRGB(255, 120, 36))
 	local light = Instance.new("PointLight")
@@ -1047,11 +1082,16 @@ local function dressHaven(parent: Instance)
 		piece.Parent = foliage
 		if desc.light then
 			local light = Instance.new("PointLight")
+			light.Name = "PointLight"
 			light.Color = piece.Color
 			light.Brightness = 1.2
 			light.Range = 10
 			light.Shadows = false
+			light.Enabled = piece.Name ~= "Lantern"
 			light.Parent = piece
+			if piece.Name == "Lantern" then
+				piece:SetAttribute("ShardfallLantern", true)
+			end
 		end
 		if desc.particle ~= nil then
 			local emitter = Instance.new("ParticleEmitter")
@@ -1061,6 +1101,312 @@ local function dressHaven(parent: Instance)
 			emitter.Parent = piece
 		end
 	end
+end
+
+local function puff(parent: Instance, name: string, rate: number, color: Color3)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = name
+	emitter.Rate = rate
+	emitter.LightEmission = 0.8
+	emitter.Lifetime = NumberRange.new(0.7, 1.6)
+	emitter.Speed = NumberRange.new(0.5, 2.5)
+	emitter.Color = ColorSequence.new(color)
+	emitter.Parent = parent
+end
+
+local function maybeSound(parent: Instance, soundId: string, name: string)
+	if not HavenLife.audioReady(soundId) then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.Name = name
+	sound.SoundId = soundId
+	sound.Looped = true
+	sound.Volume = 0.3
+	sound.RollOffMaxDistance = 140
+	sound.Parent = parent
+	sound:Play()
+end
+
+local function stampLife(parent: Instance)
+	if lifeConnection ~= nil then
+		lifeConnection:Disconnect()
+		lifeConnection = nil
+	end
+
+	local alive = Instance.new("Model")
+	alive.Name = "Alive"
+	alive.Parent = parent
+
+	local skyDrift: { { part: BasePart, drift: number } } = {}
+
+	local function stampPiece(
+		host: Instance,
+		desc: HavenLife.Piece,
+		worldX: number,
+		worldZ: number,
+		yawDeg: number
+	): BasePart
+		local className = if desc.className == "WedgePart" then "WedgePart" else "Part"
+		local piece = Instance.new(className)
+		piece.Name = desc.name
+		piece.Size = Vector3.new(desc.size[1], desc.size[2], desc.size[3])
+		piece.Anchored = true
+		piece.CanCollide = false
+		piece.CanTouch = false
+		piece.CanQuery = false
+		piece.CastShadow = desc.lod ~= "small"
+		piece.Transparency = desc.transparency
+		piece.Color = Color3.fromRGB(desc.color[1], desc.color[2], desc.color[3])
+		piece.Material = (Enum.Material :: any)[desc.material]
+		piece.TopSurface = Enum.SurfaceType.Smooth
+		piece.BottomSurface = Enum.SurfaceType.Smooth
+		if desc.shape == "Ball" and piece:IsA("Part") then
+			(piece :: Part).Shape = Enum.PartType.Ball
+		end
+		local spun = CFrame.new(worldX, desc.y, worldZ)
+			* CFrame.Angles(math.rad(desc.rx), math.rad(yawDeg), math.rad(desc.rz))
+		piece.CFrame = spun + Vector3.new(0, Haven.FLOOR_Y, 0)
+		piece:SetAttribute("ShardfallLod", desc.lod)
+		piece.Parent = host
+		if desc.light == true then
+			local glow = Instance.new("PointLight")
+			glow.Name = "PointLight"
+			glow.Color = piece.Color
+			glow.Brightness = 1.4
+			glow.Range = 18
+			glow.Shadows = false
+			glow.Parent = piece
+		end
+		if desc.particle ~= nil then
+			local rate = 5
+			if desc.particle == "mist" then
+				rate = 12
+			elseif desc.particle == "sparks" then
+				rate = 14
+			end
+			puff(piece, desc.particle, rate, piece.Color)
+		end
+		return piece
+	end
+
+	for _, desc in ipairs(HavenLife.pieces()) do
+		local worldX = desc.x
+		local worldZ = desc.z
+		local yaw = desc.ry
+		if desc.drift ~= nil then
+			local angle = #skyDrift * (math.pi * 2 / 4)
+			worldX = math.cos(angle) * desc.drift
+			worldZ = math.sin(angle) * desc.drift
+			yaw = math.deg(angle)
+		end
+		local piece = stampPiece(alive, desc, worldX, worldZ, yaw)
+		if desc.drift ~= nil then
+			table.insert(skyDrift, { part = piece, drift = desc.drift })
+		end
+	end
+
+	type RigPart = { part: BasePart, localCf: CFrame }
+	type Mover = {
+		kind: string,
+		x: number,
+		z: number,
+		points: { { number } }?,
+		radius: number?,
+		distance: number,
+		parts: { RigPart },
+	}
+	local movers: { Mover } = {}
+
+	for _, rig in ipairs(HavenLife.rigs()) do
+		local model = Instance.new("Model")
+		model.Name = rig.name
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+		model:SetAttribute("ShardfallKind", rig.kind)
+		model.Parent = alive
+		local mover: Mover = {
+			kind = rig.kind,
+			x = rig.x,
+			z = rig.z,
+			points = rig.points,
+			radius = rig.radius,
+			distance = 0,
+			parts = {},
+		}
+		for _, desc in ipairs(rig.parts) do
+			local piece = stampPiece(model, desc, rig.x + desc.x, rig.z + desc.z, desc.ry)
+			local localCf = CFrame.new(desc.x, desc.y, desc.z)
+				* CFrame.Angles(math.rad(desc.rx), math.rad(desc.ry), math.rad(desc.rz))
+			table.insert(mover.parts, { part = piece, localCf = localCf })
+		end
+		table.insert(movers, mover)
+	end
+
+	for index, dest in ipairs(Travel.DESTINATIONS) do
+		local height = 4.8 + index * 0.35
+		local stone = part(
+			alive,
+			"Waystone",
+			Vector3.new(1.6, height, 1.6),
+			CFrame.new(dest.stoneX, height / 2 + 0.25, dest.stoneZ),
+			Color3.fromRGB(132, 124, 150),
+			Enum.Material.Neon,
+			false
+		)
+		stone.CanTouch = true
+		stone.CanQuery = true
+		stone.CastShadow = false
+		stone:SetAttribute("WaystoneId", dest.id)
+		local glow = Instance.new("PointLight")
+		glow.Name = "PointLight"
+		glow.Color = Color3.fromRGB(180, 160, 220)
+		glow.Brightness = 0.8
+		glow.Range = 10
+		glow.Shadows = false
+		glow.Parent = stone
+	end
+
+	maybeSound(alive, HavenLife.AUDIO.hub, "HubAmbience")
+	maybeSound(alive, HavenLife.AUDIO.forge, "ForgeAmbience")
+	maybeSound(alive, HavenLife.AUDIO.market, "MarketAmbience")
+	maybeSound(alive, HavenLife.AUDIO.garden, "GardenAmbience")
+	maybeSound(alive, HavenLife.AUDIO.night, "NightAmbience")
+
+	local aliveParts = 0
+	for _, descendant in ipairs(alive:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			aliveParts += 1
+		end
+	end
+	print(
+		string.format(
+			"[Shardfall] Haven alive %d parts (%d dressing, %d waystones, budget %d)",
+			aliveParts,
+			HavenLife.partCount(),
+			#Travel.DESTINATIONS,
+			HavenLife.BUDGET
+		)
+	)
+
+	local lanternLights: { PointLight } = {}
+	local function collectLanterns()
+		table.clear(lanternLights)
+		local haven = workspace:FindFirstChild("Haven")
+		if haven == nil then
+			return
+		end
+		for _, descendant in ipairs(haven:GetDescendants()) do
+			if descendant:GetAttribute("ShardfallLantern") == true then
+				local glow = descendant:FindFirstChild("PointLight")
+				if glow ~= nil and glow:IsA("PointLight") then
+					table.insert(lanternLights, glow :: PointLight)
+				end
+			end
+		end
+	end
+
+	local cycleWarned = false
+	local function applyCycle(elapsed: number)
+		local found, lighting = pcall(function()
+			return game:GetService("Lighting")
+		end)
+		if not found or lighting == nil then
+			return
+		end
+		local ok, err = pcall(function()
+			local hour = HavenLife.clock(elapsed)
+			local mood = HavenLife.mood(hour)
+			local target = lighting :: any
+			target.ClockTime = hour
+			target.Brightness = mood.brightness
+			target.Ambient = Color3.fromRGB(mood.ambient[1], mood.ambient[2], mood.ambient[3])
+			target.OutdoorAmbient =
+				Color3.fromRGB(mood.outdoor[1], mood.outdoor[2], mood.outdoor[3])
+			-- A new Sky with no face ids replaces the default skybox.
+			local sky = target:FindFirstChildOfClass("Sky")
+			if sky ~= nil then
+				sky.SunAngularSize = 21
+				sky.StarCount = 3000
+				sky.MoonAngularSize = 11
+			end
+			local lampsOn = HavenLife.lanternsOn(hour)
+			for _, glow in ipairs(lanternLights) do
+				glow.Enabled = lampsOn
+			end
+		end)
+		if not ok and not cycleWarned then
+			cycleWarned = true
+			warn("[Shardfall] Haven day cycle failed: " .. tostring(err))
+		end
+	end
+
+	collectLanterns()
+	local elapsed = 0
+	applyCycle(elapsed)
+
+	local function along(points: { { number } }, distance: number): (number, number, number)
+		local total = 0
+		local lengths = {}
+		for index = 1, #points do
+			local from = points[index]
+			local to = points[(index % #points) + 1]
+			local span = math.sqrt((to[1] - from[1]) ^ 2 + (to[2] - from[2]) ^ 2)
+			if span < 0.05 then
+				span = 0.05
+			end
+			lengths[index] = span
+			total += span
+		end
+		local walk = distance % total
+		for index = 1, #points do
+			local span = lengths[index]
+			local from = points[index]
+			local to = points[(index % #points) + 1]
+			if walk <= span then
+				local t = walk / span
+				local dx = to[1] - from[1]
+				local dz = to[2] - from[2]
+				return from[1] + dx * t, from[2] + dz * t, math.atan2(dx, dz)
+			end
+			walk -= span
+		end
+		return points[1][1], points[1][2], 0
+	end
+
+	lifeConnection = RunService.Heartbeat:Connect(function(dt)
+		elapsed += dt
+		local spin = elapsed * 0.08
+		for index, shard in ipairs(skyDrift) do
+			local angle = spin + (index - 1) * (math.pi * 2 / math.max(1, #skyDrift))
+			local height = Haven.FLOOR_Y + 78 + math.sin(spin * 2 + index) * 4
+			shard.part.CFrame = CFrame.new(
+				math.cos(angle) * shard.drift,
+				height,
+				math.sin(angle) * shard.drift
+			) * CFrame.Angles(math.rad(28), angle, math.rad(12))
+		end
+		for _, mover in ipairs(movers) do
+			mover.distance += dt * (if mover.kind == "bird" then 0.7 else 4)
+			local px = mover.x
+			local pz = mover.z
+			local yaw = 0
+			local lift = 0
+			if mover.kind == "bird" then
+				local radius = mover.radius or 14
+				px = mover.x + math.cos(mover.distance) * radius
+				pz = mover.z + math.sin(mover.distance) * radius
+				yaw = mover.distance + math.pi / 2
+				lift = 9 + math.sin(mover.distance * 2) * 1.2
+			elseif mover.points ~= nil then
+				px, pz, yaw = along(mover.points, mover.distance)
+			end
+			local origin = CFrame.new(px, Haven.FLOOR_Y + lift, pz) * CFrame.Angles(0, yaw, 0)
+			for _, item in ipairs(mover.parts) do
+				item.part.CFrame = origin * item.localCf
+			end
+		end
+		applyCycle(elapsed)
+	end)
 end
 
 function HavenBuilder.build(parent: Instance): number
@@ -1084,6 +1430,7 @@ function HavenBuilder.build(parent: Instance): number
 	buildBridges(parent)
 	buildRocks(parent)
 	dressHaven(parent)
+	stampLife(parent)
 	clearDefaultPlace()
 
 	local count = 0
@@ -1107,9 +1454,10 @@ function HavenBuilder.build(parent: Instance): number
 	end
 	print(
 		string.format(
-			"[Shardfall] Haven built under %s at floor y=%d (%d prompts)",
+			"[Shardfall] Haven built under %s at floor y=%d (%d parts, %d prompts)",
 			parent.Name,
 			Haven.FLOOR_Y,
+			count,
 			prompts
 		)
 	)

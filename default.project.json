@@ -91,6 +91,12 @@
         },
         "Steer": {
           "$className": "RemoteEvent"
+        },
+        "Travel": {
+          "$className": "RemoteFunction"
+        },
+        "BuyTravelPass": {
+          "$className": "RemoteFunction"
         }
       }
     },

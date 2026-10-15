@@ -43,6 +43,8 @@ local RULES: { [string]: Rule } = {
 	BulkSalvage = { capacity = 2, perSecond = 0.5 },
 	BuyForgeBoost = { capacity = 2, perSecond = 0.5 },
 	BuyInventoryExpansion = { capacity = 2, perSecond = 0.5 },
+	Travel = { capacity = 4, perSecond = 1 },
+	BuyTravelPass = { capacity = 2, perSecond = 0.5 },
 	SetItemLock = { capacity = 6, perSecond = 3 },
 	SetItemFavorite = { capacity = 6, perSecond = 3 },
 	UseTonic = { capacity = 3, perSecond = 1 },

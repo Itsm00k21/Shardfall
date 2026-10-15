@@ -298,4 +298,37 @@ describe("Schema", function()
 		expect(copy.inventory.kept.locked).toEqual(true)
 		expect(copy.inventoryCap).toEqual(Schema.INVENTORY_CAP + 10)
 	end)
+
+	it("keeps waystones when a version 7 save is migrated", function()
+		local fresh = Schema.migrate({
+			schemaVersion = 7,
+			gold = 4,
+		})
+		assert(fresh ~= nil)
+		expect(fresh.schemaVersion).toEqual(Schema.VERSION)
+		expect(fresh.gold).toEqual(4)
+		expect(fresh.waystones).toEqual({})
+		expect(fresh.lastTravel).toEqual(0)
+		expect(fresh.travelPass).toEqual(false)
+
+		local kept = Schema.migrate({
+			schemaVersion = 7,
+			waystones = { forge = true, nope = true, spawn = true },
+			lastTravel = 12,
+			travelPass = true,
+			gold = 9,
+		})
+		assert(kept ~= nil)
+		expect(kept.waystones.forge).toEqual(true)
+		expect(kept.waystones.spawn).toEqual(true)
+		expect(kept.waystones.nope).toBeNil()
+		expect(kept.lastTravel).toEqual(12)
+		expect(kept.travelPass).toEqual(true)
+		expect(kept.gold).toEqual(9)
+		local copy = Schema.snapshot(kept)
+		expect(copy.waystones.forge).toEqual(true)
+		expect(copy.waystones.nope).toBeNil()
+		expect(copy.lastTravel).toEqual(12)
+		expect(copy.travelPass).toEqual(true)
+	end)
 end)

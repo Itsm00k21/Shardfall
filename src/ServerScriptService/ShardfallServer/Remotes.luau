@@ -24,6 +24,7 @@ local InventoryService = require(script.Parent.InventoryService)
 local RateLimiter = require(script.Parent.RateLimiter)
 local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
+local TravelService = require(script.Parent.TravelService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
@@ -274,6 +275,25 @@ function Remotes.bind()
 	functionRemote("BuyInventoryExpansion").OnServerInvoke = function(player)
 		return guard(player, "BuyInventoryExpansion", function()
 			return RollService.buyInventoryExpansion(player)
+		end)
+	end
+
+	functionRemote("Travel").OnServerInvoke = function(player, destinationId)
+		return guard(player, "Travel", function()
+			if type(destinationId) ~= "string" then
+				return { ok = false, error = "Unknown destination." }
+			end
+			local ok, err = TravelService.go(player, destinationId)
+			if not ok then
+				return { ok = false, error = err }
+			end
+			return { ok = true }
+		end)
+	end
+
+	functionRemote("BuyTravelPass").OnServerInvoke = function(player)
+		return guard(player, "BuyTravelPass", function()
+			return TravelService.buyPass(player)
 		end)
 	end
 

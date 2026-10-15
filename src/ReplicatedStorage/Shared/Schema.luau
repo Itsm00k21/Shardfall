@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 7.
+	The player profile shape, version 8.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -17,10 +17,11 @@
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Stars = require("./Stars")
+local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 7
+Schema.VERSION = 8
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -102,6 +103,9 @@ export type ProfileData = {
 	milestoneTable: { any },
 	forgeBoostUntil: number,
 	inventoryBonus: number,
+	waystones: { [string]: boolean },
+	lastTravel: number,
+	travelPass: boolean,
 }
 
 function Schema.template(): ProfileData
@@ -134,6 +138,9 @@ function Schema.template(): ProfileData
 		milestoneTable = CraftingLevel.copyTable(),
 		forgeBoostUntil = 0,
 		inventoryBonus = 0,
+		waystones = {},
+		lastTravel = 0,
+		travelPass = false,
 	}
 end
 
@@ -220,6 +227,24 @@ function Schema.reconcile(data: any): ProfileData
 	if data.inventoryBonus > 500 then
 		data.inventoryBonus = 500
 	end
+	local knownStones = {}
+	for _, id in ipairs(Travel.ids()) do
+		knownStones[id] = true
+	end
+	local stones = {}
+	if type(data.waystones) == "table" then
+		for id, unlocked in pairs(data.waystones) do
+			if knownStones[id] == true and unlocked == true then
+				stones[id] = true
+			end
+		end
+	end
+	data.waystones = stones
+	data.lastTravel = wholeNumber(data.lastTravel, 0, 0)
+	if data.lastTravel > os.time() then
+		data.lastTravel = 0
+	end
+	data.travelPass = data.travelPass == true
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -459,6 +484,21 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 7
 	end
 
+	if version < 8 then
+		-- Waystones, the travel clock, and the unsold travel pass.
+		if type(raw.waystones) ~= "table" then
+			raw.waystones = {}
+		end
+		if type(raw.lastTravel) ~= "number" then
+			raw.lastTravel = 0
+		end
+		if raw.travelPass ~= true then
+			raw.travelPass = false
+		end
+		raw.schemaVersion = 8
+		version = 8
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -628,6 +668,9 @@ function Schema.snapshot(data: ProfileData)
 		craftingMilestones = Schema.deepCopy(data.craftingMilestones),
 		milestoneTable = Schema.deepCopy(data.milestoneTable),
 		forgeBoostUntil = data.forgeBoostUntil,
+		waystones = Schema.deepCopy(data.waystones),
+		lastTravel = data.lastTravel,
+		travelPass = data.travelPass,
 	}
 end
 

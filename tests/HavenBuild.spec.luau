@@ -17,6 +17,8 @@ local expect = framework.expect
 
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
+local HavenLife = require("../src/ReplicatedStorage/Shared/HavenLife")
+local Travel = require("../src/ReplicatedStorage/Shared/Travel")
 local VerdantScatter = require("../src/ReplicatedStorage/Shared/VerdantScatter")
 
 type Mock = any
@@ -388,6 +390,12 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 	local scatterModule = instance("ModuleScript")
 	scatterModule.Name = "VerdantScatter"
 	scatterModule.Parent = shared
+	local lifeModule = instance("ModuleScript")
+	lifeModule.Name = "HavenLife"
+	lifeModule.Parent = shared
+	local travelModule = instance("ModuleScript")
+	travelModule.Name = "Travel"
+	travelModule.Parent = shared
 
 	local runService = {
 		Heartbeat = {
@@ -422,6 +430,21 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 		math = math,
 		string = string,
 		table = table,
+		NumberRange = {
+			new = function(minValue, maxValue)
+				return { Min = minValue, Max = maxValue or minValue }
+			end,
+		},
+		NumberSequence = {
+			new = function(value)
+				return { value = value }
+			end,
+		},
+		ColorSequence = {
+			new = function(color)
+				return { color = color }
+			end,
+		},
 		workspace = workspace,
 		Enum = enumNode("Enum"),
 		Color3 = {
@@ -474,6 +497,12 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			end
 			if module == scatterModule then
 				return VerdantScatter
+			end
+			if module == lifeModule then
+				return HavenLife
+			end
+			if module == travelModule then
+				return Travel
 			end
 			error("unexpected require", 2)
 		end,
