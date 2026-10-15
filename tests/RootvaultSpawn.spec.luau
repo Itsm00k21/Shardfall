@@ -109,6 +109,24 @@ local function instance(className: string): Mock
 		return nil
 	end
 
+	function methods:Clone(): Mock
+		local copy = instance(self.ClassName)
+		for key, value in pairs(self) do
+			if
+				key ~= "children"
+				and key ~= "Parent"
+				and key ~= "attributes"
+				and key ~= "ClassName"
+			then
+				rawset(copy, key, value)
+			end
+		end
+		for key, value in pairs(self.attributes) do
+			copy:SetAttribute(key, value)
+		end
+		return copy
+	end
+
 	function methods:FindFirstChildOfClass(classNameToFind: string): Mock?
 		for _, child in ipairs(self.children) do
 			if child:IsA(classNameToFind) then

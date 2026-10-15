@@ -18,10 +18,12 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
+local ThumbBar = require(script.ThumbBar)
 local TravelHud = require(script.TravelHud)
 local Ui = require(script.Ui)
 local VerdantLod = require(script.VerdantLod)
@@ -31,6 +33,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))
+local Quality = require(shared:WaitForChild("Quality"))
 local areaList = Areas.all()
 local firstArea = areaList[1]
 local firstPools = if firstArea ~= nil then Areas.pools(firstArea.id) else {}
@@ -47,6 +50,19 @@ local shownOddsKey: string? = nil
 local ui
 local inventory
 local travel
+local thumb
+local graphicsTier = "med"
+local graphicsSent = false
+local farmOn = false
+
+local function deviceIsTouch(): boolean
+	local preferred = ""
+	pcall(function()
+		preferred = tostring(UserInputService.PreferredInput)
+	end)
+	local named = if string.find(preferred, "Touch", 1, true) ~= nil then "touch" else nil
+	return Quality.touchDevice(UserInputService.TouchEnabled, named)
+end
 
 local function invoke(name: string, ...: any)
 	local remote = (remotes :: Instance):WaitForChild(name)
@@ -115,6 +131,23 @@ local function applyProfile(profile: any, saving: any)
 	end
 	if travel ~= nil then
 		travel.setProfile(profile)
+	end
+	local tier = Quality.resolve(profile.graphicsQuality, deviceIsTouch())
+	graphicsTier = tier
+	VerdantLod.setTier(tier)
+	if thumb ~= nil then
+		thumb.setGraphics(Quality.label(tier))
+	end
+	if Quality.normalize(profile.graphicsQuality) == nil and not graphicsSent then
+		graphicsSent = true
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetGraphicsQuality", tier)
+			end)
+			if ok and type(result) == "table" and type(result.profile) == "table" then
+				applyProfile(result.profile, result.saving)
+			end
+		end)
 	end
 	local key = oddsKey(profile)
 	if key ~= shownOddsKey then
@@ -337,17 +370,23 @@ ui = Ui.mount(playerGui, {
 				return invoke("SetAutoFarm", enabled)
 			end)
 			local message = remoteError(ok, result, "Could not set auto farm.")
+			local applied = enabled
 			if message ~= nil then
-				ui.setAutoFarm(not enabled)
+				applied = not enabled
 				ui.setStatus(message, "error")
-				return
+			else
+				ui.setStatus(
+					if enabled
+						then "Auto Farm is on. Wins and losses start the same run again."
+						else "Auto Farm is off.",
+					"ok"
+				)
 			end
-			ui.setStatus(
-				if enabled
-					then "Auto Farm is on. Wins and losses start the same run again."
-					else "Auto Farm is off.",
-				"ok"
-			)
+			farmOn = applied
+			ui.setAutoFarm(applied)
+			if thumb ~= nil then
+				thumb.setFarm(applied)
+			end
 		end)
 	end,
 	onAutoAttack = function(enabled: boolean)
@@ -549,6 +588,88 @@ travel = TravelHud.start(playerGui, {
 		end)
 	end,
 })
+
+local function cycleGraphics()
+	local order = Quality.ids()
+	local nextId = order[1]
+	for index, id in ipairs(order) do
+		if id == graphicsTier then
+			nextId = order[(index % #order) + 1]
+			break
+		end
+	end
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return invoke("SetGraphicsQuality", nextId)
+		end)
+		local message = remoteError(ok, result, "Could not change graphics.")
+		if message ~= nil then
+			ui.setStatus(message, "error")
+			return
+		end
+		applyResult(result)
+		ui.setStatus("Graphics " .. Quality.label(nextId) .. ".", "ok")
+	end)
+end
+
+thumb = ThumbBar.start(playerGui, {
+	onMenu = function()
+		ui.toggleMenu()
+	end,
+	onInventory = function()
+		inventory.toggle()
+	end,
+	onTravel = function()
+		travel.toggle()
+	end,
+	onAttack = function()
+		CombatHud.swing()
+	end,
+	onTonic = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("UseTonic")
+			end)
+			local message = remoteError(ok, result, "Could not drink that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local healed = if type(result) == "table" then result.healed else nil
+			ui.setStatus(
+				string.format("Healing Tonic restored %s HP.", tostring(healed or "some")),
+				"ok"
+			)
+		end)
+	end,
+	onAutoFarm = function()
+		task.spawn(function()
+			local enabled = not farmOn
+			local ok, result = pcall(function()
+				return invoke("SetAutoFarm", enabled)
+			end)
+			local message = remoteError(ok, result, "Could not set auto farm.")
+			local applied = enabled
+			if message ~= nil then
+				applied = not enabled
+				ui.setStatus(message, "error")
+			else
+				ui.setStatus(
+					if enabled
+						then "Auto Farm is on. Wins and losses start the same run again."
+						else "Auto Farm is off.",
+					"ok"
+				)
+			end
+			farmOn = applied
+			ui.setAutoFarm(applied)
+			thumb.setFarm(applied)
+		end)
+	end,
+	onGraphics = cycleGraphics,
+})
+thumb.setGraphics(Quality.label(graphicsTier))
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)

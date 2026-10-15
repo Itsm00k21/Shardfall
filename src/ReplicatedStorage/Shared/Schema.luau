@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 8.
+	The player profile shape, version 9.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -16,12 +16,13 @@
 
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
+local Quality = require("./Quality")
 local Stars = require("./Stars")
 local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 8
+Schema.VERSION = 9
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -106,6 +107,7 @@ export type ProfileData = {
 	waystones: { [string]: boolean },
 	lastTravel: number,
 	travelPass: boolean,
+	graphicsQuality: string,
 }
 
 function Schema.template(): ProfileData
@@ -141,6 +143,7 @@ function Schema.template(): ProfileData
 		waystones = {},
 		lastTravel = 0,
 		travelPass = false,
+		graphicsQuality = "",
 	}
 end
 
@@ -245,6 +248,8 @@ function Schema.reconcile(data: any): ProfileData
 		data.lastTravel = 0
 	end
 	data.travelPass = data.travelPass == true
+	local quality = Quality.normalize(data.graphicsQuality)
+	data.graphicsQuality = if quality == nil then "" else quality
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -499,6 +504,16 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 8
 	end
 
+	if version < 9 then
+		-- Graphics quality stays empty until this player picks a tier
+		-- or a touch device writes the Low default.
+		if Quality.normalize(raw.graphicsQuality) == nil then
+			raw.graphicsQuality = ""
+		end
+		raw.schemaVersion = 9
+		version = 9
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -671,6 +686,7 @@ function Schema.snapshot(data: ProfileData)
 		waystones = Schema.deepCopy(data.waystones),
 		lastTravel = data.lastTravel,
 		travelPass = data.travelPass,
+		graphicsQuality = data.graphicsQuality,
 	}
 end
 

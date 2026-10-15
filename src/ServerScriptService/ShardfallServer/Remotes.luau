@@ -26,6 +26,7 @@ local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
 local TravelService = require(script.Parent.TravelService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
+local Quality = require(ReplicatedStorage.Shared.Quality)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
@@ -294,6 +295,23 @@ function Remotes.bind()
 	functionRemote("BuyTravelPass").OnServerInvoke = function(player)
 		return guard(player, "BuyTravelPass", function()
 			return TravelService.buyPass(player)
+		end)
+	end
+
+	functionRemote("SetGraphicsQuality").OnServerInvoke = function(player, tier)
+		return guard(player, "SetGraphicsQuality", function()
+			local id = Quality.normalize(tier)
+			if id == nil then
+				return { ok = false, error = "Unknown graphics quality." }
+			end
+			local ok, err = DataService.mutate(player, function(data)
+				data.graphicsQuality = id
+				return nil
+			end)
+			if not ok then
+				return { ok = false, error = err }
+			end
+			return { ok = true, graphicsQuality = id }
 		end)
 	end
 

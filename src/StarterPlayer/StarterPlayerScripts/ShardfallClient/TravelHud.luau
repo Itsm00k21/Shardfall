@@ -9,7 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Quality = require(Shared:WaitForChild("Quality"))
 local Travel = require(Shared:WaitForChild("Travel"))
+local MobileShell = require(script.Parent.MobileShell)
 
 local TravelHud = {}
 
@@ -63,16 +65,17 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local screen = new("ScreenGui", {
 		Name = "ShardfallTravel",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 20,
 	}, playerGui) :: ScreenGui
+	MobileShell.mount(screen)
 
 	local openButton = new("TextButton", {
 		Name = "OpenTravel",
 		AnchorPoint = Vector2.new(0, 0),
 		Position = UDim2.fromOffset(16, 104),
-		Size = UDim2.fromOffset(132, 36),
+		Size = UDim2.fromOffset(132, Quality.MIN_TAP),
+		Visible = false,
 		BackgroundColor3 = COLORS.button,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -85,13 +88,16 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local root = new("Frame", {
 		Name = "TravelMap",
-		Position = UDim2.fromOffset(16, 148),
-		Size = UDim2.fromOffset(280, 430),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12, 1, -88),
+		Size = UDim2.fromOffset(320, 620),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		Visible = false,
 	}, screen) :: Frame
 	corner(root, 12)
+	MobileShell.aspect(root, 0.52)
+	MobileShell.limit(root, 400, 680)
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
@@ -112,7 +118,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local closeButton = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromOffset(28, 24),
+		Size = UDim2.fromOffset(Quality.MIN_TAP, Quality.MIN_TAP),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 16,
@@ -128,12 +134,13 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 	}, root) :: Frame
 	corner(map, 8)
+	MobileShell.aspect(map, MAP_W / MAP_H)
 
 	local list = new("Frame", {
 		Name = "Destinations",
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(0, 208),
-		Size = UDim2.new(1, 0, 0, 156),
+		Size = UDim2.new(1, 0, 0, 300),
 	}, root) :: Frame
 	new("UIListLayout", {
 		Padding = UDim.new(0, 4),
@@ -143,7 +150,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local cooldown = new("TextLabel", {
 		Name = "Cooldown",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 368),
+		Position = UDim2.fromOffset(0, 516),
 		Size = UDim2.new(1, 0, 0, 18),
 		Font = Enum.Font.BuilderSans,
 		TextSize = 13,
@@ -154,8 +161,8 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local passButton = new("TextButton", {
 		Name = "TravelPass",
-		Position = UDim2.fromOffset(0, 388),
-		Size = UDim2.new(1, 0, 0, 28),
+		Position = UDim2.fromOffset(0, 540),
+		Size = UDim2.new(1, 0, 0, Quality.MIN_TAP),
 		BackgroundColor3 = COLORS.locked,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -236,7 +243,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			Name = dest.id,
 			BackgroundColor3 = COLORS.locked,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 22),
+			Size = UDim2.new(1, 0, 0, Quality.MIN_TAP),
 			Font = Enum.Font.BuilderSansMedium,
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -255,7 +262,8 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			Name = dest.id,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = mapOffset(dest.x, dest.z),
-			Size = UDim2.fromOffset(14, 14),
+			Size = UDim2.fromOffset(12, 12),
+			Active = false,
 			BackgroundColor3 = COLORS.dot,
 			BorderSizePixel = 0,
 			Text = "",
@@ -283,12 +291,13 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	title.Text = "Travel"
-	openButton.MouseButton1Click:Connect(function()
+	local function toggle()
 		root.Visible = not root.Visible
 		if root.Visible then
 			refresh()
 		end
-	end)
+	end
+	openButton.MouseButton1Click:Connect(toggle)
 	closeButton.MouseButton1Click:Connect(function()
 		root.Visible = false
 	end)
@@ -314,6 +323,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			profile = nextProfile
 			refresh()
 		end,
+		toggle = toggle,
 	}
 end
 

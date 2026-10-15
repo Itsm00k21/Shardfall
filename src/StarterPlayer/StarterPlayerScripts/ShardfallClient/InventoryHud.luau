@@ -12,6 +12,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local MobileShell = require(script.Parent.MobileShell)
+
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
@@ -109,7 +111,7 @@ local function chip(parent: Instance, text: string, order: number): TextButton
 	local button = new("TextButton", {
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(0, 26),
+		Size = UDim2.fromOffset(0, 44),
 		AutomaticSize = Enum.AutomaticSize.X,
 		Font = Enum.Font.BuilderSansMedium,
 		TextSize = 13,
@@ -130,16 +132,17 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local screen = new("ScreenGui", {
 		Name = "ShardfallInventory",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 20,
 	}, playerGui) :: ScreenGui
+	MobileShell.mount(screen)
 
 	local openButton = new("TextButton", {
 		Name = "OpenInventory",
 		AnchorPoint = Vector2.new(0, 0),
 		Position = UDim2.fromOffset(16, 60),
-		Size = UDim2.fromOffset(132, 36),
+		Size = UDim2.fromOffset(132, 44),
+		Visible = false,
 		BackgroundColor3 = COLORS.button,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -154,12 +157,14 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Inventory",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -24, 1, -24),
+		Size = UDim2.fromScale(0.94, 0.9),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		Visible = false,
 	}, screen) :: Frame
 	corner(root, 12)
+	MobileShell.aspect(root, 0.62)
+	MobileShell.limit(root, 900, 1100)
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 12),
 		PaddingBottom = UDim.new(0, 12),
@@ -193,7 +198,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local expand = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -88, 0.5, 0),
-		Size = UDim2.fromOffset(78, 28),
+		Size = UDim2.fromOffset(96, 44),
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -205,7 +210,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local close = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(76, 28),
+		Size = UDim2.fromOffset(88, 44),
 		BackgroundColor3 = COLORS.button,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -217,7 +222,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local tabBar = new("ScrollingFrame", {
 		Position = UDim2.fromOffset(0, 42),
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0, 44),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
@@ -252,9 +257,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Search",
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(140, 26),
+		Size = UDim2.fromOffset(160, 44),
 		Font = Enum.Font.BuilderSans,
-		TextSize = 14,
+		TextSize = 16,
 		PlaceholderText = "Search",
 		PlaceholderColor3 = COLORS.muted,
 		TextColor3 = COLORS.text,
@@ -343,7 +348,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		LayoutOrder = 1,
 	}, confirm) :: TextLabel
 	local confirmYes = new("TextButton", {
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0, 44),
 		BackgroundColor3 = COLORS.danger,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -355,7 +360,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, confirm) :: TextButton
 	corner(confirmYes, 8)
 	local confirmNo = new("TextButton", {
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0, 44),
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -430,7 +435,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		color: Color3
 	): TextButton
 		local button = new("TextButton", {
-			Size = UDim2.new(1, 0, 0, 30),
+			Size = UDim2.new(1, 0, 0, 44),
 			BackgroundColor3 = color,
 			BorderSizePixel = 0,
 			Font = Enum.Font.BuilderSansBold,
@@ -783,7 +788,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	for index, tab in ipairs(InventoryView.TABS) do
 		local labelText = string.upper(string.sub(tab, 1, 1)) .. string.sub(tab, 2)
 		local button = chip(tabBar, labelText, index)
-		button.Size = UDim2.fromOffset(96, 28)
+		button.Size = UDim2.fromOffset(120, 44)
 		button.AutomaticSize = Enum.AutomaticSize.None
 		tabButtons[tab] = button
 		button.MouseButton1Click:Connect(function()
@@ -963,7 +968,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local function setOpen(open: boolean)
 		isOpen = open
 		root.Visible = open
-		openButton.Visible = not open
+		openButton.Visible = false
 		if open then
 			render()
 		end

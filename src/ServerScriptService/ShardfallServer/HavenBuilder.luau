@@ -37,6 +37,38 @@ local function rgb(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
 end
 
+-- One template per class. Repeated dressing clones it instead of building
+-- a fresh instance and retyping every default.
+local templates: { [string]: Instance } = {}
+
+local function borrow(className: string): Instance
+	local template = templates[className]
+	if template == nil then
+		template = Instance.new(className)
+		if template:IsA("BasePart") then
+			template.Anchored = true
+			template.CanCollide = false
+			template.CanTouch = false
+			template.CastShadow = false
+			template.TopSurface = Enum.SurfaceType.Smooth
+			template.BottomSurface = Enum.SurfaceType.Smooth
+		end
+		templates[className] = template
+	end
+	return template:Clone()
+end
+
+local TRIM = {
+	Flower = true,
+	Petals = true,
+	Butterflies = true,
+	Cloud = true,
+	SkyShard = true,
+	Crate = true,
+	AwningStripe = true,
+	FallLip = true,
+}
+
 local function part(
 	parent: Instance,
 	name: string,
@@ -682,7 +714,7 @@ local function buildForge(parent: Instance)
 			true
 		)
 		chimney.Name = "Chimney" .. tostring(index)
-		local embers = Instance.new("ParticleEmitter")
+		local embers = borrow("ParticleEmitter") :: ParticleEmitter
 		embers.Name = "embers"
 		embers.Rate = 7
 		embers.LightEmission = 0.9
@@ -1060,14 +1092,14 @@ local function dressHaven(parent: Instance)
 	foliage.Parent = parent
 	for _, desc in ipairs(VerdantScatter.haven()) do
 		local className = if desc.className == "WedgePart" then "WedgePart" else "Part"
-		local piece = Instance.new(className)
+		local piece = borrow(className)
 		piece.Name = desc.name
 		piece.Size = Vector3.new(desc.size[1], desc.size[2], desc.size[3])
 		piece.Anchored = true
 		piece.CanCollide = false
 		piece.CanTouch = false
 		piece.CanQuery = false
-		piece.CastShadow = desc.shadow == true
+		piece.CastShadow = desc.shadow == true and desc.lod ~= "small"
 		piece.Transparency = desc.transparency
 		piece.Color = Color3.fromRGB(desc.color[1], desc.color[2], desc.color[3])
 		piece.Material = (Enum.Material :: any)[desc.material]
@@ -1094,7 +1126,7 @@ local function dressHaven(parent: Instance)
 			end
 		end
 		if desc.particle ~= nil then
-			local emitter = Instance.new("ParticleEmitter")
+			local emitter = borrow("ParticleEmitter") :: ParticleEmitter
 			emitter.Name = desc.particle
 			emitter.Rate = 4
 			emitter.LightEmission = 0.7
@@ -1104,7 +1136,7 @@ local function dressHaven(parent: Instance)
 end
 
 local function puff(parent: Instance, name: string, rate: number, color: Color3)
-	local emitter = Instance.new("ParticleEmitter")
+	local emitter = borrow("ParticleEmitter") :: ParticleEmitter
 	emitter.Name = name
 	emitter.Rate = rate
 	emitter.LightEmission = 0.8
@@ -1148,7 +1180,7 @@ local function stampLife(parent: Instance)
 		yawDeg: number
 	): BasePart
 		local className = if desc.className == "WedgePart" then "WedgePart" else "Part"
-		local piece = Instance.new(className)
+		local piece = borrow(className)
 		piece.Name = desc.name
 		piece.Size = Vector3.new(desc.size[1], desc.size[2], desc.size[3])
 		piece.Anchored = true
@@ -1168,6 +1200,9 @@ local function stampLife(parent: Instance)
 			* CFrame.Angles(math.rad(desc.rx), math.rad(yawDeg), math.rad(desc.rz))
 		piece.CFrame = spun + Vector3.new(0, Haven.FLOOR_Y, 0)
 		piece:SetAttribute("ShardfallLod", desc.lod)
+		if TRIM[desc.name] == true then
+			piece:SetAttribute("ShardfallTrim", true)
+		end
 		piece.Parent = host
 		if desc.light == true then
 			local glow = Instance.new("PointLight")
@@ -1235,6 +1270,9 @@ local function stampLife(parent: Instance)
 		}
 		for _, desc in ipairs(rig.parts) do
 			local piece = stampPiece(model, desc, rig.x + desc.x, rig.z + desc.z, desc.ry)
+			if rig.kind == "bird" then
+				piece:SetAttribute("ShardfallTrim", true)
+			end
 			local localCf = CFrame.new(desc.x, desc.y, desc.z)
 				* CFrame.Angles(math.rad(desc.rx), math.rad(desc.ry), math.rad(desc.rz))
 			table.insert(mover.parts, { part = piece, localCf = localCf })
