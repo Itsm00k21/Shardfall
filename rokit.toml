@@ -1,0 +1,10 @@
+# Toolchain for Shardfall. Install with Rokit: https://github.com/rojo-rbx/rokit
+# `rokit install` downloads these exact versions so every machine matches.
+# Aftman reads the same format; see aftman.toml (keep the two files in sync).
+
+[tools]
+rojo = "rojo-rbx/rojo@7.7.1"
+wally = "UpliftGames/wally@0.3.2"
+lune = "lune-org/lune@0.11.0"
+stylua = "JohnnyMorganz/StyLua@2.6.0"
+selene = "Kampfkarren/selene@0.32.0"
