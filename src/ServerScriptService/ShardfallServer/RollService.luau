@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
+local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
@@ -147,6 +148,12 @@ function RollService.buyLuckBoost(player: Player)
 	return paidStub(player, Currencies.boostPitch(active))
 end
 
+function RollService.buyForgeBoost(player: Player)
+	local profile = DataService.get(player)
+	local untilTime = if profile ~= nil then profile.forgeBoostUntil else 0
+	return paidStub(player, Currencies.forgeBoostPitch(untilTime, os.time()))
+end
+
 function RollService.devGrant(player: Player, kind: any)
 	if not RunService:IsStudio() then
 		return reject("Dev tools only work in Studio.")
@@ -199,12 +206,30 @@ function RollService.devGrant(player: Player, kind: any)
 		end
 		return { ok = true }
 	end
+	if kind == "forgeboost" then
+		local ok, err = DataService.mutate(player, function(data)
+			data.forgeBoostUntil = os.time() + Currencies.FORGE_BOOST_SECONDS
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not grant a Forge Boost.")
+		end
+		return { ok = true }
+	end
 	if kind == "materials" then
 		local ok, err = DataService.mutate(player, function(data)
-			local bundle = { wood = 8, vine = 8, spore = 6, bark = 4, heartwood = 2 }
+			local bundle = {
+				wood = 8,
+				vine = 8,
+				spore = 6,
+				bark = 4,
+				heartwood = 2,
+				verdant_bark = 12,
+				gnarl_seed = 1,
+				scroll_thornbound = 1,
+			}
 			for materialId, count in pairs(bundle) do
-				local owned = data.materials[materialId] or 0
-				data.materials[materialId] = math.min(999, owned + count)
+				Materials.add(data.materials, materialId, count)
 			end
 			return nil
 		end)

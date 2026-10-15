@@ -69,6 +69,19 @@ Rarities.PITY_RESET = {
 	Secret = true,
 }
 
+-- The next rarity a craft can proc into. Secret is not a proc.
+function Rarities.next(rarity: string): string?
+	local rank = index[rarity]
+	if rank == nil then
+		return nil
+	end
+	local following = Rarities.ORDER[rank + 1]
+	if following == nil or following == "Secret" then
+		return nil
+	end
+	return following
+end
+
 function Rarities.rank(rarity: string): number
 	local rank = index[rarity]
 	if rank == nil then

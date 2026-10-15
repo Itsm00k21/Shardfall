@@ -21,6 +21,12 @@ Currencies.PRISM_PACK_TOKENS = 10
 -- Added to Shard Luck while a purchased boost is active. Odds use the sum.
 Currencies.LUCK_BOOST = 25
 
+-- Timed crafting XP. No developer product yet. The buy remote refuses and
+-- shows this pitch. A Studio dev grant can set the timestamp so the bench
+-- can be tested.
+Currencies.FORGE_BOOST_SECONDS = 60 * 60
+Currencies.FORGE_BOOST_MULT = 2
+
 export type Wallet = {
 	shardTokens: number,
 	prismTokens: number,
@@ -80,6 +86,30 @@ function Currencies.boostPitch(active: any): string
 	return string.format(
 		"Luck Boost adds +%d Shard Luck to every roll. The Odds list updates while it is active. Not for sale yet.",
 		Currencies.LUCK_BOOST
+	)
+end
+
+function Currencies.forgeBoostPitch(untilTime: any, now: any): string
+	local stamp = untilTime
+	local clock = now
+	if type(stamp) ~= "number" or stamp ~= stamp then
+		stamp = 0
+	end
+	if type(clock) ~= "number" or clock ~= clock then
+		clock = 0
+	end
+	if stamp > clock then
+		local left = math.floor(stamp - clock)
+		return string.format(
+			"Forge Boost is active: %dx Crafting XP for %d more minutes.",
+			Currencies.FORGE_BOOST_MULT,
+			math.max(1, math.ceil(left / 60))
+		)
+	end
+	return string.format(
+		"Forge Boost grants %dx Crafting XP for %d minutes. Not for sale yet. Daily login can grant it later.",
+		Currencies.FORGE_BOOST_MULT,
+		math.floor(Currencies.FORGE_BOOST_SECONDS / 60)
 	)
 end
 

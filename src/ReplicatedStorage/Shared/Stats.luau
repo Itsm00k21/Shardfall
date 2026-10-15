@@ -66,7 +66,7 @@ Stats.RARITY_SCALE = {
 	Secret = 3,
 }
 
-Stats.WEAPON_TYPES = { "sword", "bow", "staff", "dagger", "hammer" }
+Stats.WEAPON_TYPES = { "sword", "greatsword", "bow", "staff", "dagger", "hammer" }
 
 -- Future class system. Not tuned. 1 means "no class is applied".
 -- Each weapon type has its own row so a class can raise sword damage
@@ -86,6 +86,7 @@ end
 
 Stats.CLASS_WEIGHTS = {
 	sword = neutralWeights(),
+	greatsword = neutralWeights(),
 	bow = neutralWeights(),
 	staff = neutralWeights(),
 	dagger = neutralWeights(),

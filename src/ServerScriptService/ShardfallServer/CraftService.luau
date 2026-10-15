@@ -57,6 +57,38 @@ function CraftService.craft(player: Player, recipeId: any, targetUid: string?)
 			name = captured.name,
 			rerolled = captured.rerolled == true,
 			consumable = captured.consumable,
+			xp = captured.xp,
+			craftingLevel = captured.craftingLevel,
+		},
+	}
+end
+
+function CraftService.salvage(player: Player, targetUid: any)
+	if
+		type(targetUid) ~= "string"
+		or string.match(targetUid, "^[%w%-]+$") == nil
+		or #targetUid > 64
+	then
+		return reject("You do not have that item.")
+	end
+	local captured: any = nil
+	local ok, err = DataService.mutate(player, function(data)
+		local summary, reason = Crafting.salvage(data, targetUid, os.time())
+		if reason ~= nil or summary == nil then
+			return reason or "Could not salvage that."
+		end
+		captured = summary
+		return nil
+	end)
+	if not ok or captured == nil then
+		return reject(err or "Could not salvage that.")
+	end
+	return {
+		ok = true,
+		salvage = {
+			name = captured.name,
+			xp = captured.xp,
+			craftingLevel = captured.craftingLevel,
 		},
 	}
 end

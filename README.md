@@ -101,7 +101,7 @@ A panel named **SHARDFALL** sits on the right.
 - The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got, then hides itself after a few seconds.
 - A cleared room counts down about 3 seconds (the status line and the dungeon row both show it) and then teleports you to the next room. **Next room** still skips the wait. **Rootvault Waves** is a second entry: one arena, bigger packs, more HP and damage each wave, a boss every 5 waves, and a payout when the wave dies. It stops when you fall.
 - **Auto Farm** starts off. Turn it on and a win or a loss sends you back into the same mode after the card closes. With Auto Attack also on, the server walks you toward the nearest enemy until you are in weapon range. Melee closes in. Bows and staffs stop at a comfortable distance. Your own movement (keyboard, gamepad, or the touch thumbstick) overrides that walk.
-- **Craft** shows each recipe with what you own and what it costs. Briar Edge makes a Thorn Dagger, Grovewarden Hood makes the helm, Healing Tonic restores 40% HP, and Wild Resin rerolls one trait on a Rare or better piece. The server spends the materials.
+- **Forge** (the Craft tab) has Craft, Salvage, and Materials. Crafting Level runs from 1 to 100. The six iron weapons craft at level 1 from Verdant Bark. Thornbound Blade needs level 10 and a Thornbound Scroll. Salvage breaks unequipped gear into that realm's materials. Killing a Vine Crawler drops Verdant Bark. Root Brutes drop Heartwood and can drop the scroll. Grandmother Gnarl drops Gnarl's Seed. Auto-Farm uses the same kill drops. Forge Boost is a 2x Crafting XP hook and is not for sale yet. In Studio, Dev can grant the boost for an hour.
 - In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens, +25 Shard Luck, +1 Ascension, craft materials, or Skip to Rootvault boss. A live server rejects those grants. Ascension 1 unlocks Sunken Reach in both areas. Tidecrypt (the Sunken dungeon) stays locked until then, and it is not built yet.
 
 The Output window prints whether the profile came from a DataStore or from memory.
@@ -231,7 +231,7 @@ The server that loads a player writes its job id into `Lock`. Another server see
 
 Those rules live in `SessionLock.luau` as plain functions, which is what the tests call. `DataService` is the only module that talks to `DataStoreService`. When you outgrow this (gifting, instant handoff between servers), replace the inside of `DataService` with [ProfileStore](https://madstudioroblox.github.io/ProfileStore/). ProfileStore is not on the official Wally index; unofficial copies are not worth the risk. The rest of the game already goes through `mutate`, `snapshot`, and `release`.
 
-Profile fields in version 5:
+Profile fields in version 6:
 
 | Field | Meaning |
 | --- | --- |
@@ -247,11 +247,14 @@ Profile fields in version 5:
 | `pets` | Pets, keyed by unique id. They use the same star feed as gear. |
 | `pity` | Per-pool `{ rollsSinceLegendary, totalRolls }`. |
 | `equipped` | `{ weapon, pet, armor = { helm, chest, legs, boots } }`. Ids must exist in the bag. |
-| `materials` | Stack counts: Verdant Wood, Living Vine, Spore Cap, Ironbark, Heartwood. |
+| `materials` | Stack counts. Verdant forage is still Wood, Vine, Spore Cap, Ironbark, and Heartwood. Each realm also has one common, one rare, and one boss material, plus the Thornbound Scroll. |
 | `consumables` | Healing Tonics. One drink restores 40% of max HP. |
 | `vouchers` | Free cracks for `armory` or `pets`. A dungeon clear can grant one. |
+| `craftingLevel`, `craftingXp` | Forge level, 1 to 100. Separate from combat level. |
+| `craftingMilestones`, `milestoneTable` | Levels 10, 20, … 100 already reached, and the milestone rows (tier, roll bias, rarity-up, Masterwork). |
+| `forgeBoostUntil` | Unix time when 2x Crafting XP ends. 0 means off. |
 
-`Schema.migrate` fills missing keys and will refuse a profile newer than this server instead of rolling it backwards. Version 2 added armor slots. Version 3 added materials, tonics, and vouchers. Version 4 added star level on weapons, armor, and pets. There is a commented example in that function for version 5.
+`Schema.migrate` fills missing keys and will refuse a profile newer than this server instead of rolling it backwards. Version 2 added armor slots. Version 3 added materials, tonics, and vouchers. Version 4 added star level on weapons, armor, and pets. Version 5 split Prism Tokens from Shard Tokens. Version 6 added Crafting Level.
 
 ## Where to change things
 
@@ -297,9 +300,11 @@ src/ReplicatedStorage/Shared/
     Currencies.luau           Shard Tokens and Prism Tokens, separate wallets
     PaidRollPolicy.luau       ArePaidRandomItemsRestricted and trading flag
     CombatMath.luau           Damage, crits, defense, melee and projectile reach
-    Materials.luau            Stackable dungeon materials and the tonic
-    Recipes.luau              Crafting costs and results
-    Crafting.luau             Spend check and the profile change
+    Materials.luau            Stackable materials, one common/rare/boss row per realm
+    Drops.luau                Kill drops for normal, elite, and boss enemies
+    CraftingLevel.luau        Crafting Level 1–100, XP curve, milestone table
+    Recipes.luau              Crafting costs, level gates, and scroll gates
+    Crafting.luau             Craft, salvage, and the profile change
     Dungeons.luau             Rootvault rooms, wave scaling, boss, clear rewards
     Haven.luau                Haven island positions and the walk across them
     InventoryStacks.luau      Display-only stacks and the loadout line

@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
+local Drops = require(ReplicatedStorage.Shared.Drops)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
@@ -665,10 +666,7 @@ local function grant(
 		end
 		levels = gained
 		for materialId, count in pairs(rolled.materials) do
-			if data.materials[materialId] == nil then
-				data.materials[materialId] = 0
-			end
-			data.materials[materialId] += count
+			Materials.add(data.materials, materialId, count)
 		end
 		if rolled.voucher == "armory" or rolled.voucher == "pets" then
 			data.vouchers[rolled.voucher] = (data.vouchers[rolled.voucher] or 0) + 1
@@ -822,6 +820,32 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 		end
 	end
 	if enemy.hp <= 0 then
+		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
+		local landed = {}
+		local saved, saveErr = DataService.mutate(player, function(data)
+			landed = Drops.apply(data.materials, enemy.kind, RollMath.defaultRng())
+			return nil
+		end)
+		if saved then
+			local bits = {}
+			for _, materialId in ipairs(Materials.ORDER) do
+				local count = landed[materialId]
+				if count ~= nil and count > 0 then
+					table.insert(
+						bits,
+						string.format("+%d %s", count, Materials.displayName(materialId))
+					)
+				end
+			end
+			if #bits > 0 then
+				fx(player, {
+					kind = "hint",
+					text = enemy.name .. " dropped " .. table.concat(bits, ", ") .. ".",
+				})
+			end
+		else
+			warn("[Shardfall] Drop failed:", saveErr)
+		end
 		enemy.part.Transparency = 0.55
 		local bar = enemy.part:FindFirstChild("ShardfallBar")
 		if bar ~= nil then
