@@ -19,6 +19,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local CombatHud = require(script.CombatHud)
 local Ui = require(script.Ui)
 
 local player = Players.LocalPlayer
@@ -196,6 +197,77 @@ ui = Ui.mount(playerGui, {
 	onArea = function(poolId: string)
 		selectedPoolId = poolId
 		refreshOdds()
+	end,
+	onCraft = function(recipeId: string, targetUid: string?)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("Craft", recipeId, targetUid)
+			end)
+			local message = remoteError(ok, result, "Craft failed.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local craft = (result :: any).craft
+			local name = if type(craft) == "table" then craft.name else "recipe"
+			ui.setStatus("Crafted " .. tostring(name) .. ".", "ok")
+		end)
+	end,
+	onDungeon = function(action: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("Dungeon", action, "rootvault")
+			end)
+			local message = remoteError(ok, result, "Dungeon request failed.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			if type(result) == "table" and type(result.run) == "table" then
+				ui.setRun(result.run)
+			end
+			if action == "enter" then
+				ui.setStatus("Entered the Rootvault. Click the world or Attack.", "ok")
+			elseif action == "advance" then
+				ui.setStatus("Next room.", "ok")
+			elseif action == "leave" then
+				ui.setStatus("Back at the hub.", "ok")
+			elseif action == "skip" then
+				ui.setStatus("Skipped to the boss.", "ok")
+			end
+		end)
+	end,
+	onTonic = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("UseTonic")
+			end)
+			local message = remoteError(ok, result, "Could not drink that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local healed = if type(result) == "table" then result.healed else nil
+			ui.setStatus(
+				string.format("Healing Tonic restored %s HP.", tostring(healed or "some")),
+				"ok"
+			)
+		end)
+	end,
+	onAttack = function()
+		CombatHud.swing()
+	end,
+})
+
+CombatHud.start(remotes :: Instance, {
+	onRun = function(run)
+		ui.setRun(run)
+	end,
+	onHint = function(text)
+		ui.setStatus(text, "info")
 	end,
 })
 

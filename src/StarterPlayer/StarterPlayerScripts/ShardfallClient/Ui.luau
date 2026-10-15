@@ -11,6 +11,10 @@
 	Armory and Pets are the roll areas. Each one lists realms, and a realm
 	above the player's ascension stays locked. The client sends the selected
 	pool id.
+
+	Shards and Craft are tabs. Rootvault sits under them: Enter, Attack, and
+	a Healing Tonic button. The server still owns the rolls, the hits, and
+	the craft.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,9 +22,12 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(Shared:WaitForChild("Areas"))
+local Dungeons = require(Shared:WaitForChild("Dungeons"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
+local Materials = require(Shared:WaitForChild("Materials"))
 local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
+local Recipes = require(Shared:WaitForChild("Recipes"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
 local Stats = require(Shared:WaitForChild("Stats"))
 
@@ -35,6 +42,10 @@ export type Callbacks = {
 	onRemove: (uid: string) -> (),
 	onDev: (kind: string) -> (),
 	onArea: (poolId: string) -> (),
+	onCraft: (recipeId: string, targetUid: string?) -> (),
+	onDungeon: (action: string) -> (),
+	onTonic: () -> (),
+	onAttack: () -> (),
 }
 
 local COLORS = {
@@ -217,7 +228,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.muted,
 		Text = "Not saving yet. Publish the place and enable Studio API access.",
 		Visible = false,
-		LayoutOrder = 2,
+		LayoutOrder = 23,
 	}, panel) :: TextLabel
 
 	local saveOpen = false
@@ -230,6 +241,133 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		saveNote.Visible = saveBadge.Visible and saveOpen
 	end)
 
+	local page = "shards"
+	local applyPage: () -> ()
+	local selectedRecipe = "briar_edge"
+	local selectedTarget: string? = nil
+	local runState: any = { active = false }
+
+	local tabRow = new("Frame", {
+		Name = "Tabs",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 28),
+		LayoutOrder = 2,
+	}, panel) :: Frame
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+	}, tabRow)
+	local shardTab = makeButton(tabRow, "Shards", COLORS.gold, 1, 28)
+	shardTab.Size = UDim2.new(0.5, -3, 1, 0)
+	shardTab.TextSize = 14
+	local craftTab = makeButton(tabRow, "Craft", COLORS.buttonDim, 2, 28)
+	craftTab.Size = UDim2.new(0.5, -3, 1, 0)
+	craftTab.TextSize = 14
+
+	local dungeonBar = new("Frame", {
+		Name = "Dungeon",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 62),
+		LayoutOrder = 3,
+	}, panel) :: Frame
+	local runLabel = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -56, 0, 28),
+		Font = Enum.Font.BuilderSans,
+		TextSize = 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.muted,
+		Text = "Hub.",
+	}, dungeonBar) :: TextLabel
+	local dungeonActions = new("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 30),
+		Size = UDim2.new(1, 0, 0, 30),
+		BorderSizePixel = 0,
+	}, dungeonBar) :: Frame
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+	}, dungeonActions)
+	local enterButton = makeButton(dungeonActions, "Enter Rootvault", COLORS.button, 1, 30)
+	enterButton.Size = UDim2.fromScale(0.42, 1)
+	enterButton.TextSize = 13
+	local attackButton = makeButton(dungeonActions, "Attack", COLORS.buttonDim, 2, 30)
+	attackButton.Size = UDim2.new(0.28, -6, 1, 0)
+	attackButton.TextSize = 13
+	local tonicButton = makeButton(dungeonActions, "Tonic", COLORS.buttonDim, 3, 30)
+	tonicButton.Size = UDim2.new(0.3, -6, 1, 0)
+	tonicButton.TextSize = 13
+	local leaveButton = makeButton(dungeonBar, "Leave", COLORS.buttonDim, 4, 24)
+	leaveButton.Position = UDim2.fromOffset(0, 0)
+	leaveButton.Size = UDim2.fromOffset(0, 0)
+	leaveButton.Visible = false
+	leaveButton.TextSize = 12
+
+	local function paintDungeon()
+		local note = if type(runState.note) == "string"
+			then runState.note
+			else Dungeons.progressNote(0) or ""
+		if runState.active == true then
+			local phaseNote = ""
+			if runState.boss == true and runState.phase == 2 then
+				phaseNote = "  ·  stand in the sunbeam"
+			elseif runState.boss == true then
+				phaseNote = "  ·  hit during the gold weak spot"
+			end
+			local remaining = runState.remaining or 0
+			runLabel.Text = string.format(
+				"%s  ·  %s (%d/%d)  ·  %d left%s",
+				tostring(runState.dungeonName or "Rootvault"),
+				tostring(runState.roomName or "Room"),
+				runState.roomIndex or 1,
+				runState.roomCount or 1,
+				remaining,
+				phaseNote
+			)
+			enterButton.Text = if runState.cleared == true then "Next room" else "Fighting"
+			enterButton.Active = runState.cleared == true
+			enterButton.AutoButtonColor = runState.cleared == true
+			leaveButton.Visible = true
+			leaveButton.Size = UDim2.fromOffset(52, 22)
+			leaveButton.Position = UDim2.new(1, -52, 0, 0)
+		else
+			runLabel.Text = if note ~= ""
+				then "Hub.  " .. note
+				else "Hub. Click to attack once you are inside."
+			enterButton.Text = "Enter Rootvault"
+			enterButton.Active = true
+			enterButton.AutoButtonColor = true
+			leaveButton.Visible = false
+		end
+	end
+	paintDungeon()
+
+	enterButton.MouseButton1Click:Connect(function()
+		if runState.active == true then
+			if runState.cleared == true then
+				callbacks.onDungeon("advance")
+			end
+			return
+		end
+		callbacks.onDungeon("enter")
+	end)
+	leaveButton.MouseButton1Click:Connect(function()
+		callbacks.onDungeon("leave")
+	end)
+	attackButton.MouseButton1Click:Connect(function()
+		callbacks.onAttack()
+	end)
+	tonicButton.MouseButton1Click:Connect(function()
+		callbacks.onTonic()
+	end)
+
 	local stats = new("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 36),
@@ -240,7 +378,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.text,
 		Text = "Loading profile...",
 		TextWrapped = true,
-		LayoutOrder = 3,
+		LayoutOrder = 4,
 	}, panel) :: TextLabel
 
 	local pityLabel = new("TextLabel", {
@@ -251,14 +389,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
 		Text = RollMath.pityText(0, 50),
-		LayoutOrder = 4,
+		LayoutOrder = 5,
 	}, panel) :: TextLabel
 
 	local pityTrack = new("Frame", {
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 8),
-		LayoutOrder = 5,
+		LayoutOrder = 6,
 	}, panel) :: Frame
 	corner(pityTrack, 4)
 	local pityFill = new("Frame", {
@@ -279,7 +417,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, if #areas > 1 then 28 else 0),
 		Visible = #areas > 1,
-		LayoutOrder = 6,
+		LayoutOrder = 7,
 	}, panel) :: Frame
 	local chips: { { button: TextButton, area: any } } = {}
 	if #areas > 1 then
@@ -317,7 +455,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 18),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 7,
+		LayoutOrder = 8,
 	}, panel) :: Frame
 
 	local realmNext = new("TextLabel", {
@@ -331,10 +469,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.muted,
 		Text = "",
 		Visible = false,
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 	}, panel) :: TextLabel
 
-	local crack = makeButton(panel, "Crack a Shard", COLORS.gold, 9, 44)
+	local crack = makeButton(panel, "Crack a Shard", COLORS.gold, 10, 44)
 	crack.TextColor3 = COLORS.ink
 	crack.TextSize = 18
 
@@ -350,7 +488,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.danger,
 		Text = "Not enough tokens.",
 		Visible = false,
-		LayoutOrder = 10,
+		LayoutOrder = 11,
 	}, panel) :: TextLabel
 
 	local status = new("TextLabel", {
@@ -364,14 +502,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextColor3 = COLORS.muted,
 		Text = "",
 		Visible = false,
-		LayoutOrder = 11,
+		LayoutOrder = 12,
 	}, panel) :: TextLabel
 
 	local actions = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 30),
-		LayoutOrder = 12,
+		LayoutOrder = 13,
 	}, panel) :: Frame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -394,7 +532,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Visible = false,
-		LayoutOrder = 13,
+		LayoutOrder = 14,
 	}, panel) :: Frame
 	corner(oddsWrap, 8)
 	padding(oddsWrap, 8)
@@ -437,12 +575,12 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextWrapped = true,
 		TextColor3 = COLORS.text,
 		Text = "Weapon   None\nPet   None\nArmor   None\nBonus   None",
-		LayoutOrder = 14,
+		LayoutOrder = 15,
 	}, panel) :: TextLabel
 	corner(loadout, 8)
 	padding(loadout, 8)
 
-	new("TextLabel", {
+	local inventoryHeader = new("TextLabel", {
 		Name = "InventoryHeader",
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 18),
@@ -451,7 +589,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.text,
 		Text = "Inventory",
-		LayoutOrder = 15,
+		LayoutOrder = 16,
 	}, panel)
 
 	local inventory = new("Frame", {
@@ -460,14 +598,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 16,
+		LayoutOrder = 17,
 	}, panel) :: Frame
 	list(inventory, 6)
 
 	local devToggle: TextButton? = nil
 	local devBody: Frame? = nil
 	if callbacks.showDev then
-		devToggle = makeButton(panel, "Dev", COLORS.buttonDim, 17, 28)
+		devToggle = makeButton(panel, "Dev", COLORS.buttonDim, 19, 28)
 		devToggle.TextSize = 13
 		devToggle.Font = Enum.Font.BuilderSansMedium
 		devToggle.TextXAlignment = Enum.TextXAlignment.Left
@@ -482,7 +620,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			Size = UDim2.fromScale(1, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Visible = false,
-			LayoutOrder = 18,
+			LayoutOrder = 20,
 		}, panel) :: Frame
 		list(devBody, 6)
 		local grantTokens = makeButton(devBody, "+5 tokens", COLORS.buttonDim, 1, 30)
@@ -500,6 +638,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		grantAscension.MouseButton1Click:Connect(function()
 			callbacks.onDev("ascension")
 		end)
+		local grantMaterials = makeButton(devBody, "+ craft materials", COLORS.buttonDim, 4, 30)
+		grantMaterials.TextSize = 14
+		grantMaterials.MouseButton1Click:Connect(function()
+			callbacks.onDev("materials")
+		end)
+		local skipBoss = makeButton(devBody, "Skip to Rootvault boss", COLORS.buttonDim, 5, 30)
+		skipBoss.TextSize = 14
+		skipBoss.MouseButton1Click:Connect(function()
+			callbacks.onDungeon("skip")
+		end)
 		local devOpen = false
 		devToggle.MouseButton1Click:Connect(function()
 			devOpen = not devOpen
@@ -511,6 +659,38 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 		end)
 	end
+
+	local craftPage = new("Frame", {
+		Name = "Craft",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		LayoutOrder = 30,
+	}, panel) :: Frame
+	list(craftPage, 8)
+	local craftHint = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 32),
+		Font = Enum.Font.BuilderSans,
+		TextSize = 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.muted,
+		Text = "Recipes spend Verdant materials from the Rootvault. The server checks the cost.",
+		LayoutOrder = 1,
+	}, craftPage) :: TextLabel
+	local craftList = new("Frame", {
+		Name = "Recipes",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+	}, craftPage) :: Frame
+	list(craftList, 8)
 
 	local popup = new("Frame", {
 		Name = "Result",
@@ -603,6 +783,41 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local profileLoaded = false
 	local controller = {}
 
+	local function paintTabs()
+		local shards = page == "shards"
+		shardTab.BackgroundColor3 = if shards then COLORS.gold else COLORS.buttonDim
+		shardTab.TextColor3 = if shards then COLORS.ink else COLORS.text
+		craftTab.BackgroundColor3 = if shards then COLORS.buttonDim else COLORS.gold
+		craftTab.TextColor3 = if shards then COLORS.text else COLORS.ink
+	end
+
+	applyPage = function()
+		local shards = page == "shards"
+		paintTabs()
+		pityLabel.Visible = shards
+		pityTrack.Visible = shards
+		areaRow.Visible = shards and #areas > 1
+		realmRow.Visible = shards
+		realmNext.Visible = shards and realmNext.Text ~= ""
+		crack.Visible = shards
+		actions.Visible = shards
+		oddsWrap.Visible = shards and oddsOpen
+		loadout.Visible = shards
+		inventoryHeader.Visible = shards
+		inventory.Visible = shards
+		craftPage.Visible = not shards
+		tokenHint.Visible = shards and profileLoaded and tokens < 1 and not busy
+	end
+
+	shardTab.MouseButton1Click:Connect(function()
+		page = "shards"
+		applyPage()
+	end)
+	craftTab.MouseButton1Click:Connect(function()
+		page = "craft"
+		applyPage()
+	end)
+
 	local function paintCrack()
 		local ready = tokens > 0 and not busy
 		crack.Active = ready
@@ -610,7 +825,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		crack.Text = if busy then "Cracking..." else "Crack a Shard"
 		crack.BackgroundColor3 = if ready then COLORS.gold else COLORS.buttonDim
 		crack.TextColor3 = if ready then COLORS.ink else COLORS.muted
-		tokenHint.Visible = profileLoaded and tokens < 1 and not busy
+		if page == "shards" then
+			tokenHint.Visible = profileLoaded and tokens < 1 and not busy
+		end
 	end
 
 	crack.MouseButton1Click:Connect(function()
@@ -716,6 +933,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			realmNext.Visible = false
 			realmNext.Text = ""
 		end
+		applyPage()
 	end
 
 	local function highestUnlocked(area: any): any
@@ -925,6 +1143,204 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 	end
 
+	local function tonicCount(profile: any): number
+		if type(profile) ~= "table" or type(profile.consumables) ~= "table" then
+			return 0
+		end
+		local count = profile.consumables[Materials.TONIC_ID]
+		if type(count) ~= "number" then
+			return 0
+		end
+		return count
+	end
+
+	local function traitGear(profile: any): { any }
+		local rows = {}
+		if type(profile) ~= "table" or type(profile.inventory) ~= "table" then
+			return rows
+		end
+		for _, item in pairs(profile.inventory) do
+			if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
+				local slots = Rarities.TRAIT_SLOTS[item.rarity]
+				if type(slots) == "number" and slots > 0 then
+					table.insert(rows, item)
+				end
+			end
+		end
+		table.sort(rows, function(a, b)
+			return tostring(a.name) < tostring(b.name)
+		end)
+		return rows
+	end
+
+	local function renderCraft(profile: any)
+		clearGenerated(craftList)
+		tonicButton.Text = string.format("Tonic %d", tonicCount(profile))
+		local owned = {}
+		local bag = if type(profile) == "table" then profile.materials else nil
+		if type(bag) == "table" then
+			for _, materialId in ipairs(Materials.ORDER) do
+				local count = bag[materialId]
+				if type(count) == "number" and count > 0 then
+					table.insert(
+						owned,
+						string.format("%s %d", Materials.displayName(materialId), count)
+					)
+				end
+			end
+		end
+		craftHint.Text = if #owned > 0
+			then table.concat(owned, "   ·   ")
+			else "Clear the Rootvault for wood, vine, spore, bark, and heartwood."
+		local gear = traitGear(profile)
+		local stillThere = false
+		for _, item in ipairs(gear) do
+			if item.uid == selectedTarget then
+				stillThere = true
+			end
+		end
+		if not stillThere then
+			selectedTarget = if gear[1] ~= nil then gear[1].uid else nil
+		end
+
+		for index, recipe in ipairs(Recipes.all()) do
+			local card = new("Frame", {
+				BackgroundColor3 = COLORS.panel,
+				BorderSizePixel = 0,
+				Size = UDim2.fromScale(1, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				LayoutOrder = index,
+			}, craftList) :: Frame
+			corner(card, 8)
+			padding(card, 8)
+			list(card, 4)
+
+			local title = new("TextButton", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 18),
+				Font = Enum.Font.BuilderSansBold,
+				TextSize = 15,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = if recipe.id == selectedRecipe then COLORS.gold else COLORS.text,
+				Text = recipe.name,
+				LayoutOrder = 1,
+			}, card) :: TextButton
+			title.MouseButton1Click:Connect(function()
+				selectedRecipe = recipe.id
+				if latestProfile ~= nil then
+					renderCraft(latestProfile)
+				end
+			end)
+
+			new("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 16),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Font = Enum.Font.BuilderSans,
+				TextSize = 12,
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextColor3 = COLORS.muted,
+				Text = recipe.blurb,
+				LayoutOrder = 2,
+			}, card)
+
+			local costLines = {}
+			local canPay = true
+			local materials = if type(profile) == "table" then profile.materials else nil
+			for _, materialId in ipairs(Materials.ORDER) do
+				local need = recipe.costs[materialId]
+				if type(need) == "number" and need > 0 then
+					local have = 0
+					if type(materials) == "table" and type(materials[materialId]) == "number" then
+						have = materials[materialId]
+					end
+					if have < need then
+						canPay = false
+					end
+					table.insert(
+						costLines,
+						string.format("%s  %d/%d", Materials.displayName(materialId), have, need)
+					)
+				end
+			end
+			local costs = new("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 16),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Font = Enum.Font.BuilderSans,
+				TextSize = 13,
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextColor3 = if canPay then COLORS.ok else COLORS.danger,
+				Text = table.concat(costLines, "\n"),
+				LayoutOrder = 3,
+			}, card) :: TextLabel
+			costs.Name = "Costs"
+
+			if recipe.result.kind == "reroll" then
+				if #gear == 0 then
+					new("TextLabel", {
+						BackgroundTransparency = 1,
+						Size = UDim2.new(1, 0, 0, 16),
+						Font = Enum.Font.BuilderSans,
+						TextSize = 12,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextColor3 = COLORS.muted,
+						Text = "Needs a Rare or better weapon or armor piece.",
+						LayoutOrder = 4,
+					}, card)
+				else
+					for gearIndex, item in ipairs(gear) do
+						local pick = makeButton(
+							card,
+							tostring(item.name),
+							COLORS.buttonDim,
+							3 + gearIndex,
+							24
+						)
+						pick.TextSize = 12
+						local chosen = item.uid == selectedTarget
+						pick.BackgroundColor3 = if chosen then COLORS.gold else COLORS.buttonDim
+						pick.TextColor3 = if chosen then COLORS.ink else COLORS.text
+						pick.MouseButton1Click:Connect(function()
+							selectedTarget = item.uid
+							selectedRecipe = recipe.id
+							if latestProfile ~= nil then
+								renderCraft(latestProfile)
+							end
+						end)
+					end
+				end
+			end
+
+			local craftButton = makeButton(
+				card,
+				"Craft",
+				if canPay then COLORS.button else COLORS.buttonDim,
+				20,
+				28
+			)
+			craftButton.TextSize = 14
+			craftButton.MouseButton1Click:Connect(function()
+				selectedRecipe = recipe.id
+				local target = if recipe.result.kind == "reroll" then selectedTarget else nil
+				callbacks.onCraft(recipe.id, target)
+			end)
+		end
+	end
+
+	function controller.setRun(run: any)
+		if type(run) == "table" then
+			runState = run
+		else
+			runState = { active = false }
+		end
+		paintDungeon()
+	end
+
 	function controller.setProfile(profile: any, saving: boolean)
 		if type(profile) ~= "table" then
 			stats.Text = "Loading profile..."
@@ -933,19 +1349,31 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		latestProfile = profile
 		profileLoaded = true
 		paintSave(saving)
+		local voucherNote = ""
+		if type(profile.vouchers) == "table" then
+			if (profile.vouchers.armory or 0) > 0 then
+				voucherNote ..= string.format("  ·  Armory voucher %d", profile.vouchers.armory)
+			end
+			if (profile.vouchers.pets or 0) > 0 then
+				voucherNote ..= string.format("  ·  Pets voucher %d", profile.vouchers.pets)
+			end
+		end
+		stats.Size = UDim2.new(1, 0, 0, if voucherNote == "" then 36 else 52)
 		stats.Text = string.format(
-			"Lv %d    ·    %d tokens    ·    Luck %d\n%d/%d XP    ·    %d gold    ·    Asc %d",
+			"Lv %d    ·    %d tokens    ·    Luck %d\n%d/%d XP    ·    %d gold    ·    Asc %d%s",
 			profile.level or 1,
 			profile.shardTokens or 0,
 			profile.shardLuck or 0,
 			profile.xp or 0,
 			profile.xpToNext or 100,
 			profile.gold or 0,
-			profile.ascension or 0
+			profile.ascension or 0,
+			voucherNote
 		)
 		tokens = profile.shardTokens or 0
 		paintCrack()
 		renderPity(profile)
+		renderCraft(profile)
 		local gear = InventoryStacks.loadout(profile)
 		loadout.Text = string.format(
 			"Weapon   %s\nPet   %s\nArmor   %s\nBonus   %s",

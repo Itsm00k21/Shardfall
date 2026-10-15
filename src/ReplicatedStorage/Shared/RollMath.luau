@@ -60,6 +60,11 @@ export type Item = {
 	kind: string,
 	rarity: string,
 	traits: { Traits.RolledTrait },
+	stats: { any }?,
+	quality: number?,
+	weaponType: string?,
+	slot: string?,
+	setId: string?,
 	poolId: string,
 	obtainedAt: number,
 }
@@ -338,6 +343,60 @@ function RollMath.roll(pool: Pool, pity: PityState, context: RollContext, rng: R
 		},
 		pityTriggered = pityTriggered,
 		rarity = entry.rarity,
+	}
+end
+
+export type MintContext = {
+	uid: string,
+	now: number,
+	poolId: string?,
+}
+
+-- Builds one specific item. Crafting uses this so a bench result rolls stats
+-- and traits the same way a shard drop does, without touching pity.
+function RollMath.mint(templateId: string, context: MintContext, rng: Rng): Item
+	local base = ItemBases.get(templateId)
+	if base == nil then
+		error("Unknown item '" .. tostring(templateId) .. "'", 2)
+	end
+	if type(context) ~= "table" or type(context.uid) ~= "string" or context.uid == "" then
+		error("Mint context is missing a uid", 2)
+	end
+
+	local stats = {}
+	local quality = nil
+	if type(base.stats) == "table" and #base.stats > 0 then
+		stats, quality = Stats.roll(base.stats, base.rarity, base.weaponType, rng)
+	end
+
+	local traits = {}
+	if base.kind == "Weapon" or base.kind == "Armor" then
+		traits = Traits.roll(base.rarity, rng)
+	end
+
+	local obtainedAt = context.now
+	if type(obtainedAt) ~= "number" then
+		obtainedAt = 0
+	end
+	local poolId = context.poolId
+	if type(poolId) ~= "string" or poolId == "" then
+		poolId = "craft"
+	end
+
+	return {
+		uid = context.uid,
+		templateId = base.id,
+		name = base.name,
+		kind = base.kind,
+		rarity = base.rarity,
+		traits = traits,
+		stats = stats,
+		quality = quality,
+		weaponType = base.weaponType,
+		slot = base.slot,
+		setId = base.setId,
+		poolId = poolId,
+		obtainedAt = obtainedAt,
 	}
 end
 

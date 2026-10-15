@@ -37,6 +37,21 @@
         },
         "ProfileUpdated": {
           "$className": "RemoteEvent"
+        },
+        "Attack": {
+          "$className": "RemoteEvent"
+        },
+        "CombatFx": {
+          "$className": "RemoteEvent"
+        },
+        "Dungeon": {
+          "$className": "RemoteFunction"
+        },
+        "Craft": {
+          "$className": "RemoteFunction"
+        },
+        "UseTonic": {
+          "$className": "RemoteFunction"
         }
       }
     },

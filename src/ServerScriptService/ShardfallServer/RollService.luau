@@ -53,7 +53,17 @@ function RollService.rollFree(player: Player, poolId: any)
 		if not Pools.isUnlocked(pool, data.ascension) then
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
 		end
-		if data.shardTokens < 1 then
+		-- A dungeon voucher cracks that area once and does not spend a token.
+		local area = (pool :: any).area
+		local usedVoucher = false
+		if type(area) == "string" and type(data.vouchers) == "table" then
+			local stack = data.vouchers[area]
+			if type(stack) == "number" and stack >= 1 then
+				data.vouchers[area] = stack - 1
+				usedVoucher = true
+			end
+		end
+		if not usedVoucher and data.shardTokens < 1 then
 			return "You need a shard token to crack a shard."
 		end
 		if Schema.countItems(data) >= Schema.INVENTORY_CAP then
@@ -66,7 +76,9 @@ function RollService.rollFree(player: Player, poolId: any)
 			uid = HttpService:GenerateGUID(false),
 			now = os.time(),
 		}, RollMath.defaultRng())
-		data.shardTokens -= 1
+		if not usedVoucher then
+			data.shardTokens -= 1
+		end
 		Schema.insertItem(data, result.item)
 		captured = result
 		pityAfter = {
@@ -142,6 +154,20 @@ function RollService.devGrant(player: Player, kind: any)
 		end)
 		if not ok then
 			return reject(err or "Could not grant luck.")
+		end
+		return { ok = true }
+	end
+	if kind == "materials" then
+		local ok, err = DataService.mutate(player, function(data)
+			local bundle = { wood = 8, vine = 8, spore = 6, bark = 4, heartwood = 2 }
+			for materialId, count in pairs(bundle) do
+				local owned = data.materials[materialId] or 0
+				data.materials[materialId] = math.min(999, owned + count)
+			end
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not grant materials.")
 		end
 		return { ok = true }
 	end

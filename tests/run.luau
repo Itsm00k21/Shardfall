@@ -20,5 +20,8 @@ require("./InventoryStacks.spec")
 require("./Areas.spec")
 require("./Stats.spec")
 require("./Catalog.spec")
+require("./CombatMath.spec")
+require("./Crafting.spec")
+require("./Dungeons.spec")
 
 process.exit(framework.run())
