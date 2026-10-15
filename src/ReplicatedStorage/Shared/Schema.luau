@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 1.
+	The player profile shape, version 3.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -14,9 +14,11 @@
 	what DataStores can save and what a RemoteEvent can send.
 ]]
 
+local Materials = require("./Materials")
+
 local Schema = {}
 
-Schema.VERSION = 2
+Schema.VERSION = 3
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -74,6 +76,9 @@ export type ProfileData = {
 	pets: { [string]: Item },
 	pity: { [string]: PityState },
 	equipped: Equipped,
+	materials: { [string]: number },
+	consumables: { [string]: number },
+	vouchers: { [string]: number },
 }
 
 function Schema.template(): ProfileData
@@ -94,6 +99,9 @@ function Schema.template(): ProfileData
 			pet = nil,
 			armor = {},
 		},
+		materials = Materials.empty(),
+		consumables = { [Materials.TONIC_ID] = 0 },
+		vouchers = { armory = 0, pets = 0 },
 	}
 end
 
@@ -185,6 +193,9 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.equipped.armor = armor
+	data.materials = Materials.sanitize(data.materials)
+	data.consumables = Materials.sanitizeCounts(data.consumables, { Materials.TONIC_ID })
+	data.vouchers = Materials.sanitizeCounts(data.vouchers, Materials.VOUCHER_AREAS)
 	return data
 end
 
@@ -231,11 +242,26 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 2
 	end
 
+	if version < 3 then
+		-- Materials, tonics, and roll vouchers. Older saves had none of these.
+		if type(raw.materials) ~= "table" then
+			raw.materials = {}
+		end
+		if type(raw.consumables) ~= "table" then
+			raw.consumables = {}
+		end
+		if type(raw.vouchers) ~= "table" then
+			raw.vouchers = {}
+		end
+		raw.schemaVersion = 3
+		version = 3
+	end
+
 	-- Next version goes here, then bump Schema.VERSION and template():
-	-- if version < 3 then
+	-- if version < 4 then
 	--     raw.boosts = raw.boosts or {}
-	--     raw.schemaVersion = 3
-	--     version = 3
+	--     raw.schemaVersion = 4
+	--     version = 4
 	-- end
 
 	return Schema.reconcile(raw), nil
@@ -356,6 +382,9 @@ function Schema.snapshot(data: ProfileData)
 			pet = data.equipped.pet,
 			armor = Schema.deepCopy(data.equipped.armor),
 		},
+		materials = Schema.deepCopy(data.materials),
+		consumables = Schema.deepCopy(data.consumables),
+		vouchers = Schema.deepCopy(data.vouchers),
 	}
 end
 

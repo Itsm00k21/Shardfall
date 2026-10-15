@@ -7,7 +7,8 @@
 	scales them by rarity when the item drops. Pets have no gear stats.
 
 	weaponType is the class-system hook (sword, bow, staff, dagger, hammer).
-	Nothing reads it for combat yet. Stats.CLASS_WEIGHTS is keyed the same way.
+	CombatMath reads it to choose a melee swing or a projectile. Class weights
+	still apply when the stats are rolled, not a second time on hit.
 ]]
 
 local Stats = require("./Stats")

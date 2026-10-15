@@ -186,7 +186,7 @@ describe("Schema", function()
 			inventory = { hood = hood },
 		})
 		assert(migrated ~= nil)
-		expect(migrated.schemaVersion).toEqual(2)
+		expect(migrated.schemaVersion).toEqual(Schema.VERSION)
 		expect(migrated.equipped.armor.helm).toBeNil()
 		expect(migrated.equipped.armor.ring).toBeNil()
 
@@ -199,5 +199,20 @@ describe("Schema", function()
 		expect(kept.equipped.armor.helm).toEqual("hood")
 		Schema.clearEquip(kept, "hood")
 		expect(kept.equipped.armor.helm).toBeNil()
+	end)
+
+	it("fills materials, tonics, and vouchers when migrating an older save", function()
+		local profile = Schema.migrate({
+			schemaVersion = 2,
+			gold = 8,
+		})
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(3)
+		expect(profile.gold).toEqual(8)
+		expect(profile.materials.wood).toEqual(0)
+		expect(profile.materials.heartwood).toEqual(0)
+		expect(profile.consumables.healing_tonic).toEqual(0)
+		expect(profile.vouchers.armory).toEqual(0)
+		expect(profile.vouchers.pets).toEqual(0)
 	end)
 end)

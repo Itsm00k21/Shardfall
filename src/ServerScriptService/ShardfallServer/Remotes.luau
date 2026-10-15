@@ -16,7 +16,10 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local CombatService = require(script.Parent.CombatService)
+local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
+local DungeonService = require(script.Parent.DungeonService)
 local InventoryService = require(script.Parent.InventoryService)
 local RateLimiter = require(script.Parent.RateLimiter)
 local RollService = require(script.Parent.RollService)
@@ -200,6 +203,53 @@ function Remotes.bind()
 			return RollService.devGrant(player, kind)
 		end)
 	end
+
+	functionRemote("Dungeon").OnServerInvoke = function(player, action, dungeonId)
+		return guard(player, "Dungeon", function()
+			if type(action) ~= "string" then
+				return { ok = false, error = "Unknown dungeon action." }
+			end
+			return DungeonService.action(player, action, dungeonId)
+		end)
+	end
+
+	functionRemote("Craft").OnServerInvoke = function(player, recipeId, targetUid)
+		return guard(player, "Craft", function()
+			if targetUid ~= nil and not validUid(targetUid) then
+				return { ok = false, error = "You do not have that item." }
+			end
+			return CraftService.craft(player, recipeId, targetUid)
+		end)
+	end
+
+	functionRemote("UseTonic").OnServerInvoke = function(player)
+		return guard(player, "UseTonic", function()
+			return CombatService.useTonic(player)
+		end)
+	end
+
+	-- A swing is an event, not a function: the player should not wait on a
+	-- round trip before the next click. Cooldown still lives on the server.
+	eventRemote("Attack").OnServerEvent:Connect(function(player, lookX, lookY, lookZ)
+		local reported = typeof(player)
+		local isPlayer = reported == "Instance" and player:IsA("Player")
+		local accepted, why = RemoteCaller.accept(reported, isPlayer)
+		if not accepted then
+			warn("[Shardfall] Attack:", why)
+			return
+		end
+		if not RateLimiter.take(player.UserId, "Attack") then
+			return
+		end
+		local ok, err = xpcall(function()
+			CombatService.attack(player, lookX, lookY, lookZ)
+		end, function(message)
+			return debug.traceback(tostring(message), 2)
+		end)
+		if not ok then
+			warn("[Shardfall] Attack:", err)
+		end
+	end)
 
 	Players.PlayerRemoving:Connect(function(player)
 		RateLimiter.forget(player.UserId)

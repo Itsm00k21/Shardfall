@@ -6,7 +6,12 @@
 	Add a row to `list` to add a trait. RollMath calls Traits.roll for weapons
 	and armor. Pets roll none. Values are rolled uniformly between min and
 	max. "percent" is stored as a fraction (0.05 = 5%) and "count" is an
-	integer. PLACEHOLDER ranges — combat does not read these yet.
+	integer. PLACEHOLDER ranges.
+
+	Combat reads Lifesteal (heal for that fraction of damage dealt) and
+	Gold Find (extra gold on a dungeon clear). Chain Lightning and Bonus Pet
+	Damage are stored for later. Wild Resin calls Traits.pick to replace one
+	trait.
 ]]
 
 local Rarities = require("./Rarities")
@@ -116,6 +121,41 @@ function Traits.roll(rarity: string, rng: Rng): { RolledTrait }
 		})
 	end
 	return rolled
+end
+
+local function rollValue(definition: TraitDefinition, rng: Rng): number
+	if definition.unit == "count" then
+		return rng:nextInteger(definition.min, definition.max)
+	end
+	local alpha = rng:nextNumber()
+	return definition.min + (definition.max - definition.min) * alpha
+end
+
+-- One trait, skipping ids in `banned` when another trait can replace them.
+-- Used by the Wild Resin craft, which rerolls a single slot.
+function Traits.pick(rng: Rng, banned: { [string]: boolean }?): RolledTrait
+	local blocked = banned or {}
+	local bag = {}
+	for _, definition in ipairs(Traits.list) do
+		if blocked[definition.id] ~= true then
+			table.insert(bag, definition)
+		end
+	end
+	if #bag == 0 then
+		for _, definition in ipairs(Traits.list) do
+			table.insert(bag, definition)
+		end
+	end
+	local index = rng:nextInteger(1, #bag)
+	local definition = bag[index]
+	local value = rollValue(definition, rng)
+	return {
+		id = definition.id,
+		name = definition.name,
+		value = value,
+		unit = definition.unit,
+		display = Traits.format(definition.unit, value),
+	}
 end
 
 table.freeze(Traits.list)

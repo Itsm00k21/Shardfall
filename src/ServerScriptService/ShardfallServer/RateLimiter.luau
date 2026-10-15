@@ -33,6 +33,11 @@ local RULES: { [string]: Rule } = {
 	GetProfile = { capacity = 4, perSecond = 1 },
 	GetOdds = { capacity = 4, perSecond = 1 },
 	DevGrant = { capacity = 4, perSecond = 2 },
+	-- Attacks are limited by weapon cooldown too. This only stops a flood.
+	Attack = { capacity = 8, perSecond = 6 },
+	Dungeon = { capacity = 4, perSecond = 1 },
+	Craft = { capacity = 4, perSecond = 1 },
+	UseTonic = { capacity = 3, perSecond = 1 },
 }
 
 local buckets: { [string]: Bucket } = {}

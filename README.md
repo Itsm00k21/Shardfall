@@ -1,6 +1,6 @@
 # Shardfall
 
-Shardfall is a Roblox RPG + RNG game. This repo is the foundation: a [Rojo](https://rojo.space/) project you can sync into Roblox Studio and playtest. There is no combat yet. You can crack a shard, see a rarity-colored result, watch a pity bar fill, and equip or drop what you got.
+Shardfall is a Roblox RPG + RNG game. This repo is a [Rojo](https://rojo.space/) project you can sync into Roblox Studio and playtest. You can crack a shard, equip the rolled weapon, fight through the Rootvault, and craft with what the dungeon drops.
 
 The server decides every roll. The client only asks and displays the answer.
 
@@ -97,7 +97,10 @@ A panel named **SHARDFALL** sits on the right.
 - Out of tokens, Crack dims and a line under the button says "Not enough tokens."
 - Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`). Equip and Drop use one id. Armor equips into helm, chest, legs, or boots.
 - **Paid roll** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
-- In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens, +25 Shard Luck, or +1 Ascension. A live server rejects those grants. Ascension 1 unlocks Sunken Reach in both areas.
+- **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). Click the world, or press **Attack**. Swords, daggers, and hammers swing. Bows and staffs fire a shot. Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
+- The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got.
+- **Craft** shows each recipe with what you own and what it costs. Briar Edge makes a Thorn Dagger, Grovewarden Hood makes the helm, Healing Tonic restores 40% HP, and Wild Resin rerolls one trait on a Rare or better piece. The server spends the materials.
+- In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens, +25 Shard Luck, +1 Ascension, craft materials, or Skip to Rootvault boss. A live server rejects those grants. Ascension 1 unlocks Sunken Reach in both areas. Tidecrypt (the Sunken dungeon) stays locked until then, and it is not built yet.
 
 The Output window prints whether the profile came from a DataStore or from memory.
 
@@ -127,7 +130,7 @@ Tests run in [Lune](https://lune-org.github.io/docs/), not in Studio. They use `
 lune run tests/run
 ```
 
-Exit code 0 means every assertion passed. The distribution test rolls the Verdant armory 20,000 times with pity disabled and checks each item against the disclosed odds. Stat tests check that a roll stays inside its scaled range and that quality is 0% at the minimum and 100% at the maximum.
+Exit code 0 means every assertion passed. The distribution test rolls the Verdant armory 20,000 times with pity disabled and checks each item against the disclosed odds. Stat tests check that a roll stays inside its scaled range and that quality is 0% at the minimum and 100% at the maximum. Combat tests check defense, crits, weapon-type range, and the boss weak spot. Craft tests check that a short recipe spends nothing and that a paid one grants the item.
 
 Build a place file (gitignored, under `build/`):
 
@@ -147,7 +150,7 @@ selene src
 ## How a roll works
 
 1. The client sends a pool id to `RollShard`. It does not send the item.
-2. The server checks the rate limit, that the pool exists and is `public`, that your ascension is high enough, that you have a token, and that the inventory is under the cap (100).
+2. The server checks the rate limit, that the pool exists and is `public`, that your ascension is high enough, that you have a shard token or a voucher for that area, and that the inventory is under the cap (100).
 3. `RollMath.roll` picks an entry from the weights, rolls that item's stats inside the rarity-scaled range, rolls weapon or armor traits, and updates that pool's pity counter. The rolled numbers and the quality percent are stored on the item.
 4. The token is spent and the item is inserted in the same profile update. If that update fails, the token is not spent.
 5. The client gets the item and a profile snapshot. The popup is just a view of that result.
@@ -218,22 +221,25 @@ The server that loads a player writes its job id into `Lock`. Another server see
 
 Those rules live in `SessionLock.luau` as plain functions, which is what the tests call. `DataService` is the only module that talks to `DataStoreService`. When you outgrow this (gifting, instant handoff between servers), replace the inside of `DataService` with [ProfileStore](https://madstudioroblox.github.io/ProfileStore/). ProfileStore is not on the official Wally index; unofficial copies are not worth the risk. The rest of the game already goes through `mutate`, `snapshot`, and `release`.
 
-Profile fields in version 2:
+Profile fields in version 3:
 
 | Field | Meaning |
 | --- | --- |
 | `schemaVersion` | Migration version. Bump `Schema.VERSION` when the shape changes. |
-| `level`, `xp` | Stored now. XP to next level is `100 * level`. Combat is what will grant it. |
-| `ascension` | Unlocks roll pools. 0 is Verdant Wilds. 4 is Void Rift. |
-| `gold` | Soft currency. Unused beyond the display. |
+| `level`, `xp` | XP to next level is `100 * level`. A Rootvault clear grants XP and can level you up. |
+| `ascension` | Unlocks roll pools and, later, dungeons. 0 is Verdant Wilds. 4 is Void Rift. |
+| `gold` | Soft currency. A Rootvault clear pays gold. Gold Find on equipped gear adds a fraction. |
 | `shardTokens` | Spent by free cracks. New profiles start at 25. |
 | `shardLuck` | Luck stat passed into every roll. |
 | `inventory` | Weapons and armor, keyed by unique id. Each gear piece stores `stats` and `quality`. |
 | `pets` | Pets, keyed by unique id. |
 | `pity` | Per-pool `{ rollsSinceLegendary, totalRolls }`. |
 | `equipped` | `{ weapon, pet, armor = { helm, chest, legs, boots } }`. Ids must exist in the bag. |
+| `materials` | Stack counts: Verdant Wood, Living Vine, Spore Cap, Ironbark, Heartwood. |
+| `consumables` | Healing Tonics. One drink restores 40% of max HP. |
+| `vouchers` | Free cracks for `armory` or `pets`. A dungeon clear can grant one. |
 
-`Schema.migrate` fills missing keys and will refuse a profile newer than this server instead of rolling it backwards. Version 2 added armor slots. There is a commented example in that function for version 3.
+`Schema.migrate` fills missing keys and will refuse a profile newer than this server instead of rolling it backwards. Version 2 added armor slots. Version 3 added materials, tonics, and vouchers. There is a commented example in that function for version 4.
 
 ## Where to change things
 
@@ -251,6 +257,10 @@ Profile fields in version 2:
 | Change starter tokens, level curve, or inventory cap | `src/ReplicatedStorage/Shared/Schema.luau` |
 | Change autosave timing | `AUTOSAVE_SECONDS` in `DataService.luau` |
 | Add a remote | `default.project.json` (the instance) and `Remotes.luau` (the handler) |
+| Change hit math or weapon reach | `CombatMath.luau` |
+| Add a material or tonic | `Materials.luau`, then the profile defaults |
+| Add a recipe | `Recipes.luau` |
+| Add a dungeon or enemy | `Dungeons.luau`. Set `ascension` and leave `implemented = false` until the rooms exist |
 
 Shared modules are siblings in a Folder, and they load each other with `require("./Rarities")`. That path works in current Studio (require-by-string) and in the Lune tests. Do not convert `Shared` into an `init.luau` module or those `./` requires will point at the wrong place. Server and client scripts use the usual `require(ReplicatedStorage.Shared.RollMath)` form.
 
@@ -270,6 +280,11 @@ src/ReplicatedStorage/Shared/
     Pools.luau                Per-realm drop tables (placeholder odds)
     Areas.luau                Armory and Pets, the two roll areas
     RollMath.luau             Weights, pity, stats, disclosed odds
+    CombatMath.luau           Damage, crits, defense, melee and projectile reach
+    Materials.luau            Stackable dungeon materials and the tonic
+    Recipes.luau              Crafting costs and results
+    Crafting.luau             Spend check and the profile change
+    Dungeons.luau             Rootvault rooms, enemies, boss, clear rewards
     InventoryStacks.luau      Display-only stacks and the loadout line
     Schema.luau               Profile shape, migrations, snapshots
     SessionLock.luau          Lock / save decisions, no DataStore calls
@@ -280,11 +295,15 @@ src/ServerScriptService/ShardfallServer/
     StoreAdapter.luau         DataStore, or memory when it is unavailable
     RollService.luau          Free rolls and the paid stub
     InventoryService.luau     Add (server-only), equip, unequip, remove
+    CombatService.luau        Swings, projectiles, player HP
+    DungeonService.luau       Builds Rootvault and runs the enemy loop
+    CraftService.luau         Craft remote, one mutate per recipe
     RateLimiter.luau          Per-player burst limits on remotes
     Remotes.luau              Validation in front of the services
 src/StarterPlayer/StarterPlayerScripts/ShardfallClient/
     init.client.luau          Calls the remotes
-    Ui.luau                   Test panel and result popup
+    Ui.luau                   Test panel, craft tab, dungeon buttons
+    CombatHud.luau            Health bar, floating numbers, victory card
 tests/                        Lune specs and the tiny runner
 ```
 
@@ -314,14 +333,14 @@ Point `default.project.json` at the folder Wally created (`Packages` for shared,
 
 ## Next steps
 
-- Press Play, crack a few shards, and read the Output. Then publish and confirm a rejoin keeps the inventory.
-- Grant XP from a real activity. The level fields and `Schema.xpToNext` are already on the profile.
-- Use stats and traits in combat. They are rolled and saved; nothing reads `damage` or `lifesteal` yet.
-- Fill in `Stats.CLASS_WEIGHTS` when a class exists. The weapon type is already on the item, and rolls already multiply by that table.
+- Press Play, crack a shard, equip it, and clear the Rootvault. Then publish and confirm a rejoin keeps the inventory and the materials.
+- Fill in `Stats.CLASS_WEIGHTS` when a class exists. The weapon type already chooses melee or a projectile, and rolls already multiply by that table.
+- Chain Lightning and Bonus Pet Damage are stored on items and not applied in a fight yet. Lifesteal and Gold Find are.
+- Build Tidecrypt by setting `implemented = true` and filling its rooms in `Dungeons.luau`. The ascension gate is already there.
 - Replace the dev token button with a real source (a daily, a quest, a drop).
 - When you sell a shard: a developer product, a receipt handler, and `rollPaid` after the policy check. Keep the disclosed odds exact.
 - Swap `DataService`'s storage for ProfileStore when you need cross-server gifting or faster lock handoff.
-- Pets that follow the character, and a real HUD, once the test panel gets in the way.
+- Pets that follow the character, once the test panel gets in the way.
 
 ## Troubleshooting
 
