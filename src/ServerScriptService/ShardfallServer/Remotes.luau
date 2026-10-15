@@ -22,6 +22,7 @@ local DataService = require(script.Parent.DataService)
 local DungeonService = require(script.Parent.DungeonService)
 local InventoryService = require(script.Parent.InventoryService)
 local RateLimiter = require(script.Parent.RateLimiter)
+local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
@@ -55,6 +56,14 @@ local function eventRemote(name: string): RemoteEvent
 	return instance
 end
 
+function Remotes.pushPolicy(player: Player, policy: any)
+	if player.Parent == nil then
+		return
+	end
+	local remote = eventRemote("PolicyUpdated")
+	remote:FireClient(player, policy)
+end
+
 function Remotes.pushProfile(player: Player, snapshot: any, saving: boolean)
 	if player.Parent == nil then
 		return
@@ -84,6 +93,7 @@ local function respond(player: Player, action: string, result: any)
 	if snapshot ~= nil then
 		result.profile = snapshot
 	end
+	result.policy = PolicyCache.public(player)
 	return result
 end
 
@@ -137,9 +147,20 @@ function Remotes.bind()
 			end
 			local data = DataService.get(player)
 			local luck = if data ~= nil then data.shardLuck else 0
+			local boost = if data ~= nil then data.luckBoost else 0
+			local since = 0
+			if data ~= nil and type(data.pity) == "table" then
+				local bucket = data.pity[pool.id]
+				if type(bucket) == "table" and type(bucket.rollsSinceLegendary) == "number" then
+					since = bucket.rollsSinceLegendary
+				end
+			end
 			return {
 				ok = true,
-				odds = RollMath.odds(pool, luck),
+				odds = RollMath.odds(pool, luck, {
+					rollsSinceLegendary = since,
+					luckBoost = boost,
+				}),
 			}
 		end)
 	end
@@ -147,6 +168,18 @@ function Remotes.bind()
 	functionRemote("RollShard").OnServerInvoke = function(player, poolId)
 		return guard(player, "RollShard", function()
 			return RollService.rollFree(player, poolId)
+		end)
+	end
+
+	functionRemote("BuyPrism").OnServerInvoke = function(player)
+		return guard(player, "BuyPrism", function()
+			return RollService.buyPrismPack(player)
+		end)
+	end
+
+	functionRemote("BuyBoost").OnServerInvoke = function(player)
+		return guard(player, "BuyBoost", function()
+			return RollService.buyLuckBoost(player)
 		end)
 	end
 

@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 4.
+	The player profile shape, version 5.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -19,7 +19,7 @@ local Stars = require("./Stars")
 
 local Schema = {}
 
-Schema.VERSION = 4
+Schema.VERSION = 5
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -75,7 +75,9 @@ export type ProfileData = {
 	ascension: number,
 	gold: number,
 	shardTokens: number,
+	prismTokens: number,
 	shardLuck: number,
+	luckBoost: number,
 	inventory: { [string]: Item },
 	pets: { [string]: Item },
 	pity: { [string]: PityState },
@@ -94,7 +96,9 @@ function Schema.template(): ProfileData
 		gold = 0,
 		-- Enough free cracks to playtest before any token source exists.
 		shardTokens = Schema.STARTER_TOKENS,
+		prismTokens = 0,
 		shardLuck = 0,
+		luckBoost = 0,
 		inventory = {},
 		pets = {},
 		pity = {},
@@ -176,7 +180,9 @@ function Schema.reconcile(data: any): ProfileData
 	data.ascension = wholeNumber(data.ascension, 0, 0)
 	data.gold = wholeNumber(data.gold, 0, 0)
 	data.shardTokens = wholeNumber(data.shardTokens, Schema.STARTER_TOKENS, 0)
+	data.prismTokens = wholeNumber(data.prismTokens, 0, 0)
 	data.shardLuck = wholeNumber(data.shardLuck, 0, 0)
+	data.luckBoost = wholeNumber(data.luckBoost, 0, 0)
 	data.equipped.weapon = optionalUid(data.equipped.weapon)
 	data.equipped.pet = optionalUid(data.equipped.pet)
 	-- An equipped id that is not in the bag must not survive. The client
@@ -324,11 +330,23 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 4
 	end
 
+	if version < 5 then
+		-- Prism Tokens are the Robux wallet. Luck Boost is purchased luck.
+		-- Neither is copied from Shard Tokens.
+		if type(raw.prismTokens) ~= "number" then
+			raw.prismTokens = 0
+		end
+		if type(raw.luckBoost) ~= "number" then
+			raw.luckBoost = 0
+		end
+		raw.schemaVersion = 5
+		version = 5
+	end
+
 	-- Next version goes here, then bump Schema.VERSION and template():
-	-- if version < 5 then
-	--     raw.boosts = raw.boosts or {}
-	--     raw.schemaVersion = 5
-	--     version = 5
+	-- if version < 6 then
+	--     raw.schemaVersion = 6
+	--     version = 6
 	-- end
 
 	return Schema.reconcile(raw), nil
@@ -440,7 +458,9 @@ function Schema.snapshot(data: ProfileData)
 		ascension = data.ascension,
 		gold = data.gold,
 		shardTokens = data.shardTokens,
+		prismTokens = data.prismTokens,
 		shardLuck = data.shardLuck,
+		luckBoost = data.luckBoost,
 		inventory = Schema.deepCopy(data.inventory),
 		pets = Schema.deepCopy(data.pets),
 		pity = Schema.deepCopy(data.pity),

@@ -17,6 +17,15 @@
         "RollPaid": {
           "$className": "RemoteFunction"
         },
+        "BuyPrism": {
+          "$className": "RemoteFunction"
+        },
+        "BuyBoost": {
+          "$className": "RemoteFunction"
+        },
+        "PolicyUpdated": {
+          "$className": "RemoteEvent"
+        },
         "GetProfile": {
           "$className": "RemoteFunction"
         },

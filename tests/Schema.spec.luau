@@ -230,10 +230,29 @@ describe("Schema", function()
 			},
 		})
 		assert(profile ~= nil)
-		expect(profile.schemaVersion).toEqual(4)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
+		expect(profile.prismTokens).toEqual(0)
+		expect(profile.luckBoost).toEqual(0)
+		expect(profile.shardTokens).toEqual(Schema.STARTER_TOKENS)
 		expect(profile.inventory.blade.stars).toEqual(0)
 		expect(profile.inventory.blade.starProgress).toEqual(0)
 		expect(profile.inventory.blade.stats[1].baseValue).toEqual(10)
 		expect(profile.inventory.blade.stats[1].value).toEqual(10)
+	end)
+
+	it("keeps earned Shard Tokens separate from Prism Tokens", function()
+		local profile = Schema.migrate({
+			schemaVersion = 4,
+			shardTokens = 12,
+			shardLuck = 25,
+		})
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(5)
+		expect(profile.shardTokens).toEqual(12)
+		expect(profile.prismTokens).toEqual(0)
+		expect(profile.luckBoost).toEqual(0)
+		expect(profile.shardLuck).toEqual(25)
+		profile.prismTokens = 3
+		expect(profile.shardTokens).toEqual(12)
 	end)
 end)

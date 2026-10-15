@@ -89,19 +89,27 @@ export type OddsRarity = {
 	chance: number,
 }
 
+export type OddsQuery = {
+	rollsSinceLegendary: number?,
+	luckBoost: number?,
+}
+
 export type OddsTable = {
 	poolId: string,
 	poolName: string,
 	luck: number,
+	luckBoost: number,
 	placeholder: boolean,
 	pityLegendaryAt: number,
+	rollsSinceLegendary: number,
+	pityActive: boolean,
 	notice: string,
 	entries: { OddsEntry },
 	rarities: { OddsRarity },
 }
 
--- Short on purpose. The odds panel used to lead with a paragraph, and players
--- never got to the numbers. Pity stays out of the percentages either way.
+-- Kept so older notes still describe the same rule. odds() builds the
+-- string the panel shows, including pity progress and an active boost.
 RollMath.PLACEHOLDER_NOTICE =
 	"PLACEHOLDER rates. Luck included. The pity guarantee is extra and not in these percentages."
 
@@ -207,9 +215,75 @@ function RollMath.pityText(current: number, goal: number): string
 	return string.format("Pity %d / %d toward Legendary", shown, target)
 end
 
-function RollMath.odds(pool: Pool, luckPoints: number): OddsTable
-	local luck = clampLuck(luckPoints)
-	local weights, total = weighted(pool, luck, nil)
+local function queryParts(query: any): (number, number)
+	if type(query) == "number" then
+		if query ~= query or query < 0 then
+			return 0, 0
+		end
+		return math.floor(query), 0
+	end
+	if type(query) ~= "table" then
+		return 0, 0
+	end
+	local since = query.rollsSinceLegendary
+	if type(since) ~= "number" or since ~= since or since < 0 then
+		since = 0
+	else
+		since = math.floor(since)
+	end
+	local boost = query.luckBoost
+	if type(boost) ~= "number" or boost ~= boost or boost < 0 then
+		boost = 0
+	end
+	return since, boost
+end
+
+local function oddsNotice(
+	placeholder: boolean,
+	luck: number,
+	boost: number,
+	since: number,
+	goal: number,
+	pityActive: boolean
+): string
+	local lines = {}
+	if placeholder then
+		table.insert(lines, "PLACEHOLDER rates.")
+	end
+	if boost > 0 then
+		table.insert(lines, string.format("Luck %d, including +%d Luck Boost.", luck, boost))
+	else
+		table.insert(lines, string.format("Luck %d.", luck))
+	end
+	if pityActive then
+		table.insert(
+			lines,
+			"Next roll is the pity guarantee: Legendary or better. These percentages are that roll."
+		)
+	else
+		table.insert(
+			lines,
+			string.format(
+				"Pity %d/%d toward Legendary. The pity guarantee is extra and not in these percentages until it is the next roll.",
+				since,
+				goal
+			)
+		)
+	end
+	table.insert(lines, "Every outcome is an item.")
+	table.insert(
+		lines,
+		"Probabilities are rounded; total of displayed individual probabilities may not equal 100%."
+	)
+	return table.concat(lines, " ")
+end
+
+function RollMath.odds(pool: Pool, luckPoints: number, query: any): OddsTable
+	local since, boost = queryParts(query)
+	local luck = clampLuck(luckPoints) + clampLuck(boost)
+	local pityActive = since + 1 >= pool.pityLegendaryAt
+	local allowed = if pityActive then Rarities.PITY_RESET else nil
+	local weights, total = weighted(pool, luck, allowed)
 	if total <= 0 then
 		error(string.format("Pool '%s' has no positive weights.", pool.id), 2)
 	end
@@ -218,7 +292,18 @@ function RollMath.odds(pool: Pool, luckPoints: number): OddsTable
 	local chanceSum = 0
 	for index, entry in ipairs(pool.entries) do
 		if weights[index] > 0 then
+			if
+				type(entry.name) ~= "string"
+				or entry.name == ""
+				or entry.kind == ""
+				or entry.kind == "Nothing"
+			then
+				error(string.format("Pool '%s' has an empty outcome.", pool.id), 2)
+			end
 			local chance = weights[index] / total
+			if chance <= 0 then
+				error(string.format("Pool '%s' has an empty outcome.", pool.id), 2)
+			end
 			chanceSum += chance
 			table.insert(entries, {
 				templateId = entry.templateId,
@@ -257,9 +342,12 @@ function RollMath.odds(pool: Pool, luckPoints: number): OddsTable
 		poolId = pool.id,
 		poolName = pool.name,
 		luck = luck,
+		luckBoost = boost,
 		placeholder = placeholder,
 		pityLegendaryAt = pool.pityLegendaryAt,
-		notice = if placeholder then RollMath.PLACEHOLDER_NOTICE else RollMath.LIVE_NOTICE,
+		rollsSinceLegendary = since,
+		pityActive = pityActive,
+		notice = oddsNotice(placeholder, luck, boost, since, pool.pityLegendaryAt, pityActive),
 		entries = entries,
 		rarities = rarities,
 	}

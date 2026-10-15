@@ -1,18 +1,28 @@
 --!strict
 
 --[[
-	The gate in front of any paid shard roll.
+	Reads PolicyService:GetPolicyInfoForPlayerAsync for one player.
 
-	PolicyService:GetPolicyInfoForPlayerAsync returns ArePaidRandomItemsRestricted.
-	Roblox requires that check before a player can buy a random item. This
-	function only interprets the result. RollService calls PolicyService, then
-	calls evaluate(), and only then would a real purchase be allowed to run.
+	ArePaidRandomItemsRestricted gates paid random items (Prism Token cracks,
+	Robux packs, luck boosts). IsPaidItemTradingAllowed is a separate flag
+	for trading paid items. This game has no trade UI. canTrade() is the
+	check a later trade path has to call.
 
-	A missing or non-boolean flag fails closed. The purchase stub still
-	refuses after an "allowed" decision — nothing is charged and nothing is rolled.
+	A missing flag or a failed lookup fails closed. Earned Shard Token
+	cracks do not go through this module.
 ]]
 
 local PaidRollPolicy = {}
+
+PaidRollPolicy.REGION_MESSAGE = "Paid random items are unavailable in your region."
+
+export type Read = {
+	ok: boolean,
+	restricted: boolean,
+	tradingAllowed: boolean,
+	code: string,
+	error: string?,
+}
 
 export type Decision = {
 	ok: boolean,
@@ -20,28 +30,49 @@ export type Decision = {
 	error: string?,
 }
 
-function PaidRollPolicy.evaluate(policyInfo: any): Decision
+function PaidRollPolicy.read(policyInfo: any): Read
 	if
 		type(policyInfo) ~= "table"
 		or type(policyInfo.ArePaidRandomItemsRestricted) ~= "boolean"
+		or type(policyInfo.IsPaidItemTradingAllowed) ~= "boolean"
 	then
 		return {
 			ok = false,
+			restricted = true,
+			tradingAllowed = false,
 			code = "policy_unavailable",
 			error = "Could not check purchase policy. Try again.",
 		}
 	end
-	if policyInfo.ArePaidRandomItemsRestricted then
+	local restricted = policyInfo.ArePaidRandomItemsRestricted
+	return {
+		ok = true,
+		restricted = restricted,
+		tradingAllowed = policyInfo.IsPaidItemTradingAllowed,
+		code = if restricted then "restricted" else "allowed",
+		error = if restricted then PaidRollPolicy.REGION_MESSAGE else nil,
+	}
+end
+
+-- Paid random items only. Trading false does not block a Prism crack.
+function PaidRollPolicy.evaluate(policyInfo: any): Decision
+	local read = PaidRollPolicy.read(policyInfo)
+	if not read.ok or read.restricted then
 		return {
 			ok = false,
-			code = "restricted",
-			error = "Paid random items are restricted on this account.",
+			code = read.code,
+			error = read.error,
 		}
 	end
 	return {
 		ok = true,
 		code = "allowed",
 	}
+end
+
+function PaidRollPolicy.canTrade(policyInfo: any): boolean
+	local read = PaidRollPolicy.read(policyInfo)
+	return read.ok and read.tradingAllowed
 end
 
 return PaidRollPolicy

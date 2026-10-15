@@ -124,6 +124,57 @@ describe("RollMath odds", function()
 		expect(RollMath.formatChance(rarityChance("Secret"))).toEqual("0.020%")
 	end)
 
+	it(
+		"sums to 100% with luck, a boost, and an active pity roll, and lists no empty outcome",
+		function()
+			local pool = starter()
+			local boosted = RollMath.odds(pool, 0, { rollsSinceLegendary = 0, luckBoost = 25 })
+			local earned = RollMath.odds(pool, 25)
+			expect(boosted.luck).toEqual(25)
+			expect(boosted.luckBoost).toEqual(25)
+			local boostedSum = 0
+			for _, entry in ipairs(boosted.entries) do
+				boostedSum += entry.chance
+				expect(entry.chance).toBeGreaterThan(0)
+				expect(entry.name ~= "").toBeTrue()
+				expect(entry.kind ~= "Nothing").toBeTrue()
+			end
+			expect(boostedSum).toBeCloseTo(1, 1e-12)
+			expect(#boosted.entries).toEqual(#earned.entries)
+			local function chanceOf(odds, templateId: string): number
+				for _, entry in ipairs(odds.entries) do
+					if entry.templateId == templateId then
+						return entry.chance
+					end
+				end
+				error(templateId)
+			end
+			expect(chanceOf(boosted, "vinewood_sword")).toBeCloseTo(
+				chanceOf(earned, "vinewood_sword"),
+				1e-12
+			)
+			expect(string.find(boosted.notice, "Luck Boost", 1, true) ~= nil).toBeTrue()
+
+			local pity = RollMath.odds(pool, 25, {
+				rollsSinceLegendary = pool.pityLegendaryAt - 1,
+				luckBoost = 25,
+			})
+			expect(pity.pityActive).toBeTrue()
+			local pitySum = 0
+			for _, entry in ipairs(pity.entries) do
+				pitySum += entry.chance
+				expect(entry.chance).toBeGreaterThan(0)
+				local legendary = entry.rarity == "Legendary"
+					or entry.rarity == "Mythic"
+					or entry.rarity == "Secret"
+				expect(legendary).toBeTrue()
+			end
+			expect(pitySum).toBeCloseTo(1, 1e-12)
+			expect(#pity.entries).toBeLessThan(#boosted.entries)
+			expect(string.find(pity.notice, "pity", 1, true) ~= nil).toBeTrue()
+		end
+	)
+
 	it("shifts the disclosed odds at 25 Shard Luck without changing the table", function()
 		local odds = RollMath.odds(starter(), 25)
 		local function formatted(rarity: string): string
