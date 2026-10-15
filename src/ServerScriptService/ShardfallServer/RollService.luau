@@ -83,7 +83,7 @@ local function crack(player: Player, poolId: any, currency: string)
 				return spendError or "You cannot pay for that crack."
 			end
 		end
-		if Schema.countItems(data) >= Schema.INVENTORY_CAP then
+		if Schema.countItems(data) >= Schema.inventoryCap(data) then
 			return "Inventory is full."
 		end
 		local pity = Schema.pityBucket(data, pool.id)
@@ -152,6 +152,12 @@ function RollService.buyForgeBoost(player: Player)
 	local profile = DataService.get(player)
 	local untilTime = if profile ~= nil then profile.forgeBoostUntil else 0
 	return paidStub(player, Currencies.forgeBoostPitch(untilTime, os.time()))
+end
+
+function RollService.buyInventoryExpansion(player: Player)
+	local profile = DataService.get(player)
+	local bonus = if profile ~= nil then profile.inventoryBonus else 0
+	return paidStub(player, Currencies.inventoryPitch(bonus))
 end
 
 function RollService.devGrant(player: Player, kind: any)

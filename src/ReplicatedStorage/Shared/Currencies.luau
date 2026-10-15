@@ -89,6 +89,24 @@ function Currencies.boostPitch(active: any): string
 	)
 end
 
+-- Extra bag slots. No developer product yet. The buy remote refuses and
+-- shows this pitch. The base cap stays in Schema.
+Currencies.INVENTORY_EXPAND_SLOTS = 10
+Currencies.INVENTORY_EXPAND_ROBUX = 80
+
+function Currencies.inventoryPitch(bonus: any): string
+	local extra = bonus
+	if type(extra) ~= "number" or extra ~= extra or extra < 0 then
+		extra = 0
+	end
+	return string.format(
+		"Inventory expansion adds %d slots for %d Robux. You have %d extra slots. Not for sale yet.",
+		Currencies.INVENTORY_EXPAND_SLOTS,
+		Currencies.INVENTORY_EXPAND_ROBUX,
+		math.floor(extra)
+	)
+end
+
 function Currencies.forgeBoostPitch(untilTime: any, now: any): string
 	local stamp = untilTime
 	local clock = now

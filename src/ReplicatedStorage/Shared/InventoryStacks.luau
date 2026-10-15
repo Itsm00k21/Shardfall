@@ -263,7 +263,12 @@ function InventoryStacks.bestFeeder(profile: any, keptUid: string): any?
 	local best = nil
 	local bestQuality = -1
 	for uid, item in pairs(bag) do
-		if uid ~= keptUid and type(item) == "table" and item.templateId == kept.templateId then
+		if
+			uid ~= keptUid
+			and type(item) == "table"
+			and item.locked ~= true
+			and item.templateId == kept.templateId
+		then
 			local quality = if type(item.quality) == "number" then item.quality else 0
 			if best == nil or quality > bestQuality then
 				best = item

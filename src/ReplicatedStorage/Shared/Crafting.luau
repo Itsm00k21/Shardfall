@@ -10,6 +10,7 @@
 ]]
 
 local CraftingLevel = require("./CraftingLevel")
+local InventoryView = require("./InventoryView")
 local ItemBases = require("./ItemBases")
 local Materials = require("./Materials")
 local Rarities = require("./Rarities")
@@ -193,7 +194,7 @@ function Crafting.validate(
 		return nil, "Need " .. table.concat(names, ", ") .. "."
 	end
 	if recipe.result.kind == "item" then
-		if Schema.countItems(profile) >= Schema.INVENTORY_CAP then
+		if Schema.countItems(profile) >= Schema.inventoryCap(profile) then
 			return nil, "Inventory is full."
 		end
 	elseif recipe.result.kind == "consumable" then
@@ -357,14 +358,9 @@ function Crafting.salvage(
 	if item == nil or bag == nil then
 		return nil, "You do not have that item."
 	end
-	if item.kind ~= "Weapon" and item.kind ~= "Armor" then
-		return nil, "Only weapons and armor can be salvaged."
-	end
-	if (item :: any).locked == true then
-		return nil, "That item is locked."
-	end
-	if Schema.isEquipped(profile, targetUid) then
-		return nil, "Unequip it before salvaging."
+	local blocked = InventoryView.salvageBlock(profile, item)
+	if blocked ~= nil then
+		return nil, blocked
 	end
 	local yield = Crafting.salvageYield(item)
 	for materialId, count in pairs(yield) do
@@ -377,6 +373,46 @@ function Crafting.salvage(
 		name = item.name,
 		materials = yield,
 		xp = gained,
+		craftingLevel = profile.craftingLevel,
+	},
+		nil
+end
+
+-- Salvages every unequipped, unlocked weapon or armor piece of one rarity.
+-- Locked and equipped copies stay in the bag.
+function Crafting.salvageRarity(
+	profile: Schema.ProfileData,
+	rarity: string,
+	now: number
+): (any?, string?)
+	if Rarities.INDEX[rarity] == nil then
+		return nil, "Unknown rarity."
+	end
+	local uids = {}
+	for uid, item in pairs(profile.inventory) do
+		local gear = item.kind == "Weapon" or item.kind == "Armor"
+		if gear and item.rarity == rarity and InventoryView.salvageBlock(profile, item) == nil then
+			table.insert(uids, uid)
+		end
+	end
+	if #uids == 0 then
+		return nil, "Nothing of that rarity can be salvaged."
+	end
+	table.sort(uids)
+	local count = 0
+	local xp = 0
+	for _, uid in ipairs(uids) do
+		local summary, reason = Crafting.salvage(profile, uid, now)
+		if reason ~= nil or summary == nil then
+			return nil, reason or "Could not salvage that."
+		end
+		count += 1
+		xp += summary.xp
+	end
+	return {
+		count = count,
+		xp = xp,
+		rarity = rarity,
 		craftingLevel = profile.craftingLevel,
 	},
 		nil

@@ -21,6 +21,7 @@ local RunService = game:GetService("RunService")
 
 local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
+local InventoryHud = require(script.InventoryHud)
 local Ui = require(script.Ui)
 
 local player = Players.LocalPlayer
@@ -42,6 +43,7 @@ end
 
 local shownOddsKey: string? = nil
 local ui
+local inventory
 
 local function invoke(name: string, ...: any)
 	local remote = (remotes :: Instance):WaitForChild(name)
@@ -105,6 +107,9 @@ local function applyProfile(profile: any, saving: any)
 		return
 	end
 	ui.setProfile(profile, saving == true)
+	if inventory ~= nil then
+		inventory.setProfile(profile)
+	end
 	local key = oddsKey(profile)
 	if key ~= shownOddsKey then
 		shownOddsKey = key
@@ -195,48 +200,6 @@ ui = Ui.mount(playerGui, {
 			if ok and type(result) == "table" then
 				applyResult(result)
 			end
-		end)
-	end,
-	onEquip = function(uid: string)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("EquipItem", uid)
-			end)
-			local message = remoteError(ok, result, "Could not equip that.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			ui.setStatus("Equipped.", "ok")
-		end)
-	end,
-	onUnequip = function(uid: string)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("UnequipItem", uid)
-			end)
-			local message = remoteError(ok, result, "Could not unequip that.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			ui.setStatus("Unequipped.", "ok")
-		end)
-	end,
-	onRemove = function(uid: string)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("RemoveItem", uid)
-			end)
-			local message = remoteError(ok, result, "Could not drop that.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			ui.setStatus("Dropped " .. tostring((result :: any).removedName or "item") .. ".", "ok")
 		end)
 	end,
 	onDev = function(kind: string)
@@ -397,6 +360,125 @@ ui = Ui.mount(playerGui, {
 			ui.setStatus(if flag == true then "Auto Attack on." else "Auto Attack off.", "ok")
 		end)
 	end,
+})
+
+inventory = InventoryHud.start(playerGui, {
+	onEquip = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("EquipItem", uid)
+			end)
+			local message = remoteError(ok, result, "Could not equip that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Equipped.", "ok")
+		end)
+	end,
+	onUnequip = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("UnequipItem", uid)
+			end)
+			local message = remoteError(ok, result, "Could not unequip that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Unequipped.", "ok")
+		end)
+	end,
+	onSalvage = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("Salvage", uid)
+			end)
+			local message = remoteError(ok, result, "Could not salvage that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local salvage = if type(result) == "table" then (result :: any).salvage else nil
+			local name = if type(salvage) == "table" then salvage.name else "gear"
+			ui.setStatus("Salvaged " .. tostring(name) .. ".", "ok")
+		end)
+	end,
+	onBulkSalvage = function(rarity: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BulkSalvage", rarity)
+			end)
+			local message = remoteError(ok, result, "Could not salvage those.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local bulk = if type(result) == "table" then (result :: any).bulk else nil
+			local count = if type(bulk) == "table" then bulk.count else 0
+			ui.setStatus(string.format("Salvaged %s %s pieces.", tostring(count), rarity), "ok")
+		end)
+	end,
+	onLock = function(uid: string, locked: boolean)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetItemLock", uid, locked)
+			end)
+			local message = remoteError(ok, result, "Could not change that lock.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus(if locked then "Locked." else "Unlocked.", "ok")
+		end)
+	end,
+	onFavorite = function(uid: string, favorite: boolean)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetItemFavorite", uid, favorite)
+			end)
+			local message = remoteError(ok, result, "Could not change that favorite.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus(if favorite then "Favorited." else "Favorite cleared.", "ok")
+		end)
+	end,
+	onExpand = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyInventoryExpansion")
+			end)
+			local message = remoteError(ok, result, "Could not expand the inventory.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			end
+			if ok and type(result) == "table" then
+				applyResult(result)
+			end
+		end)
+	end,
+	onRemove = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("RemoveItem", uid)
+			end)
+			local message = remoteError(ok, result, "Could not drop that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Dropped " .. tostring((result :: any).removedName or "item") .. ".", "ok")
+		end)
+	end,
 	onFeed = function(keptUid: string, feederUid: string)
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -412,6 +494,23 @@ ui = Ui.mount(playerGui, {
 			local note = if type(feed) == "table" then feed.message else nil
 			ui.setStatus(if type(note) == "string" then note else "Fed.", "ok")
 		end)
+	end,
+	onTonic = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("UseTonic")
+			end)
+			local message = remoteError(ok, result, "Could not drink that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Drank a Healing Tonic.", "ok")
+		end)
+	end,
+	onStatus = function(text: string, kind: string)
+		ui.setStatus(text, kind)
 	end,
 })
 

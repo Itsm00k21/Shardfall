@@ -93,4 +93,31 @@ function CraftService.salvage(player: Player, targetUid: any)
 	}
 end
 
+function CraftService.salvageRarity(player: Player, rarity: any)
+	if type(rarity) ~= "string" or string.match(rarity, "^[%w]+$") == nil or #rarity > 32 then
+		return reject("Unknown rarity.")
+	end
+	local captured: any = nil
+	local ok, err = DataService.mutate(player, function(data)
+		local summary, reason = Crafting.salvageRarity(data, rarity, os.time())
+		if reason ~= nil or summary == nil then
+			return reason or "Could not salvage that."
+		end
+		captured = summary
+		return nil
+	end)
+	if not ok or captured == nil then
+		return reject(err or "Could not salvage that.")
+	end
+	return {
+		ok = true,
+		bulk = {
+			count = captured.count,
+			xp = captured.xp,
+			rarity = captured.rarity,
+			craftingLevel = captured.craftingLevel,
+		},
+	}
+end
+
 return CraftService

@@ -23,7 +23,7 @@ function InventoryService.add(player: Player, item: Schema.Item): (boolean, stri
 		if Schema.findItem(data, item.uid) ~= nil then
 			return "That item is already in the inventory."
 		end
-		if Schema.countItems(data) >= Schema.INVENTORY_CAP then
+		if Schema.countItems(data) >= Schema.inventoryCap(data) then
 			return "Inventory is full."
 		end
 		Schema.insertItem(data, item)
@@ -37,6 +37,9 @@ function InventoryService.remove(player: Player, uid: string): (boolean, string?
 		local item, bag = Schema.findItem(data, uid)
 		if item == nil or bag == nil then
 			return "You do not have that item."
+		end
+		if item.locked == true then
+			return "That item is locked."
 		end
 		removedName = item.name
 		bag[uid] = nil
@@ -53,6 +56,9 @@ function InventoryService.feed(player: Player, keptUid: string, feederUid: strin
 		local feeder, feederBag = Schema.findItem(data, feederUid)
 		if kept == nil or feeder == nil or keptBag == nil or feederBag == nil then
 			return "You do not have that item."
+		end
+		if feeder.locked == true then
+			return "That item is locked."
 		end
 		if keptBag ~= feederBag then
 			return "Feed a duplicate of the same item."
@@ -98,6 +104,29 @@ function InventoryService.feed(player: Player, keptUid: string, feederUid: strin
 		return { ok = false, error = err or "Could not feed that." }
 	end
 	return { ok = true, feed = summary }
+end
+
+function InventoryService.setFlag(
+	player: Player,
+	uid: string,
+	flag: string,
+	value: boolean
+): (boolean, string?)
+	if flag ~= "locked" and flag ~= "favorite" then
+		return false, "Unknown item flag."
+	end
+	return DataService.mutate(player, function(data)
+		local item = Schema.findItem(data, uid)
+		if item == nil then
+			return "You do not have that item."
+		end
+		if flag == "locked" then
+			item.locked = value
+		else
+			item.favorite = value
+		end
+		return nil
+	end)
 end
 
 function InventoryService.equip(player: Player, uid: string): (boolean, string?)

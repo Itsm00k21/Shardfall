@@ -1,12 +1,13 @@
 --!strict
 
 --[[
-	Test harness UI. Not the real game HUD.
+	Side panel for shards, the forge, and the dungeon. The bag itself lives
+	on the Inventory screen (the HUD button and the I key).
 
-	The panel stays short on purpose: stats, a pity line that counts up, one
-	Shard Token crack, and the inventory. Odds is a labeled button above the
-	Prism Token buttons. Saving is a
-	badge, not a paragraph. Studio dev grants sit in a collapsed section.
+	The panel stays short on purpose: stats, a pity line that counts up, and
+	one Shard Token crack. Odds is a labeled button above the Prism Token
+	buttons. Saving is a badge, not a paragraph. Studio dev grants sit in a
+	collapsed section and only exist when the dev gate is on.
 
 	Armory and Pets are the roll areas. Each one lists realms, and a realm
 	above the player's ascension stays locked. The client sends the selected
@@ -33,7 +34,6 @@ local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local Recipes = require(Shared:WaitForChild("Recipes"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
-local Stars = require(Shared:WaitForChild("Stars"))
 local Stats = require(Shared:WaitForChild("Stats"))
 
 local Ui = {}
@@ -44,9 +44,6 @@ export type Callbacks = {
 	onPaid: () -> (),
 	onBuyPrism: () -> (),
 	onBuyBoost: () -> (),
-	onEquip: (uid: string) -> (),
-	onUnequip: (uid: string) -> (),
-	onRemove: (uid: string) -> (),
 	onDev: (kind: string) -> (),
 	onArea: (poolId: string) -> (),
 	onCraft: (recipeId: string, targetUid: string?) -> (),
@@ -57,7 +54,6 @@ export type Callbacks = {
 	onAttack: () -> (),
 	onAutoAttack: (enabled: boolean) -> (),
 	onAutoFarm: (enabled: boolean) -> (),
-	onFeed: (keptUid: string, feederUid: string) -> (),
 }
 
 local COLORS = {
@@ -724,27 +720,19 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(loadout, 8)
 	padding(loadout, 8)
 
-	local inventoryHeader = new("TextLabel", {
-		Name = "InventoryHeader",
+	local inventoryNote = new("TextLabel", {
+		Name = "InventoryNote",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 18),
-		Font = Enum.Font.BuilderSansBold,
-		TextSize = 15,
+		Size = UDim2.new(1, 0, 0, 32),
+		Font = Enum.Font.BuilderSans,
+		TextSize = 13,
+		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = COLORS.text,
-		Text = "Inventory",
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.muted,
+		Text = "Bag, materials, and tonics are on Inventory, or press I.",
 		LayoutOrder = 17,
 	}, panel)
-
-	local inventory = new("Frame", {
-		Name = "Inventory",
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 18,
-	}, panel) :: Frame
-	list(inventory, 6)
 
 	local devToggle: TextButton? = nil
 	local devBody: Frame? = nil
@@ -1000,73 +988,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 	dismiss.MouseButton1Click:Connect(hidePopup)
 
-	local pendingKept: string? = nil
-	local pendingFeeder: string? = nil
-	local feedDialog = new("Frame", {
-		Name = "FeedConfirm",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(320, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = COLORS.background,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = 5,
-	}, screen) :: Frame
-	corner(feedDialog, 12)
-	new("UIStroke", { Color = COLORS.gold, Thickness = 2 }, feedDialog)
-	padding(feedDialog, 16)
-	list(feedDialog, 8)
-	local feedBody = new("TextLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 18),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Font = Enum.Font.BuilderSans,
-		TextSize = 14,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = COLORS.text,
-		Text = "",
-		LayoutOrder = 1,
-		ZIndex = 5,
-	}, feedDialog) :: TextLabel
-	local feedActions = new("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 30),
-		BorderSizePixel = 0,
-		LayoutOrder = 2,
-		ZIndex = 5,
-	}, feedDialog) :: Frame
-	new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 8),
-	}, feedActions)
-	local feedYes = makeButton(feedActions, "Feed", COLORS.gold, 1, 30)
-	feedYes.Size = UDim2.new(0.5, -4, 1, 0)
-	feedYes.TextSize = 14
-	feedYes.TextColor3 = COLORS.ink
-	feedYes.ZIndex = 5
-	local feedNo = makeButton(feedActions, "Cancel", COLORS.buttonDim, 2, 30)
-	feedNo.Size = UDim2.new(0.5, -4, 1, 0)
-	feedNo.TextSize = 14
-	feedNo.ZIndex = 5
-	local function hideFeed()
-		feedDialog.Visible = false
-		pendingKept = nil
-		pendingFeeder = nil
-	end
-	feedNo.MouseButton1Click:Connect(hideFeed)
-	feedYes.MouseButton1Click:Connect(function()
-		local keptUid = pendingKept
-		local feederUid = pendingFeeder
-		hideFeed()
-		if keptUid ~= nil and feederUid ~= nil then
-			callbacks.onFeed(keptUid, feederUid)
-		end
-	end)
-
 	RunService.RenderStepped:Connect(function()
 		local rotation = (os.clock() * 48) % 360
 		for index = #gradients, 1, -1 do
@@ -1113,8 +1034,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		paidFrame.Visible = shards
 		oddsWrap.Visible = shards and oddsOpen
 		loadout.Visible = shards
-		inventoryHeader.Visible = shards
-		inventory.Visible = shards
+		inventoryNote.Visible = shards
 		craftPage.Visible = not shards
 		tokenHint.Visible = shards and profileLoaded and tokens < 1 and not busy
 	end
@@ -1315,202 +1235,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 	paintChips()
 	paintRealms()
-
-	local function openFeed(profile: any, keptUid: string)
-		local kept = nil
-		if type(profile.inventory) == "table" then
-			kept = profile.inventory[keptUid]
-		end
-		if kept == nil and type(profile.pets) == "table" then
-			kept = profile.pets[keptUid]
-		end
-		local feeder = InventoryStacks.bestFeeder(profile, keptUid)
-		if type(kept) ~= "table" or type(feeder) ~= "table" then
-			return
-		end
-		local preview = Stars.advance(kept.stars, kept.starProgress, feeder.quality)
-		if preview == nil then
-			controller.setStatus("That item is already at five stars.", "error")
-			return
-		end
-		local equippedFeeder = false
-		if type(profile.equipped) == "table" then
-			equippedFeeder = profile.equipped.weapon == feeder.uid
-				or profile.equipped.pet == feeder.uid
-			if type(profile.equipped.armor) == "table" then
-				for _, uid in pairs(profile.equipped.armor) do
-					if uid == feeder.uid then
-						equippedFeeder = true
-					end
-				end
-			end
-		end
-		pendingKept = keptUid
-		pendingFeeder = feeder.uid
-		feedBody.Text = Stars.confirmText(kept, feeder, preview, equippedFeeder)
-		feedDialog.Visible = true
-	end
-
-	local function renderInventory(profile: any)
-		clearGenerated(inventory)
-		local rows = {}
-		local equipped = if type(profile.equipped) == "table" then profile.equipped else {}
-		local worn: { [string]: boolean } = {}
-		if type(equipped.weapon) == "string" then
-			worn[equipped.weapon] = true
-		end
-		if type(equipped.pet) == "string" then
-			worn[equipped.pet] = true
-		end
-		if type(equipped.armor) == "table" then
-			for _, uid in pairs(equipped.armor) do
-				if type(uid) == "string" then
-					worn[uid] = true
-				end
-			end
-		end
-		local function collect(bag: any)
-			if type(bag) ~= "table" then
-				return
-			end
-			for _, item in pairs(bag) do
-				if type(item) == "table" then
-					table.insert(rows, {
-						item = item,
-						equipped = type(item.uid) == "string" and worn[item.uid] == true,
-					})
-				end
-			end
-		end
-		collect(profile.inventory)
-		collect(profile.pets)
-
-		local stacks = InventoryStacks.group(rows)
-		if #stacks == 0 then
-			local empty = new("TextLabel", {
-				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 18),
-				Font = Enum.Font.BuilderSans,
-				TextSize = 14,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextColor3 = COLORS.muted,
-				Text = "Nothing yet. Crack a shard.",
-				LayoutOrder = 1,
-			}, inventory) :: TextLabel
-			empty.Name = "Empty"
-			return
-		end
-
-		for index, stack in ipairs(stacks) do
-			local uid = stack.uids[1]
-			local feeder = if type(uid) == "string"
-				then InventoryStacks.bestFeeder(profile, uid)
-				else nil
-			local showFeed = feeder ~= nil and (stack.stars or 0) < Stars.MAX
-			local cardHeight = if showFeed and not stack.equipped then 74 else 52
-			local card = new("Frame", {
-				BackgroundColor3 = COLORS.row,
-				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, cardHeight),
-				ClipsDescendants = true,
-				LayoutOrder = index,
-			}, inventory) :: Frame
-			corner(card, 8)
-			new("Frame", {
-				BackgroundColor3 = rarityColor(stack.rarity),
-				BorderSizePixel = 0,
-				Size = UDim2.new(0, 4, 1, 0),
-			}, card)
-
-			local title = InventoryStacks.rowTitle(stack)
-			local name = new("TextLabel", {
-				BackgroundTransparency = 1,
-				Position = UDim2.fromOffset(12, 6),
-				Size = UDim2.new(1, -92, 0, 18),
-				Font = Enum.Font.BuilderSansBold,
-				TextSize = 14,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				Text = title,
-			}, card) :: TextLabel
-			paintRarity(name, stack.rarity)
-
-			local state = if stack.equipped then "Equipped · " else ""
-			local kindLabel = stack.kind
-			if type(stack.weaponType) == "string" and stack.weaponType ~= "" then
-				kindLabel = string.upper(string.sub(stack.weaponType, 1, 1))
-					.. string.sub(stack.weaponType, 2)
-			end
-			new("TextLabel", {
-				BackgroundTransparency = 1,
-				Position = UDim2.fromOffset(12, 26),
-				Size = UDim2.new(1, -92, 0, 20),
-				Font = Enum.Font.BuilderSans,
-				TextSize = 12,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Top,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = COLORS.muted,
-				Text = string.format(
-					"%s%s · Bonus: %s",
-					state,
-					kindLabel,
-					InventoryStacks.bonusLine(stack.traits)
-				),
-			}, card)
-
-			local canEquip = stack.kind == "Weapon" or stack.kind == "Pet" or stack.kind == "Armor"
-			if canEquip and type(uid) == "string" then
-				local action = makeButton(
-					card,
-					if stack.equipped then "Unequip" else "Equip",
-					COLORS.button,
-					1,
-					20
-				)
-				action.AnchorPoint = Vector2.new(1, 0)
-				action.Position = UDim2.new(1, -8, 0, 6)
-				action.Size = UDim2.fromOffset(68, 20)
-				action.TextSize = 12
-				action.MouseButton1Click:Connect(function()
-					if stack.equipped then
-						callbacks.onUnequip(uid)
-					else
-						callbacks.onEquip(uid)
-					end
-				end)
-			end
-			if showFeed and type(uid) == "string" then
-				local feed = makeButton(card, "Feed", COLORS.gold, 3, 20)
-				feed.AnchorPoint = Vector2.new(1, 0)
-				feed.Position = UDim2.new(1, -8, 0, if canEquip then 28 else 6)
-				feed.Size = UDim2.fromOffset(68, 20)
-				feed.TextSize = 12
-				feed.TextColor3 = COLORS.ink
-				feed.MouseButton1Click:Connect(function()
-					openFeed(profile, uid)
-				end)
-			end
-			if not stack.equipped and type(uid) == "string" then
-				local drop = makeButton(
-					card,
-					if stack.count > 1 then "Drop 1" else "Drop",
-					COLORS.buttonDim,
-					2,
-					20
-				)
-				drop.AnchorPoint = Vector2.new(1, 0)
-				drop.Position =
-					UDim2.new(1, -8, 0, if showFeed then 50 elseif canEquip then 28 else 16)
-				drop.Size = UDim2.fromOffset(68, 20)
-				drop.TextSize = 12
-				drop.TextColor3 = COLORS.danger
-				drop.MouseButton1Click:Connect(function()
-					callbacks.onRemove(uid)
-				end)
-			end
-		end
-	end
 
 	function controller.setBusy(isBusy: boolean)
 		busy = isBusy
@@ -1981,7 +1705,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			gear.bonus
 		)
 		paintRealms()
-		renderInventory(profile)
 	end
 
 	function controller.setPolicy(policy: any)
