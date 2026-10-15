@@ -304,7 +304,7 @@ describe("RollMath rolls", function()
 		expect(pity.rollsSinceLegendary).toEqual(0)
 	end)
 
-	it("rolls the rarity's weapon traits and no traits for pets or materials", function()
+	it("rolls weapon traits, pet traits, and none for materials", function()
 		local function rollKind(kind: string, rarity: string)
 			local pool = {
 				id = "one",
@@ -325,7 +325,10 @@ describe("RollMath rolls", function()
 		end
 
 		expect(#rollKind("Material", "Secret").item.traits).toEqual(0)
-		expect(#rollKind("Pet", "Secret").item.traits).toEqual(0)
+		expect(#rollKind("Pet", "Common").item.traits).toEqual(0)
+		local pet = rollKind("Pet", "Secret")
+		expect(#pet.item.traits).toEqual(3)
+		expect(pet.item.traits[1].id).toEqual("bonus_pet_damage")
 		expect(#rollKind("Armor", "Rare").item.traits).toEqual(1)
 
 		local rare = rollKind("Weapon", "Rare")
@@ -373,6 +376,18 @@ describe("RollMath rolls", function()
 		expect(rollAt(0.249)).toEqual("a")
 		expect(rollAt(0.25)).toEqual("b")
 		expect(rollAt(0.999)).toEqual("b")
+	end)
+
+	it("mints a fern stag at the bottom of its pet ranges", function()
+		local item = RollMath.mint("fern_stag", { uid = "stag", now = 0 }, zeroRng())
+		expect(item.quality).toEqual(0)
+		expect(item.kind).toEqual("Pet")
+		expect(item.weaponType).toBeNil()
+		expect(#item.traits).toEqual(1)
+		expect(item.traits[1].id).toEqual("bonus_pet_damage")
+		expect(item.traits[1].display).toEqual("5.0%")
+		expect(item.stats[1].id).toEqual("pet_damage")
+		expect(item.stats[1].value).toBeCloseTo(5 * 1.35, 1e-9)
 	end)
 end)
 

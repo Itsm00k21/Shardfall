@@ -282,6 +282,38 @@ end
 	Mythic can satisfy the guarantee). Any Legendary-or-better result, forced
 	or not, resets the counter.
 ]]
+local function gearWeight(base: ItemBases.Base?): any
+	if base ~= nil and base.kind == "Pet" then
+		return "pet"
+	end
+	if base ~= nil then
+		return base.weaponType
+	end
+	return nil
+end
+
+-- Stats come from the catalog base. Traits follow the drop's kind even when
+-- the template id is not in the catalog (test pools). Materials roll none.
+local function rollGear(
+	base: ItemBases.Base?,
+	rarity: string,
+	kind: string,
+	rng: Rng
+): ({ any }, number?, { Traits.RolledTrait })
+	local stats = {}
+	local quality = nil
+	if base ~= nil and type(base.stats) == "table" and #base.stats > 0 then
+		stats, quality = Stats.roll(base.stats, rarity, gearWeight(base), rng)
+	end
+	local traits = {}
+	if kind == "Weapon" or kind == "Armor" then
+		traits = Traits.roll(rarity, rng)
+	elseif kind == "Pet" then
+		traits = Traits.rollPet(rarity, rng)
+	end
+	return stats, quality, traits
+end
+
 function RollMath.roll(pool: Pool, pity: PityState, context: RollContext, rng: Rng): RollResult
 	if type(pool) ~= "table" or type(pool.entries) ~= "table" then
 		error("RollMath.roll expected a pool", 2)
@@ -300,18 +332,7 @@ function RollMath.roll(pool: Pool, pity: PityState, context: RollContext, rng: R
 	local entry = pickFrom(pool, weights, total, rng)
 
 	local base = ItemBases.get(entry.templateId)
-	local stats = {}
-	local quality = nil
-	if base ~= nil and type(base.stats) == "table" and #base.stats > 0 then
-		stats, quality = Stats.roll(base.stats, entry.rarity, base.weaponType, rng)
-	end
-
-	-- Weapons and armor roll traits. Pets do not. Common and Uncommon have
-	-- zero trait slots, so those drops still come back with an empty list.
-	local traits = {}
-	if entry.kind == "Weapon" or entry.kind == "Armor" then
-		traits = Traits.roll(entry.rarity, rng)
-	end
+	local stats, quality, traits = rollGear(base, entry.rarity, entry.kind, rng)
 
 	if Rarities.isLegendaryOrBetter(entry.rarity) then
 		pity.rollsSinceLegendary = 0
@@ -363,16 +384,7 @@ function RollMath.mint(templateId: string, context: MintContext, rng: Rng): Item
 		error("Mint context is missing a uid", 2)
 	end
 
-	local stats = {}
-	local quality = nil
-	if type(base.stats) == "table" and #base.stats > 0 then
-		stats, quality = Stats.roll(base.stats, base.rarity, base.weaponType, rng)
-	end
-
-	local traits = {}
-	if base.kind == "Weapon" or base.kind == "Armor" then
-		traits = Traits.roll(base.rarity, rng)
-	end
+	local stats, quality, traits = rollGear(base, base.rarity, base.kind, rng)
 
 	local obtainedAt = context.now
 	if type(obtainedAt) ~= "number" then

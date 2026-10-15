@@ -170,4 +170,29 @@ describe("InventoryStacks", function()
 		expect(gear.weapon).toEqual("Arc Blade")
 		expect(gear.bonus).toEqual("Lifesteal 4.0%")
 	end)
+
+	it("shows pet quality, pet damage, and a trait on the equipped line", function()
+		local stag = item("stag", "fern_stag", "Fern Stag", "Pet", "Rare", {
+			trait("bonus_pet_damage", "Bonus Pet Damage", "5.0%"),
+		})
+		stag.quality = 0.72
+		stag.stats = {
+			{
+				id = "pet_damage",
+				name = "Pet Damage",
+				value = 8,
+				min = 6,
+				max = 10,
+				unit = "flat",
+				roll = 0.5,
+			},
+		}
+		local gear = InventoryStacks.loadout({
+			equipped = { pet = "stag" },
+			inventory = {},
+			pets = { stag = stag },
+		})
+		expect(gear.pet).toEqual("Fern Stag  72% · Pet Damage 8 · Bonus Pet Damage 5.0%")
+		expect(gear.bonus).toEqual("Bonus Pet Damage 5.0%")
+	end)
 end)

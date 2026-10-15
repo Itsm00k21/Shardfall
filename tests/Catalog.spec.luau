@@ -89,9 +89,27 @@ describe("Catalog", function()
 
 		for _, entry in ipairs(pets.entries) do
 			local base = ItemBases.get(entry.templateId)
-			assert(base ~= nil)
+			assert(base ~= nil and base.stats ~= nil)
 			expect(base.kind).toEqual("Pet")
-			expect(base.stats).toBeNil()
+			expect(base.weaponType).toBeNil()
+			expect(#base.stats).toBeGreaterThan(1)
+			local damage = false
+			local speed = false
+			for _, stat in ipairs(base.stats) do
+				if stat.id == "pet_damage" then
+					damage = true
+				elseif stat.id == "attack_speed" then
+					speed = true
+				end
+			end
+			expect(damage).toBeTrue()
+			if entry.templateId == "moss_hare" then
+				expect(#base.stats).toEqual(2)
+				expect(speed).toBeFalse()
+			elseif entry.templateId == "fern_stag" then
+				expect(speed).toBeTrue()
+				expect(base.petStyle).toEqual("beast")
+			end
 		end
 
 		for _, pool in ipairs(Pools.all()) do

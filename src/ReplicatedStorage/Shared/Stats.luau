@@ -12,7 +12,9 @@
 	CLASS_WEIGHTS is the hook for a future class system. Every weight is 1,
 	so class does not change a roll yet. A class will edit this table.
 	Weapon type tags live on the item (`sword`, `bow`, `staff`, `dagger`,
-	`hammer`). Rolls already multiply by the weight for that type.
+	`hammer`). Rolls already multiply by the weight for that type. Pets pass
+	the weight key `pet`, which is also all 1s. That key is not stored as a
+	weapon type on the item.
 ]]
 
 local Rarities = require("./Rarities")
@@ -48,6 +50,8 @@ Stats.DEFS = {
 	crit_damage = { name = "Crit Damage", unit = "multiplier", decimals = 2 },
 	health = { name = "HP", unit = "flat", decimals = 0 },
 	defense = { name = "Defense", unit = "flat", decimals = 0 },
+	pet_damage = { name = "Pet Damage", unit = "flat", decimals = 0 },
+	pet_health = { name = "Pet HP", unit = "flat", decimals = 0 },
 } :: { [string]: StatDefinition }
 
 -- PLACEHOLDER. Both ends of the authored range are multiplied by this.
@@ -74,6 +78,8 @@ local function neutralWeights(): { [string]: number }
 		crit_damage = 1,
 		health = 1,
 		defense = 1,
+		pet_damage = 1,
+		pet_health = 1,
 	}
 end
 
@@ -83,6 +89,7 @@ Stats.CLASS_WEIGHTS = {
 	staff = neutralWeights(),
 	dagger = neutralWeights(),
 	hammer = neutralWeights(),
+	pet = neutralWeights(),
 } :: { [string]: { [string]: number } }
 
 function Stats.classWeight(weaponType: any, statId: string): number

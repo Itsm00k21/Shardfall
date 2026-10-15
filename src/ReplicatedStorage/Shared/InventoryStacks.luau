@@ -110,6 +110,30 @@ local function titled(item: any): string
 	return name
 end
 
+function InventoryStacks.petLine(pet: any): string
+	if type(pet) ~= "table" then
+		return "None"
+	end
+	local line = titled(pet)
+	if type(pet.stats) == "table" then
+		for _, stat in ipairs(pet.stats) do
+			if
+				type(stat) == "table"
+				and stat.id == "pet_damage"
+				and type(stat.value) == "number"
+			then
+				line ..= " · Pet Damage " .. Stats.formatValue(stat)
+				break
+			end
+		end
+	end
+	local bonus = InventoryStacks.bonusLine(pet.traits)
+	if bonus ~= "None" then
+		line ..= " · " .. bonus
+	end
+	return line
+end
+
 local function singleton(item: any, equipped: boolean): Stack
 	local uid = item.uid
 	return {
@@ -225,7 +249,7 @@ function InventoryStacks.loadout(profile: any): Loadout
 	end
 	return {
 		weapon = if weapon ~= nil then titled(weapon) else "None",
-		pet = if pet ~= nil then titled(pet) else "None",
+		pet = InventoryStacks.petLine(pet),
 		armor = armorLabel,
 		bonus = InventoryStacks.bonusLine(traits),
 	}
