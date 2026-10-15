@@ -84,6 +84,7 @@ local hooks: Hooks = {
 
 local vitals: { [Player]: State } = {}
 local autoOn: { [Player]: boolean } = {}
+local steerUntil: { [Player]: number } = {}
 local shots: { Shot } = {}
 local rng = Random.new()
 local lastHint: { [Player]: number } = {}
@@ -461,6 +462,20 @@ function CombatService.setAutoAttack(player: Player, enabled: boolean)
 	autoOn[player] = enabled
 end
 
+-- True while the client reports movement keys or a thumbstick. Expires so a
+-- dropped "released" message cannot pin the character in place.
+function CombatService.setSteering(player: Player, moving: boolean)
+	if moving then
+		steerUntil[player] = os.clock() + 0.8
+	else
+		steerUntil[player] = 0
+	end
+end
+
+function CombatService.isSteering(player: Player): boolean
+	return os.clock() < (steerUntil[player] or 0)
+end
+
 local function releaseSwing(
 	player: Player,
 	hrp: BasePart,
@@ -775,6 +790,7 @@ function CombatService.start()
 	Players.PlayerRemoving:Connect(function(player)
 		vitals[player] = nil
 		autoOn[player] = nil
+		steerUntil[player] = nil
 		lastHint[player] = nil
 		CombatService.clearShots(player)
 	end)

@@ -214,10 +214,10 @@ ui = Ui.mount(playerGui, {
 			ui.setStatus("Crafted " .. tostring(name) .. ".", "ok")
 		end)
 	end,
-	onDungeon = function(action: string)
+	onDungeon = function(action: string, dungeonId: string?)
 		task.spawn(function()
 			local ok, result = pcall(function()
-				return invoke("Dungeon", action, "rootvault")
+				return invoke("Dungeon", action, dungeonId)
 			end)
 			local message = remoteError(ok, result, "Dungeon request failed.")
 			if message ~= nil then
@@ -228,11 +228,10 @@ ui = Ui.mount(playerGui, {
 			if type(result) == "table" and type(result.run) == "table" then
 				ui.setRun(result.run)
 			end
-			if action == "enter" then
-				ui.setStatus(
-					"Entered the Rootvault. Auto Attack is on unless you turned it off.",
-					"ok"
-				)
+			if action == "enter" and dungeonId == "rootvault_waves" then
+				ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
+			elseif action == "enter" then
+				ui.setStatus("Entered the Rootvault. Cleared rooms advance on their own.", "ok")
 			elseif action == "advance" then
 				ui.setStatus("Next room.", "ok")
 			elseif action == "leave" then
@@ -262,6 +261,25 @@ ui = Ui.mount(playerGui, {
 	end,
 	onAttack = function()
 		CombatHud.swing()
+	end,
+	onAutoFarm = function(enabled: boolean)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetAutoFarm", enabled)
+			end)
+			local message = remoteError(ok, result, "Could not set auto farm.")
+			if message ~= nil then
+				ui.setAutoFarm(not enabled)
+				ui.setStatus(message, "error")
+				return
+			end
+			ui.setStatus(
+				if enabled
+					then "Auto Farm is on. Wins and losses start the same run again."
+					else "Auto Farm is off.",
+				"ok"
+			)
+		end)
 	end,
 	onAutoAttack = function(enabled: boolean)
 		task.spawn(function()

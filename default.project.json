@@ -58,6 +58,12 @@
         },
         "SetAutoAttack": {
           "$className": "RemoteFunction"
+        },
+        "SetAutoFarm": {
+          "$className": "RemoteFunction"
+        },
+        "Steer": {
+          "$className": "RemoteEvent"
         }
       }
     },

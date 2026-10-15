@@ -6,6 +6,9 @@
 	The server already decided the hit. CombatFx tells this script where to
 	draw it. Clicking the world (not a button) sends Attack with the camera
 	direction. The panel's Attack button calls CombatHud.swing() too.
+
+	While the player is steering (keyboard, gamepad, or the touch thumbstick),
+	this script tells the server so Auto-Farm stops issuing MoveTo.
 ]]
 
 local Players = game:GetService("Players")
@@ -219,14 +222,18 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	end
 	dismiss.MouseButton1Click:Connect(hideCard)
 
-	local function showCard(title: string, body: string, titleColor: Color3)
+	local function showCard(title: string, body: string, titleColor: Color3, hold: number?)
 		cardGeneration += 1
 		local generation = cardGeneration
 		cardTitle.Text = title
 		cardTitle.TextColor3 = titleColor
 		cardBody.Text = body
 		card.Visible = true
-		task.delay(8, function()
+		local seconds = hold
+		if seconds == nil or seconds <= 0 then
+			seconds = 6
+		end
+		task.delay(seconds, function()
 			if generation == cardGeneration then
 				hideCard()
 			end
@@ -305,13 +312,79 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				callbacks.onHint(payload.text)
 			end
 		elseif payload.kind == "victory" then
-			showCard("Rootvault cleared", victoryBody(payload), Color3.fromRGB(255, 196, 64))
+			local title = if type(payload.dungeonName) == "string"
+				then payload.dungeonName .. " cleared"
+				else "Rootvault cleared"
+			showCard(
+				title,
+				victoryBody(payload),
+				Color3.fromRGB(255, 196, 64),
+				numberFrom(payload, "dismissIn")
+			)
 			callbacks.onRun({ active = false })
 		elseif payload.kind == "defeat" then
 			local text = if type(payload.text) == "string" then payload.text else "Defeated."
-			showCard("Defeated", text, Color3.fromRGB(230, 80, 96))
+			showCard(
+				"Defeated",
+				text,
+				Color3.fromRGB(230, 80, 96),
+				numberFrom(payload, "dismissIn")
+			)
 			callbacks.onRun({ active = false })
 		end
+	end)
+
+	local steer = remotes:FindFirstChild("Steer")
+	local lastSteer = 0
+	local wasSteering = false
+	local controls: any = nil
+	local function moveVector(): Vector3
+		if controls == nil then
+			local scripts = player:FindFirstChild("PlayerScripts")
+			local moduleScript = if scripts ~= nil
+				then scripts:FindFirstChild("PlayerModule")
+				else nil
+			if moduleScript ~= nil and moduleScript:IsA("ModuleScript") then
+				local ok, module = pcall(require, moduleScript)
+				if ok and type(module) == "table" and type(module.GetControls) == "function" then
+					local fetchedOk, fetched = pcall(function()
+						return module:GetControls()
+					end)
+					if fetchedOk then
+						controls = fetched
+					end
+				end
+			end
+		end
+		if type(controls) == "table" and type(controls.GetMoveVector) == "function" then
+			local ok, vector = pcall(function()
+				return controls:GetMoveVector()
+			end)
+			if ok and typeof(vector) == "Vector3" then
+				return vector
+			end
+		end
+		local down = UserInputService:IsKeyDown(Enum.KeyCode.W)
+			or UserInputService:IsKeyDown(Enum.KeyCode.A)
+			or UserInputService:IsKeyDown(Enum.KeyCode.S)
+			or UserInputService:IsKeyDown(Enum.KeyCode.D)
+		return if down then Vector3.new(1, 0, 0) else Vector3.zero
+	end
+	RunService.Heartbeat:Connect(function()
+		if steer == nil or not steer:IsA("RemoteEvent") then
+			return
+		end
+		local steering = moveVector().Magnitude > 0.15
+		local now = os.clock()
+		if steering then
+			if not wasSteering or now - lastSteer > 0.35 then
+				steer:FireServer(true)
+				lastSteer = now
+			end
+		elseif wasSteering then
+			steer:FireServer(false)
+		end
+		wasSteering = steering
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)

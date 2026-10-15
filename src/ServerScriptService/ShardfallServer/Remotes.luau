@@ -231,6 +231,16 @@ function Remotes.bind()
 		end)
 	end
 
+	functionRemote("SetAutoFarm").OnServerInvoke = function(player, enabled)
+		return guard(player, "SetAutoFarm", function()
+			if type(enabled) ~= "boolean" then
+				return { ok = false, error = "Auto farm needs on or off." }
+			end
+			DungeonService.setAutoFarm(player, enabled)
+			return { ok = true, autoFarm = enabled }
+		end)
+	end
+
 	functionRemote("SetAutoAttack").OnServerInvoke = function(player, enabled)
 		return guard(player, "SetAutoAttack", function()
 			if type(enabled) ~= "boolean" then
@@ -268,6 +278,23 @@ function Remotes.bind()
 		if not ok then
 			warn("[Shardfall] Attack:", err)
 		end
+	end)
+
+	eventRemote("Steer").OnServerEvent:Connect(function(player, moving)
+		local reported = typeof(player)
+		local isPlayer = reported == "Instance" and player:IsA("Player")
+		local accepted, why = RemoteCaller.accept(reported, isPlayer)
+		if not accepted then
+			warn("[Shardfall] Steer:", why)
+			return
+		end
+		if type(moving) ~= "boolean" then
+			return
+		end
+		if not RateLimiter.take(player.UserId, "Steer") then
+			return
+		end
+		CombatService.setSteering(player, moving)
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
