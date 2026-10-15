@@ -255,6 +255,24 @@ local function instance(className: string): Mock
 		self.Parent = nil
 	end
 
+	function methods:Clone(): Mock
+		local copy = instance(self.ClassName)
+		for key, value in pairs(self) do
+			if
+				key ~= "children"
+				and key ~= "Parent"
+				and key ~= "attributes"
+				and key ~= "ClassName"
+			then
+				rawset(copy, key, value)
+			end
+		end
+		for key, value in pairs(self.attributes) do
+			copy:SetAttribute(key, value)
+		end
+		return copy
+	end
+
 	if className == "ProximityPrompt" then
 		rawset(object, "Triggered", {
 			Connect = function(_signal, _callback)

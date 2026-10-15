@@ -97,6 +97,9 @@
         },
         "BuyTravelPass": {
           "$className": "RemoteFunction"
+        },
+        "SetGraphicsQuality": {
+          "$className": "RemoteFunction"
         }
       }
     },

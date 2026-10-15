@@ -331,4 +331,33 @@ describe("Schema", function()
 		expect(copy.lastTravel).toEqual(12)
 		expect(copy.travelPass).toEqual(true)
 	end)
+
+	it("keeps a graphics tier and drops an unknown one", function()
+		local fresh = Schema.migrate({
+			schemaVersion = 8,
+			gold = 3,
+		})
+		assert(fresh ~= nil)
+		expect(fresh.schemaVersion).toEqual(Schema.VERSION)
+		expect(fresh.graphicsQuality).toEqual("")
+		expect(fresh.gold).toEqual(3)
+
+		local kept = Schema.migrate({
+			schemaVersion = 8,
+			graphicsQuality = "HIGH",
+			gold = 6,
+		})
+		assert(kept ~= nil)
+		expect(kept.graphicsQuality).toEqual("high")
+		expect(kept.gold).toEqual(6)
+		local copy = Schema.snapshot(kept)
+		expect(copy.graphicsQuality).toEqual("high")
+
+		local dropped = Schema.migrate({
+			schemaVersion = 9,
+			graphicsQuality = "ultra",
+		})
+		assert(dropped ~= nil)
+		expect(dropped.graphicsQuality).toEqual("")
+	end)
 end)

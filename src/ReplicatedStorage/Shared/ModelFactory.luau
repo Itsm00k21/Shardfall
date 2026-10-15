@@ -700,8 +700,27 @@ local function color3(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
 end
 
+local templates: { [string]: Instance } = {}
+
+local function borrow(className: string): Instance
+	local template = templates[className]
+	if template == nil then
+		template = Instance.new(className)
+		if template:IsA("BasePart") then
+			template.Anchored = true
+			template.CanCollide = false
+			template.CanTouch = false
+			template.CastShadow = false
+			template.TopSurface = Enum.SurfaceType.Smooth
+			template.BottomSurface = Enum.SurfaceType.Smooth
+		end
+		templates[className] = template
+	end
+	return template:Clone()
+end
+
 local function attachParticle(part: BasePart, kind: string)
-	local emitter = Instance.new("ParticleEmitter")
+	local emitter = borrow("ParticleEmitter") :: ParticleEmitter
 	emitter.Name = kind
 	emitter.Rate = if kind == "fireflies" then 3 else 8
 	emitter.Lifetime = NumberRange.new(0.8, 1.8)
@@ -728,7 +747,7 @@ local function spawnPiece(
 	cframe: CFrame,
 	anchored: boolean
 ): BasePart
-	local created = Instance.new(source.className)
+	local created = borrow(source.className)
 	local part = created :: BasePart
 	part.Name = source.name
 	part.Size = Vector3.new(source.size[1], source.size[2], source.size[3])
@@ -738,7 +757,7 @@ local function spawnPiece(
 	part.CanCollide = false
 	part.CanTouch = false
 	part.CanQuery = false
-	part.CastShadow = source.lod ~= "small"
+	part.CastShadow = false
 	part.Massless = true
 	part.Transparency = source.transparency
 	part.TopSurface = Enum.SurfaceType.Smooth
@@ -965,7 +984,7 @@ function ModelFactory.dissolve(root: BasePart)
 		return
 	end
 	for index = 1, 7 do
-		local leaf = Instance.new("Part")
+		local leaf = borrow("Part") :: Part
 		leaf.Name = "Leaf"
 		leaf.Size = Vector3.new(0.55, 0.16, 0.8)
 		leaf.Color = color3(if index % 2 == 0 then MOSS else GLOW)

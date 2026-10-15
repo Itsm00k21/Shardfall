@@ -15,6 +15,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local MobileShell = require(script.Parent.MobileShell)
+
 local CombatHud = {}
 
 export type Callbacks = {
@@ -98,9 +100,9 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallCombat"
 	screen.ResetOnSpawn = false
-	screen.IgnoreGuiInset = true
 	screen.DisplayOrder = 8
 	screen.Parent = player:WaitForChild("PlayerGui")
+	MobileShell.mount(screen)
 
 	local hpFrame = Instance.new("Frame")
 	hpFrame.Name = "Health"
@@ -203,7 +205,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	cardBody.Parent = card
 
 	local dismiss = Instance.new("TextButton")
-	dismiss.Size = UDim2.new(1, 0, 0, 32)
+	dismiss.Size = UDim2.new(1, 0, 0, 44)
 	dismiss.BackgroundColor3 = Color3.fromRGB(108, 78, 196)
 	dismiss.BorderSizePixel = 0
 	dismiss.Font = Enum.Font.BuilderSansBold

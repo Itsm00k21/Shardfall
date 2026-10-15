@@ -21,6 +21,9 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(Shared:WaitForChild("Areas"))
@@ -147,6 +150,9 @@ local function makeButton(
 	order: number,
 	height: number
 ): TextButton
+	if height < 44 then
+		height = 44
+	end
 	local widget = new("TextButton", {
 		BackgroundColor3 = color,
 		BorderSizePixel = 0,
@@ -166,16 +172,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local screen = new("ScreenGui", {
 		Name = "Shardfall",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 10,
 	}, playerGui) :: ScreenGui
+	MobileShell.mount(screen)
 
 	local panel = new("ScrollingFrame", {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.new(0, 320, 1, -24),
+		Size = UDim2.new(0.92, 0, 1, -168),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
@@ -186,6 +192,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: ScrollingFrame
 	corner(panel, 12)
 	padding(panel, 12)
+	MobileShell.aspect(panel, 0.62)
+	MobileShell.limit(panel, 420, 1200)
+	if UserInputService.TouchEnabled then
+		panel.Visible = false
+	end
 	list(panel, 8)
 	new("UIStroke", {
 		Color = COLORS.stroke,
@@ -196,7 +207,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local header = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 48),
 		LayoutOrder = 1,
 	}, panel) :: Frame
 	new("TextLabel", {
@@ -212,7 +223,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local saveBadge = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(76, 20),
+		Size = UDim2.fromOffset(96, 44),
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -259,7 +270,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Tabs",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, 44),
 		LayoutOrder = 2,
 	}, panel) :: Frame
 	new("UIListLayout", {
@@ -278,7 +289,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Dungeon",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 160),
+		Size = UDim2.new(1, 0, 0, 250),
 		LayoutOrder = 3,
 	}, panel) :: Frame
 	local runLabel = new("TextLabel", {
@@ -295,7 +306,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local dungeonActions = new("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(0, 30),
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 44),
 		BorderSizePixel = 0,
 	}, dungeonBar) :: Frame
 	new("UIListLayout", {
@@ -318,8 +329,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	leaveButton.Visible = false
 	leaveButton.TextSize = 12
 	local wavesButton = makeButton(dungeonBar, "Rootvault Waves", COLORS.button, 6, 26)
-	wavesButton.Position = UDim2.fromOffset(0, 64)
-	wavesButton.Size = UDim2.new(1, 0, 0, 26)
+	wavesButton.Position = UDim2.fromOffset(0, 82)
+	wavesButton.Size = UDim2.new(1, 0, 0, 44)
 	wavesButton.TextSize = 13
 
 	local function paintDungeon()
@@ -370,8 +381,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			wavesButton.AutoButtonColor = false
 			wavesButton.Text = "Rootvault Waves"
 			leaveButton.Visible = true
-			leaveButton.Size = UDim2.fromOffset(52, 22)
-			leaveButton.Position = UDim2.new(1, -52, 0, 0)
+			leaveButton.Size = UDim2.fromOffset(96, 44)
+			leaveButton.Position = UDim2.new(1, -96, 0, 0)
 		else
 			runLabel.Text = if note ~= ""
 				then "Hub.  " .. note
@@ -415,8 +426,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local autoEnabled = true
 	local autoButton = makeButton(dungeonBar, "Auto Attack: On", COLORS.gold, 5, 26)
-	autoButton.Position = UDim2.fromOffset(0, 94)
-	autoButton.Size = UDim2.new(1, 0, 0, 26)
+	autoButton.Position = UDim2.fromOffset(0, 132)
+	autoButton.Size = UDim2.new(1, 0, 0, 44)
 	autoButton.TextSize = 13
 	autoButton.TextColor3 = COLORS.ink
 	local function paintAuto()
@@ -432,8 +443,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local farmEnabled = false
 	local farmButton = makeButton(dungeonBar, "Auto Farm: Off", COLORS.buttonDim, 7, 26)
-	farmButton.Position = UDim2.fromOffset(0, 124)
-	farmButton.Size = UDim2.new(1, 0, 0, 26)
+	farmButton.Position = UDim2.fromOffset(0, 182)
+	farmButton.Size = UDim2.new(1, 0, 0, 44)
 	farmButton.TextSize = 13
 	local function paintFarm()
 		farmButton.Text = if farmEnabled then "Auto Farm: On" else "Auto Farm: Off"
@@ -493,7 +504,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Areas",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, if #areas > 1 then 28 else 0),
+		Size = UDim2.new(1, 0, 0, if #areas > 1 then 44 else 0),
 		Visible = #areas > 1,
 		LayoutOrder = 7,
 	}, panel) :: Frame
@@ -507,7 +518,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		}, areaRow)
 		for index, area in ipairs(areas) do
 			local chip = makeButton(areaRow, area.name, COLORS.buttonDim, index, 26)
-			chip.Size = UDim2.fromOffset(0, 26)
+			chip.Size = UDim2.fromOffset(0, 44)
 			chip.AutomaticSize = Enum.AutomaticSize.X
 			chip.TextSize = 13
 			chip.Font = Enum.Font.BuilderSansMedium
@@ -586,7 +597,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local actions = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 44),
 		LayoutOrder = 13,
 	}, panel) :: Frame
 	new("UIListLayout", {
@@ -866,7 +877,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local forgeTabs = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 44),
 		LayoutOrder = 5,
 	}, craftPage) :: Frame
 	new("UIListLayout", {
@@ -1164,7 +1175,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			for index, pool in ipairs(unlocked) do
 				local chip =
 					makeButton(realmRow, pool.short or pool.name, COLORS.buttonDim, index, 24)
-				chip.Size = UDim2.fromOffset(0, 24)
+				chip.Size = UDim2.fromOffset(0, 44)
 				chip.AutomaticSize = Enum.AutomaticSize.X
 				chip.TextSize = 12
 				chip.Font = Enum.Font.BuilderSansMedium
@@ -1255,7 +1266,12 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		paintFarm()
 	end
 
+	function controller.toggleMenu()
+		panel.Visible = not panel.Visible
+	end
+
 	function controller.openPanel(kind: string, areaId: string?)
+		panel.Visible = true
 		if kind == "craft" then
 			page = "craft"
 			applyPage()
@@ -1399,7 +1415,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			local title = new("TextButton", {
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 18),
+				Size = UDim2.new(1, 0, 0, 44),
 				Font = Enum.Font.BuilderSansBold,
 				TextSize = 15,
 				TextXAlignment = Enum.TextXAlignment.Left,
@@ -1574,7 +1590,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			local row = new("Frame", {
 				BackgroundColor3 = COLORS.panel,
 				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 36),
+				Size = UDim2.new(1, 0, 0, 52),
 				LayoutOrder = index,
 			}, salvageList) :: Frame
 			corner(row, 8)
@@ -1593,7 +1609,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			local salvageButton = makeButton(row, "Salvage", COLORS.buttonDim, 1, 24)
 			salvageButton.AnchorPoint = Vector2.new(1, 0.5)
 			salvageButton.Position = UDim2.new(1, -6, 0.5, 0)
-			salvageButton.Size = UDim2.fromOffset(72, 24)
+			salvageButton.Size = UDim2.fromOffset(96, 44)
 			salvageButton.TextSize = 12
 			salvageButton.MouseButton1Click:Connect(function()
 				callbacks.onSalvage(item.uid)

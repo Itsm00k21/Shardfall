@@ -45,6 +45,7 @@ local RULES: { [string]: Rule } = {
 	BuyInventoryExpansion = { capacity = 2, perSecond = 0.5 },
 	Travel = { capacity = 4, perSecond = 1 },
 	BuyTravelPass = { capacity = 2, perSecond = 0.5 },
+	SetGraphicsQuality = { capacity = 4, perSecond = 1 },
 	SetItemLock = { capacity = 6, perSecond = 3 },
 	SetItemFavorite = { capacity = 6, perSecond = 3 },
 	UseTonic = { capacity = 3, perSecond = 1 },
