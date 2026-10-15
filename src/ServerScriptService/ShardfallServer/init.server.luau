@@ -6,7 +6,8 @@
 	Order matters. Remotes are bound and the profile listener is connected
 	before DataService.start(), which is what yields on DataStores and then
 	tells the client the profile is ready. The listener is registered first
-	so a fast in-memory load still pushes a snapshot.
+	so a fast in-memory load still pushes a snapshot. Dungeon startup, including
+	the hub build, is isolated so a map error cannot skip that profile push.
 ]]
 
 local CombatService = require(script.CombatService)
@@ -40,5 +41,8 @@ CombatService.bindHooks({
 	end,
 })
 CombatService.start()
-DungeonService.start()
+local dungeonOk, dungeonError = pcall(DungeonService.start)
+if not dungeonOk then
+	warn("[Shardfall] Dungeon startup failed: " .. tostring(dungeonError))
+end
 DataService.start()

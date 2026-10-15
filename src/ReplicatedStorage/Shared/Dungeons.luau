@@ -103,9 +103,11 @@ Dungeons.WAVE_BOSS_DAMAGE = 1.15
 -- Negative room index so the arena sits on the other side of the hub.
 Dungeons.WAVES_ROOM_INDEX = -1
 
--- Hub at the origin. Room n sits this many studs further along Z so the
--- rooms do not overlap. Players are teleported; there is no corridor.
+-- Haven occupies the origin. Room n sits REALM_OFFSET plus this many studs
+-- further along Z so the crawl does not overlap the islands. Players are
+-- teleported; there is no corridor.
 Dungeons.ROOM_SPACING = 140
+Dungeons.REALM_OFFSET = 4000
 
 Dungeons.ENEMIES = {
 	vine_crawler = {
@@ -301,9 +303,9 @@ function Dungeons.isUnlocked(dungeon: DungeonDef, ascension: any): boolean
 	return level >= dungeon.ascension
 end
 
--- Where room `index` (1-based) is built, in studs. The hub is index 0.
+-- Where room `index` (1-based) is built, in studs. The hub is not a room.
 function Dungeons.roomOrigin(index: number): (number, number, number)
-	return 0, 0, index * Dungeons.ROOM_SPACING
+	return 0, 0, Dungeons.REALM_OFFSET + index * Dungeons.ROOM_SPACING
 end
 
 function Dungeons.enemy(kind: string): EnemyDef?

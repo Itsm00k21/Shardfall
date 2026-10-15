@@ -3,9 +3,9 @@
 --[[
 	Rootvault, built when the server starts.
 
-	Studio does not need a hand-placed map. This module creates a hub and
-	four rooms in Workspace.ShardfallWorld, then teleports the player between
-	them. Enemies are anchored parts with a chase-and-swing loop. The boss
+	Studio does not need a hand-placed map. HavenBuilder creates the hub.
+	This module creates the crawl rooms in Workspace.ShardfallWorld, then
+	teleports the player between them. Enemies are anchored parts with a chase-and-swing loop. The boss
 	adds a weak spot, then a fog that only the sunbeam saves you from.
 
 	A later realm is a row in Dungeons.luau with a higher ascension. Until
@@ -27,11 +27,13 @@ local RunService = game:GetService("RunService")
 
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
+local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
+local HavenBuilder = require(script.Parent.HavenBuilder)
 
 local DungeonService = {}
 
@@ -89,6 +91,7 @@ type Restart = {
 
 local runs: { [Player]: Run } = {}
 local touchAt: { [Player]: number } = {}
+local fallAt: { [Player]: number } = {}
 local farmOn: { [Player]: boolean } = {}
 local restartAt: { [Player]: Restart } = {}
 local idleNoted: { [Player]: boolean } = {}
@@ -134,6 +137,13 @@ local function teleport(player: Player, cframe: CFrame)
 	if character == nil then
 		return
 	end
+	-- Rooms sit thousands of studs from the plaza. With streaming on, the
+	-- floor has to exist before the character moves or the player falls.
+	pcall(function()
+		if workspace.StreamingEnabled == true then
+			player:RequestStreamAroundAsync(cframe.Position, 5)
+		end
+	end)
 	local hrp = rootPart(player)
 	character:PivotTo(cframe)
 	if hrp ~= nil then
@@ -192,7 +202,11 @@ local function roomCFrame(index: number, localOffset: Vector3): CFrame
 end
 
 local function hubCFrame(): CFrame
-	return CFrame.lookAt(Vector3.new(0, 4, -12), Vector3.new(0, 3, 8))
+	local spawn = Haven.SPAWN
+	return CFrame.lookAt(
+		Vector3.new(spawn.x, spawn.y, spawn.z),
+		Vector3.new(spawn.lookX, spawn.y + 12, spawn.lookZ)
+	)
 end
 
 local function roomSpawn(index: number): CFrame
@@ -215,9 +229,9 @@ local function buildRoom(
 	local floorColor = if dungeon.endless == true
 		then Color3.fromRGB(42, 58, 78)
 		elseif index == #dungeon.rooms then Color3.fromRGB(28, 48, 36)
-		else Color3.fromRGB(54, 86, 52)
+		else Color3.fromRGB(58, 112, 54)
 	local center = roomCFrame(place, Vector3.new(0, -0.5, 0))
-	makePart(
+	local floor = makePart(
 		"Floor",
 		Vector3.new(dungeon.floorSize, 1, dungeon.floorSize),
 		center,
@@ -225,6 +239,41 @@ local function buildRoom(
 		model,
 		true
 	)
+	floor.Material = if dungeon.endless == true then Enum.Material.Slate else Enum.Material.Grass
+	if dungeon.endless ~= true then
+		local path = makePart(
+			"Path",
+			Vector3.new(8, 0.35, dungeon.floorSize * 0.62),
+			roomCFrame(place, Vector3.new(0, 0.2, 0)),
+			Color3.fromRGB(112, 86, 52),
+			model,
+			true
+		)
+		path.Material = Enum.Material.Ground
+		local trees = { { -16, -14 }, { 16, -12 }, { -14, 14 }, { 18, 8 } }
+		for treeIndex, spot in ipairs(trees) do
+			local trunk = makePart(
+				"TreeTrunk",
+				Vector3.new(2, 7, 2),
+				roomCFrame(place, Vector3.new(spot[1], 3.5, spot[2])),
+				Color3.fromRGB(92, 64, 40),
+				model,
+				true
+			)
+			trunk.Material = Enum.Material.Wood
+			local canopy = makePart(
+				"TreeCanopy",
+				Vector3.new(7, 7, 7),
+				roomCFrame(place, Vector3.new(spot[1], 8.2, spot[2])),
+				Color3.fromRGB(46, 120, 58),
+				model,
+				false
+			)
+			canopy.Shape = Enum.PartType.Ball
+			canopy.Material = Enum.Material.Grass
+			canopy.Name = "TreeCanopy" .. tostring(treeIndex)
+		end
+	end
 
 	local half = dungeon.floorSize / 2
 	local wallColor = Color3.fromRGB(34, 58, 40)
@@ -292,44 +341,29 @@ local function buildWorld()
 	world.Parent = workspace
 	worldFolder = world
 
-	local hub = Instance.new("Folder")
-	hub.Name = "Hub"
-	hub.Parent = world
-	makePart(
-		"Floor",
-		Vector3.new(48, 1, 48),
-		CFrame.new(0, -0.5, 0),
-		Color3.fromRGB(86, 120, 72),
-		hub,
-		true
-	)
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "HubSpawn"
-	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.CFrame = CFrame.new(0, 0.5, -12)
-	spawn.Anchored = true
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.Color = Color3.fromRGB(196, 176, 120)
-	spawn.Material = Enum.Material.SmoothPlastic
-	spawn.Parent = hub
-
-	local pad = makePart(
-		"EnterPad",
-		Vector3.new(8, 0.6, 8),
-		CFrame.new(0, 0.4, 8),
-		Color3.fromRGB(255, 196, 64),
-		hub,
-		false
-	)
-	pad.Material = Enum.Material.Neon
-	pad.CanTouch = true
-	pad:SetAttribute("EnterDungeon", Dungeons.ROOTVAULT_ID)
-	sign(hub, CFrame.new(0, 4, 8), "ENTER ROOTVAULT", 14)
+	local staleHaven = workspace:FindFirstChild("Haven")
+	if staleHaven ~= nil then
+		staleHaven:Destroy()
+	end
+	-- Persistent before the model is parented, and a direct Workspace child
+	-- so it shows up next to Terrain instead of inside a folder.
+	local hub = Instance.new("Model")
+	hub.Name = "Haven"
+	hub.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	hub.Parent = workspace
+	local built, hubResult = pcall(HavenBuilder.build, hub)
+	if built then
+		local count = if type(hubResult) == "number" then hubResult else 0
+		print(string.format("[Shardfall] Haven hub built (%d parts)", count))
+	else
+		warn("[Shardfall] Haven hub failed to build: " .. tostring(hubResult))
+	end
 
 	local rooms = Instance.new("Folder")
 	rooms.Name = "Rooms"
 	rooms.Parent = world
+	local _, _, roomZ = Dungeons.roomOrigin(1)
+	print(string.format("[Shardfall] Rootvault rooms start at z=%.0f", roomZ))
 	local dungeon = Dungeons.get(Dungeons.ROOTVAULT_ID)
 	assert(dungeon ~= nil, "Rootvault is missing from Dungeons.luau")
 	for index = 1, #dungeon.rooms do
@@ -1086,6 +1120,21 @@ local function onHeartbeat(dt: number)
 			end
 		end
 	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		if runs[player] ~= nil or player.Parent == nil then
+			continue
+		end
+		local hrp = rootPart(player)
+		if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
+			continue
+		end
+		if (fallAt[player] or 0) > now then
+			continue
+		end
+		fallAt[player] = now + 2
+		print("[Shardfall] " .. player.Name .. " fell off Haven; returning to HubSpawn")
+		teleport(player, hubCFrame())
+	end
 end
 
 local function reject(message: string)
@@ -1165,6 +1214,10 @@ function DungeonService.enter(player: Player, dungeonId: any)
 		spawnRoom(player, run)
 		teleport(player, roomSpawn(1))
 	end
+	-- Same payload the Enter Rootvault button's remote returns, so a portal
+	-- entry updates the panel instead of leaving that button stale.
+	local note = if endless then "Entered Rootvault Waves." else "Entered the Rootvault."
+	pushRun(player, note)
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1257,11 +1310,7 @@ local function debounce(player: Player): boolean
 	return true
 end
 
-local function bindTouches()
-	local world = worldFolder
-	if world == nil then
-		return
-	end
+local function bindTouchRoot(world: Instance)
 	for _, descendant in ipairs(world:GetDescendants()) do
 		if descendant:IsA("BasePart") and descendant.Name == "Portal" then
 			descendant.Touched:Connect(function(hit)
@@ -1299,6 +1348,20 @@ local function bindTouches()
 	end
 end
 
+local function bindTouches()
+	local roots = {}
+	if worldFolder ~= nil then
+		table.insert(roots, worldFolder)
+	end
+	local haven = workspace:FindFirstChild("Haven")
+	if haven ~= nil then
+		table.insert(roots, haven)
+	end
+	for _, world in ipairs(roots) do
+		bindTouchRoot(world)
+	end
+end
+
 function DungeonService.onPlayerDown(player: Player)
 	finish(player, false)
 end
@@ -1306,6 +1369,18 @@ end
 function DungeonService.start()
 	buildWorld()
 	bindTouches()
+	HavenBuilder.bindRootvault(function(player)
+		if not debounce(player) then
+			return
+		end
+		if runs[player] ~= nil then
+			return
+		end
+		local result = DungeonService.enter(player, Dungeons.ROOTVAULT_ID)
+		if result.ok ~= true then
+			pushRun(player, result.error)
+		end
+	end)
 
 	local function watchIdle(player: Player)
 		player.Idled:Connect(function(idleTime)
@@ -1326,21 +1401,30 @@ function DungeonService.start()
 		end)
 	end
 
+	local function placeCharacter(player: Player)
+		task.defer(function()
+			if player.Parent == nil then
+				return
+			end
+			local run = runs[player]
+			if run ~= nil and not run.resolving then
+				teleport(player, roomSpawn(run.placeIndex))
+			else
+				teleport(player, hubCFrame())
+			end
+		end)
+	end
+
 	local function hook(player: Player)
 		watchIdle(player)
 		player.CharacterAdded:Connect(function()
-			task.defer(function()
-				if player.Parent == nil then
-					return
-				end
-				local run = runs[player]
-				if run ~= nil and not run.resolving then
-					teleport(player, roomSpawn(run.placeIndex))
-				else
-					teleport(player, hubCFrame())
-				end
-			end)
+			placeCharacter(player)
 		end)
+		-- CharacterAdded does not fire for a character already standing
+		-- on the default baseplate when this script starts.
+		if player.Character ~= nil then
+			placeCharacter(player)
+		end
 	end
 
 	Players.PlayerAdded:Connect(hook)
@@ -1353,6 +1437,7 @@ function DungeonService.start()
 			destroyRun(player, run)
 		end
 		touchAt[player] = nil
+		fallAt[player] = nil
 		farmOn[player] = nil
 		restartAt[player] = nil
 		idleNoted[player] = nil

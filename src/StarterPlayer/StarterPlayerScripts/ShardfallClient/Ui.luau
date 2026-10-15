@@ -363,6 +363,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			enterButton.Active = runState.cleared == true
 			enterButton.AutoButtonColor = runState.cleared == true
+			enterButton.BackgroundColor3 = if runState.cleared == true
+				then COLORS.button
+				else COLORS.buttonDim
 			wavesButton.Active = false
 			wavesButton.AutoButtonColor = false
 			wavesButton.Text = "Rootvault Waves"
@@ -376,6 +379,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			enterButton.Text = "Enter Rootvault"
 			enterButton.Active = true
 			enterButton.AutoButtonColor = true
+			enterButton.BackgroundColor3 = COLORS.button
 			wavesButton.Active = true
 			wavesButton.AutoButtonColor = true
 			wavesButton.Text = "Rootvault Waves"
@@ -1449,6 +1453,28 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	function controller.setAutoFarm(enabled: boolean)
 		farmEnabled = enabled
 		paintFarm()
+	end
+
+	function controller.openPanel(kind: string, areaId: string?)
+		if kind == "craft" then
+			page = "craft"
+			applyPage()
+			return
+		end
+		page = "shards"
+		if type(areaId) == "string" then
+			for _, chip in ipairs(chips) do
+				if chip.area.id == areaId then
+					if selectedArea == nil or selectedArea.id ~= areaId then
+						selectArea(chip.area, true)
+					else
+						applyPage()
+					end
+					return
+				end
+			end
+		end
+		applyPage()
 	end
 
 	function controller.setStatus(text: string, kind: string)
