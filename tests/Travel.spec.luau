@@ -1,0 +1,91 @@
+--!strict
+
+local framework = require("./framework")
+local describe = framework.describe
+local it = framework.it
+local expect = framework.expect
+
+local Haven = require("../src/ReplicatedStorage/Shared/Haven")
+local Travel = require("../src/ReplicatedStorage/Shared/Travel")
+
+local function profile()
+	return {
+		waystones = {},
+		lastTravel = 0,
+		travelPass = false,
+	}
+end
+
+describe("Travel", function()
+	it("lists the six stands and leaves spawn open", function()
+		expect(#Travel.DESTINATIONS).toEqual(6)
+		local names = {}
+		for _, dest in ipairs(Travel.DESTINATIONS) do
+			table.insert(names, dest.name)
+		end
+		expect(names).toEqual({
+			"Spawn",
+			"Forge",
+			"Armory Rolls",
+			"Pet Rolls",
+			"Market",
+			"Dungeon Portals",
+		})
+		local data = profile()
+		expect(Travel.isUnlocked(data, "spawn")).toBeTrue()
+		expect(Travel.isUnlocked(data, "forge")).toBeFalse()
+		expect(Travel.isUnlocked(data, "missing")).toBeFalse()
+		local x, y, z = Travel.arrival("spawn")
+		expect(x).toEqual(Haven.SPAWN.x)
+		expect(y).toEqual(Haven.SPAWN.y)
+		expect(z).toEqual(Haven.SPAWN.z)
+		local _fx, forgeY = Travel.arrival("forge")
+		expect(forgeY).toEqual(Haven.FLOOR_Y + 4)
+	end)
+
+	it("unlocks a waystone once and ignores a second touch", function()
+		local data = profile()
+		expect(Travel.touch(data, "forge")).toBeTrue()
+		expect(data.waystones.forge).toEqual(true)
+		expect(Travel.isUnlocked(data, "forge")).toBeTrue()
+		expect(Travel.touch(data, "forge")).toBeFalse()
+		expect(Travel.touch(data, "nope")).toBeFalse()
+		expect(data.waystones.nope).toBeNil()
+		expect(Travel.touch(nil, "market")).toBeFalse()
+	end)
+
+	it("blocks a trip during the cooldown and does not stamp a rejected one", function()
+		local data = profile()
+		data.waystones.market = true
+		expect(Travel.attempt(data, "forge", 100)).toEqual("That waystone is still locked.")
+		expect(data.lastTravel).toEqual(0)
+
+		expect(Travel.attempt(data, "market", 100)).toBeNil()
+		expect(data.lastTravel).toEqual(100)
+		local cooling = Travel.attempt(data, "market", 105)
+		expect(cooling).toEqual("Waystone cooling down (5s).")
+		expect(data.lastTravel).toEqual(100)
+		expect(Travel.remaining(data, 105) > 0).toBeTrue()
+
+		expect(Travel.attempt(data, "market", 110)).toBeNil()
+		expect(data.lastTravel).toEqual(110)
+		expect(Travel.remaining(data, 120)).toEqual(0)
+	end)
+
+	it("lets a travel pass skip the cooldown without selling the pass", function()
+		local data = profile()
+		data.waystones.portals = true
+		data.lastTravel = 50
+		data.travelPass = true
+		expect(Travel.passSkipsCooldown(data)).toBeTrue()
+		expect(Travel.remaining(data, 51)).toEqual(0)
+		expect(Travel.attempt(data, "portals", 51)).toBeNil()
+		expect(data.lastTravel).toEqual(51)
+		expect(Travel.PASS_PITCH ~= "").toBeTrue()
+		expect(Travel.attempt(nil, "spawn", 10)).toEqual("Profile is still loading.")
+		expect(Travel.attempt(profile(), "nope", 10)).toEqual("Unknown destination.")
+		local skewed = profile()
+		skewed.lastTravel = 500
+		expect(Travel.remaining(skewed, 100)).toEqual(Travel.COOLDOWN)
+	end)
+end)
