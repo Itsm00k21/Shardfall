@@ -29,6 +29,7 @@ require("./Dungeons.spec")
 require("./Haven.spec")
 require("./HavenBuild.spec")
 require("./VerdantVisuals.spec")
+require("./RootvaultSpawn.spec")
 require("./Stars.spec")
 
 process.exit(framework.run())

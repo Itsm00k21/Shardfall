@@ -5,7 +5,7 @@
 
 	Studio does not need a hand-placed map. HavenBuilder creates the hub.
 	This module creates the crawl rooms in Workspace.ShardfallWorld, then
-	teleports the player between them. Enemies are part rigs from ModelFactory with a chase-and-swing loop. The boss
+	teleports the player between them. Enemies are anchored part rigs from ModelFactory with a chase-and-swing loop. The boss
 	adds a weak spot, then a fog that only the sunbeam saves you from.
 
 	A later realm is a row in Dungeons.luau with a higher ascension. Until
@@ -236,11 +236,12 @@ local function buildRoom(
 	dungeon: Dungeons.DungeonDef,
 	index: number,
 	placeIndex: number?
-)
+): number
 	local room = dungeon.rooms[index]
 	local place = if placeIndex ~= nil then placeIndex else index
 	local model = Instance.new("Model")
 	model.Name = room.id
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = parent
 
 	local floorColor = if dungeon.endless == true
@@ -276,9 +277,15 @@ local function buildRoom(
 		then "waves"
 		elseif index == #dungeon.rooms then "arena"
 		else "wild"
+	local placed = 0
 	for _, spot in ipairs(VerdantScatter.room(place * 9176 + 13, dungeon.floorSize / 2, dressMode)) do
 		local feet = roomCFrame(place, Vector3.new(spot.x, spot.y, spot.z))
-		ModelFactory.place(dressing, spot.kind, feet, spot.yaw, spot.scale)
+		local prop = ModelFactory.place(dressing, spot.kind, feet, spot.yaw, spot.scale)
+		if prop == nil then
+			warn("[Shardfall] Forest kit missing " .. spot.kind .. " in " .. room.id)
+		else
+			placed += 1
+		end
 	end
 
 	local half = dungeon.floorSize / 2
@@ -334,6 +341,7 @@ local function buildRoom(
 	portal:SetAttribute("RoomIndex", place)
 	portal:SetAttribute("DungeonId", dungeon.id)
 	sign(model, roomCFrame(place, Vector3.new(0, 3.2, 18)), "NEXT", 6)
+	return placed
 end
 
 local function buildWorld()
@@ -372,12 +380,14 @@ local function buildWorld()
 	print(string.format("[Shardfall] Rootvault rooms start at z=%.0f", roomZ))
 	local dungeon = Dungeons.get(Dungeons.ROOTVAULT_ID)
 	assert(dungeon ~= nil, "Rootvault is missing from Dungeons.luau")
+	local dressed = 0
 	for index = 1, #dungeon.rooms do
-		buildRoom(rooms, dungeon, index)
+		dressed += buildRoom(rooms, dungeon, index)
 	end
 	local waves = Dungeons.get(Dungeons.WAVES_ID)
 	assert(waves ~= nil, "Rootvault Waves is missing from Dungeons.luau")
-	buildRoom(rooms, waves, 1, Dungeons.WAVES_ROOM_INDEX)
+	dressed += buildRoom(rooms, waves, 1, Dungeons.WAVES_ROOM_INDEX)
+	print(string.format("[Shardfall] Rootvault forest kit placed %d models", dressed))
 
 	local active = Instance.new("Folder")
 	active.Name = "Active"
@@ -578,11 +588,52 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
 	end
 	local rootCFrame = roomCFrame(run.placeIndex, Vector3.new(offset.X, y, offset.Z))
-	local rig = ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, definition.name)
-	local part = rig
-	if part == nil then
-		part = makePart(definition.name, size, rootCFrame, color, run.folder, false)
-		part.Material = if definition.boss then Enum.Material.Slate else Enum.Material.Grass
+	local rigOk, rigOrErr = pcall(function()
+		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, definition.name)
+	end)
+	local part: BasePart
+	if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
+		part = rigOrErr :: BasePart
+	else
+		local reason = if rigOk then "no recipe" else tostring(rigOrErr)
+		warn(string.format("[Shardfall] %s rig failed (%s); anchored marker only", kind, reason))
+		-- Small, anchored, and non-colliding. The old fallback was a full-size
+		-- Grass block, which is what a failed rig looked like in play.
+		part = makePart(
+			definition.name,
+			Vector3.new(1.2, 1.2, 1.2),
+			rootCFrame,
+			color,
+			run.folder,
+			false
+		)
+		part.CanTouch = false
+		part.CanQuery = true
+		part.Massless = true
+		part:SetAttribute("ShardfallRigFailed", true)
+	end
+	local host = part.Parent
+	local rigModel = if host ~= nil and host:IsA("Model") then host else nil
+	if rigModel ~= nil then
+		local pieces = 0
+		for _, descendant in ipairs(rigModel:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				pieces += 1
+				if
+					descendant.Anchored ~= true
+					or descendant.CanCollide == true
+					or descendant.CanTouch == true
+				then
+					warn("[Shardfall] Clamped loose part " .. descendant.Name .. " on " .. kind)
+					descendant.Anchored = true
+					descendant.CanCollide = false
+					descendant.CanTouch = false
+				end
+			end
+		end
+		if pieces < 2 then
+			warn(string.format("[Shardfall] %s rig has %d parts", kind, pieces))
+		end
 	end
 	part:SetAttribute("ShardfallName", definition.name)
 	part:SetAttribute("EnemyId", id)
@@ -683,7 +734,6 @@ local function spawnWave(player: Player, run: Run)
 		text ..= ". Boss wave. Slam, then the sunbeam at half HP."
 	end
 	pushRun(player, text)
-	teleport(player, roomSpawn(run.placeIndex))
 end
 
 local function destroyRun(player: Player, run: Run)
@@ -1044,6 +1094,18 @@ local function moveEnemy(
 	roomIndex: number,
 	floorSize: number
 )
+	if
+		enemy.part.Anchored ~= true
+		or enemy.part.CanCollide == true
+		or enemy.part.CanTouch == true
+	then
+		warn("[Shardfall] Re-anchored loose enemy " .. enemy.name)
+		enemy.part.AssemblyLinearVelocity = Vector3.zero
+		enemy.part.AssemblyAngularVelocity = Vector3.zero
+		enemy.part.Anchored = true
+		enemy.part.CanCollide = false
+		enemy.part.CanTouch = false
+	end
 	local position = enemy.part.Position
 	local goal = Vector3.new(playerPosition.X, position.Y, playerPosition.Z)
 	local offset = goal - position
@@ -1385,11 +1447,13 @@ function DungeonService.enter(player: Player, dungeonId: any)
 	}
 	runs[player] = run
 	CombatService.refresh(player)
+	-- Arrive before the rigs exist so nothing simulates at the room while the
+	-- character is still streaming in from the hub.
+	teleport(player, roomSpawn(run.placeIndex))
 	if endless then
 		spawnWave(player, run)
 	else
 		spawnRoom(player, run)
-		teleport(player, roomSpawn(1))
 	end
 	-- Same payload the Enter Rootvault button's remote returns, so a portal
 	-- entry updates the panel instead of leaving that button stale.
@@ -1409,6 +1473,7 @@ function DungeonService.advance(player: Player)
 	run.advanceAt = nil
 	if run.dungeon.endless == true then
 		run.wave += 1
+		teleport(player, roomSpawn(run.placeIndex))
 		spawnWave(player, run)
 		return { ok = true, run = publicRun(player) }
 	end
@@ -1417,8 +1482,8 @@ function DungeonService.advance(player: Player)
 	end
 	run.roomIndex += 1
 	run.placeIndex = run.roomIndex
-	spawnRoom(player, run)
 	teleport(player, roomSpawn(run.placeIndex))
+	spawnRoom(player, run)
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1457,8 +1522,8 @@ function DungeonService.skipToBoss(player: Player)
 	run.placeIndex = run.roomIndex
 	run.advanceAt = nil
 	run.wave = 0
-	spawnRoom(player, run)
 	teleport(player, roomSpawn(run.placeIndex))
+	spawnRoom(player, run)
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1544,9 +1609,16 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
-	pcall(function()
-		VerdantLook.apply(game:GetService("Lighting"))
+	local litOk, lightResult = pcall(function()
+		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
+	if not litOk then
+		warn("[Shardfall] Verdant lighting failed: " .. tostring(lightResult))
+	elseif lightResult ~= true then
+		warn("[Shardfall] Verdant lighting applied with errors")
+	else
+		print("[Shardfall] Verdant lighting on")
+	end
 	buildWorld()
 	bindTouches()
 	HavenBuilder.bindRootvault(function(player)

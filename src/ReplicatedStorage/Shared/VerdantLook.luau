@@ -76,39 +76,55 @@ local function effect(lighting: Instance, className: string, name: string): Inst
 	return created
 end
 
-function VerdantLook.apply(lighting: Instance)
+function VerdantLook.apply(lighting: Instance): boolean
 	local preset = VerdantLook.PRESET
 	local target = lighting :: any
-	target.ClockTime = preset.clockTime
-	target.Brightness = preset.brightness
-	target.Ambient = rgb(preset.ambient)
-	target.OutdoorAmbient = rgb(preset.outdoorAmbient)
-	target.FogColor = rgb(preset.fogColor)
-	target.FogStart = preset.fogStart
-	target.FogEnd = preset.fogEnd
+	local ok = true
+	local function assign(label: string, callback: () -> ())
+		local passed, err = pcall(callback)
+		if not passed then
+			ok = false
+			warn("[Shardfall] Verdant lighting " .. label .. " failed: " .. tostring(err))
+		end
+	end
 
-	local air = effect(lighting, "Atmosphere", "VerdantAtmosphere") :: any
-	air.Density = preset.atmosphere.density
-	air.Offset = preset.atmosphere.offset
-	air.Color = rgb(preset.atmosphere.color)
-	air.Decay = rgb(preset.atmosphere.decay)
-	air.Glare = preset.atmosphere.glare
-	air.Haze = preset.atmosphere.haze
-
-	local grade = effect(lighting, "ColorCorrectionEffect", "VerdantGrade") :: any
-	grade.Brightness = preset.colorCorrection.brightness
-	grade.Contrast = preset.colorCorrection.contrast
-	grade.Saturation = preset.colorCorrection.saturation
-	grade.TintColor = rgb(preset.colorCorrection.tint)
-
-	local bloom = effect(lighting, "BloomEffect", "VerdantBloom") :: any
-	bloom.Intensity = preset.bloom.intensity
-	bloom.Size = preset.bloom.size
-	bloom.Threshold = preset.bloom.threshold
-
-	local rays = effect(lighting, "SunRaysEffect", "VerdantSunRays") :: any
-	rays.Intensity = preset.sunRays.intensity
-	rays.Spread = preset.sunRays.spread
+	assign("sky", function()
+		target.ClockTime = preset.clockTime
+		target.Brightness = preset.brightness
+		target.Ambient = rgb(preset.ambient)
+		target.OutdoorAmbient = rgb(preset.outdoorAmbient)
+		target.FogColor = rgb(preset.fogColor)
+		target.FogStart = preset.fogStart
+		target.FogEnd = preset.fogEnd
+	end)
+	assign("atmosphere", function()
+		local air = effect(lighting, "Atmosphere", "VerdantAtmosphere") :: any
+		air.Density = preset.atmosphere.density
+		air.Offset = preset.atmosphere.offset
+		air.Color = rgb(preset.atmosphere.color)
+		air.Decay = rgb(preset.atmosphere.decay)
+		air.Glare = preset.atmosphere.glare
+		air.Haze = preset.atmosphere.haze
+	end)
+	assign("grade", function()
+		local grade = effect(lighting, "ColorCorrectionEffect", "VerdantGrade") :: any
+		grade.Brightness = preset.colorCorrection.brightness
+		grade.Contrast = preset.colorCorrection.contrast
+		grade.Saturation = preset.colorCorrection.saturation
+		grade.TintColor = rgb(preset.colorCorrection.tint)
+	end)
+	assign("bloom", function()
+		local bloom = effect(lighting, "BloomEffect", "VerdantBloom") :: any
+		bloom.Intensity = preset.bloom.intensity
+		bloom.Size = preset.bloom.size
+		bloom.Threshold = preset.bloom.threshold
+	end)
+	assign("sun rays", function()
+		local rays = effect(lighting, "SunRaysEffect", "VerdantSunRays") :: any
+		rays.Intensity = preset.sunRays.intensity
+		rays.Spread = preset.sunRays.spread
+	end)
+	return ok
 end
 
 return VerdantLook

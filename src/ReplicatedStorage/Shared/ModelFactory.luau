@@ -5,7 +5,9 @@
 
 	Recipes are data. layout() and compose() do not create instances, so the
 	scatter tests can count parts and check seeds. buildEnemy() and place()
-	are the server side: a hitbox root, welded visuals, and Motor6D limbs.
+	are what the Rootvault spawn and room builder call. Every part stays
+	anchored. Limbs are posed by CFrame, not physics joints, so a rig cannot
+	fall, fling the player, or pick up the player's name tag.
 ]]
 
 local ModelFactory = {}
@@ -759,6 +761,17 @@ local function spawnPiece(
 	return part
 end
 
+local function underCharacter(parent: Instance): boolean
+	local cursor: Instance? = parent
+	while cursor ~= nil do
+		if cursor:IsA("Model") and cursor:FindFirstChildOfClass("Humanoid") ~= nil then
+			return true
+		end
+		cursor = cursor.Parent
+	end
+	return false
+end
+
 function ModelFactory.place(
 	parent: Instance,
 	kind: string,
@@ -768,6 +781,7 @@ function ModelFactory.place(
 ): Model?
 	local laid = ModelFactory.layout(kind, scaleMultiplier)
 	if laid == nil then
+		warn("[Shardfall] No kit recipe for " .. kind)
 		return nil
 	end
 	local model = Instance.new("Model")
@@ -789,15 +803,22 @@ function ModelFactory.buildEnemy(
 	rootSize: Vector3,
 	displayName: string
 ): BasePart?
+	if underCharacter(parent) then
+		warn("[Shardfall] Refused to parent " .. kind .. " rig under a character")
+		return nil
+	end
 	local laid = ModelFactory.layout(kind, 1)
 	if laid == nil then
+		warn("[Shardfall] No rig recipe for " .. kind)
 		return nil
 	end
 	local model = Instance.new("Model")
 	model.Name = kind
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	model:SetAttribute("ShardfallKind", kind)
 	model.Parent = parent
 	local root = Instance.new("Part")
-	root.Name = displayName
+	root.Name = if displayName ~= "" then displayName else kind
 	root.Size = rootSize
 	root.CFrame = rootCFrame
 	root.Anchored = true
@@ -805,25 +826,30 @@ function ModelFactory.buildEnemy(
 	root.CanTouch = false
 	root.CanQuery = true
 	root.CastShadow = false
+	root.Massless = true
 	root.Transparency = 1
 	root.Parent = model
 	model.PrimaryPart = root
 	local foot = -rootSize.Y / 2
-	for index, source in ipairs(laid) do
-		local localCf = CFrame.new(source.offset[1], foot + source.offset[2], source.offset[3])
+	for _, source in ipairs(laid) do
+		local ox = source.offset[1]
+		local oy = foot + source.offset[2]
+		local oz = source.offset[3]
+		local localCf = CFrame.new(ox, oy, oz)
 			* CFrame.Angles(source.rotation[1], source.rotation[2], source.rotation[3])
-		local visual = spawnPiece(root, source, root.CFrame * localCf, false)
-		local motor = Instance.new("Motor6D")
-		motor.Name = if source.limb ~= nil
-			then source.limb .. tostring(index)
-			else "Joint" .. tostring(index)
-		motor.Part0 = root
-		motor.Part1 = visual
-		motor.C0 = localCf
-		motor.C1 = CFrame.new()
-		motor.Parent = root
-		motor:SetAttribute("Limb", source.limb or "body")
+		local visual = spawnPiece(root, source, root.CFrame * localCf, true)
+		visual:SetAttribute("Ox", ox)
+		visual:SetAttribute("Oy", oy)
+		visual:SetAttribute("Oz", oz)
+		visual:SetAttribute("Rx", source.rotation[1])
+		visual:SetAttribute("Ry", source.rotation[2])
+		visual:SetAttribute("Rz", source.rotation[3])
+		visual:SetAttribute("Limb", source.limb or "body")
+		visual.Anchored = true
+		visual.CanCollide = false
+		visual.CanTouch = false
 	end
+	root:SetAttribute("ShardfallPieces", #laid)
 	local roleLight = if kind == "grandmother_gnarl"
 		then 22
 		elseif kind == "root_brute" or kind == "thorn_sprite" then 12
@@ -832,18 +858,57 @@ function ModelFactory.buildEnemy(
 	if roleLight > 0 then
 		attachLight(root, if kind == "grandmother_gnarl" then AMBER else CYAN, roleLight)
 	end
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanTouch = false
+	root.Transparency = 1
 	return root
 end
 
 function ModelFactory.step(root: BasePart, time: number, moving: boolean)
 	local kind = root.Parent
 	local kindName = if kind ~= nil then kind.Name else ""
+	if root.Anchored ~= true or root.CanCollide == true or root.CanTouch == true then
+		if root:GetAttribute("ShardfallLoose") ~= true then
+			root:SetAttribute("ShardfallLoose", true)
+			warn("[Shardfall] Re-anchored loose rig root " .. root.Name)
+		end
+		root.Anchored = true
+		root.CanCollide = false
+		root.CanTouch = false
+	end
 	for _, child in ipairs(root:GetChildren()) do
-		if child:IsA("Motor6D") then
-			local limb = child:GetAttribute("Limb")
-			local limbName = if type(limb) == "string" then limb else "body"
-			local pitch, bob = ModelFactory.motion(kindName, limbName, time, moving)
-			child.Transform = CFrame.new(0, bob, 0) * CFrame.Angles(math.rad(pitch), 0, 0)
+		if child:IsA("BasePart") then
+			if child.Anchored ~= true or child.CanCollide == true or child.CanTouch == true then
+				if child:GetAttribute("ShardfallLoose") ~= true then
+					child:SetAttribute("ShardfallLoose", true)
+					warn("[Shardfall] Re-anchored loose rig part " .. child.Name)
+				end
+				child.Anchored = true
+				child.CanCollide = false
+				child.CanTouch = false
+			end
+			local ox = child:GetAttribute("Ox")
+			local oy = child:GetAttribute("Oy")
+			local oz = child:GetAttribute("Oz")
+			if type(ox) == "number" and type(oy) == "number" and type(oz) == "number" then
+				local rx = child:GetAttribute("Rx")
+				local ry = child:GetAttribute("Ry")
+				local rz = child:GetAttribute("Rz")
+				local limb = child:GetAttribute("Limb")
+				local limbName = if type(limb) == "string" then limb else "body"
+				local pitch, bob = ModelFactory.motion(kindName, limbName, time, moving)
+				local localCf = CFrame.new(ox, oy, oz)
+					* CFrame.Angles(
+						if type(rx) == "number" then rx else 0,
+						if type(ry) == "number" then ry else 0,
+						if type(rz) == "number" then rz else 0
+					)
+				child.CFrame = root.CFrame
+					* localCf
+					* CFrame.new(0, bob, 0)
+					* CFrame.Angles(math.rad(pitch), 0, 0)
+			end
 		end
 	end
 end
@@ -855,8 +920,10 @@ function ModelFactory.flash(root: BasePart)
 	highlight.OutlineColor = Color3.fromRGB(255, 220, 140)
 	highlight.FillTransparency = 0.35
 	highlight.OutlineTransparency = 0.1
-	highlight.Adornee = root
-	highlight.Parent = root
+	local host = root.Parent
+	local adorn: Instance = if host ~= nil and host:IsA("Model") then host else root
+	highlight.Adornee = adorn
+	highlight.Parent = adorn
 	task.delay(0.12, function()
 		if highlight.Parent ~= nil then
 			highlight:Destroy()
