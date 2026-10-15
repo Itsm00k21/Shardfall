@@ -9,10 +9,13 @@
 	Rootvault.
 
 	StreamingEnabled cannot be set from a script. It lives on Workspace in
-	default.project.json. Writing it here used to throw before the first part
-	existed, which also skipped the profile load. The hub model is Persistent
-	so the islands stay replicated at spawn. Crawl rooms are outside this
-	model and stream in when the player is teleported.
+	default.project.json. The hub model is Persistent so the islands stay
+	replicated at spawn. Crawl rooms are outside this model and stream in
+	when the player is teleported.
+
+	A cylinder's length is its local X axis. Floors set that axis to world
+	up after Shape, then parent. Setting Shape afterwards drops the rotation,
+	which stood every island on edge and left only the spawn pad to walk on.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,11 +56,49 @@ local function part(
 	return piece
 end
 
+-- Length runs along local X. Point that axis up so the disc is a floor,
+-- and apply the CFrame after Shape and again after Parent.
+local function verticalCylinder(
+	parent: Instance,
+	name: string,
+	x: number,
+	yCenter: number,
+	z: number,
+	diameter: number,
+	length: number,
+	color: Color3,
+	material: Enum.Material,
+	collide: boolean
+): Part
+	local piece = Instance.new("Part")
+	piece.Name = name
+	piece.Shape = Enum.PartType.Cylinder
+	piece.Size = Vector3.new(length, diameter, diameter)
+	piece.Anchored = true
+	piece.CanCollide = collide
+	piece.CanTouch = false
+	piece.TopSurface = Enum.SurfaceType.Smooth
+	piece.BottomSurface = Enum.SurfaceType.Smooth
+	piece.Color = color
+	piece.Material = material
+	local cf = CFrame.fromMatrix(
+		Vector3.new(x, yCenter, z),
+		Vector3.new(0, 1, 0),
+		Vector3.new(1, 0, 0),
+		Vector3.new(0, 0, -1)
+	)
+	piece.CFrame = cf
+	piece.Parent = parent
+	piece.CFrame = cf
+	return piece
+end
+
+-- yTop is the walk surface. Thickness hangs below it.
 local function disc(
 	parent: Instance,
 	name: string,
 	x: number,
-	y: number,
+	yTop: number,
 	z: number,
 	diameter: number,
 	thickness: number,
@@ -65,17 +106,18 @@ local function disc(
 	material: Enum.Material,
 	collide: boolean
 ): Part
-	local piece = part(
+	return verticalCylinder(
 		parent,
 		name,
-		Vector3.new(thickness, diameter, diameter),
-		CFrame.new(x, y, z) * CFrame.Angles(0, 0, math.rad(90)),
+		x,
+		yTop - thickness / 2,
+		z,
+		diameter,
+		thickness,
 		color,
 		material,
 		collide
 	)
-	piece.Shape = Enum.PartType.Cylinder
-	return piece
 end
 
 local function ball(
@@ -160,6 +202,13 @@ local function approach(
 	return fromX + dx / distance * inset, fromZ + dz / distance * inset
 end
 
+local BRIDGE_WIDTH = 16
+local BRIDGE_THICKNESS = 2
+local BRIDGE_OVERLAP = 10
+local FLOOR_TOP = 0
+
+-- Local +Z is the span, local +Y is world up. Extra length sits on both rims
+-- so the walk doesn't end in a gap.
 local function bridge(parent: Instance, x1: number, z1: number, x2: number, z2: number)
 	local dx = x2 - x1
 	local dz = z2 - z1
@@ -167,17 +216,24 @@ local function bridge(parent: Instance, x1: number, z1: number, x2: number, z2: 
 	if distance < 2 then
 		return
 	end
-	local mid = Vector3.new((x1 + x2) / 2, 0.4, (z1 + z2) / 2)
-	local piece = part(
+	local forwardX = dx / distance
+	local forwardZ = dz / distance
+	local span = distance + BRIDGE_OVERLAP * 2
+	local cf = CFrame.fromMatrix(
+		Vector3.new((x1 + x2) / 2, FLOOR_TOP - BRIDGE_THICKNESS / 2, (z1 + z2) / 2),
+		Vector3.new(forwardZ, 0, -forwardX),
+		Vector3.new(0, 1, 0),
+		Vector3.new(forwardX, 0, forwardZ)
+	)
+	part(
 		parent,
 		"Bridge",
-		Vector3.new(14, 1, distance),
-		CFrame.lookAt(mid, Vector3.new(x2, 0.4, z2)),
+		Vector3.new(BRIDGE_WIDTH, BRIDGE_THICKNESS, span),
+		cf,
 		Color3.fromRGB(126, 122, 116),
 		Enum.Material.Cobblestone,
 		true
 	)
-	piece.Name = "Bridge"
 end
 
 local function island(
@@ -192,15 +248,15 @@ local function island(
 	local model = Instance.new("Model")
 	model.Name = name
 	model.Parent = parent
-	disc(model, "Ground", x, -1, z, radius * 2, 2, top, topMaterial, true)
+	disc(model, "Ground", x, FLOOR_TOP, z, radius * 2, 4, top, topMaterial, true)
 	disc(
 		model,
 		"Rock",
 		x,
-		-8,
+		FLOOR_TOP - 4,
 		z,
 		radius * 2 + 8,
-		12,
+		14,
 		Color3.fromRGB(92, 86, 78),
 		Enum.Material.Rock,
 		true
@@ -218,34 +274,69 @@ local function stationPad(parent: Instance, x: number, z: number, color: Color3)
 		px = x + dx / distance * 8
 		pz = z + dz / distance * 8
 	end
-	return disc(parent, "Station", px, 0.4, pz, 8, 0.8, color, Enum.Material.Neon, false)
+	return disc(parent, "Station", px, 0.45, pz, 9, 0.45, color, Enum.Material.Neon, false)
 end
 
 local STONE = Color3.fromRGB(138, 136, 130)
 local GRASS = Color3.fromRGB(78, 148, 72)
 
 local function buildCrystal(parent: Instance)
-	local pedestal = disc(parent, "Pedestal", 0, 1, 0, 18, 2, STONE, Enum.Material.Slate, true)
-	pedestal.Name = "Pedestal"
+	disc(parent, "Pedestal", 0, 2, 0, 22, 2, STONE, Enum.Material.Slate, true)
+
+	-- Rotated blocks, bases on the pedestal, leaning out. Not one tall cylinder.
+	local spikes = {
+		{ angle = 0, lean = 16, height = 34, thick = 5.5, radius = 2.2 },
+		{ angle = 60, lean = 22, height = 28, thick = 4.2, radius = 3.4 },
+		{ angle = 120, lean = 14, height = 36, thick = 4.8, radius = 2.6 },
+		{ angle = 180, lean = 20, height = 30, thick = 5, radius = 3.2 },
+		{ angle = 240, lean = 18, height = 33, thick = 4.4, radius = 2.8 },
+		{ angle = 300, lean = 24, height = 26, thick = 4, radius = 3.6 },
+	}
+	local shardColors = {
+		Color3.fromRGB(176, 70, 255),
+		Color3.fromRGB(130, 60, 240),
+		Color3.fromRGB(210, 110, 255),
+		Color3.fromRGB(150, 80, 255),
+		Color3.fromRGB(190, 90, 255),
+		Color3.fromRGB(120, 50, 220),
+	}
+	for index, spike in ipairs(spikes) do
+		local yaw = math.rad(spike.angle)
+		local lean = math.rad(spike.lean)
+		local cf = CFrame.new(0, 2, 0)
+			* CFrame.Angles(0, yaw, 0)
+			* CFrame.new(0, 0, spike.radius)
+			* CFrame.Angles(lean, 0, 0)
+			* CFrame.new(0, spike.height / 2, 0)
+		part(
+			parent,
+			"CrystalShard",
+			Vector3.new(spike.thick, spike.height, spike.thick),
+			cf,
+			shardColors[index],
+			Enum.Material.Neon,
+			true
+		)
+	end
+
 	local crystal = part(
 		parent,
 		"LumenHeart",
-		Vector3.new(10, Haven.CRYSTAL.height, 10),
-		CFrame.new(0, 4 + Haven.CRYSTAL.height / 2, 0) * CFrame.Angles(0, math.rad(18), math.rad(8)),
-		Color3.fromRGB(168, 90, 255),
+		Vector3.new(6, 24, 6),
+		CFrame.new(0, 14, 0),
+		Color3.fromRGB(236, 220, 255),
 		Enum.Material.Neon,
 		true
 	)
-	local crack = part(
+	part(
 		parent,
 		"Crack",
-		Vector3.new(2.2, Haven.CRYSTAL.height * 0.72, 2.2),
-		crystal.CFrame * CFrame.new(1.5, -2, 0),
+		Vector3.new(1.4, 16, 1.4),
+		CFrame.new(1.2, 13, 0.4),
 		Color3.fromRGB(210, 236, 255),
 		Enum.Material.Neon,
 		false
 	)
-	crack.Name = "Crack"
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(186, 140, 255)
 	light.Range = 48
@@ -253,7 +344,7 @@ local function buildCrystal(parent: Instance)
 	light.Parent = crystal
 	local billboard = Instance.new("BillboardGui")
 	billboard.Size = UDim2.fromOffset(140, 28)
-	billboard.StudsOffset = Vector3.new(0, Haven.CRYSTAL.height / 2 + 2, 0)
+	billboard.StudsOffset = Vector3.new(0, 16, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = crystal
 	local label = Instance.new("TextLabel")
@@ -271,15 +362,18 @@ local function buildCrystal(parent: Instance)
 	shards.Parent = parent
 	local pieces = {}
 	for index = 1, 6 do
-		local shard = ball(
+		local angle = (index - 1) * (math.pi * 2 / 6)
+		local radius = 18 + (index % 3)
+		local height = 16
+		local shard = part(
 			shards,
-			"Shard",
-			0,
-			20,
-			0,
-			2.4 + (index % 2),
-			Color3.fromRGB(186, 120, 255),
-			Enum.Material.Neon
+			"OrbitShard",
+			Vector3.new(2.2, 6, 2.2),
+			CFrame.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
+				* CFrame.Angles(0, -angle, math.rad(18)),
+			Color3.fromRGB(186, 130, 255),
+			Enum.Material.Neon,
+			false
 		)
 		table.insert(pieces, shard)
 	end
@@ -298,9 +392,10 @@ local function buildCrystal(parent: Instance)
 		spin += dt * 0.35
 		for index, shard in ipairs(pieces) do
 			local angle = spin + (index - 1) * (math.pi * 2 / #pieces)
-			local radius = 16 + (index % 3)
-			local height = 16 + math.sin(spin * 1.4 + index) * 3
+			local radius = 18 + (index % 3)
+			local height = 15 + math.sin(spin * 1.4 + index) * 4
 			shard.CFrame = CFrame.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
+				* CFrame.Angles(0, -angle, math.rad(20))
 		end
 	end)
 end
@@ -310,8 +405,8 @@ local function buildPlaza(parent: Instance)
 	sign(parent, CFrame.new(0, 5, Haven.PLAZA_RADIUS - 6), "BOSS PLAZA", 16)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
-	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.CFrame = CFrame.new(Haven.SPAWN.x, 0.5, Haven.SPAWN.z)
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.CFrame = CFrame.new(Haven.SPAWN.x, FLOOR_TOP + 0.5, Haven.SPAWN.z)
 	spawn.Anchored = true
 	spawn.Neutral = true
 	spawn.Duration = 0
@@ -477,10 +572,10 @@ local function buildGarden(parent: Instance)
 		model,
 		"Pond",
 		place.x + 6,
-		0.3,
+		0.35,
 		place.z + 4,
 		16,
-		0.6,
+		0.4,
 		Color3.fromRGB(70, 160, 210),
 		Enum.Material.Glass,
 		false
@@ -489,16 +584,18 @@ local function buildGarden(parent: Instance)
 	for index, spot in ipairs(trees) do
 		local tx = place.x + spot[1]
 		local tz = place.z + spot[2]
-		local trunk = part(
+		verticalCylinder(
 			model,
 			"Trunk",
-			Vector3.new(7, 1.6, 1.6),
-			CFrame.new(tx, 3.5, tz) * CFrame.Angles(0, 0, math.rad(90)),
+			tx,
+			3.5,
+			tz,
+			1.8,
+			7,
 			Color3.fromRGB(110, 78, 52),
 			Enum.Material.Wood,
 			true
 		)
-		trunk.Shape = Enum.PartType.Cylinder
 		ball(
 			model,
 			"Canopy" .. tostring(index),
@@ -520,7 +617,7 @@ local function buildObservatory(parent: Instance)
 	assert(place ~= nil and place.radius ~= nil, "Observatory is missing")
 	local model =
 		island(parent, "Observatory", place.x, place.z, place.radius, STONE, Enum.Material.Slate)
-	local drum = disc(
+	verticalCylinder(
 		model,
 		"Drum",
 		place.x,
@@ -532,7 +629,6 @@ local function buildObservatory(parent: Instance)
 		Enum.Material.Limestone,
 		true
 	)
-	drum.Name = "Drum"
 	ball(model, "Dome", place.x, 14, place.z, 20, Color3.fromRGB(96, 124, 186), Enum.Material.Glass)
 	part(
 		model,
@@ -578,8 +674,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"PillarL",
-			Vector3.new(2, 12, 2),
-			CFrame.new(portal.x - 6, 6, portal.z),
+			Vector3.new(3.5, 18, 3.5),
+			CFrame.new(portal.x - 7, 9, portal.z),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -587,8 +683,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"PillarR",
-			Vector3.new(2, 12, 2),
-			CFrame.new(portal.x + 6, 6, portal.z),
+			Vector3.new(3.5, 18, 3.5),
+			CFrame.new(portal.x + 7, 9, portal.z),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -596,8 +692,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"Lintel",
-			Vector3.new(16, 2, 2),
-			CFrame.new(portal.x, 13, portal.z),
+			Vector3.new(18, 3, 4),
+			CFrame.new(portal.x, 19.5, portal.z),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -605,8 +701,8 @@ local function buildPortals(parent: Instance)
 		local fill = part(
 			arch,
 			"Glow",
-			Vector3.new(10, 10, 0.6),
-			CFrame.new(portal.x, 6.5, portal.z),
+			Vector3.new(10, 14, 0.8),
+			CFrame.new(portal.x, 9, portal.z),
 			color,
 			Enum.Material.Neon,
 			false
@@ -620,15 +716,15 @@ local function buildPortals(parent: Instance)
 			part(
 				arch,
 				"Seal",
-				Vector3.new(10, 1.2, 1.2),
-				CFrame.new(portal.x, 6.5, portal.z),
+				Vector3.new(10, 1.4, 1.4),
+				CFrame.new(portal.x, 9, portal.z),
 				Color3.fromRGB(36, 34, 40),
 				Enum.Material.Metal,
 				true
 			)
 			promptOn(fill, "Coming Soon", portal.name, "soon", portal.message)
 		end
-		sign(arch, CFrame.new(portal.x, 16.5, portal.z), string.upper(portal.name), 14)
+		sign(arch, CFrame.new(portal.x, 23, portal.z), string.upper(portal.name), 16)
 	end
 end
 
