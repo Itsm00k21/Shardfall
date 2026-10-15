@@ -136,6 +136,13 @@ local function teleport(player: Player, cframe: CFrame)
 	if character == nil then
 		return
 	end
+	-- Rooms sit thousands of studs from the plaza. With streaming on, the
+	-- floor has to exist before the character moves or the player falls.
+	pcall(function()
+		if workspace.StreamingEnabled == true then
+			player:RequestStreamAroundAsync(cframe.Position, 5)
+		end
+	end)
 	local hrp = rootPart(player)
 	character:PivotTo(cframe)
 	if hrp ~= nil then
@@ -298,10 +305,17 @@ local function buildWorld()
 	world.Parent = workspace
 	worldFolder = world
 
-	local hub = Instance.new("Folder")
+	local hub = Instance.new("Model")
 	hub.Name = "Hub"
+	hub.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	hub.Parent = world
-	HavenBuilder.build(hub)
+	local built, hubResult = pcall(HavenBuilder.build, hub)
+	if built then
+		local count = if type(hubResult) == "number" then hubResult else 0
+		print(string.format("[Shardfall] Haven hub built (%d parts)", count))
+	else
+		warn("[Shardfall] Haven hub failed to build: " .. tostring(hubResult))
+	end
 
 	local rooms = Instance.new("Folder")
 	rooms.Name = "Rooms"

@@ -6,8 +6,13 @@
 	Simple parts, themed colors, and a low count. The crystal's shards orbit
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
 	the existing panel, and the Verdant arch is also an EnterPad for the
-	Rootvault. StreamingEnabled is turned on here so a Rojo sync into an
-	already-open place still streams.
+	Rootvault.
+
+	StreamingEnabled cannot be set from a script. It lives on Workspace in
+	default.project.json. Writing it here used to throw before the first part
+	existed, which also skipped the profile load. The hub model is Persistent
+	so the islands stay replicated at spawn. Crawl rooms are outside this
+	model and stream in when the player is teleported.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -684,10 +689,20 @@ local function buildRocks(parent: Instance)
 	end
 end
 
-function HavenBuilder.build(parent: Instance)
-	workspace.StreamingEnabled = true
-	workspace.StreamingMinRadius = 128
-	workspace.StreamingTargetRadius = 512
+local function hideForeignSpawns()
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		if descendant:IsA("SpawnLocation") and descendant.Name ~= "HubSpawn" then
+			descendant.Enabled = false
+			descendant.Transparency = 1
+			descendant.CanCollide = false
+		end
+	end
+end
+
+function HavenBuilder.build(parent: Instance): number
+	if parent:IsA("Model") then
+		parent.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	end
 
 	buildPlaza(parent)
 	buildCrystal(parent)
@@ -699,6 +714,15 @@ function HavenBuilder.build(parent: Instance)
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)
+	hideForeignSpawns()
+
+	local count = 0
+	for _, descendant in ipairs(parent:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			count += 1
+		end
+	end
+	return count
 end
 
 function HavenBuilder.bindRootvault(callback: (Player) -> ())
