@@ -40,6 +40,9 @@ local RULES: { [string]: Rule } = {
 	UseTonic = { capacity = 3, perSecond = 1 },
 	FeedItem = { capacity = 4, perSecond = 2 },
 	SetAutoAttack = { capacity = 4, perSecond = 1 },
+	SetAutoFarm = { capacity = 4, perSecond = 1 },
+	-- Refreshed while the player is holding a move key.
+	Steer = { capacity = 8, perSecond = 4 },
 }
 
 local buckets: { [string]: Bucket } = {}

@@ -73,9 +73,35 @@ export type DungeonDef = {
 	floorSize: number,
 	rooms: { RoomDef },
 	rewards: RewardDef?,
+	endless: boolean?,
 }
 
 Dungeons.ROOTVAULT_ID = "rootvault"
+Dungeons.WAVES_ID = "rootvault_waves"
+
+-- After a room or wave is empty, the server waits this long, then moves on.
+Dungeons.ADVANCE_SECONDS = 3
+-- How long the victory card stays up. Auto-farm restarts after the shorter one.
+Dungeons.VICTORY_CARD_SECONDS = 6
+Dungeons.FARM_RESTART_SECONDS = 4
+Dungeons.FARM_DEFEAT_SECONDS = 3
+-- Roblox disconnects a player who has not provided input for about 20 minutes.
+-- Player.Idled is the hook. Reward cutoff, if it is added later, belongs there.
+Dungeons.IDLE_NOTE_SECONDS = 15 * 60
+
+-- PLACEHOLDER wave scaling. Wave 1 is the base stat. Each later wave adds
+-- WAVE_HP_PER / WAVE_DAMAGE_PER. Count grows every WAVE_COUNT_EVERY waves.
+-- Every WAVE_BOSS_EVERY waves is a boss wave and multiplies again.
+Dungeons.WAVE_HP_PER = 0.18
+Dungeons.WAVE_DAMAGE_PER = 0.12
+Dungeons.WAVE_BASE_COUNT = 2
+Dungeons.WAVE_COUNT_EVERY = 2
+Dungeons.WAVE_MAX_COUNT = 8
+Dungeons.WAVE_BOSS_EVERY = 5
+Dungeons.WAVE_BOSS_HP = 1.35
+Dungeons.WAVE_BOSS_DAMAGE = 1.15
+-- Negative room index so the arena sits on the other side of the hub.
+Dungeons.WAVES_ROOM_INDEX = -1
 
 -- Hub at the origin. Room n sits this many studs further along Z so the
 -- rooms do not overlap. Players are teleported; there is no corridor.
@@ -218,6 +244,27 @@ local ROOTVAULT: DungeonDef = {
 	},
 }
 
+-- One arena. DungeonService fills it from waveKinds / waveStats. Rewards are
+-- per wave, not rollClear.
+local WAVES: DungeonDef = {
+	id = Dungeons.WAVES_ID,
+	name = "Rootvault Waves",
+	realm = "Verdant Wilds",
+	theme = "Endless arena",
+	ascension = 0,
+	implemented = true,
+	endless = true,
+	floorSize = 56,
+	rooms = {
+		{
+			id = "wave_arena",
+			name = "Wave Arena",
+			enemies = {},
+		},
+	},
+	rewards = nil,
+}
+
 -- Hook for the next realm. Not a crawl yet: the gate is real, the rooms are not.
 local TIDECRYPT: DungeonDef = {
 	id = "tidecrypt",
@@ -231,7 +278,7 @@ local TIDECRYPT: DungeonDef = {
 	rewards = nil,
 }
 
-local LIST: { DungeonDef } = { ROOTVAULT, TIDECRYPT }
+local LIST: { DungeonDef } = { ROOTVAULT, WAVES, TIDECRYPT }
 
 local byId: { [string]: DungeonDef } = {}
 for _, dungeon in ipairs(LIST) do
@@ -279,6 +326,100 @@ Dungeons.SUNBEAM_OFFSETS = {
 	{ x = 14, z = -6 },
 	{ x = 0, z = 14 },
 }
+
+local function wholeWave(wave: number): number
+	local n = math.floor(wave)
+	if n < 1 or n ~= n then
+		return 1
+	end
+	return n
+end
+
+function Dungeons.isBossWave(wave: number): boolean
+	return wholeWave(wave) % Dungeons.WAVE_BOSS_EVERY == 0
+end
+
+function Dungeons.waveCount(wave: number): number
+	local n = wholeWave(wave)
+	local extra = math.floor((n - 1) / Dungeons.WAVE_COUNT_EVERY)
+	local count = Dungeons.WAVE_BASE_COUNT + extra
+	if count > Dungeons.WAVE_MAX_COUNT then
+		return Dungeons.WAVE_MAX_COUNT
+	end
+	return count
+end
+
+function Dungeons.waveMultiplier(wave: number, perWave: number): number
+	local n = wholeWave(wave)
+	return 1 + (n - 1) * perWave
+end
+
+-- Boss flag is the enemy, not the wave. A boss wave's adds stay on the
+-- normal scale. The boss itself passes true and picks up WAVE_BOSS_HP.
+function Dungeons.waveStats(
+	baseHealth: number,
+	baseDamage: number,
+	wave: number,
+	boss: boolean
+): (number, number)
+	local hpScale = Dungeons.waveMultiplier(wave, Dungeons.WAVE_HP_PER)
+	local damageScale = Dungeons.waveMultiplier(wave, Dungeons.WAVE_DAMAGE_PER)
+	if boss then
+		hpScale *= Dungeons.WAVE_BOSS_HP
+		damageScale *= Dungeons.WAVE_BOSS_DAMAGE
+	end
+	local hp = math.floor(baseHealth * hpScale + 0.5)
+	local damage = math.floor(baseDamage * damageScale + 0.5)
+	if hp < 1 then
+		hp = 1
+	end
+	if damage < 1 then
+		damage = 1
+	end
+	return hp, damage
+end
+
+function Dungeons.waveKinds(wave: number): { string }
+	local n = wholeWave(wave)
+	if Dungeons.isBossWave(n) then
+		return { "grandmother_gnarl", "vine_crawler", "spore_bat" }
+	end
+	local pool = { "vine_crawler", "spore_bat", "root_brute" }
+	local kinds = {}
+	local count = Dungeons.waveCount(n)
+	for index = 1, count do
+		local pick = ((n + index - 2) % #pool) + 1
+		table.insert(kinds, pool[pick])
+	end
+	return kinds
+end
+
+function Dungeons.waveReward(wave: number): ClearReward
+	local n = wholeWave(wave)
+	local materials: { [string]: number } = { wood = 1 }
+	if n % 2 == 0 then
+		materials.vine = 1
+	end
+	if n % 4 == 0 then
+		materials.spore = 1
+	end
+	if n % 5 == 0 then
+		materials.bark = 1
+	end
+	local tokens = 0
+	if n % 5 == 0 then
+		tokens = 2
+	elseif n % 3 == 0 then
+		tokens = 1
+	end
+	return {
+		gold = math.floor(8 + n * 3),
+		shardTokens = tokens,
+		xp = math.floor(6 + n * 2),
+		materials = materials,
+		voucher = nil,
+	}
+end
 
 function Dungeons.rollClear(dungeon: DungeonDef, rng: any): ClearReward?
 	local reward = dungeon.rewards
@@ -342,6 +483,8 @@ if ROOTVAULT.rewards ~= nil then
 	table.freeze(ROOTVAULT.rewards)
 end
 table.freeze(ROOTVAULT)
+table.freeze(WAVES.rooms)
+table.freeze(WAVES)
 table.freeze(TIDECRYPT)
 table.freeze(LIST)
 

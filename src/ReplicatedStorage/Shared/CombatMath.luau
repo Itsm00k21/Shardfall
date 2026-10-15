@@ -159,6 +159,34 @@ function CombatMath.cooldown(attackSpeed: number): number
 	return 1 / attackSpeed
 end
 
+-- Distances for Auto-Farm pathing. `near` is how close is too close (0 for
+-- melee). `far` is the distance to close to. Ranged hold is 40% of weapon
+-- range, clamped to 16–32 studs, and they step back if they are 8 inside that.
+function CombatMath.farmBand(style: string, range: number): (number, number)
+	local reach = range
+	if type(reach) ~= "number" or reach ~= reach or reach < 1 then
+		reach = 1
+	end
+	if style == "projectile" then
+		local hold = reach * 0.4
+		if hold < 16 then
+			hold = 16
+		elseif hold > 32 then
+			hold = 32
+		end
+		local back = hold - 8
+		if back < 0 then
+			back = 0
+		end
+		return back, hold
+	end
+	local stop = reach * 0.7
+	if stop < 3 then
+		stop = 3
+	end
+	return 0, stop
+end
+
 function CombatMath.offense(weapon: Gear?, extra: { Gear }?): Offense
 	local worn = {}
 	if weapon ~= nil then

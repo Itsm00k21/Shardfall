@@ -12,6 +12,12 @@
 	`implemented` is true, enter() refuses it. Rewards (gold, shard tokens,
 	materials, and a chance at an Armory or Pets voucher) are granted here,
 	on the server, after the boss dies.
+
+	A cleared room waits ADVANCE_SECONDS, shows that countdown, then teleports
+	to the next room. Rootvault Waves is one arena: each wave scales in
+	Dungeons.luau, pays on clear, and continues until the player falls.
+	Auto-Farm restarts the same dungeon after victory or defeat. With Auto
+	Attack it also walks the character toward the nearest enemy.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -68,10 +74,24 @@ type Run = {
 	folder: Folder,
 	sunbeam: BasePart?,
 	sunbeamIndex: number,
+	placeIndex: number,
+	wave: number,
+	advanceAt: number?,
+	advanceShown: number?,
+	yielding: boolean?,
+	walking: boolean?,
+}
+
+type Restart = {
+	at: number,
+	dungeonId: string,
 }
 
 local runs: { [Player]: Run } = {}
 local touchAt: { [Player]: number } = {}
+local farmOn: { [Player]: boolean } = {}
+local restartAt: { [Player]: Restart } = {}
+local idleNoted: { [Player]: boolean } = {}
 local nextEnemyId = 0
 local worldFolder: Folder? = nil
 local activeFolder: Folder? = nil
@@ -180,16 +200,23 @@ local function roomSpawn(index: number): CFrame
 	return CFrame.lookAt(Vector3.new(x, 4, z - 16), Vector3.new(x, 3, z + 8))
 end
 
-local function buildRoom(parent: Folder, dungeon: Dungeons.DungeonDef, index: number)
+local function buildRoom(
+	parent: Folder,
+	dungeon: Dungeons.DungeonDef,
+	index: number,
+	placeIndex: number?
+)
 	local room = dungeon.rooms[index]
+	local place = if placeIndex ~= nil then placeIndex else index
 	local model = Instance.new("Model")
 	model.Name = room.id
 	model.Parent = parent
 
-	local floorColor = if index == #dungeon.rooms
-		then Color3.fromRGB(28, 48, 36)
+	local floorColor = if dungeon.endless == true
+		then Color3.fromRGB(42, 58, 78)
+		elseif index == #dungeon.rooms then Color3.fromRGB(28, 48, 36)
 		else Color3.fromRGB(54, 86, 52)
-	local center = roomCFrame(index, Vector3.new(0, -0.5, 0))
+	local center = roomCFrame(place, Vector3.new(0, -0.5, 0))
 	makePart(
 		"Floor",
 		Vector3.new(dungeon.floorSize, 1, dungeon.floorSize),
@@ -205,7 +232,7 @@ local function buildRoom(parent: Folder, dungeon: Dungeons.DungeonDef, index: nu
 	makePart(
 		"WallNorth",
 		Vector3.new(dungeon.floorSize, height, 1),
-		roomCFrame(index, Vector3.new(0, height / 2, -half)),
+		roomCFrame(place, Vector3.new(0, height / 2, -half)),
 		wallColor,
 		model,
 		true
@@ -213,7 +240,7 @@ local function buildRoom(parent: Folder, dungeon: Dungeons.DungeonDef, index: nu
 	makePart(
 		"WallSouth",
 		Vector3.new(dungeon.floorSize, height, 1),
-		roomCFrame(index, Vector3.new(0, height / 2, half)),
+		roomCFrame(place, Vector3.new(0, height / 2, half)),
 		wallColor,
 		model,
 		true
@@ -221,7 +248,7 @@ local function buildRoom(parent: Folder, dungeon: Dungeons.DungeonDef, index: nu
 	makePart(
 		"WallWest",
 		Vector3.new(1, height, dungeon.floorSize),
-		roomCFrame(index, Vector3.new(-half, height / 2, 0)),
+		roomCFrame(place, Vector3.new(-half, height / 2, 0)),
 		wallColor,
 		model,
 		true
@@ -229,29 +256,29 @@ local function buildRoom(parent: Folder, dungeon: Dungeons.DungeonDef, index: nu
 	makePart(
 		"WallEast",
 		Vector3.new(1, height, dungeon.floorSize),
-		roomCFrame(index, Vector3.new(half, height / 2, 0)),
+		roomCFrame(place, Vector3.new(half, height / 2, 0)),
 		wallColor,
 		model,
 		true
 	)
 
-	sign(model, roomCFrame(index, Vector3.new(0, 5, -half + 0.8)), room.name, 16)
+	sign(model, roomCFrame(place, Vector3.new(0, 5, -half + 0.8)), room.name, 16)
 
 	-- The green pad is the door. Touched on the server, and only after the
 	-- room's enemies are dead. The panel's Next room button calls the same path.
 	local portal = makePart(
 		"Portal",
 		Vector3.new(7, 0.6, 7),
-		roomCFrame(index, Vector3.new(0, 0.4, 18)),
+		roomCFrame(place, Vector3.new(0, 0.4, 18)),
 		Color3.fromRGB(72, 180, 110),
 		model,
 		false
 	)
 	portal.Material = Enum.Material.Neon
 	portal.CanTouch = true
-	portal:SetAttribute("RoomIndex", index)
+	portal:SetAttribute("RoomIndex", place)
 	portal:SetAttribute("DungeonId", dungeon.id)
-	sign(model, roomCFrame(index, Vector3.new(0, 3.2, 18)), "NEXT", 6)
+	sign(model, roomCFrame(place, Vector3.new(0, 3.2, 18)), "NEXT", 6)
 end
 
 local function buildWorld()
@@ -308,6 +335,9 @@ local function buildWorld()
 	for index = 1, #dungeon.rooms do
 		buildRoom(rooms, dungeon, index)
 	end
+	local waves = Dungeons.get(Dungeons.WAVES_ID)
+	assert(waves ~= nil, "Rootvault Waves is missing from Dungeons.luau")
+	buildRoom(rooms, waves, 1, Dungeons.WAVES_ROOM_INDEX)
 
 	local active = Instance.new("Folder")
 	active.Name = "Active"
@@ -339,18 +369,26 @@ local function publicRun(player: Player): { [string]: any }
 			end
 		end
 	end
+	local countdown = nil
+	if run.advanceAt ~= nil then
+		countdown = math.max(0, math.ceil(run.advanceAt - os.clock()))
+	end
+	local endless = run.dungeon.endless == true
 	return {
 		active = true,
 		dungeonId = run.dungeon.id,
 		dungeonName = run.dungeon.name,
-		roomName = if room ~= nil then room.name else "",
-		roomIndex = run.roomIndex,
-		roomCount = #run.dungeon.rooms,
+		roomName = if endless then "Arena" elseif room ~= nil then room.name else "",
+		roomIndex = if endless then run.wave else run.roomIndex,
+		roomCount = if endless then 0 else #run.dungeon.rooms,
 		remaining = remaining,
 		cleared = run.cleared,
 		boss = boss,
 		phase = phase,
 		note = note,
+		endless = endless,
+		wave = if endless then run.wave else nil,
+		countdown = countdown,
 	}
 end
 
@@ -427,11 +465,11 @@ local function placeSunbeam(run: Run)
 		run.sunbeamIndex = 1
 		offset = Dungeons.SUNBEAM_OFFSETS[1]
 	end
-	local x, _, z = Dungeons.roomOrigin(run.roomIndex)
+	local x, _, z = Dungeons.roomOrigin(run.placeIndex)
 	beam.CFrame = CFrame.new(x + offset.x, 0.45, z + offset.z)
 end
 
-local function spawnEnemy(run: Run, kind: string, offset: Vector3): Enemy?
+local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?): Enemy?
 	local definition = Dungeons.enemy(kind)
 	if definition == nil then
 		return nil
@@ -441,10 +479,16 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3): Enemy?
 	local size = Vector3.new(definition.size[1], definition.size[2], definition.size[3])
 	local color = Color3.fromRGB(definition.color[1], definition.color[2], definition.color[3])
 	local y = size.Y / 2 + definition.hover
+	local health = definition.maxHealth
+	local damage = definition.damage
+	if wave ~= nil then
+		health, damage =
+			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
+	end
 	local part = makePart(
 		definition.name,
 		size,
-		roomCFrame(run.roomIndex, Vector3.new(offset.X, y, offset.Z)),
+		roomCFrame(run.placeIndex, Vector3.new(offset.X, y, offset.Z)),
 		color,
 		run.folder,
 		false
@@ -457,9 +501,9 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3): Enemy?
 		id = id,
 		kind = kind,
 		name = definition.name,
-		hp = definition.maxHealth,
-		maxHp = definition.maxHealth,
-		damage = definition.damage,
+		hp = health,
+		maxHp = health,
+		damage = damage,
 		defense = definition.defense,
 		attackSpeed = definition.attackSpeed,
 		moveSpeed = definition.moveSpeed,
@@ -488,7 +532,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3): Enemy?
 		local beam = makePart(
 			"Sunbeam",
 			Vector3.new(definition.safeRadius * 2, 0.4, definition.safeRadius * 2),
-			roomCFrame(run.roomIndex, Vector3.new(0, 0.4, 0)),
+			roomCFrame(run.placeIndex, Vector3.new(0, 0.4, 0)),
 			Color3.fromRGB(255, 214, 90),
 			run.folder,
 			false
@@ -534,6 +578,23 @@ local function spawnRoom(player: Player, run: Run)
 	pushRun(player, text)
 end
 
+local function spawnWave(player: Player, run: Run)
+	clearEnemies(run)
+	run.cleared = false
+	run.advanceAt = nil
+	local kinds = Dungeons.waveKinds(run.wave)
+	for index, kind in ipairs(kinds) do
+		local offset = SPAWNS[((index - 1) % #SPAWNS) + 1]
+		spawnEnemy(run, kind, offset, run.wave)
+	end
+	local text = string.format("%s  ·  Wave %d", run.dungeon.name, run.wave)
+	if Dungeons.isBossWave(run.wave) then
+		text ..= ". Boss wave. Slam, then the sunbeam at half HP."
+	end
+	pushRun(player, text)
+	teleport(player, roomSpawn(run.placeIndex))
+end
+
 local function destroyRun(player: Player, run: Run)
 	clearEnemies(run)
 	run.folder:Destroy()
@@ -541,8 +602,16 @@ local function destroyRun(player: Player, run: Run)
 	CombatService.clearShots(player)
 end
 
-local function grant(player: Player, run: Run)
-	local rolled = Dungeons.rollClear(run.dungeon, RollMath.defaultRng())
+local function grant(
+	player: Player,
+	run: Run,
+	rolledOverride: Dungeons.ClearReward?,
+	dismissIn: number?
+)
+	local rolled = rolledOverride
+	if rolled == nil then
+		rolled = Dungeons.rollClear(run.dungeon, RollMath.defaultRng())
+	end
 	if rolled == nil then
 		return false
 	end
@@ -591,18 +660,41 @@ local function grant(player: Player, run: Run)
 			})
 		end
 	end
-	fx(player, {
-		kind = "victory",
-		dungeonName = run.dungeon.name,
-		gold = rolled.gold,
-		bonusGold = bonus,
-		shardTokens = rolled.shardTokens,
-		xp = rolled.xp,
-		levels = levels,
-		materials = lines,
-		voucher = rolled.voucher,
-	})
+	if dismissIn == nil then
+		local bits =
+			{ string.format("+%d gold", rolled.gold + bonus), string.format("+%d XP", rolled.xp) }
+		if rolled.shardTokens > 0 then
+			table.insert(bits, string.format("+%d tokens", rolled.shardTokens))
+		end
+		fx(player, {
+			kind = "hint",
+			text = string.format("Wave %d cleared. %s.", run.wave, table.concat(bits, ", ")),
+		})
+	else
+		fx(player, {
+			kind = "victory",
+			dungeonName = run.dungeon.name,
+			gold = rolled.gold,
+			bonusGold = bonus,
+			shardTokens = rolled.shardTokens,
+			xp = rolled.xp,
+			levels = levels,
+			materials = lines,
+			voucher = rolled.voucher,
+			dismissIn = dismissIn,
+		})
+	end
 	return true
+end
+
+local function scheduleRestart(player: Player, dungeonId: string, delay: number)
+	if farmOn[player] ~= true or player.Parent == nil then
+		return
+	end
+	restartAt[player] = {
+		at = os.clock() + delay,
+		dungeonId = dungeonId,
+	}
 end
 
 local function finish(player: Player, victory: boolean)
@@ -611,13 +703,25 @@ local function finish(player: Player, victory: boolean)
 		return
 	end
 	run.resolving = true
+	local dungeonId = run.dungeon.id
+	local endless = run.dungeon.endless == true
+	local farming = farmOn[player] == true
+	local cardSeconds = if farming
+		then Dungeons.FARM_RESTART_SECONDS
+		else Dungeons.VICTORY_CARD_SECONDS
 	local saved = true
 	if victory then
-		saved = grant(player, run)
+		saved = grant(player, run, nil, cardSeconds)
 	else
+		local text = if endless
+			then "The waves stop when you fall. Rewards from cleared waves are still yours."
+			else "The Rootvault pushes you out. Materials from earlier clears are still yours."
 		fx(player, {
 			kind = "defeat",
-			text = "The Rootvault pushes you out. Materials from earlier clears are still yours.",
+			text = text,
+			dismissIn = if farming
+				then Dungeons.FARM_DEFEAT_SECONDS
+				else Dungeons.VICTORY_CARD_SECONDS,
 		})
 	end
 	destroyRun(player, run)
@@ -625,11 +729,24 @@ local function finish(player: Player, victory: boolean)
 	teleport(player, hubCFrame())
 	local note = "Defeated."
 	if victory and saved then
-		note = "Rootvault cleared."
+		note = if endless then "Waves ended." else "Rootvault cleared."
 	elseif victory then
 		note = "Clear did not save."
 	end
 	pushRun(player, note)
+	if farming then
+		local delay = if victory
+			then Dungeons.FARM_RESTART_SECONDS
+			else Dungeons.FARM_DEFEAT_SECONDS
+		scheduleRestart(player, dungeonId, delay)
+	end
+end
+
+local function beginAdvance(player: Player, run: Run, text: string)
+	run.cleared = true
+	run.advanceAt = os.clock() + Dungeons.ADVANCE_SECONDS
+	run.advanceShown = Dungeons.ADVANCE_SECONDS
+	pushRun(player, text)
 end
 
 local function aliveCount(run: Run): number
@@ -677,11 +794,25 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 			bar:Destroy()
 		end
 		if aliveCount(run) == 0 then
-			if run.roomIndex >= #run.dungeon.rooms then
+			if run.dungeon.endless == true then
+				grant(player, run, Dungeons.waveReward(run.wave), nil)
+				beginAdvance(
+					player,
+					run,
+					string.format(
+						"Wave %d clear. Next wave in %ds.",
+						run.wave,
+						Dungeons.ADVANCE_SECONDS
+					)
+				)
+			elseif run.roomIndex >= #run.dungeon.rooms then
 				finish(player, true)
 			else
-				run.cleared = true
-				pushRun(player, "Room clear. Step on the green pad, or press Next room.")
+				beginAdvance(
+					player,
+					run,
+					string.format("Room clear. Next room in %ds.", Dungeons.ADVANCE_SECONDS)
+				)
 			end
 		end
 	end
@@ -757,7 +888,7 @@ local function tickEnemy(
 	if enemy.hp <= 0 then
 		return
 	end
-	moveEnemy(enemy, hrp.Position, dt, run.roomIndex, run.dungeon.floorSize)
+	moveEnemy(enemy, hrp.Position, dt, run.placeIndex, run.dungeon.floorSize)
 
 	if enemy.boss and enemy.phase == 1 then
 		if now < enemy.weakUntil then
@@ -826,6 +957,86 @@ local function tickEnemy(
 	end
 end
 
+local function tickAdvance(player: Player, run: Run, now: number)
+	if not run.cleared or run.resolving or run.advanceAt == nil then
+		return
+	end
+	local left = math.ceil(run.advanceAt - now)
+	if left < 0 then
+		left = 0
+	end
+	if left > 0 and left ~= run.advanceShown then
+		run.advanceShown = left
+		pushRun(player, string.format("Next in %ds.", left))
+	end
+	if now >= run.advanceAt then
+		run.advanceAt = nil
+		DungeonService.advance(player)
+	end
+end
+
+local function farmPath(player: Player, run: Run, hrp: BasePart)
+	if farmOn[player] ~= true or not CombatService.autoEnabled(player) then
+		return
+	end
+	local character = hrp.Parent
+	if character == nil then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil or humanoid.Health <= 0 then
+		return
+	end
+	if CombatService.isSteering(player) then
+		if run.yielding ~= true then
+			run.yielding = true
+			humanoid:MoveTo(hrp.Position)
+		end
+		return
+	end
+	run.yielding = false
+	local offense = CombatMath.loadout(DataService.get(player))
+	local enemy = CombatMath.nearestInRange(
+		hrp.Position.X,
+		hrp.Position.Z,
+		DungeonService.enemyViews(player),
+		10000
+	)
+	if enemy == nil then
+		return
+	end
+	local near, far = CombatMath.farmBand(offense.style, offense.range)
+	local dx = enemy.x - hrp.Position.X
+	local dz = enemy.z - hrp.Position.Z
+	local distance = math.sqrt(dx * dx + dz * dz)
+	local dest: Vector3? = nil
+	if distance > far and distance > 0.05 then
+		dest = Vector3.new(
+			enemy.x - dx / distance * far,
+			hrp.Position.Y,
+			enemy.z - dz / distance * far
+		)
+	elseif near > 0 and distance < near and distance > 0.05 then
+		local awayX = hrp.Position.X - enemy.x
+		local awayZ = hrp.Position.Z - enemy.z
+		local away = math.sqrt(awayX * awayX + awayZ * awayZ)
+		if away > 0.05 then
+			dest = Vector3.new(
+				hrp.Position.X + awayX / away * 6,
+				hrp.Position.Y,
+				hrp.Position.Z + awayZ / away * 6
+			)
+		end
+	end
+	if dest ~= nil then
+		run.walking = true
+		humanoid:MoveTo(dest)
+	elseif run.walking == true then
+		run.walking = false
+		humanoid:MoveTo(hrp.Position)
+	end
+end
+
 local function onHeartbeat(dt: number)
 	local step = math.min(dt, 0.1)
 	local now = os.clock()
@@ -834,7 +1045,11 @@ local function onHeartbeat(dt: number)
 			continue
 		end
 		local hrp = rootPart(player)
-		if hrp == nil or run.cleared then
+		if hrp == nil then
+			continue
+		end
+		if run.cleared then
+			tickAdvance(player, run, now)
 			continue
 		end
 		for _, enemy in pairs(run.enemies) do
@@ -843,9 +1058,32 @@ local function onHeartbeat(dt: number)
 			end
 			tickEnemy(player, run, enemy, hrp, step, now)
 		end
-		if runs[player] ~= nil and not run.resolving then
+		if runs[player] ~= nil and not run.resolving and not run.cleared then
 			CombatService.companionTick(player)
 			CombatService.autoTick(player)
+			farmPath(player, run, hrp)
+		end
+	end
+	local pending = {}
+	for player, plan in pairs(restartAt) do
+		table.insert(pending, { player = player, plan = plan })
+	end
+	for _, row in ipairs(pending) do
+		local player = row.player
+		local plan = row.plan
+		if restartAt[player] ~= plan then
+			continue
+		end
+		if farmOn[player] ~= true or player.Parent == nil or runs[player] ~= nil then
+			restartAt[player] = nil
+			continue
+		end
+		if now >= plan.at then
+			restartAt[player] = nil
+			local result = DungeonService.enter(player, plan.dungeonId)
+			if result.ok ~= true then
+				pushRun(player, result.error)
+			end
 		end
 	end
 end
@@ -854,7 +1092,19 @@ local function reject(message: string)
 	return { ok = false, error = message }
 end
 
+function DungeonService.setAutoFarm(player: Player, enabled: boolean)
+	farmOn[player] = enabled
+	if not enabled then
+		restartAt[player] = nil
+	end
+end
+
+function DungeonService.autoFarmEnabled(player: Player): boolean
+	return farmOn[player] == true
+end
+
 function DungeonService.enter(player: Player, dungeonId: any)
+	restartAt[player] = nil
 	if runs[player] ~= nil then
 		return reject("You are already in a dungeon. Leave first.")
 	end
@@ -890,6 +1140,7 @@ function DungeonService.enter(player: Player, dungeonId: any)
 		.. "_"
 		.. HttpService:GenerateGUID(false):sub(1, 8)
 	folder.Parent = activeFolder
+	local endless = dungeon.endless == true
 	local run: Run = {
 		dungeon = dungeon,
 		roomIndex = 1,
@@ -899,11 +1150,21 @@ function DungeonService.enter(player: Player, dungeonId: any)
 		folder = folder,
 		sunbeam = nil,
 		sunbeamIndex = 1,
+		placeIndex = if endless then Dungeons.WAVES_ROOM_INDEX else 1,
+		wave = if endless then 1 else 0,
+		advanceAt = nil,
+		advanceShown = nil,
+		yielding = false,
+		walking = false,
 	}
 	runs[player] = run
 	CombatService.refresh(player)
-	spawnRoom(player, run)
-	teleport(player, roomSpawn(1))
+	if endless then
+		spawnWave(player, run)
+	else
+		spawnRoom(player, run)
+		teleport(player, roomSpawn(1))
+	end
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -915,16 +1176,24 @@ function DungeonService.advance(player: Player)
 	if not run.cleared then
 		return reject("Clear this room first.")
 	end
+	run.advanceAt = nil
+	if run.dungeon.endless == true then
+		run.wave += 1
+		spawnWave(player, run)
+		return { ok = true, run = publicRun(player) }
+	end
 	if run.roomIndex >= #run.dungeon.rooms then
 		return reject("That was the last room.")
 	end
 	run.roomIndex += 1
+	run.placeIndex = run.roomIndex
 	spawnRoom(player, run)
-	teleport(player, roomSpawn(run.roomIndex))
+	teleport(player, roomSpawn(run.placeIndex))
 	return { ok = true, run = publicRun(player) }
 end
 
 function DungeonService.leave(player: Player)
+	restartAt[player] = nil
 	local run = runs[player]
 	if run == nil then
 		teleport(player, hubCFrame())
@@ -955,8 +1224,11 @@ function DungeonService.skipToBoss(player: Player)
 		return reject("You are not in a dungeon.")
 	end
 	run.roomIndex = #run.dungeon.rooms
+	run.placeIndex = run.roomIndex
+	run.advanceAt = nil
+	run.wave = 0
 	spawnRoom(player, run)
-	teleport(player, roomSpawn(run.roomIndex))
+	teleport(player, roomSpawn(run.placeIndex))
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1001,7 +1273,7 @@ local function bindTouches()
 				if run == nil then
 					return
 				end
-				if descendant:GetAttribute("RoomIndex") ~= run.roomIndex then
+				if descendant:GetAttribute("RoomIndex") ~= run.placeIndex then
 					return
 				end
 				local result = DungeonService.advance(player)
@@ -1035,7 +1307,27 @@ function DungeonService.start()
 	buildWorld()
 	bindTouches()
 
+	local function watchIdle(player: Player)
+		player.Idled:Connect(function(idleTime)
+			if type(idleTime) ~= "number" or idleTime < Dungeons.IDLE_NOTE_SECONDS then
+				return
+			end
+			if idleNoted[player] == true then
+				return
+			end
+			idleNoted[player] = true
+			warn(
+				string.format(
+					"[Shardfall] %s has been idle for %d seconds. Roblox kicks near 20 minutes with no input. Stop AFK rewards in this hook before that kick if you need a cutoff.",
+					player.Name,
+					math.floor(idleTime)
+				)
+			)
+		end)
+	end
+
 	local function hook(player: Player)
+		watchIdle(player)
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				if player.Parent == nil then
@@ -1043,7 +1335,7 @@ function DungeonService.start()
 				end
 				local run = runs[player]
 				if run ~= nil and not run.resolving then
-					teleport(player, roomSpawn(run.roomIndex))
+					teleport(player, roomSpawn(run.placeIndex))
 				else
 					teleport(player, hubCFrame())
 				end
@@ -1061,6 +1353,9 @@ function DungeonService.start()
 			destroyRun(player, run)
 		end
 		touchAt[player] = nil
+		farmOn[player] = nil
+		restartAt[player] = nil
+		idleNoted[player] = nil
 	end)
 
 	RunService.Heartbeat:Connect(onHeartbeat)

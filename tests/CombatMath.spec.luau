@@ -62,6 +62,20 @@ describe("CombatMath", function()
 		expect(staff.projectileSpeed).toEqual(64)
 	end)
 
+	it("keeps melee closing in and ranged at a clamped distance", function()
+		local near, far = CombatMath.farmBand("melee", 8)
+		expect(near).toEqual(0)
+		expect(far).toBeCloseTo(5.6, 1e-9)
+
+		local back, hold = CombatMath.farmBand("projectile", 80)
+		expect(hold).toEqual(32)
+		expect(back).toEqual(24)
+
+		local closeBack, closeHold = CombatMath.farmBand("projectile", 20)
+		expect(closeHold).toEqual(16)
+		expect(closeBack).toEqual(8)
+	end)
+
 	it("turns attack speed into a cooldown", function()
 		expect(CombatMath.cooldown(1)).toEqual(1)
 		expect(CombatMath.cooldown(2)).toEqual(0.5)

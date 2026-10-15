@@ -98,7 +98,9 @@ A panel named **SHARDFALL** sits on the right.
 - Identical pets stack (`Moss Hare x3`). Two weapons with different stat rolls stay on their own rows, and every copy keeps its id. The name shows the quality (`Vinewood Sword  84%`, `Fern Stag  72%`). A starred item reads `Nightbriar ★2 46%`. The row under it lists the trait (`Bonus: Bonus Pet Damage 5.0%`). Common pets have zero trait slots, so that line stays `Bonus: None`. Equip and Drop use one id. When you own a second copy of the same item, **Feed** asks you to confirm, shows the feeder's quality and the star progress that feed will reach, then consumes the feeder. Five stars is the cap. Each star is +8% to the rolled stats. ★3 unlocks Starforged and ★5 unlocks Ascendant (placeholder perks). Armor equips into helm, chest, legs, or boots.
 - **Paid roll** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
 - **Shards** and **Craft** are the two tabs. Under them, **Enter Rootvault** starts the Verdant crawl (or step on the gold pad in the hub). **Auto Attack** starts on: the server swings at the nearest enemy inside your weapon's range, on that weapon's attack speed. Melee aims the arc at that enemy. Bows and staffs fire at it. Click the world, or press **Attack**, when you want to aim yourself. If nothing is in range the status line says "No target in range." Damage, attack speed, and crits come from the equipped weapon. HP and Defense come from armor. An equipped pet hits the nearest enemy on its own timer using Pet Damage. Bonus Pet Damage on the pet or the weapon multiplies those hits. There is no pet model yet; the gold or white number is the swing. Numbers float off the target; crits are gold. A bar sits at the top left and above your head.
-- The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got.
+- The crawl is hub, three rooms (Vine Crawler, Spore Bat, Root Brute), then Grandmother Gnarl. After her slam she glows gold: that is the weak spot. At half HP, stand in the sunbeam when the fog pulses. Clear rewards gold, shard tokens, XP, Verdant materials, and sometimes a free Armory or Pets crack. A card lists what you got, then hides itself after a few seconds.
+- A cleared room counts down about 3 seconds (the status line and the dungeon row both show it) and then teleports you to the next room. **Next room** still skips the wait. **Rootvault Waves** is a second entry: one arena, bigger packs, more HP and damage each wave, a boss every 5 waves, and a payout when the wave dies. It stops when you fall.
+- **Auto Farm** starts off. Turn it on and a win or a loss sends you back into the same mode after the card closes. With Auto Attack also on, the server walks you toward the nearest enemy until you are in weapon range. Melee closes in. Bows and staffs stop at a comfortable distance. Your own movement (keyboard, gamepad, or the touch thumbstick) overrides that walk.
 - **Craft** shows each recipe with what you own and what it costs. Briar Edge makes a Thorn Dagger, Grovewarden Hood makes the helm, Healing Tonic restores 40% HP, and Wild Resin rerolls one trait on a Rare or better piece. The server spends the materials.
 - In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens, +25 Shard Luck, +1 Ascension, craft materials, or Skip to Rootvault boss. A live server rejects those grants. Ascension 1 unlocks Sunken Reach in both areas. Tidecrypt (the Sunken dungeon) stays locked until then, and it is not built yet.
 
@@ -288,7 +290,7 @@ src/ReplicatedStorage/Shared/
     Materials.luau            Stackable dungeon materials and the tonic
     Recipes.luau              Crafting costs and results
     Crafting.luau             Spend check and the profile change
-    Dungeons.luau             Rootvault rooms, enemies, boss, clear rewards
+    Dungeons.luau             Rootvault rooms, wave scaling, boss, clear rewards
     InventoryStacks.luau      Display-only stacks and the loadout line
     Schema.luau               Profile shape, migrations, snapshots
     SessionLock.luau          Lock / save decisions, no DataStore calls
@@ -317,6 +319,7 @@ tests/                        Lune specs and the tiny runner
 - Check arguments and the rate limit in `Remotes.luau`. Services still check ownership and currency, because a remote is not a trust boundary.
 - If a roll can cost Robux, it has to go through `rollPaid` after `PaidRollPolicy.evaluate` returns `allowed`, and the odds you show have to be `RollMath.odds` for that player's luck. Set `placeholder = false` on the pool only when the numbers are the real ones.
 - The dev grant remote checks `RunService:IsStudio()` on the server. Hiding the button on the client is not the security check.
+- Roblox kicks a player who sends no input for about 20 minutes. `Player.Idled` in `DungeonService.start` is the hook: after 15 minutes of idle it warns once. That is not a reward cap. If AFK payouts need a cutoff later, stop Auto Farm grants in that callback before the engine kick. Do not trust the client to report idle time.
 
 ## Adding a Wally package
 

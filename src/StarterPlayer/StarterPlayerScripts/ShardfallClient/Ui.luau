@@ -45,10 +45,11 @@ export type Callbacks = {
 	onDev: (kind: string) -> (),
 	onArea: (poolId: string) -> (),
 	onCraft: (recipeId: string, targetUid: string?) -> (),
-	onDungeon: (action: string) -> (),
+	onDungeon: (action: string, dungeonId: string?) -> (),
 	onTonic: () -> (),
 	onAttack: () -> (),
 	onAutoAttack: (enabled: boolean) -> (),
+	onAutoFarm: (enabled: boolean) -> (),
 	onFeed: (keptUid: string, feederUid: string) -> (),
 }
 
@@ -274,7 +275,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Dungeon",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 96),
+		Size = UDim2.new(1, 0, 0, 160),
 		LayoutOrder = 3,
 	}, panel) :: Frame
 	local runLabel = new("TextLabel", {
@@ -313,11 +314,19 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	leaveButton.Size = UDim2.fromOffset(0, 0)
 	leaveButton.Visible = false
 	leaveButton.TextSize = 12
+	local wavesButton = makeButton(dungeonBar, "Rootvault Waves", COLORS.button, 6, 26)
+	wavesButton.Position = UDim2.fromOffset(0, 64)
+	wavesButton.Size = UDim2.new(1, 0, 0, 26)
+	wavesButton.TextSize = 13
 
 	local function paintDungeon()
 		local note = if type(runState.note) == "string"
 			then runState.note
 			else Dungeons.progressNote(0) or ""
+		local countdown = ""
+		if type(runState.countdown) == "number" and runState.countdown > 0 then
+			countdown = string.format("  ·  next in %ds", runState.countdown)
+		end
 		if runState.active == true then
 			local phaseNote = ""
 			if runState.boss == true and runState.phase == 2 then
@@ -326,18 +335,34 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				phaseNote = "  ·  hit during the gold weak spot"
 			end
 			local remaining = runState.remaining or 0
-			runLabel.Text = string.format(
-				"%s  ·  %s (%d/%d)  ·  %d left%s",
-				tostring(runState.dungeonName or "Rootvault"),
-				tostring(runState.roomName or "Room"),
-				runState.roomIndex or 1,
-				runState.roomCount or 1,
-				remaining,
-				phaseNote
-			)
-			enterButton.Text = if runState.cleared == true then "Next room" else "Fighting"
+			if runState.endless == true then
+				runLabel.Text = string.format(
+					"%s  ·  Wave %d  ·  %d left%s%s",
+					tostring(runState.dungeonName or "Waves"),
+					runState.wave or runState.roomIndex or 1,
+					remaining,
+					phaseNote,
+					countdown
+				)
+				enterButton.Text = if runState.cleared == true then "Next wave" else "Fighting"
+			else
+				runLabel.Text = string.format(
+					"%s  ·  %s (%d/%d)  ·  %d left%s%s",
+					tostring(runState.dungeonName or "Rootvault"),
+					tostring(runState.roomName or "Room"),
+					runState.roomIndex or 1,
+					runState.roomCount or 1,
+					remaining,
+					phaseNote,
+					countdown
+				)
+				enterButton.Text = if runState.cleared == true then "Next room" else "Fighting"
+			end
 			enterButton.Active = runState.cleared == true
 			enterButton.AutoButtonColor = runState.cleared == true
+			wavesButton.Active = false
+			wavesButton.AutoButtonColor = false
+			wavesButton.Text = "Rootvault Waves"
 			leaveButton.Visible = true
 			leaveButton.Size = UDim2.fromOffset(52, 22)
 			leaveButton.Position = UDim2.new(1, -52, 0, 0)
@@ -348,6 +373,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			enterButton.Text = "Enter Rootvault"
 			enterButton.Active = true
 			enterButton.AutoButtonColor = true
+			wavesButton.Active = true
+			wavesButton.AutoButtonColor = true
+			wavesButton.Text = "Rootvault Waves"
 			leaveButton.Visible = false
 		end
 	end
@@ -360,7 +388,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			return
 		end
-		callbacks.onDungeon("enter")
+		callbacks.onDungeon("enter", "rootvault")
+	end)
+	wavesButton.MouseButton1Click:Connect(function()
+		if runState.active == true then
+			return
+		end
+		callbacks.onDungeon("enter", "rootvault_waves")
 	end)
 	leaveButton.MouseButton1Click:Connect(function()
 		callbacks.onDungeon("leave")
@@ -374,7 +408,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local autoEnabled = true
 	local autoButton = makeButton(dungeonBar, "Auto Attack: On", COLORS.gold, 5, 26)
-	autoButton.Position = UDim2.fromOffset(0, 64)
+	autoButton.Position = UDim2.fromOffset(0, 94)
 	autoButton.Size = UDim2.new(1, 0, 0, 26)
 	autoButton.TextSize = 13
 	autoButton.TextColor3 = COLORS.ink
@@ -387,6 +421,22 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		autoEnabled = not autoEnabled
 		paintAuto()
 		callbacks.onAutoAttack(autoEnabled)
+	end)
+
+	local farmEnabled = false
+	local farmButton = makeButton(dungeonBar, "Auto Farm: Off", COLORS.buttonDim, 7, 26)
+	farmButton.Position = UDim2.fromOffset(0, 124)
+	farmButton.Size = UDim2.new(1, 0, 0, 26)
+	farmButton.TextSize = 13
+	local function paintFarm()
+		farmButton.Text = if farmEnabled then "Auto Farm: On" else "Auto Farm: Off"
+		farmButton.BackgroundColor3 = if farmEnabled then COLORS.gold else COLORS.buttonDim
+		farmButton.TextColor3 = if farmEnabled then COLORS.ink else COLORS.text
+	end
+	farmButton.MouseButton1Click:Connect(function()
+		farmEnabled = not farmEnabled
+		paintFarm()
+		callbacks.onAutoFarm(farmEnabled)
 	end)
 
 	local stats = new("TextLabel", {
@@ -1269,6 +1319,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	function controller.setAutoAttack(enabled: boolean)
 		autoEnabled = enabled
 		paintAuto()
+	end
+
+	function controller.setAutoFarm(enabled: boolean)
+		farmEnabled = enabled
+		paintFarm()
 	end
 
 	function controller.setStatus(text: string, kind: string)
