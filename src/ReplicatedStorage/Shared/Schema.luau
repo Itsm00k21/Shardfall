@@ -153,6 +153,15 @@ function Schema.reconcile(data: any): ProfileData
 	data.shardLuck = wholeNumber(data.shardLuck, 0, 0)
 	data.equipped.weapon = optionalUid(data.equipped.weapon)
 	data.equipped.pet = optionalUid(data.equipped.pet)
+	-- An equipped id that is not in the bag must not survive. The client
+	-- names whatever this points at, so a stale id would look like a sword
+	-- the player does not have.
+	if data.equipped.weapon ~= nil and data.inventory[data.equipped.weapon] == nil then
+		data.equipped.weapon = nil
+	end
+	if data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
+		data.equipped.pet = nil
+	end
 	return data
 end
 

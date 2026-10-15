@@ -86,6 +86,83 @@ describe("RollMath odds", function()
 		expect(RollMath.formatChance(byId.unnamed_edge.chance)).toEqual("0.020%")
 	end)
 
+	it("publishes rarity totals as the sum of those weights", function()
+		local pool = starter()
+		local odds = RollMath.odds(pool, 0)
+		local weightByRarity: { [string]: number } = {}
+		local weightSum = 0
+		for _, entry in ipairs(pool.entries) do
+			weightSum += entry.weight
+			weightByRarity[entry.rarity] = (weightByRarity[entry.rarity] or 0) + entry.weight
+		end
+		expect(#odds.rarities).toEqual(7)
+		for _, row in ipairs(odds.rarities) do
+			local weight = weightByRarity[row.rarity]
+			assert(weight ~= nil, row.rarity)
+			expect(row.chance).toBeCloseTo(weight / weightSum, 1e-12)
+			expect(row.chance).toBeGreaterThan(0)
+		end
+		local function rarityChance(rarity: string): number
+			for _, row in ipairs(odds.rarities) do
+				if row.rarity == rarity then
+					return row.chance
+				end
+			end
+			error(rarity)
+		end
+		-- Not a 60 / 30 / 9 / 0.9 curve. Common is 60% because Splinter is 35%
+		-- and Wooden Sword is 25%. Secret stays visible at 0.020%, not 0%.
+		expect(rarityChance("Common")).toBeCloseTo(0.60, 1e-12)
+		expect(rarityChance("Uncommon")).toBeCloseTo(0.25, 1e-12)
+		expect(rarityChance("Rare")).toBeCloseTo(0.10, 1e-12)
+		expect(rarityChance("Epic")).toBeCloseTo(0.04, 1e-12)
+		expect(rarityChance("Legendary")).toBeCloseTo(0.008, 1e-12)
+		expect(rarityChance("Mythic")).toBeCloseTo(0.0018, 1e-12)
+		expect(rarityChance("Secret")).toBeCloseTo(0.0002, 1e-12)
+		expect(RollMath.formatChance(rarityChance("Common"))).toEqual("60.00%")
+		expect(RollMath.formatChance(rarityChance("Uncommon"))).toEqual("25.00%")
+		expect(RollMath.formatChance(rarityChance("Secret"))).toEqual("0.020%")
+	end)
+
+	it("shifts the disclosed odds at 25 Shard Luck without changing the table", function()
+		local odds = RollMath.odds(starter(), 25)
+		local function formatted(rarity: string): string
+			for _, row in ipairs(odds.rarities) do
+				if row.rarity == rarity then
+					return RollMath.formatChance(row.chance)
+				end
+			end
+			error(rarity)
+		end
+		local function itemChance(templateId: string): string
+			for _, entry in ipairs(odds.entries) do
+				if entry.templateId == templateId then
+					return RollMath.formatChance(entry.chance)
+				end
+			end
+			error(templateId)
+		end
+		expect(formatted("Common")).toEqual("57.05%")
+		expect(formatted("Uncommon")).toEqual("25.70%")
+		expect(formatted("Rare")).toEqual("11.12%")
+		expect(formatted("Epic")).toEqual("4.81%")
+		expect(formatted("Legendary")).toEqual("1.04%")
+		expect(formatted("Mythic")).toEqual("0.253%")
+		expect(formatted("Secret")).toEqual("0.030%")
+		expect(itemChance("splinter")).toEqual("33.28%")
+		expect(itemChance("wooden_sword")).toEqual("23.77%")
+		expect(itemChance("unnamed_edge")).toEqual("0.030%")
+	end)
+
+	it("describes pity as a count up toward the guarantee", function()
+		expect(RollMath.pityText(0, 50)).toEqual("Pity 0 / 50 toward Legendary")
+		expect(RollMath.pityText(7, 50)).toEqual("Pity 7 / 50 toward Legendary")
+		expect(RollMath.pityText(8, 50)).toEqual("Pity 8 / 50 toward Legendary")
+		expect(RollMath.pityText(18, 50)).toEqual("Pity 18 / 50 toward Legendary")
+		expect(RollMath.pityText(50, 50)).toEqual("Pity 50 / 50 toward Legendary")
+		expect(RollMath.pityText(-3, 50)).toEqual("Pity 0 / 50 toward Legendary")
+	end)
+
 	it("keeps the starter weights easy to read as percents", function()
 		local sum = 0
 		for _, entry in ipairs(starter().entries) do

@@ -3,20 +3,21 @@
 --[[
 	Test harness UI. Not the real game HUD.
 
-	Built with Instance.new so there is no UI framework to learn yet. The
-	panel is a scrolling column: currencies, pity, the disclosed odds, the
-	Crack a Shard button, and the inventory. A roll opens a rarity-colored
-	popup in the middle of the screen.
+	The panel stays short on purpose: stats, a pity line that counts up, one
+	Crack button, and the inventory. Odds are behind View odds so the
+	disclosure stays one click away without covering the panel. Saving is a
+	badge, not a paragraph. Studio dev grants sit in a collapsed section.
 
-	The client displays results. It does not decide them. Every button calls
-	back into init.client.luau, which asks the server.
+	Roll areas come from Areas.all(). One area hides the picker. Two or more
+	show it above Crack. The client sends that area's pool id.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Pools = require(Shared:WaitForChild("Pools"))
+local Areas = require(Shared:WaitForChild("Areas"))
+local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
 
@@ -30,6 +31,7 @@ export type Callbacks = {
 	onUnequip: (uid: string) -> (),
 	onRemove: (uid: string) -> (),
 	onDev: (kind: string) -> (),
+	onArea: (poolId: string) -> (),
 }
 
 local COLORS = {
@@ -39,10 +41,12 @@ local COLORS = {
 	text = Color3.fromRGB(240, 236, 248),
 	muted = Color3.fromRGB(176, 168, 198),
 	gold = Color3.fromRGB(255, 196, 64),
+	ink = Color3.fromRGB(32, 22, 10),
 	danger = Color3.fromRGB(230, 80, 96),
 	ok = Color3.fromRGB(110, 210, 140),
 	button = Color3.fromRGB(108, 78, 196),
 	buttonDim = Color3.fromRGB(54, 46, 78),
+	stroke = Color3.fromRGB(64, 54, 92),
 }
 
 local gradients: { UIGradient } = {}
@@ -100,25 +104,40 @@ local function paintRarity(label: TextLabel, rarity: string)
 	table.insert(gradients, gradient)
 end
 
-local function clearRows(container: Instance)
+local function clearGenerated(container: Instance)
 	for _, child in ipairs(container:GetChildren()) do
-		if child:IsA("UIListLayout") or child:IsA("UIPadding") then
+		if
+			child:IsA("UIListLayout")
+			or child:IsA("UIPadding")
+			or child:IsA("UICorner")
+			or child.Name == "Notice"
+		then
 			continue
 		end
 		child:Destroy()
 	end
 end
 
-local function traitLine(item: any): string
-	local traits = item.traits
-	if type(traits) ~= "table" or #traits == 0 then
-		return item.kind
-	end
-	local parts = {}
-	for _, trait in ipairs(traits) do
-		table.insert(parts, string.format("%s %s", trait.name, trait.display))
-	end
-	return table.concat(parts, "  ·  ")
+local function makeButton(
+	parent: Instance,
+	text: string,
+	color: Color3,
+	order: number,
+	height: number
+): TextButton
+	local widget = new("TextButton", {
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, height),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextColor3 = COLORS.text,
+		Text = text,
+		AutoButtonColor = true,
+		LayoutOrder = order,
+	}, parent) :: TextButton
+	corner(widget, 8)
+	return widget
 end
 
 function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
@@ -133,55 +152,86 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local panel = new("ScrollingFrame", {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 16),
-		Size = UDim2.new(0, 360, 1, -32),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.new(0, 320, 1, -24),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 6,
+		ScrollBarThickness = 4,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Active = true,
 	}, screen) :: ScrollingFrame
 	corner(panel, 12)
-	padding(panel, 14)
+	padding(panel, 12)
 	list(panel, 8)
+	new("UIStroke", {
+		Color = COLORS.stroke,
+		Thickness = 1,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, panel)
 
-	local function sectionLabel(text: string, size: number, color: Color3, order: number): TextLabel
-		return new("TextLabel", {
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, size + 6),
-			Font = Enum.Font.BuilderSansBold,
-			TextSize = size,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = color,
-			Text = text,
-			LayoutOrder = order,
-		}, panel) :: TextLabel
-	end
-
-	sectionLabel("SHARDFALL", 22, COLORS.gold, 1)
-
-	local banner = new("TextLabel", {
-		BackgroundColor3 = COLORS.panel,
-		Size = UDim2.new(1, 0, 0, 36),
-		Font = Enum.Font.BuilderSans,
-		TextSize = 13,
-		TextWrapped = true,
+	local header = new("Frame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 26),
+		LayoutOrder = 1,
+	}, panel) :: Frame
+	new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -84, 1, 0),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.gold,
-		Text = "Not saving. Publish the place and enable Studio API access (see the README).",
+		Text = "SHARDFALL",
+	}, header)
+
+	local saveBadge = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 0.5),
+		Size = UDim2.fromOffset(76, 20),
+		BackgroundColor3 = COLORS.panel,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 12,
+		TextColor3 = COLORS.gold,
+		Text = "Not saved",
+		AutoButtonColor = true,
+		Visible = false,
+	}, header) :: TextButton
+	corner(saveBadge, 6)
+
+	local saveNote = new("TextLabel", {
+		Name = "SaveNote",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 32),
+		Font = Enum.Font.BuilderSans,
+		TextSize = 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.muted,
+		Text = "Not saving yet. Publish the place and enable Studio API access.",
 		Visible = false,
 		LayoutOrder = 2,
 	}, panel) :: TextLabel
-	corner(banner, 6)
-	padding(banner, 6)
+
+	local saveOpen = false
+	local function paintSave(saving: boolean)
+		saveBadge.Visible = not saving
+		saveNote.Visible = not saving and saveOpen
+	end
+	saveBadge.MouseButton1Click:Connect(function()
+		saveOpen = not saveOpen
+		saveNote.Visible = saveBadge.Visible and saveOpen
+	end)
 
 	local stats = new("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 36),
 		Font = Enum.Font.BuilderSans,
-		TextSize = 15,
+		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = COLORS.text,
@@ -194,134 +244,247 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 16),
 		Font = Enum.Font.BuilderSansMedium,
-		TextSize = 14,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
-		Text = "Pity",
+		Text = RollMath.pityText(0, 50),
 		LayoutOrder = 4,
 	}, panel) :: TextLabel
 
 	local pityTrack = new("Frame", {
 		BackgroundColor3 = COLORS.panel,
-		Size = UDim2.new(1, 0, 0, 12),
 		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 8),
 		LayoutOrder = 5,
 	}, panel) :: Frame
-	corner(pityTrack, 6)
+	corner(pityTrack, 4)
 	local pityFill = new("Frame", {
 		BackgroundColor3 = COLORS.gold,
-		Size = UDim2.fromScale(0, 1),
 		BorderSizePixel = 0,
+		Size = UDim2.fromScale(0, 1),
 	}, pityTrack) :: Frame
-	corner(pityFill, 6)
+	corner(pityFill, 4)
 
-	local notice = new("TextLabel", {
+	local areas = Areas.all()
+	local selected: any = areas[1]
+	local latestProfile: any = nil
+
+	local areaRow = new("Frame", {
+		Name = "Areas",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 48),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, if #areas > 1 then 28 else 0),
+		Visible = #areas > 1,
+		LayoutOrder = 6,
+	}, panel) :: Frame
+	local chips: { { button: TextButton, area: any } } = {}
+	if #areas > 1 then
+		new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 6),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		}, areaRow)
+		for index, area in ipairs(areas) do
+			local chip = makeButton(areaRow, area.name, COLORS.buttonDim, index, 26)
+			chip.Size = UDim2.fromOffset(0, 26)
+			chip.AutomaticSize = Enum.AutomaticSize.X
+			chip.TextSize = 13
+			chip.Font = Enum.Font.BuilderSansMedium
+			new("UIPadding", {
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10),
+			}, chip)
+			table.insert(chips, { button = chip, area = area })
+		end
+	end
+
+	local function paintChips()
+		for _, chip in ipairs(chips) do
+			local active = selected ~= nil and chip.area.id == selected.id
+			chip.button.BackgroundColor3 = if active then COLORS.gold else COLORS.buttonDim
+			chip.button.TextColor3 = if active then COLORS.ink else COLORS.text
+		end
+	end
+
+	local crack = makeButton(panel, "Crack a Shard", COLORS.gold, 7, 44)
+	crack.TextColor3 = COLORS.ink
+	crack.TextSize = 18
+
+	-- In the layout, directly under the button. Not a cursor tooltip, so it
+	-- cannot sit on top of the pointer or cover Crack a Shard.
+	local tokenHint = new("TextLabel", {
+		Name = "TokenHint",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
+		Font = Enum.Font.BuilderSansMedium,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.danger,
+		Text = "Not enough tokens.",
+		Visible = false,
+		LayoutOrder = 8,
+	}, panel) :: TextLabel
+
+	local status = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
 		Font = Enum.Font.BuilderSans,
 		TextSize = 13,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = COLORS.gold,
-		Text = "Loading odds...",
-		LayoutOrder = 6,
+		TextColor3 = COLORS.muted,
+		Text = "",
+		Visible = false,
+		LayoutOrder = 9,
 	}, panel) :: TextLabel
 
-	local raritySummary = new("TextLabel", {
+	local actions = new("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 32),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 30),
+		LayoutOrder = 10,
+	}, panel) :: Frame
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+	}, actions)
+	local viewOdds = makeButton(actions, "View odds", COLORS.buttonDim, 1, 30)
+	viewOdds.Size = UDim2.new(0.5, -3, 1, 0)
+	viewOdds.TextSize = 14
+	viewOdds.Font = Enum.Font.BuilderSansMedium
+	local paid = makeButton(actions, "Paid roll", COLORS.buttonDim, 2, 30)
+	paid.Size = UDim2.new(0.5, -3, 1, 0)
+	paid.TextSize = 14
+	paid.Font = Enum.Font.BuilderSansMedium
+
+	local oddsWrap = new("Frame", {
+		Name = "Odds",
+		BackgroundColor3 = COLORS.panel,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		LayoutOrder = 11,
+	}, panel) :: Frame
+	corner(oddsWrap, 8)
+	padding(oddsWrap, 8)
+	list(oddsWrap, 2)
+	local oddsNotice = new("TextLabel", {
+		Name = "Notice",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Font = Enum.Font.BuilderSans,
 		TextSize = 12,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = COLORS.muted,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.gold,
 		Text = "",
-		LayoutOrder = 7,
-	}, panel) :: TextLabel
+		LayoutOrder = 0,
+	}, oddsWrap) :: TextLabel
 
-	local oddsList = new("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 0),
+	local oddsOpen = false
+	local function setOddsOpen(open: boolean)
+		oddsOpen = open
+		oddsWrap.Visible = open
+		viewOdds.Text = if open then "Hide odds" else "View odds"
+	end
+	viewOdds.MouseButton1Click:Connect(function()
+		setOddsOpen(not oddsOpen)
+	end)
+	paid.MouseButton1Click:Connect(callbacks.onPaid)
+
+	local loadout = new("TextLabel", {
+		BackgroundColor3 = COLORS.panel,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 62),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 8,
-	}, panel) :: Frame
-	list(oddsList, 2)
-
-	local function button(
-		text: string,
-		color: Color3,
-		order: number,
-		callback: () -> ()
-	): TextButton
-		local widget = new("TextButton", {
-			BackgroundColor3 = color,
-			Size = UDim2.new(1, 0, 0, 36),
-			Font = Enum.Font.BuilderSansBold,
-			TextSize = 16,
-			TextColor3 = COLORS.text,
-			Text = text,
-			AutoButtonColor = true,
-			LayoutOrder = order,
-		}, panel) :: TextButton
-		corner(widget, 8)
-		widget.MouseButton1Click:Connect(callback)
-		return widget
-	end
-
-	local crack = button("Crack a Shard", COLORS.button, 9, callbacks.onCrack)
-	local paid = button("Paid roll (stub)", COLORS.buttonDim, 10, callbacks.onPaid)
-	paid.Font = Enum.Font.BuilderSansMedium
-	paid.TextSize = 14
-
-	local devTokens: TextButton? = nil
-	local devLuck: TextButton? = nil
-	if callbacks.showDev then
-		devTokens = button("Dev: +5 tokens", COLORS.buttonDim, 11, function()
-			callbacks.onDev("tokens")
-		end)
-		devLuck = button("Dev: +25 Shard Luck", COLORS.buttonDim, 12, function()
-			callbacks.onDev("luck")
-		end)
-		if devTokens ~= nil then
-			devTokens.TextSize = 14
-		end
-		if devLuck ~= nil then
-			devLuck.TextSize = 14
-		end
-	end
-
-	local status = new("TextLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 32),
 		Font = Enum.Font.BuilderSans,
 		TextSize = 14,
-		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = COLORS.muted,
-		Text = "",
-		LayoutOrder = 13,
+		TextWrapped = true,
+		TextColor3 = COLORS.text,
+		Text = "Weapon   None\nPet   None\nBonus   None",
+		LayoutOrder = 12,
 	}, panel) :: TextLabel
+	corner(loadout, 8)
+	padding(loadout, 8)
 
-	sectionLabel("Inventory", 16, COLORS.text, 14).Name = "InventoryHeader"
+	new("TextLabel", {
+		Name = "InventoryHeader",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.text,
+		Text = "Inventory",
+		LayoutOrder = 13,
+	}, panel)
 
 	local inventory = new("Frame", {
 		Name = "Inventory",
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 15,
+		LayoutOrder = 14,
 	}, panel) :: Frame
 	list(inventory, 6)
+
+	local devToggle: TextButton? = nil
+	local devBody: Frame? = nil
+	if callbacks.showDev then
+		devToggle = makeButton(panel, "Dev", COLORS.buttonDim, 15, 28)
+		devToggle.TextSize = 13
+		devToggle.Font = Enum.Font.BuilderSansMedium
+		devToggle.TextXAlignment = Enum.TextXAlignment.Left
+		new("UIPadding", {
+			PaddingLeft = UDim.new(0, 10),
+			PaddingRight = UDim.new(0, 10),
+		}, devToggle)
+		devBody = new("Frame", {
+			Name = "DevBody",
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Visible = false,
+			LayoutOrder = 16,
+		}, panel) :: Frame
+		list(devBody, 6)
+		local grantTokens = makeButton(devBody, "+5 tokens", COLORS.buttonDim, 1, 30)
+		grantTokens.TextSize = 14
+		grantTokens.MouseButton1Click:Connect(function()
+			callbacks.onDev("tokens")
+		end)
+		local grantLuck = makeButton(devBody, "+25 Shard Luck", COLORS.buttonDim, 2, 30)
+		grantLuck.TextSize = 14
+		grantLuck.MouseButton1Click:Connect(function()
+			callbacks.onDev("luck")
+		end)
+		local devOpen = false
+		devToggle.MouseButton1Click:Connect(function()
+			devOpen = not devOpen
+			if devBody ~= nil then
+				devBody.Visible = devOpen
+			end
+			if devToggle ~= nil then
+				devToggle.Text = if devOpen then "Hide dev" else "Dev"
+			end
+		end)
+	end
 
 	local popup = new("Frame", {
 		Name = "Result",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(320, 210),
+		Size = UDim2.fromOffset(300, 200),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		Visible = false,
@@ -336,9 +499,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local popupRarity = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 22),
+		Size = UDim2.new(1, 0, 0, 18),
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 14,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.gold,
 		Text = "",
@@ -346,9 +509,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, popup) :: TextLabel
 	local popupName = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0, 30),
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 26,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.text,
 		Text = "",
@@ -356,9 +519,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, popup) :: TextLabel
 	local popupTraits = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.new(1, 0, 0, 36),
 		Font = Enum.Font.BuilderSans,
-		TextSize = 15,
+		TextSize = 14,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -370,22 +533,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 18),
 		Font = Enum.Font.BuilderSansMedium,
-		TextSize = 14,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.gold,
 		Text = "",
 		LayoutOrder = 4,
 	}, popup) :: TextLabel
-	local dismiss = new("TextButton", {
-		BackgroundColor3 = COLORS.button,
-		Size = UDim2.new(1, 0, 0, 32),
-		Font = Enum.Font.BuilderSansBold,
-		TextSize = 15,
-		TextColor3 = COLORS.text,
-		Text = "Dismiss",
-		LayoutOrder = 5,
-	}, popup) :: TextButton
-	corner(dismiss, 8)
+	local dismiss = makeButton(popup, "Dismiss", COLORS.button, 5, 30)
+	dismiss.TextSize = 14
 
 	local popupGeneration = 0
 	local function hidePopup()
@@ -410,35 +565,87 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end)
 
 	local busy = false
+	local tokens = 0
+	local profileLoaded = false
 	local controller = {}
 
+	local function paintCrack()
+		local ready = tokens > 0 and not busy
+		crack.Active = ready
+		crack.AutoButtonColor = ready
+		crack.Text = if busy then "Cracking..." else "Crack a Shard"
+		crack.BackgroundColor3 = if ready then COLORS.gold else COLORS.buttonDim
+		crack.TextColor3 = if ready then COLORS.ink else COLORS.muted
+		tokenHint.Visible = profileLoaded and tokens < 1 and not busy
+	end
+
+	crack.MouseButton1Click:Connect(function()
+		if busy or tokens < 1 then
+			return
+		end
+		callbacks.onCrack()
+	end)
+
+	local function renderPity(profile: any)
+		local goal = 50
+		local current = 0
+		if selected ~= nil then
+			goal = selected.pityLegendaryAt or 50
+			if type(profile.pity) == "table" and type(profile.pity[selected.poolId]) == "table" then
+				current = profile.pity[selected.poolId].rollsSinceLegendary or 0
+			end
+		end
+		pityLabel.Text = RollMath.pityText(current, goal)
+		local ratio = 0
+		if goal > 0 then
+			ratio = math.clamp(current / goal, 0, 1)
+		end
+		pityFill.Size = UDim2.fromScale(ratio, 1)
+	end
+
+	local function selectArea(area: any, notify: boolean)
+		selected = area
+		paintChips()
+		if latestProfile ~= nil then
+			renderPity(latestProfile)
+		end
+		if notify and area ~= nil then
+			callbacks.onArea(area.poolId)
+		end
+	end
+	for _, chip in ipairs(chips) do
+		local area = chip.area
+		chip.button.MouseButton1Click:Connect(function()
+			if selected ~= nil and selected.id == area.id then
+				return
+			end
+			selectArea(area, true)
+		end)
+	end
+	paintChips()
+
 	local function renderInventory(profile: any)
-		clearRows(inventory)
+		clearGenerated(inventory)
 		local rows = {}
 		local function collect(bag: any, equippedUid: any)
 			if type(bag) ~= "table" then
 				return
 			end
 			for _, item in pairs(bag) do
-				table.insert(rows, {
-					item = item,
-					equipped = item.uid ~= nil and item.uid == equippedUid,
-				})
+				if type(item) == "table" then
+					table.insert(rows, {
+						item = item,
+						equipped = type(item.uid) == "string" and item.uid == equippedUid,
+					})
+				end
 			end
 		end
 		local equipped = if type(profile.equipped) == "table" then profile.equipped else {}
 		collect(profile.inventory, equipped.weapon)
 		collect(profile.pets, equipped.pet)
-		table.sort(rows, function(a, b)
-			local left = Rarities.INDEX[a.item.rarity] or 0
-			local right = Rarities.INDEX[b.item.rarity] or 0
-			if left ~= right then
-				return left > right
-			end
-			return tostring(a.item.name) < tostring(b.item.name)
-		end)
 
-		if #rows == 0 then
+		local stacks = InventoryStacks.group(rows)
+		if #stacks == 0 then
 			local empty = new("TextLabel", {
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, 18),
@@ -447,88 +654,98 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextColor3 = COLORS.muted,
 				Text = "Nothing yet. Crack a shard.",
+				LayoutOrder = 1,
 			}, inventory) :: TextLabel
-			empty.LayoutOrder = 1
+			empty.Name = "Empty"
 			return
 		end
 
-		for index, row in ipairs(rows) do
-			local item = row.item
+		for index, stack in ipairs(stacks) do
 			local card = new("Frame", {
 				BackgroundColor3 = COLORS.row,
-				Size = UDim2.new(1, 0, 0, 64),
 				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 52),
+				ClipsDescendants = true,
 				LayoutOrder = index,
 			}, inventory) :: Frame
 			corner(card, 8)
-
-			local name = new("TextLabel", {
-				BackgroundTransparency = 1,
-				Position = UDim2.fromOffset(10, 6),
-				Size = UDim2.new(1, -150, 0, 20),
-				Font = Enum.Font.BuilderSansBold,
-				TextSize = 15,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				Text = if row.equipped then "Equipped  " .. item.name else item.name,
-			}, card) :: TextLabel
-			paintRarity(name, item.rarity)
-
-			new("TextLabel", {
-				BackgroundTransparency = 1,
-				Position = UDim2.fromOffset(10, 28),
-				Size = UDim2.new(1, -20, 0, 28),
-				Font = Enum.Font.BuilderSans,
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Top,
-				TextWrapped = true,
-				TextColor3 = COLORS.muted,
-				Text = traitLine(item),
+			new("Frame", {
+				BackgroundColor3 = rarityColor(stack.rarity),
+				BorderSizePixel = 0,
+				Size = UDim2.new(0, 4, 1, 0),
 			}, card)
 
-			local uid = item.uid
-			local canEquip = item.kind == "Weapon" or item.kind == "Pet"
-			if canEquip then
-				local action = new("TextButton", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -8, 0, 8),
-					Size = UDim2.fromOffset(72, 22),
-					BackgroundColor3 = COLORS.button,
-					Font = Enum.Font.BuilderSansBold,
-					TextSize = 13,
-					TextColor3 = COLORS.text,
-					Text = if row.equipped then "Unequip" else "Equip",
-				}, card) :: TextButton
-				corner(action, 6)
+			local title = if stack.count > 1
+				then string.format("%s x%d", stack.name, stack.count)
+				else stack.name
+			local name = new("TextLabel", {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(12, 6),
+				Size = UDim2.new(1, -92, 0, 18),
+				Font = Enum.Font.BuilderSansBold,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				Text = title,
+			}, card) :: TextLabel
+			paintRarity(name, stack.rarity)
+
+			local state = if stack.equipped then "Equipped · " else ""
+			new("TextLabel", {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(12, 26),
+				Size = UDim2.new(1, -92, 0, 20),
+				Font = Enum.Font.BuilderSans,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = COLORS.muted,
+				Text = string.format(
+					"%s%s · Bonus: %s",
+					state,
+					stack.kind,
+					InventoryStacks.bonusLine(stack.traits)
+				),
+			}, card)
+
+			local uid = stack.uids[1]
+			local canEquip = stack.kind == "Weapon" or stack.kind == "Pet"
+			if canEquip and type(uid) == "string" then
+				local action = makeButton(
+					card,
+					if stack.equipped then "Unequip" else "Equip",
+					COLORS.button,
+					1,
+					20
+				)
+				action.AnchorPoint = Vector2.new(1, 0)
+				action.Position = UDim2.new(1, -8, 0, 6)
+				action.Size = UDim2.fromOffset(68, 20)
+				action.TextSize = 12
 				action.MouseButton1Click:Connect(function()
-					if type(uid) ~= "string" then
-						return
-					end
-					if row.equipped then
+					if stack.equipped then
 						callbacks.onUnequip(uid)
 					else
 						callbacks.onEquip(uid)
 					end
 				end)
 			end
-
-			if not row.equipped then
-				local drop = new("TextButton", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -8, 0, if canEquip then 34 else 8),
-					Size = UDim2.fromOffset(72, 22),
-					BackgroundColor3 = COLORS.buttonDim,
-					Font = Enum.Font.BuilderSans,
-					TextSize = 13,
-					TextColor3 = COLORS.danger,
-					Text = "Drop",
-				}, card) :: TextButton
-				corner(drop, 6)
+			if not stack.equipped and type(uid) == "string" then
+				local drop = makeButton(
+					card,
+					if stack.count > 1 then "Drop 1" else "Drop",
+					COLORS.buttonDim,
+					2,
+					20
+				)
+				drop.AnchorPoint = Vector2.new(1, 0)
+				drop.Position = UDim2.new(1, -8, 0, if canEquip then 28 else 16)
+				drop.Size = UDim2.fromOffset(68, 20)
+				drop.TextSize = 12
+				drop.TextColor3 = COLORS.danger
 				drop.MouseButton1Click:Connect(function()
-					if type(uid) == "string" then
-						callbacks.onRemove(uid)
-					end
+					callbacks.onRemove(uid)
 				end)
 			end
 		end
@@ -536,18 +753,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.setBusy(isBusy: boolean)
 		busy = isBusy
-		crack.Active = not isBusy
-		crack.AutoButtonColor = not isBusy
-		crack.Text = if isBusy then "Cracking..." else "Crack a Shard"
-		crack.BackgroundColor3 = if isBusy then COLORS.buttonDim else COLORS.button
+		paintCrack()
 	end
 
 	function controller.setNotice(text: string)
-		notice.Text = text
+		oddsNotice.Text = text
 	end
 
 	function controller.setStatus(text: string, kind: string)
 		status.Text = text
+		status.Visible = text ~= ""
 		if kind == "error" then
 			status.TextColor3 = COLORS.danger
 		elseif kind == "ok" then
@@ -562,80 +777,93 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			stats.Text = "Loading profile..."
 			return
 		end
-		banner.Visible = not saving
+		latestProfile = profile
+		profileLoaded = true
+		paintSave(saving)
 		stats.Text = string.format(
-			"Lv %d    %d / %d XP    Ascension %d\n%d tokens    %d gold    Shard Luck %d",
+			"Lv %d    ·    %d tokens    ·    Luck %d\n%d/%d XP    ·    %d gold    ·    Asc %d",
 			profile.level or 1,
+			profile.shardTokens or 0,
+			profile.shardLuck or 0,
 			profile.xp or 0,
 			profile.xpToNext or 100,
-			profile.ascension or 0,
-			profile.shardTokens or 0,
 			profile.gold or 0,
-			profile.shardLuck or 0
+			profile.ascension or 0
 		)
-
-		local pool = Pools.get(Pools.STARTER_ID)
-		local goal = if pool ~= nil then pool.pityLegendaryAt else 50
-		local current = 0
-		if
-			type(profile.pity) == "table"
-			and pool ~= nil
-			and type(profile.pity[pool.id]) == "table"
-		then
-			current = profile.pity[pool.id].rollsSinceLegendary or 0
-		end
-		pityLabel.Text = string.format("Legendary pity  %d / %d", current, goal)
-		local ratio = 0
-		if goal > 0 then
-			ratio = math.clamp(current / goal, 0, 1)
-		end
-		pityFill.Size = UDim2.fromScale(ratio, 1)
+		tokens = profile.shardTokens or 0
+		paintCrack()
+		renderPity(profile)
+		local gear = InventoryStacks.loadout(profile)
+		loadout.Text =
+			string.format("Weapon   %s\nPet   %s\nBonus   %s", gear.weapon, gear.pet, gear.bonus)
 		renderInventory(profile)
-
-		if not busy then
-			local tokens = profile.shardTokens or 0
-			crack.Text = if tokens > 0 then "Crack a Shard" else "Crack a Shard (no tokens)"
-			crack.BackgroundColor3 = if tokens > 0 then COLORS.button else COLORS.buttonDim
-		end
 	end
 
 	function controller.setOdds(odds: any)
-		clearRows(oddsList)
+		clearGenerated(oddsWrap)
 		if type(odds) ~= "table" then
-			notice.Text = "Odds unavailable."
+			oddsNotice.Text = "Odds unavailable."
 			return
 		end
-		notice.Text = tostring(odds.notice or "")
-		local parts = {}
-		if type(odds.rarities) == "table" then
-			for _, row in ipairs(odds.rarities) do
-				table.insert(
-					parts,
-					string.format("%s %s", row.rarity, RollMath.formatChance(row.chance))
-				)
-			end
+		oddsNotice.Text = tostring(odds.notice or "")
+		local order = 1
+		local function heading(text: string)
+			order += 1
+			local label = new("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 16),
+				Font = Enum.Font.BuilderSansBold,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = COLORS.muted,
+				Text = text,
+				LayoutOrder = order,
+			}, oddsWrap) :: TextLabel
+			label.Name = "Heading"
 		end
-		raritySummary.Text = table.concat(parts, "    ")
-		if type(odds.entries) ~= "table" then
-			return
-		end
-		for index, entry in ipairs(odds.entries) do
-			local row = new("TextLabel", {
+		local function row(text: string, rarity: string)
+			order += 1
+			local label = new("TextLabel", {
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, 16),
 				Font = Enum.Font.BuilderSans,
 				TextSize = 13,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Text = string.format(
-					"%s    %s    %s",
-					RollMath.formatChance(entry.chance),
-					entry.rarity,
-					entry.name
-				),
-				LayoutOrder = index,
-			}, oddsList) :: TextLabel
-			paintRarity(row, entry.rarity)
+				Text = text,
+				LayoutOrder = order,
+			}, oddsWrap) :: TextLabel
+			-- Solid rarity color. A moving rainbow made Secret read as blank
+			-- in a recording; the word stays in the string either way.
+			label.TextColor3 = rarityColor(rarity)
+		end
+		local areaName = if selected ~= nil then selected.name else "Odds"
+		heading(areaName .. "  ·  totals")
+		if type(odds.rarities) == "table" then
+			for _, rarityRow in ipairs(odds.rarities) do
+				row(
+					string.format(
+						"%s    %s",
+						rarityRow.rarity,
+						RollMath.formatChance(rarityRow.chance)
+					),
+					rarityRow.rarity
+				)
+			end
+		end
+		heading("Each drop")
+		if type(odds.entries) == "table" then
+			for _, entry in ipairs(odds.entries) do
+				row(
+					string.format(
+						"%s    %s    %s",
+						RollMath.formatChance(entry.chance),
+						entry.rarity,
+						entry.name
+					),
+					entry.rarity
+				)
+			end
 		end
 	end
 
@@ -654,7 +882,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		popupRarity.TextColor3 = rarityColor(item.rarity)
 		paintRarity(popupRarity, item.rarity)
 		popupName.Text = tostring(item.name)
-		popupTraits.Text = traitLine(item)
+		popupTraits.Text = "Bonus: " .. InventoryStacks.bonusLine(item.traits)
 		popupPity.Text = if result.pityTriggered then "Pity guaranteed this drop." else ""
 		popupStroke.Color = rarityColor(item.rarity)
 		if Rarities.isRainbow(item.rarity) then

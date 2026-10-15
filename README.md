@@ -89,12 +89,14 @@ You should see:
 A panel named **SHARDFALL** sits on the right.
 
 - You start at level 1 with **25 shard tokens**, 0 gold, 0 Shard Luck.
-- The odds list is labeled **PLACEHOLDER**. Those numbers are not final.
-- **Crack a Shard** spends one token. The server rolls, and a popup uses the rarity color (Secret is a moving rainbow).
-- The pity bar moves toward 50. At 50 rolls without a Legendary or better, the next one is forced.
-- Weapons and pets can be equipped. Anything can be dropped. Materials cannot be equipped.
-- **Paid roll (stub)** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
-- In Studio only, **Dev: +5 tokens** and **Dev: +25 Shard Luck** exist so you can see luck change the odds. They do nothing in a live server.
+- **Crack a Shard** is the main button. It spends one token. The popup uses the rarity color (Secret is a moving rainbow).
+- Pity counts **up**: `Pity 18 / 50 toward Legendary`. The bar fills with that same number. At 50, the next roll is Legendary or better, then the counter resets.
+- **View odds** opens the disclosure table. **Hide odds** closes it. Those numbers are `RollMath.odds` for your current Shard Luck: rarity totals, then each drop. Pity is not inside the percentages. At 0 luck, Splinter is 35% and Common is 60%.
+- A **Not saved** badge means this session is memory-only. Click it for one line about publishing, then click it again to hide that line.
+- Out of tokens, Crack dims and a line under the button says "Not enough tokens."
+- Identical drops stack in the inventory (`Training Pup x3`). Different traits stay on their own row, and every copy keeps its id. Equip and Drop use one id. The loadout names a weapon or pet only when that item is in the bag. **Bonus** shows its traits, or `None`.
+- **Paid roll** asks the server, which checks regional policy and then tells you paid shards are not for sale. Your tokens do not change.
+- In Studio, **Dev** is collapsed at the bottom. Open it for +5 tokens or +25 Shard Luck. A live server rejects those grants.
 
 The Output window prints whether the profile came from a DataStore or from memory.
 
@@ -155,6 +157,8 @@ selene src
 
 Weights in `Pools.luau` sum to 10,000, so at 0 luck the chance is `weight / 100` percent. Luck and pity are **not** in this table. The in-game list is computed from the same weights, including your current Shard Luck. Pity is a guarantee on top, and the UI says so.
 
+Rarity totals at 0 luck: Common 60%, Uncommon 25%, Rare 10%, Epic 4%, Legendary 0.80%, Mythic 0.18%, Secret 0.02%. View odds prints those totals and then each drop below. Both come from `RollMath.odds`, which is the table the server rolls with. Shard Luck shifts the percentages toward rarer tiers. It does not replace them with a different curve. At 25 luck, Common is about 57.05% and Secret is 0.030%, not 0%.
+
 | Drop | Rarity | Kind | Chance |
 | --- | --- | --- | --- |
 | Splinter | Common | Material | 35% |
@@ -181,7 +185,13 @@ effectiveWeight = baseWeight * (1 + shardLuck / 100) ^ exponent
 
 Common's exponent is 0, so luck does not inflate every drop by the same amount. It shifts chance toward rarer tiers. Negative luck is treated as 0.
 
-Pity is per pool. `pityLegendaryAt` on the starter shard is 50. The roll that would make the counter hit 50 is chosen only from Legendary, Mythic, and Secret (still weighted against each other). Any of those three resets the counter, including a natural pull before the guarantee.
+Pity is per pool. `pityLegendaryAt` on the starter shard is 50. The roll that would make the counter hit 50 is chosen only from Legendary, Mythic, and Secret (still weighted against each other). Any of those three resets the counter, including a natural pull before the guarantee. The panel shows that counter going up (`Pity 12 / 50 toward Legendary`), and the bar uses the same number. It is not a countdown of rolls left.
+
+### Roll areas
+
+An area is one Crack button and one odds table. Today there is a single area, Starter Shard, pointed at `starter_shard` (weapons, pets, and materials together).
+
+Weapons and pets will later be separate areas. To add one, add a pool in `Pools.luau`, then add a row to the list in `Areas.luau`. The panel shows an area picker only when more than one public area exists. The client sends that area's pool id. It does not hard-code the starter shard.
 
 Weapon trait slots: Rare and Epic roll 1, Legendary and Mythic roll 2, Secret rolls 3. Pets and materials roll none. The traits today are Lifesteal, Chain Lightning, Bonus Pet Damage, and Gold Find. Nothing in combat reads them yet.
 
@@ -232,6 +242,7 @@ Profile fields in version 1:
 | Change luck, colors, trait slot counts, pity rarities | `src/ReplicatedStorage/Shared/Rarities.luau` |
 | Add a weapon trait | `src/ReplicatedStorage/Shared/Traits.luau` |
 | Change the pity threshold | `pityLegendaryAt` on the pool |
+| Add a roll area (weapons, pets, …) | A pool in `Pools.luau`, then a row in `Areas.luau` |
 | Change starter tokens, level curve, or inventory cap | `src/ReplicatedStorage/Shared/Schema.luau` |
 | Change autosave timing | `AUTOSAVE_SECONDS` in `DataService.luau` |
 | Add a remote | `default.project.json` (the instance) and `Remotes.luau` (the handler) |
@@ -250,7 +261,9 @@ src/ReplicatedStorage/Shared/
     Rarities.luau             Ladder, colors, luck exponents, trait slots
     Traits.luau               Weapon trait definitions and rolls
     Pools.luau                Drop tables (placeholder odds)
+    Areas.luau                Which pools the Crack button can roll
     RollMath.luau             Weights, pity, disclosed odds
+    InventoryStacks.luau      Display-only stacks and the loadout line
     Schema.luau               Profile shape, migrations, snapshots
     SessionLock.luau          Lock / save decisions, no DataStore calls
     PaidRollPolicy.luau       Interprets ArePaidRandomItemsRestricted

@@ -131,4 +131,32 @@ describe("Schema", function()
 		assert(found ~= nil)
 		expect(found.kind).toEqual("Weapon")
 	end)
+
+	it("clears an equipped id that is not in the bag and keeps one that is", function()
+		local missing = Schema.migrate({
+			schemaVersion = 1,
+			equipped = { weapon = "missing-sword", pet = "missing-pet" },
+			inventory = {
+				sword = { uid = "sword", name = "Wooden Sword", kind = "Weapon" },
+			},
+		})
+		assert(missing ~= nil)
+		expect(missing.equipped.weapon).toBeNil()
+		expect(missing.equipped.pet).toBeNil()
+		expect(missing.inventory.sword.name).toEqual("Wooden Sword")
+
+		local kept = Schema.migrate({
+			schemaVersion = 1,
+			equipped = { weapon = "sword", pet = "pup" },
+			inventory = {
+				sword = { uid = "sword", name = "Wooden Sword", kind = "Weapon" },
+			},
+			pets = {
+				pup = { uid = "pup", name = "Training Pup", kind = "Pet" },
+			},
+		})
+		assert(kept ~= nil)
+		expect(kept.equipped.weapon).toEqual("sword")
+		expect(kept.equipped.pet).toEqual("pup")
+	end)
 end)

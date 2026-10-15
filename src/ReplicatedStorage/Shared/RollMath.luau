@@ -93,16 +93,12 @@ export type OddsTable = {
 	rarities: { OddsRarity },
 }
 
-RollMath.PLACEHOLDER_NOTICE = table.concat({
-	"PLACEHOLDER ODDS — these rates are for development and are not final.",
-	"Percentages include your Shard Luck and do not include pity.",
-	"Legendary or better is guaranteed when the pity counter fills.",
-}, " ")
+-- Short on purpose. The odds panel used to lead with a paragraph, and players
+-- never got to the numbers. Pity stays out of the percentages either way.
+RollMath.PLACEHOLDER_NOTICE =
+	"PLACEHOLDER rates. Luck included. The pity guarantee is extra and not in these percentages."
 
-RollMath.LIVE_NOTICE = table.concat({
-	"Percentages include your Shard Luck and do not include pity.",
-	"Legendary or better is guaranteed when the pity counter fills.",
-}, " ")
+RollMath.LIVE_NOTICE = "Luck included. The pity guarantee is extra and not in these percentages."
 
 local function clampLuck(luckPoints: any): number
 	if type(luckPoints) ~= "number" then
@@ -182,6 +178,26 @@ function RollMath.formatChance(chance: number): string
 		return string.format("%.2f%%", percent)
 	end
 	return string.format("%.3f%%", percent)
+end
+
+-- Counts up. 0 is an empty bar, and `goal` is the guaranteed Legendary roll.
+-- The number is the rolls already made since the last Legendary or better,
+-- not a countdown of rolls remaining.
+function RollMath.pityText(current: number, goal: number): string
+	local shown = current
+	if type(shown) ~= "number" or shown ~= shown or shown < 0 then
+		shown = 0
+	end
+	shown = math.floor(shown)
+	local target = goal
+	if type(target) ~= "number" or target ~= target or target < 1 then
+		target = 1
+	end
+	target = math.floor(target)
+	if shown > target then
+		shown = target
+	end
+	return string.format("Pity %d / %d toward Legendary", shown, target)
 end
 
 function RollMath.odds(pool: Pool, luckPoints: number): OddsTable

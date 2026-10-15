@@ -12,6 +12,10 @@
 	playtested. Change them before anyone pays for a roll, and keep the
 	in-game odds (RollMath.odds) in sync — they read this table, so editing
 	here is enough.
+
+	Which pool a player can crack is decided in Areas.luau. This file is
+	only the drop table. A future weapons area and pets area are two pools
+	plus two rows there, not a special case in the UI.
 ]]
 
 local Pools = {}

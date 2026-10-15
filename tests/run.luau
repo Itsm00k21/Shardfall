@@ -16,5 +16,7 @@ require("./SessionLock.spec")
 require("./PaidRollPolicy.spec")
 require("./RemoteCaller.spec")
 require("./MemoryRoll.spec")
+require("./InventoryStacks.spec")
+require("./Areas.spec")
 
 process.exit(framework.run())

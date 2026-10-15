@@ -10,6 +10,10 @@
 	Buttons call RemoteFunctions. The server rolls, saves, and answers with
 	the item plus a profile snapshot. ProfileUpdated covers anything that
 	changed without a button press (the first load, for example).
+
+	The pool id comes from the selected roll area (Areas.luau). With one
+	area that is the starter shard. Adding an area there is what the Crack
+	button and the odds popup follow.
 ]]
 
 local Players = game:GetService("Players")
@@ -21,7 +25,10 @@ local Ui = require(script.Ui)
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local shared = ReplicatedStorage:WaitForChild("Shared")
-local Pools = require(shared:WaitForChild("Pools"))
+local Areas = require(shared:WaitForChild("Areas"))
+local areaList = Areas.all()
+local firstArea = areaList[1]
+local selectedPoolId = if firstArea ~= nil then firstArea.poolId else "starter_shard"
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes", 30)
 if remotes == nil then
@@ -61,7 +68,7 @@ end
 
 local function refreshOdds()
 	local ok, result = pcall(function()
-		return invoke("GetOdds", Pools.STARTER_ID)
+		return invoke("GetOdds", selectedPoolId)
 	end)
 	local message = remoteError(ok, result, "Could not load odds.")
 	if message ~= nil then
@@ -96,7 +103,7 @@ ui = Ui.mount(playerGui, {
 		ui.setStatus("Cracking a shard...", "info")
 		task.spawn(function()
 			local ok, result = pcall(function()
-				return invoke("RollShard", Pools.STARTER_ID)
+				return invoke("RollShard", selectedPoolId)
 			end)
 			ui.setBusy(false)
 			local message = remoteError(ok, result, "Roll failed.")
@@ -115,7 +122,7 @@ ui = Ui.mount(playerGui, {
 		ui.setStatus("Checking paid-roll policy...", "info")
 		task.spawn(function()
 			local ok, result = pcall(function()
-				return invoke("RollPaid", Pools.STARTER_ID)
+				return invoke("RollPaid", selectedPoolId)
 			end)
 			local message = remoteError(ok, result, "Paid roll blocked.")
 			if type(result) == "table" and type(result.code) == "string" and message ~= nil then
@@ -184,6 +191,10 @@ ui = Ui.mount(playerGui, {
 			applyResult(result)
 			ui.setStatus("Dev grant applied. Odds follow Shard Luck.", "ok")
 		end)
+	end,
+	onArea = function(poolId: string)
+		selectedPoolId = poolId
+		refreshOdds()
 	end,
 })
 
