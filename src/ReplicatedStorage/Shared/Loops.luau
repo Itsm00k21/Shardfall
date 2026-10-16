@@ -6,7 +6,8 @@
 	A missed day pauses the login calendar. Dailies last three days and can
 	be rerolled once. The 4x4 board places up to nine seals at random.
 	Rows, columns, and both diagonals count as lines. Second Chance points
-	come from helping a new or low-level player.
+	come from helping a new or low-level player. They live on boardChance,
+	not on the board, so the sixteen cells stay booleans.
 
 	The premium track is cosmetics and a Gem refund. It does not grant
 	power. Loops.PREMIUM_ENABLED stays false, so a grant, a claim, and a
@@ -135,7 +136,6 @@ function Loops.board()
 	for index = 1, 16 do
 		cells[index] = false
 	end
-	cells.chance = 0
 	return cells
 end
 
@@ -238,11 +238,8 @@ function Loops.placeSeal(cells: { any }, salt: number): number
 	return Loops.seal(cells, index)
 end
 
-function Loops.chance(cells: any): number
-	if type(cells) ~= "table" then
-		return 0
-	end
-	local amount = cells.chance
+-- A stored point count, separate from the board. Nil and junk read as 0.
+function Loops.chance(amount: any): number
 	if type(amount) ~= "number" or amount ~= amount then
 		return 0
 	end
@@ -267,24 +264,22 @@ function Loops.mentorCredit(selfId: any, allyId: any, allyLevel: any, allyNew: a
 	return type(allyLevel) == "number" and allyLevel >= 1 and allyLevel < 10
 end
 
-function Loops.grantChance(cells: { any }): boolean
-	if type(cells) ~= "table" then
-		return false
-	end
-	local current = Loops.chance(cells)
+-- Granted, and the count after the attempt. The board is not touched.
+function Loops.grantChance(amount: any): (boolean, number)
+	local current = Loops.chance(amount)
 	if current >= Loops.CHANCE_MAX then
-		return false
+		return false, current
 	end
-	cells.chance = current + 1
-	return true
+	return true, current + 1
 end
 
-function Loops.retry(cells: { any }, salt: number): (boolean, string, number)
+function Loops.retry(cells: { any }, salt: number, amount: any): (boolean, string, number, number)
+	local points = Loops.chance(amount)
 	if type(cells) ~= "table" then
-		return false, "The board is not ready.", 0
+		return false, "The board is not ready.", 0, points
 	end
-	if Loops.chance(cells) < Loops.RETRY_COST then
-		return false, "Retry costs 1 Second Chance.", Loops.lineCount(cells)
+	if points < Loops.RETRY_COST then
+		return false, "Retry costs 1 Second Chance.", Loops.lineCount(cells), points
 	end
 	local sealed = {}
 	for index = 1, 16 do
@@ -294,26 +289,27 @@ function Loops.retry(cells: { any }, salt: number): (boolean, string, number)
 	end
 	local open = openCells(cells)
 	if #sealed < 1 or #open < 1 then
-		return false, "Nothing to move.", Loops.lineCount(cells)
+		return false, "Nothing to move.", Loops.lineCount(cells), points
 	end
 	local from = pick(sealed, salt)
 	local destination = pick(open, salt + 1)
 	cells[from] = false
-	cells.chance = Loops.chance(cells) - Loops.RETRY_COST
+	points -= Loops.RETRY_COST
 	local lines = Loops.seal(cells, destination)
-	return true, "", lines
+	return true, "", lines, points
 end
 
-function Loops.shuffle(cells: { any }, salt: number): (boolean, string, number)
+function Loops.shuffle(cells: { any }, salt: number, amount: any): (boolean, string, number, number)
+	local points = Loops.chance(amount)
 	if type(cells) ~= "table" then
-		return false, "The board is not ready.", 0
+		return false, "The board is not ready.", 0, points
 	end
-	if Loops.chance(cells) < Loops.SHUFFLE_COST then
-		return false, "Shuffle costs 2 Second Chance.", Loops.lineCount(cells)
+	if points < Loops.SHUFFLE_COST then
+		return false, "Shuffle costs 2 Second Chance.", Loops.lineCount(cells), points
 	end
 	local count = Loops.sealCount(cells)
 	if count < 1 then
-		return false, "Nothing to shuffle.", 0
+		return false, "Nothing to shuffle.", 0, points
 	end
 	if count > Loops.SEAL_CAP then
 		count = Loops.SEAL_CAP
@@ -321,13 +317,13 @@ function Loops.shuffle(cells: { any }, salt: number): (boolean, string, number)
 	for index = 1, 16 do
 		cells[index] = false
 	end
-	cells.chance = Loops.chance(cells) - Loops.SHUFFLE_COST
+	points -= Loops.SHUFFLE_COST
 	local cursor = math.floor(salt)
 	for _ = 1, count do
 		cursor += 1
 		Loops.placeSeal(cells, cursor)
 	end
-	return true, "", Loops.lineCount(cells)
+	return true, "", Loops.lineCount(cells), points
 end
 
 function Loops.passXp(xp: number, amount: number): (number, number)
@@ -566,6 +562,7 @@ function Loops.refresh(data: any, now: number, salt: number)
 		data.board = Loops.board()
 		data.boardLines = 0
 		data.weeklyWeek = week
+		-- boardChance stays. Helping earns it, and the cap is CHANCE_MAX.
 	end
 	if type(data.board) ~= "table" or #data.board < 16 then
 		data.board = Loops.board()

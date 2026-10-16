@@ -65,7 +65,7 @@ function LoopHud.setProfile(profile: any)
 	else
 		table.insert(lines, string.format("Pass tier %s · premium locked", tier))
 	end
-	local chance = Loops.chance(profile.board)
+	local chance = Loops.chance(profile.boardChance)
 	table.insert(lines, string.format("Second Chance %d/%d", chance, Loops.CHANCE_MAX))
 	if type(profile.dailies) == "table" then
 		for _, quest in ipairs(profile.dailies) do

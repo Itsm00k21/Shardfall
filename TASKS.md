@@ -599,22 +599,24 @@ Server-only, not a remote: `LoopService.noteMentor(player, allyUserId, allyLevel
 
 `LoopHud` does not call `ShardPass` yet. `WaitForChild` on a missing remote would hang the button. After `ShardPass` exists, the client calls are `invoke("ShardPass", "retry")`, `"shuffle"`, `"claim"`, `"skip"`, and `"overflow"`.
 
-Schema can stay at version 20 for this merge. `passPremium`, `passPremiumClaimed`, `passCosmetics`, and `passOverflow` are written on the profile and `reconcile` keeps unknown keys, so they survive a save. They are not in `Schema.snapshot`, and `board.chance` already is, because it sits on the board array. Before you set `PREMIUM_ENABLED`, add the four fields so the client can see ownership. Suggested version 21, in `ProfileData`, `template()`, and `if version < 21` in `migrate`:
+Schema can stay at version 20 for this merge. `passPremium`, `passPremiumClaimed`, `passCosmetics`, `passOverflow`, and `boardChance` are written on the profile and `reconcile` keeps unknown keys, so they survive a save. They are not in `Schema.snapshot`. Before you set `PREMIUM_ENABLED`, add these fields so the client can see ownership and Second Chance. Suggested version 21, in `ProfileData`, `template()`, and `if version < 21` in `migrate`:
 
 ```lua
 passPremium: boolean,
 passPremiumClaimed: number,
 passCosmetics: { [string]: boolean },
 passOverflow: number,
+boardChance: number,
 ```
 
-Defaults: `passPremium = false`, `passPremiumClaimed = 0`, `passCosmetics = {}`, `passOverflow = 0`. In `snapshot`:
+Defaults: `passPremium = false`, `passPremiumClaimed = 0`, `passCosmetics = {}`, `passOverflow = 0`, `boardChance = 0`. In `snapshot`:
 
 ```lua
 passPremium = data.passPremium == true,
 passPremiumClaimed = data.passPremiumClaimed or 0,
 passCosmetics = Schema.deepCopy(data.passCosmetics or {}),
 passOverflow = data.passOverflow or 0,
+boardChance = data.boardChance or 0,
 ```
 
 No power fields. Premium rewards are skins, pet hats, trails, one weapon VFX, one emote, and 400 Gems by tier 50. Tier 50 (`pass_skin_nightmare`) also needs `nightmareBest >= 1`. A skip costs 80 Gems and still cannot mint that skin.

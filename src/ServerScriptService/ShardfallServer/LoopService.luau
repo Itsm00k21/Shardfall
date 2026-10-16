@@ -237,7 +237,10 @@ function LoopService.noteMentor(player: Player, allyUserId: any, allyLevel: any,
 		if type(data.board) ~= "table" then
 			data.board = Loops.board()
 		end
-		Loops.grantChance(data.board)
+		local granted, points = Loops.grantChance(data.boardChance)
+		if granted then
+			data.boardChance = points
+		end
 		return nil
 	end)
 end
@@ -250,10 +253,12 @@ function LoopService.retry(player: Player)
 			data.board = Loops.board()
 		end
 		local before = data.boardLines or 0
-		local worked, text, total = Loops.retry(data.board, player.UserId + now)
+		local worked, text, total, points =
+			Loops.retry(data.board, player.UserId + now, data.boardChance)
 		if not worked then
 			return text
 		end
+		data.boardChance = points
 		raiseLines(data, before, total)
 		return nil
 	end)
@@ -271,10 +276,12 @@ function LoopService.shuffle(player: Player)
 			data.board = Loops.board()
 		end
 		local before = data.boardLines or 0
-		local worked, text, total = Loops.shuffle(data.board, player.UserId + now)
+		local worked, text, total, points =
+			Loops.shuffle(data.board, player.UserId + now, data.boardChance)
 		if not worked then
 			return text
 		end
+		data.boardChance = points
 		raiseLines(data, before, total)
 		return nil
 	end)

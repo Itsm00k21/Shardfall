@@ -87,34 +87,85 @@ describe("Loops", function()
 		expect(Loops.mentorCredit(1, 2, 0, false)).toEqual(false)
 		expect(Loops.mentorCredit(1, 2, 9, false)).toEqual(true)
 		expect(Loops.mentorCredit(1, 2, 20, true)).toEqual(true)
-		local cells = Loops.board()
+		local chance = 0
 		for _ = 1, Loops.CHANCE_MAX do
-			expect(Loops.grantChance(cells)).toEqual(true)
+			local granted, nextChance = Loops.grantChance(chance)
+			expect(granted).toEqual(true)
+			chance = nextChance
 		end
-		expect(Loops.grantChance(cells)).toEqual(false)
-		expect(Loops.chance(cells)).toEqual(Loops.CHANCE_MAX)
+		local capped, cappedChance = Loops.grantChance(chance)
+		expect(capped).toEqual(false)
+		expect(cappedChance).toEqual(Loops.CHANCE_MAX)
+		expect(Loops.chance(chance)).toEqual(Loops.CHANCE_MAX)
 		local stuck = Loops.board()
 		Loops.seal(stuck, 1)
-		expect(Loops.retry(stuck, 1)).toEqual(false)
+		expect(Loops.retry(stuck, 1, 0)).toEqual(false)
 		expect(stuck[1]).toEqual(true)
-		expect(Loops.grantChance(stuck)).toEqual(true)
-		local moved, moveNote = Loops.retry(stuck, 1)
+		local granted, stuckChance = Loops.grantChance(0)
+		expect(granted).toEqual(true)
+		local moved, moveNote, _lines, left = Loops.retry(stuck, 1, stuckChance)
 		expect(moved).toEqual(true)
 		expect(moveNote).toEqual("")
 		expect(stuck[1]).toEqual(false)
 		expect(Loops.sealCount(stuck)).toEqual(1)
-		expect(Loops.chance(stuck)).toEqual(0)
+		expect(left).toEqual(0)
+		expect(Loops.chance(left)).toEqual(0)
 		local mixed = Loops.board()
 		Loops.seal(mixed, 1)
 		Loops.seal(mixed, 2)
 		Loops.seal(mixed, 3)
-		Loops.grantChance(mixed)
-		expect(Loops.shuffle(mixed, 3)).toEqual(false)
-		expect(Loops.grantChance(mixed)).toEqual(true)
-		local shuffled = Loops.shuffle(mixed, 3)
+		local _, one = Loops.grantChance(0)
+		expect(Loops.shuffle(mixed, 3, one)).toEqual(false)
+		local _, two = Loops.grantChance(one)
+		local shuffled, _note, _count, after = Loops.shuffle(mixed, 3, two)
 		expect(shuffled).toEqual(true)
 		expect(Loops.sealCount(mixed)).toEqual(3)
-		expect(Loops.chance(mixed)).toEqual(0)
+		expect(after).toEqual(0)
+		local profile = {
+			dailies = {},
+			weekly = {},
+			weeklyWeek = 0,
+			boardChance = 4,
+		}
+		Loops.refresh(profile, 86400 * 7, 1)
+		expect(profile.weeklyWeek).toEqual(1)
+		expect(profile.boardChance).toEqual(4)
+	end)
+
+	it("keeps every board key an integer from 1 to 16", function()
+		local function pure(cells): boolean
+			local seen = 0
+			for key in pairs(cells) do
+				if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then
+					return false
+				end
+				seen += 1
+			end
+			return seen == 16
+		end
+
+		local fresh = Loops.board()
+		expect(pure(fresh)).toEqual(true)
+
+		local placed = Loops.board()
+		Loops.placeSeal(placed, 4)
+		expect(pure(placed)).toEqual(true)
+
+		local movedBoard = Loops.board()
+		Loops.seal(movedBoard, 1)
+		local _, points = Loops.grantChance(0)
+		local moved = Loops.retry(movedBoard, 2, points)
+		expect(moved).toEqual(true)
+		expect(pure(movedBoard)).toEqual(true)
+
+		local shuffledBoard = Loops.board()
+		Loops.seal(shuffledBoard, 1)
+		Loops.seal(shuffledBoard, 2)
+		local _, first = Loops.grantChance(0)
+		local _, second = Loops.grantChance(first)
+		local shuffled = Loops.shuffle(shuffledBoard, 5, second)
+		expect(shuffled).toEqual(true)
+		expect(pure(shuffledBoard)).toEqual(true)
 	end)
 
 	it("refuses premium grants, claims, and skips while the track is off", function()

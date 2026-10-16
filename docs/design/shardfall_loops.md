@@ -101,7 +101,7 @@ The beta loop (login streak, 3 dailies with one reroll, first-clear bonus, daily
 
 **Shard Board.** Each week is a 4x4 grid. Finishing a daily or weekly places one seal on a random empty cell, and the week stops at 9 seals. A line is a full row, a full column, or either diagonal. Payouts are unchanged: 1 line is an Epic chest, 2 lines are 5 Gems and 3 Shard Keys, 3 lines are a Legendary chest. `boardLines` is a high-water mark, so Retry or Shuffle cannot farm the same chest twice.
 
-**Second Chance.** Helping another player under level 10, or a player who is new to that content, grants 1 point, up to 9. You cannot credit yourself. Retry costs 1 and moves one seal. Shuffle costs 2 and lays the same seals down again at random. There is no party list in the live run yet, so points stay at 0 until GHOST calls `LoopService.noteMentor` from a clear that has an ally. The call is server-only.
+**Second Chance.** Helping another player under level 10, or a player who is new to that content, grants 1 point, up to 9. You cannot credit yourself. Retry costs 1 and moves one seal. Shuffle costs 2 and lays the same seals down again at random. The count is `boardChance` on the profile, a number from 0 to 9. The board stays a pure 16-boolean array. Points survive the weekly board reset. They are earned by helping, and the cap is 9, so a new week does not wipe them. There is no party list in the live run yet, so points stay at 0 until GHOST calls `LoopService.noteMentor` from a clear that has an ally. The call is server-only.
 
 **Shard Pass.** 50 tiers, `Loops.PASS_XP` (1000) each, same pace the free track already uses. The design note of 10,000 per tier is a tuning target for when the pass is published. Changing it now would slow free players, so it stays 1000.
 
