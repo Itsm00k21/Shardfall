@@ -1038,9 +1038,11 @@ actionBar = ActionBar.start(playerGui, {
 	end,
 	onSkills = function()
 		local opening = not ClassHud.isVisible()
-		closePanels(if opening then "skills" else nil)
 		if opening then
+			closePanels("skills")
 			ClassHud.setVisible(true)
+		else
+			ClassHud.dismiss()
 		end
 	end,
 	onTonic = function()
