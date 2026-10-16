@@ -106,6 +106,8 @@
         "FusePet": { "$className": "RemoteFunction" },
         "PaintPet": { "$className": "RemoteFunction" },
         "FavoritePet": { "$className": "RemoteFunction" },
+        "Trade": { "$className": "RemoteFunction" },
+        "Market": { "$className": "RemoteFunction" },
         "Loops": { "$className": "RemoteFunction" },
         "RerollDaily": { "$className": "RemoteFunction" },
         "ClaimPass": { "$className": "RemoteFunction" },

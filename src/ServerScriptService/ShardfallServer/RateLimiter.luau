@@ -59,6 +59,8 @@ local RULES: { [string]: Rule } = {
 	FusePet = { capacity = 3, perSecond = 1 },
 	PaintPet = { capacity = 4, perSecond = 1 },
 	FavoritePet = { capacity = 4, perSecond = 1 },
+	Trade = { capacity = 6, perSecond = 2 },
+	Market = { capacity = 8, perSecond = 3 },
 	Loops = { capacity = 4, perSecond = 1 },
 	RerollDaily = { capacity = 3, perSecond = 0.5 },
 	ClaimPass = { capacity = 4, perSecond = 1 },

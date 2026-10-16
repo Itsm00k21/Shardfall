@@ -17,6 +17,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataService = require(script.Parent.DataService)
 local PolicyCache = require(script.Parent.PolicyCache)
+local TradeAudit = require(script.Parent.TradeAudit)
+local Schema = require(ReplicatedStorage.Shared.Schema)
 local Trading = require(ReplicatedStorage.Shared.Trading)
 
 local TradeService = {}
@@ -83,6 +85,14 @@ local function paidFor(player: Player): boolean
 	local policy = PolicyCache.public(player)
 	return policy.ready == true and policy.tradingAllowed == true
 end
+
+local function persistAudit()
+	if not TradeAudit.save(Trading.auditLog()) then
+		warn("[Shardfall] trade audit did not save")
+	end
+end
+
+local SAVE_FAILED = "Could not save that trade. Nothing was kept."
 
 local function sessionFor(userId: number): Trading.Session?
 	local id = byUser[userId]
@@ -221,6 +231,14 @@ function TradeService.rollback(tradeId: string)
 	if not Trading.tryLock(ids) then
 		return fail("That trade is already finishing.")
 	end
+	local leftNow = DataService.get(leftPlayer)
+	local rightNow = DataService.get(rightPlayer)
+	if leftNow == nil or rightNow == nil then
+		Trading.unlock(ids)
+		return fail("That player is not here.")
+	end
+	local backupLeft = Schema.deepCopy(leftNow)
+	local backupRight = Schema.deepCopy(rightNow)
 	local outcome = nil
 	local ok, err = DataService.mutate(leftPlayer, function(leftData)
 		local rightData = DataService.get(rightPlayer)
@@ -238,9 +256,12 @@ function TradeService.rollback(tradeId: string)
 	if not ok then
 		return fail(err or "Could not reverse that trade.")
 	end
-	DataService.mutate(rightPlayer, function()
-		return nil
-	end)
+	local saved = DataService.savePair(leftPlayer, rightPlayer, backupLeft, backupRight)
+	if not saved then
+		entry.reversed = false
+		return fail(SAVE_FAILED)
+	end
+	persistAudit()
 	return outcome or fail("Could not reverse that trade.")
 end
 
@@ -258,6 +279,10 @@ function TradeService.start()
 		return
 	end
 	started = true
+	local entries = TradeAudit.load()
+	if #entries > 0 then
+		Trading.restoreAudit(entries)
+	end
 	Players.PlayerRemoving:Connect(function(player)
 		TradeService.onPlayerRemoving(player)
 	end)
@@ -328,6 +353,13 @@ local function commit(player: Player, payload: any)
 	end
 	local acceptWarning = type(payload) == "table" and payload.acceptWarning == true
 	return withPlayers(session, function(leftPlayer, rightPlayer)
+		local leftNow = DataService.get(leftPlayer)
+		local rightNow = DataService.get(rightPlayer)
+		if leftNow == nil or rightNow == nil then
+			return fail("That player is not here.")
+		end
+		local backupLeft = Schema.deepCopy(leftNow)
+		local backupRight = Schema.deepCopy(rightNow)
 		local result = nil
 		local ok, err = DataService.mutate(leftPlayer, function(leftData)
 			local rightData = DataService.get(rightPlayer)
@@ -361,9 +393,15 @@ local function commit(player: Player, payload: any)
 			and result.pending ~= true
 			and result.already ~= true
 		then
-			DataService.mutate(rightPlayer, function()
-				return nil
-			end)
+			local saved = DataService.savePair(leftPlayer, rightPlayer, backupLeft, backupRight)
+			if not saved then
+				Trading.reopen(session)
+				if type(result.auditId) == "string" then
+					Trading.dropEntry(Trading.auditLog(), result.auditId)
+				end
+				return fail(SAVE_FAILED)
+			end
+			persistAudit()
 			forget(session)
 		end
 		local extra = {
@@ -410,6 +448,9 @@ local function report(player: Player, payload: any)
 	local okSet, err = Trading.report(Trading.auditLog(), tradeId, player.UserId)
 	if not okSet then
 		return fail(err or "No trade with that id.")
+	end
+	if not TradeAudit.save(Trading.auditLog()) then
+		return fail("Could not save that report.")
 	end
 	return { ok = true }
 end

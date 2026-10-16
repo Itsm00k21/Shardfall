@@ -859,7 +859,7 @@ local function buildMarket(parent: Instance)
 		)
 	end
 	local shop = stationPad(model, place.x, place.z, Color3.fromRGB(255, 196, 80))
-	promptOn(shop, "Coming Soon", "Daily shop", "soon", place.message)
+	promptOn(shop, "Market Board", "Browse and trade", "market", nil)
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Market")
 end
 

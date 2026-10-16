@@ -36,6 +36,8 @@ local function dispatch(callbacks: Callbacks, action: any, objectText: any, mess
 		callbacks.onPanel("shards", name)
 	elseif name == "craft" then
 		callbacks.onPanel("craft", nil)
+	elseif name == "market" then
+		callbacks.onPanel("market", nil)
 	elseif name == "soon" then
 		callbacks.onSoon(if type(message) == "string" then message else "Coming soon.")
 	end

@@ -18,6 +18,11 @@
 	final save when the player leaves. mutate() copies the profile first and
 	restores it if the callback returns an error string or throws, so a
 	rejected roll cannot eat a token.
+
+	save() writes that profile now, including when the adapter is the
+	in-memory store. savePair() writes two profiles and, if either write
+	fails, puts both backups back and writes those too. Trades use it so a
+	crash cannot keep one side of a swap.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -165,6 +170,53 @@ local function write(record: Record, releaseLock: boolean): (boolean, string)
 		return false, outcome
 	end
 	return true, "saved"
+end
+
+function DataService.save(player: Player): (boolean, string?)
+	local record = records[player]
+	if record == nil or not record.loaded or record.released then
+		return false, "Profile is not loaded."
+	end
+	local ok, reason = write(record, false)
+	if not ok then
+		warn("[Shardfall] Profile save failed:", reason)
+		return false, reason
+	end
+	notify(player)
+	return true, nil
+end
+
+function DataService.replace(player: Player, data: any): boolean
+	local record = records[player]
+	if record == nil or not record.loaded or record.released then
+		return false
+	end
+	record.data = Schema.deepCopy(data)
+	notify(player)
+	return true
+end
+
+-- Writes both profiles. A failed write puts both backups back in memory and
+-- writes those, so a store that accepted only the first profile is undone.
+function DataService.savePair(
+	first: Player,
+	second: Player,
+	firstBackup: any,
+	secondBackup: any
+): (boolean, string?)
+	local okFirst, whyFirst = DataService.save(first)
+	local okSecond, whySecond = DataService.save(second)
+	if okFirst and okSecond then
+		return true, nil
+	end
+	DataService.replace(first, firstBackup)
+	DataService.replace(second, secondBackup)
+	local undoFirst = DataService.save(first)
+	local undoSecond = DataService.save(second)
+	if not undoFirst or not undoSecond then
+		warn("[Shardfall] Could not write the restored profiles back.")
+	end
+	return false, whyFirst or whySecond
 end
 
 local function load(player: Player): (boolean, string?)
