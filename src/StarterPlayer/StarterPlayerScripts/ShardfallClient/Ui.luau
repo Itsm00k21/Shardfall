@@ -285,15 +285,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(panel, 12)
 	padding(panel, 12)
 	local function fitPanel()
-		local camera = workspace.CurrentCamera
-		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
-		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
-		if vx < 1 then
-			vx = 1280
-		end
-		if vy < 1 then
-			vy = 720
-		end
+		local vx, vy = MobileShell.view(screen)
 		local box = ShellLayout.menuRect(vx, vy)
 		panel.Position = UDim2.fromOffset(box.x, box.y)
 		panel.Size = UDim2.fromOffset(box.w, box.h)
@@ -303,6 +295,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	if fitCamera ~= nil then
 		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitPanel)
 	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPanel)
 	list(panel, 8)
 	new("UIStroke", {
 		Color = COLORS.stroke,

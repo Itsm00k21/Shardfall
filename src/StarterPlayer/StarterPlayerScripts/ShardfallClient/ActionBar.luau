@@ -56,21 +56,27 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 60,
-		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
 		IgnoreGuiInset = false,
 	}, playerGui) :: ScreenGui
 
 	local row = new("Frame", {
 		Name = "Actions",
-		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.fromOffset(88, 0),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -ShellLayout.BAR_MARGIN),
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(0, ShellLayout.ACTION_H),
+		Size = UDim2.fromOffset(0, ShellLayout.ACTION_H + ShellLayout.BAR_PAD * 2),
 	}, screen) :: Frame
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, ShellLayout.BAR_PAD),
+		PaddingBottom = UDim.new(0, ShellLayout.BAR_PAD),
+		PaddingLeft = UDim.new(0, ShellLayout.BAR_PAD),
+		PaddingRight = UDim.new(0, ShellLayout.BAR_PAD),
+	}, row)
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, ShellLayout.ACTION_GAP),
-		HorizontalAlignment = Enum.HorizontalAlignment.Left,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, row)
@@ -101,13 +107,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local slots = { attack, dodge, skills, tonic, inventory, travel, menu }
 
 	local function applyWidth()
-		local vx, vy = MobileShell.view(screen)
-		local bar = ShellLayout.actionBar(vx, vy)
+		local vx, _vy = MobileShell.view(screen)
 		local slot = ShellLayout.thumbSize(vx)
 		local width = math.max(64, slot.w)
 		local height = math.max(64, slot.h)
-		row.Position = UDim2.fromOffset(bar.x, bar.y)
-		row.Size = UDim2.fromOffset(bar.w, height)
+		local gaps = ShellLayout.ACTION_GAP * (ShellLayout.SLOT_COUNT - 1)
+		local barW = ShellLayout.SLOT_COUNT * width + gaps + ShellLayout.BAR_PAD * 2
+		row.Size = UDim2.fromOffset(barW, height + ShellLayout.BAR_PAD * 2)
 		for _, widget in ipairs(slots) do
 			widget.Size = UDim2.fromOffset(width, height)
 		end

@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Onboarding = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Onboarding"))
+local MobileShell = require(script.Parent.MobileShell)
 
 local OnboardHud = {}
 local player = Players.LocalPlayer
@@ -27,6 +28,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any)
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 20
 	screen.Parent = player:WaitForChild("PlayerGui")
+	MobileShell.mount(screen)
 
 	local frame = Instance.new("Frame")
 	frame.AnchorPoint = Vector2.new(0.5, 0)

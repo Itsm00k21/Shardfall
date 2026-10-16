@@ -6,6 +6,8 @@
 
 local Players = game:GetService("Players")
 
+local MobileShell = require(script.Parent.MobileShell)
+
 local PetHud = {}
 local player = Players.LocalPlayer
 local label: TextButton? = nil
@@ -16,6 +18,7 @@ function PetHud.start(invoke: (string, ...any) -> any)
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 11
 	screen.Parent = player:WaitForChild("PlayerGui")
+	MobileShell.mount(screen)
 	local button = Instance.new("TextButton")
 	button.Name = "Hatch"
 	button.AnchorPoint = Vector2.new(0, 0)

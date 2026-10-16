@@ -103,7 +103,7 @@ function LoopHud.start(invoke: (string, ...any) -> any)
 	screen.Name = "ShardfallLoops"
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 12
-	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
 

@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
+local MobileShell = require(script.Parent.MobileShell)
 
 local DoorHud = {}
 local player = Players.LocalPlayer
@@ -36,6 +37,7 @@ function DoorHud.start(callRemote: (string, ...any) -> any)
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 14
 	screen.Parent = player:WaitForChild("PlayerGui")
+	MobileShell.mount(screen)
 	local frame = Instance.new("Frame")
 	frame.Name = "Doors"
 	frame.AnchorPoint = Vector2.new(0, 0)
@@ -45,15 +47,7 @@ function DoorHud.start(callRemote: (string, ...any) -> any)
 	frame.Visible = false
 	frame.Parent = screen
 	local function place()
-		local camera = workspace.CurrentCamera
-		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
-		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
-		if vx < 1 then
-			vx = 1280
-		end
-		if vy < 1 then
-			vy = 720
-		end
+		local vx, vy = MobileShell.view(screen)
 		local box = ShellLayout.doorRect(vx, vy)
 		frame.Position = UDim2.fromOffset(box.x, box.y)
 		frame.Size = UDim2.fromOffset(box.w, box.h)
@@ -63,9 +57,17 @@ function DoorHud.start(callRemote: (string, ...any) -> any)
 	if camera ~= nil then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
 	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 4)
+	pad.PaddingBottom = UDim.new(0, 4)
+	pad.PaddingLeft = UDim.new(0, 8)
+	pad.PaddingRight = UDim.new(0, 8)
+	pad.Parent = frame
 	local list = Instance.new("UIListLayout")
 	list.FillDirection = Enum.FillDirection.Horizontal
 	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	list.VerticalAlignment = Enum.VerticalAlignment.Center
 	list.Padding = UDim.new(0, 12)
 	list.Parent = frame
 	row = frame

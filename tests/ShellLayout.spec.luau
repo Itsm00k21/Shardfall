@@ -125,4 +125,33 @@ describe("ShellLayout", function()
 			expect(capture.w >= 220 and capture.h >= 64).toBeTrue()
 		end
 	end)
+
+	it("keeps the anchored action bar inside the GUI inset", function()
+		local views = {
+			{ 1280, 800 },
+			{ 1920, 1080 },
+			{ 844, 390 },
+		}
+		local tops = { 36, 58 }
+		local bottoms = { 0, 34 }
+		for _, view in ipairs(views) do
+			local vx = view[1]
+			local vy = view[2]
+			for _, top in ipairs(tops) do
+				for _, bottom in ipairs(bottoms) do
+					local bar = ShellLayout.anchoredActionBar(vx, vy, top, bottom)
+					local guiTop = top
+					local guiBottom = vy - bottom
+					expect(bar.h >= 64).toBeTrue()
+					expect(bar.y >= guiTop).toBeTrue()
+					expect(bar.y + bar.h <= guiBottom).toBeTrue()
+					expect(bar.y + bar.h <= vy).toBeTrue()
+					-- A full-viewport Y placed inside a GUI that already
+					-- starts below the top bar puts the bottom edge off screen.
+					local legacyBottom = top + (vy - ShellLayout.BAR_MARGIN)
+					expect(legacyBottom > vy).toBeTrue()
+				end
+			end
+		end
+	end)
 end)
