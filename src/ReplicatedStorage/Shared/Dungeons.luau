@@ -78,6 +78,7 @@ export type DungeonDef = {
 
 Dungeons.ROOTVAULT_ID = "rootvault"
 Dungeons.WAVES_ID = "rootvault_waves"
+Dungeons.HEARTWOOD_ID = "heartwood"
 
 -- After a room or wave is empty, the server waits this long, then moves on.
 Dungeons.ADVANCE_SECONDS = 3
@@ -351,7 +352,31 @@ local TIDECRYPT: DungeonDef = {
 	rewards = nil,
 }
 
-local LIST: { DungeonDef } = { ROOTVAULT, WAVES, TIDECRYPT }
+local HEARTWOOD: DungeonDef = {
+	id = Dungeons.HEARTWOOD_ID,
+	name = "The Heartwood",
+	realm = "Verdant Wilds",
+	theme = "Raid wings",
+	ascension = 0,
+	implemented = true,
+	floorSize = Dungeons.FLOOR_SIZE,
+	rooms = {
+		{ id = "twins", name = "Thornwarden Twins", enemies = { "grandmother_gnarl" } },
+		{ id = "sapwell", name = "Mother Sapwell", enemies = { "grandmother_gnarl" } },
+		{ id = "galecrown", name = "Galecrown", enemies = { "grandmother_gnarl" } },
+		{ id = "awakened", name = "Grandmother Gnarl Awakened", enemies = { "grandmother_gnarl" } },
+	},
+	rewards = {
+		gold = 60,
+		shardTokens = 4,
+		xp = 80,
+		materials = { wood = 4, vine = 3, spore = 2, bark = 2 },
+		heartwoodChance = 0.5,
+		voucherChance = 0.2,
+	},
+}
+
+local LIST: { DungeonDef } = { ROOTVAULT, WAVES, HEARTWOOD, TIDECRYPT }
 
 local byId: { [string]: DungeonDef } = {}
 for _, dungeon in ipairs(LIST) do

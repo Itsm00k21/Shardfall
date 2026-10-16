@@ -38,6 +38,7 @@ local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 local Loops = require(ReplicatedStorage.Shared.Loops)
 local Progression = require(ReplicatedStorage.Shared.Progression)
+local Raids = require(ReplicatedStorage.Shared.Raids)
 local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local Rootvault = require(ReplicatedStorage.Shared.Rootvault)
@@ -107,6 +108,10 @@ type Run = {
 	eliteNext: boolean,
 	shrine: string,
 	startedAt: number,
+	practice: boolean,
+	raidPlayers: number,
+	healerPresent: boolean,
+	echo: number,
 }
 
 type Restart = {
@@ -648,6 +653,11 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
 	end
 	health, damage = Rootvault.scale(run.difficulty, health, damage)
+	if run.dungeon.id == Dungeons.HEARTWOOD_ID then
+		local hpMul, dmgMul = Raids.combatScale(run.difficulty, run.raidPlayers, run.healerPresent)
+		health = math.floor(health * hpMul + 0.5)
+		damage = math.floor(damage * dmgMul + 0.5)
+	end
 	local elite = false
 	if run.eliteNext and definition.boss ~= true then
 		elite = true
@@ -656,8 +666,15 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		damage = math.floor(damage * Rootvault.ELITE_DAMAGE + 0.5)
 	end
 	local rootCFrame = roomCFrame(run.placeIndex, Vector3.new(offset.X, y, offset.Z))
+	local display = definition.name
+	if run.dungeon.id == Dungeons.HEARTWOOD_ID then
+		local room = run.dungeon.rooms[run.roomIndex]
+		if room ~= nil then
+			display = room.name
+		end
+	end
 	local rigOk, rigOrErr = pcall(function()
-		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, definition.name)
+		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, display)
 	end)
 	local part: BasePart
 	if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
@@ -667,14 +684,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		warn(string.format("[Rootvault] %s rig failed (%s); anchored marker only", kind, reason))
 		-- Small, anchored, and non-colliding. The old fallback was a full-size
 		-- Grass block, which is what a failed rig looked like in play.
-		part = makePart(
-			definition.name,
-			Vector3.new(1.2, 1.2, 1.2),
-			rootCFrame,
-			color,
-			run.folder,
-			false
-		)
+		part = makePart(display, Vector3.new(1.2, 1.2, 1.2), rootCFrame, color, run.folder, false)
 		part.CanTouch = false
 		part.CanQuery = true
 		part.Massless = true
@@ -843,6 +853,10 @@ local function grant(
 	if rolled == nil then
 		return false
 	end
+	if run.practice == true then
+		fx(player, { kind = "hint", text = "Practice Grove. No loot." })
+		return true
+	end
 	local profile = DataService.get(player)
 	local _, _, goldFind = CombatMath.loadout(profile)
 	local bonus = CombatMath.bonusGold(rolled.gold, goldFind)
@@ -880,6 +894,16 @@ local function grant(
 		data.passXp = select(1, Loops.passXp(data.passXp or 0, 40))
 		xpShown = xpGain
 		levels = Progression.addXp(data, xpGain)
+		if
+			run.dungeon.id == Dungeons.HEARTWOOD_ID
+			and run.difficulty == "normal"
+			and run.practice ~= true
+		then
+			local seconds = math.max(1, math.floor(os.clock() - run.startedAt))
+			if (data.raidBest or 0) == 0 or seconds < data.raidBest then
+				data.raidBest = seconds
+			end
+		end
 		for materialId, count in pairs(rolled.materials) do
 			Materials.add(data.materials, materialId, count)
 		end
@@ -906,6 +930,14 @@ local function grant(
 	end
 	if run.dungeon.endless ~= true then
 		LoopService.progress(player, "rooms", 1)
+	end
+	if
+		run.dungeon.id == Dungeons.HEARTWOOD_ID
+		and run.difficulty == "normal"
+		and run.practice ~= true
+	then
+		local seconds = math.max(1, math.floor(os.clock() - run.startedAt))
+		require(script.Parent.RaidService).recordTime(player.Name, seconds)
 	end
 	if run.difficulty == "nightmare" and run.dungeon.endless ~= true then
 		local seconds = math.max(1, math.floor(os.clock() - run.startedAt))
@@ -1012,6 +1044,12 @@ end
 local function beginAdvance(player: Player, run: Run, text: string)
 	run.cleared = true
 	LoopService.progress(player, "rooms", 1)
+	if run.dungeon.id == Dungeons.HEARTWOOD_ID and run.roomIndex < #run.dungeon.rooms then
+		run.advanceAt = os.clock() + 2
+		run.advanceShown = 2
+		pushRun(player, text .. " Next wing in 2s.")
+		return
+	end
 	if run.dungeon.endless ~= true and run.roomIndex < #run.dungeon.rooms then
 		run.offer = Rootvault.offer(run.roomIndex, #run.dungeon.rooms, math.random(1, 5))
 		run.advanceAt = nil
@@ -1123,6 +1161,9 @@ function DungeonService.damageEnemy(
 	if run.shrine == "might" then
 		amount = math.floor(amount * 1.15 + 0.5)
 	end
+	if run.echo > 0 then
+		amount = math.floor(amount * (1 + run.echo * 0.05) + 0.5)
+	end
 	enemy.hp -= amount
 	if enemy.hp < 0 then
 		enemy.hp = 0
@@ -1180,6 +1221,16 @@ function DungeonService.damageEnemy(
 			local drop = ChestConfig.enemyDrop(data, enemy.kind, RollMath.defaultRng())
 			if drop ~= nil then
 				table.insert(chestBits, drop.label)
+			end
+			if enemy.boss and run.dungeon.id == Dungeons.HEARTWOOD_ID and run.practice ~= true then
+				local room = run.dungeon.rooms[run.roomIndex]
+				local bossId = if room ~= nil then room.id else "wing"
+				local paid, dropped =
+					Raids.applyClear(data, bossId, run.difficulty, os.time(), math.random())
+				table.insert(chestBits, string.format("%d Raid Marks", paid))
+				if dropped then
+					table.insert(chestBits, "raid gear")
+				end
 			end
 			if enemy.boss then
 				for _, row in ipairs(ChestConfig.bossKill(data, os.time())) do
@@ -1629,7 +1680,7 @@ function DungeonService.autoFarmEnabled(player: Player): boolean
 	return farmOn[player] == true
 end
 
-function DungeonService.enter(player: Player, dungeonId: any, difficulty: any)
+function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, practice: boolean?)
 	restartAt[player] = nil
 	if runs[player] ~= nil then
 		return reject("You are already in a dungeon. Leave first.")
@@ -1656,8 +1707,21 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any)
 	if dungeon.implemented ~= true or #dungeon.rooms == 0 then
 		return reject(dungeon.name .. " is not built yet.")
 	end
+	local raidMode = if dungeon.id == Dungeons.HEARTWOOD_ID
+		then Raids.difficulty(difficulty)
+		else nil
+	if dungeon.id == Dungeons.HEARTWOOD_ID and raidMode == nil then
+		return reject("Pick Story or Normal.")
+	end
 	local diff = Rootvault.difficulty(difficulty)
-	if (profile.level or 1) < diff.level then
+	if raidMode ~= nil and practice ~= true then
+		if (profile.level or 1) < raidMode.level then
+			return reject(string.format("Level %d opens The Heartwood.", raidMode.level))
+		end
+		if raidMode.id == "normal" and profile.raidStory ~= true then
+			return reject("Clear Story once before Normal.")
+		end
+	elseif raidMode == nil and (profile.level or 1) < diff.level then
 		return reject(string.format("Level %d opens %s.", diff.level, diff.id))
 	end
 	if activeFolder == nil then
@@ -1687,11 +1751,15 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any)
 		yielding = false,
 		walking = false,
 		loot = {},
-		difficulty = diff.id,
+		difficulty = if raidMode ~= nil then raidMode.id else diff.id,
 		offer = nil,
 		eliteNext = false,
 		shrine = "",
 		startedAt = os.clock(),
+		practice = practice == true,
+		raidPlayers = 1,
+		healerPresent = false,
+		echo = if raidMode ~= nil and raidMode.id == "story" then profile.raidEcho or 0 else 0,
 	}
 	runs[player] = run
 	CombatService.refresh(player)
@@ -1705,8 +1773,48 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any)
 	end
 	-- Same payload the Enter Rootvault button's remote returns, so a portal
 	-- entry updates the panel instead of leaving that button stale.
-	local note = if endless then "Entered Rootvault Waves." else "Entered the Rootvault."
+	local note = if endless
+		then "Entered Rootvault Waves."
+		elseif raidMode ~= nil then "Entered The Heartwood."
+		else "Entered the Rootvault."
 	pushRun(player, note)
+	return { ok = true, run = publicRun(player) }
+end
+
+function DungeonService.tuneRaid(player: Player, options: any)
+	local run = runs[player]
+	if run == nil or run.dungeon.id ~= Dungeons.HEARTWOOD_ID or type(options) ~= "table" then
+		return reject("The Heartwood is not open.")
+	end
+	run.practice = options.practice == true
+	run.raidPlayers = if type(options.players) == "number" then options.players else 1
+	run.healerPresent = options.healer == true
+	if type(options.echo) == "number" then
+		run.echo = options.echo
+	end
+	local wing = if type(options.wing) == "number" then math.floor(options.wing) else 1
+	if wing < 1 then
+		wing = 1
+	end
+	if wing > #run.dungeon.rooms then
+		wing = #run.dungeon.rooms
+	end
+	run.roomIndex = wing
+	run.placeIndex = wing
+	run.advanceAt = nil
+	run.offer = nil
+	teleport(player, roomSpawn(run.placeIndex))
+	spawnRoom(player, run)
+	local phase = if type(options.phase) == "number" then math.floor(options.phase) else 1
+	for _, enemy in pairs(run.enemies) do
+		if enemy.boss and phase >= 2 then
+			local ratio = if phase >= 3 then Rootvault.PHASE3 else Rootvault.PHASE2
+			enemy.hp = math.max(1, math.floor(enemy.maxHp * ratio))
+			enemy.phase = phase
+		end
+	end
+	local room = run.dungeon.rooms[wing]
+	pushRun(player, if room ~= nil then room.name else "Heartwood")
 	return { ok = true, run = publicRun(player) }
 end
 
@@ -1927,6 +2035,18 @@ local function bindTouches()
 end
 
 function DungeonService.onPlayerDown(player: Player)
+	local run = runs[player]
+	if
+		run ~= nil
+		and run.dungeon.id == Dungeons.HEARTWOOD_ID
+		and run.difficulty == "story"
+		and run.practice ~= true
+	then
+		DataService.mutate(player, function(data)
+			data.raidEcho = math.min(5, (data.raidEcho or 0) + 1)
+			return nil
+		end)
+	end
 	finish(player, false)
 end
 

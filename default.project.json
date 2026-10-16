@@ -108,6 +108,11 @@
         "ClaimPass": { "$className": "RemoteFunction" },
         "PremiumPass": { "$className": "RemoteFunction" },
         "StartDailyBoss": { "$className": "RemoteFunction" },
+        "RaidQueue": { "$className": "RemoteFunction" },
+        "RaidPost": { "$className": "RemoteFunction" },
+        "RaidJoin": { "$className": "RemoteFunction" },
+        "RaidPractice": { "$className": "RemoteFunction" },
+        "RaidBuy": { "$className": "RemoteFunction" },
         "CombatFx": {
           "$className": "RemoteEvent"
         },

@@ -71,7 +71,7 @@ function Audio.zoneForRun(active: any, boss: any, dungeonId: any): string?
 	if active ~= true then
 		return nil
 	end
-	if dungeonId ~= "rootvault" and dungeonId ~= "rootvault_waves" then
+	if dungeonId ~= "rootvault" and dungeonId ~= "rootvault_waves" and dungeonId ~= "heartwood" then
 		return nil
 	end
 	if boss == true then

@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 18.
+	The player profile shape, version 19.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -26,7 +26,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 18
+Schema.VERSION = 19
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -160,6 +160,14 @@ export type ProfileData = {
 	nightmareBest: number,
 	dailyBonusDay: number,
 	dailyRerollDay: number,
+	raidMarks: number,
+	raidMarksEarned: number,
+	raidMarkWeek: number,
+	raidLock: { [string]: number },
+	raidPity: { [string]: number },
+	raidStory: boolean,
+	raidEcho: number,
+	raidBest: number,
 }
 
 function Schema.template(): ProfileData
@@ -251,6 +259,14 @@ function Schema.template(): ProfileData
 		nightmareBest = 0,
 		dailyBonusDay = -1,
 		dailyRerollDay = -1,
+		raidMarks = 0,
+		raidMarksEarned = 0,
+		raidMarkWeek = -1,
+		raidLock = {},
+		raidPity = {},
+		raidStory = false,
+		raidEcho = 0,
+		raidBest = 0,
 	}
 end
 
@@ -423,6 +439,20 @@ function Schema.reconcile(data: any): ProfileData
 	data.passClaimed = wholeNumber(data.passClaimed, 0, 0)
 	data.boardLines = wholeNumber(data.boardLines, 0, 0)
 	data.nightmareBest = wholeNumber(data.nightmareBest, 0, 0)
+	data.raidMarks = wholeNumber(data.raidMarks, 0, 0)
+	data.raidMarksEarned = wholeNumber(data.raidMarksEarned, 0, 0)
+	data.raidEcho = wholeNumber(data.raidEcho, 0, 0)
+	if data.raidEcho > 5 then
+		data.raidEcho = 5
+	end
+	data.raidBest = wholeNumber(data.raidBest, 0, 0)
+	data.raidStory = data.raidStory == true
+	if type(data.raidLock) ~= "table" then
+		data.raidLock = {}
+	end
+	if type(data.raidPity) ~= "table" then
+		data.raidPity = {}
+	end
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -458,6 +488,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.weeklyWeek = stamp(data.weeklyWeek)
 	data.dailyBonusDay = stamp(data.dailyBonusDay)
 	data.dailyRerollDay = stamp(data.dailyRerollDay)
+	data.raidMarkWeek = stamp(data.raidMarkWeek)
 	if data.chestDuplicates ~= "star" then
 		data.chestDuplicates = "dust"
 	end
@@ -878,6 +909,19 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		raw.dailyBonusDay = -1
 		raw.dailyRerollDay = -1
 		raw.schemaVersion = 18
+		version = 18
+	end
+
+	if version < 19 then
+		raw.raidMarks = 0
+		raw.raidMarksEarned = 0
+		raw.raidMarkWeek = -1
+		raw.raidLock = {}
+		raw.raidPity = {}
+		raw.raidStory = false
+		raw.raidEcho = 0
+		raw.raidBest = 0
+		raw.schemaVersion = 19
 	end
 
 	return Schema.reconcile(raw), nil
@@ -1098,6 +1142,10 @@ function Schema.snapshot(data: ProfileData)
 		passClaimed = data.passClaimed,
 		nightmareBest = data.nightmareBest,
 		dailyBossReady = data.lastDailyBossDay ~= Loops.dayNumber(os.time()),
+		raidMarks = data.raidMarks,
+		raidStory = data.raidStory,
+		raidEcho = data.raidEcho,
+		raidBest = data.raidBest,
 	}
 end
 
