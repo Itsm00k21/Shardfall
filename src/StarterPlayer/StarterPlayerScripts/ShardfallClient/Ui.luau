@@ -213,17 +213,25 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 8),
-		Size = UDim2.new(0.92, 0, 0, 48),
+		Size = UDim2.new(0.92, 0, 0, 56),
 		BackgroundColor3 = COLORS.gold,
 		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 22,
+		TextSize = 16,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Center,
 		TextColor3 = COLORS.ink,
 		Text = "",
 		Visible = false,
 		ZIndex = 20,
 	}, bannerGui) :: TextLabel
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, 8),
+		PaddingBottom = UDim.new(0, 8),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, banner)
 	corner(banner, 8)
 	local bannerToken = 0
 	local function showBanner(text: string, kind: string, hold: boolean?)
@@ -1663,8 +1671,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		local token = statusToken
 		status.Text = text
 		status.Visible = text ~= ""
-		toast.Text = text
-		toast.Visible = text ~= ""
+		-- One status line. The banner is centered; the old toast sat beside
+		-- it and the two wraps read as one garbled line.
+		toast.Text = ""
+		toast.Visible = false
 		showBanner(text, kind, hold)
 		local color = COLORS.muted
 		if kind == "error" then

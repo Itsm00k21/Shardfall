@@ -25,6 +25,7 @@ local Audio = require(Shared:WaitForChild("Audio"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local Pools = require(Shared:WaitForChild("Pools"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
+local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 
@@ -46,7 +47,15 @@ local TAP = RarityConfig.MIN_TAP
 
 local function color3(rarity: string): Color3
 	local red, green, blue = RarityConfig.color(rarity)
+	red, green, blue = UiTheme.lift(red, green, blue)
 	return Color3.fromRGB(red, green, blue)
+end
+
+local function worldStroke(parent: Instance)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = UiTheme.STROKE
+	stroke.Color = Color3.fromRGB(16, 14, 24)
+	stroke.Parent = parent
 end
 
 local function corner(parent: Instance, radius: number)
@@ -119,9 +128,10 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		oddsCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placeOdds)
 	end
 	odds.BackgroundColor3 = Color3.fromRGB(18, 16, 28)
-	odds.BackgroundTransparency = 0.15
+	odds.BackgroundTransparency = 0
 	odds.BorderSizePixel = 0
 	odds.Visible = false
+	odds.ClipsDescendants = true
 	odds.Parent = gui
 	corner(odds, 10)
 	local oddsLayout = Instance.new("UIListLayout")
@@ -129,9 +139,10 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	oddsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	oddsLayout.Parent = odds
 	local oddsPad = Instance.new("UIPadding")
-	oddsPad.PaddingTop = UDim.new(0, 8)
-	oddsPad.PaddingLeft = UDim.new(0, 10)
-	oddsPad.PaddingRight = UDim.new(0, 8)
+	oddsPad.PaddingTop = UDim.new(0, UiTheme.PAD)
+	oddsPad.PaddingLeft = UDim.new(0, UiTheme.PAD)
+	oddsPad.PaddingRight = UDim.new(0, UiTheme.PAD)
+	oddsPad.PaddingBottom = UDim.new(0, UiTheme.PAD)
 	oddsPad.Parent = odds
 
 	local oddsTitle = Instance.new("TextLabel")
@@ -149,14 +160,17 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	for index, rarity in ipairs(Rarities.ORDER) do
 		local label = Instance.new("TextLabel")
 		label.Name = rarity
-		label.BackgroundTransparency = 1
+		label.BackgroundColor3 = Color3.fromRGB(18, 16, 28)
+		label.BackgroundTransparency = 0
 		label.Size = UDim2.new(1, 0, 0, 22)
 		label.Font = Enum.Font.BuilderSans
-		label.TextSize = 13
+		label.TextSize = UiTheme.MIN_TEXT
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		label.TextTruncate = Enum.TextTruncate.AtEnd
+		label.TextWrapped = false
 		label.TextColor3 = color3(rarity)
 		label.Text = rarity
+		worldStroke(label)
 		label.LayoutOrder = index
 		label.Visible = false
 		label.Parent = odds
@@ -247,26 +261,30 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	luckLabel.AnchorPoint = Vector2.new(0.5, 1)
 	luckLabel.Position = UDim2.new(0.5, 0, 1, -148)
 	luckLabel.Size = UDim2.fromOffset(280, 18)
-	luckLabel.BackgroundTransparency = 1
+	luckLabel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	luckLabel.BackgroundTransparency = 0
 	luckLabel.Font = Enum.Font.BuilderSansMedium
-	luckLabel.TextSize = 14
-	luckLabel.TextColor3 = Color3.fromRGB(236, 214, 140)
+	luckLabel.TextSize = UiTheme.MIN_TEXT
+	luckLabel.TextColor3 = Color3.fromRGB(255, 220, 150)
 	luckLabel.Text = ""
 	luckLabel.Visible = false
 	luckLabel.Parent = gui
+	worldStroke(luckLabel)
 
 	local pityLabel = Instance.new("TextLabel")
 	pityLabel.Name = "Pity"
 	pityLabel.AnchorPoint = Vector2.new(0.5, 1)
 	pityLabel.Position = UDim2.new(0.5, 0, 1, -128)
 	pityLabel.Size = UDim2.fromOffset(320, 16)
-	pityLabel.BackgroundTransparency = 1
+	pityLabel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	pityLabel.BackgroundTransparency = 0
 	pityLabel.Font = Enum.Font.BuilderSans
-	pityLabel.TextSize = 13
-	pityLabel.TextColor3 = Color3.fromRGB(186, 180, 204)
+	pityLabel.TextSize = UiTheme.MIN_TEXT
+	pityLabel.TextColor3 = Color3.fromRGB(220, 214, 236)
 	pityLabel.Text = ""
 	pityLabel.Visible = false
 	pityLabel.Parent = gui
+	worldStroke(pityLabel)
 
 	local card = Instance.new("Frame")
 	card.Name = "Result"

@@ -154,7 +154,7 @@ function MarketHud.start(invoke: (string, ...any) -> any)
 	root.Position = UDim2.new(0, 16, 1, -16)
 	root.Size = UDim2.fromOffset(360, 420)
 	root.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
-	root.BackgroundTransparency = 0.15
+	root.BackgroundTransparency = 0
 	root.BorderSizePixel = 0
 	root.Visible = false
 	root.Parent = screen
@@ -349,8 +349,9 @@ function MarketHud.start(invoke: (string, ...any) -> any)
 	local toggle = Instance.new("TextButton")
 	toggle.Name = "OpenMarket"
 	toggle.AnchorPoint = Vector2.new(0, 1)
-	toggle.Position = UDim2.new(0, 16, 1, -16)
+	toggle.Position = UDim2.new(0, 16, 1, -88)
 	toggle.Size = UDim2.fromOffset(64, 64)
+	toggle.Visible = false
 	toggle.BackgroundColor3 = gold
 	toggle.BorderSizePixel = 0
 	toggle.Font = Enum.Font.BuilderSansBold
@@ -366,9 +367,9 @@ function MarketHud.start(invoke: (string, ...any) -> any)
 	toggle.Activated:Connect(function()
 		root.Visible = not root.Visible
 		if root.Visible then
-			toggle.Position = UDim2.new(0, 384, 1, -16)
+			toggle.Position = UDim2.new(0, 384, 1, -88)
 		else
-			toggle.Position = UDim2.new(0, 16, 1, -16)
+			toggle.Position = UDim2.new(0, 16, 1, -88)
 		end
 	end)
 end

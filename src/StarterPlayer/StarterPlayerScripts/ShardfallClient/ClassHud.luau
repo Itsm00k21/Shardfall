@@ -17,6 +17,7 @@ local SoundService = game:GetService("SoundService")
 
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
+local MobileShell = require(script.Parent.MobileShell)
 
 local ClassHud = {}
 
@@ -113,6 +114,8 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	screen.Name = "ShardfallClasses"
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 55
+	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
 
 	local panel = Instance.new("Frame")
@@ -121,7 +124,7 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	panel.Position = UDim2.fromOffset(16, 140)
 	panel.Size = UDim2.fromOffset(360, 220)
 	panel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
-	panel.BackgroundTransparency = 0.12
+	panel.BackgroundTransparency = 0
 	panel.BorderSizePixel = 0
 	panel.Visible = false
 	panel.Active = true
@@ -129,15 +132,7 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	panel.Parent = screen
 	panelRef = panel
 	local function place()
-		local camera = workspace.CurrentCamera
-		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
-		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
-		if vx < 1 then
-			vx = 1280
-		end
-		if vy < 1 then
-			vy = 720
-		end
+		local vx, vy = MobileShell.view(screen)
 		local box = ShellLayout.classRect(vx, vy)
 		local bar = ShellLayout.actionBar(vx, vy)
 		local pet = ShellLayout.petRect()
@@ -163,6 +158,7 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	if camera ~= nil then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
 	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = panel
