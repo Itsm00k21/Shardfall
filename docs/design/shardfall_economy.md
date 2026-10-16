@@ -67,8 +67,28 @@ Track average gold balance by level, top 1% balance, gold earned vs spent per da
 - **Haven Market Board** (like FFXIV): list/browse/buy; 5% listing/sale fee as a gold sink. Crafters/gatherers can be a real career.
 - Mythic shards untradeable for 7 days after drop. Starter gear/Robux-bought items bound.
 
+These notes override the post-beta line that Gems are bound and that trading starts only at level 15. New-tier players may make small item trades. Gems move only from Standard up.
+
+### Shipped Market Board rules
+- List, browse, buy, and cancel. Goods stay in the seller's bag and are reserved until the sale, so a crash does not delete them.
+- Listing fee is 5% of the gold price, or 5% of `price * 100` when the price is in Gems. Rounded down, minimum 1 gold. Paid when the listing is posted, sunk immediately, not returned on cancel or expiry.
+- The buyer pays the asking price. The seller receives the full price. The listing fee is the gold sink.
+- Listings last 48 hours. Caps: New 4, Standard 8, Trusted and Patron 20.
+- Gem prices require both sides to be allowed to trade Gems. Robux-bought items stay bound (`Trading.ROBUX_ITEM_TRADING_ENABLED = false`).
+
 ## Trade Audit System (protect players without blocking whales)
 **Log everything**: every trade and market sale stores both players, items, Gem/gold amounts, estimated value, timestamp, server, account age, and level. Logs kept 180 days; review dashboard with search by player/item.
+
+### Shipped trade rules
+- Both players confirm, then both commit. Any offer change clears both confirms and starts a 3 second lock.
+- At commit the server re-reads both profiles. Items, materials, chests, gold, and Gems move in one pass or both profiles are restored. A second commit returns the same audit id and does not move anything again.
+- Direct trades sink 10% of gold offered (`floor(gold * 0.10)`). Gems move 1 for 1. The receiver of a lopsided window (95% or more of the value) must pass `acceptWarning`.
+- Tradeable: materials, shard gear (Weapon, Armor, Accessory, Pet, Shard), unopened chests, and cosmetics. Gems from Standard up.
+- Bound: starter gear (`starter` or template id `starter_`), Robux items while the kill switch is off, locked items, equipped items, exploit items, and Mythic shards for 7 days after `obtainedAt` (missing timestamp stays bound).
+- Trust tiers, first match wins. An account under 14 days stays New even at a high level, so a fresh mule cannot spend. A Patron, or an opt-in verified trader with 60 clean days, is uncapped. Trusted is level 40+, or 60 clean days, or any Robux receipt, once the account is 14 days old. Standard is level 15+ and 14 days. Everyone else is New.
+- Daily value caps, estimated in gold (1 Gem = 100 gold for the estimate only): New 2,000 per trade and per day, and nothing above Rare. Standard starts at 50,000 and adds 5,000 per level above 15, capped at 150,000. Trusted 2,000,000. Patron uncapped.
+- Hard blocks: New-tier limits, `tradeLocked` / `tradeFlagged`, exploit items, Robux items. Flags (lopsided 10x between unconnected accounts, a New account receiving 1,500+ estimated value, five New partners in a day, the same template three times in an hour, a 5x spike versus history, a handoff plus a large transfer) are stored on the audit row and do not stop the trade.
+- Rollback restores items and the gold that was sunk as tax, once. The market listing fee stays sunk. Search is by player or item. A player can report their own trade.
 
 **Trust tiers instead of hard limits**
 | Tier | Who | Daily trade value cap |
