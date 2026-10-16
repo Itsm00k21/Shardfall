@@ -175,6 +175,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Position = UDim2.fromOffset(16, 132),
 		Size = UDim2.fromOffset(480, 400),
 		BackgroundColor3 = COLORS.background,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Visible = false,
 		ClipsDescendants = true,
@@ -184,15 +185,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		return ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
 	end
 	local function fitRoot()
-		local camera = workspace.CurrentCamera
-		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
-		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
-		if vx < 1 then
-			vx = 1280
-		end
-		if vy < 1 then
-			vy = 720
-		end
+		local vx, vy = MobileShell.view(screen)
 		local box = ShellLayout.inventory(vx, vy, phoneLayout())
 		local pet = ShellLayout.petRect()
 		root.Position = UDim2.fromOffset(16, pet.y + pet.h + 8)
@@ -203,6 +196,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	if fitCamera ~= nil then
 		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitRoot)
 	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitRoot)
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 12),
 		PaddingBottom = UDim.new(0, 12),
@@ -714,9 +708,12 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			placePanes()
 		end
 		if #rows == 0 then
-			local empty = label(grid, InventoryView.emptyText(query.tab), 1, COLORS.muted, 14)
+			local empty = label(grid, "No items yet", 1, COLORS.text, 16)
 			empty.Name = "Notice"
-			empty.Size = UDim2.fromOffset(220, 40)
+			empty.Size = UDim2.fromOffset(240, 24)
+			local hint = label(grid, InventoryView.emptyText(query.tab), 2, COLORS.muted, 14)
+			hint.Name = "Hint"
+			hint.Size = UDim2.fromOffset(240, 48)
 		end
 
 		clearGenerated(detail)

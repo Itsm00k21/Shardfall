@@ -14,6 +14,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Loops = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Loops"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
 local LoopHud = {}
 local player = Players.LocalPlayer
@@ -90,8 +91,8 @@ function LoopHud.setProfile(profile: any)
 		table.insert(lines, string.format("Nightmare best %ds", best))
 	end
 	local ready = if profile.dailyBossReady == true
-		then "Daily Gnarl is up"
-		else "Daily Gnarl is down"
+		then "Daily boss ready"
+		else "Daily boss resting"
 	table.insert(lines, ready)
 	label.Text = table.concat(lines, "\n")
 	paintBoard(profile.board)
@@ -102,16 +103,20 @@ function LoopHud.start(invoke: (string, ...any) -> any)
 	screen.Name = "ShardfallLoops"
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 12
+	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
 
 	local panel = Instance.new("Frame")
 	panel.Name = "Board"
 	panel.AnchorPoint = Vector2.new(1, 0)
-	panel.Position = UDim2.new(1, -16, 0, 72)
+	panel.Position = UDim2.new(1, -UiTheme.PAD, 0, 72)
 	panel.Size = UDim2.fromOffset(280, 220)
 	panel.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
-	panel.BackgroundTransparency = 0.35
+	panel.BackgroundTransparency = 0
 	panel.BorderSizePixel = 0
+	panel.Visible = false
+	panel.ClipsDescendants = true
 	panel.Parent = screen
 	local panelCorner = Instance.new("UICorner")
 	panelCorner.CornerRadius = UDim.new(0, 12)
@@ -152,8 +157,8 @@ function LoopHud.start(invoke: (string, ...any) -> any)
 	note.Size = UDim2.fromOffset(132, 140)
 	note.BackgroundTransparency = 1
 	note.Font = Enum.Font.BuilderSans
-	note.TextSize = 13
-	note.TextColor3 = Color3.fromRGB(240, 236, 248)
+	note.TextSize = UiTheme.MIN_TEXT
+	note.TextColor3 = Color3.fromRGB(244, 240, 252)
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextYAlignment = Enum.TextYAlignment.Top
 	note.TextWrapped = true
@@ -161,28 +166,38 @@ function LoopHud.start(invoke: (string, ...any) -> any)
 	note.Parent = panel
 	label = note
 
-	local row = Instance.new("Frame")
+	local row = Instance.new("ScrollingFrame")
 	row.Name = "Actions"
 	row.AnchorPoint = Vector2.new(0, 1)
-	row.Position = UDim2.new(0, 3, 1, -4)
-	row.Size = UDim2.fromOffset(274, 64)
-	row.BackgroundTransparency = 1
+	row.Position = UDim2.new(0, UiTheme.PAD, 1, -(UiTheme.TAP + UiTheme.PAD))
+	row.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, UiTheme.TAP)
+	row.BackgroundColor3 = Color3.fromRGB(28, 24, 40)
+	row.BackgroundTransparency = 0
+	row.BorderSizePixel = 0
+	row.ScrollBarThickness = 4
+	row.ScrollingDirection = Enum.ScrollingDirection.X
+	row.AutomaticCanvasSize = Enum.AutomaticSize.X
+	row.CanvasSize = UDim2.new()
 	row.Parent = panel
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	rowCorner.Parent = row
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.Padding = UDim.new(0, 6)
+	layout.Padding = UDim.new(0, UiTheme.PAD)
 	layout.Parent = row
 
 	local function button(name: string, text: string, color: Color3, callback: () -> ())
 		local hit = Instance.new("TextButton")
 		hit.Name = name
-		hit.Size = UDim2.fromOffset(64, 64)
+		hit.Size = UDim2.fromOffset(UiTheme.labelWidth(text), UiTheme.TAP)
 		hit.BackgroundColor3 = color
 		hit.BorderSizePixel = 0
 		hit.Font = Enum.Font.BuilderSansBold
-		hit.TextSize = 13
+		hit.TextSize = UiTheme.MIN_TEXT
 		hit.TextColor3 = Color3.fromRGB(16, 14, 24)
-		hit.TextWrapped = true
+		hit.TextWrapped = false
+		hit.TextTruncate = Enum.TextTruncate.None
 		hit.Text = text
 		hit.Parent = row
 		local corner = Instance.new("UICorner")

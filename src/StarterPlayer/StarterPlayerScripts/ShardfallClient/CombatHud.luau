@@ -183,7 +183,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	hpText.Position = UDim2.fromOffset(10, 2)
 	hpText.Size = UDim2.new(1, -20, 0, 16)
 	hpText.Font = Enum.Font.BuilderSansBold
-	hpText.TextSize = 13
+	hpText.TextSize = 14
 	hpText.TextXAlignment = Enum.TextXAlignment.Left
 	hpText.TextColor3 = Color3.fromRGB(240, 236, 248)
 	hpText.Text = "HP"
@@ -194,13 +194,19 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	wallet.BackgroundTransparency = 1
 	wallet.Position = UDim2.fromOffset(16, 54)
 	wallet.Size = UDim2.fromOffset(220, 16)
+	wallet.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	wallet.BackgroundTransparency = 0
 	wallet.Font = Enum.Font.BuilderSans
-	wallet.TextSize = 13
+	wallet.TextSize = 14
 	wallet.TextXAlignment = Enum.TextXAlignment.Left
-	wallet.TextColor3 = Color3.fromRGB(236, 214, 140)
+	wallet.TextColor3 = Color3.fromRGB(255, 220, 150)
 	wallet.TextTruncate = Enum.TextTruncate.AtEnd
 	wallet.Text = ""
 	wallet.Parent = screen
+	local walletStroke = Instance.new("UIStroke")
+	walletStroke.Thickness = 1
+	walletStroke.Color = Color3.fromRGB(16, 14, 24)
+	walletStroke.Parent = wallet
 	walletLabel = wallet
 	if pendingWallet ~= nil then
 		paintWallet(pendingWallet[1], pendingWallet[2], pendingWallet[3])

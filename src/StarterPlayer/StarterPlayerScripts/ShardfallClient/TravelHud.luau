@@ -94,6 +94,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Position = UDim2.fromOffset(16, 140),
 		Size = UDim2.fromOffset(320, 400),
 		BackgroundColor3 = COLORS.background,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Visible = false,
 		ClipsDescendants = true,
@@ -104,15 +105,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: ScrollingFrame
 	corner(root, 12)
 	local function place()
-		local camera = workspace.CurrentCamera
-		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
-		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
-		if vx < 1 then
-			vx = 1280
-		end
-		if vy < 1 then
-			vy = 720
-		end
+		local vx, vy = MobileShell.view(screen)
 		local box = ShellLayout.travelRect(vx, vy)
 		root.Position = UDim2.fromOffset(box.x, box.y)
 		root.Size = UDim2.fromOffset(box.w, box.h)
@@ -122,6 +115,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	if placeCamera ~= nil then
 		placeCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
 	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
@@ -177,7 +171,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Position = UDim2.fromOffset(0, 516),
 		Size = UDim2.new(1, 0, 0, 18),
 		Font = Enum.Font.BuilderSans,
-		TextSize = 13,
+		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
 		Text = "",
@@ -190,7 +184,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		BackgroundColor3 = COLORS.locked,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 13,
+		TextSize = 14,
 		TextColor3 = COLORS.text,
 		Text = "Travel pass",
 		AutoButtonColor = true,
