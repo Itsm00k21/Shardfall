@@ -14,10 +14,10 @@
 	so the profile load never started.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build b3c8748+ server` in Output.
+	still leaves `[Shardfall] build ff655d8+ server` in Output.
 ]]
 
-print("[Shardfall] build b3c8748+ server")
+print("[Shardfall] build ff655d8+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
