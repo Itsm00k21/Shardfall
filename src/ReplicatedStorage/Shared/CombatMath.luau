@@ -287,6 +287,34 @@ function CombatMath.clampVitals(hp: number, maxHp: number): (number, number)
 	return current, max
 end
 
+-- HP after the max changes. Undamaged players stay full, so a leftover
+-- 103 cannot sit under a max of 130. A real hit keeps the missing points.
+-- Death stays at 0.
+function CombatMath.syncVitals(
+	hp: number,
+	previousMax: number,
+	nextMax: number,
+	hurt: boolean
+): (number, number)
+	local _, newMax = CombatMath.clampVitals(1, nextMax)
+	if hurt ~= true then
+		return newMax, newMax
+	end
+	local current, oldMax = CombatMath.clampVitals(hp, previousMax)
+	if current <= 0 then
+		return 0, newMax
+	end
+	if current >= oldMax then
+		return newMax, newMax
+	end
+	local missing = oldMax - current
+	local shifted = newMax - missing
+	if shifted < 0 then
+		shifted = 0
+	end
+	return CombatMath.clampVitals(shifted, newMax)
+end
+
 -- One incoming hit after defense and the class taken multiplier.
 -- Already at 0 deals nothing and is not a new kill, so a second orb in the
 -- same heartbeat cannot call the death hook again.

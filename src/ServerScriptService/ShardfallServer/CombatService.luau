@@ -59,6 +59,7 @@ type State = {
 	comboAt: number,
 	dodge: CombatFeel.DodgeState,
 	ult: number,
+	hurt: boolean,
 }
 
 type Shot = {
@@ -153,6 +154,7 @@ local function ensure(player: Player): State
 			comboAt = 0,
 			dodge = CombatFeel.blankDodge(os.clock()),
 			ult = 0,
+			hurt = false,
 		}
 		vitals[player] = state
 	end
@@ -194,39 +196,50 @@ local function paint(part: BasePart, hp: number, maxHp: number)
 	end
 end
 
-local function publish(player: Player, state: State)
-	local hp, maxHp = CombatMath.clampVitals(state.hp, state.maxHp)
-	state.hp = hp
-	state.maxHp = maxHp
-	local hrp = rootPart(player)
-	if hrp ~= nil then
-		paint(hrp, hp, maxHp)
-		local nameLabel = hrp:FindFirstChild("Name", true)
-		if nameLabel ~= nil and nameLabel:IsA("TextLabel") then
-			nameLabel.Text = string.format("HP  %d / %d", hp, maxHp)
-		end
+local function ensureBar(part: BasePart, studs: number, color: Color3): TextLabel
+	local existing = part:FindFirstChild("ShardfallBar")
+	local gui: BillboardGui
+	if existing ~= nil and existing:IsA("BillboardGui") then
+		gui = existing
+	else
+		local created = Instance.new("BillboardGui")
+		created.Name = "ShardfallBar"
+		created.Size = UDim2.fromOffset(92, 22)
+		created.StudsOffset = Vector3.new(0, studs, 0)
+		created.AlwaysOnTop = true
+		created.Parent = part
+		gui = created
 	end
-	syncBody(player, maxHp)
-	fx(player, {
-		kind = "hp",
-		hp = hp,
-		maxHp = maxHp,
-	})
-end
 
-local function ensureBar(part: BasePart, studs: number, color: Color3)
-	if part:FindFirstChild("ShardfallBar") ~= nil then
-		return
+	if gui:FindFirstChild("Back") == nil then
+		local back = Instance.new("Frame")
+		back.Name = "Back"
+		back.Position = UDim2.fromOffset(0, 14)
+		back.Size = UDim2.new(1, 0, 0, 8)
+		back.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
+		back.BorderSizePixel = 0
+		back.Parent = gui
+
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BackgroundColor3 = color
+		fill.BorderSizePixel = 0
+		fill.Parent = back
 	end
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "ShardfallBar"
-	gui.Size = UDim2.fromOffset(92, 22)
-	gui.StudsOffset = Vector3.new(0, studs, 0)
-	gui.AlwaysOnTop = true
-	gui.Parent = part
+
+	local label = gui:FindFirstChild("Vitals")
+	if label ~= nil and label:IsA("TextLabel") then
+		return label
+	end
+	local legacy = gui:FindFirstChild("Name")
+	if legacy ~= nil and legacy:IsA("TextLabel") then
+		legacy.Name = "Vitals"
+		return legacy
+	end
 
 	local name = Instance.new("TextLabel")
-	name.Name = "Name"
+	name.Name = "Vitals"
 	name.BackgroundTransparency = 1
 	name.Size = UDim2.new(1, 0, 0, 12)
 	name.Font = Enum.Font.BuilderSansBold
@@ -235,21 +248,25 @@ local function ensureBar(part: BasePart, studs: number, color: Color3)
 	name.TextStrokeTransparency = 0.4
 	name.Text = ""
 	name.Parent = gui
+	return name
+end
 
-	local back = Instance.new("Frame")
-	back.Name = "Back"
-	back.Position = UDim2.fromOffset(0, 14)
-	back.Size = UDim2.new(1, 0, 0, 8)
-	back.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
-	back.BorderSizePixel = 0
-	back.Parent = gui
-
-	local fill = Instance.new("Frame")
-	fill.Name = "Fill"
-	fill.Size = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3 = color
-	fill.BorderSizePixel = 0
-	fill.Parent = back
+local function publish(player: Player, state: State)
+	local hp, maxHp = CombatMath.clampVitals(state.hp, state.maxHp)
+	state.hp = hp
+	state.maxHp = maxHp
+	local hrp = rootPart(player)
+	if hrp ~= nil then
+		paint(hrp, hp, maxHp)
+		local nameLabel = ensureBar(hrp, 3.2, Color3.fromRGB(110, 210, 140))
+		nameLabel.Text = string.format("HP  %d / %d", hp, maxHp)
+	end
+	syncBody(player, maxHp)
+	fx(player, {
+		kind = "hp",
+		hp = hp,
+		maxHp = maxHp,
+	})
 end
 
 local function attachCharacter(player: Player, character: Model)
@@ -321,16 +338,10 @@ function CombatService.refresh(player: Player)
 		publish(player, state)
 		return
 	end
-	if not state.ready then
-		state.hp = state.maxHp
-		state.ready = true
-	else
-		if state.maxHp > previousMax then
-			state.hp += state.maxHp - previousMax
-		end
-		if state.hp > state.maxHp then
-			state.hp = state.maxHp
-		end
+	state.hp = CombatMath.syncVitals(state.hp, previousMax, state.maxHp, state.hurt)
+	state.ready = true
+	if state.hp >= state.maxHp then
+		state.hurt = false
 	end
 	publish(player, state)
 end
@@ -339,6 +350,7 @@ function CombatService.revive(player: Player)
 	local state = ensure(player)
 	state.hp = state.maxHp
 	state.ready = true
+	state.hurt = false
 	publish(player, state)
 end
 
@@ -360,6 +372,9 @@ local function heal(player: Player, amount: number, x: number, y: number, z: num
 	local gained = state.hp - before
 	if gained <= 0 then
 		return
+	end
+	if state.hp >= state.maxHp then
+		state.hurt = false
 	end
 	publish(player, state)
 	fx(player, {
@@ -403,9 +418,13 @@ function CombatService.damagePlayer(
 		return false
 	end
 	local mods = classMods(player)
+	local before = state.hp
 	local nextHp, amount, down =
 		CombatMath.applyPlayerDamage(state.hp, state.maxHp, rawDamage, state.defense, mods.taken)
 	state.hp = nextHp
+	if nextHp < before then
+		state.hurt = true
+	end
 	publish(player, state)
 	fx(player, {
 		kind = "damage",
