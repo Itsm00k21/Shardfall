@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Drops = require(ReplicatedStorage.Shared.Drops)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
@@ -69,6 +70,10 @@ type Enemy = {
 	safeRadius: number,
 	nextFog: number,
 	nextAttack: number,
+	stagger: number,
+	stunUntil: number,
+	telegraphUntil: number,
+	telegraphColor: string,
 	hover: number,
 	color: Color3,
 	part: BasePart,
@@ -447,12 +452,14 @@ local function publicRun(player: Player): { [string]: any }
 	local remaining = 0
 	local boss = false
 	local phase = nil
+	local stagger = 0
 	for _, enemy in pairs(run.enemies) do
 		if enemy.hp > 0 then
 			remaining += 1
 			if enemy.boss then
 				boss = true
 				phase = enemy.phase
+				stagger = enemy.stagger
 			end
 		end
 	end
@@ -472,6 +479,8 @@ local function publicRun(player: Player): { [string]: any }
 		cleared = run.cleared,
 		boss = boss,
 		phase = phase,
+		stagger = stagger,
+		staggerMax = CombatFeel.STAGGER_MAX,
 		note = note,
 		endless = endless,
 		wave = if endless then run.wave else nil,
@@ -713,6 +722,10 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		safeRadius = definition.safeRadius,
 		nextFog = 0,
 		nextAttack = os.clock() + 0.8,
+		stagger = 0,
+		stunUntil = 0,
+		telegraphUntil = 0,
+		telegraphColor = "red",
 		hover = definition.hover,
 		color = color,
 		part = part,
@@ -1020,7 +1033,13 @@ local function summonSaplings(run: Run)
 	end
 end
 
-function DungeonService.damageEnemy(player: Player, enemyId: string, amount: number, _crit: boolean)
+function DungeonService.damageEnemy(
+	player: Player,
+	enemyId: string,
+	amount: number,
+	_crit: boolean,
+	heavy: boolean?
+)
 	local run = runs[player]
 	if run == nil or run.resolving then
 		return
@@ -1029,12 +1048,36 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 	if enemy == nil or enemy.hp <= 0 then
 		return
 	end
+	local now = os.clock()
+	if now < enemy.stunUntil then
+		amount = math.floor(amount * 1.25 + 0.5)
+	end
 	enemy.hp -= amount
 	if enemy.hp < 0 then
 		enemy.hp = 0
 	end
 	paintEnemy(enemy)
 	pcall(ModelFactory.flash, enemy.part)
+	if enemy.hp > 0 then
+		if enemy.boss then
+			local bar, stunned = CombatFeel.applyStagger(enemy.stagger, heavy == true, true)
+			enemy.stagger = bar
+			if stunned then
+				enemy.stunUntil = now + CombatFeel.STAGGER_STUN
+				pushRun(player, "Staggered. The bark splits.")
+			end
+		else
+			enemy.stunUntil = now + CombatFeel.NORMAL_STAGGER
+		end
+	elseif heavy == true or enemy.boss then
+		fx(player, {
+			kind = "kill",
+			shards = true,
+			x = enemy.part.Position.X,
+			y = enemy.part.Position.Y + 2,
+			z = enemy.part.Position.Z,
+		})
+	end
 	if enemy.boss then
 		local phase = Dungeons.bossPhase(enemy.hp, enemy.maxHp, enemy.phase2At)
 		if phase ~= enemy.phase and phase == 2 and enemy.hp > 0 then
@@ -1212,6 +1255,9 @@ local function tickEnemy(
 	if enemy.hp <= 0 then
 		return
 	end
+	if now < enemy.stunUntil then
+		return
+	end
 	moveEnemy(enemy, hrp.Position, dt, run.placeIndex, run.dungeon.floorSize)
 	pcall(ModelFactory.step, enemy.part, now, true)
 
@@ -1260,6 +1306,38 @@ local function tickEnemy(
 		end
 	end
 
+	if enemy.telegraphUntil > 0 then
+		if now < enemy.telegraphUntil then
+			return
+		end
+		local position = enemy.part.Position
+		local endsAt = enemy.telegraphUntil
+		enemy.telegraphUntil = 0
+		enemy.nextAttack = now + CombatMath.cooldown(enemy.attackSpeed)
+		if enemy.style == "projectile" then
+			CombatService.launchEnemyShot(
+				player,
+				position,
+				hrp.Position,
+				enemy.damage,
+				enemy.projectileSpeed,
+				enemy.range
+			)
+		else
+			CombatService.damagePlayer(
+				player,
+				enemy.damage,
+				hrp.Position.X,
+				hrp.Position.Y,
+				hrp.Position.Z,
+				endsAt
+			)
+			if enemy.boss and enemy.phase == 1 and runs[player] ~= nil then
+				enemy.weakUntil = os.clock() + enemy.weakSeconds
+			end
+		end
+		return
+	end
 	if now < enemy.nextAttack then
 		return
 	end
@@ -1269,38 +1347,29 @@ local function tickEnemy(
 	if distance > enemy.range then
 		return
 	end
-	enemy.nextAttack = now + CombatMath.cooldown(enemy.attackSpeed)
-	if enemy.style == "projectile" then
-		CombatService.launchEnemyShot(
-			player,
-			position,
-			hrp.Position,
-			enemy.damage,
-			enemy.projectileSpeed,
-			enemy.range
-		)
-	else
-		CombatService.damagePlayer(
-			player,
-			enemy.damage,
-			hrp.Position.X,
-			hrp.Position.Y,
-			hrp.Position.Z
-		)
-		if enemy.boss and enemy.phase == 1 and runs[player] ~= nil then
-			enemy.weakUntil = os.clock() + enemy.weakSeconds
-			local slam = VerdantLook.MARKERS.slam
-			marker(
-				run,
-				slam.name,
-				Vector3.new(slam.size[1], slam.size[2], slam.size[3]),
-				Vector3.new(hrp.Position.X, slam.y, hrp.Position.Z),
-				Color3.fromRGB(slam.color[1], slam.color[2], slam.color[3]),
-				0.85,
-				nil
-			)
-		end
-	end
+	local colorName = if enemy.boss and enemy.phase >= 2 then "purple" else "red"
+	local cue = CombatFeel.telegraph(colorName, "normal")
+	enemy.telegraphColor = cue.color
+	enemy.telegraphUntil = now + cue.seconds
+	fx(player, {
+		kind = "telegraph",
+		color = cue.color,
+		verb = cue.verb,
+		seconds = cue.seconds,
+		endsAt = enemy.telegraphUntil,
+		x = hrp.Position.X,
+		y = hrp.Position.Y,
+		z = hrp.Position.Z,
+	})
+	marker(
+		run,
+		"Telegraph",
+		Vector3.new(8, 0.2, 8),
+		Vector3.new(hrp.Position.X, 0.3, hrp.Position.Z),
+		Color3.fromRGB(cue.rgb[1], cue.rgb[2], cue.rgb[3]),
+		cue.seconds,
+		nil
+	)
 end
 
 local function tickAdvance(player: Player, run: Run, now: number)

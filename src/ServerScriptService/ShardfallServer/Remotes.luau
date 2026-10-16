@@ -452,7 +452,7 @@ function Remotes.bind()
 
 	-- A swing is an event, not a function: the player should not wait on a
 	-- round trip before the next click. Cooldown still lives on the server.
-	eventRemote("Attack").OnServerEvent:Connect(function(player, lookX, lookY, lookZ)
+	eventRemote("Attack").OnServerEvent:Connect(function(player, lookX, lookY, lookZ, charged)
 		local reported = typeof(player)
 		local isPlayer = reported == "Instance" and player:IsA("Player")
 		local accepted, why = RemoteCaller.accept(reported, isPlayer)
@@ -464,13 +464,27 @@ function Remotes.bind()
 			return
 		end
 		local ok, err = xpcall(function()
-			CombatService.attack(player, lookX, lookY, lookZ)
+			CombatService.attack(player, lookX, lookY, lookZ, charged == true)
 		end, function(message)
 			return debug.traceback(tostring(message), 2)
 		end)
 		if not ok then
 			warn("[Shardfall] Attack:", err)
 		end
+	end)
+
+	eventRemote("Dodge").OnServerEvent:Connect(function(player, telegraphEndsAt)
+		local reported = typeof(player)
+		local isPlayer = reported == "Instance" and player:IsA("Player")
+		local accepted, why = RemoteCaller.accept(reported, isPlayer)
+		if not accepted then
+			warn("[Shardfall] Dodge:", why)
+			return
+		end
+		if not RateLimiter.take(player.UserId, "Dodge") then
+			return
+		end
+		CombatService.dodge(player, telegraphEndsAt)
 	end)
 
 	eventRemote("Steer").OnServerEvent:Connect(function(player, moving)

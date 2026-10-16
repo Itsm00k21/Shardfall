@@ -80,6 +80,9 @@
         "Attack": {
           "$className": "RemoteEvent"
         },
+        "Dodge": {
+          "$className": "RemoteEvent"
+        },
         "CombatFx": {
           "$className": "RemoteEvent"
         },

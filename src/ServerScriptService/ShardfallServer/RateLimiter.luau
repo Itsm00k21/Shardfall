@@ -47,6 +47,7 @@ local RULES: { [string]: Rule } = {
 	DevGrant = { capacity = 4, perSecond = 2 },
 	-- Attacks are limited by weapon cooldown too. This only stops a flood.
 	Attack = { capacity = 8, perSecond = 6 },
+	Dodge = { capacity = 6, perSecond = 3 },
 	Dungeon = { capacity = 4, perSecond = 1 },
 	Craft = { capacity = 4, perSecond = 1 },
 	Salvage = { capacity = 4, perSecond = 1 },

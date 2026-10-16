@@ -83,8 +83,8 @@ CombatService.bindHooks({
 	enemies = function(player)
 		return DungeonService.enemyViews(player)
 	end,
-	onEnemyHit = function(player, enemyId, amount, crit)
-		DungeonService.damageEnemy(player, enemyId, amount, crit)
+	onEnemyHit = function(player, enemyId, amount, crit, heavy)
+		DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
 	end,
 	onPlayerDown = function(player)
 		DungeonService.onPlayerDown(player)

@@ -26,6 +26,9 @@ export type Callbacks = {
 
 local player = Players.LocalPlayer
 local attackRemote: RemoteEvent? = nil
+local dodgeRemote: RemoteEvent? = nil
+local allowShake = true
+local telegraphEndsAt = 0
 
 local function floater(position: Vector3, text: string, color: Color3)
 	local anchor = Instance.new("Part")
@@ -80,22 +83,41 @@ local function numberFrom(payload: any, key: string): number?
 	return value
 end
 
-function CombatHud.swing()
+local function lookVector(): Vector3
+	local camera = workspace.CurrentCamera
+	return if camera ~= nil then camera.CFrame.LookVector else Vector3.new(0, 0, -1)
+end
+
+function CombatHud.swing(charged: boolean?)
 	local remote = attackRemote
 	if remote == nil then
 		return
 	end
-	local camera = workspace.CurrentCamera
-	local look = if camera ~= nil then camera.CFrame.LookVector else Vector3.new(0, 0, -1)
-	remote:FireServer(look.X, look.Y, look.Z)
+	local look = lookVector()
+	remote:FireServer(look.X, look.Y, look.Z, charged == true)
+end
+
+function CombatHud.dodge()
+	local remote = dodgeRemote
+	if remote == nil then
+		return
+	end
+	remote:FireServer(telegraphEndsAt)
+end
+
+function CombatHud.setFeel(tier: string, shake: boolean)
+	allowShake = shake ~= false and tier ~= "low"
 end
 
 function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	local attack = remotes:WaitForChild("Attack")
+	local dodge = remotes:WaitForChild("Dodge")
 	local fx = remotes:WaitForChild("CombatFx")
 	assert(attack:IsA("RemoteEvent"), "Attack remote missing")
+	assert(dodge:IsA("RemoteEvent"), "Dodge remote missing")
 	assert(fx:IsA("RemoteEvent"), "CombatFx remote missing")
 	attackRemote = attack
+	dodgeRemote = dodge
 
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallCombat"
@@ -146,6 +168,70 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	fillCorner.CornerRadius = UDim.new(0, 4)
 	fillCorner.Parent = hpFill
 
+	local comboLabel = Instance.new("TextLabel")
+	comboLabel.Name = "Combo"
+	comboLabel.BackgroundTransparency = 1
+	comboLabel.Position = UDim2.fromOffset(16, 56)
+	comboLabel.Size = UDim2.fromOffset(220, 24)
+	comboLabel.Font = Enum.Font.BuilderSansBold
+	comboLabel.TextSize = 16
+	comboLabel.TextXAlignment = Enum.TextXAlignment.Left
+	comboLabel.TextColor3 = Color3.fromRGB(255, 214, 120)
+	comboLabel.Text = ""
+	comboLabel.Parent = screen
+
+	local cueLabel = Instance.new("TextLabel")
+	cueLabel.Name = "Telegraph"
+	cueLabel.AnchorPoint = Vector2.new(0.5, 0)
+	cueLabel.Position = UDim2.new(0.5, 0, 0, 72)
+	cueLabel.Size = UDim2.fromOffset(280, 36)
+	cueLabel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	cueLabel.BackgroundTransparency = 0.15
+	cueLabel.Font = Enum.Font.BuilderSansBold
+	cueLabel.TextSize = 18
+	cueLabel.TextColor3 = Color3.fromRGB(255, 80, 70)
+	cueLabel.Text = ""
+	cueLabel.Visible = false
+	cueLabel.Parent = screen
+
+	local flash = Instance.new("Frame")
+	flash.Name = "HitFlash"
+	flash.Size = UDim2.fromScale(1, 1)
+	flash.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	flash.BackgroundTransparency = 1
+	flash.BorderSizePixel = 0
+	flash.Active = false
+	flash.Parent = screen
+
+	local function feelButton(name: string, text: string, order: number, color: Color3): TextButton
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.AnchorPoint = Vector2.new(1, 1)
+		button.Position = UDim2.new(1, -16, 1, -16 - (order * 72))
+		button.Size = UDim2.fromOffset(64, 64)
+		button.BackgroundColor3 = color
+		button.BorderSizePixel = 0
+		button.Font = Enum.Font.BuilderSansBold
+		button.TextSize = 14
+		button.TextColor3 = Color3.fromRGB(16, 14, 24)
+		button.Text = text
+		button.Parent = screen
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 12)
+		corner.Parent = button
+		return button
+	end
+	local dodgeButton = feelButton("Dodge", "Dodge", 0, Color3.fromRGB(120, 210, 170))
+	local chargeButton = feelButton("Charge", "Charge", 1, Color3.fromRGB(255, 186, 96))
+	dodgeButton.MouseButton1Click:Connect(function()
+		CombatHud.dodge()
+	end)
+	chargeButton.MouseButton1Click:Connect(function()
+		CombatHud.swing(true)
+	end)
+
+	local shakeUntil = 0
+	local flashUntil = 0
 	local function setHp(hp: number, maxHp: number)
 		local safeMax = if maxHp > 0 then maxHp else 1
 		hpText.Text = string.format("HP  %d / %d", math.floor(hp + 0.5), math.floor(safeMax + 0.5))
@@ -306,7 +392,82 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				color = Color3.fromRGB(255, 196, 64)
 				text = text .. "!"
 			end
+			local combo = numberFrom(payload, "combo")
+			if combo ~= nil and combo > 1 then
+				comboLabel.Text = string.format("%d hit", combo)
+			elseif payload.kind == "damage" then
+				comboLabel.Text = ""
+			end
+			local shake = numberFrom(payload, "shake") or 0
+			if allowShake and shake > 0 then
+				shakeUntil = os.clock() + shake
+			end
+			local flashSeconds = numberFrom(payload, "flash") or 0
+			if flashSeconds > 0 then
+				flashUntil = os.clock() + flashSeconds
+				flash.BackgroundColor3 = if payload.crit == true
+					then Color3.fromRGB(255, 196, 64)
+					else Color3.fromRGB(255, 255, 255)
+			end
+			if payload.heavy == true then
+				text = text .. "!"
+			end
 			floater(Vector3.new(x, y, z), text, color)
+		elseif payload.kind == "telegraph" then
+			local verb = if type(payload.verb) == "string" then payload.verb else "dodge"
+			local colorName = if type(payload.color) == "string" then payload.color else "red"
+			telegraphEndsAt = numberFrom(payload, "endsAt") or 0
+			cueLabel.Text = string.upper(colorName) .. "  " .. verb
+			cueLabel.Visible = true
+			task.delay(numberFrom(payload, "seconds") or 0.8, function()
+				cueLabel.Visible = false
+			end)
+		elseif payload.kind == "dodge" then
+			local charges = numberFrom(payload, "charges")
+			dodgeButton.Text = if charges ~= nil then "Dodge\n" .. tostring(charges) else "Dodge"
+			if payload.perfect == true then
+				local x = numberFrom(payload, "x") or 0
+				local y = numberFrom(payload, "y") or 0
+				local z = numberFrom(payload, "z") or 0
+				floater(Vector3.new(x, y + 3, z), "PERFECT", Color3.fromRGB(255, 236, 140))
+			end
+		elseif payload.kind == "kill" then
+			local x = numberFrom(payload, "x")
+			local y = numberFrom(payload, "y")
+			local z = numberFrom(payload, "z")
+			if x ~= nil and y ~= nil and z ~= nil and payload.shards == true then
+				for index = 1, 4 do
+					local shard = Instance.new("Part")
+					shard.Name = "KillShard"
+					shard.Size = Vector3.new(0.4, 0.4, 0.4)
+					shard.Anchored = true
+					shard.CanCollide = false
+					shard.CanQuery = false
+					shard.CanTouch = false
+					shard.Material = Enum.Material.Neon
+					shard.Color = Color3.fromRGB(255, 214, 120)
+					shard.CFrame = CFrame.new(x, y, z)
+					shard.Parent = workspace
+					local born = os.clock()
+					local angle = index * 1.57
+					local connection: RBXScriptConnection? = nil
+					connection = RunService.RenderStepped:Connect(function()
+						local age = os.clock() - born
+						shard.Position = Vector3.new(x, y, z)
+							+ Vector3.new(
+								math.cos(angle) * age * 6,
+								age * 4,
+								math.sin(angle) * age * 6
+							)
+						if age > 0.45 then
+							if connection ~= nil then
+								connection:Disconnect()
+							end
+							shard:Destroy()
+						end
+					end)
+				end
+			end
 		elseif payload.kind == "hp" then
 			local hp = numberFrom(payload, "hp")
 			local maxHp = numberFrom(payload, "maxHp")
@@ -381,6 +542,27 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			or UserInputService:IsKeyDown(Enum.KeyCode.D)
 		return if down then Vector3.new(1, 0, 0) else Vector3.zero
 	end
+	RunService.RenderStepped:Connect(function()
+		local now = os.clock()
+		if now < flashUntil then
+			flash.BackgroundTransparency = 0.72
+		else
+			flash.BackgroundTransparency = 1
+		end
+		local character = player.Character
+		local humanoid = if character ~= nil
+			then character:FindFirstChildOfClass("Humanoid")
+			else nil
+		if humanoid ~= nil then
+			if allowShake and now < shakeUntil then
+				humanoid.CameraOffset =
+					Vector3.new(math.noise(now * 40) * 0.4, math.noise(now * 28) * 0.25, 0)
+			else
+				humanoid.CameraOffset = Vector3.zero
+			end
+		end
+	end)
+
 	RunService.Heartbeat:Connect(function()
 		if steer == nil or not steer:IsA("RemoteEvent") then
 			return
@@ -402,11 +584,19 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		if processed then
 			return
 		end
+		if input.KeyCode == Enum.KeyCode.Q then
+			CombatHud.dodge()
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.R then
+			CombatHud.swing(true)
+			return
+		end
 		if
 			input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch
 		then
-			CombatHud.swing()
+			CombatHud.swing(false)
 		end
 	end)
 end

@@ -183,6 +183,7 @@ local function applyProfile(profile: any, saving: any)
 		rollReel.setTier(tier)
 	end
 	musicController.setVolumes(profile.musicVolume, profile.sfxVolume)
+	CombatHud.setFeel(tier, profile.shake ~= false)
 	if Quality.normalize(profile.graphicsQuality) == nil and not graphicsSent then
 		graphicsSent = true
 		task.spawn(function()

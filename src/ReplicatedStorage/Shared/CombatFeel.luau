@@ -1,0 +1,228 @@
+--!strict
+
+--[[
+	Hit feedback, dodge, combos, telegraphs, and the stagger bar.
+
+	Times and multipliers live here so a playtest tune is one edit.
+	The server owns charges, combo count, and stagger. The client only
+	draws what a CombatFx payload already decided.
+]]
+
+local CombatFeel = {}
+
+CombatFeel.HITSTOP = { light = 0.03, heavy = 0.07, kill = 0.1 }
+CombatFeel.FLASH = { light = 0.08, heavy = 0.12, kill = 0.12 }
+CombatFeel.DODGE_SECONDS = 0.35
+CombatFeel.IFRAME_SECONDS = 0.2
+CombatFeel.DODGE_CHARGES = 2
+CombatFeel.DODGE_RECHARGE = 3
+CombatFeel.PERFECT_WINDOW = 0.15
+CombatFeel.SLOWMO_SECONDS = 0.3
+CombatFeel.PERFECT_ULT = 12
+CombatFeel.COMBO_HITS = 3
+CombatFeel.CHARGE_MULT = 1.75
+CombatFeel.HEAVY_MULT = 1.4
+CombatFeel.COMBO_IDLE = 3
+CombatFeel.STAGGER_MAX = 100
+CombatFeel.STAGGER_STUN = 4
+CombatFeel.STAGGER_LIGHT = 8
+CombatFeel.STAGGER_HEAVY = 18
+CombatFeel.NORMAL_STAGGER = 0.28
+CombatFeel.TELEGRAPH_NORMAL = 0.8
+CombatFeel.TELEGRAPH_MIN = 0.5
+
+CombatFeel.BUFFS = {
+	{ hits = 10, bonus = 0.05 },
+	{ hits = 25, bonus = 0.1 },
+	{ hits = 50, bonus = 0.15 },
+}
+
+CombatFeel.TELEGRAPHS = {
+	red = { verb = "dodge", rgb = { 220, 64, 56 } },
+	yellow = { verb = "stack", rgb = { 240, 196, 64 } },
+	purple = { verb = "spread", rgb = { 168, 96, 220 } },
+	blue = { verb = "interrupt", rgb = { 80, 150, 230 } },
+}
+
+export type DodgeState = {
+	charges: number,
+	nextAt: number,
+	iframeUntil: number,
+	slowUntil: number,
+}
+
+export type Juice = {
+	weight: string,
+	hitstop: number,
+	flash: number,
+	shake: number,
+	shards: boolean,
+	particles: number,
+}
+
+function CombatFeel.blankDodge(now: number): DodgeState
+	return {
+		charges = CombatFeel.DODGE_CHARGES,
+		nextAt = now,
+		iframeUntil = 0,
+		slowUntil = 0,
+	}
+end
+
+function CombatFeel.refillDodge(state: DodgeState, now: number)
+	if state.charges >= CombatFeel.DODGE_CHARGES then
+		state.charges = CombatFeel.DODGE_CHARGES
+		return
+	end
+	while state.charges < CombatFeel.DODGE_CHARGES and now >= state.nextAt do
+		state.charges += 1
+		if state.charges < CombatFeel.DODGE_CHARGES then
+			state.nextAt += CombatFeel.DODGE_RECHARGE
+		end
+	end
+end
+
+function CombatFeel.tryDodge(state: DodgeState, now: number): boolean
+	CombatFeel.refillDodge(state, now)
+	if state.charges < 1 then
+		return false
+	end
+	if state.charges >= CombatFeel.DODGE_CHARGES then
+		state.nextAt = now + CombatFeel.DODGE_RECHARGE
+	end
+	state.charges -= 1
+	state.iframeUntil = now + CombatFeel.IFRAME_SECONDS
+	return true
+end
+
+function CombatFeel.iframe(state: DodgeState, now: number): boolean
+	return now < state.iframeUntil
+end
+
+function CombatFeel.perfect(telegraphEndsAt: number, now: number): boolean
+	return now <= telegraphEndsAt and now >= telegraphEndsAt - CombatFeel.PERFECT_WINDOW
+end
+
+function CombatFeel.notePerfect(state: DodgeState, now: number)
+	state.slowUntil = now + CombatFeel.SLOWMO_SECONDS
+end
+
+function CombatFeel.advanceCombo(chain: number, lastAt: number, now: number, charged: boolean)
+	local count = chain
+	if lastAt > 0 and now - lastAt > CombatFeel.COMBO_IDLE then
+		count = 0
+	end
+	local index = (count % CombatFeel.COMBO_HITS) + 1
+	local heavy = charged or index == CombatFeel.COMBO_HITS
+	local multiplier = 1
+	if charged then
+		multiplier = CombatFeel.CHARGE_MULT
+	elseif index == CombatFeel.COMBO_HITS then
+		multiplier = CombatFeel.HEAVY_MULT
+	end
+	local nextChain = count + 1
+	return {
+		index = index,
+		chain = nextChain,
+		heavy = heavy,
+		multiplier = multiplier * (1 + CombatFeel.comboBonus(nextChain)),
+		bonus = CombatFeel.comboBonus(nextChain),
+	}
+end
+
+function CombatFeel.comboBonus(chain: number): number
+	local bonus = 0
+	for _, row in ipairs(CombatFeel.BUFFS) do
+		if chain >= row.hits then
+			bonus = row.bonus
+		end
+	end
+	return bonus
+end
+
+function CombatFeel.weight(crit: boolean, heavy: boolean, killed: boolean): string
+	if killed then
+		return "kill"
+	end
+	if crit or heavy then
+		return "heavy"
+	end
+	return "light"
+end
+
+function CombatFeel.juice(kind: string): Juice
+	if kind == "kill" then
+		return {
+			weight = "kill",
+			hitstop = CombatFeel.HITSTOP.kill,
+			flash = CombatFeel.FLASH.kill,
+			shake = 0.15,
+			shards = true,
+			particles = 12,
+		}
+	end
+	if kind == "heavy" then
+		return {
+			weight = "heavy",
+			hitstop = CombatFeel.HITSTOP.heavy,
+			flash = CombatFeel.FLASH.heavy,
+			shake = 0.15,
+			shards = false,
+			particles = 8,
+		}
+	end
+	return {
+		weight = "light",
+		hitstop = CombatFeel.HITSTOP.light,
+		flash = CombatFeel.FLASH.light,
+		shake = 0,
+		shards = false,
+		particles = 5,
+	}
+end
+
+function CombatFeel.particlesFor(tier: string, juice: Juice): number
+	if tier == "low" then
+		return math.max(2, math.floor(juice.particles * 0.5))
+	end
+	return juice.particles
+end
+
+function CombatFeel.shakeAllowed(tier: string, enabled: boolean, juice: Juice): number
+	if not enabled or tier == "low" or juice.shake <= 0 then
+		return 0
+	end
+	return juice.shake
+end
+
+function CombatFeel.applyStagger(bar: number, heavy: boolean, boss: boolean): (number, boolean)
+	local gain = if heavy then CombatFeel.STAGGER_HEAVY else CombatFeel.STAGGER_LIGHT
+	if boss then
+		gain = math.floor(gain * 0.6)
+	end
+	local nextBar = bar + gain
+	if nextBar >= CombatFeel.STAGGER_MAX then
+		return 0, true
+	end
+	return nextBar, false
+end
+
+function CombatFeel.telegraph(color: string, difficulty: string?)
+	local row = CombatFeel.TELEGRAPHS[color]
+	if row == nil then
+		row = CombatFeel.TELEGRAPHS.red
+		color = "red"
+	end
+	local seconds = CombatFeel.TELEGRAPH_MIN
+	if difficulty == nil or difficulty == "normal" or difficulty == "story" then
+		seconds = CombatFeel.TELEGRAPH_NORMAL
+	end
+	return {
+		color = color,
+		verb = row.verb,
+		seconds = seconds,
+		rgb = row.rgb,
+	}
+end
+
+return CombatFeel

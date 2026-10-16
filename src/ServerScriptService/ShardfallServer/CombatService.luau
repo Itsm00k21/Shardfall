@@ -19,8 +19,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Materials = require(ReplicatedStorage.Shared.Materials)
+local Quality = require(ReplicatedStorage.Shared.Quality)
 local DataService = require(script.Parent.DataService)
 
 local CombatService = {}
@@ -39,7 +41,7 @@ export type EnemyView = {
 
 type Hooks = {
 	enemies: (Player) -> { EnemyView },
-	onEnemyHit: (Player, string, number, boolean) -> (),
+	onEnemyHit: (Player, string, number, boolean, boolean) -> (),
 	onPlayerDown: (Player) -> (),
 	inRun: (Player) -> boolean,
 }
@@ -51,6 +53,10 @@ type State = {
 	nextAttack: number,
 	nextCompanion: number,
 	ready: boolean,
+	combo: number,
+	comboAt: number,
+	dodge: CombatFeel.DodgeState,
+	ult: number,
 }
 
 type Shot = {
@@ -69,13 +75,14 @@ type Shot = {
 	critChance: number,
 	critDamage: number,
 	lifesteal: number,
+	heavy: boolean,
 }
 
 local hooks: Hooks = {
 	enemies = function(_player)
 		return {}
 	end,
-	onEnemyHit = function(_player, _id, _amount, _crit) end,
+	onEnemyHit = function(_player, _id, _amount, _crit, _heavy) end,
 	onPlayerDown = function(_player) end,
 	inRun = function(_player)
 		return false
@@ -134,6 +141,10 @@ local function ensure(player: Player): State
 			nextAttack = 0,
 			nextCompanion = 0,
 			ready = false,
+			combo = 0,
+			comboAt = 0,
+			dodge = CombatFeel.blankDodge(os.clock()),
+			ult = 0,
 		}
 		vitals[player] = state
 	end
@@ -288,11 +299,30 @@ function CombatService.damagePlayer(
 	rawDamage: number,
 	x: number,
 	y: number,
-	z: number
+	z: number,
+	telegraphEndsAt: number?
 ): boolean
 	local state = ensure(player)
 	if state.hp <= 0 then
 		return true
+	end
+	local now = os.clock()
+	if CombatFeel.iframe(state.dodge, now) then
+		local perfect = telegraphEndsAt ~= nil and CombatFeel.perfect(telegraphEndsAt, now)
+		if perfect then
+			CombatFeel.notePerfect(state.dodge, now)
+			state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
+		end
+		fx(player, {
+			kind = "dodge",
+			perfect = perfect,
+			charges = state.dodge.charges,
+			ult = state.ult,
+			x = x,
+			y = y,
+			z = z,
+		})
+		return false
 	end
 	local hit = CombatMath.resolveHit(rawDamage, 0, 1, state.defense, 1, 0)
 	state.hp -= hit.amount
@@ -316,13 +346,25 @@ function CombatService.damagePlayer(
 	return down
 end
 
+local function feelTier(player: Player): (string, boolean)
+	local profile = DataService.get(player)
+	local tier = "med"
+	local shake = true
+	if profile ~= nil then
+		tier = Quality.normalize(profile.graphicsQuality) or "med"
+		shake = profile.shake ~= false
+	end
+	return tier, shake
+end
+
 local function strikeEnemy(
 	player: Player,
 	enemy: EnemyView,
 	damage: number,
 	critChance: number,
 	critDamage: number,
-	lifesteal: number
+	lifesteal: number,
+	heavy: boolean
 )
 	local hit = CombatMath.resolveHit(
 		damage,
@@ -339,15 +381,26 @@ local function strikeEnemy(
 			hit.healed = math.floor(amount * lifesteal + 0.5)
 		end
 	end
+	local kind = CombatFeel.weight(hit.crit, heavy, false)
+	local juice = CombatFeel.juice(kind)
+	local tier, shakeOn = feelTier(player)
+	local state = ensure(player)
 	fx(player, {
 		kind = "damage",
 		amount = amount,
 		crit = hit.crit,
+		heavy = heavy,
+		weight = kind,
+		hitstop = juice.hitstop,
+		flash = juice.flash,
+		shake = CombatFeel.shakeAllowed(tier, shakeOn, juice),
+		particles = CombatFeel.particlesFor(tier, juice),
+		combo = state.combo,
 		x = enemy.x,
 		y = enemy.y + 2,
 		z = enemy.z,
 	})
-	hooks.onEnemyHit(player, enemy.id, amount, hit.crit)
+	hooks.onEnemyHit(player, enemy.id, amount, hit.crit, heavy)
 	if hit.healed > 0 then
 		local hrp = rootPart(player)
 		local x, y, z = enemy.x, enemy.y, enemy.z
@@ -446,7 +499,8 @@ function CombatService.companionTick(player: Player)
 		offense.damage,
 		offense.critChance,
 		offense.critDamage,
-		offense.lifesteal
+		offense.lifesteal,
+		false
 	)
 end
 
@@ -481,14 +535,23 @@ local function releaseSwing(
 	hrp: BasePart,
 	offense: CombatMath.Offense,
 	aim: Vector3,
-	flat: Vector3
+	flat: Vector3,
+	charged: boolean
 )
 	local state = ensure(player)
 	local now = os.clock()
 	if now < state.nextAttack then
 		return
 	end
+	if now < state.dodge.iframeUntil then
+		-- A dodge cancels the end of a swing. The next hit waits out the roll.
+		return
+	end
+	local step = CombatFeel.advanceCombo(state.combo, state.comboAt, now, charged)
+	state.combo = step.chain
+	state.comboAt = now
 	state.nextAttack = now + CombatMath.cooldown(offense.attackSpeed)
+	local damage = offense.damage * step.multiplier
 
 	if offense.style == "projectile" then
 		local start = hrp.Position + aim * 3
@@ -505,10 +568,11 @@ local function releaseSwing(
 				remaining = offense.range,
 				player = player,
 				fromPlayer = true,
-				damage = offense.damage,
+				damage = damage,
 				critChance = offense.critChance,
 				critDamage = offense.critDamage,
 				lifesteal = offense.lifesteal,
+				heavy = step.heavy,
 			},
 			if offense.weaponType == "staff"
 				then Color3.fromRGB(120, 220, 140)
@@ -517,7 +581,7 @@ local function releaseSwing(
 		return
 	end
 
-	swingFlash(hrp.Position, flat, offense.range, false)
+	swingFlash(hrp.Position, flat, offense.range, step.heavy)
 	local closest: EnemyView? = nil
 	local closestDistance = math.huge
 	for _, enemy in ipairs(hooks.enemies(player)) do
@@ -545,15 +609,16 @@ local function releaseSwing(
 		strikeEnemy(
 			player,
 			closest,
-			offense.damage,
+			damage,
 			offense.critChance,
 			offense.critDamage,
-			offense.lifesteal
+			offense.lifesteal,
+			step.heavy
 		)
 	end
 end
 
-function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)
+function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any, charged: any)
 	-- Haven has nothing to swing at. The old tip sat on the gold banner
 	-- from the moment the player spawned.
 	if not hooks.inRun(player) then
@@ -573,7 +638,35 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(0, 0, -1)
 	end
-	releaseSwing(player, hrp, offense, aim, flat.Unit)
+	releaseSwing(player, hrp, offense, aim, flat.Unit, charged == true)
+end
+
+function CombatService.dodge(player: Player, telegraphEndsAt: any)
+	if not hooks.inRun(player) then
+		return
+	end
+	local state = ensure(player)
+	local now = os.clock()
+	if not CombatFeel.tryDodge(state.dodge, now) then
+		fx(player, { kind = "dodge", perfect = false, charges = 0, ult = state.ult })
+		return
+	end
+	local ends = if type(telegraphEndsAt) == "number" then telegraphEndsAt else nil
+	local perfect = ends ~= nil and CombatFeel.perfect(ends, now)
+	if perfect then
+		CombatFeel.notePerfect(state.dodge, now)
+		state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
+	end
+	local hrp = rootPart(player)
+	fx(player, {
+		kind = "dodge",
+		perfect = perfect,
+		charges = state.dodge.charges,
+		ult = state.ult,
+		x = if hrp ~= nil then hrp.Position.X else 0,
+		y = if hrp ~= nil then hrp.Position.Y else 0,
+		z = if hrp ~= nil then hrp.Position.Z else 0,
+	})
 end
 
 -- Nearest enemy inside the equipped weapon's range. Melee still uses that
@@ -607,7 +700,7 @@ function CombatService.autoTick(player: Player)
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(0, 0, -1)
 	end
-	releaseSwing(player, hrp, offense, aim, flat.Unit)
+	releaseSwing(player, hrp, offense, aim, flat.Unit, false)
 end
 
 function CombatService.launchEnemyShot(
@@ -640,6 +733,7 @@ function CombatService.launchEnemyShot(
 		critChance = 0,
 		critDamage = 1,
 		lifesteal = 0,
+		heavy = false,
 	}, Color3.fromRGB(186, 120, 255))
 end
 
@@ -734,7 +828,8 @@ local function stepShots(dt: number)
 					shot.damage,
 					shot.critChance,
 					shot.critDamage,
-					shot.lifesteal
+					shot.lifesteal,
+					shot.heavy
 				)
 				hit = true
 			end
