@@ -105,9 +105,34 @@ Dungeons.WAVES_ROOM_INDEX = -1
 
 -- Haven occupies the origin. Room n sits REALM_OFFSET plus this many studs
 -- further along Z so the crawl does not overlap the islands. Players are
--- teleported; there is no corridor.
+-- teleported. The in-room path is the corridor.
 Dungeons.ROOM_SPACING = 140
 Dungeons.REALM_OFFSET = 4000
+-- 79 studs on a side is about 2x the old 56-stud floor, with space to kite.
+Dungeons.FLOOR_SIZE = 79
+Dungeons.WALL_HEIGHT = 16
+Dungeons.CORRIDOR_WIDTH = 16
+-- Player stands far enough from the north wall that a short camera stays inside.
+Dungeons.SPAWN_Z = -18
+Dungeons.PORTAL_Z = 28
+Dungeons.CAMERA_MAX_ZOOM = 18
+Dungeons.CAMERA_MIN_ZOOM = 4
+-- Fixed crawl light. Brighter than Haven night, and the client applies it
+-- only while the character is inside a room so the day cycle stays on the hub.
+Dungeons.CRAWL_LIGHT = {
+	ambient = { 124, 110, 90 },
+	outdoor = { 156, 138, 112 },
+	brightness = 1.7,
+	clockTime = 14.5,
+	fog = { 110, 104, 86 },
+}
+-- Warm fill plus a thin outline so a rig still reads when shadows are off.
+Dungeons.RIM = {
+	fill = { 255, 214, 160 },
+	fillTransparency = 0.88,
+	outline = { 255, 236, 200 },
+	outlineTransparency = 0.2,
+}
 
 Dungeons.ENEMIES = {
 	vine_crawler = {
@@ -258,7 +283,7 @@ local ROOTVAULT: DungeonDef = {
 	theme = "Nature, beasts, wood, vines",
 	ascension = 0,
 	implemented = true,
-	floorSize = 56,
+	floorSize = Dungeons.FLOOR_SIZE,
 	rooms = {
 		{
 			id = "thicket",
@@ -302,7 +327,7 @@ local WAVES: DungeonDef = {
 	ascension = 0,
 	implemented = true,
 	endless = true,
-	floorSize = 56,
+	floorSize = Dungeons.FLOOR_SIZE,
 	rooms = {
 		{
 			id = "wave_arena",
@@ -321,7 +346,7 @@ local TIDECRYPT: DungeonDef = {
 	theme = "Water and tide",
 	ascension = 1,
 	implemented = false,
-	floorSize = 56,
+	floorSize = Dungeons.FLOOR_SIZE,
 	rooms = {},
 	rewards = nil,
 }
@@ -358,6 +383,47 @@ function Dungeons.enemy(kind: string): EnemyDef?
 	return Dungeons.ENEMIES[kind]
 end
 
+function Dungeons.lightLayout(
+	floorSize: number
+): { { kind: string, x: number, z: number, y: number } }
+	local size = floorSize
+	if type(size) ~= "number" or size ~= size or size < 16 then
+		size = Dungeons.FLOOR_SIZE
+	end
+	local edge = size / 2 - 3
+	return {
+		{ kind = "torch", x = -edge * 0.55, z = -edge, y = 6 },
+		{ kind = "torch", x = edge * 0.55, z = -edge, y = 6 },
+		{ kind = "torch", x = -edge, z = 0, y = 6 },
+		{ kind = "torch", x = edge, z = 0, y = 6 },
+		{ kind = "crystal", x = -edge * 0.45, z = edge, y = 6 },
+		{ kind = "crystal", x = edge * 0.45, z = edge, y = 6 },
+		{ kind = "floor", x = 0, z = -edge * 0.25, y = 3.2 },
+		{ kind = "floor", x = 0, z = edge * 0.25, y = 3.2 },
+	}
+end
+
+function Dungeons.inCrawl(x: number, z: number): boolean
+	if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then
+		return false
+	end
+	local half = Dungeons.FLOOR_SIZE / 2 + 6
+	local places = { Dungeons.WAVES_ROOM_INDEX }
+	local root = Dungeons.get(Dungeons.ROOTVAULT_ID)
+	if root ~= nil then
+		for index = 1, #root.rooms do
+			table.insert(places, index)
+		end
+	end
+	for _, index in ipairs(places) do
+		local originX, _, originZ = Dungeons.roomOrigin(index)
+		if math.abs(x - originX) <= half and math.abs(z - originZ) <= half then
+			return true
+		end
+	end
+	return false
+end
+
 function Dungeons.bossPhase(health: number, maxHealth: number, phase2At: number): number
 	if maxHealth <= 0 then
 		return 1
@@ -370,9 +436,21 @@ end
 
 -- Sunbeam pads in the boss room, offsets from the room center.
 Dungeons.SUNBEAM_OFFSETS = {
-	{ x = -14, z = 8 },
-	{ x = 14, z = -6 },
-	{ x = 0, z = 14 },
+	{ x = -22, z = 8 },
+	{ x = 22, z = -4 },
+	{ x = 0, z = 20 },
+}
+
+-- Eight pads, one per wave slot, spread across the open floor.
+Dungeons.ENEMY_SPAWNS = {
+	{ x = -26, z = 2 },
+	{ x = 26, z = 2 },
+	{ x = -14, z = 22 },
+	{ x = 14, z = 22 },
+	{ x = 0, z = 10 },
+	{ x = -26, z = 18 },
+	{ x = 26, z = 18 },
+	{ x = 0, z = 28 },
 }
 
 local function wholeWave(wave: number): number
@@ -525,6 +603,17 @@ table.freeze(Dungeons.SUNBEAM_OFFSETS)
 for _, offset in ipairs(Dungeons.SUNBEAM_OFFSETS) do
 	table.freeze(offset)
 end
+table.freeze(Dungeons.ENEMY_SPAWNS)
+for _, offset in ipairs(Dungeons.ENEMY_SPAWNS) do
+	table.freeze(offset)
+end
+table.freeze(Dungeons.CRAWL_LIGHT.ambient)
+table.freeze(Dungeons.CRAWL_LIGHT.outdoor)
+table.freeze(Dungeons.CRAWL_LIGHT.fog)
+table.freeze(Dungeons.CRAWL_LIGHT)
+table.freeze(Dungeons.RIM.fill)
+table.freeze(Dungeons.RIM.outline)
+table.freeze(Dungeons.RIM)
 table.freeze(ROOTVAULT.rooms)
 if ROOTVAULT.rewards ~= nil then
 	table.freeze(ROOTVAULT.rewards.materials)

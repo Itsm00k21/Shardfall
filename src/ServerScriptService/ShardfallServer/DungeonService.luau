@@ -109,12 +109,10 @@ local nextEnemyId = 0
 local worldFolder: Folder? = nil
 local activeFolder: Folder? = nil
 
-local SPAWNS = {
-	Vector3.new(-8, 0, 8),
-	Vector3.new(8, 0, 8),
-	Vector3.new(0, 0, 14),
-	Vector3.new(-10, 0, 12),
-}
+local SPAWNS = {}
+for _, spot in ipairs(Dungeons.ENEMY_SPAWNS) do
+	table.insert(SPAWNS, Vector3.new(spot.x, 0, spot.z))
+end
 
 local function fx(player: Player, payload: { [string]: any })
 	if player.Parent == nil then
@@ -235,7 +233,7 @@ end
 
 local function roomSpawn(index: number): CFrame
 	local x, _, z = Dungeons.roomOrigin(index)
-	return CFrame.lookAt(Vector3.new(x, 4, z - 16), Vector3.new(x, 3, z + 8))
+	return CFrame.lookAt(Vector3.new(x, 4, z + Dungeons.SPAWN_Z), Vector3.new(x, 3, z + 8))
 end
 
 local function buildRoom(
@@ -258,9 +256,9 @@ local function buildRoom(
 	model.Parent = parent
 
 	local floorColor = if dungeon.endless == true
-		then Color3.fromRGB(42, 58, 78)
-		elseif index == #dungeon.rooms then Color3.fromRGB(28, 48, 36)
-		else Color3.fromRGB(58, 112, 54)
+		then Color3.fromRGB(68, 86, 112)
+		elseif index == #dungeon.rooms then Color3.fromRGB(46, 78, 58)
+		else Color3.fromRGB(78, 132, 72)
 	local center = roomCFrame(place, Vector3.new(0, -0.5, 0))
 	local floor = makePart(
 		"Floor",
@@ -274,13 +272,14 @@ local function buildRoom(
 	if dungeon.endless ~= true then
 		local path = makePart(
 			"Path",
-			Vector3.new(8, 0.35, dungeon.floorSize * 0.62),
+			Vector3.new(Dungeons.CORRIDOR_WIDTH, 0.35, dungeon.floorSize * 0.72),
 			roomCFrame(place, Vector3.new(0, 0.2, 0)),
 			Color3.fromRGB(112, 86, 52),
 			model,
 			true
 		)
 		path.Material = Enum.Material.Ground
+		path.CastShadow = false
 	end
 
 	local dressing = Instance.new("Model")
@@ -303,39 +302,48 @@ local function buildRoom(
 
 	local half = dungeon.floorSize / 2
 	local wallColor = Color3.fromRGB(34, 58, 40)
-	local height = 7
-	makePart(
-		"WallNorth",
-		Vector3.new(dungeon.floorSize, height, 1),
-		roomCFrame(place, Vector3.new(0, height / 2, -half)),
-		wallColor,
+	local height = Dungeons.WALL_HEIGHT
+	local function wall(name: string, size: Vector3, offset: Vector3)
+		local part = makePart(name, size, roomCFrame(place, offset), wallColor, model, true)
+		part.CastShadow = false
+		return part
+	end
+	wall("WallNorth", Vector3.new(dungeon.floorSize, height, 1), Vector3.new(0, height / 2, -half))
+	wall("WallSouth", Vector3.new(dungeon.floorSize, height, 1), Vector3.new(0, height / 2, half))
+	wall("WallWest", Vector3.new(1, height, dungeon.floorSize), Vector3.new(-half, height / 2, 0))
+	wall("WallEast", Vector3.new(1, height, dungeon.floorSize), Vector3.new(half, height / 2, 0))
+	local ceiling = makePart(
+		"Ceiling",
+		Vector3.new(dungeon.floorSize, 1, dungeon.floorSize),
+		roomCFrame(place, Vector3.new(0, height, 0)),
+		Color3.fromRGB(24, 36, 30),
 		model,
 		true
 	)
-	makePart(
-		"WallSouth",
-		Vector3.new(dungeon.floorSize, height, 1),
-		roomCFrame(place, Vector3.new(0, height / 2, half)),
-		wallColor,
-		model,
-		true
-	)
-	makePart(
-		"WallWest",
-		Vector3.new(1, height, dungeon.floorSize),
-		roomCFrame(place, Vector3.new(-half, height / 2, 0)),
-		wallColor,
-		model,
-		true
-	)
-	makePart(
-		"WallEast",
-		Vector3.new(1, height, dungeon.floorSize),
-		roomCFrame(place, Vector3.new(half, height / 2, 0)),
-		wallColor,
-		model,
-		true
-	)
+	ceiling.CastShadow = false
+	for _, spec in ipairs(Dungeons.lightLayout(dungeon.floorSize)) do
+		local warm = spec.kind == "torch"
+		local color = if warm then Color3.fromRGB(255, 168, 86) else Color3.fromRGB(150, 230, 176)
+		local host = makePart(
+			if warm then "Torch" else "Crystal",
+			Vector3.new(1.1, 1.5, 1.1),
+			roomCFrame(place, Vector3.new(spec.x, spec.y, spec.z)),
+			color,
+			model,
+			false
+		)
+		host.Material = Enum.Material.Glass
+		host.CastShadow = false
+		host.CanTouch = false
+		host.CanQuery = false
+		local glow = Instance.new("PointLight")
+		glow.Name = "PointLight"
+		glow.Color = color
+		glow.Brightness = if spec.kind == "floor" then 1.15 else 1.35
+		glow.Range = if spec.kind == "floor" then 42 else 32
+		glow.Shadows = false
+		glow.Parent = host
+	end
 
 	sign(model, roomCFrame(place, Vector3.new(0, 5, -half + 0.8)), room.name, 16)
 
@@ -344,7 +352,7 @@ local function buildRoom(
 	local portal = makePart(
 		"Portal",
 		Vector3.new(7, 0.6, 7),
-		roomCFrame(place, Vector3.new(0, 0.4, 18)),
+		roomCFrame(place, Vector3.new(0, 0.4, Dungeons.PORTAL_Z)),
 		Color3.fromRGB(72, 180, 110),
 		model,
 		false
@@ -353,7 +361,7 @@ local function buildRoom(
 	portal.CanTouch = true
 	portal:SetAttribute("RoomIndex", place)
 	portal:SetAttribute("DungeonId", dungeon.id)
-	sign(model, roomCFrame(place, Vector3.new(0, 3.2, 18)), "NEXT", 6)
+	sign(model, roomCFrame(place, Vector3.new(0, 3.2, Dungeons.PORTAL_Z)), "NEXT", 6)
 	return placed
 end
 
@@ -667,6 +675,18 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	part:SetAttribute("ShardfallName", definition.name)
 	part:SetAttribute("EnemyId", id)
 	part:SetAttribute("ShardfallKind", kind)
+	local rimHost = if rigModel ~= nil then rigModel else part
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "Rim"
+	highlight.Adornee = rimHost
+	highlight.FillColor =
+		Color3.fromRGB(Dungeons.RIM.fill[1], Dungeons.RIM.fill[2], Dungeons.RIM.fill[3])
+	highlight.FillTransparency = Dungeons.RIM.fillTransparency
+	highlight.OutlineColor =
+		Color3.fromRGB(Dungeons.RIM.outline[1], Dungeons.RIM.outline[2], Dungeons.RIM.outline[3])
+	highlight.OutlineTransparency = Dungeons.RIM.outlineTransparency
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.Parent = rimHost
 	enemyBar(part, definition.name, color, ModelFactory.barLift(kind))
 	local enemy: Enemy = {
 		id = id,

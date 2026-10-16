@@ -13,11 +13,13 @@
 ]]
 
 local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Dungeons = require(Shared:WaitForChild("Dungeons"))
 local HavenLife = require(Shared:WaitForChild("HavenLife"))
 local Quality = require(Shared:WaitForChild("Quality"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
@@ -29,6 +31,70 @@ local nextScan = 0
 local bases: { [ParticleEmitter]: number } = {}
 local pinned: { BasePart } = {}
 local reportedArt = false
+local crawlZoomMax: number? = nil
+local crawlZoomMin: number? = nil
+local crawlShadows: boolean? = nil
+
+local function characterInCrawl(): boolean
+	local player = Players.LocalPlayer
+	if player == nil then
+		return false
+	end
+	local character = player.Character
+	if character == nil then
+		return false
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root == nil or not root:IsA("BasePart") then
+		return false
+	end
+	return Dungeons.inCrawl(root.Position.X, root.Position.Z)
+end
+
+-- The server day cycle owns Haven. Inside a room the client paints a fixed
+-- crawl light every frame so night cannot darken the floor, and it caps zoom
+-- so the camera stays under the ceiling instead of pushing through a wall.
+local function applyCrawlLight()
+	local player = Players.LocalPlayer
+	if player == nil then
+		return
+	end
+	local inside = characterInCrawl()
+	if inside then
+		if crawlZoomMax == nil then
+			crawlZoomMax = player.CameraMaxZoomDistance
+			crawlZoomMin = player.CameraMinZoomDistance
+			crawlShadows = Lighting.GlobalShadows
+		end
+		player.CameraMaxZoomDistance = Dungeons.CAMERA_MAX_ZOOM
+		player.CameraMinZoomDistance = Dungeons.CAMERA_MIN_ZOOM
+		player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+		Lighting.GlobalShadows = false
+		local light = Dungeons.CRAWL_LIGHT
+		Lighting.Ambient = Color3.fromRGB(light.ambient[1], light.ambient[2], light.ambient[3])
+		Lighting.OutdoorAmbient =
+			Color3.fromRGB(light.outdoor[1], light.outdoor[2], light.outdoor[3])
+		Lighting.Brightness = light.brightness
+		Lighting.ClockTime = light.clockTime
+		Lighting.FogColor = Color3.fromRGB(light.fog[1], light.fog[2], light.fog[3])
+		local reach = Dungeons.FLOOR_SIZE * 2
+		if Lighting.FogEnd < reach then
+			Lighting.FogEnd = reach
+		end
+		return
+	end
+	if crawlZoomMax == nil or crawlZoomMin == nil then
+		return
+	end
+	player.CameraMaxZoomDistance = crawlZoomMax
+	player.CameraMinZoomDistance = crawlZoomMin
+	if crawlShadows ~= nil then
+		Lighting.GlobalShadows = crawlShadows
+	end
+	crawlZoomMax = nil
+	crawlZoomMin = nil
+	crawlShadows = nil
+end
 
 function VerdantLod.setTier(id: string)
 	local known = Quality.normalize(id)
@@ -206,6 +272,7 @@ local function remember(slot: Sample?, ok: boolean): Sample
 end
 
 function VerdantLod.start()
+	RunService.RenderStepped:Connect(applyCrawlLight)
 	RunService.Heartbeat:Connect(function()
 		local now = os.clock()
 		if now < nextScan then
@@ -215,6 +282,7 @@ function VerdantLod.start()
 		nextScan = now + 1.5
 		local tier = Quality.get(tierId)
 		applyLighting(tier)
+		applyCrawlLight()
 		local haven = Workspace:FindFirstChild("Haven")
 		if haven == nil then
 			return

@@ -57,6 +57,64 @@ describe("Dungeons", function()
 		expect(Dungeons.progressNote(1)).toEqual("Tidecrypt is unlocked and not built yet.")
 	end)
 
+	it("gives Rootvault a wider floor, a lit crawl, and spread spawns", function()
+		local dungeon = Dungeons.get(Dungeons.ROOTVAULT_ID)
+		assert(dungeon ~= nil)
+		local waves = Dungeons.get(Dungeons.WAVES_ID)
+		assert(waves ~= nil)
+		local oldArea = 56 * 56
+		local area = dungeon.floorSize * dungeon.floorSize
+		expect(dungeon.floorSize).toEqual(Dungeons.FLOOR_SIZE)
+		expect(waves.floorSize).toEqual(Dungeons.FLOOR_SIZE)
+		expect(area >= oldArea * 1.6).toBeTrue()
+		expect(area <= oldArea * 2).toBeTrue()
+		expect(Dungeons.CORRIDOR_WIDTH >= 16).toBeTrue()
+		expect(Dungeons.WALL_HEIGHT > 7).toBeTrue()
+		expect(Dungeons.CAMERA_MAX_ZOOM < Dungeons.FLOOR_SIZE / 2 - 8).toBeTrue()
+		local half = dungeon.floorSize / 2 - 4
+		local margin = Dungeons.FLOOR_SIZE / 2 - math.abs(Dungeons.SPAWN_Z)
+		expect(margin > Dungeons.CAMERA_MAX_ZOOM).toBeTrue()
+		expect(#Dungeons.ENEMY_SPAWNS >= Dungeons.WAVE_MAX_COUNT).toBeTrue()
+		for index, spot in ipairs(Dungeons.ENEMY_SPAWNS) do
+			expect(math.abs(spot.x) <= half).toBeTrue()
+			expect(math.abs(spot.z) <= half).toBeTrue()
+			for other = index + 1, #Dungeons.ENEMY_SPAWNS do
+				local nextSpot = Dungeons.ENEMY_SPAWNS[other]
+				local dx = spot.x - nextSpot.x
+				local dz = spot.z - nextSpot.z
+				expect(dx * dx + dz * dz >= 12 * 12).toBeTrue()
+			end
+		end
+		local lights = Dungeons.lightLayout(dungeon.floorSize)
+		local torches = 0
+		local floors = 0
+		for _, light in ipairs(lights) do
+			expect(math.abs(light.x) < dungeon.floorSize / 2).toBeTrue()
+			expect(math.abs(light.z) < dungeon.floorSize / 2).toBeTrue()
+			if light.kind == "torch" then
+				torches += 1
+			elseif light.kind == "floor" then
+				floors += 1
+				expect(light.y < 5).toBeTrue()
+			end
+		end
+		expect(torches >= 4).toBeTrue()
+		expect(floors >= 2).toBeTrue()
+		local night = { ambient = { 48, 42, 72 }, outdoor = { 70, 64, 96 }, brightness = 1.15 }
+		local crawl = Dungeons.CRAWL_LIGHT
+		expect(crawl.brightness > night.brightness).toBeTrue()
+		for channel = 1, 3 do
+			expect(crawl.ambient[channel] > night.ambient[channel]).toBeTrue()
+			expect(crawl.outdoor[channel] > night.outdoor[channel]).toBeTrue()
+		end
+		expect(Dungeons.RIM.fillTransparency > 0.7).toBeTrue()
+		expect(Dungeons.RIM.outlineTransparency > 0).toBeTrue()
+		expect(Dungeons.RIM.outlineTransparency < 0.5).toBeTrue()
+		local _, _, roomZ = Dungeons.roomOrigin(1)
+		expect(Dungeons.inCrawl(0, roomZ)).toBeTrue()
+		expect(Dungeons.inCrawl(0, 30)).toBeFalse()
+	end)
+
 	it("spaces rooms down the Z axis and flips the boss into phase 2 at half health", function()
 		local _, _, z1 = Dungeons.roomOrigin(1)
 		local _, _, z2 = Dungeons.roomOrigin(2)
