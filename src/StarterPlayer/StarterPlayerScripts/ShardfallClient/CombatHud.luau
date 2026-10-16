@@ -288,9 +288,31 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	local downHold = false
 	local latchedHp = 100
 	local latchedMax = 100
+	local function paintOverhead(hp: number, maxHp: number)
+		local character = player.Character
+		if character == nil then
+			return
+		end
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if hrp == nil then
+			return
+		end
+		local bar = hrp:FindFirstChild("ShardfallBar")
+		if bar == nil then
+			return
+		end
+		local label = bar:FindFirstChild("Vitals")
+		if label == nil then
+			label = bar:FindFirstChild("Name")
+		end
+		if label ~= nil and label:IsA("TextLabel") then
+			label.Text = string.format("HP  %d / %d", hp, maxHp)
+		end
+	end
 	local function drawHp()
 		local drawn = if downHold then 0 else latchedHp
 		hpText.Text = string.format("HP  %d / %d", drawn, latchedMax)
+		paintOverhead(drawn, latchedMax)
 		local ratio = if latchedMax > 0 then drawn / latchedMax else 0
 		hpFill.Size = UDim2.fromScale(ratio, 1)
 		hpFill.BackgroundColor3 = if drawn <= 0 or ratio < 0.3
@@ -323,6 +345,12 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			root:GetAttributeChangedSignal("ShardfallMax"):Connect(function()
 				pullVitals(root)
 			end)
+			root.ChildAdded:Connect(function(child)
+				if child.Name == "ShardfallBar" then
+					drawHp()
+				end
+			end)
+			drawHp()
 		end)
 	end
 	if player.Character ~= nil then
