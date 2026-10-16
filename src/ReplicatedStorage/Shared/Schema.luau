@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 14.
+	The player profile shape, version 15.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -18,13 +18,14 @@ local Audio = require("./Audio")
 local Classes = require("./Classes")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
+local Progression = require("./Progression")
 local Quality = require("./Quality")
 local Stars = require("./Stars")
 local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 14
+Schema.VERSION = 15
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -136,6 +137,11 @@ export type ProfileData = {
 	classTalent: { [string]: string },
 	onboardStep: string,
 	onboardDone: boolean,
+	restCharges: number,
+	welcomeCharges: number,
+	lastSeen: number,
+	milestoneTitle: string,
+	welcomeNote: string,
 }
 
 function Schema.template(): ProfileData
@@ -205,6 +211,11 @@ function Schema.template(): ProfileData
 		classTalent = {},
 		onboardStep = "open",
 		onboardDone = false,
+		restCharges = 0,
+		welcomeCharges = 0,
+		lastSeen = 0,
+		milestoneTitle = "",
+		welcomeNote = "",
 	}
 end
 
@@ -220,11 +231,7 @@ function Schema.deepCopy(value: any): any
 end
 
 function Schema.xpToNext(level: number): number
-	local whole = math.floor(level)
-	if whole < 1 then
-		whole = 1
-	end
-	return 100 * whole
+	return Progression.xpToNext(level)
 end
 
 local function wholeNumber(value: any, fallback: number, minimum: number): number
@@ -347,6 +354,15 @@ function Schema.reconcile(data: any): ProfileData
 		data.onboardStep = "open"
 	end
 	data.onboardDone = data.onboardDone == true
+	data.restCharges = wholeNumber(data.restCharges, 0, 0)
+	data.welcomeCharges = wholeNumber(data.welcomeCharges, 0, 0)
+	data.lastSeen = wholeNumber(data.lastSeen, 0, 0)
+	if type(data.milestoneTitle) ~= "string" then
+		data.milestoneTitle = ""
+	end
+	if type(data.welcomeNote) ~= "string" then
+		data.welcomeNote = ""
+	end
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -754,6 +770,16 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 14
 	end
 
+	if version < 15 then
+		raw.restCharges = 0
+		raw.welcomeCharges = 0
+		raw.lastSeen = os.time()
+		raw.milestoneTitle = ""
+		raw.welcomeNote = ""
+		raw.schemaVersion = 15
+		version = 15
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -954,6 +980,11 @@ function Schema.snapshot(data: ProfileData)
 		classLevel = Classes.progress(data.classXp[data.classId] or 0),
 		onboardStep = data.onboardStep,
 		onboardDone = data.onboardDone,
+		restCharges = data.restCharges,
+		welcomeCharges = data.welcomeCharges,
+		lastSeen = data.lastSeen,
+		milestoneTitle = data.milestoneTitle,
+		welcomeNote = data.welcomeNote,
 	}
 end
 

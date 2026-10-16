@@ -94,7 +94,7 @@ describe("Schema", function()
 		expect(profile.inventory.abc.name).toEqual("Wooden Sword")
 		expect(profile.gold).toEqual(0)
 		expect(snapshot.xpToNext).toEqual(100)
-		expect(Schema.xpToNext(3)).toEqual(300)
+		expect(Schema.xpToNext(3)).toEqual(math.floor(100 * (3 ^ 1.6) + 0.5))
 	end)
 
 	it("tracks pity per pool and files pets separately from weapons", function()

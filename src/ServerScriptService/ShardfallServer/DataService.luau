@@ -199,6 +199,11 @@ local function load(player: Player): (boolean, string?)
 					source = Schema.deepCopy(document.Data)
 				end
 				local migrated, migrateErr = Schema.migrate(source)
+				if migrated ~= nil then
+					local Progression =
+						require(game:GetService("ReplicatedStorage").Shared.Progression)
+					Progression.applyReturn(migrated, os.time())
+				end
 				if migrated == nil then
 					reason = migrateErr or "corrupt"
 					claimedData = nil

@@ -35,11 +35,11 @@ local Materials = require(ReplicatedStorage.Shared.Materials)
 local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
 local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
+local Progression = require(ReplicatedStorage.Shared.Progression)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local Rootvault = require(ReplicatedStorage.Shared.Rootvault)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
-local Schema = require(ReplicatedStorage.Shared.Schema)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
 local OnboardingService = require(script.Parent.OnboardingService)
@@ -845,14 +845,7 @@ local function grant(
 	local ok, err = DataService.mutate(player, function(data)
 		data.gold += rolled.gold + bonus
 		data.shardTokens += rolled.shardTokens
-		data.xp += rolled.xp
-		local gained = 0
-		while data.xp >= Schema.xpToNext(data.level) and gained < 25 do
-			data.xp -= Schema.xpToNext(data.level)
-			data.level += 1
-			gained += 1
-		end
-		levels = gained
+		levels = Progression.addXp(data, rolled.xp)
 		for materialId, count in pairs(rolled.materials) do
 			Materials.add(data.materials, materialId, count)
 		end
