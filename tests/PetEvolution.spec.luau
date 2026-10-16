@@ -7,6 +7,7 @@ local expect = framework.expect
 
 local PetEvolution = require("../src/ReplicatedStorage/Shared/PetEvolution")
 local WildCapture = require("../src/ReplicatedStorage/Shared/WildCapture")
+local WildCaptureService = require("../src/ServerScriptService/ShardfallServer/WildCaptureService")
 
 local function fox(level: number): any
 	return {
@@ -212,5 +213,157 @@ describe("Wild capture", function()
 		expect(missed).toBeNil()
 		local unknown = WildCapture.rollBossPet("not_a_boss", 0)
 		expect(unknown).toBeNil()
+	end)
+end)
+
+describe("Wild capture service", function()
+	local now = 0
+
+	local function player(id: number): any
+		return { ClassName = "Player", UserId = id }
+	end
+
+	local function useClock()
+		WildCaptureService.setMutate(nil)
+		WildCaptureService.setClock(function()
+			return now
+		end)
+	end
+
+	local function charmProfile(): any
+		return {
+			inventory = {
+				c1 = { uid = "c1", templateId = WildCapture.CHARM_ITEM_ID },
+			},
+			equipped = { accessories = { charm = "c1" } },
+			companions = {},
+		}
+	end
+
+	local function useProfile(profile: any)
+		WildCaptureService.setMutate(function(_who, mutator)
+			local err = mutator(profile)
+			if err ~= nil then
+				return false, err
+			end
+			return true, nil
+		end)
+	end
+
+	it("refuses a tame before the shiny is defeated", function()
+		now = 1000
+		useClock()
+		local who = player(1)
+		WildCaptureService.clear(who)
+		expect(WildCapture.TAME_WINDOW).toEqual(30)
+
+		local noted = WildCaptureService.noteShiny(who, "vine_crawler", 0)
+		expect(noted.shiny).toEqual(true)
+		local early = WildCaptureService.tame(who, {
+			enemyId = "vine_crawler",
+			defeated = true,
+			roll = 0,
+		})
+		expect(early.ok).toEqual(false)
+		expect(early.error).toEqual("Defeat the shiny first.")
+
+		local fromClient = WildCaptureService.handle(who, "tame", {
+			enemyId = "vine_crawler",
+			defeated = true,
+			roll = 0,
+		})
+		expect(fromClient.ok).toEqual(false)
+		expect(fromClient.error).toEqual("Defeat the shiny first.")
+		expect(WildCaptureService.markDefeated(who, "vine_crawler").ok).toEqual(true)
+	end)
+
+	it("refuses a tame after the window and keeps the mark", function()
+		now = 2000
+		useClock()
+		local who = player(2)
+		WildCaptureService.clear(who)
+		WildCaptureService.noteShiny(who, "spore_bat", 0)
+		expect(WildCaptureService.markDefeated(who, "spore_bat").ok).toEqual(true)
+
+		now = 2000 + WildCapture.TAME_WINDOW
+		local late = WildCaptureService.tame(who, { enemyId = "spore_bat", roll = 0 })
+		expect(late.ok).toEqual(false)
+		expect(late.error).toEqual("The shiny slipped away.")
+		local again = WildCaptureService.tame(who, { enemyId = "spore_bat", roll = 0 })
+		expect(again.ok).toEqual(false)
+		expect(again.error).toEqual("The shiny slipped away.")
+	end)
+
+	it("tames inside the window with a charm and a winning roll", function()
+		now = 3000
+		useClock()
+		local who = player(3)
+		WildCaptureService.clear(who)
+		WildCaptureService.noteShiny(who, "vine_crawler", 0)
+		expect(WildCaptureService.markDefeated(who, "vine_crawler").ok).toEqual(true)
+		now = 3000 + WildCapture.TAME_WINDOW - 1
+
+		local profile = charmProfile()
+		useProfile(profile)
+		local caught = WildCaptureService.tame(who, { enemyId = "vine_crawler", roll = 0 })
+		expect(caught.ok).toEqual(true)
+		expect(caught.shiny).toEqual(true)
+		expect(caught.species).toEqual("vine_sprout")
+		expect(caught.name).toEqual("Vine Sprout")
+		expect(#profile.companions).toEqual(1)
+		expect(profile.companions[1].shiny).toEqual(true)
+		expect(profile.companions[1].golden).toEqual(true)
+		expect(profile.companions[1].statBonus).toEqual(WildCapture.SHINY_STAT_BONUS)
+
+		local spent = WildCaptureService.tame(who, { enemyId = "vine_crawler", roll = 0 })
+		expect(spent.ok).toEqual(false)
+		expect(spent.error).toEqual("No shiny is here.")
+
+		WildCaptureService.noteShiny(who, "thorn_sprite", 0)
+		WildCaptureService.markDefeated(who, "thorn_sprite")
+		local bare = {
+			inventory = {},
+			equipped = { accessories = {} },
+			companions = {},
+		}
+		useProfile(bare)
+		local unarmed = WildCaptureService.tame(who, { enemyId = "thorn_sprite", roll = 0 })
+		expect(unarmed.ok).toEqual(false)
+		expect(unarmed.error).toEqual("Equip a Capture Charm.")
+		local bareGone = WildCaptureService.tame(who, { enemyId = "thorn_sprite", roll = 0 })
+		expect(bareGone.ok).toEqual(false)
+		expect(bareGone.error).toEqual("No shiny is here.")
+
+		useProfile(profile)
+		WildCaptureService.noteShiny(who, "moss_crawler", 0)
+		WildCaptureService.markDefeated(who, "moss_crawler")
+		local missed = WildCaptureService.tame(who, {
+			enemyId = "moss_crawler",
+			roll = WildCapture.CAPTURE_CHANCE,
+		})
+		expect(missed.ok).toEqual(false)
+		expect(missed.error).toEqual("The shiny slipped away.")
+		local gone = WildCaptureService.tame(who, { enemyId = "moss_crawler", roll = 0 })
+		expect(gone.ok).toEqual(false)
+		expect(gone.error).toEqual("No shiny is here.")
+	end)
+
+	it("drops every mark when the run is cleared", function()
+		now = 4000
+		useClock()
+		local who = player(4)
+		WildCaptureService.noteShiny(who, "vine_crawler", 0)
+		WildCaptureService.noteShiny(who, "root_brute", 0)
+		expect(WildCaptureService.markDefeated(who, "vine_crawler").ok).toEqual(true)
+		WildCaptureService.clear(who)
+
+		local defeated = WildCaptureService.tame(who, { enemyId = "vine_crawler", roll = 0 })
+		expect(defeated.ok).toEqual(false)
+		expect(defeated.error).toEqual("No shiny is here.")
+		local spawned = WildCaptureService.tame(who, { enemyId = "root_brute", roll = 0 })
+		expect(spawned.ok).toEqual(false)
+		expect(spawned.error).toEqual("No shiny is here.")
+		expect(WildCaptureService.markDefeated(who, "vine_crawler").ok).toEqual(false)
+		expect(WildCaptureService.markDefeated(who, "root_brute").ok).toEqual(false)
 	end)
 end)

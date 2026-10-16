@@ -39,6 +39,8 @@ export type BossPet = {
 WildCapture.SHINY_SPAWN_RATE = 0.02
 -- With the charm equipped. Without it the chance is zero.
 WildCapture.CAPTURE_CHANCE = 0.25
+-- Seconds after the shiny dies. The service stores an os.clock() deadline.
+WildCapture.TAME_WINDOW = 30
 WildCapture.CHARM_ITEM_ID = "capture_charm"
 -- Gold price for a vendor. Not a Robux product.
 WildCapture.CHARM_GOLD = 250

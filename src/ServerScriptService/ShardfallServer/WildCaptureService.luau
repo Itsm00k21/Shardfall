@@ -3,30 +3,66 @@
 --[[
 	Server rolls for shiny tames, boss pets, and evolution.
 
-	DungeonService should call noteShiny when an enemy spawns, tame when
-	that shiny is defeated, and grantBoss when Grandmother Gnarl falls.
-	A client remote must not send the shiny flag or the roll. handle()
-	ignores both and only tames a shiny this server already noted.
+	DungeonService calls noteShiny when an enemy spawns, markDefeated when
+	that shiny dies, grantBoss when Grandmother Gnarl falls, and clear when
+	the run ends. noteShiny stores a spawned mark. markDefeated turns it
+	into a defeated mark with a WildCapture.TAME_WINDOW deadline. The client
+	tame spends only a defeated, unexpired mark. It cannot send the shiny
+	flag, the roll, or a defeated bit. handle() ignores all three.
 
-	Remotes, RateLimiter, and init are Ghost's. start() only drops the
-	pending shiny when the player leaves.
+	A miss (no charm, or a losing roll) still spends the shiny. Marks are
+	per player. Remotes, RateLimiter, and init are Ghost's. start() drops
+	marks when the player leaves. setClock and setMutate let Lune drive the
+	window without DataService. They do nothing once DataService is loaded.
 ]]
 
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PetEvolution: any
+local WildCapture: any
+local HttpService: any = nil
+local Players: any = nil
+local DataService: any = nil
 
-local DataService = require(script.Parent.DataService)
-local PetEvolution = require(ReplicatedStorage.Shared.PetEvolution)
-local WildCapture = require(ReplicatedStorage.Shared.WildCapture)
+if game ~= nil then
+	HttpService = game:GetService("HttpService")
+	Players = game:GetService("Players")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	DataService = require(script.Parent.DataService)
+	PetEvolution = require(ReplicatedStorage.Shared.PetEvolution)
+	WildCapture = require(ReplicatedStorage.Shared.WildCapture)
+else
+	PetEvolution = require("../../ReplicatedStorage/Shared/PetEvolution")
+	WildCapture = require("../../ReplicatedStorage/Shared/WildCapture")
+end
 
 local WildCaptureService = {}
 
-local pending: { [Player]: { [string]: number } } = {}
+type Mark = {
+	state: "spawned" | "defeated",
+	deadline: number,
+}
+
+type Mutator = (any) -> string?
+type MutateFn = (any, Mutator) -> (boolean, string?)
+
+local pending: { [any]: { [string]: Mark } } = {}
 local started = false
+local issued = 0
+local clock: () -> number = os.clock
+local mutateOverride: MutateFn? = nil
 
 local function fail(message: string)
 	return { ok = false, error = message }
+end
+
+local function isPlayer(value: any): boolean
+	if typeof(value) == "Instance" then
+		return (value :: any):IsA("Player")
+	end
+	-- Lune has no Player instances. Production always has DataService.
+	if DataService ~= nil then
+		return false
+	end
+	return type(value) == "table" and value.ClassName == "Player"
 end
 
 local function key(value: any): string?
@@ -74,42 +110,72 @@ local function findCompanion(data: any, uid: string): (any?, number?)
 	return nil, nil
 end
 
+local function newUid(): string
+	if HttpService ~= nil then
+		return HttpService:GenerateGUID(false)
+	end
+	issued += 1
+	return string.format("wild-%d", issued)
+end
+
 local function insertCompanion(data: any, pet: any)
-	pet.uid = HttpService:GenerateGUID(false)
+	pet.uid = newUid()
 	if type(data.companions) ~= "table" then
 		data.companions = {}
 	end
 	table.insert(data.companions, pet)
 end
 
-local function giveMark(player: Player, enemyId: string)
+local function putMark(player: any, enemyId: string, mark: Mark)
 	local marked = pending[player]
 	if marked == nil then
-		local fresh: { [string]: number } = {}
+		local fresh: { [string]: Mark } = {}
 		marked = fresh
 		pending[player] = fresh
 	end
-	marked[enemyId] = (marked[enemyId] or 0) + 1
+	marked[enemyId] = mark
 end
 
-local function takeMark(player: Player, enemyId: string): boolean
+-- Spends a defeated mark that is still inside the window. Spawned and
+-- expired marks stay where they are.
+local function spendDefeated(player: any, enemyId: string): (Mark?, string?)
 	local marked = pending[player]
-	if marked == nil then
-		return false
+	local mark = if marked ~= nil then marked[enemyId] else nil
+	if mark == nil then
+		return nil, "No shiny is here."
 	end
-	local count = marked[enemyId]
-	if type(count) ~= "number" or count < 1 then
-		return false
+	if mark.state ~= "defeated" then
+		return nil, "Defeat the shiny first."
 	end
-	if count == 1 then
-		marked[enemyId] = nil
-	else
-		marked[enemyId] = count - 1
+	if clock() >= mark.deadline then
+		return nil, "The shiny slipped away."
 	end
-	return true
+	marked[enemyId] = nil
+	if next(marked) == nil then
+		pending[player] = nil
+	end
+	return mark, nil
 end
 
-local function note(player: Player, encounter: any)
+local function mutate(player: any, mutator: Mutator): (boolean, string?)
+	local override = mutateOverride
+	if override ~= nil then
+		return override(player, mutator)
+	end
+	if DataService == nil then
+		return false, "Profile is not loaded."
+	end
+	return DataService.mutate(player, mutator)
+end
+
+local function snapshotOf(player: any): any
+	if DataService == nil then
+		return nil
+	end
+	return DataService.snapshot(player)
+end
+
+local function note(player: any, encounter: any)
 	local enemyId = key(encounter.enemyId)
 	if enemyId == nil or WildCapture.ENEMIES[enemyId] == nil then
 		return { ok = false, error = "That creature cannot be tamed.", shiny = false }
@@ -120,21 +186,19 @@ local function note(player: Player, encounter: any)
 	end
 	local shiny = WildCapture.rollShiny(roll)
 	if shiny then
-		giveMark(player, enemyId)
+		putMark(player, enemyId, { state = "spawned", deadline = 0 })
 	end
 	return { ok = true, shiny = shiny, enemyId = enemyId }
 end
 
-local function tame(player: Player, encounter: any)
+local function tame(player: any, encounter: any)
 	local enemyId = key(encounter.enemyId)
 	if enemyId == nil then
 		return fail("Nothing to capture.")
 	end
-	if encounter.defeated == false then
-		return fail("Defeat the shiny first.")
-	end
-	if not takeMark(player, enemyId) then
-		return fail("No shiny is here.")
+	local spent, blocked = spendDefeated(player, enemyId)
+	if spent == nil then
+		return fail(blocked or "No shiny is here.")
 	end
 	local captureRoll = unitRoll(encounter.roll)
 	if captureRoll == nil then
@@ -142,7 +206,7 @@ local function tame(player: Player, encounter: any)
 	end
 	local caughtName = ""
 	local caughtSpecies = ""
-	local saved, err = DataService.mutate(player, function(data)
+	local saved, err = mutate(player, function(data)
 		if not WildCapture.charmEquipped(data) then
 			return "Equip a Capture Charm."
 		end
@@ -160,7 +224,7 @@ local function tame(player: Player, encounter: any)
 		return nil
 	end)
 	if not saved and err == "Profile is not loaded." then
-		giveMark(player, enemyId)
+		putMark(player, enemyId, spent)
 		return fail(err)
 	end
 	if not saved then
@@ -171,11 +235,11 @@ local function tame(player: Player, encounter: any)
 		name = caughtName,
 		species = caughtSpecies,
 		shiny = true,
-		profile = DataService.snapshot(player),
+		profile = snapshotOf(player),
 	}
 end
 
-local function boss(player: Player, encounter: any)
+local function boss(player: any, encounter: any)
 	local bossId = key(encounter.bossId)
 	if bossId == nil then
 		bossId = key(encounter.enemyId)
@@ -191,7 +255,7 @@ local function boss(player: Player, encounter: any)
 	if pet == nil then
 		return { ok = false, error = reason, dropped = false }
 	end
-	local saved, err = DataService.mutate(player, function(data)
+	local saved, err = mutate(player, function(data)
 		insertCompanion(data, pet)
 		return nil
 	end)
@@ -204,18 +268,18 @@ local function boss(player: Player, encounter: any)
 		name = pet.name,
 		species = pet.species,
 		ability = pet.ability,
-		profile = DataService.snapshot(player),
+		profile = snapshotOf(player),
 	}
 end
 
-local function evolve(player: Player, encounter: any)
+local function evolve(player: any, encounter: any)
 	local uid = uidOf(encounter.uid)
 	if uid == nil then
 		return fail("Pick a companion.")
 	end
 	local noteText = ""
 	local speciesId = ""
-	local saved, err = DataService.mutate(player, function(data)
+	local saved, err = mutate(player, function(data)
 		local pet, index = findCompanion(data, uid)
 		if pet == nil or index == nil then
 			return "That companion is not in the den."
@@ -248,12 +312,12 @@ local function evolve(player: Player, encounter: any)
 		ok = true,
 		name = noteText,
 		species = speciesId,
-		profile = DataService.snapshot(player),
+		profile = snapshotOf(player),
 	}
 end
 
 function WildCaptureService.resolve(player: Player, encounter: any)
-	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+	if not isPlayer(player) then
 		return fail("Capture needs a player.")
 	end
 	if type(encounter) ~= "table" or type(encounter.action) ~= "string" then
@@ -282,16 +346,29 @@ function WildCaptureService.noteShiny(player: Player, enemyId: string, roll: num
 	})
 end
 
+function WildCaptureService.markDefeated(player: Player, enemyId: string)
+	if not isPlayer(player) then
+		return fail("Capture needs a player.")
+	end
+	local id = key(enemyId)
+	if id == nil or WildCapture.ENEMIES[id] == nil then
+		return fail("That creature cannot be tamed.")
+	end
+	local marked = pending[player]
+	local mark = if marked ~= nil then marked[id] else nil
+	if mark == nil or mark.state ~= "spawned" then
+		return fail("No shiny is here.")
+	end
+	mark.state = "defeated"
+	mark.deadline = clock() + WildCapture.TAME_WINDOW
+	return { ok = true, enemyId = id }
+end
+
 function WildCaptureService.tame(player: Player, encounter: any)
 	local payload = if type(encounter) == "table" then encounter else {}
-	local defeated = true
-	if payload.defeated == false then
-		defeated = false
-	end
 	return WildCaptureService.resolve(player, {
 		action = "tame",
 		enemyId = payload.enemyId,
-		defeated = defeated,
 		roll = payload.roll,
 	})
 end
@@ -313,6 +390,13 @@ function WildCaptureService.evolve(player: Player, uid: string)
 	})
 end
 
+function WildCaptureService.clear(player: Player)
+	if not isPlayer(player) then
+		return
+	end
+	pending[player] = nil
+end
+
 -- Client entry once Ghost binds the Capture remote. Rolls stay on the server.
 function WildCaptureService.handle(player: Player, action: any, payload: any)
 	if action == "tame" then
@@ -322,7 +406,6 @@ function WildCaptureService.handle(player: Player, action: any, payload: any)
 		end
 		return WildCaptureService.tame(player, {
 			enemyId = enemyId,
-			defeated = true,
 		})
 	end
 	if action == "evolve" then
@@ -338,11 +421,32 @@ function WildCaptureService.handle(player: Player, action: any, payload: any)
 	return fail("Unknown capture action.")
 end
 
+function WildCaptureService.setClock(fn: (() -> number)?)
+	if DataService ~= nil then
+		return
+	end
+	if fn == nil then
+		clock = os.clock
+	else
+		clock = fn
+	end
+end
+
+function WildCaptureService.setMutate(fn: MutateFn?)
+	if DataService ~= nil then
+		return
+	end
+	mutateOverride = fn
+end
+
 function WildCaptureService.start()
 	if started then
 		return
 	end
 	started = true
+	if Players == nil then
+		return
+	end
 	Players.PlayerRemoving:Connect(function(player)
 		pending[player] = nil
 	end)

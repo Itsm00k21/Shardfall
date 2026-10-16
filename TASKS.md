@@ -137,98 +137,148 @@ Build stamp files are T-012. T-018 stamped `3558616+`.
 
 ### T-014 hooks for GHOST
 
-HELPER did not edit T-012, `Pets.luau`, or `PetService.luau`. Evolution, shiny tames, and boss pets are ready to call. Wire these, then the capture prompt and the evolve button go live.
+HELPER did not edit T-012, `Pets.luau`, or `PetService.luau`. Evolution, shiny tames, and boss pets are ready to call. Wire these against the post-#18 files (the same shape as Trade and Market). Schema stays at version 20. This branch does not add a profile field.
 
-`default.project.json` inside `ReplicatedStorage.Remotes`:
+`default.project.json`, inside `ReplicatedStorage.Remotes`, next to the Trade and Market lines:
 
 ```json
-"Capture": { "$className": "RemoteFunction" },
-"EvolvePet": { "$className": "RemoteFunction" }
+        "Capture": { "$className": "RemoteFunction" },
+        "EvolvePet": { "$className": "RemoteFunction" },
 ```
 
-This branch did not add them. `$path` already includes `PetEvolution`, `WildCapture`, `WildCaptureService`, and `CaptureHud`.
+`$path` already includes `PetEvolution`, `WildCapture`, `WildCaptureService`, and `CaptureHud`. Do not add a new tree for them.
 
-`RateLimiter.luau` `RULES`:
+`RateLimiter.luau` `RULES`, next to Trade and Market. A remote with no rule is rejected:
 
 ```lua
-Capture = { capacity = 4, perSecond = 1 },
-EvolvePet = { capacity = 3, perSecond = 1 },
+	Capture = { capacity = 4, perSecond = 1 },
+	EvolvePet = { capacity = 3, perSecond = 1 },
 ```
 
-`Remotes.luau` requires `WildCaptureService`, then inside `Remotes.bind`:
+`Remotes.luau`, with the other service requires:
 
 ```lua
-functionRemote("Capture").OnServerInvoke = function(player, action, payload)
-	return guard(player, "Capture", function()
-		if type(action) ~= "string" then
-			return { ok = false, error = "Unknown capture action." }
-		end
-		return WildCaptureService.handle(player, action, payload)
-	end)
-end
-
-functionRemote("EvolvePet").OnServerInvoke = function(player, uid)
-	return guard(player, "EvolvePet", function()
-		if type(uid) ~= "string" then
-			return { ok = false, error = "Pick a companion." }
-		end
-		return WildCaptureService.evolve(player, uid)
-	end)
-end
+local WildCaptureService = require(script.Parent.WildCaptureService)
 ```
 
-`Capture` from the client is only `tame`. `handle` ignores a client shiny flag and a client roll. `EvolvePet` takes the companion uid.
+Inside `Remotes.bind`, next to the Trade and Market handlers:
+
+```lua
+	functionRemote("Capture").OnServerInvoke = function(player, action, payload)
+		return guard(player, "Capture", function()
+			if type(action) ~= "string" then
+				return { ok = false, error = "Unknown capture action." }
+			end
+			return WildCaptureService.handle(player, action, payload)
+		end)
+	end
+	functionRemote("EvolvePet").OnServerInvoke = function(player, uid)
+		return guard(player, "EvolvePet", function()
+			if type(uid) ~= "string" then
+				return { ok = false, error = "Pick a companion." }
+			end
+			return WildCaptureService.evolve(player, uid)
+		end)
+	end
+```
+
+`Capture` from the client is only `tame`. `handle` ignores a client shiny flag, a client roll, and a client `defeated` bit. `EvolvePet` takes the companion uid.
 
 | Remote | action | payload |
 |---|---|---|
 | Capture | `tame` | `{ enemyId: string }` |
 | EvolvePet | — | companion `uid: string` |
 
-`init.server.luau` (order does not matter; `start` only clears a pending shiny when the player leaves):
+`init.server.luau`, with the TradeService require, and `start()` next to `TradeService.start()` / `MarketService.start()` before `DataService.start()`:
 
 ```lua
 local WildCaptureService = require(script.WildCaptureService)
+```
+
+```lua
 WildCaptureService.start()
 ```
 
-`init.client.luau`, after `invoke` exists:
+`start` drops that player's marks on `PlayerRemoving`. Run end still needs `clear` below.
+
+`init.client.luau`, require next to `MarketHud`, and start next to `MarketHud.start`. Pass the existing `invoke` local. CaptureHud calls `invoke("Capture", "tame", { enemyId })`, so do not wrap it the way MarketHud does:
 
 ```lua
 local CaptureHud = require(script.CaptureHud)
+```
+
+```lua
 CaptureHud.start(invoke)
 ```
 
-`DungeonService.luau`, when an enemy spawns for a player:
+`DungeonService.luau` (sibling require, same as `LoopService`):
 
 ```lua
 local WildCaptureService = require(script.Parent.WildCaptureService)
-local noted = WildCaptureService.noteShiny(player, enemyId)
-if noted.shiny then
-	-- Tell that client the enemyId. CaptureHud.prompt opens from the client.
+```
+
+On spawn, pass the enemy **kind** (`vine_crawler`), not the `e12` key in `run.enemies`. The service rolls. Remember the result on that enemy:
+
+```lua
+local noted = WildCaptureService.noteShiny(player, kind)
+enemy.shiny = noted.shiny == true
+if enemy.shiny then
+	-- Tell that client `kind`. CaptureHud.prompt opens the Tame button.
 end
 ```
 
-When that shiny dies (not a normal copy of the same id):
+When that shiny's hp hits 0 in `damageEnemy` (this replaces calling `tame` on death):
 
 ```lua
-WildCaptureService.tame(player, { enemyId = enemyId, defeated = true })
+if enemy.shiny == true then
+	WildCaptureService.markDefeated(player, enemy.kind)
+end
 ```
+
+`markDefeated` turns the spawned mark into a defeated mark. The deadline is `os.clock() + WildCapture.TAME_WINDOW` (30 seconds). The client tame spends only that defeated, unexpired mark. A spawned mark returns `"Defeat the shiny first."` An expired one returns `"The shiny slipped away."` Neither of those is consumed. A miss (no charm, or a losing roll) still spends it.
 
 When Grandmother Gnarl dies:
 
 ```lua
-WildCaptureService.grantBoss(player, { bossId = "grandmother_gnarl" })
+if enemy.kind == "grandmother_gnarl" and enemy.hp <= 0 then
+	WildCaptureService.grantBoss(player, { bossId = "grandmother_gnarl" })
+end
 ```
 
-`noteShiny`, `tame`, and `grantBoss` stay on the server. Do not add client actions for them. `CombatHud.luau` is unchanged on this branch. When the client learns a shiny id, call:
+At run end, at the bottom of `destroyRun` (leave, wipe, and the other endings all go through it):
 
 ```lua
-CaptureHud.prompt({ enemyId = enemyId, displayName = "Vine Sprout" })
+WildCaptureService.clear(player)
 ```
 
-The Tame button calls `invoke("Capture", "tame", { enemyId })`. Pass `{ onAttempt, onDismiss }` to `prompt` if combat UI should own the click.
+`noteShiny`, `markDefeated`, `grantBoss`, and `clear` stay on the server. Do not add client actions for them. `CombatHud.luau` is unchanged on this branch. When the client learns a shiny kind, call:
 
-Charm: `WildCapture.charmEquipped` is true when `equipped.accessories.charm` is the uid of an inventory item with `templateId` `capture_charm`, or when the live profile has `captureCharm == true`. Schema does not save `captureCharm`. The charm slot already exists. `ItemBases` has no `capture_charm` row yet; add one if a drop or a gold vendor needs a catalog id. Price is `WildCapture.CHARM_GOLD` (250 gold). Do not sell it for Robux. `Materials.sanitize` drops unknown ids, so do not put the charm in the materials bag.
+```lua
+CaptureHud.prompt({ enemyId = kind, displayName = "Vine Sprout" })
+```
+
+The Tame button calls `invoke("Capture", "tame", { enemyId = kind })`. Pass `{ onAttempt, onDismiss }` to `prompt` if combat UI should own the click. Marks are per player and per kind, not per `e12` instance.
+
+Charm: `WildCapture.charmEquipped` is true when `equipped.accessories.charm` is the uid of an inventory item with `templateId` `capture_charm`, or when the live profile has `captureCharm == true`. Schema does not save `captureCharm`. Do not add a schema key for it. `Schema.ACCESSORY_SLOTS.charm` already exists, and `Schema.equipItem` already writes `equipped.accessories.charm` for `kind == "Accessory"` and `slot == "charm"`.
+
+`ItemBases` has no `capture_charm` row. Widen `Base.kind` with `"Accessory"` and add this row. It has no combat stats. Price is `WildCapture.CHARM_GOLD` (250 gold) at the vendor that sells it. Do not add a Robux product id or a MarketplaceService prompt.
+
+```lua
+kind: "Weapon" | "Armor" | "Pet" | "Accessory",
+```
+
+```lua
+add({
+	id = "capture_charm",
+	name = "Capture Charm",
+	kind = "Accessory",
+	rarity = "Uncommon",
+	ascension = 0,
+	slot = "charm",
+})
+```
+
+`Materials.sanitize` drops unknown ids, so do not put the charm in the materials bag.
 
 `WildCaptureService.evolve` spends the recipe inside `DataService.mutate`. No `PetService` edit.
 
