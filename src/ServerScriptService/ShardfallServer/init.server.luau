@@ -9,16 +9,16 @@
 	so a fast in-memory load still pushes a snapshot.
 
 	The profile load runs before trade, market, receipts, raids, messaging,
-	and the hub build. Those starts sit in begin() so a throw (a DataStore,
-	MemoryStore, or MessagingService with API access off, including the
-	ShardfallTradeAudit store) warns and the rest of boot continues. A hung
+	and the hub build. Every service start sits in its own begin() so one
+	throw (ProcessReceipt, a DataStore, MemoryStore, or MessagingService
+	with API access off) warns and the rest of boot continues. A hung
 	subscribe cannot sit in front of the profile load.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build be3658a+ server` in Output.
+	still leaves `[Shardfall] build 1269531+ server` in Output.
 ]]
 
-print("[Shardfall] build be3658a+ server")
+print("[Shardfall] build 1269531+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
@@ -96,28 +96,34 @@ DataService.onChanged(function(player, snapshot, saving)
 	CombatService.refresh(player)
 end)
 
-Remotes.bind()
+begin("Remotes", function()
+	Remotes.bind()
+end)
 PolicyCache.onChanged(function(player, policy)
 	Remotes.pushPolicy(player, policy)
 end)
-CombatService.bindHooks({
-	enemies = function(player)
-		return DungeonService.enemyViews(player)
-	end,
-	onEnemyHit = function(player, enemyId, amount, crit, heavy)
-		local killed = DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
-		ClassService.grantXp(player, if killed then 24 else 4)
-	end,
-	onPlayerDown = function(player)
-		DungeonService.onPlayerDown(player)
-	end,
-	inRun = function(player)
-		return DungeonService.isInRun(player)
-	end,
-})
+begin("CombatHooks", function()
+	CombatService.bindHooks({
+		enemies = function(player)
+			return DungeonService.enemyViews(player)
+		end,
+		onEnemyHit = function(player, enemyId, amount, crit, heavy)
+			local killed = DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
+			ClassService.grantXp(player, if killed then 24 else 4)
+		end,
+		onPlayerDown = function(player)
+			DungeonService.onPlayerDown(player)
+		end,
+		inRun = function(player)
+			return DungeonService.isInRun(player)
+		end,
+	})
+end)
 
--- Profiles first. A trade audit, marketplace, or messaging hang must not skip this.
-DataService.start()
+-- Profiles first. A receipt read, trade audit, or messaging hang must not skip this.
+begin("DataService", function()
+	DataService.start()
+end)
 
 begin("PolicyCache", function()
 	PolicyCache.start()

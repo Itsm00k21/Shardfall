@@ -6,6 +6,10 @@
 	No product is on sale in this beta. An unknown product is left
 	unprocessed so a later publish can grant it. A repeated id never pays
 	twice. Session locking still lives in DataService.
+
+	ProcessReceipt is assign-only. Reading it throws
+	"you can only set the callback value, get is not available" and that
+	used to abort server boot before the world or the profile load.
 ]]
 
 local DataService = require(script.Parent.DataService)
@@ -26,23 +30,23 @@ function ReceiptService.grant(player: Player, receiptId: string, _productId: num
 end
 
 function ReceiptService.start()
-	local ok, marketplace = pcall(function()
-		return game:GetService("MarketplaceService")
+	local ok, err = pcall(function()
+		-- Assign only. A read of ProcessReceipt throws and aborts boot.
+		game:GetService("MarketplaceService").ProcessReceipt = function(receipt)
+			if type(receipt) ~= "table" or type(receipt.PlayerId) ~= "number" then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			local player = game:GetService("Players"):GetPlayerByUserId(receipt.PlayerId)
+			if player == nil or type(receipt.PurchaseId) ~= "string" then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			-- Nothing is sold yet. Recording the id without a grant would swallow
+			-- a real purchase, so leave it pending until a product map exists.
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
 	end)
-	if not ok or marketplace == nil or marketplace.ProcessReceipt == nil then
-		return
-	end
-	marketplace.ProcessReceipt = function(receipt)
-		if type(receipt) ~= "table" or type(receipt.PlayerId) ~= "number" then
-			return Enum.ProductPurchaseDecision.NotProcessedYet
-		end
-		local player = game:GetService("Players"):GetPlayerByUserId(receipt.PlayerId)
-		if player == nil or type(receipt.PurchaseId) ~= "string" then
-			return Enum.ProductPurchaseDecision.NotProcessedYet
-		end
-		-- Nothing is sold yet. Recording the id without a grant would swallow
-		-- a real purchase, so leave it pending until a product map exists.
-		return Enum.ProductPurchaseDecision.NotProcessedYet
+	if not ok then
+		warn("[Shardfall] ProcessReceipt was not set: " .. tostring(err))
 	end
 end
 

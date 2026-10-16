@@ -40,12 +40,24 @@ describe("Server boot", function()
 			expect(profiles < lastAt(server, call)).toBeTrue()
 		end
 		local guards = {
+			{ 'begin("DataService"', "DataService.start()" },
+			{ 'begin("PolicyCache"', "PolicyCache.start()" },
 			{ 'begin("RollService"', "RollService.bindAnnouncements()" },
 			{ 'begin("ReceiptService"', "ReceiptService.start()" },
+			{ 'begin("ClassService"', "ClassService.start()" },
+			{ 'begin("CombatService"', "CombatService.start()" },
 			{ 'begin("DungeonService"', "DungeonService.start()" },
 			{ 'begin("TradeService"', "TradeService.start()" },
 			{ 'begin("MarketService"', "MarketService.start()" },
 		}
+		local startCalls = 0
+		for line in string.gmatch(server, "[^\n]+") do
+			if string.find(line, ".start()", 1, true) ~= nil and string.find(line, "--", 1, true) == nil then
+				startCalls += 1
+				expect(string.byte(line, 1) == 9).toBeTrue()
+			end
+		end
+		expect(startCalls >= 8).toBeTrue()
 		for _, pair in ipairs(guards) do
 			expect(lastAt(server, pair[1]) < lastAt(server, pair[2])).toBeTrue()
 		end
