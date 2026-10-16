@@ -198,10 +198,10 @@ function HavenLife.pieces(): { Piece }
 				tilt,
 				math.deg(yaw),
 				0,
-				{ 120, 220, 255 },
-				"Neon",
+				{ 168, 198, 210 },
+				"Glass",
 				"large",
-				0,
+				0.28,
 				nil,
 				"mist",
 				true
@@ -222,9 +222,9 @@ function HavenLife.pieces(): { Piece }
 				math.deg(yaw),
 				0,
 				MIST,
-				"Neon",
+				"Glass",
 				"small",
-				0.15
+				0.35
 			)
 		)
 	end
@@ -243,13 +243,10 @@ function HavenLife.pieces(): { Piece }
 				28,
 				index * 40,
 				12,
-				{ 190, 140, 255 },
-				"Neon",
+				{ 158, 142, 186 },
+				"SmoothPlastic",
 				"large",
-				0,
-				nil,
-				nil,
-				true
+				0.08
 			)
 		)
 		list[#list].drift = 70 + index * 18
@@ -332,7 +329,7 @@ function HavenLife.pieces(): { Piece }
 				0,
 				0,
 				petal[(index - 1) % #petal + 1],
-				"Neon",
+				"SmoothPlastic",
 				"small",
 				0,
 				"Ball"
@@ -353,7 +350,7 @@ function HavenLife.pieces(): { Piece }
 			0,
 			0,
 			PINK,
-			"Neon",
+			"SmoothPlastic",
 			"small",
 			1,
 			"Ball",
@@ -374,7 +371,7 @@ function HavenLife.pieces(): { Piece }
 			0,
 			0,
 			GOLD,
-			"Neon",
+			"SmoothPlastic",
 			"small",
 			1,
 			"Ball",
@@ -421,13 +418,10 @@ function HavenLife.pieces(): { Piece }
 			18,
 			0,
 			0,
-			{ 210, 220, 255 },
-			"Neon",
+			{ 180, 190, 210 },
+			"Glass",
 			"large",
-			0.25,
-			nil,
-			nil,
-			true
+			0.4
 		)
 	)
 
@@ -465,9 +459,9 @@ function HavenLife.rigs(): { Rig }
 			{ 48, 150, 170 },
 		}
 		local flag = {
-			{ 255, 210, 70 },
-			{ 255, 120, 170 },
-			{ 140, 230, 255 },
+			{ 196, 164, 84 },
+			{ 186, 112, 140 },
+			{ 120, 168, 176 },
 		}
 		table.insert(list, {
 			name = "Townsfolk",
@@ -490,12 +484,9 @@ function HavenLife.rigs(): { Rig }
 					0,
 					0,
 					cloak[index],
-					"Neon",
+					"SmoothPlastic",
 					"large",
-					0,
-					nil,
-					nil,
-					true
+					0
 				),
 				piece(
 					"Head",
@@ -528,12 +519,9 @@ function HavenLife.rigs(): { Rig }
 					0,
 					0,
 					flag[index],
-					"Neon",
+					"Fabric",
 					"large",
-					0,
-					nil,
-					nil,
-					true
+					0
 				),
 				piece(
 					"Arm",
@@ -713,9 +701,9 @@ function HavenLife.exposure(clockTime: number): {
 	end
 	local glare = math.max(band(6.2), band(18.2))
 	return {
-		bloomIntensity = 0.45 - glare * 0.35,
-		bloomSize = 22 - glare * 12,
-		bloomThreshold = 0.85 + glare * 0.12,
+		bloomIntensity = 0.12 - glare * 0.08,
+		bloomSize = 10 - glare * 4,
+		bloomThreshold = 1.6 + glare * 0.2,
 		sunIntensity = 0.14 - glare * 0.11,
 		sunSpread = 0.35 - glare * 0.18,
 		brightness = 2.15 - glare * 1.0,

@@ -2,7 +2,7 @@
 
 --[[
 	Haven quick travel. The Travel button opens a compact map of the six
-	stands. Locked waystones stay grey until that player's save has them.
+	stands. Every stand is open from the start.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -177,49 +177,14 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local dots: { [string]: TextButton } = {}
 
 	local function paintRow(id: string)
-		local unlocked = Travel.isUnlocked(profile, id)
 		local row = rows[id]
 		local dot = dots[id]
 		if row ~= nil then
-			row.BackgroundColor3 = if unlocked then COLORS.open else COLORS.locked
-			row.TextColor3 = if unlocked then COLORS.text else COLORS.muted
+			row.BackgroundColor3 = COLORS.open
+			row.TextColor3 = COLORS.text
 		end
 		if dot ~= nil then
-			dot.BackgroundColor3 = if unlocked then COLORS.gold else COLORS.locked
-		end
-	end
-
-	local function paintStones()
-		local haven = workspace:FindFirstChild("Haven")
-		if haven == nil then
-			return
-		end
-		for _, descendant in ipairs(haven:GetDescendants()) do
-			if
-				descendant:IsA("BasePart")
-				and type(descendant:GetAttribute("WaystoneId")) == "string"
-			then
-				local id = descendant:GetAttribute("WaystoneId") :: string
-				local unlocked = Travel.isUnlocked(profile, id)
-				local mark = descendant:FindFirstChild("WaystoneMark")
-				if mark == nil or not mark:IsA("Highlight") then
-					local created = Instance.new("Highlight")
-					created.Name = "WaystoneMark"
-					created.Adornee = descendant
-					created.FillTransparency = 0.45
-					created.OutlineTransparency = 0.1
-					created.Parent = descendant
-					mark = created
-				end
-				local highlight = mark :: Highlight
-				if unlocked then
-					highlight.FillColor = Color3.fromRGB(255, 196, 80)
-					highlight.OutlineColor = Color3.fromRGB(255, 230, 170)
-				else
-					highlight.FillColor = Color3.fromRGB(90, 90, 98)
-					highlight.OutlineColor = Color3.fromRGB(58, 58, 66)
-				end
-			end
+			dot.BackgroundColor3 = COLORS.gold
 		end
 	end
 
@@ -235,19 +200,18 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		else
 			cooldown.Text = "Waystones ready."
 		end
-		paintStones()
 	end
 
 	for index, dest in ipairs(Travel.DESTINATIONS) do
 		local row = new("TextButton", {
 			Name = dest.id,
-			BackgroundColor3 = COLORS.locked,
+			BackgroundColor3 = COLORS.open,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, Quality.MIN_TAP),
 			Font = Enum.Font.BuilderSansMedium,
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = COLORS.muted,
+			TextColor3 = COLORS.text,
 			Text = "  " .. dest.name,
 			AutoButtonColor = true,
 			LayoutOrder = index,

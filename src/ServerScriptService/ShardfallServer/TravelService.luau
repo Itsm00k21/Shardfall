@@ -1,8 +1,8 @@
 --!strict
 
 --[[
-	Server travel. Touching a waystone writes the unlock. The Travel remote
-	checks the save, then streams the destination and moves the character.
+	Server travel. Every destination is open. The Travel remote checks the
+	cooldown, then streams the destination and moves the character.
 	BuyTravelPass is a stub and does not set travelPass.
 ]]
 
@@ -147,7 +147,7 @@ function TravelService.bind()
 	for _, descendant in ipairs(haven:GetDescendants()) do
 		if
 			descendant:IsA("BasePart")
-			and type(descendant:GetAttribute("WaystoneId")) == "string"
+			and Travel.shouldBind(descendant.Name, descendant:GetAttribute("WaystoneId"))
 		then
 			local id = descendant:GetAttribute("WaystoneId") :: string
 			bound += 1

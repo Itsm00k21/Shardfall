@@ -477,7 +477,7 @@ local function stationPad(
 		size,
 		0.45 + SEAM,
 		color,
-		Enum.Material.Neon,
+		Enum.Material.SmoothPlastic,
 		false
 	)
 end
@@ -498,12 +498,12 @@ local function buildCrystal(parent: Instance)
 		{ angle = 300, lean = 24, height = 26, thick = 4, radius = 3.6 },
 	}
 	local shardColors = {
-		Color3.fromRGB(176, 70, 255),
-		Color3.fromRGB(130, 60, 240),
-		Color3.fromRGB(210, 110, 255),
-		Color3.fromRGB(150, 80, 255),
-		Color3.fromRGB(190, 90, 255),
-		Color3.fromRGB(120, 50, 220),
+		Color3.fromRGB(132, 96, 168),
+		Color3.fromRGB(112, 88, 156),
+		Color3.fromRGB(148, 110, 170),
+		Color3.fromRGB(120, 96, 160),
+		Color3.fromRGB(138, 104, 166),
+		Color3.fromRGB(104, 84, 148),
 	}
 	for index, spike in ipairs(spikes) do
 		local yaw = math.rad(spike.angle)
@@ -513,15 +513,16 @@ local function buildCrystal(parent: Instance)
 			* CFrame.new(0, 0, spike.radius)
 			* CFrame.Angles(lean, 0, 0)
 			* CFrame.new(0, spike.height / 2, 0)
-		part(
+		local shard = part(
 			parent,
 			"CrystalShard",
 			Vector3.new(spike.thick, spike.height, spike.thick),
 			cf,
 			shardColors[index],
-			Enum.Material.Neon,
+			Enum.Material.Glass,
 			true
 		)
+		shard.Transparency = 0.18
 	end
 
 	local crystal = part(
@@ -529,25 +530,44 @@ local function buildCrystal(parent: Instance)
 		"LumenHeart",
 		Vector3.new(8, 42, 8),
 		CFrame.new(0, 24 - SEAM, 0),
-		Color3.fromRGB(236, 220, 255),
-		Enum.Material.Neon,
+		Color3.fromRGB(186, 168, 204),
+		Enum.Material.Glass,
 		true
 	)
+	crystal.Transparency = 0.15
 	crystal:SetAttribute("ShardfallKeep", true)
-	part(
+	local core = part(
+		parent,
+		"LumenCore",
+		Vector3.new(1.8, 5.5, 1.8),
+		CFrame.new(0, 22, 0),
+		Color3.fromRGB(255, 214, 164),
+		Enum.Material.Neon,
+		false
+	)
+	core:SetAttribute("ShardfallKeep", true)
+	local coreLight = Instance.new("PointLight")
+	coreLight.Name = "PointLight"
+	coreLight.Color = Color3.fromRGB(255, 206, 150)
+	coreLight.Range = 14
+	coreLight.Brightness = 0.55
+	coreLight.Shadows = false
+	coreLight.Parent = core
+	local crack = part(
 		parent,
 		"Crack",
 		Vector3.new(1.6, 28, 1.6),
 		CFrame.new(1.4, 22, 0.6),
-		Color3.fromRGB(210, 236, 255),
-		Enum.Material.Neon,
+		Color3.fromRGB(176, 196, 214),
+		Enum.Material.Glass,
 		false
 	)
+	crack.Transparency = 0.35
 	local beamColors = {
-		Color3.fromRGB(230, 210, 255),
-		Color3.fromRGB(186, 140, 255),
-		Color3.fromRGB(255, 228, 196),
-		Color3.fromRGB(160, 120, 240),
+		Color3.fromRGB(176, 164, 196),
+		Color3.fromRGB(150, 132, 184),
+		Color3.fromRGB(196, 180, 164),
+		Color3.fromRGB(140, 124, 176),
 	}
 	for index, beamColor in ipairs(beamColors) do
 		local yaw = (index - 1) * (math.pi / 2)
@@ -562,15 +582,16 @@ local function buildCrystal(parent: Instance)
 			Vector3.new(1.1, height, 1.1),
 			cf,
 			beamColor,
-			Enum.Material.Neon,
+			Enum.Material.Glass,
 			false
 		)
-		beam.Transparency = 0.35
+		beam.Transparency = 0.45
 	end
 	local light = Instance.new("PointLight")
-	light.Color = Color3.fromRGB(186, 140, 255)
-	light.Range = 64
-	light.Brightness = 2.4
+	light.Color = Color3.fromRGB(186, 160, 210)
+	light.Range = 18
+	light.Brightness = 0.28
+	light.Shadows = false
 	light.Parent = crystal
 	local billboard = Instance.new("BillboardGui")
 	billboard.Size = UDim2.fromOffset(140, 28)
@@ -601,10 +622,11 @@ local function buildCrystal(parent: Instance)
 			Vector3.new(3.4, 14, 3.4),
 			CFrame.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
 				* CFrame.Angles(0, -angle, math.rad(18)),
-			Color3.fromRGB(186, 130, 255),
-			Enum.Material.Neon,
+			Color3.fromRGB(150, 130, 176),
+			Enum.Material.Glass,
 			false
 		)
+		shard.Transparency = 0.22
 		table.insert(pieces, shard)
 	end
 	if orbitConnection ~= nil then
@@ -676,8 +698,8 @@ local function buildPlaza(parent: Instance)
 		Haven.ARMORY.z + 6,
 		12,
 		0.45 + SEAM,
-		Color3.fromRGB(212, 176, 96),
-		Enum.Material.Neon,
+		Color3.fromRGB(168, 142, 88),
+		Enum.Material.SmoothPlastic,
 		false
 	)
 	promptOn(pad, "Armory", "Weapons and armor", "armory", nil)
@@ -731,7 +753,7 @@ local function buildForge(parent: Instance)
 		local embers = borrow("ParticleEmitter") :: ParticleEmitter
 		embers.Name = "embers"
 		embers.Rate = 7
-		embers.LightEmission = 0.9
+		embers.LightEmission = 0.35
 		embers.Lifetime = NumberRange.new(0.8, 1.6)
 		embers.Speed = NumberRange.new(2, 5)
 		embers.Color = ColorSequence.new(Color3.fromRGB(255, 140, 48))
@@ -780,14 +802,14 @@ local function buildForge(parent: Instance)
 	local fire = Instance.new("PointLight")
 	fire.Name = "PointLight"
 	fire.Color = flame.Color
-	fire.Brightness = 2
-	fire.Range = 18
+	fire.Brightness = 0.9
+	fire.Range = 12
 	fire.Shadows = false
 	fire.Parent = flame
 	local sparks = borrow("ParticleEmitter") :: ParticleEmitter
 	sparks.Name = "sparks"
 	sparks.Rate = 8
-	sparks.LightEmission = 0.8
+	sparks.LightEmission = 0.3
 	sparks.Lifetime = NumberRange.new(0.4, 0.9)
 	sparks.Speed = NumberRange.new(1, 3)
 	sparks.Color = ColorSequence.new(Color3.fromRGB(255, 170, 64))
@@ -795,8 +817,8 @@ local function buildForge(parent: Instance)
 	local forge = stationPad(model, place.x, place.z, Color3.fromRGB(255, 120, 36))
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 140, 40)
-	light.Range = 22
-	light.Brightness = 1.5
+	light.Range = 10
+	light.Brightness = 0.4
 	light.Parent = forge
 	promptOn(forge, "Forge", "Craft, upgrade, reroll", "craft", nil)
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Forge")
@@ -1033,10 +1055,18 @@ local function buildPortals(parent: Instance)
 			Vector3.new(10, 14, 0.8),
 			CFrame.new(portal.x, 9, portal.z),
 			color,
-			Enum.Material.Neon,
+			Enum.Material.Glass,
 			false
 		)
+		fill.Transparency = 0.4
 		fill.CanTouch = portal.open == true
+		local portalLight = Instance.new("PointLight")
+		portalLight.Name = "PointLight"
+		portalLight.Color = color
+		portalLight.Brightness = 0.25
+		portalLight.Range = 8
+		portalLight.Shadows = false
+		portalLight.Parent = fill
 		if portal.open == true then
 			fill.Name = "EnterPad"
 			fill:SetAttribute("EnterDungeon", portal.dungeonId or Dungeons.ROOTVAULT_ID)
@@ -1189,8 +1219,8 @@ local function dressHaven(parent: Instance)
 			local light = Instance.new("PointLight")
 			light.Name = "PointLight"
 			light.Color = piece.Color
-			light.Brightness = 1.2
-			light.Range = 10
+			light.Brightness = 0.4
+			light.Range = 8
 			light.Shadows = false
 			light.Enabled = piece.Name ~= "Lantern"
 			light.Parent = piece
@@ -1202,7 +1232,7 @@ local function dressHaven(parent: Instance)
 			local emitter = borrow("ParticleEmitter") :: ParticleEmitter
 			emitter.Name = desc.particle
 			emitter.Rate = 4
-			emitter.LightEmission = 0.7
+			emitter.LightEmission = 0.2
 			emitter.Parent = piece
 		end
 	end
@@ -1212,7 +1242,7 @@ local function puff(parent: Instance, name: string, rate: number, color: Color3)
 	local emitter = borrow("ParticleEmitter") :: ParticleEmitter
 	emitter.Name = name
 	emitter.Rate = rate
-	emitter.LightEmission = 0.8
+	emitter.LightEmission = 0.25
 	emitter.Lifetime = NumberRange.new(0.7, 1.6)
 	emitter.Speed = NumberRange.new(0.5, 2.5)
 	emitter.Color = ColorSequence.new(color)
@@ -1288,8 +1318,8 @@ local function stampLife(parent: Instance)
 			local glow = Instance.new("PointLight")
 			glow.Name = "PointLight"
 			glow.Color = piece.Color
-			glow.Brightness = 1.4
-			glow.Range = 18
+			glow.Brightness = 0.28
+			glow.Range = 9
 			glow.Shadows = false
 			glow.Parent = piece
 		end
@@ -1384,8 +1414,8 @@ local function stampLife(parent: Instance)
 			"Waystone",
 			Vector3.new(3.4, height, 3.4),
 			CFrame.new(dest.stoneX, height / 2 + 0.25, dest.stoneZ),
-			Color3.fromRGB(186, 150, 255),
-			Enum.Material.Neon,
+			Color3.fromRGB(132, 118, 158),
+			Enum.Material.SmoothPlastic,
 			false
 		)
 		stone.CanTouch = true
@@ -1398,17 +1428,17 @@ local function stampLife(parent: Instance)
 			"WaystoneCrystal",
 			Vector3.new(2.4, 3.4, 2.4),
 			CFrame.new(dest.stoneX, height + 1.6, dest.stoneZ) * CFrame.Angles(0, 0.4, 0.5),
-			Color3.fromRGB(255, 220, 140),
-			Enum.Material.Neon,
+			Color3.fromRGB(214, 196, 150),
+			Enum.Material.Glass,
 			false
 		)
-		crystal:SetAttribute("WaystoneId", dest.id)
+		crystal.Transparency = 0.2
 		crystal:SetAttribute("ShardfallKeep", true)
 		local glow = Instance.new("PointLight")
 		glow.Name = "PointLight"
-		glow.Color = Color3.fromRGB(180, 160, 220)
-		glow.Brightness = 0.8
-		glow.Range = 10
+		glow.Color = Color3.fromRGB(180, 160, 200)
+		glow.Brightness = 0.3
+		glow.Range = 8
 		glow.Shadows = false
 		glow.Parent = stone
 	end

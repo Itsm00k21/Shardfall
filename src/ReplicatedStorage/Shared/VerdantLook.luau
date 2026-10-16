@@ -33,9 +33,9 @@ VerdantLook.PRESET = {
 		tint = { 255, 244, 220 },
 	},
 	bloom = {
-		intensity = 0.45,
-		size = 22,
-		threshold = 0.85,
+		intensity = 0.12,
+		size = 10,
+		threshold = 1.6,
 	},
 	sunRays = {
 		intensity = 0.14,
