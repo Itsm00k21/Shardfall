@@ -888,8 +888,79 @@ describe("HavenBuilder", function()
 					2
 				)
 			end
-			if math.abs(deckTop(deck) - Haven.FLOOR_Y) > 0.01 then
-				error("landing is not flush with the floor", 2)
+			if math.abs(deckTop(deck) - (Haven.FLOOR_Y + Haven.LAYER)) > 0.01 then
+				error("landing is not lifted off the floor", 2)
+			end
+		end
+
+		local function footprintOf(part: Mock): Haven.Footprint
+			local right = part.CFrame.XVector
+			local forward = part.CFrame.ZVector
+			local pos = part.CFrame.Position
+			return {
+				x = pos.X,
+				z = pos.Z,
+				rightX = right.X,
+				rightZ = right.Z,
+				forwardX = forward.X,
+				forwardZ = forward.Z,
+				halfX = part.Size.X / 2,
+				halfZ = part.Size.Z / 2,
+			}
+		end
+
+		local function isWalkPlate(part: Mock): boolean
+			if part:IsA("BasePart") ~= true then
+				return false
+			end
+			if part.Transparency ~= nil and part.Transparency >= 1 then
+				return false
+			end
+			local up = part.CFrame.YVector
+			if up == nil or up.Y < 0.99 then
+				return false
+			end
+			if
+				part.Name == "Ground"
+				or part.Name == "Landing"
+				or part.Name == "Bridge"
+				or part.Name == "HubSpawn"
+				or part.Name == "Station"
+				or part.Name == "Pond"
+				or part.Name == "Pedestal"
+				or part.Name == "Rock"
+			then
+				return true
+			end
+			local size = part.Size
+			return part.CanCollide == true and size.X >= 8 and size.Z >= 8 and size.Y <= 12
+		end
+
+		local plates = {}
+		for _, descendant in ipairs(hub:GetDescendants()) do
+			if isWalkPlate(descendant) then
+				table.insert(plates, descendant)
+			end
+		end
+		for left = 1, #plates do
+			for right = left + 1, #plates do
+				local a = plates[left]
+				local b = plates[right]
+				if Haven.coplanarTops(footprintOf(a), deckTop(a), footprintOf(b), deckTop(b)) then
+					local aParent = if a.Parent ~= nil then a.Parent.Name else "?"
+					local bParent = if b.Parent ~= nil then b.Parent.Name else "?"
+					error(
+						string.format(
+							"%s/%s and %s/%s share a top at %.3f",
+							aParent,
+							a.Name,
+							bParent,
+							b.Name,
+							deckTop(a)
+						),
+						2
+					)
+				end
 			end
 		end
 

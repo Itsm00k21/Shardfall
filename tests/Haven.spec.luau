@@ -52,6 +52,31 @@ describe("Haven", function()
 		expect(seconds <= 30).toBeTrue()
 	end)
 
+	it("keeps overlapping walk tops apart by the layer offset", function()
+		expect(Haven.LAYER >= 0.04 and Haven.LAYER <= 0.08).toBeTrue()
+		local function box(x: number, z: number, half: number): Haven.Footprint
+			return {
+				x = x,
+				z = z,
+				rightX = 1,
+				rightZ = 0,
+				forwardX = 0,
+				forwardZ = 1,
+				halfX = half,
+				halfZ = half,
+			}
+		end
+		local plaza = box(0, 0, 52)
+		local deck = box(52, 0, 7)
+		expect(Haven.footprintsOverlap(plaza, deck)).toBeTrue()
+		expect(Haven.sameTop(Haven.FLOOR_Y, Haven.FLOOR_Y)).toBeTrue()
+		expect(Haven.sameTop(Haven.FLOOR_Y, Haven.FLOOR_Y + Haven.LAYER)).toBeFalse()
+		expect(Haven.coplanarTops(plaza, Haven.FLOOR_Y, deck, Haven.FLOOR_Y)).toBeTrue()
+		expect(Haven.coplanarTops(plaza, Haven.FLOOR_Y, deck, Haven.FLOOR_Y + Haven.LAYER)).toBeFalse()
+		local neighbor = box(104, 0, 52)
+		expect(Haven.footprintsOverlap(plaza, neighbor)).toBeFalse()
+	end)
+
 	it("keeps the dungeon rooms beyond the islands", function()
 		local _, _, waveZ = Dungeons.roomOrigin(Dungeons.WAVES_ROOM_INDEX)
 		local _, _, roomZ = Dungeons.roomOrigin(1)

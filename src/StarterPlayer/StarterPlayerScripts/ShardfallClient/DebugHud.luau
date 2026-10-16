@@ -35,19 +35,28 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
 
+	local margin = UiTheme.safeMargin()
 	local toggle = Instance.new("TextButton")
 	toggle.Name = "DebugToggle"
 	toggle.AnchorPoint = Vector2.new(1, 0)
-	toggle.Position = UDim2.new(1, -UiTheme.PAD, 0, UiTheme.PAD)
-	toggle.Size = UDim2.fromOffset(UiTheme.labelWidth("Debug"), 32)
+	toggle.Position = UDim2.new(1, -margin, 0, margin)
+	toggle.Size = UDim2.fromOffset(UiTheme.labelWidth("Debug") + UiTheme.PAD * 2, 32)
 	toggle.BackgroundColor3 = rgb("debug")
 	toggle.BackgroundTransparency = 0
 	toggle.BorderSizePixel = 0
 	toggle.Font = Enum.Font.BuilderSansBold
 	toggle.TextSize = UiTheme.MIN_TEXT
+	toggle.TextXAlignment = Enum.TextXAlignment.Center
+	toggle.TextYAlignment = Enum.TextYAlignment.Center
 	toggle.TextColor3 = rgb("gold")
 	toggle.Text = "Debug"
 	toggle.Parent = screen
+	local togglePad = Instance.new("UIPadding")
+	togglePad.PaddingTop = UDim.new(0, 4)
+	togglePad.PaddingBottom = UDim.new(0, 4)
+	togglePad.PaddingLeft = UDim.new(0, UiTheme.PAD)
+	togglePad.PaddingRight = UDim.new(0, UiTheme.PAD)
+	togglePad.Parent = toggle
 	local toggleCorner = Instance.new("UICorner")
 	toggleCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	toggleCorner.Parent = toggle
@@ -55,7 +64,7 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	local row = Instance.new("ScrollingFrame")
 	row.Name = "Debug"
 	row.AnchorPoint = Vector2.new(1, 0)
-	row.Position = UDim2.new(1, -UiTheme.PAD, 0, 48)
+	row.Position = UDim2.new(1, -margin, 0, margin + 32 + UiTheme.PAD)
 	row.Size = UDim2.fromOffset(320, UiTheme.TAP + UiTheme.PAD * 2)
 	row.BackgroundColor3 = rgb("background")
 	row.BackgroundTransparency = 0
@@ -85,7 +94,7 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	local function place()
 		local size = screen.AbsoluteSize
 		local vx = if size.X >= 200 then size.X else 1280
-		local width = math.clamp(vx - UiTheme.PAD * 2, UiTheme.TAP, 520)
+		local width = math.clamp(vx - margin * 2, UiTheme.TAP, 520)
 		row.Size = UDim2.fromOffset(width, UiTheme.TAP + UiTheme.PAD * 2)
 	end
 	place()

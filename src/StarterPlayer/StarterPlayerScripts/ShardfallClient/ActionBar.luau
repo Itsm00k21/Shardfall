@@ -42,11 +42,20 @@ local function button(parent: Instance, name: string, text: string, color: Color
 		TextSize = 15,
 		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.None,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
 		TextColor3 = Color3.fromRGB(240, 236, 248),
 		Text = text,
 		AutoButtonColor = true,
 	}, parent) :: TextButton
 	new("UICorner", { CornerRadius = UDim.new(0, 12) }, widget)
+	local pad = ShellLayout.BAR_PAD
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, pad),
+		PaddingBottom = UDim.new(0, pad),
+		PaddingLeft = UDim.new(0, pad),
+		PaddingRight = UDim.new(0, pad),
+	}, widget)
 	return widget
 end
 
