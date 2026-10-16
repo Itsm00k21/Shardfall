@@ -20,6 +20,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local CombatHud = {}
@@ -44,6 +45,7 @@ end
 export type Callbacks = {
 	onRun: (any) -> (),
 	onHint: (string) -> (),
+	onDodgeCharges: ((number) -> ())?,
 }
 
 local player = Players.LocalPlayer
@@ -204,8 +206,8 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 
 	local cueLabel = Instance.new("TextLabel")
 	cueLabel.Name = "Telegraph"
-	cueLabel.AnchorPoint = Vector2.new(0.5, 0)
-	cueLabel.Position = UDim2.new(0.5, 0, 0, 72)
+	cueLabel.AnchorPoint = Vector2.new(0, 0)
+	cueLabel.Position = UDim2.fromOffset(16, 72)
 	cueLabel.Size = UDim2.fromOffset(280, 36)
 	cueLabel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	cueLabel.BackgroundTransparency = 0.15
@@ -225,32 +227,28 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	flash.Active = false
 	flash.Parent = screen
 
-	local function feelButton(name: string, text: string, order: number, color: Color3): TextButton
-		local button = Instance.new("TextButton")
-		button.Name = name
-		button.AnchorPoint = Vector2.new(1, 1)
-		button.Position = UDim2.new(1, -16, 1, -16 - (order * 72))
-		button.Size = UDim2.fromOffset(64, 64)
-		button.BackgroundColor3 = color
-		button.BorderSizePixel = 0
-		button.Font = Enum.Font.BuilderSansBold
-		button.TextSize = 14
-		button.TextColor3 = Color3.fromRGB(16, 14, 24)
-		button.Text = text
-		button.Parent = screen
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 12)
-		corner.Parent = button
-		return button
+	local function placeChrome()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local combo = ShellLayout.comboRect()
+		comboLabel.Position = UDim2.fromOffset(combo.x, combo.y)
+		comboLabel.Size = UDim2.fromOffset(combo.w, combo.h)
+		local cue = ShellLayout.cueRect(vx, vy)
+		cueLabel.Position = UDim2.fromOffset(cue.x, cue.y)
+		cueLabel.Size = UDim2.fromOffset(cue.w, cue.h)
 	end
-	local dodgeButton = feelButton("Dodge", "Dodge", 0, Color3.fromRGB(120, 210, 170))
-	local chargeButton = feelButton("Charge", "Charge", 1, Color3.fromRGB(255, 186, 96))
-	dodgeButton.MouseButton1Click:Connect(function()
-		CombatHud.dodge()
-	end)
-	chargeButton.MouseButton1Click:Connect(function()
-		CombatHud.swing(true)
-	end)
+	placeChrome()
+	local chromeCamera = workspace.CurrentCamera
+	if chromeCamera ~= nil then
+		chromeCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placeChrome)
+	end
 
 	local shakeUntil = 0
 	local flashUntil = 0
@@ -460,7 +458,9 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			end)
 		elseif payload.kind == "dodge" then
 			local charges = numberFrom(payload, "charges")
-			dodgeButton.Text = if charges ~= nil then "Dodge\n" .. tostring(charges) else "Dodge"
+			if charges ~= nil and callbacks.onDodgeCharges ~= nil then
+				callbacks.onDodgeCharges(charges)
+			end
 			playCue(if payload.perfect == true then "perfect" else "dodge")
 			if payload.perfect == true then
 				local x = numberFrom(payload, "x") or 0

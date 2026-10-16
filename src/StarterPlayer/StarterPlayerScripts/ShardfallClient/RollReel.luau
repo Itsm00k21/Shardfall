@@ -78,7 +78,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	gui.Name = "ShardfallRoll"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
-	gui.DisplayOrder = 8
+	gui.DisplayOrder = 40
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = playerGui
 	MobileShell.mount(gui)
@@ -982,7 +982,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		busy = false
 		choosing = false
 		hooks.setBusy(false)
-		gui.DisplayOrder = 8
+		gui.DisplayOrder = 40
 		chestFrame.Visible = false
 		manyFrame.Visible = false
 		reel.Visible = false
@@ -998,7 +998,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		local seed = if type(pending) == "table" then tonumber(pending.fillerSeed) else nil
 		if busy then
 			if choice.Visible and seed ~= nil and seed == shownSeed then
-				gui.DisplayOrder = 30
+				gui.DisplayOrder = 40
 			else
 				hooks.setStatus("A chest is already opening.", "info")
 			end
@@ -1006,7 +1006,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		end
 		busy = true
 		hooks.setBusy(true)
-		gui.DisplayOrder = 30
+		gui.DisplayOrder = 40
 		generation += 1
 		skipToken = { skipped = false }
 		skipButton.Visible = false

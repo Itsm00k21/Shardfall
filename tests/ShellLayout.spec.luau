@@ -55,4 +55,61 @@ describe("ShellLayout", function()
 		expect(ShellLayout.zoneVisible(ShellLayout.ZONE_MAX_DISTANCE + 1)).toBeFalse()
 		expect(ShellLayout.zoneScale(ShellLayout.ZONE_MAX_DISTANCE + 20)).toEqual(0)
 	end)
+
+	it("keeps the always-on chrome from stacking on 1280x800 and a phone", function()
+		local viewports = {
+			{ 1280, 800 },
+			{ 1280, 720 },
+			{ 844, 390 },
+			{ 800, 380 },
+		}
+		for _, row in ipairs(viewports) do
+			local vx = row[1]
+			local vy = row[2]
+			local health = ShellLayout.healthRect()
+			local pet = ShellLayout.petRect()
+			local raid = ShellLayout.raidRect()
+			local action = ShellLayout.actionBar(vx, vy)
+			local market = ShellLayout.marketButton(vx, vy)
+			local loop = ShellLayout.loopRect(vx, vy)
+			local cue = ShellLayout.cueRect(vx, vy)
+			local debugRow = ShellLayout.debugRect(vx, vy)
+			local always = { health, pet, raid, action, market, loop, cue, debugRow }
+			for i = 1, #always do
+				for j = i + 1, #always do
+					expect(ShellLayout.overlaps(always[i], always[j])).toBeFalse()
+				end
+			end
+			expect(action.x >= ShellLayout.LEFT_RESERVE).toBeTrue()
+			expect(action.h >= 60).toBeTrue()
+			expect(action.y + action.h <= vy).toBeTrue()
+			local menu = ShellLayout.menuRect(vx, vy)
+			local doors = ShellLayout.doorRect(vx, vy)
+			local classBox = ShellLayout.classRect(vx, vy)
+			local bag = ShellLayout.inventory(vx, vy, false)
+			local bagRect = {
+				x = 16,
+				y = pet.y + pet.h + 8,
+				w = bag.w,
+				h = bag.h,
+			}
+			expect(ShellLayout.overlaps(menu, health)).toBeFalse()
+			expect(ShellLayout.overlaps(menu, pet)).toBeFalse()
+			expect(ShellLayout.overlaps(menu, raid)).toBeFalse()
+			expect(ShellLayout.overlaps(menu, action)).toBeFalse()
+			expect(ShellLayout.overlaps(menu, market)).toBeFalse()
+			expect(ShellLayout.overlaps(menu, loop)).toBeFalse()
+			expect(ShellLayout.overlaps(doors, action)).toBeFalse()
+			expect(ShellLayout.overlaps(doors, pet)).toBeFalse()
+			expect(ShellLayout.overlaps(doors, raid)).toBeFalse()
+			expect(ShellLayout.overlaps(doors, loop)).toBeFalse()
+			expect(ShellLayout.overlaps(classBox, doors)).toBeFalse()
+			expect(ShellLayout.overlaps(classBox, pet)).toBeFalse()
+			expect(ShellLayout.overlaps(classBox, raid)).toBeFalse()
+			expect(ShellLayout.overlaps(bagRect, action)).toBeFalse()
+			expect(ShellLayout.overlaps(bagRect, loop)).toBeFalse()
+			expect(ShellLayout.overlaps(bagRect, pet)).toBeFalse()
+			expect(menu.h > 0 and doors.h > 0 and classBox.h > 0).toBeTrue()
+		end
+	end)
 end)

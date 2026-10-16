@@ -31,14 +31,32 @@ export type Box = {
 	h: number,
 }
 
+export type Rect = {
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+}
+
+-- Action bar sits above the bottom edge. The left reserve clears the
+-- market button (16 + 64 + 8). Seven slots, 8px gaps.
+ShellLayout.ACTION_H = 64
+ShellLayout.ACTION_GAP = 8
+ShellLayout.BAR_MARGIN = 12
+ShellLayout.LEFT_RESERVE = 88
+ShellLayout.SLOT_COUNT = 7
+
 function ShellLayout.mobile(touchEnabled: boolean, keyboardEnabled: boolean): boolean
 	return touchEnabled == true and keyboardEnabled ~= true
 end
 
 function ShellLayout.inventory(viewportX: number, viewportY: number, mobile: boolean): Box
 	local margin = if mobile then 8 else 16
-	local maxW = math.max(0, viewportX - margin * 2)
-	local maxH = math.max(0, viewportY - margin * 2)
+	local bar = ShellLayout.actionBar(viewportX, viewportY)
+	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	local top = ShellLayout.petRect().y + ShellLayout.petRect().h + 8
+	local maxW = math.max(0, loop.x - 8 - margin)
+	local maxH = math.max(0, bar.y - 8 - top)
 	local w = math.min(if mobile then maxW else 960, maxW)
 	local h = math.min(if mobile then maxH else 680, maxH)
 	return { w = w, h = h }
@@ -61,21 +79,154 @@ function ShellLayout.sidePanel(viewportX: number, viewportY: number): Box
 end
 
 function ShellLayout.thumbSize(viewportX: number): Box
-	local gaps = 8 * 5 + 24
-	local slot = math.floor((viewportX - gaps) / 7)
+	local gaps = ShellLayout.ACTION_GAP * (ShellLayout.SLOT_COUNT - 1)
+	local usable = viewportX - ShellLayout.LEFT_RESERVE - ShellLayout.BAR_MARGIN - gaps
+	local slot = math.floor(usable / ShellLayout.SLOT_COUNT)
 	local w = math.clamp(slot, 72, 96)
-	return { w = w, h = 56 }
+	return { w = w, h = ShellLayout.ACTION_H }
 end
 
 ShellLayout.THUMBS = {
-	{ id = "Menu", label = "Menu" },
+	{ id = "Attack", label = "Attack" },
+	{ id = "Dodge", label = "Dodge" },
+	{ id = "Skills", label = "Skills" },
+	{ id = "Tonic", label = "Tonic" },
 	{ id = "Inventory", label = "Items" },
 	{ id = "Travel", label = "Travel" },
-	{ id = "Graphics", label = "Med" },
-	{ id = "AutoFarm", label = "Farm" },
-	{ id = "Tonic", label = "Tonic" },
-	{ id = "Attack", label = "Attack" },
+	{ id = "Menu", label = "Menu" },
 }
+
+function ShellLayout.overlaps(a: Rect, b: Rect): boolean
+	return a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h
+end
+
+function ShellLayout.healthRect(): Rect
+	return { x = 16, y = 16, w = 220, h = 40 }
+end
+
+function ShellLayout.comboRect(): Rect
+	return { x = 244, y = 16, w = 160, h = 24 }
+end
+
+function ShellLayout.petRect(): Rect
+	return { x = 16, y = 60, w = 96, h = 64 }
+end
+
+function ShellLayout.raidRect(): Rect
+	return { x = 120, y = 60, w = 96, h = 64 }
+end
+
+function ShellLayout.loopRect(viewportX: number, _viewportY: number): Rect
+	return {
+		x = viewportX - 16 - 280,
+		y = 72,
+		w = 280,
+		h = 220,
+	}
+end
+
+function ShellLayout.marketButton(_viewportX: number, viewportY: number): Rect
+	return { x = 16, y = viewportY - 80, w = 64, h = 64 }
+end
+
+function ShellLayout.actionBar(viewportX: number, viewportY: number): Rect
+	local slot = ShellLayout.thumbSize(viewportX)
+	local gaps = ShellLayout.ACTION_GAP * (ShellLayout.SLOT_COUNT - 1)
+	local barW = ShellLayout.SLOT_COUNT * slot.w + gaps
+	local space = viewportX - ShellLayout.LEFT_RESERVE - ShellLayout.BAR_MARGIN
+	local x = ShellLayout.LEFT_RESERVE + math.max(0, math.floor((space - barW) / 2))
+	local y = viewportY - ShellLayout.BAR_MARGIN - slot.h
+	return { x = x, y = y, w = barW, h = slot.h }
+end
+
+function ShellLayout.debugRect(viewportX: number, viewportY: number): Rect
+	local combo = ShellLayout.comboRect()
+	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	local x = combo.x + combo.w + 8
+	local w = loop.x - 8 - x
+	if w > 520 then
+		w = 520
+	end
+	if w < 64 then
+		w = 64
+	end
+	return { x = x, y = 16, w = w, h = 64 }
+end
+
+function ShellLayout.doorRect(viewportX: number, viewportY: number): Rect
+	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	local bar = ShellLayout.actionBar(viewportX, viewportY)
+	local pet = ShellLayout.petRect()
+	local w = 420
+	local h = 72
+	local right = loop.x - 8
+	if w > right - 16 then
+		w = math.max(200, right - 16)
+	end
+	local x = math.floor((16 + right - w) / 2)
+	if x < 16 then
+		x = 16
+	end
+	if x + w > right then
+		x = math.max(16, right - w)
+	end
+	local y = bar.y - 8 - h
+	local minY = pet.y + pet.h + 8
+	if y < minY then
+		y = minY
+	end
+	return { x = x, y = y, w = w, h = h }
+end
+
+function ShellLayout.classRect(viewportX: number, viewportY: number): Rect
+	local door = ShellLayout.doorRect(viewportX, viewportY)
+	local pet = ShellLayout.petRect()
+	local w = math.min(360, door.w)
+	local bottom = door.y - 8
+	local minY = pet.y + pet.h + 8
+	local y = bottom - 220
+	if y < minY then
+		y = minY
+	end
+	local h = bottom - y
+	if h < 0 then
+		h = 0
+	end
+	return { x = door.x, y = y, w = w, h = h }
+end
+
+function ShellLayout.menuRect(viewportX: number, viewportY: number): Rect
+	local door = ShellLayout.doorRect(viewportX, viewportY)
+	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	local pet = ShellLayout.petRect()
+	local y = pet.y + pet.h + 16
+	local bottom = door.y - 8
+	local h = bottom - y
+	if h < 0 then
+		h = 0
+	end
+	local w = math.min(360, math.floor(viewportX * 0.36))
+	local maxW = math.max(160, loop.x - 8 - 16)
+	if w > maxW then
+		w = maxW
+	end
+	return { x = 16, y = y, w = w, h = h }
+end
+
+function ShellLayout.travelRect(viewportX: number, viewportY: number): Rect
+	local menu = ShellLayout.menuRect(viewportX, viewportY)
+	local w = math.min(320, menu.w)
+	return { x = menu.x, y = menu.y, w = w, h = menu.h }
+end
+
+function ShellLayout.cueRect(viewportX: number, viewportY: number): Rect
+	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	local raid = ShellLayout.raidRect()
+	local x = raid.x + raid.w + 8
+	local right = loop.x - 8
+	local w = math.min(280, math.max(0, right - x))
+	return { x = x, y = 88, w = w, h = 36 }
+end
 
 function ShellLayout.labelFits(label: string, width: number): boolean
 	return #label * 8 + 10 <= width
