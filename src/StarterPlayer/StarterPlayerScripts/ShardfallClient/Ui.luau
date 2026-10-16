@@ -196,6 +196,44 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: TextLabel
 	corner(toast, 8)
 
+	local bannerGui = new("ScreenGui", {
+		Name = "ShardfallBanner",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = 100,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	}, playerGui) :: ScreenGui
+	local banner = new("TextLabel", {
+		Name = "Banner",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 8),
+		Size = UDim2.new(0.92, 0, 0, 48),
+		BackgroundColor3 = COLORS.gold,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 22,
+		TextColor3 = COLORS.ink,
+		Text = "",
+		Visible = false,
+		ZIndex = 20,
+	}, bannerGui) :: TextLabel
+	corner(banner, 8)
+	local function showBanner(text: string, kind: string)
+		banner.Text = text
+		banner.Visible = text ~= ""
+		local background = COLORS.gold
+		local ink = COLORS.ink
+		if kind == "error" then
+			background = COLORS.danger
+			ink = COLORS.text
+		elseif kind == "ok" then
+			background = COLORS.ok
+		end
+		banner.BackgroundColor3 = background
+		banner.TextColor3 = ink
+	end
+
 	local panel = new("ScrollingFrame", {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(1, 0),
@@ -412,6 +450,22 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	wavesButton.Position = UDim2.fromOffset(0, 82)
 	wavesButton.Size = UDim2.new(1, 0, 0, 44)
 	wavesButton.TextSize = 13
+	local waveAt = 0
+	local function pressWaves()
+		local now = os.clock()
+		if now - waveAt < 0.4 then
+			return
+		end
+		waveAt = now
+		if runState.active == true then
+			showBanner("Leave this run before starting Rootvault Waves.", "error")
+			return
+		end
+		showBanner("Entering Rootvault Waves…", "info")
+		callbacks.onDungeon("enter", "rootvault_waves")
+	end
+	wavesButton.MouseButton1Click:Connect(pressWaves)
+	wavesButton.Activated:Connect(pressWaves)
 
 	local function paintDungeon()
 		local note = if type(runState.note) == "string"
@@ -487,19 +541,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			return
 		end
 		callbacks.onDungeon("enter", "rootvault")
-	end)
-	wavesButton.Activated:Connect(function()
-		local text = "Entering Rootvault Waves…"
-		local color = COLORS.muted
-		if runState.active == true then
-			text = "Leave this run before starting Rootvault Waves."
-			color = COLORS.danger
-		else
-			callbacks.onDungeon("enter", "rootvault_waves")
-		end
-		toast.Text = text
-		toast.TextColor3 = color
-		toast.Visible = true
 	end)
 	leaveButton.MouseButton1Click:Connect(function()
 		callbacks.onDungeon("leave")
@@ -920,9 +961,20 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Visible = false,
-		LayoutOrder = 30,
+		LayoutOrder = 3,
 	}, panel) :: Frame
 	list(craftPage, 8)
+	new("TextLabel", {
+		Name = "ForgeTitle",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 28),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.gold,
+		Text = "FORGE",
+		LayoutOrder = 0,
+	}, craftPage)
 	local craftHint = new("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 18),
@@ -1134,6 +1186,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		loadout.Visible = shards
 		inventoryNote.Visible = shards
 		craftPage.Visible = not shards
+		dungeonBar.Visible = shards
+		if not shards then
+			panel.CanvasPosition = Vector2.zero
+		end
 		tokenHint.Visible = shards and profileLoaded and tokens < 1 and not busy
 	end
 
@@ -1369,6 +1425,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		if kind == "craft" then
 			page = "craft"
 			applyPage()
+			panel.CanvasPosition = Vector2.zero
 			return
 		end
 		page = "shards"
@@ -1392,6 +1449,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		status.Visible = text ~= ""
 		toast.Text = text
 		toast.Visible = text ~= ""
+		showBanner(text, kind)
 		local color = COLORS.muted
 		if kind == "error" then
 			color = COLORS.danger

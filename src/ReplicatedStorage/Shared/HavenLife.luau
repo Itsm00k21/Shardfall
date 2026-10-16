@@ -161,7 +161,7 @@ function HavenLife.pieces(): { Piece }
 		-- lying inside the island.
 		local fx, fz = outer(fall[1], fall[2], fall[3], 16)
 		local yaw = math.atan2(fx - fall[1], fz - fall[2])
-		local length = 24
+		local length = 28
 		local tilt = 68
 		local top = 2.2
 		local centerY = top - math.cos(math.rad(tilt)) * (length / 2)
@@ -169,19 +169,19 @@ function HavenLife.pieces(): { Piece }
 			piece(
 				"Waterfall",
 				"Part",
-				8,
+				10,
 				length,
-				1.4,
+				2.8,
 				fx,
 				centerY,
 				fz,
 				tilt,
 				math.deg(yaw),
 				0,
-				MIST,
-				"Glass",
+				{ 120, 220, 255 },
+				"Neon",
 				"large",
-				0.18,
+				0,
 				nil,
 				"mist"
 			)
@@ -222,10 +222,10 @@ function HavenLife.pieces(): { Piece }
 				28,
 				index * 40,
 				12,
-				{ 170, 120, 255 },
+				{ 190, 140, 255 },
 				"Neon",
 				"large",
-				0.15,
+				0,
 				nil,
 				nil,
 				true
@@ -436,8 +436,18 @@ function HavenLife.rigs(): { Rig }
 		},
 	}
 	for index, points in ipairs(loops) do
-		local height = 3.05 + index * 0.28
+		local height = 6.2 + index * 0.5
 		local home = points[1]
+		local cloak = {
+			{ 120, 72, 220 },
+			{ 220, 84, 96 },
+			{ 48, 150, 170 },
+		}
+		local flag = {
+			{ 255, 210, 70 },
+			{ 255, 120, 170 },
+			{ 140, 230, 255 },
+		}
 		table.insert(list, {
 			name = "Townsfolk",
 			kind = "folk",
@@ -449,16 +459,16 @@ function HavenLife.rigs(): { Rig }
 				piece(
 					"Body",
 					"Part",
-					1.3,
+					3.2,
 					height,
-					0.8,
+					2.2,
 					0,
 					height / 2,
 					0,
 					0,
 					0,
 					0,
-					{ 90, 108, 150 },
+					cloak[index],
 					"SmoothPlastic",
 					"large",
 					0
@@ -466,11 +476,11 @@ function HavenLife.rigs(): { Rig }
 				piece(
 					"Head",
 					"Part",
-					1.1,
-					1.1,
-					1.1,
+					2,
+					2,
+					2,
 					0,
-					height + 0.7,
+					height + 1.3,
 					0,
 					0,
 					0,
@@ -482,37 +492,57 @@ function HavenLife.rigs(): { Rig }
 					"Ball"
 				),
 				piece(
+					"TownsfolkFlag",
+					"Part",
+					0.8,
+					14,
+					0.8,
+					0,
+					height + 8,
+					0,
+					0,
+					0,
+					0,
+					flag[index],
+					"Neon",
+					"large",
+					0,
+					nil,
+					nil,
+					true
+				),
+				piece(
 					"Arm",
 					"Part",
-					0.35,
-					1.4,
-					0.35,
-					0.9,
+					0.7,
+					2.6,
+					0.7,
+					2.1,
 					height * 0.55,
 					0,
 					0,
 					0,
 					18,
-					{ 90, 108, 150 },
+					cloak[index],
 					"SmoothPlastic",
-					"small",
+					"large",
 					0
 				),
 				piece(
 					"Arm",
 					"Part",
-					0.35,
-					1.4,
-					0.35,
-					-0.9,
+					0.7,
+					2.6,
+					0.7,
+					-2.1,
 					height * 0.55,
 					0,
 					0,
 					0,
 					-18,
-					{ 90, 108, 150 },
+					cloak[index],
 					"SmoothPlastic",
-					"small",
+					"large",
 					0
 				),
 			},

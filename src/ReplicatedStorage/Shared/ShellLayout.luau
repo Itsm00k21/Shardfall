@@ -12,8 +12,9 @@
 local ShellLayout = {}
 
 -- Zone names are stud-sized, so they shrink with distance, and they drop
--- off before the next island's label stacks on top of them.
-ShellLayout.ZONE_MAX_DISTANCE = 110
+-- off before the next island's label stacks on top of them. 70 studs is
+-- inside one island, short of the bridge to the next one.
+ShellLayout.ZONE_MAX_DISTANCE = 70
 ShellLayout.ZONE_WIDTH_STUDS = 12
 ShellLayout.ZONE_HEIGHT_STUDS = 2.4
 
@@ -74,6 +75,26 @@ ShellLayout.THUMBS = {
 
 function ShellLayout.labelFits(label: string, width: number): boolean
 	return #label * 8 + 10 <= width
+end
+
+function ShellLayout.zoneVisible(distance: number): boolean
+	if type(distance) ~= "number" or distance ~= distance then
+		return false
+	end
+	return distance >= 0 and distance <= ShellLayout.ZONE_MAX_DISTANCE
+end
+
+-- 1 beside the camera, about a third of that at the cutoff, 0 past it.
+function ShellLayout.zoneScale(distance: number): number
+	if not ShellLayout.zoneVisible(distance) then
+		return 0
+	end
+	local span = ShellLayout.ZONE_MAX_DISTANCE
+	if span <= 0 then
+		return 1
+	end
+	local along = math.clamp(distance / span, 0, 1)
+	return 1 - along * 0.65
 end
 
 return ShellLayout

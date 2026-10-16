@@ -229,4 +229,51 @@ function Quality.lodHide(
 	return false, trimIndex, shown
 end
 
+-- True only when the client will actually draw the part. A Transparency of 1,
+-- a LocalTransparencyModifier near 1, a part that is not under Workspace, or
+-- a part sitting off the hub (the void under the islands) does not count.
+function Quality.drawn(
+	transparency: number,
+	modifier: number,
+	inWorkspace: boolean,
+	y: number?
+): boolean
+	if inWorkspace ~= true then
+		return false
+	end
+	if type(transparency) ~= "number" or transparency ~= transparency then
+		return false
+	end
+	if type(modifier) ~= "number" or modifier ~= modifier then
+		return false
+	end
+	if transparency < 0 or transparency >= 0.95 then
+		return false
+	end
+	if modifier < 0 or modifier >= 0.5 then
+		return false
+	end
+	if y ~= nil then
+		if type(y) ~= "number" or y ~= y or y < 90 or y > 280 then
+			return false
+		end
+	end
+	return true
+end
+
+-- An NPC counts only when a real body-sized part is drawn. A 1-stud limb
+-- with Transparency 0 is not a visible character.
+function Quality.modelShown(
+	transparency: number,
+	modifier: number,
+	inWorkspace: boolean,
+	y: number?,
+	longest: number
+): boolean
+	if not Quality.drawn(transparency, modifier, inWorkspace, y) then
+		return false
+	end
+	return type(longest) == "number" and longest == longest and longest >= 4
+end
+
 return Quality

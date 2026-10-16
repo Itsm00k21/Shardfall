@@ -159,6 +159,11 @@ local function teleport(player: Player, cframe: CFrame)
 	-- same contexts that cannot write it, and skipping the request is what
 	-- drops the camera into the black gap on the way out of a room.
 	pcall(function()
+		if hrp ~= nil then
+			player.ReplicationFocus = hrp
+		end
+	end)
+	pcall(function()
 		player:RequestStreamAroundAsync(cframe.Position, 5)
 	end)
 	character:PivotTo(cframe)

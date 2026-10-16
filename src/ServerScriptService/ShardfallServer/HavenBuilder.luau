@@ -64,10 +64,17 @@ local TRIM = {
 	Petals = true,
 	Butterflies = true,
 	Cloud = true,
-	SkyShard = true,
 	Crate = true,
 	AwningStripe = true,
+}
+
+-- These stay opaque on every tier. Sky shards and the fall lip used to be
+-- trim, so a med budget could drop them with the flowers.
+local KEEP_PIECE = {
+	Waterfall = true,
 	FallLip = true,
+	SkyShard = true,
+	StarBeam = true,
 }
 
 local function part(
@@ -523,6 +530,7 @@ local function buildCrystal(parent: Instance)
 		Enum.Material.Neon,
 		true
 	)
+	crystal:SetAttribute("ShardfallKeep", true)
 	part(
 		parent,
 		"Crack",
@@ -1263,6 +1271,9 @@ local function stampLife(parent: Instance)
 		if TRIM[desc.name] == true then
 			piece:SetAttribute("ShardfallTrim", true)
 		end
+		if KEEP_PIECE[desc.name] == true then
+			piece:SetAttribute("ShardfallKeep", true)
+		end
 		piece.Parent = host
 		if desc.light == true then
 			local glow = Instance.new("PointLight")
@@ -1332,6 +1343,8 @@ local function stampLife(parent: Instance)
 			local piece = stampPiece(model, desc, rig.x + desc.x, rig.z + desc.z, desc.ry)
 			if rig.kind == "bird" then
 				piece:SetAttribute("ShardfallTrim", true)
+			elseif rig.kind == "folk" then
+				piece:SetAttribute("ShardfallKeep", true)
 			end
 			local localCf = CFrame.new(desc.x, desc.y, desc.z)
 				* CFrame.Angles(math.rad(desc.rx), math.rad(desc.ry), math.rad(desc.rz))
@@ -1341,26 +1354,27 @@ local function stampLife(parent: Instance)
 	end
 
 	for index, dest in ipairs(Travel.DESTINATIONS) do
-		local height = 4.8 + index * 0.35
+		local height = 9 + index * 0.35
 		local stone = part(
-			alive,
+			parent,
 			"Waystone",
-			Vector3.new(1.6, height, 1.6),
+			Vector3.new(3.4, height, 3.4),
 			CFrame.new(dest.stoneX, height / 2 + 0.25, dest.stoneZ),
-			Color3.fromRGB(132, 124, 150),
+			Color3.fromRGB(186, 150, 255),
 			Enum.Material.Neon,
 			false
 		)
 		stone.CanTouch = true
 		stone.CanQuery = true
-		stone.CastShadow = false
+		stone.CastShadow = true
 		stone:SetAttribute("WaystoneId", dest.id)
+		stone:SetAttribute("ShardfallKeep", true)
 		local crystal = part(
-			alive,
+			parent,
 			"WaystoneCrystal",
-			Vector3.new(1.2, 1.8, 1.2),
-			CFrame.new(dest.stoneX, height + 1, dest.stoneZ) * CFrame.Angles(0, 0.4, 0.5),
-			Color3.fromRGB(186, 140, 255),
+			Vector3.new(2.4, 3.4, 2.4),
+			CFrame.new(dest.stoneX, height + 1.6, dest.stoneZ) * CFrame.Angles(0, 0.4, 0.5),
+			Color3.fromRGB(255, 220, 140),
 			Enum.Material.Neon,
 			false
 		)
@@ -1584,6 +1598,17 @@ function HavenBuilder.build(parent: Instance): number
 						player.Name
 					)
 				)
+				if typeof(player) ~= "Instance" or not player:IsA("Player") then
+					return
+				end
+				if type(action) ~= "string" then
+					return
+				end
+				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+				local remote = if remotes ~= nil then remotes:FindFirstChild("HavenPrompt") else nil
+				if remote ~= nil and remote:IsA("RemoteEvent") then
+					remote:FireClient(player, action)
+				end
 			end)
 		end
 	end

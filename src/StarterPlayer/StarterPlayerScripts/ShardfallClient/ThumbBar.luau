@@ -64,10 +64,10 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, playerGui) :: ScreenGui
 	MobileShell.mount(screen)
 
-	local left = new("Frame", {
-		Name = "LeftThumb",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 12, 1, -12),
+	local row = new("Frame", {
+		Name = "ThumbRow",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -12),
 		BackgroundTransparency = 1,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromOffset(0, 56),
@@ -75,25 +75,10 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 8),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, left)
-
-	local right = new("Frame", {
-		Name = "RightThumb",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -12, 1, -12),
-		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, 56),
-	}, screen) :: Frame
-	new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 8),
-		HorizontalAlignment = Enum.HorizontalAlignment.Right,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, right)
+	}, row)
 
 	local ink = Color3.fromRGB(32, 22, 10)
 	local purple = Color3.fromRGB(108, 78, 196)
@@ -110,21 +95,20 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 	local width = thumbWidth()
 
-	local menu = button(left, "Menu", "≡\nMenu", dim, width)
+	local menu = button(row, "Menu", "Menu", dim, width)
 	menu.LayoutOrder = 1
-	local inventory = button(left, "Inventory", "▣\nItems", purple, width)
+	local inventory = button(row, "Inventory", "Items", purple, width)
 	inventory.LayoutOrder = 2
-	local travel = button(left, "Travel", "→\nTravel", purple, width)
+	local travel = button(row, "Travel", "Travel", purple, width)
 	travel.LayoutOrder = 3
-
-	local graphics = button(right, "Graphics", "◆\nMed", dim, width)
-	graphics.LayoutOrder = 1
-	local farm = button(right, "AutoFarm", "↻\nFarm", dim, width)
-	farm.LayoutOrder = 2
-	local tonic = button(right, "Tonic", "+\nTonic", dim, width)
-	tonic.LayoutOrder = 3
-	local attack = button(right, "Attack", "×\nAttack", gold, width)
-	attack.LayoutOrder = 4
+	local graphics = button(row, "Graphics", "Med", dim, width)
+	graphics.LayoutOrder = 4
+	local farm = button(row, "AutoFarm", "Farm", dim, width)
+	farm.LayoutOrder = 5
+	local tonic = button(row, "Tonic", "Tonic", dim, width)
+	tonic.LayoutOrder = 6
+	local attack = button(row, "Attack", "Attack", gold, width)
+	attack.LayoutOrder = 7
 	attack.TextColor3 = ink
 
 	local function applyWidth()
@@ -149,7 +133,7 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local farmOn = false
 	return {
 		setGraphics = function(label: string)
-			graphics.Text = "◆\n" .. label
+			graphics.Text = label
 		end,
 		setFarm = function(enabled: boolean)
 			farmOn = enabled
