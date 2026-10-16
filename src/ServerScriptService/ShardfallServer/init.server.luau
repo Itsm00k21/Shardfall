@@ -8,6 +8,10 @@
 	tells the client the profile is ready. The listener is registered first
 	so a fast in-memory load still pushes a snapshot. Dungeon startup, including
 	the hub build, is isolated so a map error cannot skip that profile push.
+	DataService.start() runs before the trade audit. TradeAudit.load reads
+	ShardfallTradeAudit, and that UpdateAsync used to run first. In Studio
+	with API access off it can yield until the client has already given up,
+	so the profile load never started.
 
 	The first statement is a print, before any require, so a broken module
 	still leaves `[Shardfall] build b3c8748+ server` in Output.
@@ -109,9 +113,9 @@ local dungeonOk, dungeonError = pcall(DungeonService.start)
 if not dungeonOk then
 	warn("[Shardfall] Dungeon startup failed: " .. tostring(dungeonError))
 end
+DataService.start()
 TradeService.start()
 MarketService.start()
-DataService.start()
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()
 		DataService.waitFor(player, 20)

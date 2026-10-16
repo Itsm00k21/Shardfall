@@ -223,7 +223,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, bannerGui) :: TextLabel
 	corner(banner, 8)
 	local bannerToken = 0
-	local function showBanner(text: string, kind: string)
+	local function showBanner(text: string, kind: string, hold: boolean?)
 		bannerToken += 1
 		local token = bannerToken
 		local changed = banner.Text ~= text or not banner.Visible
@@ -239,7 +239,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		banner.BackgroundColor3 = background
 		banner.TextColor3 = ink
-		if text == "" then
+		if text == "" or hold == true then
+			if text ~= "" and changed then
+				print("[Toast] shown " .. text)
+			end
 			return
 		end
 		if changed then
@@ -1606,14 +1609,25 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local statusToken = 0
-	function controller.setStatus(text: string, kind: string)
+	function controller.clearStatus()
+		statusToken += 1
+		bannerToken += 1
+		status.Visible = false
+		status.Text = ""
+		toast.Visible = false
+		toast.Text = ""
+		banner.Visible = false
+		banner.Text = ""
+	end
+
+	function controller.setStatus(text: string, kind: string, hold: boolean?)
 		statusToken += 1
 		local token = statusToken
 		status.Text = text
 		status.Visible = text ~= ""
 		toast.Text = text
 		toast.Visible = text ~= ""
-		showBanner(text, kind)
+		showBanner(text, kind, hold)
 		local color = COLORS.muted
 		if kind == "error" then
 			color = COLORS.danger
@@ -1622,7 +1636,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		status.TextColor3 = color
 		toast.TextColor3 = color
-		if text == "" then
+		if text == "" or hold == true then
 			return
 		end
 		task.delay(ShellLayout.BANNER_SECONDS, function()

@@ -237,6 +237,7 @@ local function applyProfile(profile: any, saving: any)
 	if type(profile) ~= "table" then
 		return
 	end
+	ui.clearStatus()
 	ui.setProfile(profile, saving == true)
 	ClassHud.setProfile(profile)
 	OnboardHud.setProfile(profile)
@@ -1029,8 +1030,8 @@ task.spawn(function()
 	end)
 	local message = remoteError(ok, result, "Could not load your profile.")
 	if message ~= nil then
-		ui.setStatus(message, "error")
-		refreshOdds()
+		ui.setStatus(message, "error", true)
+		ui.setNotice(message)
 		return
 	end
 	applyProfile((result :: any).profile, (result :: any).saving)

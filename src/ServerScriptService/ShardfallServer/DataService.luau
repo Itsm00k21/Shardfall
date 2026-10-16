@@ -23,12 +23,20 @@
 	in-memory store. savePair() writes two profiles and, if either write
 	fails, puts both backups back and writes those too. Trades use it so a
 	crash cannot keep one side of a swap.
+
+	Studio with API access off can leave UpdateAsync yielded. GetProfile
+	then answered "Profile is still loading." forever. A timed-out or thrown
+	store read in Studio becomes an in-memory session profile and a warn.
+	That profile is not written back to the DataStore.
 ]]
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
+local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
+local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local SessionLock = require(ReplicatedStorage.Shared.SessionLock)
 local StoreAdapter = require(script.Parent.StoreAdapter)
@@ -53,6 +61,8 @@ type Record = {
 	loading: boolean,
 	failed: boolean,
 	released: boolean,
+	ephemeral: boolean,
+	error: string?,
 }
 
 type Listener = (Player, any, boolean) -> ()
@@ -77,12 +87,19 @@ local function notify(player: Player)
 		return
 	end
 	local snapshot = Schema.snapshot(record.data)
+	local saving = persistent and record.ephemeral ~= true
 	for _, listener in ipairs(listeners) do
-		task.spawn(listener, player, snapshot, persistent)
+		task.spawn(listener, player, snapshot, saving)
 	end
 end
 
-function DataService.isPersistent(): boolean
+function DataService.isPersistent(player: Player?): boolean
+	if player ~= nil then
+		local record = records[player]
+		if record ~= nil and record.ephemeral == true then
+			return false
+		end
+	end
 	return persistent
 end
 
@@ -106,20 +123,24 @@ function DataService.get(player: Player): Schema.ProfileData?
 	return record.data
 end
 
-function DataService.waitFor(player: Player, timeout: number): Schema.ProfileData?
+function DataService.waitFor(player: Player, timeout: number): (Schema.ProfileData?, string?)
 	local deadline = os.clock() + timeout
 	while os.clock() < deadline do
 		local data = DataService.get(player)
 		if data ~= nil then
-			return data
+			return data, nil
 		end
 		local record = records[player]
 		if record ~= nil and record.failed then
-			return nil
+			return nil, record.error or "Could not load your Shardfall profile. Rejoin."
 		end
 		task.wait(0.1)
 	end
-	return nil
+	local record = records[player]
+	if record ~= nil and record.failed then
+		return nil, record.error or "Could not load your Shardfall profile. Rejoin."
+	end
+	return nil, nil
 end
 
 function DataService.mutate(
@@ -177,6 +198,9 @@ function DataService.save(player: Player): (boolean, string?)
 	if record == nil or not record.loaded or record.released then
 		return false, "Profile is not loaded."
 	end
+	if record.ephemeral then
+		return true, nil
+	end
 	local ok, reason = write(record, false)
 	if not ok then
 		warn("[Shardfall] Profile save failed:", reason)
@@ -219,6 +243,41 @@ function DataService.savePair(
 	return false, whyFirst or whySecond
 end
 
+local function failLoad(record: Record, message: string): (boolean, string)
+	record.loading = false
+	record.failed = true
+	record.error = message
+	return false, message
+end
+
+local function sessionFallback(record: Record, player: Player, why: any): (boolean, string?)
+	local migrated = Schema.migrate(nil)
+	warn(
+		string.format(
+			"[Shardfall] DataStore load failed for %s (%s). This Studio session uses a memory profile and will NOT save.",
+			player.Name,
+			tostring(why)
+		)
+	)
+	if migrated == nil then
+		return failLoad(record, "Could not load your Shardfall profile. Rejoin.")
+	end
+	record.data = migrated
+	record.loaded = true
+	record.loading = false
+	record.failed = false
+	record.ephemeral = true
+	record.error = nil
+	print(
+		string.format(
+			"[Shardfall] Loaded %s (%d) via memory (not saved)",
+			player.Name,
+			player.UserId
+		)
+	)
+	return true, nil
+end
+
 local function load(player: Player): (boolean, string?)
 	if records[player] ~= nil then
 		return false, "Profile is already loading."
@@ -232,51 +291,26 @@ local function load(player: Player): (boolean, string?)
 		loading = true,
 		failed = false,
 		released = false,
+		ephemeral = false,
 	}
 	records[player] = record
+	local studio = RunService:IsStudio()
 
 	for attempt = 1, LOAD_ATTEMPTS do
 		if record.released or player.Parent ~= Players then
-			record.failed = true
-			record.loading = false
-			return false, "Left before the profile loaded."
+			return failLoad(record, "Left before the profile loaded.")
 		end
 
-		local claimedData: Schema.ProfileData? = nil
 		local reason = "error"
-		local callOk, callErr = pcall(function()
-			currentAdapter():updateAsync(key, function(document)
-				local source = nil
-				if type(document) == "table" then
-					source = Schema.deepCopy(document.Data)
-				end
-				local migrated, migrateErr = Schema.migrate(source)
-				if migrated ~= nil then
-					local Progression =
-						require(game:GetService("ReplicatedStorage").Shared.Progression)
-					Progression.applyReturn(migrated, os.time())
-				end
-				if migrated == nil then
-					reason = migrateErr or "corrupt"
-					claimedData = nil
-					return nil
-				end
-				local written, claimReason = SessionLock.tryClaim(
-					if type(document) == "table" then document else nil,
-					os.time(),
-					serverId,
-					placeId,
-					SessionLock.TIMEOUT_SECONDS,
-					Schema.deepCopy(migrated)
-				)
-				reason = claimReason
-				if written == nil then
-					claimedData = nil
-					return nil
-				end
-				claimedData = migrated
-				return written
-			end)
+		local callOk, outcome = CallBudget.run(CallBudget.DATASTORE_SECONDS, function()
+			return ProfileLoad.open(
+				currentAdapter(),
+				key,
+				os.time(),
+				serverId,
+				placeId,
+				SessionLock.TIMEOUT_SECONDS
+			)
 		end)
 
 		if not callOk then
@@ -286,20 +320,59 @@ local function load(player: Player): (boolean, string?)
 					"[Shardfall] Load attempt %d failed for %s: %s",
 					attempt,
 					player.Name,
-					tostring(callErr)
+					tostring(outcome)
 				)
 			)
-		end
-
-		if claimedData ~= nil then
-			record.data = claimedData
+			if studio or not persistent then
+				return sessionFallback(record, player, outcome)
+			end
+		elseif type(outcome) == "table" and outcome.session == true then
+			reason = "error"
+			warn(
+				string.format(
+					"[Shardfall] Load attempt %d failed for %s: %s",
+					attempt,
+					player.Name,
+					tostring(outcome.error)
+				)
+			)
+			if studio or not persistent then
+				if type(outcome.data) == "table" then
+					record.data = outcome.data
+					record.loaded = true
+					record.loading = false
+					record.failed = false
+					record.ephemeral = true
+					record.error = nil
+					warn(
+						string.format(
+							"[Shardfall] DataStore load failed for %s (%s). This Studio session uses a memory profile and will NOT save.",
+							player.Name,
+							tostring(outcome.error)
+						)
+					)
+					print(
+						string.format(
+							"[Shardfall] Loaded %s (%d) via memory (not saved)",
+							player.Name,
+							player.UserId
+						)
+					)
+					return true, nil
+				end
+				return sessionFallback(record, player, outcome.error)
+			end
+		elseif type(outcome) == "table" and outcome.data ~= nil then
+			record.data = outcome.data
 			record.loaded = true
 			record.loading = false
 			-- Leave during the yield: the lock is already ours, and release()
 			-- will have skipped the write because loaded was still false.
 			-- Clear it here so the next server does not wait out the timeout.
 			if record.released or player.Parent ~= Players then
-				write(record, true)
+				if not record.ephemeral then
+					write(record, true)
+				end
 				records[player] = nil
 				return false, "Left before the profile loaded."
 			end
@@ -312,6 +385,8 @@ local function load(player: Player): (boolean, string?)
 				)
 			)
 			return true, nil
+		elseif type(outcome) == "table" and type(outcome.reason) == "string" then
+			reason = outcome.reason
 		end
 
 		local retryable = reason == "busy" or reason == "error"
@@ -320,23 +395,19 @@ local function load(player: Player): (boolean, string?)
 			continue
 		end
 
-		record.loading = false
-		record.failed = true
 		if reason == "newer" then
-			return false, "This server is out of date for your Shardfall profile. Rejoin shortly."
+			return failLoad(record, "This server is out of date for your Shardfall profile. Rejoin shortly.")
 		end
 		if reason == "corrupt" then
-			return false, "Your Shardfall profile could not be read. It was not overwritten."
+			return failLoad(record, "Your Shardfall profile could not be read. It was not overwritten.")
 		end
 		if reason == "busy" then
-			return false, "Your data is still open on another server. Rejoin in a moment."
+			return failLoad(record, "Your data is still open on another server. Rejoin in a moment.")
 		end
-		return false, "Could not load your Shardfall profile. Rejoin."
+		return failLoad(record, "Could not load your Shardfall profile. Rejoin.")
 	end
 
-	record.failed = true
-	record.loading = false
-	return false, "Could not load your Shardfall profile. Rejoin."
+	return failLoad(record, "Could not load your Shardfall profile. Rejoin.")
 end
 
 function DataService.release(player: Player)
