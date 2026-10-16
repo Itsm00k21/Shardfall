@@ -6,6 +6,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Audio = require("../src/ReplicatedStorage/Shared/Audio")
+local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 
 describe("Audio", function()
 	it("keeps Kevin's Haven track id in one place", function()
@@ -15,14 +16,26 @@ describe("Audio", function()
 		expect(Audio.FADE_SECONDS).toEqual(2)
 	end)
 
-	it("leaves other zones quiet until a track is filled in", function()
-		expect(Audio.TRACKS.rootvault).toEqual("")
+	it("gives Rootvault and Grandmother Gnarl separate entries on one asset", function()
+		local crawl = "rbxassetid://122681644942798"
+		expect(Audio.Rootvault).toEqual(crawl)
+		expect(Audio.GnarlBoss).toEqual(crawl)
+		expect(Audio.TRACKS.rootvault).toEqual(Audio.Rootvault)
+		expect(Audio.TRACKS.gnarlBoss).toEqual(Audio.GnarlBoss)
+		expect(Audio.trackFor("rootvault")).toEqual(crawl)
+		expect(Audio.trackFor("gnarlBoss")).toEqual(crawl)
+		expect(Audio.trackFor(Audio.GNARL_ZONE)).toEqual(Audio.GnarlBoss)
 		expect(Audio.TRACKS.verdant).toEqual("")
-		expect(Audio.trackFor("rootvault")).toBeNil()
 		expect(Audio.trackFor("verdant")).toBeNil()
 		expect(Audio.trackFor("nowhere")).toBeNil()
 		expect(Audio.zoneFor(false)).toEqual("haven")
 		expect(Audio.zoneFor(true)).toEqual("rootvault")
+		expect(Audio.zoneForRun(true, false, Dungeons.ROOTVAULT_ID)).toEqual(Audio.ROOTVAULT_ZONE)
+		expect(Audio.zoneForRun(true, true, Dungeons.ROOTVAULT_ID)).toEqual(Audio.GNARL_ZONE)
+		expect(Audio.zoneForRun(true, false, Dungeons.WAVES_ID)).toEqual(Audio.ROOTVAULT_ZONE)
+		expect(Audio.zoneForRun(true, true, Dungeons.WAVES_ID)).toEqual(Audio.GNARL_ZONE)
+		expect(Audio.zoneForRun(false, true, Dungeons.ROOTVAULT_ID)).toBeNil()
+		expect(Audio.zoneForRun(true, true, "tidecrypt")).toBeNil()
 	end)
 
 	it("multiplies the bed by the music slider and clamps both ends", function()

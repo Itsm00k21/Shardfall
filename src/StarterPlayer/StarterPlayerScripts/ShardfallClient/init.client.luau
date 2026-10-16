@@ -343,6 +343,7 @@ ui = Ui.mount(playerGui, {
 			applyResult(result)
 			if type(result) == "table" and type(result.run) == "table" then
 				ui.setRun(result.run)
+				musicController.syncRun(result.run)
 			end
 			if action == "enter" and dungeonId == "rootvault_waves" then
 				ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
@@ -889,6 +890,7 @@ VerdantLod.start()
 CombatHud.start(remotes :: Instance, {
 	onRun = function(run)
 		ui.setRun(run)
+		musicController.syncRun(run)
 	end,
 	onHint = function(text)
 		ui.setStatus(text, "info")
