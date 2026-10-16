@@ -1,16 +1,16 @@
 --!strict
 
 --[[
-	Bottom action bar. Attack, dodge, skills, tonic, inventory, travel, and
-	the menu. Every target is at least 60px. Graphics and auto farm live on
-	the menu sheet, not on this row.
+	The only always-on action row. Attack, dodge, skills, tonic, items,
+	travel, and menu. Each target is at least 64px and labeled. Graphics
+	and auto farm stay on the menu sheet.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 
-local ThumbBar = {}
+local ActionBar = {}
 
 export type Callbacks = {
 	onMenu: () -> (),
@@ -36,7 +36,7 @@ local function button(parent: Instance, name: string, text: string, color: Color
 		Name = name,
 		BackgroundColor3 = color,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(72, ShellLayout.ACTION_H),
+		Size = UDim2.fromOffset(64, 64),
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 15,
 		TextWrapped = true,
@@ -49,16 +49,16 @@ local function button(parent: Instance, name: string, text: string, color: Color
 	return widget
 end
 
-function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
+function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local screen = new("ScreenGui", {
-		Name = "ShardfallTouch",
+		Name = "ShardfallActions",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 30,
+		DisplayOrder = 60,
 	}, playerGui) :: ScreenGui
 
 	local row = new("Frame", {
-		Name = "ThumbRow",
+		Name = "Actions",
 		AnchorPoint = Vector2.new(0, 0),
 		Position = UDim2.fromOffset(88, 0),
 		BackgroundTransparency = 1,
@@ -109,10 +109,12 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		local bar = ShellLayout.actionBar(vx, vy)
 		local slot = ShellLayout.thumbSize(vx)
+		local width = math.max(64, slot.w)
+		local height = math.max(64, slot.h)
 		row.Position = UDim2.fromOffset(bar.x, bar.y)
-		row.Size = UDim2.fromOffset(bar.w, bar.h)
+		row.Size = UDim2.fromOffset(bar.w, height)
 		for _, widget in ipairs(slots) do
-			widget.Size = UDim2.fromOffset(slot.w, slot.h)
+			widget.Size = UDim2.fromOffset(width, height)
 		end
 	end
 	applyWidth()
@@ -136,4 +138,4 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}
 end
 
-return ThumbBar
+return ActionBar

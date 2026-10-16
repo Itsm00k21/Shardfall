@@ -15,18 +15,20 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 1269531+ client` in Output.
+	still leaves `[Shardfall] build 27e69f2+ client` in Output.
 ]]
 
-print("[Shardfall] build 1269531+ client")
+print("[Shardfall] build 27e69f2+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local ForeignScripts =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
+local ActionBar = require(script.ActionBar)
 local CaptureHud = require(script.CaptureHud)
 local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
@@ -41,12 +43,25 @@ local MarketHud = require(script.MarketHud)
 local PetHud = require(script.PetHud)
 local RaidHud = require(script.RaidHud)
 local RollReel = require(script.RollReel)
-local ThumbBar = require(script.ThumbBar)
 local TravelHud = require(script.TravelHud)
 local Ui = require(script.Ui)
 local VerdantLod = require(script.VerdantLod)
 
 local player = Players.LocalPlayer
+
+local function hideRobloxChrome()
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+	end)
+end
+hideRobloxChrome()
+task.spawn(function()
+	for _ = 1, 10 do
+		hideRobloxChrome()
+		task.wait(0.5)
+	end
+end)
 
 -- Haven's walk surface is y=120. The default camera follows the Humanoid,
 -- which is what PlayerModule does. Set it here as well so a late control
@@ -96,7 +111,9 @@ local function dropStaleScripts(root: Instance)
 			local inAvatar = avatar ~= nil and Players:GetPlayerFromCharacter(avatar) ~= nil
 			-- PlayerGui and PlayerScripts only. Never Workspace, and never
 			-- a script on the character that is keeping the avatar upright.
-			if not inAvatar and ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant)) then
+			if
+				not inAvatar and ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant))
+			then
 				table.insert(doomed, descendant)
 			end
 		end
@@ -164,7 +181,7 @@ local rollReel
 local musicController = MusicController.start()
 local inventory
 local travel
-local thumb
+local actionBar
 local graphicsTier = "med"
 local graphicsSent = false
 
@@ -242,6 +259,7 @@ local function applyProfile(profile: any, saving: any)
 	end
 	ui.clearStatus()
 	ui.setProfile(profile, saving == true)
+	CombatHud.setWallet(profile.gold or 0, profile.shardTokens or 0, profile.gems or 0)
 	ClassHud.setProfile(profile)
 	OnboardHud.setProfile(profile)
 	PetHud.setProfile(profile)
@@ -569,7 +587,51 @@ local function hideMarket()
 	end
 	local toggle = gui:FindFirstChild("OpenMarket")
 	if toggle ~= nil and toggle:IsA("GuiObject") then
+		toggle.Visible = false
 		toggle.Position = UDim2.new(0, 16, 1, -16)
+	end
+end
+
+local function guiChild(guiName: string, childName: string): GuiObject?
+	local gui = playerGui:FindFirstChild(guiName)
+	if gui == nil then
+		return nil
+	end
+	local child = gui:FindFirstChild(childName)
+	if child ~= nil and child:IsA("GuiObject") then
+		return child
+	end
+	return nil
+end
+
+-- Join shows HP, the action bar, and currency. Hatch, raid, the daily
+-- board, and the roll sheet open from Menu. The market button stays
+-- hidden; Haven still opens the stall.
+local function setHubChrome(open: boolean, keepRaid: boolean?)
+	if rollReel ~= nil then
+		rollReel.setOpen(open)
+	end
+	local hatch = guiChild("ShardfallPets", "Hatch")
+	if hatch ~= nil then
+		hatch.Visible = open
+		if open then
+			hatch.Position = UDim2.fromOffset(16, 76)
+		end
+	end
+	local raid = guiChild("ShardfallRaids", "RaidToggle")
+	if raid ~= nil and keepRaid ~= true then
+		raid.Visible = open
+		if open then
+			raid.Position = UDim2.fromOffset(120, 76)
+		end
+	end
+	local board = guiChild("ShardfallLoops", "Board")
+	if board ~= nil then
+		board.Visible = open
+	end
+	local market = guiChild("ShardfallMarket", "OpenMarket")
+	if market ~= nil then
+		market.Visible = false
 	end
 end
 
@@ -591,6 +653,9 @@ local function closePanels(except: string?)
 	end
 	if except ~= "market" then
 		hideMarket()
+	end
+	if except ~= "menu" then
+		setHubChrome(false, except == "raid")
 	end
 	DoorHud.suppress(except ~= nil)
 end
@@ -942,12 +1007,13 @@ function cycleGraphics()
 	end)
 end
 
-thumb = ThumbBar.start(playerGui, {
+actionBar = ActionBar.start(playerGui, {
 	onMenu = function()
 		local opening = not ui.isOpen()
 		closePanels(if opening then "menu" else nil)
 		if opening then
 			ui.open()
+			setHubChrome(true)
 		end
 	end,
 	onInventory = function()
@@ -1040,6 +1106,7 @@ end)
 RaidHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
+setHubChrome(false)
 DebugHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
@@ -1054,8 +1121,8 @@ ClassHud.start(remotes :: Instance, function(action: string, ...: any)
 end)
 CombatHud.start(remotes :: Instance, {
 	onDodgeCharges = function(charges: number)
-		if thumb ~= nil then
-			thumb.setDodge(charges)
+		if actionBar ~= nil then
+			actionBar.setDodge(charges)
 		end
 	end,
 	onRun = function(run)
@@ -1067,6 +1134,7 @@ CombatHud.start(remotes :: Instance, {
 		ui.setStatus(text, "info")
 	end,
 })
+setHubChrome(false)
 
 local profileEvent = (remotes :: Instance):WaitForChild("ProfileUpdated")
 if profileEvent:IsA("RemoteEvent") then

@@ -53,6 +53,22 @@ local attackRemote: RemoteEvent? = nil
 local dodgeRemote: RemoteEvent? = nil
 local allowShake = true
 local telegraphEndsAt = 0
+local walletLabel: TextLabel? = nil
+local pendingWallet: { number }? = nil
+
+local function paintWallet(gold: number, tokens: number, gems: number)
+	local label = walletLabel
+	if label == nil then
+		pendingWallet = { gold, tokens, gems }
+		return
+	end
+	label.Text =
+		string.format("%dg  %dt  %dgm", math.floor(gold), math.floor(tokens), math.floor(gems))
+end
+
+function CombatHud.setWallet(gold: number, tokens: number, gems: number)
+	paintWallet(gold, tokens, gems)
+end
 
 local function floater(position: Vector3, text: string, color: Color3)
 	local anchor = Instance.new("Part")
@@ -170,8 +186,26 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	hpText.TextSize = 13
 	hpText.TextXAlignment = Enum.TextXAlignment.Left
 	hpText.TextColor3 = Color3.fromRGB(240, 236, 248)
-	hpText.Text = "HP 100 / 100"
+	hpText.Text = "HP"
 	hpText.Parent = hpFrame
+
+	local wallet = Instance.new("TextLabel")
+	wallet.Name = "Wallet"
+	wallet.BackgroundTransparency = 1
+	wallet.Position = UDim2.fromOffset(16, 54)
+	wallet.Size = UDim2.fromOffset(220, 16)
+	wallet.Font = Enum.Font.BuilderSans
+	wallet.TextSize = 13
+	wallet.TextXAlignment = Enum.TextXAlignment.Left
+	wallet.TextColor3 = Color3.fromRGB(236, 214, 140)
+	wallet.TextTruncate = Enum.TextTruncate.AtEnd
+	wallet.Text = ""
+	wallet.Parent = screen
+	walletLabel = wallet
+	if pendingWallet ~= nil then
+		paintWallet(pendingWallet[1], pendingWallet[2], pendingWallet[3])
+		pendingWallet = nil
+	end
 
 	local hpBack = Instance.new("Frame")
 	hpBack.Position = UDim2.fromOffset(10, 22)
@@ -184,7 +218,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	backCorner.Parent = hpBack
 
 	local hpFill = Instance.new("Frame")
-	hpFill.Size = UDim2.fromScale(1, 1)
+	hpFill.Size = UDim2.fromScale(0, 1)
 	hpFill.BackgroundColor3 = Color3.fromRGB(110, 210, 140)
 	hpFill.BorderSizePixel = 0
 	hpFill.Parent = hpBack
@@ -268,6 +302,34 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		latchedHp, latchedMax = CombatMath.clampVitals(hp, maxHp)
 		drawHp()
 	end
+
+	local function pullVitals(root: BasePart)
+		local hp = root:GetAttribute("ShardfallHp")
+		local maxHp = root:GetAttribute("ShardfallMax")
+		if type(hp) == "number" and type(maxHp) == "number" then
+			setHp(hp, maxHp)
+		end
+	end
+
+	local function watchCharacter(character: Model)
+		task.spawn(function()
+			local root = character:WaitForChild("HumanoidRootPart", 8)
+			if root == nil or not root:IsA("BasePart") or character.Parent == nil then
+				return
+			end
+			pullVitals(root)
+			root:GetAttributeChangedSignal("ShardfallHp"):Connect(function()
+				pullVitals(root)
+			end)
+			root:GetAttributeChangedSignal("ShardfallMax"):Connect(function()
+				pullVitals(root)
+			end)
+		end)
+	end
+	if player.Character ~= nil then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
 
 	local card = Instance.new("Frame")
 	card.Name = "Result"

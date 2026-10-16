@@ -267,6 +267,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.fromOffset(320, 480),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
+		Visible = false,
 		ScrollBarThickness = 4,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
