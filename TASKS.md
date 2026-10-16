@@ -38,7 +38,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 |---|---|---|---|---|---|---|
 | T-015 | Shard Pass premium wiring, kept off, and 4x4 board polish | HELPER | `helper/shard-pass-9721` | `src/ReplicatedStorage/Shared/Loops.luau`, `src/ServerScriptService/ShardfallServer/LoopService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/LoopHud.luau`, `tests/Loops.spec.luau`, `docs/design/shardfall_loops.md`. `Loops.PREMIUM_ENABLED` stays `false`. | claimed | — |
 | T-016 | Session-recap string on the victory card | HELPER | `helper/session-recap-9721` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/SessionRecap.luau`, `tests/Progression.spec.luau` (recap string only). Read `Progression.recap` in `src/ReplicatedStorage/Shared/Progression.luau`. The victory card is drawn in `CombatHud.luau` (T-001). Add a call site there only after a note on this row. | claimed | — |
-| T-017 | Haste shrines, mender healing, shielder blocking | HELPER | `helper/enemy-abilities-9721` | `src/ReplicatedStorage/Shared/EnemyAbilities.luau`, `tests/EnemyAbilities.spec.luau`, `tests/run.luau`, `docs/design/rootvault_design.md`. Haste is stored on the run and does nothing. Menders do not heal. Shielders do not block. Hook points in `DungeonService.luau` and `Rootvault.luau` (T-003) need a note on this row before those files change. | claimed | — |
+| T-017 | Haste shrines, mender healing, shielder blocking | HELPER | `helper/enemy-abilities-9721` | `src/ReplicatedStorage/Shared/EnemyAbilities.luau`, `tests/EnemyAbilities.spec.luau`, `tests/run.luau`, `docs/design/rootvault_design.md`. Rules are in `EnemyAbilities` and are not called yet, so gameplay is unchanged. Hook points are in the T-017 hooks section. This task does not edit `DungeonService.luau` or `Rootvault.luau`. | claimed | — |
 
 `src/ReplicatedStorage/Shared/Pets.luau` and `src/ServerScriptService/ShardfallServer/PetService.luau` stay with the shipped hatchery. T-014 adds new modules beside them. Edit those two only after a note on T-014.
 
@@ -286,6 +286,230 @@ add({
 `tests/run.luau` already requires `./PetEvolution.spec` on this branch.
 
 Build stamp files are T-012. This branch does not change them. Stamp on merge if you want the printed build to move.
+
+### T-017 hooks for GHOST
+
+HELPER did not edit `DungeonService.luau`, `Rootvault.luau`, `CombatHud.luau`, or T-012. `EnemyAbilities` is pure and ready to call. Kinds already match `Rootvault.ROLES`, and `"haste"` is already in `Rootvault.SHRINES`. Do not add a function to `Rootvault`. The door note there still says the boon lasts the rest of the run; Haste in this module expires after `EnemyAbilities.HASTE.duration` (30 seconds). Leave that string unless you want it changed in a T-003 edit.
+
+`$path` already includes `src/ReplicatedStorage/Shared`, so `EnemyAbilities` is in the place file without a `default.project.json` edit. Nothing requires it until the calls below.
+
+`DungeonService.luau`, next to the `Rootvault` require:
+
+```lua
+local EnemyAbilities = require(ReplicatedStorage.Shared.EnemyAbilities)
+```
+
+On the `Run` type, next to `shrine`:
+
+```lua
+	haste: EnemyAbilities.Haste?,
+	hasteWalk: number?,
+	priority: string?,
+```
+
+On the `Enemy` type, next to `stunUntil`:
+
+```lua
+	nextHeal: number?,
+```
+
+In `enter`, next to `shrine = ""`:
+
+```lua
+		haste = nil,
+		hasteWalk = nil,
+		priority = nil,
+```
+
+In the enemy literal inside `spawnEnemy`:
+
+```lua
+		nextHeal = nil,
+```
+
+`chooseDoor`, replace the shrine branch. A new shrine clears a live Haste buff first so Might does not keep the speed bonus. `applyHaste` returns nil for `"might"` and `"ward"`.
+
+```lua
+	elseif picked.id == "shrine" then
+		local now = os.clock()
+		if run.hasteWalk ~= nil then
+			local previous = player.Character
+			local body = if previous ~= nil then previous:FindFirstChildOfClass("Humanoid") else nil
+			if body ~= nil then
+				body.WalkSpeed = run.hasteWalk
+			end
+		end
+		run.haste = nil
+		run.hasteWalk = nil
+		run.shrine = Rootvault.shrine(math.random(1, 3))
+		run.haste = EnemyAbilities.applyHaste(run.shrine, now)
+		if run.haste ~= nil then
+			local character = player.Character
+			local humanoid = if character ~= nil
+				then character:FindFirstChildOfClass("Humanoid")
+				else nil
+			run.hasteWalk = if humanoid ~= nil
+				then humanoid.WalkSpeed
+				else EnemyAbilities.HASTE.baseWalk
+			if humanoid ~= nil then
+				humanoid.WalkSpeed = EnemyAbilities.moveSpeed(run.hasteWalk, run.haste, now)
+			end
+		end
+```
+
+`pushRun(player, picked.note)` already follows the branch. When `run.haste ~= nil`, pass `EnemyAbilities.HASTE.gainedNote` instead of `picked.note`.
+
+Expire at the top of the `onHeartbeat` player loop, after the `run.resolving` check and before the `hrp == nil` continue, so a cleared room still drops the buff. `now` is the `os.clock()` already taken at the top of `onHeartbeat`.
+
+```lua
+		if run.haste ~= nil and EnemyAbilities.expireHaste(run.haste, now) == nil then
+			run.haste = nil
+			if run.shrine == EnemyAbilities.HASTE.id then
+				run.shrine = ""
+			end
+			local character = player.Character
+			local humanoid = if character ~= nil
+				then character:FindFirstChildOfClass("Humanoid")
+				else nil
+			if humanoid ~= nil and run.hasteWalk ~= nil then
+				humanoid.WalkSpeed = run.hasteWalk
+			end
+			run.hasteWalk = nil
+			pushRun(player, EnemyAbilities.HASTE.fadedNote)
+		end
+```
+
+At the top of `destroyRun`, restore the same way before `runs[player] = nil`, so the hub does not keep the boosted WalkSpeed. Do not copy `haste` onto the profile.
+
+`damageEnemy`, after the `run.echo` multiplier and before `enemy.hp -= amount`. Skip the check when the character has no root, so a missing attacker is not treated as world origin.
+
+```lua
+	local hrp = rootPart(player)
+	if hrp ~= nil then
+		local look = enemy.part.CFrame.LookVector
+		local dealt, blocked = EnemyAbilities.block({
+			kind = enemy.kind,
+			hp = enemy.hp,
+			x = enemy.part.Position.X,
+			z = enemy.part.Position.Z,
+			lookX = look.X,
+			lookZ = look.Z,
+		}, hrp.Position.X, hrp.Position.Z, amount)
+		if blocked then
+			pushRun(player, EnemyAbilities.SHIELDER.blockNote)
+			return false
+		end
+		amount = dealt
+	end
+```
+
+A blocked hit deals 0 and returns before stagger, flash, and the HP write. Pet and projectile hits use this same function, and the position is the player's, because `damageEnemy` does not receive a shot origin.
+
+`moveEnemy`: keep the snap `lookAt` for every kind except `EnemyAbilities.SHIELDER.kind`. Replace the distance branch so both arms share `nextPosition`. `dt` is already an argument.
+
+```lua
+	local nextPosition = position
+	if distance > hold then
+		local step = math.min(distance - hold, enemy.moveSpeed * dt)
+		nextPosition = position + offset.Unit * step
+		local x, _, z = Dungeons.roomOrigin(roomIndex)
+		local limit = floorSize / 2 - 4
+		nextPosition = Vector3.new(
+			math.clamp(nextPosition.X, x - limit, x + limit),
+			position.Y,
+			math.clamp(nextPosition.Z, z - limit, z + limit)
+		)
+	end
+	if enemy.kind == EnemyAbilities.SHIELDER.kind then
+		local look = enemy.part.CFrame.LookVector
+		local lookX, lookZ = EnemyAbilities.turnShield(
+			look.X,
+			look.Z,
+			goal.X - nextPosition.X,
+			goal.Z - nextPosition.Z,
+			dt
+		)
+		enemy.part.CFrame = CFrame.lookAt(nextPosition, nextPosition + Vector3.new(lookX, 0, lookZ))
+	else
+		enemy.part.CFrame =
+			CFrame.lookAt(nextPosition, Vector3.new(goal.X, nextPosition.Y, goal.Z))
+	end
+```
+
+Other kinds stay snapped to the player. A zero aim keeps the previous look, so a brute standing on the player does not spin.
+
+Mender pulses go in `onHeartbeat`, after the `tickEnemy` loop, inside the `not run.cleared` block. `run.enemies` is a map. `mend` and `priority` take an array.
+
+```lua
+		local roster = {}
+		local byId = {}
+		for _, enemy in pairs(run.enemies) do
+			local row = {
+				id = enemy.id,
+				kind = enemy.kind,
+				hp = enemy.hp,
+				maxHp = enemy.maxHp,
+				x = enemy.part.Position.X,
+				z = enemy.part.Position.Z,
+				nextHeal = enemy.nextHeal,
+			}
+			table.insert(roster, row)
+			byId[enemy.id] = row
+		end
+		local pulses = EnemyAbilities.mend(roster, now)
+		for _, pulse in ipairs(pulses) do
+			local target = run.enemies[pulse.targetId]
+			local mender = run.enemies[pulse.menderId]
+			if target ~= nil and target.hp > 0 then
+				target.hp = pulse.hp
+				paintEnemy(target)
+			end
+			if mender ~= nil then
+				mender.nextHeal = pulse.nextHeal
+			end
+			local targetRow = byId[pulse.targetId]
+			if targetRow ~= nil then
+				targetRow.hp = pulse.hp
+			end
+			local menderRow = byId[pulse.menderId]
+			if menderRow ~= nil then
+				menderRow.nextHeal = pulse.nextHeal
+			end
+		end
+		if #pulses > 0 then
+			pushRun(player, EnemyAbilities.MENDER.pulseNote)
+		end
+		run.priority = EnemyAbilities.priority(roster, now)
+```
+
+`priority` is the living mender id, or nil. `publicRun` can send it later. `CombatHud.luau` is unchanged on this branch. A moss crawler with no position is still the priority and still produces no pulse.
+
+Attack cooldown is not in `DungeonService`. It is `state.nextAttack` / `state.nextCompanion` in `CombatService` (T-001). This branch does not edit that file. Wire it only if you want the ×1.2 swing speed; walk speed already comes from the heartbeat and `chooseDoor` snippets.
+
+```lua
+function DungeonService.hasteAttack(player: Player, attackSpeed: number, now: number): number
+	local run = runs[player]
+	if run == nil then
+		return attackSpeed
+	end
+	local sped = EnemyAbilities.attackSpeed(attackSpeed, run.haste, now)
+	if sped <= 0 then
+		return attackSpeed
+	end
+	return sped
+end
+```
+
+```lua
+	local attackSpeed = DungeonService.hasteAttack(player, offense.attackSpeed, now)
+	state.nextAttack = now + CombatMath.cooldown(attackSpeed)
+```
+
+Use the same `hasteAttack` call for `state.nextCompanion`. Pass the gear attack speed each swing. Do not pass a value `attackSpeed` already returned, or the bonus stacks.
+
+`tests/run.luau` requires `./EnemyAbilities.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
 
 ## Open
 
