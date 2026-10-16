@@ -6,7 +6,9 @@ local it = framework.it
 local expect = framework.expect
 
 local MarketBoard = require("../src/ReplicatedStorage/Shared/MarketBoard")
+local MemoryStore = require("../src/ReplicatedStorage/Shared/MemoryStore")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
+local TradeAudit = require("../src/ServerScriptService/ShardfallServer/TradeAudit")
 local Trading = require("../src/ReplicatedStorage/Shared/Trading")
 
 local function hasFlag(flags: any, name: string): boolean
@@ -202,6 +204,109 @@ describe("Trading", function()
 		expect(#found).toEqual(1)
 		expect(left.ledger[#left.ledger].reason).toEqual("trade")
 		expect(left.ledger[#left.ledger].currency).toEqual("gold")
+	end)
+
+	spec("restores both profiles when the commit fails halfway", function()
+		local now = 1_000_000
+		local leftItem = weapon("left-item", "Rare", 0)
+		local rightItem =
+			weapon("right-item", "Common", 0, { name = "Shield", templateId = "shield" })
+		local left = profile(5000, { ["left-item"] = leftItem })
+		local right = profile(1000, { ["right-item"] = rightItem })
+		local ctx = context()
+		local leftActor = actor(11, 20, 30)
+		local rightActor = actor(22, 22, 40)
+		local session = Trading.open("rollback", 11, 22, now)
+		assert(session ~= nil)
+		expect(Trading.setOffer(session, 11, { gold = 1000, items = { "left-item" } }, now)).toEqual(
+			true
+		)
+		expect(Trading.setOffer(session, 22, { items = { "right-item" } }, now + 1)).toEqual(true)
+		local ready = now + 1 + Trading.LOCK_SECONDS
+		expect(Trading.confirm(session, 11, ready)).toEqual(true)
+		expect(Trading.confirm(session, 22, ready)).toEqual(true)
+		local first =
+			Trading.finish(session, 11, left, right, leftActor, rightActor, ctx, ready, true)
+		expect(first.pending).toEqual(true)
+		local beforeLeft = Schema.deepCopy(left)
+		local beforeRight = Schema.deepCopy(right)
+		local original = Trading.giveMoney
+		Trading.giveMoney = function()
+			error("grant failed")
+		end
+		local callOk, result = pcall(function()
+			return Trading.finish(session, 22, left, right, leftActor, rightActor, ctx, ready, true)
+		end)
+		Trading.giveMoney = original
+		expect(callOk).toEqual(true)
+		assert(type(result) == "table")
+		expect(result.ok).toEqual(false)
+		expect(left.gold).toEqual(beforeLeft.gold)
+		expect(right.gold).toEqual(beforeRight.gold)
+		expect(Schema.findItem(left, "left-item") ~= nil).toBeTrue()
+		expect(Schema.findItem(right, "left-item")).toBeNil()
+		expect(Schema.findItem(right, "right-item") ~= nil).toBeTrue()
+		expect(Schema.findItem(left, "right-item")).toBeNil()
+		expect(#ctx.log).toEqual(0)
+		expect(session.status).toEqual("open")
+		expect(session.left.committed).toEqual(false)
+		expect(session.right.committed).toEqual(false)
+	end)
+
+	spec("drops the audit row when the commit fails after the log write", function()
+		local now = 2_000_000
+		local leftItem = weapon("left-item", "Rare", 0)
+		local rightItem = weapon("right-item", "Common", 0)
+		local left = profile(5000, { ["left-item"] = leftItem })
+		local right = profile(1000, { ["right-item"] = rightItem })
+		local ctx = context()
+		local leftActor = actor(11, 20, 30)
+		local rightActor = actor(22, 22, 40)
+		local session = Trading.open("audit-fail", 11, 22, now)
+		assert(session ~= nil)
+		expect(Trading.setOffer(session, 11, { gold = 1000, items = { "left-item" } }, now)).toEqual(
+			true
+		)
+		expect(Trading.setOffer(session, 22, { items = { "right-item" } }, now + 1)).toEqual(true)
+		local ready = now + 1 + Trading.LOCK_SECONDS
+		expect(Trading.confirm(session, 11, ready)).toEqual(true)
+		expect(Trading.confirm(session, 22, ready)).toEqual(true)
+		local first =
+			Trading.finish(session, 11, left, right, leftActor, rightActor, ctx, ready, true)
+		expect(first.pending).toEqual(true)
+		local beforeLeft = Schema.deepCopy(left)
+		local beforeRight = Schema.deepCopy(right)
+		local original = Trading.append
+		Trading.append = function(logContext, entry, stamp)
+			original(logContext, entry, stamp)
+			error("audit failed")
+		end
+		local callOk, result = pcall(function()
+			return Trading.finish(session, 22, left, right, leftActor, rightActor, ctx, ready, true)
+		end)
+		Trading.append = original
+		expect(callOk).toEqual(true)
+		assert(type(result) == "table")
+		expect(result.ok).toEqual(false)
+		expect(left.gold).toEqual(beforeLeft.gold)
+		expect(right.gold).toEqual(beforeRight.gold)
+		expect(Schema.findItem(left, "left-item") ~= nil).toBeTrue()
+		expect(Schema.findItem(right, "right-item") ~= nil).toBeTrue()
+		expect(#ctx.log).toEqual(0)
+		expect(session.status).toEqual("open")
+	end)
+
+	spec("round-trips the trade audit log through memory", function()
+		local store = MemoryStore.new()
+		TradeAudit.bind(store)
+		local row = { id = "trade-1", kind = "trade" }
+		expect(TradeAudit.save({ row })).toEqual(true)
+		local loaded = TradeAudit.load()
+		expect(#loaded).toEqual(1)
+		expect(loaded[1].id).toEqual("trade-1")
+		expect(loaded[1].kind).toEqual("trade")
+		local again = TradeAudit.load()
+		expect(again[1].id).toEqual("trade-1")
 	end)
 
 	spec("refuses a commit until both players confirm and the lock has passed", function()

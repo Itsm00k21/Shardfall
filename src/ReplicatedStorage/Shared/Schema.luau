@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 19.
+	The player profile shape, version 20.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -26,7 +26,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 19
+Schema.VERSION = 20
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -168,6 +168,13 @@ export type ProfileData = {
 	raidStory: boolean,
 	raidEcho: number,
 	raidBest: number,
+	tradeDay: number,
+	tradeValueToday: number,
+	tradeLocked: boolean,
+	tradeFlagged: boolean,
+	verifiedTrader: boolean,
+	tradeCleanSince: number,
+	tradeHandoff: boolean,
 }
 
 function Schema.template(): ProfileData
@@ -267,6 +274,13 @@ function Schema.template(): ProfileData
 		raidStory = false,
 		raidEcho = 0,
 		raidBest = 0,
+		tradeDay = 0,
+		tradeValueToday = 0,
+		tradeLocked = false,
+		tradeFlagged = false,
+		verifiedTrader = false,
+		tradeCleanSince = 0,
+		tradeHandoff = false,
 	}
 end
 
@@ -447,6 +461,13 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	data.raidBest = wholeNumber(data.raidBest, 0, 0)
 	data.raidStory = data.raidStory == true
+	data.tradeDay = wholeNumber(data.tradeDay, 0, 0)
+	data.tradeValueToday = wholeNumber(data.tradeValueToday, 0, 0)
+	data.tradeCleanSince = wholeNumber(data.tradeCleanSince, 0, 0)
+	data.tradeLocked = data.tradeLocked == true
+	data.tradeFlagged = data.tradeFlagged == true
+	data.verifiedTrader = data.verifiedTrader == true
+	data.tradeHandoff = data.tradeHandoff == true
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -922,6 +943,18 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		raw.raidEcho = 0
 		raw.raidBest = 0
 		raw.schemaVersion = 19
+		version = 19
+	end
+
+	if version < 20 then
+		raw.tradeDay = 0
+		raw.tradeValueToday = 0
+		raw.tradeLocked = false
+		raw.tradeFlagged = false
+		raw.verifiedTrader = false
+		raw.tradeCleanSince = 0
+		raw.tradeHandoff = false
+		raw.schemaVersion = 20
 	end
 
 	return Schema.reconcile(raw), nil
@@ -1146,6 +1179,10 @@ function Schema.snapshot(data: ProfileData)
 		raidStory = data.raidStory,
 		raidEcho = data.raidEcho,
 		raidBest = data.raidBest,
+		tradeLocked = data.tradeLocked,
+		tradeFlagged = data.tradeFlagged,
+		verifiedTrader = data.verifiedTrader,
+		tradeHandoff = data.tradeHandoff,
 	}
 end
 

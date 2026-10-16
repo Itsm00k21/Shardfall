@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 87d4d79+ client` in Output.
+	still leaves `[Shardfall] build 3558616+ client` in Output.
 ]]
 
-print("[Shardfall] build 87d4d79+ client")
+print("[Shardfall] build 3558616+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34,6 +34,7 @@ local InventoryHud = require(script.InventoryHud)
 local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
+local MarketHud = require(script.MarketHud)
 local PetHud = require(script.PetHud)
 local RaidHud = require(script.RaidHud)
 local RollReel = require(script.RollReel)
@@ -885,6 +886,11 @@ thumb.setGraphics(Quality.label(graphicsTier))
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)
+		if kind == "market" then
+			MarketHud.open()
+			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
+			return
+		end
 		ui.openPanel(kind, areaId)
 		if kind == "craft" then
 			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")
@@ -901,6 +907,9 @@ HavenClient.start({
 
 VerdantLod.start()
 
+MarketHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
 PetHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)

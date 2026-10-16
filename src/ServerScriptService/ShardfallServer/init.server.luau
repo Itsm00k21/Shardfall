@@ -10,10 +10,10 @@
 	the hub build, is isolated so a map error cannot skip that profile push.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 87d4d79+ server` in Output.
+	still leaves `[Shardfall] build 3558616+ server` in Output.
 ]]
 
-print("[Shardfall] build 87d4d79+ server")
+print("[Shardfall] build 3558616+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
@@ -65,6 +65,8 @@ local CombatService = require(script.CombatService)
 local ClassService = require(script.ClassService)
 local DataService = require(script.DataService)
 local DungeonService = require(script.DungeonService)
+local MarketService = require(script.MarketService)
+local TradeService = require(script.TradeService)
 local PolicyCache = require(script.PolicyCache)
 local RaidService = require(script.RaidService)
 local ReceiptService = require(script.ReceiptService)
@@ -107,6 +109,8 @@ local dungeonOk, dungeonError = pcall(DungeonService.start)
 if not dungeonOk then
 	warn("[Shardfall] Dungeon startup failed: " .. tostring(dungeonError))
 end
+TradeService.start()
+MarketService.start()
 DataService.start()
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()

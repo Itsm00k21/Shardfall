@@ -16,8 +16,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataService = require(script.Parent.DataService)
+local TradeAudit = require(script.Parent.TradeAudit)
 local MarketBoard = require(ReplicatedStorage.Shared.MarketBoard)
 local PolicyCache = require(script.Parent.PolicyCache)
+local Schema = require(ReplicatedStorage.Shared.Schema)
 local Trading = require(ReplicatedStorage.Shared.Trading)
 
 local MarketService = {}
@@ -78,6 +80,14 @@ end
 local function paidFor(player: Player): boolean
 	local policy = PolicyCache.public(player)
 	return policy.ready == true and policy.tradingAllowed == true
+end
+
+local SAVE_FAILED = "Could not save that trade. Nothing was kept."
+
+local function persistAudit()
+	if not TradeAudit.save(Trading.auditLog()) then
+		warn("[Shardfall] trade audit did not save")
+	end
 end
 
 local function listingId(payload: any): string?
@@ -194,6 +204,14 @@ local function buy(player: Player, payload: any)
 	if not Trading.tryLock(ids) then
 		return fail("That trade is already finishing.")
 	end
+	local buyerNow = DataService.get(player)
+	local sellerNow = DataService.get(seller)
+	if buyerNow == nil or sellerNow == nil then
+		Trading.unlock(ids)
+		return fail("The seller is not here.")
+	end
+	local backupBuyer = Schema.deepCopy(buyerNow)
+	local backupSeller = Schema.deepCopy(sellerNow)
 	local result = nil
 	local ok, err = DataService.mutate(player, function(buyerData)
 		local sellerData = DataService.get(seller)
@@ -222,9 +240,24 @@ local function buy(player: Player, payload: any)
 		return fail(err or "Could not buy that.")
 	end
 	if result ~= nil and result.ok == true then
-		DataService.mutate(seller, function()
-			return nil
-		end)
+		local saved = DataService.savePair(player, seller, backupBuyer, backupSeller)
+		if not saved then
+			local sold = board.listings[id]
+			if sold ~= nil then
+				sold.status = "open"
+				sold.buyerUserId = nil
+				sold.version += 1
+				local reserved, reserveErr = Trading.reserve(sold.id, sold.sellerUserId, sold.offer)
+				if not reserved then
+					warn("[Shardfall] market hold was not restored:", reserveErr)
+				end
+			end
+			if type(result.auditId) == "string" then
+				Trading.dropEntry(Trading.auditLog(), result.auditId)
+			end
+			return fail(SAVE_FAILED)
+		end
+		persistAudit()
 	end
 	return result or fail("Could not buy that.")
 end

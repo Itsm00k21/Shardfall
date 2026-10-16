@@ -21,7 +21,19 @@ local MarketHud = {}
 local player = Players.LocalPlayer
 local statusLabel: TextLabel? = nil
 local bodyLabel: TextLabel? = nil
+local panel: Frame? = nil
+local toggleButton: TextButton? = nil
 local lastTradeId = ""
+
+function MarketHud.open()
+	if panel == nil then
+		return
+	end
+	panel.Visible = true
+	if toggleButton ~= nil then
+		toggleButton.Position = UDim2.new(0, 384, 1, -16)
+	end
+end
 
 local function setStatus(text: string)
 	if statusLabel ~= nil then
@@ -146,6 +158,7 @@ function MarketHud.start(invoke: (string, ...any) -> any)
 	root.BorderSizePixel = 0
 	root.Visible = false
 	root.Parent = screen
+	panel = root
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = root
@@ -349,6 +362,7 @@ function MarketHud.start(invoke: (string, ...any) -> any)
 	local toggleCorner = Instance.new("UICorner")
 	toggleCorner.CornerRadius = UDim.new(0, 12)
 	toggleCorner.Parent = toggle
+	toggleButton = toggle
 	toggle.Activated:Connect(function()
 		root.Visible = not root.Visible
 		if root.Visible then

@@ -28,10 +28,12 @@ local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
 local RaidService = require(script.Parent.RaidService)
 local LoopService = require(script.Parent.LoopService)
+local MarketService = require(script.Parent.MarketService)
 local OnboardingService = require(script.Parent.OnboardingService)
 local RateLimiter = require(script.Parent.RateLimiter)
 local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
+local TradeService = require(script.Parent.TradeService)
 local TravelService = require(script.Parent.TravelService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local Quality = require(ReplicatedStorage.Shared.Quality)
@@ -508,6 +510,22 @@ function Remotes.bind()
 	functionRemote("FavoritePet").OnServerInvoke = function(player, uid, locked)
 		return guard(player, "FavoritePet", function()
 			return PetService.favorite(player, uid, locked)
+		end)
+	end
+	functionRemote("Trade").OnServerInvoke = function(player, action, payload)
+		return guard(player, "Trade", function()
+			if type(action) ~= "string" then
+				return { ok = false, error = "Unknown trade action." }
+			end
+			return TradeService.handle(player, action, payload)
+		end)
+	end
+	functionRemote("Market").OnServerInvoke = function(player, action, payload)
+		return guard(player, "Market", function()
+			if type(action) ~= "string" then
+				return { ok = false, error = "Unknown market action." }
+			end
+			return MarketService.handle(player, action, payload)
 		end)
 	end
 	functionRemote("Loops").OnServerInvoke = function(player)

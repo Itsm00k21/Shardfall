@@ -702,6 +702,13 @@ local function clearReady(session: Session)
 	session.right.seenRevision = 0
 end
 
+function Trading.reopen(session: Session)
+	session.status = "open"
+	session.auditId = nil
+	session.settling = false
+	clearReady(session)
+end
+
 function Trading.setOffer(
 	session: Session,
 	userId: number,
@@ -1471,6 +1478,15 @@ function Trading.append(context: Context, entry: AuditEntry, now: number)
 	Trading.prune(context.log, now)
 end
 
+function Trading.dropEntry(log: { AuditEntry }, tradeId: string)
+	for index = #log, 1, -1 do
+		if log[index].id == tradeId then
+			table.remove(log, index)
+			return
+		end
+	end
+end
+
 function Trading.findEntry(log: { AuditEntry }, tradeId: string): AuditEntry?
 	for index = #log, 1, -1 do
 		local entry = log[index]
@@ -1908,57 +1924,80 @@ function Trading.finish(
 		end
 	end
 
+	-- One pair of backups covers the whole commit. A failure in the move
+	-- or the audit write puts both profiles back before anything is kept.
+	local snapLeft = capture(left)
+	local snapRight = capture(right)
 	local lines =
 		buildLines(left, right, leftActor, rightActor, session.left.offer, session.right.offer)
 	session.settling = true
-	local reason = applyOffers(left, right, session.left.offer, session.right.offer)
+	local failed: string? = nil
+	local entryId: string? = nil
+	local entryFlags: { string }? = nil
+	local callOk, callErr = xpcall(function()
+		local reason = applyOffers(left, right, session.left.offer, session.right.offer)
+		if reason ~= nil then
+			failed = reason
+			return
+		end
+		local entry: AuditEntry = {
+			id = Trading.nextId("trade", now),
+			kind = "trade",
+			timestamp = now,
+			server = context.server,
+			left = partyRecord(leftActor),
+			right = partyRecord(rightActor),
+			lines = lines,
+			estimatedValue = {
+				[leftActor.userId] = look.leftValue,
+				[rightActor.userId] = look.rightValue,
+			},
+			flags = {},
+			warning = look.warning,
+			reversed = false,
+			reports = {},
+			listingId = nil,
+		}
+		entry.flags = dedupeFlags(Trading.collectFlags(entry, context.log, leftActor, rightActor))
+		entryId = entry.id
+		entryFlags = entry.flags
+		Trading.append(context, entry, now)
+		rememberSpent(
+			left,
+			leftActor.userId,
+			context,
+			now,
+			Trading.spentToday(left, leftActor.userId, context, now) + look.leftValue
+		)
+		rememberSpent(
+			right,
+			rightActor.userId,
+			context,
+			now,
+			Trading.spentToday(right, rightActor.userId, context, now) + look.rightValue
+		)
+	end, debug.traceback)
 	session.settling = false
-	if reason ~= nil then
+	if not callOk or failed ~= nil then
+		restore(left, snapLeft)
+		restore(right, snapRight)
+		if entryId ~= nil then
+			Trading.dropEntry(context.log, entryId)
+		end
 		clearReady(session)
-		return { ok = false, error = reason }
+		if not callOk then
+			warn("[Shardfall] trade commit failed:", callErr)
+			return { ok = false, error = "Could not finish that trade." }
+		end
+		return { ok = false, error = failed }
 	end
-
-	local entry: AuditEntry = {
-		id = Trading.nextId("trade", now),
-		kind = "trade",
-		timestamp = now,
-		server = context.server,
-		left = partyRecord(leftActor),
-		right = partyRecord(rightActor),
-		lines = lines,
-		estimatedValue = {
-			[leftActor.userId] = look.leftValue,
-			[rightActor.userId] = look.rightValue,
-		},
-		flags = {},
-		warning = look.warning,
-		reversed = false,
-		reports = {},
-		listingId = nil,
-	}
-	entry.flags = dedupeFlags(Trading.collectFlags(entry, context.log, leftActor, rightActor))
-	Trading.append(context, entry, now)
-	rememberSpent(
-		left,
-		leftActor.userId,
-		context,
-		now,
-		Trading.spentToday(left, leftActor.userId, context, now) + look.leftValue
-	)
-	rememberSpent(
-		right,
-		rightActor.userId,
-		context,
-		now,
-		Trading.spentToday(right, rightActor.userId, context, now) + look.rightValue
-	)
 	session.status = "committed"
-	session.auditId = entry.id
+	session.auditId = entryId
 	return {
 		ok = true,
-		auditId = entry.id,
+		auditId = entryId,
 		warning = look.warning,
-		flags = entry.flags,
+		flags = entryFlags,
 	}
 end
 
