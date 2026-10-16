@@ -348,16 +348,24 @@ describe("Active bonuses", function()
 	end)
 end)
 
-describe("Bound pieces", function()
-	it("marks every catalog piece bound and untradeable", function()
+describe("Tradeable pieces", function()
+	it("recognizes a piece or set id and does not treat bound as the test", function()
 		for _, setDef in ipairs(RelicSets.all()) do
 			for _, piece in ipairs(setDef.pieces) do
 				expect(piece.bound).toEqual(true)
 				expect(piece.tradeable).toEqual(false)
 				expect(RelicSets.isRelic(piece.id)).toEqual(true)
 				expect(RelicSets.isRelic(piece)).toEqual(true)
+				expect(RelicSets.isRelic({ templateId = piece.id, bound = true })).toEqual(true)
+				expect(RelicSets.isRelic({ id = piece.id })).toEqual(true)
+				expect(RelicSets.isRelic({ pieceId = piece.id })).toEqual(true)
+				expect(RelicSets.isRelic({ setId = piece.id })).toEqual(true)
 			end
 			expect(RelicSets.isRelic(setDef.id)).toEqual(true)
+			expect(RelicSets.isRelic({ setId = setDef.id })).toEqual(true)
+			expect(RelicSets.isRelic({ id = setDef.id })).toEqual(true)
+			expect(RelicSets.isRelic({ templateId = setDef.id })).toEqual(true)
+			expect(RelicSets.isRelic({ pieceId = setDef.id })).toEqual(true)
 		end
 		expect(RelicSets.isRelic("iron_sword")).toEqual(false)
 		expect(RelicSets.isRelic("grovewarden_hood")).toEqual(false)
@@ -365,18 +373,28 @@ describe("Bound pieces", function()
 		expect(RelicSets.isRelic(nil)).toEqual(false)
 		expect(RelicSets.isRelic({ bound = true })).toEqual(false)
 		expect(RelicSets.isRelic({ tradeable = false })).toEqual(false)
+		expect(RelicSets.isRelic({
+			templateId = "starter_sword",
+			id = "starter_sword",
+			bound = true,
+			starter = true,
+		})).toEqual(false)
 		expect(RelicSets.isRelic({ templateId = "verdant_voidcaster_boots" })).toEqual(true)
 		expect(RelicSets.isRelic({ setId = "verdant_tidecaller" })).toEqual(true)
+		expect(RelicSets.isRelic({
+			templateId = "iron_sword",
+			pieceId = "verdant_warden_helm",
+		})).toEqual(true)
 	end)
 
-	it("stamps a drop without mutating it, and leaves other items alone", function()
+	it("stamps a tradeable unbound copy and leaves the input alone", function()
 		local drop = { templateId = "verdant_frostblade_helm", name = "Rimewake Hood" }
 		local stamped = RelicSets.stamp(drop)
 		expect(stamped == drop).toEqual(false)
 		expect(drop.bound).toBeNil()
 		expect(drop.tradeable).toBeNil()
-		expect(stamped.bound).toEqual(true)
-		expect(stamped.tradeable).toEqual(false)
+		expect(stamped.bound).toEqual(false)
+		expect(stamped.tradeable).toEqual(true)
 		expect(stamped.templateId).toEqual("verdant_frostblade_helm")
 		expect(stamped.name).toEqual("Rimewake Hood")
 		expect(stamped.setId).toEqual("verdant_frostblade")
@@ -393,8 +411,10 @@ describe("Bound pieces", function()
 		end
 		local copy = RelicSets.stamp(catalog)
 		expect(copy == catalog).toEqual(false)
-		expect(copy.bound).toEqual(true)
+		expect(copy.bound).toEqual(false)
+		expect(copy.tradeable).toEqual(true)
 		expect(catalog.bound).toEqual(true)
+		expect(catalog.tradeable).toEqual(false)
 		expect(function()
 			catalog.bound = false
 		end).toThrow()
@@ -404,12 +424,22 @@ describe("Bound pieces", function()
 		expect(RelicSets.stamp(nil)).toBeNil()
 		expect(RelicSets.stamp("verdant_warden_helm")).toEqual("verdant_warden_helm")
 
+		local starter = {
+			templateId = "starter_sword",
+			bound = true,
+			tradeable = false,
+			starter = true,
+		}
+		expect(RelicSets.stamp(starter) == starter).toEqual(true)
+		expect(starter.bound).toEqual(true)
+		expect(starter.tradeable).toEqual(false)
+
 		local setOnly = { setId = "verdant_forgeborn", name = "Kilnheart" }
 		local marked = RelicSets.stamp(setOnly)
 		expect(marked == setOnly).toEqual(false)
 		expect(setOnly.bound).toBeNil()
-		expect(marked.bound).toEqual(true)
-		expect(marked.tradeable).toEqual(false)
+		expect(marked.bound).toEqual(false)
+		expect(marked.tradeable).toEqual(true)
 		expect(marked.slot).toBeNil()
 		expect(marked.name).toEqual("Kilnheart")
 	end)

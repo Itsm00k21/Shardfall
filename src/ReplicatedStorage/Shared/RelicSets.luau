@@ -3,7 +3,9 @@
 --[[
 	Verdant Relic Sets. Heartwood Hard drops one 4-piece set per class.
 
-	Pieces are bound and never tradeable. Two pieces unlock a 2-piece
+	Pieces are raid-drop only. They are tradeable on the Market Board
+	and not bound. stamp sets bound = false and tradeable = true on a
+	copy and does not write the input. Two pieces unlock a 2-piece
 	bonus. Four unlock that and a 4-piece bonus. The bonuses change how
 	the class plays. They do not add flat damage, health, or defense,
 	and nothing here costs Robux.
@@ -484,34 +486,47 @@ function RelicSets.setPct(owned: any): number
 	return pctFromPieces(best)
 end
 
-function RelicSets.isRelic(item: any): boolean
-	if pieceRow(item) ~= nil then
-		return true
+local function namesRelic(value: any): boolean
+	if type(value) ~= "string" or value == "" then
+		return false
 	end
+	return byPiece[value] ~= nil or bySet[value] ~= nil
+end
+
+-- A piece id, a set id, or an item whose templateId, id, pieceId, or
+-- setId names one. bound is not the test. A starter with bound = true
+-- is not a relic.
+function RelicSets.isRelic(item: any): boolean
 	if type(item) == "string" then
-		return bySet[item] ~= nil
+		return namesRelic(item)
 	end
 	if type(item) ~= "table" then
 		return false
 	end
-	if type(item.setId) == "string" and bySet[item.setId] ~= nil then
+	if namesRelic(item.templateId) then
 		return true
 	end
-	if type(item.id) == "string" and bySet[item.id] ~= nil then
+	if namesRelic(item.id) then
+		return true
+	end
+	if namesRelic(item.pieceId) then
+		return true
+	end
+	if namesRelic(item.setId) then
 		return true
 	end
 	return false
 end
 
 -- A new table when `item` is a relic. The input is not written.
--- Anything else is returned as it was.
+-- The copy is tradeable and not bound. Anything else is returned as it was.
 function RelicSets.stamp(item: any): any
 	if type(item) ~= "table" or not RelicSets.isRelic(item) then
 		return item
 	end
 	local copy = table.clone(item)
-	copy.bound = true
-	copy.tradeable = false
+	copy.bound = false
+	copy.tradeable = true
 	local row = pieceRow(item)
 	if row ~= nil then
 		copy.setId = row.setId

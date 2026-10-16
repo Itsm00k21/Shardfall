@@ -1,8 +1,8 @@
 # Verdant Relic Sets
 
-Heartwood Hard drops one 4-piece Verdant Relic Set for each of the five classes. The pieces are bound and never tradeable. Each set has a 2-piece bonus and a 4-piece bonus. Those bonuses change how you play. They do not add flat damage, health, defense, crit, or attack speed.
+Heartwood Hard drops one 4-piece Verdant Relic Set for each of the five classes. Pieces are raid-drop only. They are tradeable on the Market Board, and they are not bound. Each set has a 2-piece bonus and a 4-piece bonus. Those bonuses change how you play. They do not add flat damage, health, defense, crit, or attack speed.
 
-The rules live in `src/ReplicatedStorage/Shared/RelicSets.luau`. This module does not grant loot, roll a drop, edit a profile, or spend Robux. T-010 wires the drops, the Vault, and the trade refusal. The numbers below are the ones in the module, for Kevin to review.
+The rules live in `src/ReplicatedStorage/Shared/RelicSets.luau`. This module does not grant loot, roll a drop, edit a profile, or spend Robux. T-010 wires the drops and the Vault. It does not refuse a relic trade. The numbers below are the ones in the module, for Kevin to review.
 
 `grovewarden_*` in `ItemBases` is the existing Epic armor set. It is not a Verdant Relic Set. Relic ids are `verdant_<class>_<slot>`.
 
@@ -14,7 +14,7 @@ The rules live in `src/ReplicatedStorage/Shared/RelicSets.luau`. This module doe
 | Pieces | 4 per set: `helm`, `chest`, `legs`, `boots` (same slots as `Schema.ARMOR_SLOTS`) |
 | Source | `heartwood_hard` only. Story and Normal do not drop these. |
 | Kind / rarity | `Armor` / `Epic` |
-| Bind | `bound = true`, `tradeable = false`. Never tradeable, including the 2-hour same-run window other raid gear uses. |
+| Trade | Raid-drop only. Not bound. `stamp` sets `bound = false` and `tradeable = true` on a copy and does not write the input. Market Board trades are allowed. The 2-hour same-run window is not a relic bind. |
 | Count | Unique piece ids of that class. A duplicate Mask counts once. Another class's pieces count as zero. |
 | Thresholds | 0 or 1 piece: no bonus. 2 or 3: the 2-piece bonus. 4: both, 2-piece first. |
 | `setPct(owned)` | Integer percent of the fullest set you own: 0, 25, 50, 75, or 100. Counts outside 0–4 pieces clamp. |
@@ -115,11 +115,16 @@ Left out on purpose:
 - The Tidecaller 4-piece does not add a heal percent. It moves the shield the passive already made, and you lose it if you are alone.
 - The Forgeborn cone uses Hammerfall's existing damage. Radius 8 matches that skill. The change is that you have to aim a 120° cone.
 - Frostblade's spread does not add crit damage. It only moves 1 Chill.
-- Pieces are not sold. There is no Robux product id.
+- The vendor does not sell set pieces. There is no Robux product id. A stamped piece can be traded on the Market Board.
+
+## Heartwood Vendor
+
+The Heartwood Vendor sells weaker helper items for Raid Marks or materials. It never sells Verdant Relic Set pieces. Hard drops are the only source for the set. Ghost wires the vendor under T-010. This module sets no Mark price and no Robux product.
+
+`docs/design/shardfall_raids.md` still says Relic Set pieces are bound. Kevin's decision in this file replaces that line. Ghost follows this file when T-010 wires loot and the vendor.
 
 ## For review
 
-1. Relic pieces are never tradeable. The raids doc also lets raid gear be traded inside the same run for 2 hours. That window does not apply to these pieces. Confirm.
+1. Kevin decided pieces are raid-drop only and tradeable on the Market Board. They are not bound. `Trading.luau` is not edited, and there is no `Trading.rejection` block for relics.
 2. `setPct` only returns 0, 25, 50, 75, or 100, because a set is 4 pieces. The session-recap sample sentence uses 41%. Confirm the 25-point steps are what the card should show.
 3. Applying the behavior (the taunt, the cleanse, the cone, the Chill spread) is combat. This module only returns the rows. Confirm that stays out of T-010.
-4. Should the Heartwood Vendor sell a missing piece for Raid Marks, or are Hard drops the only source? No Mark price is set here.
