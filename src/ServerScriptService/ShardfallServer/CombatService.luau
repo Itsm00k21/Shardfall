@@ -24,6 +24,7 @@ local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Quality = require(ReplicatedStorage.Shared.Quality)
 local DataService = require(script.Parent.DataService)
+local OnboardingService = require(script.Parent.OnboardingService)
 
 local CombatService = {}
 
@@ -657,6 +658,7 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 		flat = Vector3.new(0, 0, -1)
 	end
 	releaseSwing(player, hrp, offense, aim, flat.Unit, charged == true)
+	OnboardingService.note(player, "swing")
 end
 
 function CombatService.dodge(player: Player, telegraphEndsAt: any)
@@ -665,6 +667,7 @@ function CombatService.dodge(player: Player, telegraphEndsAt: any)
 	end
 	local state = ensure(player)
 	local now = os.clock()
+	OnboardingService.note(player, "dodge")
 	if not CombatFeel.tryDodge(state.dodge, now) then
 		fx(player, { kind = "dodge", perfect = false, charges = 0, ult = state.ult })
 		return

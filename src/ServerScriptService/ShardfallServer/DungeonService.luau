@@ -42,6 +42,7 @@ local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
+local OnboardingService = require(script.Parent.OnboardingService)
 local HavenBuilder = require(script.Parent.HavenBuilder)
 
 local DungeonService = {}
@@ -1772,6 +1773,7 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 		end)
 	end
 	pushRun(player, picked.note)
+	OnboardingService.note(player, "door")
 	return DungeonService.advance(player)
 end
 

@@ -31,6 +31,7 @@ local DoorHud = require(script.DoorHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
 local MusicController = require(script.MusicController)
+local OnboardHud = require(script.OnboardHud)
 local RollReel = require(script.RollReel)
 local ThumbBar = require(script.ThumbBar)
 local TravelHud = require(script.TravelHud)
@@ -169,6 +170,7 @@ local function applyProfile(profile: any, saving: any)
 	end
 	ui.setProfile(profile, saving == true)
 	ClassHud.setProfile(profile)
+	OnboardHud.setProfile(profile)
 	if inventory ~= nil then
 		inventory.setProfile(profile)
 	end
@@ -892,6 +894,9 @@ HavenClient.start({
 
 VerdantLod.start()
 
+OnboardHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
 DoorHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)

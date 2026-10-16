@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 13.
+	The player profile shape, version 14.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -24,7 +24,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 13
+Schema.VERSION = 14
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -134,6 +134,8 @@ export type ProfileData = {
 	classId: string,
 	classXp: { [string]: number },
 	classTalent: { [string]: string },
+	onboardStep: string,
+	onboardDone: boolean,
 }
 
 function Schema.template(): ProfileData
@@ -201,6 +203,8 @@ function Schema.template(): ProfileData
 		classId = "",
 		classXp = {},
 		classTalent = {},
+		onboardStep = "open",
+		onboardDone = false,
 	}
 end
 
@@ -339,6 +343,10 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.classTalent = classTalent
+	if type(data.onboardStep) ~= "string" or data.onboardStep == "" then
+		data.onboardStep = "open"
+	end
+	data.onboardDone = data.onboardDone == true
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -735,6 +743,17 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 13
 	end
 
+	if version < 14 then
+		if type(raw.onboardStep) ~= "string" then
+			raw.onboardStep = "haven"
+		end
+		if raw.onboardDone ~= true then
+			raw.onboardDone = true
+		end
+		raw.schemaVersion = 14
+		version = 14
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -933,6 +952,8 @@ function Schema.snapshot(data: ProfileData)
 		classXp = Schema.deepCopy(data.classXp),
 		classTalent = Schema.deepCopy(data.classTalent),
 		classLevel = Classes.progress(data.classXp[data.classId] or 0),
+		onboardStep = data.onboardStep,
+		onboardDone = data.onboardDone,
 	}
 end
 

@@ -15,6 +15,7 @@ local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
 local DungeonService = require(script.Parent.DungeonService)
+local OnboardingService = require(script.Parent.OnboardingService)
 
 local ClassService = {}
 
@@ -89,6 +90,7 @@ function ClassService.select(player: Player, classId: any): { [string]: any }
 	local row = session(player)
 	row.resource = if classId == "voidcaster" then 100 else 0
 	row.chill = 0
+	OnboardingService.note(player, "class")
 	return { ok = true, classId = classId, profile = DataService.snapshot(player) }
 end
 

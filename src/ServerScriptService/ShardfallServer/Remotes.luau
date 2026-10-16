@@ -24,6 +24,7 @@ local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
 local DungeonService = require(script.Parent.DungeonService)
 local InventoryService = require(script.Parent.InventoryService)
+local OnboardingService = require(script.Parent.OnboardingService)
 local RateLimiter = require(script.Parent.RateLimiter)
 local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
@@ -473,6 +474,15 @@ function Remotes.bind()
 			warn("[Shardfall] Attack:", err)
 		end
 	end)
+
+	functionRemote("Onboard").OnServerInvoke = function(player, action)
+		return guard(player, "Onboard", function()
+			if action == "skip" then
+				return OnboardingService.skip(player)
+			end
+			return OnboardingService.advance(player)
+		end)
+	end
 
 	functionRemote("SetClass").OnServerInvoke = function(player, classId)
 		return guard(player, "SetClass", function()
