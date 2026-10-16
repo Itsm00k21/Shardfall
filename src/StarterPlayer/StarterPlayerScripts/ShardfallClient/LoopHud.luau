@@ -19,6 +19,7 @@ local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("U
 local LoopHud = {}
 local player = Players.LocalPlayer
 local label: TextLabel? = nil
+local boardRef: Frame? = nil
 local cells: { TextLabel } = {}
 
 local function questLine(quest): string
@@ -98,6 +99,16 @@ function LoopHud.setProfile(profile: any)
 	paintBoard(profile.board)
 end
 
+function LoopHud.setOpen(open: boolean)
+	if boardRef ~= nil then
+		boardRef.Visible = open
+	end
+end
+
+function LoopHud.isOpen(): boolean
+	return boardRef ~= nil and boardRef.Visible
+end
+
 function LoopHud.start(invoke: (string, ...any) -> any)
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallLoops"
@@ -118,6 +129,7 @@ function LoopHud.start(invoke: (string, ...any) -> any)
 	panel.Visible = false
 	panel.ClipsDescendants = true
 	panel.Parent = screen
+	boardRef = panel
 	local panelCorner = Instance.new("UICorner")
 	panelCorner.CornerRadius = UDim.new(0, 12)
 	panelCorner.Parent = panel

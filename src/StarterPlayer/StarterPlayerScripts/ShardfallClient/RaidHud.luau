@@ -82,6 +82,7 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	toggle.TextWrapped = true
 	toggle.TextColor3 = Color3.fromRGB(16, 14, 24)
 	toggle.Text = "Raid"
+	toggle.Visible = false
 	toggle.Parent = screen
 	local toggleCorner = Instance.new("UICorner")
 	toggleCorner.CornerRadius = UDim.new(0, 12)

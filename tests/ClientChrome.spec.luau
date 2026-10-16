@@ -119,4 +119,51 @@ describe("Client chrome", function()
 		expect(string.find(combat, "humanoid.MaxHealth = maxHealth", 1, true) ~= nil).toBeTrue()
 		expect(string.find(combat, 'string.format("HP  %d / %d", hp, maxHp)', 1, true) ~= nil).toBeTrue()
 	end)
+
+	it("shows only HP, currency, the action bar, and the debug toggle at join", function()
+		expect(ClientChrome.visibleAtJoin("ShardfallCombat")).toEqual(true)
+		expect(ClientChrome.visibleAtJoin("ShardfallActions")).toEqual(true)
+		expect(ClientChrome.visibleAtJoin("ShardfallDebug")).toEqual(true)
+		for _, name in ipairs({
+			"Shardfall",
+			"ShardfallRoll",
+			"ShardfallLoops",
+			"ShardfallMenu",
+			"ShardfallClasses",
+			"ShardfallPets",
+			"ShardfallRaids",
+			"ShardfallInventory",
+			"ShardfallTravel",
+			"ShardfallMarket",
+		}) do
+			expect(ClientChrome.visibleAtJoin(name)).toEqual(false)
+		end
+		local root = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
+		local ui = fs.readFile(root .. "Ui.luau")
+		local client = fs.readFile(root .. "init.client.luau")
+		local menu = fs.readFile(root .. "MenuHud.luau")
+		local classes = fs.readFile(root .. "ClassHud.luau")
+		local debugHud = fs.readFile(root .. "DebugHud.luau")
+		expect(string.find(ui, "Loading profile...", 1, true)).toBeNil()
+		expect(string.find(client, "setHubChrome(true)", 1, true)).toBeNil()
+		expect(string.find(client, "MenuHud.start", 1, true) ~= nil).toBeTrue()
+		expect(string.find(menu, "panel.Visible = false", 1, true) ~= nil).toBeTrue()
+		expect(string.find(menu, "ClientChrome.MENU", 1, true) ~= nil).toBeTrue()
+		expect(ClientChrome.MENU).toEqual({
+			"Codes",
+			"Daily",
+			"Pass",
+			"Settings",
+			"Roll",
+			"Craft",
+			"Bossrush",
+		})
+		expect(string.find(classes, "sec cooldown", 1, true) ~= nil).toBeTrue()
+		expect(string.find(classes, "Change class", 1, true) ~= nil).toBeTrue()
+		expect(string.find(classes, "panel.Visible = false", 1, true) ~= nil).toBeTrue()
+		expect(string.find(debugHud, "UIGridLayout", 1, true) ~= nil).toBeTrue()
+		expect(string.find(debugHud, "Enum.ScrollingDirection.Y", 1, true) ~= nil).toBeTrue()
+		expect(string.find(debugHud, "Enum.ScrollingDirection.X", 1, true)).toBeNil()
+		expect(string.find(debugHud, "ShellLayout.debugGrid", 1, true) ~= nil).toBeTrue()
+	end)
 end)

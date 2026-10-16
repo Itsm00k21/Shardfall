@@ -22,6 +22,7 @@ local OWNED: { [string]: boolean } = {
 	ShardfallInventory = true,
 	ShardfallLoops = true,
 	ShardfallMarket = true,
+	ShardfallMenu = true,
 	ShardfallOnboard = true,
 	ShardfallPets = true,
 	ShardfallRaids = true,
@@ -33,6 +34,15 @@ local OWNED: { [string]: boolean } = {
 function ClientChrome.shouldClear(name: string): boolean
 	return OWNED[name] == true
 end
+
+-- Join draws the combat HUD (HP and currency), the action bar, and the
+-- Studio debug toggle. Every other owned gui stays hidden until a button.
+function ClientChrome.visibleAtJoin(name: string): boolean
+	return name == "ShardfallCombat" or name == "ShardfallActions" or name == "ShardfallDebug"
+end
+
+-- One menu. Each entry opens that sheet and closes the others.
+ClientChrome.MENU = { "Codes", "Daily", "Pass", "Settings", "Roll", "Craft", "Bossrush" }
 
 -- The current roll line is "Pity 0 / 50 toward Legendary". 0/80 is a leftover.
 function ClientChrome.legacyReadout(text: string): boolean
