@@ -76,6 +76,9 @@ These notes override the post-beta line that Gems are bound and that trading sta
 - Listings last 48 hours. Caps: New 4, Standard 8, Trusted and Patron 20.
 - Gem prices require both sides to be allowed to trade Gems. Robux-bought items stay bound (`Trading.ROBUX_ITEM_TRADING_ENABLED = false`).
 
+### Cross-server board
+`MarketCross.MARKET_XSERVER_ENABLED` turns on escrowed listings that any server can browse. The durable copy is a DataStore. A MemoryStore sorted map per item category, ordered by price and expired with the 48 hour listing, is the index. Listing still sinks the 5% gold fee and does not tax the sale; the seller's mailbox receives the full price. Goods leave the seller's profile when the listing is created. A buy claims the row with UpdateAsync, gives the goods to the buyer, and writes the seller's payout into the mailbox. Cancel and expiry return the goods through that mailbox. The seller is paid when they are in this server, or when MessagingService pings the server they are in. If the switch is off, or MemoryStore and DataStores do not answer, the server keeps the in-memory board and goods stay reserved in the bag.
+
 ## Trade Audit System (protect players without blocking whales)
 **Log everything**: every trade and market sale stores both players, items, Gem/gold amounts, estimated value, timestamp, server, account age, and level. Logs kept 180 days; review dashboard with search by player/item.
 
