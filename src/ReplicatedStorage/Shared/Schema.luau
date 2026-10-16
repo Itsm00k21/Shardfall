@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 17.
+	The player profile shape, version 18.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -18,6 +18,7 @@ local Audio = require("./Audio")
 local Classes = require("./Classes")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
+local Loops = require("./Loops")
 local Progression = require("./Progression")
 local Quality = require("./Quality")
 local Stars = require("./Stars")
@@ -25,7 +26,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 17
+Schema.VERSION = 18
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -148,6 +149,17 @@ export type ProfileData = {
 	receipts: { [string]: boolean },
 	eggs: number,
 	companions: { any },
+	dailies: { any },
+	weekly: { any },
+	weeklyWeek: number,
+	board: { any },
+	boardLines: number,
+	passXp: number,
+	passClaimed: number,
+	firstClearDay: number,
+	nightmareBest: number,
+	dailyBonusDay: number,
+	dailyRerollDay: number,
 }
 
 function Schema.template(): ProfileData
@@ -228,6 +240,17 @@ function Schema.template(): ProfileData
 		receipts = {},
 		eggs = 1,
 		companions = {},
+		dailies = {},
+		weekly = {},
+		weeklyWeek = -1,
+		board = {},
+		boardLines = 0,
+		passXp = 0,
+		passClaimed = 0,
+		firstClearDay = -1,
+		nightmareBest = 0,
+		dailyBonusDay = -1,
+		dailyRerollDay = -1,
 	}
 end
 
@@ -387,6 +410,19 @@ function Schema.reconcile(data: any): ProfileData
 	if type(data.companions) ~= "table" then
 		data.companions = {}
 	end
+	if type(data.dailies) ~= "table" then
+		data.dailies = {}
+	end
+	if type(data.weekly) ~= "table" then
+		data.weekly = {}
+	end
+	if type(data.board) ~= "table" then
+		data.board = {}
+	end
+	data.passXp = wholeNumber(data.passXp, 0, 0)
+	data.passClaimed = wholeNumber(data.passClaimed, 0, 0)
+	data.boardLines = wholeNumber(data.boardLines, 0, 0)
+	data.nightmareBest = wholeNumber(data.nightmareBest, 0, 0)
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -418,6 +454,10 @@ function Schema.reconcile(data: any): ProfileData
 	data.lastLoginDay = stamp(data.lastLoginDay)
 	data.lastDailyBossDay = stamp(data.lastDailyBossDay)
 	data.lastWeeklyBossWeek = stamp(data.lastWeeklyBossWeek)
+	data.firstClearDay = stamp(data.firstClearDay)
+	data.weeklyWeek = stamp(data.weeklyWeek)
+	data.dailyBonusDay = stamp(data.dailyBonusDay)
+	data.dailyRerollDay = stamp(data.dailyRerollDay)
 	if data.chestDuplicates ~= "star" then
 		data.chestDuplicates = "dust"
 	end
@@ -825,6 +865,21 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 17
 	end
 
+	if version < 18 then
+		raw.dailies = {}
+		raw.weekly = {}
+		raw.weeklyWeek = -1
+		raw.board = {}
+		raw.boardLines = 0
+		raw.passXp = 0
+		raw.passClaimed = 0
+		raw.firstClearDay = -1
+		raw.nightmareBest = 0
+		raw.dailyBonusDay = -1
+		raw.dailyRerollDay = -1
+		raw.schemaVersion = 18
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -1034,6 +1089,15 @@ function Schema.snapshot(data: ProfileData)
 		eventTokens = data.eventTokens,
 		eggs = data.eggs,
 		companions = Schema.deepCopy(data.companions),
+		dailies = Schema.deepCopy(data.dailies),
+		weekly = Schema.deepCopy(data.weekly),
+		board = Schema.deepCopy(data.board),
+		boardLines = data.boardLines,
+		passXp = data.passXp,
+		passTier = select(2, Loops.passXp(data.passXp, 0)),
+		passClaimed = data.passClaimed,
+		nightmareBest = data.nightmareBest,
+		dailyBossReady = data.lastDailyBossDay ~= Loops.dayNumber(os.time()),
 	}
 end
 

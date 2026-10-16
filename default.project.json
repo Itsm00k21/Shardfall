@@ -103,6 +103,11 @@
         "FusePet": { "$className": "RemoteFunction" },
         "PaintPet": { "$className": "RemoteFunction" },
         "FavoritePet": { "$className": "RemoteFunction" },
+        "Loops": { "$className": "RemoteFunction" },
+        "RerollDaily": { "$className": "RemoteFunction" },
+        "ClaimPass": { "$className": "RemoteFunction" },
+        "PremiumPass": { "$className": "RemoteFunction" },
+        "StartDailyBoss": { "$className": "RemoteFunction" },
         "CombatFx": {
           "$className": "RemoteEvent"
         },

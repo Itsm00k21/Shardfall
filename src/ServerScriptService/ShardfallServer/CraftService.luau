@@ -15,6 +15,7 @@ local Crafting = require(ReplicatedStorage.Shared.Crafting)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local DataService = require(script.Parent.DataService)
+local LoopService = require(script.Parent.LoopService)
 
 local CraftService = {}
 
@@ -138,6 +139,7 @@ function CraftService.upgrade(player: Player, uid: any)
 	if not ok then
 		return reject(err or "Could not upgrade that.")
 	end
+	LoopService.progress(player, "forge", 1)
 	return { ok = true, note = note, profile = DataService.snapshot(player) }
 end
 

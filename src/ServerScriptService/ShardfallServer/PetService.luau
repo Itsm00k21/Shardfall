@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Pets = require(ReplicatedStorage.Shared.Pets)
 local DataService = require(script.Parent.DataService)
+local LoopService = require(script.Parent.LoopService)
 
 local PetService = {}
 
@@ -54,6 +55,7 @@ function PetService.hatch(player: Player)
 	if not ok then
 		return reject(err or "Could not hatch.")
 	end
+	LoopService.progress(player, "hatch", 1)
 	return { ok = true, name = note, profile = DataService.snapshot(player) }
 end
 
@@ -76,6 +78,7 @@ function PetService.care(player: Player, uid: any, kind: any)
 	if not ok then
 		return reject(err or "Could not do that.")
 	end
+	LoopService.progress(player, "pet", 1)
 	return { ok = true, profile = DataService.snapshot(player) }
 end
 

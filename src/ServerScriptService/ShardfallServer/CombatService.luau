@@ -24,6 +24,7 @@ local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Quality = require(ReplicatedStorage.Shared.Quality)
 local DataService = require(script.Parent.DataService)
+local LoopService = require(script.Parent.LoopService)
 local OnboardingService = require(script.Parent.OnboardingService)
 
 local CombatService = {}
@@ -678,6 +679,7 @@ function CombatService.dodge(player: Player, telegraphEndsAt: any)
 		CombatFeel.notePerfect(state.dodge, now)
 		state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
 	end
+	LoopService.progress(player, "dodge", 1)
 	local hrp = rootPart(player)
 	fx(player, {
 		kind = "dodge",

@@ -36,7 +36,9 @@ local Materials = require(ReplicatedStorage.Shared.Materials)
 local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
 local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
+local Loops = require(ReplicatedStorage.Shared.Loops)
 local Progression = require(ReplicatedStorage.Shared.Progression)
+local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local Rootvault = require(ReplicatedStorage.Shared.Rootvault)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
@@ -104,6 +106,7 @@ type Run = {
 	offer: { any }?,
 	eliteNext: boolean,
 	shrine: string,
+	startedAt: number,
 }
 
 type Restart = {
@@ -844,6 +847,7 @@ local function grant(
 	local _, _, goldFind = CombatMath.loadout(profile)
 	local bonus = CombatMath.bonusGold(rolled.gold, goldFind)
 	local levels = 0
+	local xpShown = rolled.xp
 	local ok, err = DataService.mutate(player, function(data)
 		local elapsed = 0
 		if farmSince[player] ~= nil then
@@ -857,7 +861,25 @@ local function grant(
 		data.gold += paid
 		Economy.log(data, "dungeon_clear", "gold", paid, data.gold)
 		data.shardTokens += rolled.shardTokens
-		levels = Progression.addXp(data, rolled.xp)
+		local xpGain = rolled.xp
+		if run.dungeon.endless ~= true and run.dungeon.id == Dungeons.ROOTVAULT_ID then
+			local today = Loops.dayNumber(os.time())
+			local mult, day, rare = Loops.firstClear(data.firstClearDay or -1, today)
+			data.firstClearDay = day
+			xpGain = rolled.xp * mult
+			if rare and type(data.chests) == "table" then
+				data.chests.Rare = (data.chests.Rare or 0) + 1
+			end
+			if run.difficulty == "nightmare" then
+				local seconds = math.max(1, math.floor(os.clock() - run.startedAt))
+				if (data.nightmareBest or 0) == 0 or seconds < data.nightmareBest then
+					data.nightmareBest = seconds
+				end
+			end
+		end
+		data.passXp = select(1, Loops.passXp(data.passXp or 0, 40))
+		xpShown = xpGain
+		levels = Progression.addXp(data, xpGain)
 		for materialId, count in pairs(rolled.materials) do
 			Materials.add(data.materials, materialId, count)
 		end
@@ -882,6 +904,13 @@ local function grant(
 		})
 		return false
 	end
+	if run.dungeon.endless ~= true then
+		LoopService.progress(player, "rooms", 1)
+	end
+	if run.difficulty == "nightmare" and run.dungeon.endless ~= true then
+		local seconds = math.max(1, math.floor(os.clock() - run.startedAt))
+		LoopService.recordTime(player.Name, player.UserId, seconds)
+	end
 
 	local gained: { [string]: number } = {}
 	Materials.merge(gained, rolled.materials)
@@ -898,7 +927,7 @@ local function grant(
 	end
 	if dismissIn == nil then
 		local bits =
-			{ string.format("+%d gold", rolled.gold + bonus), string.format("+%d XP", rolled.xp) }
+			{ string.format("+%d gold", rolled.gold + bonus), string.format("+%d XP", xpShown) }
 		if rolled.shardTokens > 0 then
 			table.insert(bits, string.format("+%d tokens", rolled.shardTokens))
 		end
@@ -913,7 +942,7 @@ local function grant(
 			gold = rolled.gold,
 			bonusGold = bonus,
 			shardTokens = rolled.shardTokens,
-			xp = rolled.xp,
+			xp = xpShown,
 			levels = levels,
 			materials = lines,
 			voucher = rolled.voucher,
@@ -982,6 +1011,7 @@ end
 
 local function beginAdvance(player: Player, run: Run, text: string)
 	run.cleared = true
+	LoopService.progress(player, "rooms", 1)
 	if run.dungeon.endless ~= true and run.roomIndex < #run.dungeon.rooms then
 		run.offer = Rootvault.offer(run.roomIndex, #run.dungeon.rooms, math.random(1, 5))
 		run.advanceAt = nil
@@ -1661,6 +1691,7 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any)
 		offer = nil,
 		eliteNext = false,
 		shrine = "",
+		startedAt = os.clock(),
 	}
 	runs[player] = run
 	CombatService.refresh(player)
@@ -1718,6 +1749,34 @@ function DungeonService.leave(player: Player)
 	teleport(player, hubCFrame())
 	destroyRun(player, run)
 	pushRun(player, "Left the Rootvault.")
+	return { ok = true, run = publicRun(player) }
+end
+
+function DungeonService.startDailyBoss(player: Player)
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
+	end
+	if profile.lastDailyBossDay == Loops.dayNumber(os.time()) then
+		return reject("The daily Gnarl is already down.")
+	end
+	if runs[player] ~= nil then
+		return reject("Leave the crawl first.")
+	end
+	local entered = DungeonService.enter(player, Dungeons.ROOTVAULT_ID, "normal")
+	if entered.ok ~= true then
+		return entered
+	end
+	local run = runs[player]
+	if run == nil then
+		return reject("The daily Gnarl did not open.")
+	end
+	run.roomIndex = #run.dungeon.rooms
+	run.placeIndex = run.roomIndex
+	run.advanceAt = nil
+	teleport(player, roomSpawn(run.placeIndex))
+	spawnRoom(player, run)
+	pushRun(player, "Daily Gnarl.")
 	return { ok = true, run = publicRun(player) }
 end
 

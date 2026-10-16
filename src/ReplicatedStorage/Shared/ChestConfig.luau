@@ -20,6 +20,8 @@ local RollMath = require("./RollMath")
 local Schema = require("./Schema")
 local Stars = require("./Stars")
 
+local Loops = require("./Loops")
+
 local ChestConfig = {}
 
 ChestConfig.PAID_CHESTS_ENABLED = true
@@ -429,14 +431,11 @@ end
 function ChestConfig.claimLogin(data: any, now: number): (any?, string?)
 	ChestConfig.ensure(data)
 	local day = dayNumber(now)
-	if data.lastLoginDay == day then
+	local streak, paid = Loops.login(data.loginStreak or 0, data.lastLoginDay, day)
+	if not paid then
 		return nil, "Daily login is already claimed."
 	end
-	if data.lastLoginDay == day - 1 then
-		data.loginStreak += 1
-	else
-		data.loginStreak = 1
-	end
+	data.loginStreak = streak
 	data.lastLoginDay = day
 	local granted = { grantListed(data, "login") }
 	if data.loginStreak % 7 == 0 then
