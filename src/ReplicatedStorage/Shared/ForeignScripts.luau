@@ -5,8 +5,10 @@
 
 	StarterPlayer holds Roblox's camera and control scripts (PlayerModule,
 	RbxCharacterSounds, and the rest). Disabling those leaves the camera
-	dead and the screen gray. The scan never walks that service, and it
-	also skips a built-in name if one shows up under Workspace.
+	dead and the screen gray. The scan walks StarterPlayer and skips those
+	built-in names, plus ShardfallClient. Any other script there is a
+	leftover UI and gets disabled. A built-in name under Workspace is
+	skipped too.
 ]]
 
 local ForeignScripts = {}
@@ -16,6 +18,7 @@ ForeignScripts.SERVICES = {
 	"Workspace",
 	"StarterGui",
 	"StarterPack",
+	"StarterPlayer",
 	"ReplicatedFirst",
 	"ServerStorage",
 }
@@ -31,9 +34,6 @@ ForeignScripts.BUILT_IN = {
 }
 
 function ForeignScripts.shouldFlag(serviceName: string, names: { string }): boolean
-	if serviceName == "StarterPlayer" then
-		return false
-	end
 	local listed = false
 	for _, service in ipairs(ForeignScripts.SERVICES) do
 		if service == serviceName then
@@ -44,9 +44,6 @@ function ForeignScripts.shouldFlag(serviceName: string, names: { string }): bool
 		return false
 	end
 	for _, name in ipairs(names) do
-		if name == "StarterPlayer" then
-			return false
-		end
 		if ForeignScripts.BUILT_IN[name] == true then
 			return false
 		end

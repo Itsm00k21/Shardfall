@@ -19,6 +19,7 @@ local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 
 local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
+local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local CombatHud = {}
@@ -253,13 +254,21 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 
 	local shakeUntil = 0
 	local flashUntil = 0
-	local function setHp(hp: number, maxHp: number)
-		local safeMax = if maxHp > 0 then maxHp else 1
-		hpText.Text = string.format("HP  %d / %d", math.floor(hp + 0.5), math.floor(safeMax + 0.5))
-		hpFill.Size = UDim2.fromScale(math.clamp(hp / safeMax, 0, 1), 1)
-		hpFill.BackgroundColor3 = if hp / safeMax < 0.3
+	local downHold = false
+	local latchedHp = 100
+	local latchedMax = 100
+	local function drawHp()
+		local drawn = if downHold then 0 else latchedHp
+		hpText.Text = string.format("HP  %d / %d", drawn, latchedMax)
+		local ratio = if latchedMax > 0 then drawn / latchedMax else 0
+		hpFill.Size = UDim2.fromScale(ratio, 1)
+		hpFill.BackgroundColor3 = if drawn <= 0 or ratio < 0.3
 			then Color3.fromRGB(230, 80, 96)
 			else Color3.fromRGB(110, 210, 140)
+	end
+	local function setHp(hp: number, maxHp: number)
+		latchedHp, latchedMax = CombatMath.clampVitals(hp, maxHp)
+		drawHp()
 	end
 
 	local card = Instance.new("Frame")
@@ -328,6 +337,10 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	local cardGeneration = 0
 	local function hideCard()
 		card.Visible = false
+		if downHold then
+			downHold = false
+			drawHp()
+		end
 	end
 	dismiss.MouseButton1Click:Connect(hideCard)
 
@@ -521,6 +534,11 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			callbacks.onRun({ active = false })
 		elseif payload.kind == "defeat" then
 			local text = if type(payload.text) == "string" then payload.text else "Defeated."
+			-- Revive publishes max HP (100 + armor, which is where 103 came
+			-- from) in the same breath as this card. Hold the bar at 0 until
+			-- the card closes so the fill and the text agree.
+			downHold = true
+			drawHp()
 			showCard(
 				"Defeated",
 				text,
