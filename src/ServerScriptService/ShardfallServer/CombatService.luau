@@ -78,6 +78,11 @@ type Shot = {
 	heavy: boolean,
 }
 
+local classMods = function(_player: Player): { taken: number, dealt: number }
+	return { taken = 1, dealt = 1 }
+end
+local onPlayerHit = function(_player: Player) end
+
 local hooks: Hooks = {
 	enemies = function(_player)
 		return {}
@@ -232,6 +237,14 @@ local function attachCharacter(player: Player, character: Model)
 	end
 end
 
+function CombatService.bindClassMods(fn: (Player) -> { taken: number, dealt: number })
+	classMods = fn
+end
+
+function CombatService.bindPlayerHit(fn: (Player) -> ())
+	onPlayerHit = fn
+end
+
 function CombatService.bindHooks(nextHooks: Hooks)
 	hooks = nextHooks
 end
@@ -324,6 +337,8 @@ function CombatService.damagePlayer(
 		})
 		return false
 	end
+	local mods = classMods(player)
+	rawDamage *= mods.taken
 	local hit = CombatMath.resolveHit(rawDamage, 0, 1, state.defense, 1, 0)
 	state.hp -= hit.amount
 	local down = state.hp <= 0
@@ -342,6 +357,8 @@ function CombatService.damagePlayer(
 	if down then
 		-- Defer so a killing blow cannot destroy the shot list mid-loop.
 		task.defer(hooks.onPlayerDown, player)
+	else
+		onPlayerHit(player)
 	end
 	return down
 end
@@ -366,8 +383,9 @@ local function strikeEnemy(
 	lifesteal: number,
 	heavy: boolean
 )
+	local mods = classMods(player)
 	local hit = CombatMath.resolveHit(
-		damage,
+		damage * mods.dealt,
 		critChance,
 		critDamage,
 		enemy.defense,
@@ -667,6 +685,32 @@ function CombatService.dodge(player: Player, telegraphEndsAt: any)
 		y = if hrp ~= nil then hrp.Position.Y else 0,
 		z = if hrp ~= nil then hrp.Position.Z else 0,
 	})
+end
+
+function CombatService.ultCharge(player: Player): number
+	return ensure(player).ult
+end
+
+function CombatService.addUlt(player: Player, amount: number)
+	local state = ensure(player)
+	state.ult = math.min(100, state.ult + amount)
+end
+
+function CombatService.spendUlt(player: Player)
+	ensure(player).ult = 0
+end
+
+function CombatService.healAmount(player: Player, amount: number)
+	local hrp = rootPart(player)
+	local x, y, z = 0, 0, 0
+	if hrp ~= nil then
+		x, y, z = hrp.Position.X, hrp.Position.Y, hrp.Position.Z
+	end
+	heal(player, amount, x, y, z)
+end
+
+function CombatService.strike(player: Player, enemy: EnemyView, damage: number, heavy: boolean)
+	strikeEnemy(player, enemy, damage, 0.05, 1.5, 0, heavy)
 end
 
 -- Nearest enemy inside the equipped weapon's range. Melee still uses that

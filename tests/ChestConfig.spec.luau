@@ -163,7 +163,8 @@ describe("ChestConfig", function()
 		expect(bought.ok).toEqual(true)
 		expect(bought.rarity).toEqual("Epic")
 		expect(data.shardDust).toEqual(0)
-		local mythicTry = ChestConfig.buyDustShard(data, "unnamed_grove", rng(0), 1000, uidFactory())
+		local mythicTry =
+			ChestConfig.buyDustShard(data, "unnamed_grove", rng(0), 1000, uidFactory())
 		expect(mythicTry.ok).toEqual(false)
 	end)
 

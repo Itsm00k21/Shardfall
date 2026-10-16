@@ -234,7 +234,10 @@ function ChestConfig.ensure(data: any)
 	if data.chestDuplicates ~= "star" then
 		data.chestDuplicates = "dust"
 	end
-	if type(data.chestSalvageBelow) ~= "string" or Rarities.INDEX[data.chestSalvageBelow] == nil then
+	if
+		type(data.chestSalvageBelow) ~= "string"
+		or Rarities.INDEX[data.chestSalvageBelow] == nil
+	then
 		data.chestSalvageBelow = ""
 	end
 	if type(data.materials) ~= "table" then
@@ -260,7 +263,11 @@ function ChestConfig.addChest(data: any, tier: string, count: number): number
 	return gained
 end
 
-function ChestConfig.chances(tier: string, luck: number, floorOverride: string?): { [string]: number }
+function ChestConfig.chances(
+	tier: string,
+	luck: number,
+	floorOverride: string?
+): { [string]: number }
 	local row = ODDS[tier]
 	local chances: { [string]: number } = {}
 	if row == nil then
@@ -639,7 +646,14 @@ local function findStarTarget(data: any, templateId: string): any?
 	return nil
 end
 
-local function resolveDrop(data: any, entry: any, rng: any, now: number, uid: () -> string, owned: { [string]: any })
+local function resolveDrop(
+	data: any,
+	entry: any,
+	rng: any,
+	now: number,
+	uid: () -> string,
+	owned: { [string]: any }
+)
 	local existing = owned[entry.templateId]
 	local dustIt = existing ~= nil and salvageDuplicate(data, entry.rarity)
 	if existing ~= nil and not dustIt then
@@ -726,7 +740,14 @@ function ChestConfig.bestIndex(results: { any }): number
 	return best
 end
 
-function ChestConfig.open(data: any, tier: string, count: number, rng: any, now: number, uid: () -> string)
+function ChestConfig.open(
+	data: any,
+	tier: string,
+	count: number,
+	rng: any,
+	now: number,
+	uid: () -> string
+)
 	ChestConfig.ensure(data)
 	if ChestConfig.FLOOR[tier] == nil then
 		return { ok = false, error = "Unknown chest." }
@@ -849,7 +870,13 @@ function ChestConfig.choose(data: any, index: number, rng: any, now: number, uid
 	}
 end
 
-function ChestConfig.buyDustShard(data: any, templateId: string, rng: any, now: number, uid: () -> string)
+function ChestConfig.buyDustShard(
+	data: any,
+	templateId: string,
+	rng: any,
+	now: number,
+	uid: () -> string
+)
 	ChestConfig.ensure(data)
 	if type(templateId) ~= "string" or string.match(templateId, "^[%w_]+$") == nil then
 		return { ok = false, error = "Unknown shard." }

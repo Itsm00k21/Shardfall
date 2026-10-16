@@ -83,6 +83,15 @@
         "Dodge": {
           "$className": "RemoteEvent"
         },
+        "SetClass": {
+          "$className": "RemoteFunction"
+        },
+        "PickTalent": {
+          "$className": "RemoteFunction"
+        },
+        "UseSkill": {
+          "$className": "RemoteFunction"
+        },
         "CombatFx": {
           "$className": "RemoteEvent"
         },

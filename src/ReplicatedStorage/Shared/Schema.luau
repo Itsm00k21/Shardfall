@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 12.
+	The player profile shape, version 13.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -15,6 +15,7 @@
 ]]
 
 local Audio = require("./Audio")
+local Classes = require("./Classes")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Quality = require("./Quality")
@@ -23,7 +24,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 12
+Schema.VERSION = 13
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -130,6 +131,9 @@ export type ProfileData = {
 	pendingChest: any,
 	musicVolume: number,
 	sfxVolume: number,
+	classId: string,
+	classXp: { [string]: number },
+	classTalent: { [string]: string },
 }
 
 function Schema.template(): ProfileData
@@ -194,6 +198,9 @@ function Schema.template(): ProfileData
 		pendingChest = nil,
 		musicVolume = Audio.DEFAULT_MUSIC,
 		sfxVolume = Audio.DEFAULT_SFX,
+		classId = "",
+		classXp = {},
+		classTalent = {},
 	}
 end
 
@@ -311,6 +318,27 @@ function Schema.reconcile(data: any): ProfileData
 	data.vip = data.vip == true
 	data.shake = data.shake ~= false
 	data.musicVolume = Audio.clampVolume(data.musicVolume)
+	if Classes.get(data.classId) == nil then
+		data.classId = ""
+	end
+	local classXp = {}
+	if type(data.classXp) == "table" then
+		for classId, amount in pairs(data.classXp) do
+			if Classes.get(classId) ~= nil then
+				classXp[classId] = wholeNumber(amount, 0, 0)
+			end
+		end
+	end
+	data.classXp = classXp
+	local classTalent = {}
+	if type(data.classTalent) == "table" then
+		for classId, talentId in pairs(data.classTalent) do
+			if type(talentId) == "string" and Classes.validTalent(classId, talentId) then
+				classTalent[classId] = talentId
+			end
+		end
+	end
+	data.classTalent = classTalent
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -693,6 +721,20 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 12
 	end
 
+	if version < 13 then
+		if type(raw.classId) ~= "string" then
+			raw.classId = ""
+		end
+		if type(raw.classXp) ~= "table" then
+			raw.classXp = {}
+		end
+		if type(raw.classTalent) ~= "table" then
+			raw.classTalent = {}
+		end
+		raw.schemaVersion = 13
+		version = 13
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -887,6 +929,10 @@ function Schema.snapshot(data: ProfileData)
 		pendingChest = Schema.deepCopy(data.pendingChest),
 		musicVolume = data.musicVolume,
 		sfxVolume = data.sfxVolume,
+		classId = data.classId,
+		classXp = Schema.deepCopy(data.classXp),
+		classTalent = Schema.deepCopy(data.classTalent),
+		classLevel = Classes.progress(data.classXp[data.classId] or 0),
 	}
 end
 

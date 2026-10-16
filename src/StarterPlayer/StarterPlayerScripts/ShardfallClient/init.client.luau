@@ -25,6 +25,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
@@ -166,6 +167,7 @@ local function applyProfile(profile: any, saving: any)
 		return
 	end
 	ui.setProfile(profile, saving == true)
+	ClassHud.setProfile(profile)
 	if inventory ~= nil then
 		inventory.setProfile(profile)
 	end
@@ -888,6 +890,9 @@ HavenClient.start({
 
 VerdantLod.start()
 
+ClassHud.start(remotes :: Instance, function(action: string, ...: any)
+	return invoke(action, ...)
+end)
 CombatHud.start(remotes :: Instance, {
 	onRun = function(run)
 		ui.setRun(run)

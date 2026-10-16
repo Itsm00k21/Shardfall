@@ -62,6 +62,7 @@ do
 end
 
 local CombatService = require(script.CombatService)
+local ClassService = require(script.ClassService)
 local DataService = require(script.DataService)
 local DungeonService = require(script.DungeonService)
 local PolicyCache = require(script.PolicyCache)
@@ -84,7 +85,8 @@ CombatService.bindHooks({
 		return DungeonService.enemyViews(player)
 	end,
 	onEnemyHit = function(player, enemyId, amount, crit, heavy)
-		DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
+		local killed = DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
+		ClassService.grantXp(player, if killed then 24 else 4)
 	end,
 	onPlayerDown = function(player)
 		DungeonService.onPlayerDown(player)
@@ -93,6 +95,10 @@ CombatService.bindHooks({
 		return DungeonService.isInRun(player)
 	end,
 })
+ClassService.start()
+CombatService.bindPlayerHit(function(player)
+	ClassService.onHit(player)
+end)
 CombatService.start()
 local dungeonOk, dungeonError = pcall(DungeonService.start)
 if not dungeonOk then

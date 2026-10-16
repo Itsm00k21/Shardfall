@@ -1046,7 +1046,7 @@ function DungeonService.damageEnemy(
 	end
 	local enemy = run.enemies[enemyId]
 	if enemy == nil or enemy.hp <= 0 then
-		return
+		return false
 	end
 	local now = os.clock()
 	if now < enemy.stunUntil then
@@ -1171,6 +1171,7 @@ function DungeonService.damageEnemy(
 			end
 		end
 	end
+	return enemy.hp <= 0
 end
 
 function DungeonService.enemyViews(player: Player): { CombatService.EnemyView }

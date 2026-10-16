@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Audio = require(ReplicatedStorage.Shared.Audio)
 local ChestService = require(script.Parent.ChestService)
+local ClassService = require(script.Parent.ClassService)
 local CombatService = require(script.Parent.CombatService)
 local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
@@ -472,6 +473,24 @@ function Remotes.bind()
 			warn("[Shardfall] Attack:", err)
 		end
 	end)
+
+	functionRemote("SetClass").OnServerInvoke = function(player, classId)
+		return guard(player, "SetClass", function()
+			return ClassService.select(player, classId)
+		end)
+	end
+
+	functionRemote("PickTalent").OnServerInvoke = function(player, talentId)
+		return guard(player, "PickTalent", function()
+			return ClassService.pickTalent(player, talentId)
+		end)
+	end
+
+	functionRemote("UseSkill").OnServerInvoke = function(player, slot)
+		return guard(player, "UseSkill", function()
+			return ClassService.cast(player, slot)
+		end)
+	end
 
 	eventRemote("Dodge").OnServerEvent:Connect(function(player, telegraphEndsAt)
 		local reported = typeof(player)
