@@ -27,6 +27,7 @@ local UserInputService = game:GetService("UserInputService")
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local ForeignScripts =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
+local CaptureHud = require(script.CaptureHud)
 local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
 local DebugHud = require(script.DebugHud)
@@ -235,6 +236,7 @@ local function applyProfile(profile: any, saving: any)
 	if type(profile) ~= "table" then
 		return
 	end
+	ui.clearStatus()
 	ui.setProfile(profile, saving == true)
 	ClassHud.setProfile(profile)
 	OnboardHud.setProfile(profile)
@@ -1019,6 +1021,7 @@ VerdantLod.start()
 MarketHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
+CaptureHud.start(invoke)
 PetHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
@@ -1084,8 +1087,8 @@ task.spawn(function()
 	end)
 	local message = remoteError(ok, result, "Could not load your profile.")
 	if message ~= nil then
-		ui.setStatus(message, "error")
-		refreshOdds()
+		ui.setStatus(message, "error", true)
+		ui.setNotice(message)
 		return
 	end
 	applyProfile((result :: any).profile, (result :: any).saving)

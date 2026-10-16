@@ -219,6 +219,43 @@ function ShellLayout.travelRect(viewportX: number, viewportY: number): Rect
 	return { x = menu.x, y = menu.y, w = w, h = menu.h }
 end
 
+function ShellLayout.captureRect(viewportX: number, viewportY: number): Rect
+	local health = ShellLayout.healthRect()
+	local bar = ShellLayout.actionBar(viewportX, viewportY)
+	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	local pet = ShellLayout.petRect()
+	local w = 340
+	local h = 210
+	local right = loop.x - 8
+	if w > right - 16 then
+		w = math.max(220, right - 16)
+	end
+	local bottom = bar.y - 8
+	local y = pet.y + pet.h + 8
+	if y + h > bottom then
+		y = bottom - h
+	end
+	local minY = health.y + health.h + 8
+	if y < minY then
+		y = minY
+	end
+	if y + h > bottom then
+		h = math.max(64, bottom - y)
+	end
+	local x = math.floor((16 + right - w) / 2)
+	if x < 16 then
+		x = 16
+	end
+	local box = { x = x, y = y, w = w, h = h }
+	if ShellLayout.overlaps(box, health) then
+		box.x = health.x + health.w + 8
+		if box.x + box.w > right then
+			box.w = math.max(64, right - box.x)
+		end
+	end
+	return box
+end
+
 function ShellLayout.cueRect(viewportX: number, viewportY: number): Rect
 	local loop = ShellLayout.loopRect(viewportX, viewportY)
 	local raid = ShellLayout.raidRect()
