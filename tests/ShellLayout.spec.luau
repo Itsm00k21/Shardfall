@@ -142,9 +142,11 @@ describe("ShellLayout", function()
 					local bar = ShellLayout.anchoredActionBar(vx, vy, top, bottom)
 					local guiTop = top
 					local guiBottom = vy - bottom
+					expect(ShellLayout.BAR_MARGIN >= 12).toBeTrue()
 					expect(bar.h >= 64).toBeTrue()
 					expect(bar.y >= guiTop).toBeTrue()
-					expect(bar.y + bar.h <= guiBottom).toBeTrue()
+					expect(bar.y + bar.h <= guiBottom - ShellLayout.BAR_MARGIN).toBeTrue()
+					expect(guiBottom - (bar.y + bar.h) >= 12).toBeTrue()
 					expect(bar.y + bar.h <= vy).toBeTrue()
 					-- A full-viewport Y placed inside a GUI that already
 					-- starts below the top bar puts the bottom edge off screen.

@@ -19,6 +19,9 @@ Haven.WALK_SPEED = 16
 Haven.PLAZA_RADIUS = 52
 -- Studio's default baseplate tops out at y=0. The whole hub sits above it.
 Haven.FLOOR_Y = 120
+-- Lift a walk overlay (bridge deck, inlay) this far above the floor it
+-- crosses. Coplanar tops flicker, including a seam that only bites by a hair.
+Haven.LAYER = 0.05
 -- Below this, a player who is not in a dungeon fell off the sky island.
 Haven.FALL_Y = 60
 
@@ -219,6 +222,54 @@ end
 function Haven.spawnOnPlaza(): boolean
 	local distance = math.sqrt(Haven.SPAWN.x * Haven.SPAWN.x + Haven.SPAWN.z * Haven.SPAWN.z)
 	return distance < Haven.PLAZA_RADIUS - 8
+end
+
+export type Footprint = {
+	x: number,
+	z: number,
+	rightX: number,
+	rightZ: number,
+	forwardX: number,
+	forwardZ: number,
+	halfX: number,
+	halfZ: number,
+}
+
+-- Tops within this band are the same surface. The bridge tongues step by
+-- 0.02, which stays just outside the band.
+function Haven.sameTop(a: number, b: number): boolean
+	return math.abs(a - b) < 0.02
+end
+
+-- True when two flat rectangles cover the same ground. A shared edge does
+-- not count; a bite past that edge does.
+function Haven.footprintsOverlap(a: Footprint, b: Footprint): boolean
+	local slop = 1e-4
+	local axes = {
+		{ a.rightX, a.rightZ },
+		{ a.forwardX, a.forwardZ },
+		{ b.rightX, b.rightZ },
+		{ b.forwardX, b.forwardZ },
+	}
+	local dx = b.x - a.x
+	local dz = b.z - a.z
+	for _, axis in ipairs(axes) do
+		local ax = axis[1]
+		local az = axis[2]
+		local dist = math.abs(dx * ax + dz * az)
+		local spanA = a.halfX * math.abs(a.rightX * ax + a.rightZ * az)
+			+ a.halfZ * math.abs(a.forwardX * ax + a.forwardZ * az)
+		local spanB = b.halfX * math.abs(b.rightX * ax + b.rightZ * az)
+			+ b.halfZ * math.abs(b.forwardX * ax + b.forwardZ * az)
+		if dist >= spanA + spanB - slop then
+			return false
+		end
+	end
+	return true
+end
+
+function Haven.coplanarTops(a: Footprint, topA: number, b: Footprint, topB: number): boolean
+	return Haven.sameTop(topA, topB) and Haven.footprintsOverlap(a, b)
 end
 
 -- Farthest horizontal point. Dungeon rooms must sit beyond this.

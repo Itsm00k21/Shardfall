@@ -377,8 +377,9 @@ local function oriented(
 	)
 end
 
--- Flush deck stops at each rim. A tongue tucks under the floor, lower by
--- SEAM, so the overlap still holds a foot and the tops do not flicker.
+-- Deck stops at each rim and sits Haven.LAYER above the island floor so the
+-- cobble overlay does not share that top. A tongue tucks under the floor,
+-- lower by SEAM, so the overlap still holds a foot.
 local function bridge(
 	parent: Instance,
 	x1: number,
@@ -407,7 +408,9 @@ local function bridge(
 	local deckAZ = z1 + dirZ * clear1
 	local deckBX = x2 - dirX * clear2
 	local deckBZ = z2 - dirZ * clear2
-	oriented(parent, "Landing", deckAX, deckAZ, deckBX, deckBZ, FLOOR_TOP)
+	-- Darker cobble deck over the lighter island floor. Same top Y flickers
+	-- along the walk toward the crystal, so the overlay sits up by LAYER.
+	oriented(parent, "Landing", deckAX, deckAZ, deckBX, deckBZ, FLOOR_TOP + Haven.LAYER)
 	-- Each tongue sits a little lower than the last so two tongues that
 	-- cross under the plaza do not share a top either.
 	local tongueDrop = SEAM + (slot - 1) * 0.02

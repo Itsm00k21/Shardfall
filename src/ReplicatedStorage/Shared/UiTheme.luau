@@ -10,6 +10,9 @@
 local UiTheme = {}
 
 UiTheme.PAD = 8
+-- Past device safe insets. 8px still left the debug toggle's right edge flat
+-- against the viewport, so the control sits further in.
+UiTheme.EDGE = 16
 UiTheme.MIN_TEXT = 14
 UiTheme.CORNER = 10
 UiTheme.TAP = 64
@@ -31,6 +34,10 @@ UiTheme.RGB = rgbRows
 
 function UiTheme.labelWidth(text: string): number
 	return math.max(UiTheme.TAP, #text * 8 + 20)
+end
+
+function UiTheme.safeMargin(): number
+	return math.max(8, UiTheme.EDGE)
 end
 
 -- Dark rarity colors (Mythic red) disappear on the dark odds panel.
