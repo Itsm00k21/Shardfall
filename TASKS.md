@@ -35,7 +35,6 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 
 | id | title | owner | branch | files / folders | status | PR |
 |---|---|---|---|---|---|---|
-| T-014 | Pet evolution, wild shiny capture, and boss pets | HELPER | `helper/pets-9721` | `src/ReplicatedStorage/Shared/PetEvolution.luau`, `src/ReplicatedStorage/Shared/WildCapture.luau`, `src/ServerScriptService/ShardfallServer/WildCaptureService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CaptureHud.luau`, `tests/PetEvolution.spec.luau`, `docs/design/shardfall_pets.md` | claimed | — |
 | T-015 | Shard Pass premium wiring, kept off, and 4x4 board polish | HELPER | `helper/shard-pass-9721` | `src/ReplicatedStorage/Shared/Loops.luau`, `src/ServerScriptService/ShardfallServer/LoopService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/LoopHud.luau`, `tests/Loops.spec.luau`, `docs/design/shardfall_loops.md`. `Loops.PREMIUM_ENABLED` stays `false`. | claimed | — |
 | T-016 | Session-recap string on the victory card | HELPER | `helper/session-recap-9721` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/SessionRecap.luau`, `tests/Progression.spec.luau` (recap string only). Read `Progression.recap` in `src/ReplicatedStorage/Shared/Progression.luau`. The victory card is drawn in `CombatHud.luau` (T-001). Add a call site there only after a note on this row. | claimed | — |
 | T-017 | Haste shrines, mender healing, shielder blocking | HELPER | `helper/enemy-abilities-9721` | `src/ReplicatedStorage/Shared/EnemyAbilities.luau`, `tests/EnemyAbilities.spec.luau`, `docs/design/rootvault_design.md`. Haste is stored on the run and does nothing. Menders do not heal. Shielders do not block. Hook points in `DungeonService.luau` and `Rootvault.luau` (T-003) need a note on this row before those files change. | claimed | — |
@@ -136,6 +135,157 @@ Server-only, not remotes: `TradeService.rollback(tradeId)`, `TradeService.review
 
 Build stamp files are T-012. T-018 stamped `3558616+`.
 
+### T-014 hooks for GHOST
+
+HELPER did not edit T-012, `Pets.luau`, or `PetService.luau`. Evolution, shiny tames, and boss pets are ready to call. Wire these against the post-#18 files (the same shape as Trade and Market). Schema stays at version 20. This branch does not add a profile field.
+
+`default.project.json`, inside `ReplicatedStorage.Remotes`, next to the Trade and Market lines:
+
+```json
+        "Capture": { "$className": "RemoteFunction" },
+        "EvolvePet": { "$className": "RemoteFunction" },
+```
+
+`$path` already includes `PetEvolution`, `WildCapture`, `WildCaptureService`, and `CaptureHud`. Do not add a new tree for them.
+
+`RateLimiter.luau` `RULES`, next to Trade and Market. A remote with no rule is rejected:
+
+```lua
+	Capture = { capacity = 4, perSecond = 1 },
+	EvolvePet = { capacity = 3, perSecond = 1 },
+```
+
+`Remotes.luau`, with the other service requires:
+
+```lua
+local WildCaptureService = require(script.Parent.WildCaptureService)
+```
+
+Inside `Remotes.bind`, next to the Trade and Market handlers:
+
+```lua
+	functionRemote("Capture").OnServerInvoke = function(player, action, payload)
+		return guard(player, "Capture", function()
+			if type(action) ~= "string" then
+				return { ok = false, error = "Unknown capture action." }
+			end
+			return WildCaptureService.handle(player, action, payload)
+		end)
+	end
+	functionRemote("EvolvePet").OnServerInvoke = function(player, uid)
+		return guard(player, "EvolvePet", function()
+			if type(uid) ~= "string" then
+				return { ok = false, error = "Pick a companion." }
+			end
+			return WildCaptureService.evolve(player, uid)
+		end)
+	end
+```
+
+`Capture` from the client is only `tame`. `handle` ignores a client shiny flag, a client roll, and a client `defeated` bit. `EvolvePet` takes the companion uid.
+
+| Remote | action | payload |
+|---|---|---|
+| Capture | `tame` | `{ enemyId: string }` |
+| EvolvePet | — | companion `uid: string` |
+
+`init.server.luau`, with the TradeService require, and `start()` next to `TradeService.start()` / `MarketService.start()` before `DataService.start()`:
+
+```lua
+local WildCaptureService = require(script.WildCaptureService)
+```
+
+```lua
+WildCaptureService.start()
+```
+
+`start` drops that player's marks on `PlayerRemoving`. Run end still needs `clear` below.
+
+`init.client.luau`, require next to `MarketHud`, and start next to `MarketHud.start`. Pass the existing `invoke` local. CaptureHud calls `invoke("Capture", "tame", { enemyId })`, so do not wrap it the way MarketHud does:
+
+```lua
+local CaptureHud = require(script.CaptureHud)
+```
+
+```lua
+CaptureHud.start(invoke)
+```
+
+`DungeonService.luau` (sibling require, same as `LoopService`):
+
+```lua
+local WildCaptureService = require(script.Parent.WildCaptureService)
+```
+
+On spawn, pass the enemy **kind** (`vine_crawler`), not the `e12` key in `run.enemies`. The service rolls. Remember the result on that enemy:
+
+```lua
+local noted = WildCaptureService.noteShiny(player, kind)
+enemy.shiny = noted.shiny == true
+if enemy.shiny then
+	-- Tell that client `kind`. CaptureHud.prompt opens the Tame button.
+end
+```
+
+When that shiny's hp hits 0 in `damageEnemy` (this replaces calling `tame` on death):
+
+```lua
+if enemy.shiny == true then
+	WildCaptureService.markDefeated(player, enemy.kind)
+end
+```
+
+`markDefeated` turns the spawned mark into a defeated mark. The deadline is `os.clock() + WildCapture.TAME_WINDOW` (30 seconds). The client tame spends only that defeated, unexpired mark. A spawned mark returns `"Defeat the shiny first."` An expired one returns `"The shiny slipped away."` Neither of those is consumed. A miss (no charm, or a losing roll) still spends it.
+
+When Grandmother Gnarl dies:
+
+```lua
+if enemy.kind == "grandmother_gnarl" and enemy.hp <= 0 then
+	WildCaptureService.grantBoss(player, { bossId = "grandmother_gnarl" })
+end
+```
+
+At run end, at the bottom of `destroyRun` (leave, wipe, and the other endings all go through it):
+
+```lua
+WildCaptureService.clear(player)
+```
+
+`noteShiny`, `markDefeated`, `grantBoss`, and `clear` stay on the server. Do not add client actions for them. `CombatHud.luau` is unchanged on this branch. When the client learns a shiny kind, call:
+
+```lua
+CaptureHud.prompt({ enemyId = kind, displayName = "Vine Sprout" })
+```
+
+The Tame button calls `invoke("Capture", "tame", { enemyId = kind })`. Pass `{ onAttempt, onDismiss }` to `prompt` if combat UI should own the click. Marks are per player and per kind, not per `e12` instance.
+
+Charm: `WildCapture.charmEquipped` is true when `equipped.accessories.charm` is the uid of an inventory item with `templateId` `capture_charm`, or when the live profile has `captureCharm == true`. Schema does not save `captureCharm`. Do not add a schema key for it. `Schema.ACCESSORY_SLOTS.charm` already exists, and `Schema.equipItem` already writes `equipped.accessories.charm` for `kind == "Accessory"` and `slot == "charm"`.
+
+`ItemBases` has no `capture_charm` row. Widen `Base.kind` with `"Accessory"` and add this row. It has no combat stats. Price is `WildCapture.CHARM_GOLD` (250 gold) at the vendor that sells it. Do not add a Robux product id or a MarketplaceService prompt.
+
+```lua
+kind: "Weapon" | "Armor" | "Pet" | "Accessory",
+```
+
+```lua
+add({
+	id = "capture_charm",
+	name = "Capture Charm",
+	kind = "Accessory",
+	rarity = "Uncommon",
+	ascension = 0,
+	slot = "charm",
+})
+```
+
+`Materials.sanitize` drops unknown ids, so do not put the charm in the materials bag.
+
+`WildCaptureService.evolve` spends the recipe inside `DataService.mutate`. No `PetService` edit.
+
+`tests/run.luau` already requires `./PetEvolution.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. Stamp on merge if you want the printed build to move.
+
 ## Open
 
 No unassigned tasks.
@@ -145,4 +295,5 @@ No unassigned tasks.
 | id | title | owner | branch | files / folders | status | PR |
 |---|---|---|---|---|---|---|
 | T-013 | Trading, Haven Market Board, and trade audit log | HELPER | `helper/market-9721` | `src/ReplicatedStorage/Shared/Trading.luau`, `src/ReplicatedStorage/Shared/MarketBoard.luau`, `src/ServerScriptService/ShardfallServer/TradeService.luau`, `src/ServerScriptService/ShardfallServer/MarketService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MarketHud.luau`, `tests/Trading.spec.luau`, `docs/design/shardfall_economy.md` (v1.1 Market Board and Trade Audit) | done | [#16](https://github.com/Itsm00k21/Shardfall/pull/16) |
+| T-014 | Pet evolution, wild shiny capture, and boss pets | HELPER | `helper/pets-9721` | `src/ReplicatedStorage/Shared/PetEvolution.luau`, `src/ReplicatedStorage/Shared/WildCapture.luau`, `src/ServerScriptService/ShardfallServer/WildCaptureService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CaptureHud.luau`, `tests/PetEvolution.spec.luau`, `docs/design/shardfall_pets.md` (v1.1 evolution, wild capture, boss pets) | done | [#17](https://github.com/Itsm00k21/Shardfall/pull/17) |
 | T-018 | Wire T-013 hooks and save both profiles after a trade | GHOST | `cursor/trade-wiring-9721` | `default.project.json`, `src/ServerScriptService/ShardfallServer/RateLimiter.luau`, `src/ServerScriptService/ShardfallServer/Remotes.luau`, `src/ReplicatedStorage/Shared/Schema.luau`, `src/ServerScriptService/ShardfallServer/init.server.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau`, `src/ServerScriptService/ShardfallServer/DataService.luau`, `src/ServerScriptService/ShardfallServer/TradeService.luau`, `src/ServerScriptService/ShardfallServer/MarketService.luau`, `src/ServerScriptService/ShardfallServer/TradeAudit.luau` | done | [#18](https://github.com/Itsm00k21/Shardfall/pull/18) |
