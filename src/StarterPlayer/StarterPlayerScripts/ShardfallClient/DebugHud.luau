@@ -31,7 +31,7 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	screen.Name = "ShardfallDebug"
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 20
-	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
 

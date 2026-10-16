@@ -43,6 +43,7 @@ export type Rect = {
 ShellLayout.ACTION_H = 64
 ShellLayout.ACTION_GAP = 8
 ShellLayout.BAR_MARGIN = 12
+ShellLayout.BAR_PAD = 8
 ShellLayout.LEFT_RESERVE = 88
 ShellLayout.SLOT_COUNT = 7
 
@@ -137,6 +138,33 @@ function ShellLayout.actionBar(viewportX: number, viewportY: number): Rect
 	local x = ShellLayout.LEFT_RESERVE + math.max(0, math.floor((space - barW) / 2))
 	local y = viewportY - ShellLayout.BAR_MARGIN - slot.h
 	return { x = x, y = y, w = barW, h = slot.h }
+end
+
+-- Screen-space rect of the live action row. The ScreenGui yields insetTop
+-- and insetBottom, and the row is anchored to that GUI's bottom:
+-- AnchorPoint (0.5, 1), Position (0.5, 0, 1, -BAR_MARGIN). Padding sits
+-- inside the row so the 64px buttons stay on screen.
+function ShellLayout.anchoredActionBar(
+	viewportX: number,
+	viewportY: number,
+	insetTop: number,
+	insetBottom: number
+): Rect
+	local top = if type(insetTop) == "number" then math.max(0, insetTop) else 0
+	local bottomInset = if type(insetBottom) == "number" then math.max(0, insetBottom) else 0
+	local guiBottom = viewportY - bottomInset
+	local slot = ShellLayout.thumbSize(math.max(0, viewportX))
+	local gaps = ShellLayout.ACTION_GAP * (ShellLayout.SLOT_COUNT - 1)
+	local barW = ShellLayout.SLOT_COUNT * slot.w + gaps + ShellLayout.BAR_PAD * 2
+	local h = slot.h + ShellLayout.BAR_PAD * 2
+	local x = math.max(0, math.floor((viewportX - barW) / 2))
+	local edge = guiBottom - ShellLayout.BAR_MARGIN
+	local y = edge - h
+	if y < top then
+		h = math.max(0, edge - top)
+		y = edge - h
+	end
+	return { x = x, y = y, w = barW, h = h }
 end
 
 function ShellLayout.debugRect(viewportX: number, viewportY: number): Rect

@@ -7,10 +7,10 @@
 local MobileShell = {}
 
 function MobileShell.mount(screen: ScreenGui)
-	-- Core UI insets keep panels off the top bar and the home indicator.
-	-- Scale stays at 1. Growing from the screen center pushed the travel
-	-- sidebar and the odds panel onto each other.
-	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	-- Device safe insets are the GUI's own box. Scale stays at 1.
+	-- Growing from the screen center pushed the travel sidebar and the
+	-- odds panel onto each other.
+	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.IgnoreGuiInset = false
 	local scale = Instance.new("UIScale")
 	scale.Name = "Fit"
@@ -26,6 +26,9 @@ function MobileShell.view(screen: ScreenGui): (number, number)
 	local camera = workspace.CurrentCamera
 	local vx = if camera ~= nil then camera.ViewportSize.X else 1280
 	local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+	local GuiService = game:GetService("GuiService")
+	local inset = GuiService:GetGuiInset()
+	vy -= inset.Y
 	if vx < 1 then
 		vx = 1280
 	end

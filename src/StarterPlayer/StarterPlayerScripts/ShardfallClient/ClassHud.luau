@@ -114,7 +114,7 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	screen.Name = "ShardfallClasses"
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 55
-	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
 

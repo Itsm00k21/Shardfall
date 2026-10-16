@@ -268,15 +268,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	flash.Parent = screen
 
 	local function placeChrome()
-		local camera = workspace.CurrentCamera
-		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
-		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
-		if vx < 1 then
-			vx = 1280
-		end
-		if vy < 1 then
-			vy = 720
-		end
+		local vx, vy = MobileShell.view(screen)
 		local combo = ShellLayout.comboRect()
 		comboLabel.Position = UDim2.fromOffset(combo.x, combo.y)
 		comboLabel.Size = UDim2.fromOffset(combo.w, combo.h)
@@ -289,6 +281,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	if chromeCamera ~= nil then
 		chromeCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placeChrome)
 	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeChrome)
 
 	local shakeUntil = 0
 	local flashUntil = 0

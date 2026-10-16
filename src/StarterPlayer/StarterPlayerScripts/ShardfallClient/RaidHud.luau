@@ -7,6 +7,8 @@
 
 local Players = game:GetService("Players")
 
+local MobileShell = require(script.Parent.MobileShell)
+
 local RaidHud = {}
 local player = Players.LocalPlayer
 local statusLabel: TextLabel? = nil
@@ -66,6 +68,7 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	screen.ResetOnSpawn = false
 	screen.DisplayOrder = 13
 	screen.Parent = player:WaitForChild("PlayerGui")
+	MobileShell.mount(screen)
 
 	local toggle = Instance.new("TextButton")
 	toggle.Name = "RaidToggle"
