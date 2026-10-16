@@ -74,6 +74,9 @@
         "DevGrant": {
           "$className": "RemoteFunction"
         },
+        "Debug": {
+          "$className": "RemoteFunction"
+        },
         "ProfileUpdated": {
           "$className": "RemoteEvent"
         },

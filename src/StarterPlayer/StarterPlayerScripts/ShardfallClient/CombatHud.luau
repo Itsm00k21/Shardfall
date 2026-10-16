@@ -11,13 +11,34 @@
 	this script tells the server so Auto-Farm stops issuing MoveTo.
 ]]
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 
+local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local CombatHud = {}
+
+local function playCue(name: string)
+	local id = Audio.cue(name)
+	if id == nil then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = id
+	sound.Volume = 0.6
+	local group = SoundService:FindFirstChild("SFX")
+	if group ~= nil and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
+	sound.Parent = SoundService
+	sound:Play()
+	Debris:AddItem(sound, 4)
+end
 
 export type Callbacks = {
 	onRun: (any) -> (),
@@ -413,18 +434,21 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				text = text .. "!"
 			end
 			floater(Vector3.new(x, y, z), text, color)
+			playCue("hit")
 		elseif payload.kind == "telegraph" then
 			local verb = if type(payload.verb) == "string" then payload.verb else "dodge"
 			local colorName = if type(payload.color) == "string" then payload.color else "red"
 			telegraphEndsAt = numberFrom(payload, "endsAt") or 0
 			cueLabel.Text = string.upper(colorName) .. "  " .. verb
 			cueLabel.Visible = true
+			playCue(colorName)
 			task.delay(numberFrom(payload, "seconds") or 0.8, function()
 				cueLabel.Visible = false
 			end)
 		elseif payload.kind == "dodge" then
 			local charges = numberFrom(payload, "charges")
 			dodgeButton.Text = if charges ~= nil then "Dodge\n" .. tostring(charges) else "Dodge"
+			playCue(if payload.perfect == true then "perfect" else "dodge")
 			if payload.perfect == true then
 				local x = numberFrom(payload, "x") or 0
 				local y = numberFrom(payload, "y") or 0
@@ -432,6 +456,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				floater(Vector3.new(x, y + 3, z), "PERFECT", Color3.fromRGB(255, 236, 140))
 			end
 		elseif payload.kind == "kill" then
+			playCue("kill")
 			local x = numberFrom(payload, "x")
 			local y = numberFrom(payload, "y")
 			local z = numberFrom(payload, "z")

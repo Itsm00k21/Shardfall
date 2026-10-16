@@ -1888,6 +1888,52 @@ function DungeonService.startDailyBoss(player: Player)
 	return { ok = true, run = publicRun(player) }
 end
 
+function DungeonService.setBossPhase(player: Player, phase: any)
+	if
+		runs[player] == nil
+		or runs[player].dungeon.id ~= Dungeons.ROOTVAULT_ID
+			and runs[player].dungeon.id ~= Dungeons.HEARTWOOD_ID
+	then
+		local skipped = DungeonService.skipToBoss(player)
+		if skipped.ok ~= true then
+			return skipped
+		end
+	end
+	local run = runs[player]
+	if run == nil then
+		return reject("No boss is up.")
+	end
+	local hasBoss = false
+	for _, enemy in pairs(run.enemies) do
+		if enemy.boss then
+			hasBoss = true
+		end
+	end
+	if not hasBoss then
+		local skipped = DungeonService.skipToBoss(player)
+		if skipped.ok ~= true then
+			return skipped
+		end
+		run = runs[player]
+	end
+	if run == nil then
+		return reject("No boss is up.")
+	end
+	local step = if type(phase) == "number" then math.floor(phase) else 2
+	for _, enemy in pairs(run.enemies) do
+		if enemy.boss then
+			local ratio = if step >= 3
+				then Rootvault.PHASE3
+				elseif step == 2 then Rootvault.PHASE2
+				else 1
+			enemy.hp = math.max(1, math.floor(enemy.maxHp * ratio))
+			enemy.phase = math.clamp(step, 1, 3)
+		end
+	end
+	pushRun(player, "Boss phase " .. tostring(step) .. ".")
+	return { ok = true, run = publicRun(player) }
+end
+
 function DungeonService.skipToBoss(player: Player)
 	if not RunService:IsStudio() then
 		return reject("Dev tools only work in Studio.")

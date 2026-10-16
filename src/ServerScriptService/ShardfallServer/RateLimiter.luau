@@ -45,6 +45,7 @@ local RULES: { [string]: Rule } = {
 	GetProfile = { capacity = 4, perSecond = 1 },
 	GetOdds = { capacity = 4, perSecond = 1 },
 	DevGrant = { capacity = 4, perSecond = 2 },
+	Debug = { capacity = 6, perSecond = 2 },
 	-- Attacks are limited by weapon cooldown too. This only stops a flood.
 	Attack = { capacity = 8, perSecond = 6 },
 	Dodge = { capacity = 6, perSecond = 3 },

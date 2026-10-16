@@ -84,7 +84,37 @@ function Audio.heard(base: number, slider: number): number
 	return Audio.clampVolume(base) * Audio.clampVolume(slider)
 end
 
+-- Empty until a licensed Creator Store id is pasted in. Playback skips blanks.
+Audio.CUES = {
+	common = "",
+	uncommon = "",
+	rare = "",
+	epic = "",
+	legendary = "",
+	mythic = "",
+	hit = "",
+	dodge = "",
+	perfect = "",
+	kill = "",
+	red = "",
+	yellow = "",
+	purple = "",
+	blue = "",
+}
+
+function Audio.cue(name: any): string?
+	if type(name) ~= "string" then
+		return nil
+	end
+	local id = Audio.CUES[string.lower(name)]
+	if type(id) ~= "string" or string.match(id, "^rbxassetid://%d+$") == nil then
+		return nil
+	end
+	return id
+end
+
 table.freeze(Audio.GROUPS)
 table.freeze(Audio.TRACKS)
+table.freeze(Audio.CUES)
 
 return Audio

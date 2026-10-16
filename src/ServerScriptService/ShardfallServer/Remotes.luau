@@ -22,6 +22,7 @@ local ClassService = require(script.Parent.ClassService)
 local CombatService = require(script.Parent.CombatService)
 local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
+local DebugService = require(script.Parent.DebugService)
 local DungeonService = require(script.Parent.DungeonService)
 local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
@@ -272,6 +273,12 @@ function Remotes.bind()
 				return { ok = false, error = err }
 			end
 			return { ok = true, removedName = removedName }
+		end)
+	end
+
+	functionRemote("Debug").OnServerInvoke = function(player, action)
+		return guard(player, "Debug", function()
+			return DebugService.run(player, action)
 		end)
 	end
 

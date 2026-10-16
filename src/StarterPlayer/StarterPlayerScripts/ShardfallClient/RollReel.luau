@@ -21,6 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Audio = require(Shared:WaitForChild("Audio"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
@@ -704,7 +705,10 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 				RunService.RenderStepped:Wait()
 			end
 		end
-		if rarity == "Rare" or rarity == "Epic" or rarity == "Legendary" then
+		local ladder = Audio.cue(rarity)
+		if ladder ~= nil then
+			playSound(ladder, 0.6)
+		elseif rarity == "Rare" or rarity == "Epic" or rarity == "Legendary" then
 			playSound("rbxasset://sounds/electronicpingshort.wav", 0.5)
 		end
 		flashColor(rarity, plan.landSeconds)
