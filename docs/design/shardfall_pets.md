@@ -49,6 +49,32 @@ Other players' pets are simplified at distance; cap visible pets per player on L
 ## Beta scope
 Verdant eggs + Hatchery, 8-10 Verdant pets across rarities, 5 roles, leveling, Bond stars, 3-5 hidden combos. Evolution, wild capture, boss pets post-beta.
 
+## v1.1 Evolution, wild capture, and boss pets
+
+The hatchery in `Pets.luau` does not call these. `PetEvolution`, `WildCapture`, and `WildCaptureService` hold the rules. Nothing here is sold for Robux.
+
+### Evolution
+Level 25, then level 50. Each step spends Verdant materials. The personal name, uid, Bond, Affinity, favorite lock, colors, and journal stay. The journal gains `Evolved to <display name>`. Species id, display name (`speciesName`), role, rarity, and ability id change. A form does not skip a step.
+
+| From | Level | Species | Ability | Materials |
+|---|---|---|---|---|
+| Ember Fox | 25 | Blaze Fox | `blaze_bite` | 4 Heartwood, 8 Verdant Bark, 6 Living Vine |
+| Blaze Fox | 50 | Inferno Kitsune | `inferno_pounce` | 1 Gnarl's Seed, 8 Heartwood, 10 Ironbark |
+| Mossback Turtle | 25 | Ridgeback | `ridge_guard` | 8 Ironbark, 6 Verdant Bark, 8 Verdant Wood |
+| Ridgeback | 50 | Elder Mossback | `canopy_aegis` | 6 Heartwood, 1 Gnarl's Seed, 8 Spore Cap |
+| Root Mole | 25 | Burrow Mole | `deep_dig` | 12 Verdant Wood, 6 Living Vine, 4 Spore Cap |
+| Burrow Mole | 50 | Den Architect | `vault_harvest` | 6 Heartwood, 8 Ironbark, 8 Verdant Bark |
+
+### Wild shiny capture
+`SHINY_SPAWN_RATE` is 0.02. `CAPTURE_CHANCE` is 0.25 and only applies when a Capture Charm is equipped. The charm id is `capture_charm`. It costs 250 gold (`CHARM_GOLD`) or drops as loot. It is not a Robux item.
+
+The tame writes a companion in the hatchery shape plus `shiny`, `golden`, `statBonus` 0.05, and `statNote` `+5% stats`. Enemy ids map to species: Vine Crawler to Vine Sprout, Spore Bat to Spore Mote, Moss Crawler to Moss Kit, Root Brute to Root Pup, Thorn Sprite to Thorn Wisp.
+
+The charm counts as equipped when `equipped.accessories.charm` is the uid of an inventory item with `templateId` `capture_charm`. A live `captureCharm` flag is also read. Schema does not save that flag.
+
+### Boss pets
+`BOSS_PETS.grandmother_gnarl` drops Gnarlling (`gnarlling`, ability `tiny_gnarl`) at 0.01. The pet is a cosmetic flex with that ability. `statBonus` is 0. It is not a shiny.
+
 ## v1.1 (Kevin's notes): Deep companion bond
 Goal: players feel their pet is *theirs* - a buddy with history, not a stat item.
 
