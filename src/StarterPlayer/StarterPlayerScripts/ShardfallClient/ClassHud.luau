@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 
 local ClassHud = {}
 
@@ -19,6 +20,29 @@ local player = Players.LocalPlayer
 local latest: any = nil
 local invoke: ((string, ...any) -> any)? = nil
 local paint: () -> () = function() end
+local panelRef: Frame? = nil
+
+function ClassHud.close()
+	if panelRef ~= nil then
+		panelRef.Visible = false
+	end
+end
+
+function ClassHud.isVisible(): boolean
+	return panelRef ~= nil and panelRef.Visible
+end
+
+function ClassHud.setVisible(open: boolean)
+	if panelRef ~= nil then
+		panelRef.Visible = open
+	end
+end
+
+function ClassHud.toggle()
+	if panelRef ~= nil then
+		panelRef.Visible = not panelRef.Visible
+	end
+end
 
 local function playSound(id: string)
 	if string.match(id, "^rbxassetid://%d+$") == nil then
@@ -53,13 +77,35 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 
 	local panel = Instance.new("Frame")
 	panel.Name = "Classes"
-	panel.AnchorPoint = Vector2.new(0, 1)
-	panel.Position = UDim2.new(0, 16, 1, -16)
+	panel.AnchorPoint = Vector2.new(0, 0)
+	panel.Position = UDim2.fromOffset(16, 140)
 	panel.Size = UDim2.fromOffset(360, 220)
 	panel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	panel.BackgroundTransparency = 0.12
 	panel.BorderSizePixel = 0
+	panel.Visible = false
+	panel.ClipsDescendants = true
 	panel.Parent = screen
+	panelRef = panel
+	local function place()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local box = ShellLayout.classRect(vx, vy)
+		panel.Position = UDim2.fromOffset(box.x, box.y)
+		panel.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	place()
+	local camera = workspace.CurrentCamera
+	if camera ~= nil then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	end
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = panel

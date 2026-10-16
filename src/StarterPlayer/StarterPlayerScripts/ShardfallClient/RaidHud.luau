@@ -10,6 +10,23 @@ local Players = game:GetService("Players")
 local RaidHud = {}
 local player = Players.LocalPlayer
 local statusLabel: TextLabel? = nil
+local rowRef: Frame? = nil
+local toggleRef: TextButton? = nil
+local listener: ((boolean) -> ())? = nil
+
+function RaidHud.setListener(fn: (boolean) -> ())
+	listener = fn
+end
+
+function RaidHud.close()
+	if rowRef ~= nil then
+		rowRef.Visible = false
+	end
+end
+
+function RaidHud.isOpen(): boolean
+	return rowRef ~= nil and rowRef.Visible
+end
 
 local function show(result: any)
 	if statusLabel == nil or type(result) ~= "table" then
@@ -38,6 +55,9 @@ function RaidHud.setProfile(profile: any)
 	if statusLabel.Text == "Heartwood" or string.sub(statusLabel.Text, 1, 5) == "Marks" then
 		statusLabel.Text = line
 	end
+	if toggleRef ~= nil then
+		toggleRef.Text = "Raid"
+	end
 end
 
 function RaidHud.start(invoke: (string, ...any) -> any)
@@ -47,13 +67,33 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	screen.DisplayOrder = 13
 	screen.Parent = player:WaitForChild("PlayerGui")
 
+	local toggle = Instance.new("TextButton")
+	toggle.Name = "RaidToggle"
+	toggle.AnchorPoint = Vector2.new(0, 0)
+	toggle.Position = UDim2.fromOffset(120, 60)
+	toggle.Size = UDim2.fromOffset(96, 64)
+	toggle.BackgroundColor3 = Color3.fromRGB(140, 96, 64)
+	toggle.BorderSizePixel = 0
+	toggle.Font = Enum.Font.BuilderSansBold
+	toggle.TextSize = 13
+	toggle.TextWrapped = true
+	toggle.TextColor3 = Color3.fromRGB(16, 14, 24)
+	toggle.Text = "Raid"
+	toggle.Parent = screen
+	local toggleCorner = Instance.new("UICorner")
+	toggleCorner.CornerRadius = UDim.new(0, 12)
+	toggleCorner.Parent = toggle
+	toggleRef = toggle
+
 	local row = Instance.new("Frame")
 	row.Name = "Raid"
-	row.AnchorPoint = Vector2.new(0, 1)
-	row.Position = UDim2.new(0, 16, 1, -330)
+	row.AnchorPoint = Vector2.new(0, 0)
+	row.Position = UDim2.fromOffset(120, 132)
 	row.Size = UDim2.fromOffset(360, 64)
 	row.BackgroundTransparency = 1
+	row.Visible = false
 	row.Parent = screen
+	rowRef = row
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.Padding = UDim.new(0, 6)
@@ -61,17 +101,27 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
-	note.AnchorPoint = Vector2.new(0, 1)
-	note.Position = UDim2.new(0, 16, 1, -398)
-	note.Size = UDim2.fromOffset(340, 36)
+	note.AnchorPoint = Vector2.new(0, 0)
+	note.Position = UDim2.fromOffset(0, 66)
+	note.Size = UDim2.fromOffset(340, 20)
 	note.Font = Enum.Font.BuilderSans
-	note.TextSize = 14
+	note.TextSize = 13
 	note.TextColor3 = Color3.fromRGB(240, 236, 248)
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextWrapped = true
 	note.Text = "Heartwood"
-	note.Parent = screen
+	note.Visible = false
+	note.Parent = row
 	statusLabel = note
+
+	toggle.Activated:Connect(function()
+		local opening = not row.Visible
+		if listener ~= nil then
+			listener(opening)
+		end
+		row.Visible = opening
+		note.Visible = opening
+	end)
 
 	local function button(name: string, text: string, color: Color3, callback: () -> ())
 		local hit = Instance.new("TextButton")

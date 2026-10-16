@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Quality = require(Shared:WaitForChild("Quality"))
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local Travel = require(Shared:WaitForChild("Travel"))
 local MobileShell = require(script.Parent.MobileShell)
 
@@ -18,6 +19,7 @@ local TravelHud = {}
 export type Callbacks = {
 	onTravel: (id: string) -> (),
 	onBuyPass: () -> (),
+	onVisible: ((open: boolean) -> ())?,
 }
 
 local COLORS = {
@@ -86,18 +88,40 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: TextButton
 	corner(openButton, 8)
 
-	local root = new("Frame", {
+	local root = new("ScrollingFrame", {
 		Name = "TravelMap",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 12, 1, -88),
-		Size = UDim2.fromOffset(320, 620),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(16, 140),
+		Size = UDim2.fromOffset(320, 400),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		Visible = false,
-	}, screen) :: Frame
+		ClipsDescendants = true,
+		ScrollBarThickness = 4,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+	}, screen) :: ScrollingFrame
 	corner(root, 12)
-	MobileShell.aspect(root, 0.52)
-	MobileShell.limit(root, 400, 680)
+	local function place()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local box = ShellLayout.travelRect(vx, vy)
+		root.Position = UDim2.fromOffset(box.x, box.y)
+		root.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	place()
+	local placeCamera = workspace.CurrentCamera
+	if placeCamera ~= nil then
+		placeCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	end
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
@@ -255,15 +279,25 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	title.Text = "Travel"
-	local function toggle()
-		root.Visible = not root.Visible
-		if root.Visible then
+	local function setOpen(open: boolean)
+		if root.Visible == open then
+			return
+		end
+		root.Visible = open
+		if open then
+			place()
 			refresh()
 		end
+		if callbacks.onVisible ~= nil then
+			callbacks.onVisible(open)
+		end
+	end
+	local function toggle()
+		setOpen(not root.Visible)
 	end
 	openButton.MouseButton1Click:Connect(toggle)
 	closeButton.MouseButton1Click:Connect(function()
-		root.Visible = false
+		setOpen(false)
 	end)
 	passButton.MouseButton1Click:Connect(function()
 		callbacks.onBuyPass()
@@ -288,6 +322,15 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			refresh()
 		end,
 		toggle = toggle,
+		open = function()
+			setOpen(true)
+		end,
+		close = function()
+			setOpen(false)
+		end,
+		isOpen = function(): boolean
+			return root.Visible
+		end,
 	}
 end
 

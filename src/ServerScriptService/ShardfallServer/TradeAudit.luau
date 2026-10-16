@@ -19,6 +19,7 @@ local KEY = "log"
 local adapter: any = nil
 local schemaModule: any = nil
 local memoryModule: any = nil
+local budgetModule: any = nil
 
 function TradeAudit.bind(nextAdapter: any)
 	adapter = nextAdapter
@@ -52,16 +53,32 @@ local function memoryStore(): any
 	return memoryModule
 end
 
+local function budget(): any
+	if budgetModule ~= nil then
+		return budgetModule
+	end
+	local ok, result = pcall(require, "../../ReplicatedStorage/Shared/CallBudget")
+	if ok then
+		budgetModule = result
+		return result
+	end
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	budgetModule = require(ReplicatedStorage.Shared.CallBudget)
+	return budgetModule
+end
+
 local function current(): any
 	if adapter ~= nil then
 		return adapter
 	end
 	local DataStoreService = game:GetService("DataStoreService")
-	local probed, probeErr = pcall(function()
+	local limits = budget()
+	local probed, probeErr = limits.run(limits.DATASTORE_SECONDS, function()
 		local probe = DataStoreService:GetDataStore(STORE_NAME)
 		probe:UpdateAsync("__shardfall_trade_probe", function(document)
 			return document
 		end)
+		return true
 	end)
 	if probed then
 		local store = DataStoreService:GetDataStore(STORE_NAME)
@@ -82,14 +99,25 @@ end
 
 function TradeAudit.load(): { any }
 	local entries: { any } = {}
-	local ok, err = pcall(function()
-		current():updateAsync(KEY, function(document)
+	local store = current()
+	local function read()
+		store:updateAsync(KEY, function(document)
 			if type(document) == "table" and type(document.entries) == "table" then
 				entries = schema().deepCopy(document.entries)
 			end
 			return nil
 		end)
-	end)
+		return true
+	end
+	-- Memory (tests, and Studio after the probe fails) returns immediately.
+	-- A live DataStore read is budgeted so a hung UpdateAsync cannot stall startup.
+	local ok, err
+	if store.persistent == true then
+		local limits = budget()
+		ok, err = limits.run(limits.DATASTORE_SECONDS, read)
+	else
+		ok, err = pcall(read)
+	end
 	if not ok then
 		warn("[Shardfall] trade audit load failed:", err)
 		return {}

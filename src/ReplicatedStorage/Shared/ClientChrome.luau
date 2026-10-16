@@ -13,6 +13,7 @@ local ClientChrome = {}
 local OWNED: { [string]: boolean } = {
 	Shardfall = true,
 	ShardfallBanner = true,
+	ShardfallCapture = true,
 	ShardfallClasses = true,
 	ShardfallCombat = true,
 	ShardfallDebug = true,

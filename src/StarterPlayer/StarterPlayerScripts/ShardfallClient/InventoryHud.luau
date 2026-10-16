@@ -167,12 +167,13 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local root = new("Frame", {
 		Name = "Inventory",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.94, 0.9),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(16, 132),
+		Size = UDim2.fromOffset(480, 400),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		Visible = false,
+		ClipsDescendants = true,
 	}, screen) :: Frame
 	corner(root, 12)
 	local function phoneLayout(): boolean
@@ -189,6 +190,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			vy = 720
 		end
 		local box = ShellLayout.inventory(vx, vy, phoneLayout())
+		local pet = ShellLayout.petRect()
+		root.Position = UDim2.fromOffset(16, pet.y + pet.h + 8)
 		root.Size = UDim2.fromOffset(box.w, box.h)
 	end
 	fitRoot()
@@ -1210,6 +1213,11 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	expand.MouseButton1Click:Connect(callbacks.onExpand)
 
 	local function setOpen(open: boolean)
+		if isOpen == open then
+			root.Visible = open
+			openButton.Visible = false
+			return
+		end
 		isOpen = open
 		root.Visible = open
 		openButton.Visible = false
@@ -1260,6 +1268,28 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.toggle()
 		setOpen(not isOpen)
+	end
+
+	function controller.open()
+		setOpen(true)
+	end
+
+	function controller.close()
+		setOpen(false)
+	end
+
+	function controller.isOpen(): boolean
+		return isOpen
+	end
+
+	function controller.openTab(tab: string)
+		query.tab = tab
+		paintFilters()
+		if isOpen then
+			render()
+			return
+		end
+		setOpen(true)
 	end
 
 	paintFilters()

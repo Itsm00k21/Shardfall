@@ -101,7 +101,7 @@ local function respond(player: Player, action: string, result: any)
 	if type(result) ~= "table" then
 		return fail(action, string.format("handler returned %s, expected a table", typeof(result)))
 	end
-	result.saving = DataService.isPersistent()
+	result.saving = DataService.isPersistent(player)
 	local snapshot = DataService.snapshot(player)
 	if snapshot ~= nil then
 		result.profile = snapshot
@@ -141,8 +141,11 @@ end
 function Remotes.bind()
 	functionRemote("GetProfile").OnServerInvoke = function(player)
 		return guard(player, "GetProfile", function()
-			local data = DataService.waitFor(player, 15)
+			local data, loadError = DataService.waitFor(player, 15)
 			if data == nil then
+				if type(loadError) == "string" and loadError ~= "" then
+					return { ok = false, error = loadError }
+				end
 				return { ok = false, error = "Profile is still loading." }
 			end
 			return { ok = true }

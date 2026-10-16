@@ -184,10 +184,12 @@ local function teleport(player: Player, cframe: CFrame)
 			player.ReplicationFocus = hrp
 		end
 	end)
+	-- Move first. RequestStreamAroundAsync yields for up to 5 seconds, and
+	-- the default baseplate can be removed during that wait.
+	character:PivotTo(cframe)
 	pcall(function()
 		player:RequestStreamAroundAsync(cframe.Position, 5)
 	end)
-	character:PivotTo(cframe)
 	if hrp ~= nil then
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
@@ -393,7 +395,8 @@ local function purgeSavedWorld()
 	local removed = 0
 	for _, child in ipairs(workspace:GetChildren()) do
 		local humanoid = child:IsA("Model") and child:FindFirstChildOfClass("Humanoid") ~= nil
-		if SavedWorld.shouldRemove(child.Name, child.ClassName, humanoid) then
+		local isCharacter = child:IsA("Model") and Players:GetPlayerFromCharacter(child) ~= nil
+		if SavedWorld.shouldRemove(child.Name, child.ClassName, humanoid == true, isCharacter) then
 			print(
 				string.format(
 					"[Shardfall] removed saved world %s (%s). Rojo does not manage Workspace.",
@@ -2127,7 +2130,7 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build b3c8748+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build 78279d5+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
@@ -2139,6 +2142,23 @@ function DungeonService.start()
 		print("[Shardfall] Verdant lighting on")
 	end
 	buildWorld()
+	local hubReady = false
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		if descendant.Name == "HubSpawn" then
+			hubReady = true
+			break
+		end
+	end
+	if hubReady then
+		for _, player in ipairs(Players:GetPlayers()) do
+			if runs[player] == nil then
+				teleport(player, hubCFrame())
+			end
+		end
+		HavenBuilder.clearDefaults()
+	else
+		warn("[Shardfall] HubSpawn is missing, so the default baseplate stays")
+	end
 	bindTouches()
 	local TravelService = require(script.Parent.TravelService)
 	TravelService.bind()
