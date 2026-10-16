@@ -14,10 +14,10 @@
 	so the profile load never started.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build c98e7b5+ server` in Output.
+	still leaves `[Shardfall] build 78279d5+ server` in Output.
 ]]
 
-print("[Shardfall] build c98e7b5+ server")
+print("[Shardfall] build 78279d5+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
@@ -28,11 +28,17 @@ local function silenceForeignScripts()
 			if descendant:IsA("BaseScript") then
 				local names = { descendant.Name }
 				local cursor: Instance? = descendant.Parent
+				local inAvatar = false
 				while cursor ~= nil do
 					table.insert(names, cursor.Name)
+					if cursor:IsA("Model") and game:GetService("Players"):GetPlayerFromCharacter(cursor) ~= nil then
+						inAvatar = true
+					end
 					cursor = cursor.Parent
 				end
-				if ForeignScripts.shouldFlag(serviceName, names) then
+				-- Avatar scripts stay. Disabling them does not delete the
+				-- floor, but it does drop the character when the plate goes.
+				if not inAvatar and ForeignScripts.shouldFlag(serviceName, names) then
 					found += 1
 					warn(
 						string.format(

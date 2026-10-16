@@ -7,8 +7,9 @@
 	RbxCharacterSounds, and the rest). Disabling those leaves the camera
 	dead and the screen gray. The scan walks StarterPlayer and skips those
 	built-in names, plus ShardfallClient. Any other script there is a
-	leftover UI and gets disabled. A built-in name under Workspace is
-	skipped too.
+	leftover UI and gets disabled. It never destroys parts, and it never
+	destroys a server script. A built-in name under Workspace is skipped
+	too. Scripts inside a player character are left alone by the caller.
 ]]
 
 local ForeignScripts = {}

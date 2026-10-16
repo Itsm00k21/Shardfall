@@ -67,10 +67,10 @@ local function teleport(player: Player, cframe: CFrame)
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		hrp.Anchored = true
 	end
+	character:PivotTo(cframe)
 	pcall(function()
 		player:RequestStreamAroundAsync(cframe.Position, 5)
 	end)
-	character:PivotTo(cframe)
 	if hrp ~= nil and hrp:IsA("BasePart") then
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero

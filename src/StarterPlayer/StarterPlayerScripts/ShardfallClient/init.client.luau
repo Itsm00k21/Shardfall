@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build c98e7b5+ client` in Output.
+	still leaves `[Shardfall] build 78279d5+ client` in Output.
 ]]
 
-print("[Shardfall] build c98e7b5+ client")
+print("[Shardfall] build 78279d5+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -92,7 +92,11 @@ local function dropStaleScripts(root: Instance)
 	local doomed = {}
 	for _, descendant in ipairs(root:GetDescendants()) do
 		if descendant:IsA("BaseScript") and descendant ~= script then
-			if ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant)) then
+			local avatar = descendant:FindFirstAncestorOfClass("Model")
+			local inAvatar = avatar ~= nil and Players:GetPlayerFromCharacter(avatar) ~= nil
+			-- PlayerGui and PlayerScripts only. Never Workspace, and never
+			-- a script on the character that is keeping the avatar upright.
+			if not inAvatar and ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant)) then
 				table.insert(doomed, descendant)
 			end
 		end
