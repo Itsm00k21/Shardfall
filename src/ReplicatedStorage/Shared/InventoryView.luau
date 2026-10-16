@@ -96,6 +96,58 @@ function InventoryView.defaultQuery(): Query
 	}
 end
 
+export type FilterFlags = {
+	realm: boolean,
+	slot: boolean,
+	sockets: boolean,
+	worn: boolean,
+	locked: boolean,
+	rarity: boolean,
+	sort: boolean,
+}
+
+function InventoryView.activeFilters(tab: string): FilterFlags
+	local gear = tab == "weapons" or tab == "armor" or tab == "accessories"
+	local pet = tab == "pets"
+	return {
+		realm = gear or pet or tab == "materials",
+		slot = #InventoryView.slotChoices(tab) > 0,
+		sockets = gear,
+		worn = gear or pet,
+		locked = gear or pet,
+		rarity = tab ~= "chests",
+		sort = true,
+	}
+end
+
+local function openChoice(value: string?): boolean
+	return type(value) ~= "string" or value == "" or value == "Any" or value == "N/A"
+end
+
+function InventoryView.realmLabel(realm: string?): string
+	if openChoice(realm) or realm == nil then
+		return "All realms"
+	end
+	return "Realm: " .. realm
+end
+
+function InventoryView.slotLabel(slot: string?): string
+	if openChoice(slot) or slot == nil then
+		return "All types"
+	end
+	return "Type: " .. slot
+end
+
+function InventoryView.socketLabel(sockets: number?, atLeast: number?): string
+	if atLeast ~= nil then
+		return "Sockets: " .. tostring(atLeast) .. "+"
+	end
+	if sockets == nil then
+		return "All sockets"
+	end
+	return "Sockets: " .. tostring(sockets)
+end
+
 function InventoryView.slotChoices(tab: string): { string }
 	if tab == "weapons" then
 		return { "sword", "greatsword", "bow", "staff", "dagger", "hammer" }

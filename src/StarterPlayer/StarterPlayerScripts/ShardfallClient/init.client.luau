@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 27e69f2+ client` in Output.
+	still leaves `[Shardfall] build 8013d71+ client` in Output.
 ]]
 
-print("[Shardfall] build 27e69f2+ client")
+print("[Shardfall] build 8013d71+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1038,9 +1038,11 @@ actionBar = ActionBar.start(playerGui, {
 	end,
 	onSkills = function()
 		local opening = not ClassHud.isVisible()
-		closePanels(if opening then "skills" else nil)
 		if opening then
+			closePanels("skills")
 			ClassHud.setVisible(true)
+		else
+			ClassHud.dismiss()
 		end
 	end,
 	onTonic = function()

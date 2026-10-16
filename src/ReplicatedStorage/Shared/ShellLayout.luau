@@ -213,10 +213,26 @@ function ShellLayout.menuRect(viewportX: number, viewportY: number): Rect
 	return { x = 16, y = y, w = w, h = h }
 end
 
+-- Odds and version readout. The roll sheet draws this on the left.
+function ShellLayout.oddsRect(): Rect
+	return { x = 12, y = 72, w = 230, h = 250 }
+end
+
 function ShellLayout.travelRect(viewportX: number, viewportY: number): Rect
 	local menu = ShellLayout.menuRect(viewportX, viewportY)
-	local w = math.min(320, menu.w)
-	return { x = menu.x, y = menu.y, w = w, h = menu.h }
+	local odds = ShellLayout.oddsRect()
+	local bar = ShellLayout.actionBar(viewportX, viewportY)
+	local health = ShellLayout.healthRect()
+	local left = math.max(menu.x + menu.w, odds.x + odds.w) + 16
+	local y = math.max(odds.y, health.y + health.h + 8)
+	local bottom = bar.y - 8
+	local h = math.max(0, bottom - y)
+	local right = viewportX - 16
+	local w = math.min(320, right - left)
+	if w < 160 then
+		w = math.max(120, right - left)
+	end
+	return { x = left, y = y, w = w, h = h }
 end
 
 function ShellLayout.captureRect(viewportX: number, viewportY: number): Rect
