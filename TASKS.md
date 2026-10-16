@@ -39,9 +39,7 @@ Next free id is T-025.
 
 HELPER takes self-contained systems. New modules listed below are the owned paths. Do not edit a GHOST path. If a hook has to land in a shared module or in `CombatHud.luau` / `DungeonService.luau` / `Rootvault.luau`, write that on the row in this file first and wait for GHOST.
 
-| id | title | owner | branch | files / folders | status | PR |
-|---|---|---|---|---|---|---|
-| T-016 | Session-recap string on the victory card | HELPER | `helper/session-recap-9721` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/SessionRecap.luau`, `tests/Progression.spec.luau` (recap string only). Read `Progression.recap` in `src/ReplicatedStorage/Shared/Progression.luau`. The victory card is drawn in `CombatHud.luau` (T-001). Add a call site there only after a note on this row. | claimed | — |
+No claimed HELPER tasks.
 
 `src/ReplicatedStorage/Shared/Pets.luau` and `src/ServerScriptService/ShardfallServer/PetService.luau` stay with the shipped hatchery. T-014 adds new modules beside them. Edit those two only after a note on T-014.
 
@@ -626,6 +624,103 @@ No power fields. Premium rewards are skins, pet hats, trails, one weapon VFX, on
 
 Build stamp files are T-012. This branch does not change them. The stamp lines are in files other in-flight branches are editing, and prior HELPER branches skipped the stamp the same way.
 
+### T-016 hooks for GHOST
+
+HELPER did not edit `CombatHud.luau`, `DungeonService.luau`, `Progression.luau`, or T-012. `SessionRecap` is pure and ready to call. It does not read the profile, grant rewards, or spend Robux. The client only formats the four numbers it is given. `$path` already includes `src/StarterPlayer/StarterPlayerScripts/ShardfallClient`, so `SessionRecap` is in the place file without a `default.project.json` edit.
+
+This note is against `CombatHud.luau` after #29 (`cbe50bc`). That file has `CombatHud.setWallet` and the HP attribute fallback on `HumanoidRootPart`. `ThumbBar.luau` is gone. The action row is `ActionBar.luau`. Neither of those needs a change for this line.
+
+`CombatHud.luau`, next to the `MobileShell` require:
+
+```lua
+local SessionRecap = require(script.Parent.SessionRecap)
+```
+
+In `victoryBody`, after the voucher branch (`payload.voucher == "armory"` / `"pets"` / the "No roll voucher" line) and before `return table.concat(lines, "\n")`:
+
+```lua
+	local recapLine = SessionRecap.line(payload.recap)
+	if recapLine ~= "" then
+		table.insert(lines, recapLine)
+	end
+```
+
+`showCard` in the `payload.kind == "victory"` branch already passes `victoryBody(payload)`. Do not add a second label, and do not append this line on the defeat card. An empty string means the payload had no recap yet, so skip it. A blank row would show up before GHOST sends the table.
+
+`SessionRecap.line` accepts that table, or the four numbers in the same order as `Progression.recap` (`beforeLevel`, `afterLevel`, `epics`, `setPct`). Named fields:
+
+```lua
+recap = {
+	beforeLevel = sessionStartLevel, -- account level when this server session began
+	afterLevel = afterLevel, -- data.level after Progression.addXp
+	epics = sessionEpics, -- Epic drops this session. 0 until a counter exists
+	setPct = 0, -- Relic Set percent, 0-100. 0 until T-010
+}
+```
+
+The design sentence is `This session: +3 levels, 2 Epics, 41% to your Relic Set`. That is what `Progression.recap(1, 4, 2, 41)` returns, and what `SessionRecap.line` returns for those same numbers. `Progression.recap` always prints all three clauses, always uses the plural, and `string.format` throws if a field is nil. The card line does not need a change to `Progression.luau`. `SessionRecap` uses the same gain (`max(0, after - before)`) and the same 0-100 clamp, then:
+
+- Drops a missing field, a zero, a negative, NaN, or infinity. No `nil` is concatenated.
+- Says `+1 level` and `1 Epic` when the count is one.
+- Returns `""` when the table is missing, so the card stays as it is today.
+- Returns `This session: a quiet clear.` when the fields arrived and every one is zero.
+- Stays within `SessionRecap.MAX_CHARS` (60), about two lines in the current card body (340px card, 16px padding, TextSize 15). A pathological count shortens `41% to your Relic Set` to `41% Relic Set`.
+
+Do not pass `payload.levels` into the recap. In `grant`, `levels` is the return from `Progression.addXp` for this clear only. `SessionRecap` ignores a `levels` key on purpose.
+
+No new remote and no schema field. The existing `CombatFx` victory payload gains `recap`. Hold the two counters in memory for the server session.
+
+`DungeonService.luau`, next to the other player maps:
+
+```lua
+local sessionStartLevel: { [Player]: number } = {}
+local sessionEpics: { [Player]: number } = {}
+```
+
+In `grant`, next to `local levels = 0`, so `afterLevel` is visible after `DataService.mutate`:
+
+```lua
+local afterLevel = 0
+```
+
+Inside the mutate callback, before `Progression.addXp`, remember the level once:
+
+```lua
+	if sessionStartLevel[player] == nil then
+		sessionStartLevel[player] = data.level
+	end
+```
+
+After `levels = Progression.addXp(data, xpGain)`:
+
+```lua
+	afterLevel = data.level
+```
+
+On the victory `fx` table (`kind = "victory"`, the `else` of `if dismissIn == nil`), next to `levels = levels`:
+
+```lua
+			recap = {
+				beforeLevel = sessionStartLevel[player],
+				afterLevel = afterLevel,
+				epics = sessionEpics[player] or 0,
+				setPct = 0,
+			},
+```
+
+`Players.PlayerRemoving` in `DungeonService.start` already clears `idleNoted[player]`. Clear the two maps there too:
+
+```lua
+		sessionStartLevel[player] = nil
+		sessionEpics[player] = nil
+```
+
+That first-grant snapshot misses levels gained in Haven before the first clear. Snapshot `data.level` when the profile finishes loading in `DataService` if the line should include those. There is no session Epic counter and no Relic Set percent on the profile (T-010). Leave `epics` and `setPct` at 0 until those exist. A 0 is omitted, so a real level gain still prints.
+
+`tests/run.luau` already requires `./Progression.spec`. No new spec line.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the client until the `CombatHud` line above, and prior HELPER branches skipped the stamp the same way.
+
 ## Open
 
 No unassigned tasks.
@@ -640,3 +735,4 @@ No unassigned tasks.
 | T-021 | Single HUD: menu sheet, action bar, Studio debug | GHOST | `cursor/hud-cleanup-9721` | `src/ReplicatedStorage/Shared/ShellLayout.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau`, `Ui.luau`, `ThumbBar.luau`, `DebugHud.luau`, `CombatHud.luau`, `ClassHud.luau`, `DoorHud.luau`, `InventoryHud.luau`, `TravelHud.luau`, `PetHud.luau`, `RaidHud.luau`, `RollReel.luau`, `tests/ShellLayout.spec.luau`. Stamp lines only in `Build.luau`, `init.server.luau`, and `DungeonService.luau`. Did not change combat HP. | done | [#22](https://github.com/Itsm00k21/Shardfall/pull/22) |
 | T-017 | Haste shrines, mender healing, shielder blocking | HELPER | `helper/enemy-abilities-9721` | `src/ReplicatedStorage/Shared/EnemyAbilities.luau`, `tests/EnemyAbilities.spec.luau`, `tests/run.luau`, `docs/design/rootvault_design.md`. Rules are in `EnemyAbilities` and are not called yet, so gameplay is unchanged. Hook points are in the T-017 hooks section. This task does not edit `DungeonService.luau` or `Rootvault.luau`. | done | [#25](https://github.com/Itsm00k21/Shardfall/pull/25) |
 | T-015 | Shard Pass premium wiring, kept off, and 4x4 board polish | HELPER | `helper/shard-pass-9721` | `src/ReplicatedStorage/Shared/Loops.luau`, `src/ServerScriptService/ShardfallServer/LoopService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/LoopHud.luau`, `tests/Loops.spec.luau`, `docs/design/shardfall_loops.md`. `Loops.PREMIUM_ENABLED` stays `false`. No build stamp: the stamp lines live in GHOST files. Snippets are in the T-015 hooks section. Second Chance is `data.boardChance` (0 to 9, survives the weekly reset) so `data.board` stays a pure 16-boolean array. | done | [#28](https://github.com/Itsm00k21/Shardfall/pull/28) |
+| T-016 | Session-recap string on the victory card | HELPER | `helper/session-recap-9721` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/SessionRecap.luau`, `tests/Progression.spec.luau` (recap string only). `Progression.luau` was not edited. `CombatHud.luau` (T-001) was not edited. Call site for GHOST: `victoryBody`, after the voucher line, `require(script.Parent.SessionRecap)`, pass `payload.recap`. Snippet is in the T-016 hooks section. No build stamp. | done | [#30](https://github.com/Itsm00k21/Shardfall/pull/30) |
