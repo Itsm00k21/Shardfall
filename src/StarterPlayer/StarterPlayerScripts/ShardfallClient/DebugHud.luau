@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
 local DebugHud = {}
@@ -64,14 +65,14 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	local row = Instance.new("ScrollingFrame")
 	row.Name = "Debug"
 	row.AnchorPoint = Vector2.new(1, 0)
-	row.Position = UDim2.new(1, -margin, 0, margin + 32 + UiTheme.PAD)
-	row.Size = UDim2.fromOffset(320, UiTheme.TAP + UiTheme.PAD * 2)
+	row.Position = UDim2.new(1, -margin, 0, margin + 32 + margin)
+	row.Size = UDim2.fromOffset(320, UiTheme.TAP)
 	row.BackgroundColor3 = rgb("background")
 	row.BackgroundTransparency = 0
 	row.BorderSizePixel = 0
-	row.ScrollBarThickness = 4
-	row.ScrollingDirection = Enum.ScrollingDirection.X
-	row.AutomaticCanvasSize = Enum.AutomaticSize.X
+	row.ScrollBarThickness = 6
+	row.ScrollingDirection = Enum.ScrollingDirection.Y
+	row.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	row.CanvasSize = UDim2.new()
 	row.Visible = false
 	row.ClipsDescendants = true
@@ -82,10 +83,12 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	pad.PaddingLeft = UDim.new(0, UiTheme.PAD)
 	pad.PaddingRight = UDim.new(0, UiTheme.PAD)
 	pad.Parent = row
-	local layout = Instance.new("UIListLayout")
+	local layout = Instance.new("UIGridLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.Padding = UDim.new(0, UiTheme.PAD)
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.CellPadding = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD)
+	layout.CellSize = UDim2.fromOffset(96, UiTheme.TAP)
 	layout.Parent = row
 	local rowCorner = Instance.new("UICorner")
 	rowCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
@@ -94,11 +97,18 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	local function place()
 		local size = screen.AbsoluteSize
 		local vx = if size.X >= 200 then size.X else 1280
-		local width = math.clamp(vx - margin * 2, UiTheme.TAP, 520)
-		row.Size = UDim2.fromOffset(width, UiTheme.TAP + UiTheme.PAD * 2)
+		local vy = if size.Y >= 200 then size.Y else 800
+		local count = 0
+		for _, child in ipairs(row:GetChildren()) do
+			if child:IsA("GuiButton") then
+				count += 1
+			end
+		end
+		local grid =
+			ShellLayout.debugGrid(vx, vy, margin, math.max(1, count), 96, UiTheme.TAP, UiTheme.PAD)
+		row.Position = UDim2.new(1, -grid.margin, 0, grid.y)
+		row.Size = UDim2.fromOffset(grid.w, grid.h)
 	end
-	place()
-	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 
 	toggle.Activated:Connect(function()
 		row.Visible = not row.Visible
@@ -165,6 +175,8 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 	hit("skip", "Boss", function()
 		invoke("Dungeon", "skip")
 	end)
+	place()
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 end
 
 return DebugHud

@@ -156,4 +156,34 @@ describe("ShellLayout", function()
 			end
 		end
 	end)
+
+	it("keeps the menu, skills sheet, and debug grid inside 1280, 1920, and 844", function()
+		local views = {
+			{ 1280, 800 },
+			{ 1920, 1080 },
+			{ 844, 390 },
+		}
+		for _, view in ipairs(views) do
+			local vx = view[1]
+			local vy = view[2]
+			local bar = ShellLayout.actionBar(vx, vy)
+			local sheet = ShellLayout.menuSheet(vx, vy)
+			expect(sheet.h > 0).toBeTrue()
+			expect(sheet.x >= 16).toBeTrue()
+			expect(sheet.x + sheet.w <= vx - 16).toBeTrue()
+			expect(sheet.y + sheet.h <= bar.y).toBeTrue()
+			local skills = ShellLayout.skillsRect(vx, vy)
+			expect(skills.x >= 16).toBeTrue()
+			expect(skills.x + skills.w <= vx - 16).toBeTrue()
+			expect(skills.y + skills.h <= bar.y).toBeTrue()
+			local grid = ShellLayout.debugGrid(vx, vy, 16, 20, 96, 64, 8)
+			expect(grid.margin >= 8).toBeTrue()
+			expect(grid.x >= grid.margin).toBeTrue()
+			expect(grid.x + grid.w <= vx - grid.margin).toBeTrue()
+			expect(grid.y >= 32 + grid.margin).toBeTrue()
+			expect(grid.y + grid.h <= vy).toBeTrue()
+			expect(grid.columns >= 2).toBeTrue()
+			expect(grid.columns < 20).toBeTrue()
+		end
+	end)
 end)

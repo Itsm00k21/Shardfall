@@ -40,6 +40,7 @@ local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
 local MarketHud = require(script.MarketHud)
+local MenuHud = require(script.MenuHud)
 local PetHud = require(script.PetHud)
 local RaidHud = require(script.RaidHud)
 local RollReel = require(script.RollReel)
@@ -182,6 +183,7 @@ local musicController = MusicController.start()
 local inventory
 local travel
 local actionBar
+local menuHud
 local graphicsTier = "med"
 local graphicsSent = false
 
@@ -313,6 +315,36 @@ end
 
 local cycleGraphics: () -> ()
 
+local function requestDungeon(action: string, dungeonId: string?)
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return invoke("Dungeon", action, dungeonId)
+		end)
+		local message = remoteError(ok, result, "Dungeon request failed.")
+		if message ~= nil then
+			ui.setStatus(message, "error")
+			return
+		end
+		applyResult(result)
+		if type(result) == "table" and type(result.run) == "table" then
+			ui.setRun(result.run)
+			musicController.syncRun(result.run)
+			DoorHud.setRun(result.run)
+		end
+		if action == "enter" and dungeonId == "rootvault_waves" then
+			ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
+		elseif action == "enter" then
+			ui.setStatus("Entered the Rootvault. Cleared rooms advance on their own.", "ok")
+		elseif action == "advance" then
+			ui.setStatus("Next room.", "ok")
+		elseif action == "leave" then
+			ui.setStatus("Back at the hub.", "ok")
+		elseif action == "skip" then
+			ui.setStatus("Skipped to the boss.", "ok")
+		end
+	end)
+end
+
 ui = Ui.mount(playerGui, {
 	showDev = false,
 	onCrack = function()
@@ -430,35 +462,7 @@ ui = Ui.mount(playerGui, {
 			end
 		end)
 	end,
-	onDungeon = function(action: string, dungeonId: string?)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("Dungeon", action, dungeonId)
-			end)
-			local message = remoteError(ok, result, "Dungeon request failed.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			if type(result) == "table" and type(result.run) == "table" then
-				ui.setRun(result.run)
-				musicController.syncRun(result.run)
-				DoorHud.setRun(result.run)
-			end
-			if action == "enter" and dungeonId == "rootvault_waves" then
-				ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
-			elseif action == "enter" then
-				ui.setStatus("Entered the Rootvault. Cleared rooms advance on their own.", "ok")
-			elseif action == "advance" then
-				ui.setStatus("Next room.", "ok")
-			elseif action == "leave" then
-				ui.setStatus("Back at the hub.", "ok")
-			elseif action == "skip" then
-				ui.setStatus("Skipped to the boss.", "ok")
-			end
-		end)
-	end,
+	onDungeon = requestDungeon,
 	onTonic = function()
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -604,30 +608,15 @@ local function guiChild(guiName: string, childName: string): GuiObject?
 	return nil
 end
 
--- Join shows HP, the action bar, and currency. Hatch, raid, the daily
--- board, and the roll sheet open from Menu. The market button stays
--- hidden; Haven still opens the stall.
-local function setHubChrome(open: boolean, keepRaid: boolean?)
-	if rollReel ~= nil then
-		rollReel.setOpen(open)
-	end
+-- Hatch, the raid chip, and the market button never sit on the join screen.
+local function hideStrayButtons()
 	local hatch = guiChild("ShardfallPets", "Hatch")
 	if hatch ~= nil then
-		hatch.Visible = open
-		if open then
-			hatch.Position = UDim2.fromOffset(16, 76)
-		end
+		hatch.Visible = false
 	end
 	local raid = guiChild("ShardfallRaids", "RaidToggle")
-	if raid ~= nil and keepRaid ~= true then
-		raid.Visible = open
-		if open then
-			raid.Position = UDim2.fromOffset(120, 76)
-		end
-	end
-	local board = guiChild("ShardfallLoops", "Board")
-	if board ~= nil then
-		board.Visible = open
+	if raid ~= nil then
+		raid.Visible = false
 	end
 	local market = guiChild("ShardfallMarket", "OpenMarket")
 	if market ~= nil then
@@ -635,8 +624,24 @@ local function setHubChrome(open: boolean, keepRaid: boolean?)
 	end
 end
 
+-- Join shows HP, currency, the action bar, and the Studio debug toggle.
+-- open is ignored: nothing here may reveal the roll sheet or the daily board.
+local function setHubChrome(open: boolean, _keepRaid: boolean?)
+	if open == true then
+		return
+	end
+	if rollReel ~= nil then
+		rollReel.setOpen(false)
+	end
+	LoopHud.setOpen(false)
+	hideStrayButtons()
+end
+
 local function closePanels(except: string?)
-	if except ~= "menu" then
+	if except ~= "menu" and menuHud ~= nil then
+		menuHud.close()
+	end
+	if except ~= "craft" then
 		ui.close()
 	end
 	if except ~= "inventory" and inventory ~= nil then
@@ -654,9 +659,13 @@ local function closePanels(except: string?)
 	if except ~= "market" then
 		hideMarket()
 	end
-	if except ~= "menu" then
-		setHubChrome(false, except == "raid")
+	if except ~= "roll" and rollReel ~= nil then
+		rollReel.setOpen(false)
 	end
+	if except ~= "daily" and except ~= "pass" then
+		LoopHud.setOpen(false)
+	end
+	hideStrayButtons()
 	DoorHud.suppress(except ~= nil)
 end
 
@@ -1007,13 +1016,45 @@ function cycleGraphics()
 	end)
 end
 
+menuHud = MenuHud.start(playerGui, {
+	onCodes = function()
+		if menuHud ~= nil then
+			menuHud.setNote("Codes are not open yet.")
+		end
+	end,
+	onDaily = function()
+		closePanels("daily")
+		LoopHud.setOpen(true)
+	end,
+	onPass = function()
+		closePanels("pass")
+		LoopHud.setOpen(true)
+	end,
+	onSettings = function()
+		cycleGraphics()
+	end,
+	onRoll = function()
+		closePanels("roll")
+		if rollReel ~= nil then
+			rollReel.setOpen(true)
+		end
+	end,
+	onCraft = function()
+		closePanels("craft")
+		ui.openPanel("craft")
+	end,
+	onBossrush = function()
+		closePanels(nil)
+		requestDungeon("enter", "rootvault_waves")
+	end,
+})
+
 actionBar = ActionBar.start(playerGui, {
 	onMenu = function()
-		local opening = not ui.isOpen()
+		local opening = menuHud == nil or not menuHud.isOpen()
 		closePanels(if opening then "menu" else nil)
-		if opening then
-			ui.open()
-			setHubChrome(true)
+		if opening and menuHud ~= nil and not ClassHud.holdsChoice() then
+			menuHud.open()
 		end
 	end,
 	onInventory = function()
@@ -1073,7 +1114,7 @@ HavenClient.start({
 			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
 			return
 		end
-		closePanels("menu")
+		closePanels(if kind == "craft" then "craft" else nil)
 		ui.openPanel(kind, areaId)
 		if kind == "craft" then
 			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")

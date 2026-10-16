@@ -31,6 +31,7 @@ function PetHud.start(invoke: (string, ...any) -> any)
 	button.TextWrapped = true
 	button.TextColor3 = Color3.fromRGB(16, 14, 24)
 	button.Text = "Hatch"
+	button.Visible = false
 	button.Parent = screen
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)

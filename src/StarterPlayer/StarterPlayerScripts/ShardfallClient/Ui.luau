@@ -620,7 +620,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = COLORS.text,
-		Text = "Loading profile...",
+		Text = "",
 		TextWrapped = true,
 		LayoutOrder = 4,
 	}, panel) :: TextLabel
@@ -2060,7 +2060,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.setProfile(profile: any, saving: boolean)
 		if type(profile) ~= "table" then
-			stats.Text = "Loading profile..."
+			stats.Text = ""
 			return
 		end
 		latestProfile = profile

@@ -333,4 +333,71 @@ function ShellLayout.zoneScale(distance: number): number
 	return 1 - along * 0.65
 end
 
+-- Centered menu sheet. It stays above the action bar on a short window.
+function ShellLayout.menuSheet(viewportX: number, viewportY: number): Rect
+	local bar = ShellLayout.actionBar(viewportX, viewportY)
+	local margin = 16
+	local top = 72
+	local bottom = bar.y - 12
+	local w = math.min(400, math.max(160, viewportX - margin * 2))
+	local h = math.min(420, math.max(0, bottom - top))
+	local x = math.max(margin, math.floor((viewportX - w) / 2))
+	local y = top
+	if y + h > bottom then
+		h = math.max(0, bottom - y)
+	end
+	return { x = x, y = y, w = w, h = h }
+end
+
+-- Skills sheet. Same band as the menu so the class list is not a bare header.
+function ShellLayout.skillsRect(viewportX: number, viewportY: number): Rect
+	local sheet = ShellLayout.menuSheet(viewportX, viewportY)
+	return { x = sheet.x, y = sheet.y, w = sheet.w, h = sheet.h }
+end
+
+export type DebugGrid = {
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	columns: number,
+	rows: number,
+	margin: number,
+}
+
+-- Debug grants wrap under the toggle. The frame's right edge stays inside
+-- the safe inset by at least 8px, and the grid starts below the toggle.
+function ShellLayout.debugGrid(
+	viewportX: number,
+	viewportY: number,
+	margin: number,
+	count: number,
+	cellW: number,
+	cellH: number,
+	gap: number
+): DebugGrid
+	local pad = math.max(8, margin)
+	local toggleH = 32
+	local y = pad + toggleH + pad
+	local frameW = math.max(cellW, viewportX - pad * 2)
+	local usable = math.max(cellW, frameW - pad * 2 - 8)
+	local stride = cellW + gap
+	local columns = math.max(1, math.floor((usable + gap) / stride))
+	local total = math.max(1, count)
+	local rows = math.ceil(total / columns)
+	local contentH = rows * cellH + math.max(0, rows - 1) * gap + pad * 2
+	local maxH = math.max(cellH + pad * 2, viewportY - y - 16)
+	local h = math.min(contentH, maxH)
+	local x = math.max(pad, viewportX - pad - frameW)
+	return {
+		x = x,
+		y = y,
+		w = frameW,
+		h = h,
+		columns = columns,
+		rows = rows,
+		margin = pad,
+	}
+end
+
 return ShellLayout
