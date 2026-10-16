@@ -27,6 +27,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
+local DoorHud = require(script.DoorHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
 local MusicController = require(script.MusicController)
@@ -347,6 +348,7 @@ ui = Ui.mount(playerGui, {
 			if type(result) == "table" and type(result.run) == "table" then
 				ui.setRun(result.run)
 				musicController.syncRun(result.run)
+				DoorHud.setRun(result.run)
 			end
 			if action == "enter" and dungeonId == "rootvault_waves" then
 				ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
@@ -890,6 +892,9 @@ HavenClient.start({
 
 VerdantLod.start()
 
+DoorHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
 ClassHud.start(remotes :: Instance, function(action: string, ...: any)
 	return invoke(action, ...)
 end)
@@ -897,6 +902,7 @@ CombatHud.start(remotes :: Instance, {
 	onRun = function(run)
 		ui.setRun(run)
 		musicController.syncRun(run)
+		DoorHud.setRun(run)
 	end,
 	onHint = function(text)
 		ui.setStatus(text, "info")

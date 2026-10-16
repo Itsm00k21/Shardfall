@@ -36,6 +36,7 @@ local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
 local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
+local Rootvault = require(ReplicatedStorage.Shared.Rootvault)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
 local Schema = require(ReplicatedStorage.Shared.Schema)
@@ -97,6 +98,10 @@ type Run = {
 	-- Kill drops collected this run. The clear card lists these with the
 	-- room rewards, including Gnarl's Seed from Grandmother Gnarl.
 	loot: { [string]: number },
+	difficulty: string,
+	offer: { any }?,
+	eliteNext: boolean,
+	shrine: string,
 }
 
 type Restart = {
@@ -485,6 +490,9 @@ local function publicRun(player: Player): { [string]: any }
 		endless = endless,
 		wave = if endless then run.wave else nil,
 		countdown = countdown,
+		difficulty = run.difficulty,
+		doors = run.offer,
+		shrine = run.shrine,
 	}
 end
 
@@ -633,6 +641,14 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		health, damage =
 			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
 	end
+	health, damage = Rootvault.scale(run.difficulty, health, damage)
+	local elite = false
+	if run.eliteNext and definition.boss ~= true then
+		elite = true
+		run.eliteNext = false
+		health = math.floor(health * Rootvault.ELITE_HP + 0.5)
+		damage = math.floor(damage * Rootvault.ELITE_DAMAGE + 0.5)
+	end
 	local rootCFrame = roomCFrame(run.placeIndex, Vector3.new(offset.X, y, offset.Z))
 	local rigOk, rigOrErr = pcall(function()
 		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, definition.name)
@@ -681,7 +697,10 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			warn(string.format("[Rootvault] %s rig has %d parts", kind, pieces))
 		end
 	end
-	part:SetAttribute("ShardfallName", definition.name)
+	part:SetAttribute(
+		"ShardfallName",
+		if elite then "Elite " .. definition.name else definition.name
+	)
 	part:SetAttribute("EnemyId", id)
 	part:SetAttribute("ShardfallKind", kind)
 	local rimHost = if rigModel ~= nil then rigModel else part
@@ -957,6 +976,19 @@ end
 
 local function beginAdvance(player: Player, run: Run, text: string)
 	run.cleared = true
+	if run.dungeon.endless ~= true and run.roomIndex < #run.dungeon.rooms then
+		run.offer = Rootvault.offer(run.roomIndex, #run.dungeon.rooms, math.random(1, 5))
+		run.advanceAt = nil
+		pushRun(player, text .. " Two doors.")
+		if farmOn[player] == true then
+			task.delay(1.2, function()
+				if runs[player] == run and run.offer ~= nil and run.offer[1] ~= nil then
+					DungeonService.chooseDoor(player, run.offer[1].id)
+				end
+			end)
+		end
+		return
+	end
 	run.advanceAt = os.clock() + Dungeons.ADVANCE_SECONDS
 	run.advanceShown = Dungeons.ADVANCE_SECONDS
 	pushRun(player, text)
@@ -1052,6 +1084,9 @@ function DungeonService.damageEnemy(
 	if now < enemy.stunUntil then
 		amount = math.floor(amount * 1.25 + 0.5)
 	end
+	if run.shrine == "might" then
+		amount = math.floor(amount * 1.15 + 0.5)
+	end
 	enemy.hp -= amount
 	if enemy.hp < 0 then
 		enemy.hp = 0
@@ -1079,18 +1114,25 @@ function DungeonService.damageEnemy(
 		})
 	end
 	if enemy.boss then
-		local phase = Dungeons.bossPhase(enemy.hp, enemy.maxHp, enemy.phase2At)
-		if phase ~= enemy.phase and phase == 2 and enemy.hp > 0 then
-			enemy.phase = 2
+		local phase = if enemy.kind == "grandmother_gnarl"
+			then Rootvault.gnarlPhase(enemy.hp, enemy.maxHp)
+			else Dungeons.bossPhase(enemy.hp, enemy.maxHp, enemy.phase2At)
+		if phase ~= enemy.phase and enemy.hp > 0 then
+			enemy.phase = phase
 			enemy.weakUntil = 0
-			enemy.nextFog = os.clock() + enemy.fogInterval
-			ModelFactory.tintNamed(enemy.part, "Eye", Color3.fromRGB(176, 120, 255))
-			if run.sunbeam ~= nil then
-				run.sunbeam.Transparency = 0
+			if phase == 2 then
+				enemy.nextFog = os.clock() + enemy.fogInterval
+				ModelFactory.tintNamed(enemy.part, "Eye", Color3.fromRGB(176, 120, 255))
+				if run.sunbeam ~= nil then
+					run.sunbeam.Transparency = 0
+				end
+				placeSunbeam(run)
+				summonSaplings(run)
+			elseif phase == 3 then
+				enemy.attackSpeed = enemy.attackSpeed * 1.25
+				ModelFactory.tintNamed(enemy.part, "Eye", Color3.fromRGB(255, 140, 48))
 			end
-			placeSunbeam(run)
-			summonSaplings(run)
-			pushRun(player, "Spore fog. Stand in the sunbeam before it pulses.")
+			pushRun(player, Rootvault.phaseNote(phase))
 		end
 	end
 	if enemy.hp <= 0 then
@@ -1106,6 +1148,11 @@ function DungeonService.damageEnemy(
 			if enemy.boss then
 				for _, row in ipairs(ChestConfig.bossKill(data, os.time())) do
 					table.insert(chestBits, row.label)
+				end
+				local floorTier = Rootvault.difficulty(run.difficulty).chest
+				if floorTier == "Uncommon" or floorTier == "Rare" then
+					data.chests[floorTier] = (data.chests[floorTier] or 0) + 1
+					table.insert(chestBits, floorTier .. " chest")
 				end
 			end
 			return nil
@@ -1348,7 +1395,14 @@ local function tickEnemy(
 	if distance > enemy.range then
 		return
 	end
-	local colorName = if enemy.boss and enemy.phase >= 2 then "purple" else "red"
+	local colorName = "red"
+	if enemy.boss and enemy.phase >= 3 then
+		colorName = "blue"
+	elseif enemy.boss and enemy.phase >= 2 then
+		colorName = "purple"
+	elseif enemy.kind == "thorn_sprite" then
+		colorName = "red"
+	end
 	local cue = CombatFeel.telegraph(colorName, "normal")
 	enemy.telegraphColor = cue.color
 	enemy.telegraphUntil = now + cue.seconds
@@ -1534,7 +1588,7 @@ function DungeonService.autoFarmEnabled(player: Player): boolean
 	return farmOn[player] == true
 end
 
-function DungeonService.enter(player: Player, dungeonId: any)
+function DungeonService.enter(player: Player, dungeonId: any, difficulty: any)
 	restartAt[player] = nil
 	if runs[player] ~= nil then
 		return reject("You are already in a dungeon. Leave first.")
@@ -1560,6 +1614,10 @@ function DungeonService.enter(player: Player, dungeonId: any)
 	end
 	if dungeon.implemented ~= true or #dungeon.rooms == 0 then
 		return reject(dungeon.name .. " is not built yet.")
+	end
+	local diff = Rootvault.difficulty(difficulty)
+	if (profile.level or 1) < diff.level then
+		return reject(string.format("Level %d opens %s.", diff.level, diff.id))
 	end
 	if activeFolder == nil then
 		return reject("The dungeon world is still loading.")
@@ -1588,6 +1646,10 @@ function DungeonService.enter(player: Player, dungeonId: any)
 		yielding = false,
 		walking = false,
 		loot = {},
+		difficulty = diff.id,
+		offer = nil,
+		eliteNext = false,
+		shrine = "",
 	}
 	runs[player] = run
 	CombatService.refresh(player)
@@ -1671,9 +1733,54 @@ function DungeonService.skipToBoss(player: Player)
 	return { ok = true, run = publicRun(player) }
 end
 
-function DungeonService.action(player: Player, action: string, dungeonId: any)
+function DungeonService.chooseDoor(player: Player, doorId: any)
+	local run = runs[player]
+	if run == nil or run.offer == nil then
+		return reject("No doors are open.")
+	end
+	local picked = nil
+	for _, door in ipairs(run.offer) do
+		if door.id == doorId then
+			picked = door
+		end
+	end
+	if picked == nil then
+		return reject("That door is not open.")
+	end
+	run.offer = nil
+	if picked.id == "treasure" then
+		DataService.mutate(player, function(data)
+			ChestConfig.grantSource(data, "room", os.time())
+			data.gold += 25
+			return nil
+		end)
+	elseif picked.id == "elite" then
+		run.eliteNext = true
+	elseif picked.id == "spring" then
+		local _hp, maxHp = CombatService.vitals(player)
+		CombatService.healAmount(player, math.max(1, math.floor(maxHp * 0.3)))
+	elseif picked.id == "shrine" then
+		run.shrine = Rootvault.shrine(math.random(1, 3))
+	elseif picked.id == "shop" then
+		DataService.mutate(player, function(data)
+			if (data.shardKeys or 0) < 40 then
+				return nil
+			end
+			data.shardKeys -= 40
+			data.chests.Uncommon = (data.chests.Uncommon or 0) + 1
+			return nil
+		end)
+	end
+	pushRun(player, picked.note)
+	return DungeonService.advance(player)
+end
+
+function DungeonService.action(player: Player, action: string, dungeonId: any, extra: any)
 	if action == "enter" then
-		return DungeonService.enter(player, dungeonId)
+		return DungeonService.enter(player, dungeonId, extra)
+	end
+	if action == "door" then
+		return DungeonService.chooseDoor(player, dungeonId)
 	end
 	if action == "advance" then
 		return DungeonService.advance(player)

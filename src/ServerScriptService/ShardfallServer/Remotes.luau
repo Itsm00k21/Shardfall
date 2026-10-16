@@ -280,12 +280,12 @@ function Remotes.bind()
 		end)
 	end
 
-	functionRemote("Dungeon").OnServerInvoke = function(player, action, dungeonId)
+	functionRemote("Dungeon").OnServerInvoke = function(player, action, dungeonId, extra)
 		return guard(player, "Dungeon", function()
 			if type(action) ~= "string" then
 				return { ok = false, error = "Unknown dungeon action." }
 			end
-			return DungeonService.action(player, action, dungeonId)
+			return DungeonService.action(player, action, dungeonId, extra)
 		end)
 	end
 
