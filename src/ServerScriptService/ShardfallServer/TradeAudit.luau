@@ -67,10 +67,7 @@ local function budget(): any
 	return budgetModule
 end
 
-local function current(): any
-	if adapter ~= nil then
-		return adapter
-	end
+local function openStore(): any
 	local DataStoreService = game:GetService("DataStoreService")
 	local limits = budget()
 	local probed, probeErr = limits.run(limits.DATASTORE_SECONDS, function()
@@ -88,13 +85,23 @@ local function current(): any
 		function real:updateAsync(key: string, transform: (any) -> any)
 			return store:UpdateAsync(key, transform)
 		end
-		adapter = real
 		return real
 	end
-	local memory = memoryStore().new()
-	adapter = memory
 	warn("[Shardfall] trade audit is in memory for this server:", probeErr)
-	return memory
+	return memoryStore().new()
+end
+
+local function current(): any
+	if adapter ~= nil then
+		return adapter
+	end
+	local opened, store = pcall(openStore)
+	if not opened or store == nil then
+		warn("[Shardfall] trade audit unavailable, using an empty log: " .. tostring(store))
+		store = memoryStore().new()
+	end
+	adapter = store
+	return store
 end
 
 function TradeAudit.load(): { any }

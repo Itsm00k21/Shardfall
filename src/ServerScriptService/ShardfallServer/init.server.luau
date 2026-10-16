@@ -4,20 +4,21 @@
 	Shardfall server entry.
 
 	Order matters. Remotes are bound and the profile listener is connected
-	before DataService.start(), which is what yields on DataStores and then
+	before the profile load, which is what yields on DataStores and then
 	tells the client the profile is ready. The listener is registered first
-	so a fast in-memory load still pushes a snapshot. Dungeon startup, including
-	the hub build, is isolated so a map error cannot skip that profile push.
-	DataService.start() runs before the trade audit. TradeAudit.load reads
-	ShardfallTradeAudit, and that UpdateAsync used to run first. In Studio
-	with API access off it can yield until the client has already given up,
-	so the profile load never started.
+	so a fast in-memory load still pushes a snapshot.
+
+	The profile load runs before trade, market, receipts, raids, messaging,
+	and the hub build. Those starts sit in begin() so a throw (a DataStore,
+	MemoryStore, or MessagingService with API access off, including the
+	ShardfallTradeAudit store) warns and the rest of boot continues. A hung
+	subscribe cannot sit in front of the profile load.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 78279d5+ server` in Output.
+	still leaves `[Shardfall] build be3658a+ server` in Output.
 ]]
 
-print("[Shardfall] build 78279d5+ server")
+print("[Shardfall] build be3658a+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
@@ -83,17 +84,22 @@ local ReceiptService = require(script.ReceiptService)
 local Remotes = require(script.Remotes)
 local RollService = require(script.RollService)
 
+local function begin(label: string, start: () -> ())
+	local ok, err = pcall(start)
+	if not ok then
+		warn(string.format("[Shardfall] %s failed: %s", label, tostring(err)))
+	end
+end
+
 DataService.onChanged(function(player, snapshot, saving)
 	Remotes.pushProfile(player, snapshot, saving)
 	CombatService.refresh(player)
 end)
 
 Remotes.bind()
-RollService.bindAnnouncements()
 PolicyCache.onChanged(function(player, policy)
 	Remotes.pushPolicy(player, policy)
 end)
-PolicyCache.start()
 CombatService.bindHooks({
 	enemies = function(player)
 		return DungeonService.enemyViews(player)
@@ -109,22 +115,45 @@ CombatService.bindHooks({
 		return DungeonService.isInRun(player)
 	end,
 })
-ReceiptService.start()
-ClassService.start()
-CombatService.bindPlayerHit(function(player)
-	ClassService.onHit(player)
-end)
-CombatService.start()
-local dungeonOk, dungeonError = pcall(DungeonService.start)
-if not dungeonOk then
-	warn("[Shardfall] Dungeon startup failed: " .. tostring(dungeonError))
-end
+
+-- Profiles first. A trade audit, marketplace, or messaging hang must not skip this.
 DataService.start()
-TradeService.start()
-MarketService.start()
+
+begin("PolicyCache", function()
+	PolicyCache.start()
+end)
+begin("RollService", function()
+	RollService.bindAnnouncements()
+end)
+begin("ReceiptService", function()
+	ReceiptService.start()
+end)
+begin("ClassService", function()
+	ClassService.start()
+end)
+begin("CombatService", function()
+	CombatService.bindPlayerHit(function(player)
+		ClassService.onHit(player)
+	end)
+	CombatService.start()
+end)
+begin("DungeonService", function()
+	DungeonService.start()
+end)
+begin("TradeService", function()
+	TradeService.start()
+end)
+begin("MarketService", function()
+	MarketService.start()
+end)
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()
-		DataService.waitFor(player, 20)
-		RaidService.receive(player)
+		local ok, err = pcall(function()
+			DataService.waitFor(player, 20)
+			RaidService.receive(player)
+		end)
+		if not ok then
+			warn("[Shardfall] RaidService failed: " .. tostring(err))
+		end
 	end)
 end)
