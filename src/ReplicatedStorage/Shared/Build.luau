@@ -10,7 +10,7 @@
 
 local Build = {}
 
-Build.STAMP = "428a45e+"
+Build.STAMP = "a32db94+"
 
 function Build.line(side: string): string
 	return string.format("[Shardfall] build %s %s", Build.STAMP, side)
