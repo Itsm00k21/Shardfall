@@ -94,3 +94,19 @@ Login streak, 3 dailies + rerolls, first-clear bonus, daily boss (Gnarl variant)
 5. Odd-numbered costs and leftover waste (Genshin resin complaint). Make sure the numbers divide evenly.
 6. Quest clutter (Destiny bounties, general knowledge): cap visible tasks at about 8.
 7. A pass you can only finish by grinding hard. Ship with a slack buffer and catch-up XP in the last 2 weeks.
+
+## Beta build (T-015)
+
+The beta loop (login streak, 3 dailies with one reroll, first-clear bonus, daily Gnarl, weeklies, Nightmare leaderboard) is already live. This pass adds the Shard Board polish and the premium track, with the track switched off.
+
+**Shard Board.** Each week is a 4x4 grid. Finishing a daily or weekly places one seal on a random empty cell, and the week stops at 9 seals. A line is a full row, a full column, or either diagonal. Payouts are unchanged: 1 line is an Epic chest, 2 lines are 5 Gems and 3 Shard Keys, 3 lines are a Legendary chest. `boardLines` is a high-water mark, so Retry or Shuffle cannot farm the same chest twice.
+
+**Second Chance.** Helping another player under level 10, or a player who is new to that content, grants 1 point, up to 9. You cannot credit yourself. Retry costs 1 and moves one seal. Shuffle costs 2 and lays the same seals down again at random. The count is `boardChance` on the profile, a number from 0 to 9. The board stays a pure 16-boolean array. Points survive the weekly board reset. They are earned by helping, and the cap is 9, so a new week does not wipe them. There is no party list in the live run yet, so points stay at 0 until GHOST calls `LoopService.noteMentor` from a clear that has an ally. The call is server-only.
+
+**Shard Pass.** 50 tiers, `Loops.PASS_XP` (1000) each, same pace the free track already uses. The design note of 10,000 per tier is a tuning target for when the pass is published. Changing it now would slow free players, so it stays 1000.
+
+The premium track is cosmetics and a Gem refund. No gold, keys, dust, or stats. It has 10 skins, 2 pet hats, 2 trails, 1 weapon VFX, and 1 emote. Gem rows pay 40 and sum to 400, which is the 400 Robux price. Tier 50 is Nightmare Bloom and pays no Gems. It stays locked until `nightmareBest` is at least 1, so the bragging skin cannot be bought outright. A tier skip costs 80 Gems, adds one tier of Pass XP, and still cannot claim Nightmare Bloom without that clear. After tier 50, each extra tier is a cache of 4 Shard Keys. That overflow function is not called from the live free claim.
+
+A bought pass never expires, and earned tiers are never re-locked. The Pass Archive is the same entitlement at 480 Robux (400 plus 20%). It does not refund more Gems than the 400 price. Product ids are 0 until GHOST publishes them. A non-positive id never matches.
+
+`Loops.PREMIUM_ENABLED` is false. While it is false, `grantPremium`, `claimPremium`, and `skipTier` refuse and write nothing, so a receipt is left pending instead of being swallowed. Free claim rewards are unchanged. The client Pass button still gets "The premium track is not for sale yet."

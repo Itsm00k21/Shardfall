@@ -39,7 +39,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 
 | id | title | owner | branch | files / folders | status | PR |
 |---|---|---|---|---|---|---|
-| T-015 | Shard Pass premium wiring, kept off, and 4x4 board polish | HELPER | `helper/shard-pass-9721` | `src/ReplicatedStorage/Shared/Loops.luau`, `src/ServerScriptService/ShardfallServer/LoopService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/LoopHud.luau`, `tests/Loops.spec.luau`, `docs/design/shardfall_loops.md`. `Loops.PREMIUM_ENABLED` stays `false`. | claimed | — |
+| T-015 | Shard Pass premium wiring, kept off, and 4x4 board polish | HELPER | `helper/shard-pass-9721` | `src/ReplicatedStorage/Shared/Loops.luau`, `src/ServerScriptService/ShardfallServer/LoopService.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/LoopHud.luau`, `tests/Loops.spec.luau`, `docs/design/shardfall_loops.md`. `Loops.PREMIUM_ENABLED` stays `false`. No build stamp: the stamp lines live in GHOST files. Snippets are in the T-015 hooks section. | claimed | — |
 | T-016 | Session-recap string on the victory card | HELPER | `helper/session-recap-9721` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/SessionRecap.luau`, `tests/Progression.spec.luau` (recap string only). Read `Progression.recap` in `src/ReplicatedStorage/Shared/Progression.luau`. The victory card is drawn in `CombatHud.luau` (T-001). Add a call site there only after a note on this row. | claimed | — |
 
 `src/ReplicatedStorage/Shared/Pets.luau` and `src/ServerScriptService/ShardfallServer/PetService.luau` stay with the shipped hatchery. T-014 adds new modules beside them. Edit those two only after a note on T-014.
@@ -512,6 +512,118 @@ Use the same `hasteAttack` call for `state.nextCompanion`. Pass the gear attack 
 `tests/run.luau` requires `./EnemyAbilities.spec` on this branch.
 
 Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+### T-015 hooks for GHOST
+
+HELPER did not edit `ReceiptService.luau`, `Remotes.luau`, `RateLimiter.luau`, `Schema.luau`, `init.server.luau`, `init.client.luau`, or `default.project.json`. `Loops.PREMIUM_ENABLED` stays `false`. Product ids stay `0`. While that is true, `LoopService.grantPremium`, `claimPremium`, and `skipTier` refuse and write nothing. `LoopHud` is already mounted from `init.client.luau`. No new `begin()` line: `LoopService` has no `start()`, and `ReceiptService.start()` already runs inside `begin()` after `DataService.start()`.
+
+Do not read `MarketplaceService.ProcessReceipt`. The new branch below sits inside the existing assignment in `ReceiptService.start`. A `false` from `grantPremium` must stay `NotProcessedYet`, or a real purchase is swallowed.
+
+`ReceiptService.luau`, with the other requires:
+
+```lua
+local Loops = require(game:GetService("ReplicatedStorage").Shared.Loops)
+local LoopService = require(script.Parent.LoopService)
+```
+
+Inside the existing `ProcessReceipt = function(receipt)` callback, after the player and `PurchaseId` checks and in place of the "nothing is sold yet" return:
+
+```lua
+			if Loops.productKind(receipt.ProductId) ~= nil then
+				if LoopService.grantPremium(player, receipt.PurchaseId, receipt.ProductId) then
+					return Enum.ProductPurchaseDecision.PurchaseGranted
+				end
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+```
+
+Publish by assigning the module fields from `ReceiptService.start`, before the callback. Leave the source values in `Loops.luau` at `false` and `0`. Do not edit `Loops.luau` to flip the switch.
+
+```lua
+Loops.PASS_PRODUCT_ID = 0 -- published developer product id for the 400 Robux pass
+Loops.ARCHIVE_PRODUCT_ID = 0 -- published id for the archive pass, 480 Robux
+Loops.PREMIUM_ENABLED = true
+```
+
+Both ids must be positive and different. The archive grants the same track and does not refund more than 400 Gems. A duplicate `PurchaseId` returns granted and does not pay twice.
+
+`default.project.json`, inside `ReplicatedStorage.Remotes`, next to `PremiumPass`:
+
+```json
+        "ShardPass": { "$className": "RemoteFunction" },
+```
+
+`RateLimiter.luau` `RULES`. A remote with no rule is rejected:
+
+```lua
+	ShardPass = { capacity = 4, perSecond = 1 },
+```
+
+`Remotes.luau` already requires `LoopService`. Inside `Remotes.bind`, next to `PremiumPass`. There is no mentor action. Clients must not grant Second Chance.
+
+```lua
+	functionRemote("ShardPass").OnServerInvoke = function(player, action)
+		return guard(player, "ShardPass", function()
+			if action == "retry" then
+				return LoopService.retry(player)
+			end
+			if action == "shuffle" then
+				return LoopService.shuffle(player)
+			end
+			if action == "claim" then
+				return LoopService.claimPremium(player)
+			end
+			if action == "skip" then
+				return LoopService.skipTier(player)
+			end
+			if action == "overflow" then
+				return LoopService.overflow(player)
+			end
+			return { ok = false, error = "Unknown pass action." }
+		end)
+	end
+```
+
+| Remote | action | payload |
+|---|---|---|
+| ShardPass | `retry` | `nil` |
+| ShardPass | `shuffle` | `nil` |
+| ShardPass | `claim` | `nil` |
+| ShardPass | `skip` | `nil` |
+| ShardPass | `overflow` | `nil` |
+
+`PremiumPass` already calls `LoopService.premium()`. While the switch is off it returns `{ ok = false, error = "The premium track is not for sale yet." }`. When the switch is on and the pass id is positive it returns `productId`, `archiveProductId`, `robux`, and `archiveRobux`. The Pass button prompts only in that case. It calls `PromptProductPurchase`. It does not read `ProcessReceipt`.
+
+Server-only, not a remote: `LoopService.noteMentor(player, allyUserId, allyLevel, allyNew)`. Credit requires a different player who is level 1 to 9, or `allyNew == true`. There is no party roster in `DungeonService` today. Do not scan the server. Call it from a real ally on that clear once a party exists. Until then Second Chance stays 0 and Retry / Shuffle refuse.
+
+`LoopHud` does not call `ShardPass` yet. `WaitForChild` on a missing remote would hang the button. After `ShardPass` exists, the client calls are `invoke("ShardPass", "retry")`, `"shuffle"`, `"claim"`, `"skip"`, and `"overflow"`.
+
+Schema can stay at version 20 for this merge. `passPremium`, `passPremiumClaimed`, `passCosmetics`, `passOverflow`, and `boardChance` are written on the profile and `reconcile` keeps unknown keys, so they survive a save. They are not in `Schema.snapshot`. Before you set `PREMIUM_ENABLED`, add these fields so the client can see ownership and Second Chance. Suggested version 21, in `ProfileData`, `template()`, and `if version < 21` in `migrate`:
+
+```lua
+passPremium: boolean,
+passPremiumClaimed: number,
+passCosmetics: { [string]: boolean },
+passOverflow: number,
+boardChance: number,
+```
+
+Defaults: `passPremium = false`, `passPremiumClaimed = 0`, `passCosmetics = {}`, `passOverflow = 0`, `boardChance = 0`. In `snapshot`:
+
+```lua
+passPremium = data.passPremium == true,
+passPremiumClaimed = data.passPremiumClaimed or 0,
+passCosmetics = Schema.deepCopy(data.passCosmetics or {}),
+passOverflow = data.passOverflow or 0,
+boardChance = data.boardChance or 0,
+```
+
+No power fields. Premium rewards are skins, pet hats, trails, one weapon VFX, one emote, and 400 Gems by tier 50. Tier 50 (`pass_skin_nightmare`) also needs `nightmareBest >= 1`. A skip costs 80 Gems and still cannot mint that skin.
+
+`tests/run.luau` already requires `./Loops.spec`. No new spec line.
+
+Build stamp files are T-012. This branch does not change them. The stamp lines are in files other in-flight branches are editing, and prior HELPER branches skipped the stamp the same way.
 
 ## Open
 

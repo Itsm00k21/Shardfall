@@ -1,16 +1,21 @@
 --!strict
 
 --[[
-	Dailies, weeklies, the Shard Board, and the free Shard Pass.
+	Dailies, weeklies, the Shard Board, and the Shard Pass.
 
 	The client asks to reroll, claim, or start the daily boss. Progress is
 	counted here when a room, dodge, hatch, forge, or pet action lands.
-	Premium purchase stays refused until the pass is published.
+	Seals land on random cells, up to nine a week.
+
+	Premium grants, claims, and tier skips refuse while
+	Loops.PREMIUM_ENABLED is false. ReceiptService is the only caller that
+	should grant the pass, and only after GHOST wires the product id.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local Economy = require(ReplicatedStorage.Shared.Economy)
 local Loops = require(ReplicatedStorage.Shared.Loops)
 local DataService = require(script.Parent.DataService)
 
@@ -51,8 +56,9 @@ function LoopService.progress(player: Player, id: string, amount: number)
 			if type(data.board) ~= "table" then
 				data.board = Loops.board()
 			end
-			for _ = 1, finished do
-				local total = Loops.sealNext(data.board)
+			local stamp = player.UserId + Loops.dayNumber(now)
+			for step = 1, finished do
+				local total = Loops.placeSeal(data.board, stamp + step * 17)
 				if total > lines then
 					payLines(data, lines, total)
 					lines = total
@@ -183,8 +189,185 @@ function LoopService.claim(player: Player)
 end
 
 function LoopService.premium()
-	local _open, reason = Loops.premium()
-	return { ok = false, error = reason }
+	local open, reason = Loops.premium()
+	if not open then
+		return { ok = false, error = reason }
+	end
+	if Loops.PASS_PRODUCT_ID <= 0 then
+		return { ok = false, error = "The premium track is not for sale yet." }
+	end
+	return {
+		ok = true,
+		productId = Loops.PASS_PRODUCT_ID,
+		archiveProductId = Loops.ARCHIVE_PRODUCT_ID,
+		robux = Loops.PASS_ROBUX,
+		archiveRobux = Loops.archiveRobux(),
+	}
+end
+
+local function applyPremium(data, reward)
+	if type(reward) ~= "table" then
+		return
+	end
+	if type(reward.gems) == "number" and reward.gems > 0 then
+		Economy.grant(data, "gems", reward.gems, "shard_pass")
+	end
+	if type(reward.id) == "string" and reward.id ~= "" then
+		if type(data.passCosmetics) ~= "table" then
+			data.passCosmetics = {}
+		end
+		data.passCosmetics[reward.id] = true
+	end
+end
+
+local function raiseLines(data, before: number, total: number)
+	if total > before then
+		payLines(data, before, total)
+		data.boardLines = total
+	end
+end
+
+-- Server only. A client remote must not call this or players can mint points.
+function LoopService.noteMentor(player: Player, allyUserId: any, allyLevel: any, allyNew: any)
+	if not Loops.mentorCredit(player.UserId, allyUserId, allyLevel, allyNew) then
+		return
+	end
+	DataService.mutate(player, function(data)
+		Loops.refresh(data, os.time(), player.UserId)
+		if type(data.board) ~= "table" then
+			data.board = Loops.board()
+		end
+		local granted, points = Loops.grantChance(data.boardChance)
+		if granted then
+			data.boardChance = points
+		end
+		return nil
+	end)
+end
+
+function LoopService.retry(player: Player)
+	local ok, err = DataService.mutate(player, function(data)
+		local now = os.time()
+		Loops.refresh(data, now, player.UserId)
+		if type(data.board) ~= "table" then
+			data.board = Loops.board()
+		end
+		local before = data.boardLines or 0
+		local worked, text, total, points =
+			Loops.retry(data.board, player.UserId + now, data.boardChance)
+		if not worked then
+			return text
+		end
+		data.boardChance = points
+		raiseLines(data, before, total)
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not retry that seal.")
+	end
+	return { ok = true, profile = DataService.snapshot(player) }
+end
+
+function LoopService.shuffle(player: Player)
+	local ok, err = DataService.mutate(player, function(data)
+		local now = os.time()
+		Loops.refresh(data, now, player.UserId)
+		if type(data.board) ~= "table" then
+			data.board = Loops.board()
+		end
+		local before = data.boardLines or 0
+		local worked, text, total, points =
+			Loops.shuffle(data.board, player.UserId + now, data.boardChance)
+		if not worked then
+			return text
+		end
+		data.boardChance = points
+		raiseLines(data, before, total)
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not shuffle the board.")
+	end
+	return { ok = true, profile = DataService.snapshot(player) }
+end
+
+-- ReceiptService calls this from its existing ProcessReceipt assignment.
+-- False means leave the purchase pending. Never read ProcessReceipt here.
+function LoopService.grantPremium(player: Player, receiptId: any, productId: any): boolean
+	if Loops.PREMIUM_ENABLED ~= true then
+		return false
+	end
+	local accepted = false
+	local saved = DataService.mutate(player, function(data)
+		local granted, _duplicate, reason = Loops.grantPremium(data, receiptId, productId)
+		if not granted then
+			return reason
+		end
+		accepted = true
+		return nil
+	end)
+	return saved and accepted
+end
+
+function LoopService.claimPremium(player: Player)
+	if Loops.PREMIUM_ENABLED ~= true then
+		return reject("The premium track is not for sale yet.")
+	end
+	local ok, err = DataService.mutate(player, function(data)
+		local claimed, reward, ready, reason = Loops.claimPremium(
+			data.passXp or 0,
+			data.passPremiumClaimed or 0,
+			data.passPremium == true,
+			data.nightmareBest or 0
+		)
+		if not ready then
+			return reason
+		end
+		data.passPremiumClaimed = claimed
+		applyPremium(data, reward)
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not claim that tier.")
+	end
+	return { ok = true, profile = DataService.snapshot(player) }
+end
+
+function LoopService.skipTier(player: Player)
+	if Loops.PREMIUM_ENABLED ~= true then
+		return reject("The premium track is not for sale yet.")
+	end
+	local ok, err = DataService.mutate(player, function(data)
+		local total, gemsLeft, ready, reason =
+			Loops.skipTier(data.passXp or 0, data.gems or 0, data.passPremium == true)
+		if not ready then
+			return reason
+		end
+		data.passXp = total
+		data.gems = gemsLeft
+		Economy.log(data, "shard_pass_skip", "gems", -Loops.SKIP_GEMS, gemsLeft)
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not skip that tier.")
+	end
+	return { ok = true, profile = DataService.snapshot(player) }
+end
+
+function LoopService.overflow(player: Player)
+	local ok, err = DataService.mutate(player, function(data)
+		local caches, gain, ready = Loops.overflow(data.passXp or 0, data.passOverflow or 0)
+		if not ready then
+			return "No key cache is ready."
+		end
+		data.passOverflow = caches
+		Economy.grant(data, "shardKeys", gain, "pass_overflow")
+		return nil
+	end)
+	if not ok then
+		return reject(err or "No key cache is ready.")
+	end
+	return { ok = true, profile = DataService.snapshot(player) }
 end
 
 return LoopService
