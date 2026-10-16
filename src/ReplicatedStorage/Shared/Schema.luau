@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 15.
+	The player profile shape, version 16.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -25,7 +25,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 15
+Schema.VERSION = 16
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -142,6 +142,10 @@ export type ProfileData = {
 	lastSeen: number,
 	milestoneTitle: string,
 	welcomeNote: string,
+	gems: number,
+	eventTokens: number,
+	ledger: { any },
+	receipts: { [string]: boolean },
 }
 
 function Schema.template(): ProfileData
@@ -216,6 +220,10 @@ function Schema.template(): ProfileData
 		lastSeen = 0,
 		milestoneTitle = "",
 		welcomeNote = "",
+		gems = 0,
+		eventTokens = 0,
+		ledger = {},
+		receipts = {},
 	}
 end
 
@@ -363,6 +371,14 @@ function Schema.reconcile(data: any): ProfileData
 	if type(data.welcomeNote) ~= "string" then
 		data.welcomeNote = ""
 	end
+	data.gems = wholeNumber(data.gems, 0, 0)
+	data.eventTokens = wholeNumber(data.eventTokens, 0, 0)
+	if type(data.ledger) ~= "table" then
+		data.ledger = {}
+	end
+	if type(data.receipts) ~= "table" then
+		data.receipts = {}
+	end
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -467,6 +483,11 @@ function Schema.reconcile(data: any): ProfileData
 			sockets = 6
 		end
 		item.sockets = sockets
+		local upgrade = wholeNumber(item.upgrade, 0, 0)
+		if upgrade > 10 then
+			upgrade = 10
+		end
+		item.upgrade = upgrade
 		Stars.applyStats(item)
 	end
 	for _, item in pairs(data.inventory) do
@@ -780,6 +801,15 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 15
 	end
 
+	if version < 16 then
+		raw.gems = 0
+		raw.eventTokens = 0
+		raw.ledger = {}
+		raw.receipts = {}
+		raw.schemaVersion = 16
+		version = 16
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -985,6 +1015,8 @@ function Schema.snapshot(data: ProfileData)
 		lastSeen = data.lastSeen,
 		milestoneTitle = data.milestoneTitle,
 		welcomeNote = data.welcomeNote,
+		gems = data.gems,
+		eventTokens = data.eventTokens,
 	}
 end
 

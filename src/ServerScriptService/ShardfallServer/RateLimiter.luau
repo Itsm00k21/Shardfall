@@ -52,6 +52,7 @@ local RULES: { [string]: Rule } = {
 	PickTalent = { capacity = 4, perSecond = 1 },
 	UseSkill = { capacity = 6, perSecond = 3 },
 	Onboard = { capacity = 4, perSecond = 1 },
+	UpgradeGear = { capacity = 4, perSecond = 1 },
 	Dungeon = { capacity = 4, perSecond = 1 },
 	Craft = { capacity = 4, perSecond = 1 },
 	Salvage = { capacity = 4, perSecond = 1 },

@@ -475,6 +475,12 @@ function Remotes.bind()
 		end
 	end)
 
+	functionRemote("UpgradeGear").OnServerInvoke = function(player, uid)
+		return guard(player, "UpgradeGear", function()
+			return CraftService.upgrade(player, uid)
+		end)
+	end
+
 	functionRemote("Onboard").OnServerInvoke = function(player, action)
 		return guard(player, "Onboard", function()
 			if action == "skip" then

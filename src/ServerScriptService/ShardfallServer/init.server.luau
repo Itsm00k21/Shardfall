@@ -66,6 +66,7 @@ local ClassService = require(script.ClassService)
 local DataService = require(script.DataService)
 local DungeonService = require(script.DungeonService)
 local PolicyCache = require(script.PolicyCache)
+local ReceiptService = require(script.ReceiptService)
 local Remotes = require(script.Remotes)
 local RollService = require(script.RollService)
 
@@ -95,6 +96,7 @@ CombatService.bindHooks({
 		return DungeonService.isInRun(player)
 	end,
 })
+ReceiptService.start()
 ClassService.start()
 CombatService.bindPlayerHit(function(player)
 	ClassService.onHit(player)

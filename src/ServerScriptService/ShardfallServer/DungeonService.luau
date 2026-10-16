@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local Economy = require(ReplicatedStorage.Shared.Economy)
 local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Drops = require(ReplicatedStorage.Shared.Drops)
@@ -114,6 +115,7 @@ local runs: { [Player]: Run } = {}
 local touchAt: { [Player]: number } = {}
 local fallAt: { [Player]: number } = {}
 local farmOn: { [Player]: boolean } = {}
+local farmSince: { [Player]: number } = {}
 local restartAt: { [Player]: Restart } = {}
 local idleNoted: { [Player]: boolean } = {}
 local nextEnemyId = 0
@@ -843,7 +845,17 @@ local function grant(
 	local bonus = CombatMath.bonusGold(rolled.gold, goldFind)
 	local levels = 0
 	local ok, err = DataService.mutate(player, function(data)
-		data.gold += rolled.gold + bonus
+		local elapsed = 0
+		if farmSince[player] ~= nil then
+			elapsed = os.clock() - farmSince[player]
+		end
+		local paid, _, stopFarm =
+			Economy.farmPayout(rolled.gold + bonus, farmOn[player] == true, elapsed)
+		if stopFarm then
+			farmOn[player] = false
+		end
+		data.gold += paid
+		Economy.log(data, "dungeon_clear", "gold", paid, data.gold)
 		data.shardTokens += rolled.shardTokens
 		levels = Progression.addXp(data, rolled.xp)
 		for materialId, count in pairs(rolled.materials) do
@@ -1573,8 +1585,13 @@ end
 
 function DungeonService.setAutoFarm(player: Player, enabled: boolean)
 	farmOn[player] = enabled
-	if not enabled then
+	if enabled then
+		if farmSince[player] == nil then
+			farmSince[player] = os.clock()
+		end
+	else
 		restartAt[player] = nil
+		farmSince[player] = nil
 	end
 end
 

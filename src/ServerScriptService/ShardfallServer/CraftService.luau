@@ -12,6 +12,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Crafting = require(ReplicatedStorage.Shared.Crafting)
+local Economy = require(ReplicatedStorage.Shared.Economy)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local DataService = require(script.Parent.DataService)
 
@@ -118,6 +119,26 @@ function CraftService.salvageRarity(player: Player, rarity: any)
 			craftingLevel = captured.craftingLevel,
 		},
 	}
+end
+
+function CraftService.upgrade(player: Player, uid: any)
+	if type(uid) ~= "string" or uid == "" then
+		return reject("Pick a piece of gear.")
+	end
+	local note = ""
+	local ok, err = DataService.mutate(player, function(data)
+		local item = data.inventory[uid]
+		local upgraded, reason = Economy.upgrade(item, data)
+		if not upgraded then
+			return reason
+		end
+		note = reason
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not upgrade that.")
+	end
+	return { ok = true, note = note, profile = DataService.snapshot(player) }
 end
 
 return CraftService
