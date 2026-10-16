@@ -28,6 +28,7 @@ local UserInputService = game:GetService("UserInputService")
 local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
+local RollReel = require(script.RollReel)
 local ThumbBar = require(script.ThumbBar)
 local TravelHud = require(script.TravelHud)
 local Ui = require(script.Ui)
@@ -82,6 +83,7 @@ end
 
 local shownOddsKey: string? = nil
 local ui
+local rollReel
 local inventory
 local travel
 local thumb
@@ -147,10 +149,12 @@ local function oddsKey(profile: any): string
 		end
 	end
 	return string.format(
-		"%s:%s:%s:%s",
+		"%s:%s:%s:%s:%s:%s",
 		selectedPoolId,
 		tostring(profile.shardLuck or 0),
 		tostring(profile.luckBoost or 0),
+		tostring(profile.shardRolls or 0),
+		tostring(profile.vip == true),
 		tostring(since)
 	)
 end
@@ -171,6 +175,10 @@ local function applyProfile(profile: any, saving: any)
 	VerdantLod.setTier(tier)
 	if thumb ~= nil then
 		thumb.setGraphics(Quality.label(tier))
+	end
+	if rollReel ~= nil then
+		rollReel.setProfile(profile)
+		rollReel.setTier(tier)
 	end
 	if Quality.normalize(profile.graphicsQuality) == nil and not graphicsSent then
 		graphicsSent = true
@@ -205,45 +213,14 @@ end
 ui = Ui.mount(playerGui, {
 	showDev = RunService:IsStudio(),
 	onCrack = function()
-		ui.setBusy(true)
-		ui.setStatus("Cracking a shard...", "info")
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("RollShard", selectedPoolId)
-			end)
-			ui.setBusy(false)
-			local message = remoteError(ok, result, "Roll failed.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			ui.showRoll(result)
-			local item = (result :: any).item
-			local name = if type(item) == "table" then item.name else "a drop"
-			ui.setStatus("Received " .. tostring(name) .. ".", "ok")
-		end)
+		if rollReel ~= nil then
+			rollReel.request(false)
+		end
 	end,
 	onPaid = function()
-		ui.setStatus("Cracking with a Prism Token...", "info")
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("RollPaid", selectedPoolId)
-			end)
-			local message = remoteError(ok, result, "Prism crack blocked.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-			else
-				applyResult(result)
-				ui.showRoll(result)
-				local item = (result :: any).item
-				local name = if type(item) == "table" then item.name else "a drop"
-				ui.setStatus("Received " .. tostring(name) .. " for a Prism Token.", "ok")
-			end
-			if ok and type(result) == "table" and message ~= nil then
-				applyResult(result)
-			end
-		end)
+		if rollReel ~= nil then
+			rollReel.request(true)
+		end
 	end,
 	onBuyPrism = function()
 		ui.setStatus(Currencies.packPitch(), "info")
@@ -438,6 +415,38 @@ ui = Ui.mount(playerGui, {
 			ui.setAutoAttack(flag == true)
 			ui.setStatus(if flag == true then "Auto Attack on." else "Auto Attack off.", "ok")
 		end)
+	end,
+})
+
+rollReel = RollReel.mount(playerGui, {
+	invoke = invoke,
+	remoteError = remoteError,
+	getPoolId = function()
+		return selectedPoolId
+	end,
+	applyResult = applyResult,
+	setStatus = function(text: string, kind: string)
+		ui.setStatus(text, kind)
+	end,
+	setBusy = function(isBusy: boolean)
+		ui.setBusy(isBusy)
+	end,
+	onEquip = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("EquipItem", uid)
+			end)
+			local message = remoteError(ok, result, "Could not equip that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Equipped.", "ok")
+		end)
+	end,
+	tier = function()
+		return graphicsTier
 	end,
 })
 
@@ -746,6 +755,9 @@ local policyEvent = (remotes :: Instance):WaitForChild("PolicyUpdated")
 if policyEvent:IsA("RemoteEvent") then
 	policyEvent.OnClientEvent:Connect(function(policy)
 		ui.setPolicy(policy)
+		if rollReel ~= nil then
+			rollReel.setPolicy(policy)
+		end
 	end)
 end
 

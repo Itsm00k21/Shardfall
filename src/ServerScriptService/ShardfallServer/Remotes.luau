@@ -28,8 +28,8 @@ local TravelService = require(script.Parent.TravelService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local Quality = require(ReplicatedStorage.Shared.Quality)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
+local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
 local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
-local RollMath = require(ReplicatedStorage.Shared.RollMath)
 
 local Remotes = {}
 
@@ -149,28 +149,17 @@ function Remotes.bind()
 				return { ok = false, error = "Unknown shard." }
 			end
 			local data = DataService.get(player)
-			local luck = if data ~= nil then data.shardLuck else 0
-			local boost = if data ~= nil then data.luckBoost else 0
-			local since = 0
-			if data ~= nil and type(data.pity) == "table" then
-				local bucket = data.pity[pool.id]
-				if type(bucket) == "table" and type(bucket.rollsSinceLegendary) == "number" then
-					since = bucket.rollsSinceLegendary
-				end
-			end
+			local luck = RarityConfig.luckFromProfile(data)
 			return {
 				ok = true,
-				odds = RollMath.odds(pool, luck, {
-					rollsSinceLegendary = since,
-					luckBoost = boost,
-				}),
+				odds = RarityConfig.disclose(pool, luck),
 			}
 		end)
 	end
 
-	functionRemote("RollShard").OnServerInvoke = function(player, poolId)
+	functionRemote("RollShard").OnServerInvoke = function(player, poolId, skip)
 		return guard(player, "RollShard", function()
-			return RollService.rollFree(player, poolId)
+			return RollService.rollFree(player, poolId, skip == true)
 		end)
 	end
 
@@ -186,9 +175,9 @@ function Remotes.bind()
 		end)
 	end
 
-	functionRemote("RollPaid").OnServerInvoke = function(player, poolId)
+	functionRemote("RollPaid").OnServerInvoke = function(player, poolId, skip)
 		return guard(player, "RollPaid", function()
-			return RollService.rollPaid(player, poolId)
+			return RollService.rollPaid(player, poolId, skip == true)
 		end)
 	end
 
@@ -295,6 +284,15 @@ function Remotes.bind()
 	functionRemote("BuyTravelPass").OnServerInvoke = function(player)
 		return guard(player, "BuyTravelPass", function()
 			return TravelService.buyPass(player)
+		end)
+	end
+
+	functionRemote("SetShake").OnServerInvoke = function(player, enabled)
+		return guard(player, "SetShake", function()
+			if type(enabled) ~= "boolean" then
+				return { ok = false, error = "Shake must be on or off." }
+			end
+			return RollService.setShake(player, enabled)
 		end)
 	end
 

@@ -25,7 +25,9 @@ type Bucket = {
 }
 
 local RULES: { [string]: Rule } = {
-	RollShard = { capacity = 3, perSecond = 1 },
+	-- The shard reel's real gate is RollService's 0.6s / 1.0s clock.
+	-- This bucket only stops a burst from outrunning that clock.
+	RollShard = { capacity = 4, perSecond = 2 },
 	RollPaid = { capacity = 2, perSecond = 0.5 },
 	BuyPrism = { capacity = 2, perSecond = 0.5 },
 	BuyBoost = { capacity = 2, perSecond = 0.5 },
@@ -52,6 +54,7 @@ local RULES: { [string]: Rule } = {
 	FeedItem = { capacity = 4, perSecond = 2 },
 	SetAutoAttack = { capacity = 4, perSecond = 1 },
 	SetAutoFarm = { capacity = 4, perSecond = 1 },
+	SetShake = { capacity = 4, perSecond = 1 },
 	-- Refreshed while the player is holding a move key.
 	Steer = { capacity = 8, perSecond = 4 },
 }

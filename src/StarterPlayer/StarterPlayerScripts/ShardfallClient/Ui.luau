@@ -36,6 +36,7 @@ local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
+local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 local Recipes = require(Shared:WaitForChild("Recipes"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
 local Stats = require(Shared:WaitForChild("Stats"))
@@ -622,7 +623,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
-		Text = RollMath.pityText(0, 50),
+		Text = RarityConfig.pityLine(0, 0),
 		LayoutOrder = 5,
 	}, panel) :: TextLabel
 
@@ -1220,12 +1221,15 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end)
 
 	local function paintPaid()
-		local showPaid = policyState.paidRolls == true
+		local showPaid = RarityConfig.PAID_LUCK_ENABLED and policyState.paidRolls == true
 		regionLabel.Visible = not showPaid
-		regionLabel.Text = if type(policyState.message) == "string"
-				and policyState.message ~= ""
-			then policyState.message
-			else "Paid random items are unavailable in your region."
+		local regionText = RarityConfig.REGION_MESSAGE
+		if not RarityConfig.PAID_LUCK_ENABLED then
+			regionText = RarityConfig.PAID_OFF_MESSAGE
+		elseif policyState.ready ~= true and type(policyState.message) == "string" then
+			regionText = policyState.message
+		end
+		regionLabel.Text = regionText
 		prismButton.Visible = showPaid
 		buyPrism.Visible = showPaid
 		boostLabel.Visible = showPaid
@@ -1283,18 +1287,20 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local function renderPity(profile: any)
-		local goal = 50
-		local current = 0
-		if selectedPool ~= nil then
-			goal = selectedPool.pityLegendaryAt or 50
-			if type(profile.pity) == "table" and type(profile.pity[selectedPool.id]) == "table" then
-				current = profile.pity[selectedPool.id].rollsSinceLegendary or 0
+		local epic = 0
+		local legendary = 0
+		if type(profile) == "table" then
+			if type(profile.sinceEpic) == "number" then
+				epic = profile.sinceEpic
+			end
+			if type(profile.sinceLegendary) == "number" then
+				legendary = profile.sinceLegendary
 			end
 		end
-		pityLabel.Text = RollMath.pityText(current, goal)
+		pityLabel.Text = RarityConfig.pityLine(epic, legendary)
 		local ratio = 0
-		if goal > 0 then
-			ratio = math.clamp(current / goal, 0, 1)
+		if RarityConfig.LEGENDARY_PITY > 0 then
+			ratio = math.clamp(legendary / RarityConfig.LEGENDARY_PITY, 0, 1)
 		end
 		pityFill.Size = UDim2.fromScale(ratio, 1)
 	end
@@ -1961,14 +1967,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		heading(areaName .. "  ·  totals")
 		if type(odds.rarities) == "table" then
 			for _, rarityRow in ipairs(odds.rarities) do
-				row(
-					string.format(
-						"%s    %s",
+				local chanceText = RollMath.formatChance(rarityRow.chance)
+				local text = if type(rarityRow.oneIn) == "number"
+					then string.format(
+						"%s    1 in %d    %s",
 						rarityRow.rarity,
-						RollMath.formatChance(rarityRow.chance)
-					),
-					rarityRow.rarity
-				)
+						rarityRow.oneIn,
+						chanceText
+					)
+					else string.format("%s    %s", rarityRow.rarity, chanceText)
+				row(text, rarityRow.rarity)
 			end
 		end
 		heading("Each drop")

@@ -14,6 +14,9 @@
         "RollShard": {
           "$className": "RemoteFunction"
         },
+        "RollAnnounce": {
+          "$className": "RemoteEvent"
+        },
         "RollPaid": {
           "$className": "RemoteFunction"
         },
@@ -99,6 +102,9 @@
           "$className": "RemoteFunction"
         },
         "SetGraphicsQuality": {
+          "$className": "RemoteFunction"
+        },
+        "SetShake": {
           "$className": "RemoteFunction"
         },
         "HavenPrompt": {

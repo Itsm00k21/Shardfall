@@ -3,23 +3,26 @@
 --[[
 	Server-authoritative shard rolls.
 
-	rollFree spends one shard token and rolls with RollMath. The client only
-	sends a pool id. The item, the pity update, and the token spend happen
-	inside DataService.mutate, which rolls back if anything fails.
+	The client sends a pool id and, when Quick Roll is on, a skip flag.
+	This module checks the cooldown, reads luck from the saved profile,
+	draws with Random.new, updates pity, and saves the item. The client
+	never picks the shard.
 
-	rollPaid spends one Prism Token after the cached policy check. It does
-	not charge Robux. buyPrismPack and buyLuckBoost are the Robux stubs:
-	they show the numeric offer, then refuse. Wire developer products there
-	later, and only after PolicyCache.allowPaid returns true.
+	rollFree spends one shard token. rollPaid spends one Prism Token after
+	the cached policy check and the paid-luck kill switch. Neither charges
+	Robux. buyPrismPack and buyLuckBoost are the Robux stubs.
 ]]
 
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
+local Rarities = require(ReplicatedStorage.Shared.Rarities)
+local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local DataService = require(script.Parent.DataService)
@@ -27,9 +30,105 @@ local PolicyCache = require(script.Parent.PolicyCache)
 
 local RollService = {}
 
+local lastRoll: { [number]: number } = {}
+local announcementsBound = false
+
 local function reject(message: string)
 	return { ok = false, error = message }
 end
+
+-- Roblox Random. The outcome never comes from math.random or the client.
+local function serverRng()
+	local rng = Random.new()
+	return {
+		nextNumber = function(_self)
+			return rng:NextNumber()
+		end,
+		nextInteger = function(_self, minimum: number, maximum: number)
+			return rng:NextInteger(minimum, maximum)
+		end,
+	}
+end
+
+local function announceRemote(): RemoteEvent?
+	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	if folder == nil then
+		return nil
+	end
+	local remote = folder:FindFirstChild("RollAnnounce")
+	if remote ~= nil and remote:IsA("RemoteEvent") then
+		return remote
+	end
+	return nil
+end
+
+local function broadcast(name: string, shard: string, rarity: string, crossServer: boolean)
+	local remote = announceRemote()
+	if remote == nil then
+		return
+	end
+	remote:FireAllClients({
+		text = string.format("%s rolled %s (%s)", name, shard, rarity),
+		rarity = rarity,
+		crossServer = crossServer,
+	})
+end
+
+local function publishMythic(name: string, shard: string, rarity: string)
+	local ok, err = pcall(function()
+		local MessagingService = game:GetService("MessagingService")
+		MessagingService:PublishAsync(
+			RarityConfig.TOPIC,
+			HttpService:JSONEncode({
+				jobId = game.JobId,
+				name = name,
+				shard = shard,
+				rarity = rarity,
+			})
+		)
+	end)
+	if not ok then
+		warn("[Roll] cross-server announce failed: " .. tostring(err))
+	end
+end
+
+function RollService.bindAnnouncements()
+	if announcementsBound then
+		return
+	end
+	announcementsBound = true
+	local ok, err = pcall(function()
+		local MessagingService = game:GetService("MessagingService")
+		MessagingService:SubscribeAsync(RarityConfig.TOPIC, function(message)
+			local payload = message.Data
+			if type(payload) == "string" then
+				local decoded, data = pcall(function()
+					return HttpService:JSONDecode(payload)
+				end)
+				payload = if decoded then data else nil
+			end
+			if type(payload) ~= "table" then
+				return
+			end
+			if payload.jobId == game.JobId then
+				return
+			end
+			broadcast(
+				tostring(payload.name or "Someone"),
+				tostring(payload.shard or "a shard"),
+				tostring(payload.rarity or "Mythic"),
+				true
+			)
+		end)
+	end)
+	if not ok then
+		warn("[Roll] mythic announce subscribe failed: " .. tostring(err))
+	end
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	lastRoll[player.UserId] = nil
+end)
 
 local function poolFromClient(poolId: any)
 	if type(poolId) ~= "string" or string.match(poolId, "^[%w_]+$") == nil or #poolId > 64 then
@@ -42,10 +141,13 @@ local function poolFromClient(poolId: any)
 	return pool
 end
 
-local function crack(player: Player, poolId: any, currency: string)
+local function crack(player: Player, poolId: any, currency: string, skip: boolean)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")
+	end
+	if currency == Currencies.PRISM and not RarityConfig.PAID_LUCK_ENABLED then
+		return reject(RarityConfig.PAID_OFF_MESSAGE)
 	end
 	if currency == Currencies.PRISM then
 		local allowed, reason, code = PolicyCache.allowPaid(player)
@@ -58,8 +160,23 @@ local function crack(player: Player, poolId: any, currency: string)
 		end
 	end
 
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
+	end
+	local policyOk = false
+	local paidAllowed = PolicyCache.allowPaid(player)
+	policyOk = paidAllowed == true
+	local entitled = RarityConfig.quickEntitled(profile, os.time())
+	local quick = skip == true
+		and RarityConfig.quickAllowed(policyOk, RarityConfig.PAID_LUCK_ENABLED, entitled)
+	local previous = lastRoll[player.UserId]
+	local waitFor = RarityConfig.cooldown(quick)
+	if previous ~= nil and os.clock() - previous < waitFor then
+		return reject("Roll cooling down.")
+	end
+
 	local captured: any = nil
-	local pityAfter: any = nil
 	local ok, err = DataService.mutate(player, function(data)
 		if not Pools.isUnlocked(pool, data.ascension) then
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
@@ -86,40 +203,96 @@ local function crack(player: Player, poolId: any, currency: string)
 		if Schema.countItems(data) >= Schema.inventoryCap(data) then
 			return "Inventory is full."
 		end
-		local pity = Schema.pityBucket(data, pool.id)
-		local result = RollMath.roll(pool, pity, {
-			luck = Currencies.effectiveLuck(data.shardLuck, data.luckBoost),
-			-- GenerateGUID does not need HttpService.HttpEnabled.
+		local rng = serverRng()
+		local luck = RarityConfig.luckFromProfile(data)
+		local counters = {
+			sinceEpic = data.sinceEpic,
+			sinceLegendary = data.sinceLegendary,
+		}
+		local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
+		local entry = RarityConfig.chooseEntry(pool, rarity, rng)
+		if type(entry) ~= "table" or type(entry.templateId) ~= "string" then
+			return "That shard has nothing to roll."
+		end
+		local fillerSeed = rng:nextInteger(1, 2147483646)
+		local item = RollMath.mint(entry.templateId, {
 			uid = HttpService:GenerateGUID(false),
 			now = os.time(),
-		}, RollMath.defaultRng())
-		Schema.insertItem(data, result.item)
-		captured = result
-		pityAfter = {
-			rollsSinceLegendary = pity.rollsSinceLegendary,
-			totalRolls = pity.totalRolls,
-			pityLegendaryAt = pool.pityLegendaryAt,
+			poolId = pool.id,
+		}, rng)
+		Schema.insertItem(data, item)
+		RarityConfig.advance(counters, item.rarity, floor)
+		data.sinceEpic = counters.sinceEpic
+		data.sinceLegendary = counters.sinceLegendary
+		data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
+		local bucket = Schema.pityBucket(data, pool.id)
+		if Rarities.isLegendaryOrBetter(item.rarity) then
+			bucket.rollsSinceLegendary = 0
+		else
+			bucket.rollsSinceLegendary += 1
+		end
+		bucket.totalRolls += 1
+		captured = {
+			item = item,
+			pityTriggered = pityTriggered,
+			rarity = item.rarity,
+			fillerSeed = fillerSeed,
+			luck = luck,
+			rollIndex = data.shardRolls,
+			sinceEpic = data.sinceEpic,
+			sinceLegendary = data.sinceLegendary,
 		}
 		return nil
 	end)
 	if not ok or captured == nil then
 		return reject(err or "Could not crack that shard.")
 	end
+	lastRoll[player.UserId] = os.clock()
+	local reveal = RarityConfig.reveal(captured.rarity, quick)
+	if reveal.announce then
+		broadcast(player.Name, captured.item.name, captured.rarity, false)
+	end
+	if reveal.crossServer then
+		publishMythic(player.Name, captured.item.name, captured.rarity)
+	end
 	return {
 		ok = true,
 		item = captured.item,
+		shardId = captured.item.templateId,
+		rarity = captured.rarity,
+		rollIndex = captured.rollIndex,
+		fillerSeed = captured.fillerSeed,
+		luck = captured.luck,
+		quick = quick,
 		pityTriggered = captured.pityTriggered,
-		pity = pityAfter,
+		pity = {
+			sinceEpic = captured.sinceEpic,
+			sinceLegendary = captured.sinceLegendary,
+			epicAt = RarityConfig.EPIC_PITY,
+			legendaryAt = RarityConfig.LEGENDARY_PITY,
+			shardRolls = captured.rollIndex,
+		},
 		currency = currency,
 	}
 end
 
-function RollService.rollFree(player: Player, poolId: any)
-	return crack(player, poolId, Currencies.SHARD)
+function RollService.rollFree(player: Player, poolId: any, skip: any)
+	return crack(player, poolId, Currencies.SHARD, skip == true)
 end
 
-function RollService.rollPaid(player: Player, poolId: any)
-	return crack(player, poolId, Currencies.PRISM)
+function RollService.rollPaid(player: Player, poolId: any, skip: any)
+	return crack(player, poolId, Currencies.PRISM, skip == true)
+end
+
+function RollService.setShake(player: Player, enabled: boolean)
+	local ok, err = DataService.mutate(player, function(data)
+		data.shake = enabled == true
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not save the shake setting.")
+	end
+	return { ok = true }
 end
 
 local function paidStub(player: Player, pitch: string)
@@ -143,6 +316,9 @@ function RollService.buyPrismPack(player: Player)
 end
 
 function RollService.buyLuckBoost(player: Player)
+	if not RarityConfig.PAID_LUCK_ENABLED then
+		return reject(RarityConfig.PAID_OFF_MESSAGE)
+	end
 	local profile = DataService.get(player)
 	local active = if profile ~= nil then profile.luckBoost else 0
 	return paidStub(player, Currencies.boostPitch(active))
@@ -241,6 +417,26 @@ function RollService.devGrant(player: Player, kind: any)
 		end)
 		if not ok then
 			return reject(err or "Could not grant materials.")
+		end
+		return { ok = true }
+	end
+	if kind == "quick" then
+		local ok, err = DataService.mutate(player, function(data)
+			data.quickRoll = data.quickRoll ~= true
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not toggle Quick Roll.")
+		end
+		return { ok = true }
+	end
+	if kind == "vip" then
+		local ok, err = DataService.mutate(player, function(data)
+			data.vip = data.vip ~= true
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not toggle VIP.")
 		end
 		return { ok = true }
 	end

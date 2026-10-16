@@ -11,6 +11,7 @@ local process = require("@lune/process")
 local framework = require("./framework")
 
 require("./RollMath.spec")
+require("./RarityConfig.spec")
 require("./Schema.spec")
 require("./SessionLock.spec")
 require("./PaidRollPolicy.spec")

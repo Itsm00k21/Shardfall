@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 9.
+	The player profile shape, version 10.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -22,7 +22,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 9
+Schema.VERSION = 10
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -108,6 +108,13 @@ export type ProfileData = {
 	lastTravel: number,
 	travelPass: boolean,
 	graphicsQuality: string,
+	shardRolls: number,
+	sinceEpic: number,
+	sinceLegendary: number,
+	quickRoll: boolean,
+	quickRollUntil: number,
+	vip: boolean,
+	shake: boolean,
 }
 
 function Schema.template(): ProfileData
@@ -144,6 +151,13 @@ function Schema.template(): ProfileData
 		lastTravel = 0,
 		travelPass = false,
 		graphicsQuality = "",
+		shardRolls = 0,
+		sinceEpic = 0,
+		sinceLegendary = 0,
+		quickRoll = false,
+		quickRollUntil = 0,
+		vip = false,
+		shake = true,
 	}
 end
 
@@ -250,6 +264,16 @@ function Schema.reconcile(data: any): ProfileData
 	data.travelPass = data.travelPass == true
 	local quality = Quality.normalize(data.graphicsQuality)
 	data.graphicsQuality = if quality == nil then "" else quality
+	data.shardRolls = wholeNumber(data.shardRolls, 0, 0)
+	if data.shardRolls > 1000000000 then
+		data.shardRolls = 1000000000
+	end
+	data.sinceEpic = wholeNumber(data.sinceEpic, 0, 0)
+	data.sinceLegendary = wholeNumber(data.sinceLegendary, 0, 0)
+	data.quickRoll = data.quickRoll == true
+	data.quickRollUntil = wholeNumber(data.quickRollUntil, 0, 0)
+	data.vip = data.vip == true
+	data.shake = data.shake ~= false
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -514,6 +538,34 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 9
 	end
 
+	if version < 10 then
+		-- Global shard pity, the Quick Roll unlock, VIP, and the shake toggle.
+		-- Older per-pool pity stays where it is; these counters start fresh.
+		if type(raw.shardRolls) ~= "number" then
+			raw.shardRolls = 0
+		end
+		if type(raw.sinceEpic) ~= "number" then
+			raw.sinceEpic = 0
+		end
+		if type(raw.sinceLegendary) ~= "number" then
+			raw.sinceLegendary = 0
+		end
+		if raw.quickRoll ~= true then
+			raw.quickRoll = false
+		end
+		if type(raw.quickRollUntil) ~= "number" then
+			raw.quickRollUntil = 0
+		end
+		if raw.vip ~= true then
+			raw.vip = false
+		end
+		if raw.shake ~= false then
+			raw.shake = true
+		end
+		raw.schemaVersion = 10
+		version = 10
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -687,6 +739,13 @@ function Schema.snapshot(data: ProfileData)
 		lastTravel = data.lastTravel,
 		travelPass = data.travelPass,
 		graphicsQuality = data.graphicsQuality,
+		shardRolls = data.shardRolls,
+		sinceEpic = data.sinceEpic,
+		sinceLegendary = data.sinceLegendary,
+		quickRoll = data.quickRoll,
+		quickRollUntil = data.quickRollUntil,
+		vip = data.vip,
+		shake = data.shake,
 	}
 end
 

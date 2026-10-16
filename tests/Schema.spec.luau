@@ -359,5 +359,34 @@ describe("Schema", function()
 		})
 		assert(dropped ~= nil)
 		expect(dropped.graphicsQuality).toEqual("")
+		expect(dropped.schemaVersion).toEqual(Schema.VERSION)
+		expect(dropped.shardRolls).toEqual(0)
+		expect(dropped.sinceEpic).toEqual(0)
+		expect(dropped.sinceLegendary).toEqual(0)
+		expect(dropped.quickRoll).toEqual(false)
+		expect(dropped.vip).toEqual(false)
+		expect(dropped.shake).toEqual(true)
+		local pityCopy = Schema.snapshot(dropped)
+		expect(pityCopy.shardRolls).toEqual(0)
+		expect(pityCopy.shake).toEqual(true)
+
+		local keptRolls = Schema.migrate({
+			schemaVersion = 10,
+			shardRolls = 40,
+			sinceEpic = 12,
+			sinceLegendary = 400,
+			quickRoll = true,
+			vip = true,
+			shake = false,
+			gold = 2,
+		})
+		assert(keptRolls ~= nil)
+		expect(keptRolls.shardRolls).toEqual(40)
+		expect(keptRolls.sinceEpic).toEqual(12)
+		expect(keptRolls.sinceLegendary).toEqual(400)
+		expect(keptRolls.quickRoll).toEqual(true)
+		expect(keptRolls.vip).toEqual(true)
+		expect(keptRolls.shake).toEqual(false)
+		expect(keptRolls.gold).toEqual(2)
 	end)
 end)
