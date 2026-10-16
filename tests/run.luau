@@ -52,5 +52,6 @@ require("./VerdantVisuals.spec")
 require("./RootvaultSpawn.spec")
 require("./Stars.spec")
 require("./Trading.spec")
+require("./MarketCross.spec")
 
 process.exit(framework.run())

@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 20.
+	The player profile shape, version 21.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -26,7 +26,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 20
+Schema.VERSION = 21
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -175,6 +175,7 @@ export type ProfileData = {
 	verifiedTrader: boolean,
 	tradeCleanSince: number,
 	tradeHandoff: boolean,
+	marketClaims: { string },
 }
 
 function Schema.template(): ProfileData
@@ -281,6 +282,7 @@ function Schema.template(): ProfileData
 		verifiedTrader = false,
 		tradeCleanSince = 0,
 		tradeHandoff = false,
+		marketClaims = {},
 	}
 end
 
@@ -309,6 +311,22 @@ local function wholeNumber(value: any, fallback: number, minimum: number): numbe
 		return minimum
 	end
 	return floored
+end
+
+local function claimIds(value: any): { string }
+	local all = {}
+	if type(value) ~= "table" then
+		return all
+	end
+	for _, entry in ipairs(value) do
+		if type(entry) == "string" and #entry > 0 and #entry <= 80 then
+			table.insert(all, entry)
+		end
+	end
+	while #all > 200 do
+		table.remove(all, 1)
+	end
+	return all
 end
 
 local function optionalUid(value: any): string?
@@ -468,6 +486,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.tradeFlagged = data.tradeFlagged == true
 	data.verifiedTrader = data.verifiedTrader == true
 	data.tradeHandoff = data.tradeHandoff == true
+	data.marketClaims = claimIds(data.marketClaims)
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -955,6 +974,12 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		raw.tradeCleanSince = 0
 		raw.tradeHandoff = false
 		raw.schemaVersion = 20
+		version = 20
+	end
+
+	if version < 21 then
+		raw.marketClaims = {}
+		raw.schemaVersion = 21
 	end
 
 	return Schema.reconcile(raw), nil
@@ -1183,6 +1208,7 @@ function Schema.snapshot(data: ProfileData)
 		tradeFlagged = data.tradeFlagged,
 		verifiedTrader = data.verifiedTrader,
 		tradeHandoff = data.tradeHandoff,
+		marketClaims = Schema.deepCopy(data.marketClaims),
 	}
 end
 

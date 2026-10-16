@@ -179,6 +179,7 @@ export type AuditEntry = {
 	reversed: boolean,
 	reports: { number },
 	listingId: string?,
+	action: string?,
 }
 
 export type SpentRow = {
@@ -1999,6 +2000,44 @@ function Trading.finish(
 		warning = look.warning,
 		flags = entryFlags,
 	}
+end
+
+function Trading.auditMarket(
+	context: Context,
+	action: string,
+	seller: Actor,
+	other: Actor?,
+	lines: { AuditLine },
+	sellerValue: number,
+	buyerValue: number,
+	now: number,
+	listingId: string
+): AuditEntry
+	local buyer = if other ~= nil then other else seller
+	local entry: AuditEntry = {
+		id = Trading.nextId(action, now),
+		kind = "market",
+		timestamp = now,
+		server = context.server,
+		left = partyRecord(seller),
+		right = partyRecord(buyer),
+		lines = lines,
+		estimatedValue = {
+			[seller.userId] = sellerValue,
+			[buyer.userId] = buyerValue,
+		},
+		flags = {},
+		warning = nil,
+		reversed = false,
+		reports = {},
+		listingId = listingId,
+		action = action,
+	}
+	if action == "buy" and other ~= nil then
+		entry.flags = dedupeFlags(Trading.collectFlags(entry, context.log, seller, other))
+	end
+	Trading.append(context, entry, now)
+	return entry
 end
 
 function Trading.recordMarket(
