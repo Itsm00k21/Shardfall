@@ -92,7 +92,11 @@ local function dropStaleScripts(root: Instance)
 	local doomed = {}
 	for _, descendant in ipairs(root:GetDescendants()) do
 		if descendant:IsA("BaseScript") and descendant ~= script then
-			if ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant)) then
+			local avatar = descendant:FindFirstAncestorOfClass("Model")
+			local inAvatar = avatar ~= nil and Players:GetPlayerFromCharacter(avatar) ~= nil
+			-- PlayerGui and PlayerScripts only. Never Workspace, and never
+			-- a script on the character that is keeping the avatar upright.
+			if not inAvatar and ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant)) then
 				table.insert(doomed, descendant)
 			end
 		end

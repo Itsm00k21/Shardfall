@@ -18,6 +18,7 @@ local expect = framework.expect
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
 local HavenLife = require("../src/ReplicatedStorage/Shared/HavenLife")
+local SavedWorld = require("../src/ReplicatedStorage/Shared/SavedWorld")
 local ShellLayout = require("../src/ReplicatedStorage/Shared/ShellLayout")
 local Travel = require("../src/ReplicatedStorage/Shared/Travel")
 local VerdantScatter = require("../src/ReplicatedStorage/Shared/VerdantScatter")
@@ -418,6 +419,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 	local shellModule = instance("ModuleScript")
 	shellModule.Name = "ShellLayout"
 	shellModule.Parent = shared
+	local savedModule = instance("ModuleScript")
+	savedModule.Name = "SavedWorld"
+	savedModule.Parent = shared
 
 	local runService = {
 		Heartbeat = {
@@ -529,6 +533,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			if module == shellModule then
 				return ShellLayout
 			end
+			if module == savedModule then
+				return SavedWorld
+			end
 			error("unexpected require", 2)
 		end,
 	}
@@ -564,6 +571,8 @@ describe("HavenBuilder", function()
 		expect(workspace.StreamingEnabled).toEqual(true)
 		expect(hub.Parent).toEqual(workspace)
 		expect(hub.ModelStreamingMode.__enum).toEqual("Enum.ModelStreamingMode.Persistent")
+		expect(baseplate.Parent).toEqual(workspace)
+		builder.clearDefaults()
 		expect(baseplate.Parent).toBeNil()
 		expect(findNamed(hub, "LumenHeart") ~= nil).toBeTrue()
 		expect(findNamed(hub, "BossPlaza") ~= nil).toBeTrue()

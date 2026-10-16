@@ -28,11 +28,17 @@ local function silenceForeignScripts()
 			if descendant:IsA("BaseScript") then
 				local names = { descendant.Name }
 				local cursor: Instance? = descendant.Parent
+				local inAvatar = false
 				while cursor ~= nil do
 					table.insert(names, cursor.Name)
+					if cursor:IsA("Model") and game:GetService("Players"):GetPlayerFromCharacter(cursor) ~= nil then
+						inAvatar = true
+					end
 					cursor = cursor.Parent
 				end
-				if ForeignScripts.shouldFlag(serviceName, names) then
+				-- Avatar scripts stay. Disabling them does not delete the
+				-- floor, but it does drop the character when the plate goes.
+				if not inAvatar and ForeignScripts.shouldFlag(serviceName, names) then
 					found += 1
 					warn(
 						string.format(

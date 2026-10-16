@@ -24,6 +24,7 @@ local RunService = game:GetService("RunService")
 
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
+local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
 local HavenLife = require(ReplicatedStorage.Shared.HavenLife)
 local ShellLayout = require(ReplicatedStorage.Shared.ShellLayout)
 local Travel = require(ReplicatedStorage.Shared.Travel)
@@ -1144,9 +1145,20 @@ local function buildRocks(parent: Instance)
 	end
 end
 
-local function clearDefaultPlace()
+function HavenBuilder.clearDefaults()
+	local hubReady = false
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		if descendant.Name == "HubSpawn" then
+			hubReady = true
+			break
+		end
+	end
+	if not hubReady then
+		warn("[Shardfall] HubSpawn is missing, so the default baseplate stays")
+		return
+	end
 	local plate = workspace:FindFirstChild("Baseplate")
-	if plate ~= nil then
+	if plate ~= nil and SavedWorld.shouldClearDefault(plate.Name, plate.ClassName, true) then
 		pcall(function()
 			plate:Destroy()
 		end)
@@ -1164,7 +1176,7 @@ local function clearDefaultPlace()
 
 	local doomed = {}
 	for _, descendant in ipairs(workspace:GetDescendants()) do
-		if descendant:IsA("SpawnLocation") and descendant.Name ~= "HubSpawn" then
+		if SavedWorld.shouldClearDefault(descendant.Name, descendant.ClassName, true) then
 			table.insert(doomed, descendant)
 		end
 	end
@@ -1611,7 +1623,6 @@ function HavenBuilder.build(parent: Instance): number
 		parent.Parent = workspace
 	end
 
-	clearDefaultPlace()
 	buildPlaza(parent)
 	buildCrystal(parent)
 	buildForge(parent)
@@ -1634,7 +1645,6 @@ function HavenBuilder.build(parent: Instance): number
 	guard("Haven life", function()
 		stampLife(parent)
 	end)
-	clearDefaultPlace()
 
 	local count = 0
 	local prompts = 0
