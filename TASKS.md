@@ -30,16 +30,23 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 | T-022 | Wire T-017 EnemyAbilities hooks into the live run | GHOST | `cursor/enemy-hooks-9721` | `src/ServerScriptService/ShardfallServer/DungeonService.luau` (chooseDoor shrine branch, onHeartbeat mend/priority, damageEnemy block, moveEnemy turnShield for root_brute, destroyRun WalkSpeed restore), `src/ServerScriptService/ShardfallServer/CombatService.luau` (hasteAttack in releaseSwing and companionTick), `src/ReplicatedStorage/Shared/EnemyAbilities.luau` (HASTE duration/expiry), `tests/EnemyAbilities.spec.luau`. Follow the snippets in the T-017 hooks section. (a) Haste lasts the rest of the run like Might, not 30 seconds, to match the Rootvault door text; the wiring changes HASTE duration/expiry to match and updates the spec, and WalkSpeed is still restored when a new shrine replaces Haste and in destroyRun. (b) The CombatService hook is approved (Ghost owns T-001). (c) Menders never heal grandmother_gnarl. Starts after T-020 (capture hooks on `cursor/capture-hooks-9721`) lands and draft #19 is resolved, since all three edit `DungeonService.luau`. Do not implement before then. | claimed | — |
 | T-023 | Join chrome: one action bar, closed roll and debug, matching HP | GHOST | `cursor/join-chrome-404b` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau`, new `ActionBar.luau` (replaces `ThumbBar.luau`), `Ui.luau`, `DebugHud.luau`, `RollReel.luau`, `CombatHud.luau`, `src/ServerScriptService/ShardfallServer/CombatService.luau` (MaxHealth sync only; no T-022 haste/mend/shield hooks), `src/ReplicatedStorage/Shared/ClientChrome.luau`, `tests/ClientChrome.spec.luau`. Stamp lines only in `Build.luau`, `init.server.luau`, and `DungeonService.luau`. Hide LoopHud and MarketHud from init; do not edit those modules. Do not remount CaptureHud or implement T-020 hooks. | done | [#29](https://github.com/Itsm00k21/Shardfall/pull/29) |
 | T-024 | Class picker stays open, inventory filters, travel clear of the left panel | GHOST | `cursor/hud-followup-404b` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/ClassHud.luau`, `init.client.luau` (Skills toggle and closePanels only), `HavenClient.luau` (prompt echo dedupe), `InventoryHud.luau`, `src/ReplicatedStorage/Shared/InventoryView.luau`, `ShellLayout.luau`, `RollReel.luau` (odds frame position only), `tests/InventoryView.spec.luau`, `tests/ShellLayout.spec.luau`, `tests/ClientChrome.spec.luau`. Stamp lines only in `Build.luau`, `init.server.luau`, `init.client.luau`, and `DungeonService.luau`. Do not edit LoopHud, MarketHud, CombatHud, Pets, or PetService. Do not implement T-020 capture hooks or T-022 ability hooks. | done | [#31](https://github.com/Itsm00k21/Shardfall/pull/31) |
+| T-026 | Wire T-016 session recap into the victory card | GHOST | `cursor/recap-hooks-9721` | `CombatHud.luau` (victoryBody line only), `DungeonService.luau` (recap table on the victory CombatFx payload, session Epic counter, PlayerRemoving cleanup), `DataService.luau` (session-start level snapshot at profile load) | claimed | — |
 
-T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007.
+T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules now come from T-025. T-010 keeps the Vault and the wiring.
 
-Next free id is T-025.
+T-026 wires the T-016 session recap. The lead brief named this row T-024; #31 already shipped that id for the class picker. T-025 is the relic-set module, so this wiring row is T-026. Lead decisions, also under T-016 hooks: the session baseline level is snapshotted when the profile finishes loading in DataService (so Haven XP counts), not on the first grant; an Epic is any Epic-or-better item granted this session from any source (dungeon drops and chest contents both count; pets do not); `setPct` stays 0 until Relic Sets exist (T-010 / T-025).
+
+Next free id is T-027.
 
 ## Claimed by HELPER
 
 HELPER takes self-contained systems. New modules listed below are the owned paths. Do not edit a GHOST path. If a hook has to land in a shared module or in `CombatHud.luau` / `DungeonService.luau` / `Rootvault.luau`, write that on the row in this file first and wait for GHOST.
 
-No claimed HELPER tasks.
+| id | title | owner | branch | files / folders | status | PR |
+|---|---|---|---|---|---|---|
+| T-025 | Verdant Relic Set rules module (pure, no wiring) | HELPER | `helper/relic-sets-9721` | new `src/ReplicatedStorage/Shared/RelicSets.luau`, new `tests/RelicSets.spec.luau`, one require line in `tests/run.luau`, new `docs/design/relic_sets.md` | claimed | — |
+
+Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set (drops from Heartwood Hard, bound, never tradeable) with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. Pure data plus functions only: no edits to `Raids.luau`, `RaidService.luau`, Schema, remotes, ItemBases, or any GHOST file. Anything needing wiring goes in a "T-025 hooks for GHOST" section. Bonus numbers go in `docs/design/relic_sets.md` for Kevin to review.
 
 `src/ReplicatedStorage/Shared/Pets.luau` and `src/ServerScriptService/ShardfallServer/PetService.luau` stay with the shipped hatchery. T-014 adds new modules beside them. Edit those two only after a note on T-014.
 
@@ -716,6 +723,12 @@ On the victory `fx` table (`kind = "victory"`, the `else` of `if dismissIn == ni
 ```
 
 That first-grant snapshot misses levels gained in Haven before the first clear. Snapshot `data.level` when the profile finishes loading in `DataService` if the line should include those. There is no session Epic counter and no Relic Set percent on the profile (T-010). Leave `epics` and `setPct` at 0 until those exist. A 0 is omitted, so a real level gain still prints.
+
+Lead decisions for T-026. These settle the questions on #30 and override the first-grant snapshot in the `grant` snippet above.
+
+- The session baseline level is snapshotted when the profile finishes loading in `DataService`, so Haven XP counts. Do not snapshot on the first `grant`.
+- An Epic is any Epic-or-better item granted this session from any source. Dungeon drops and chest contents both count. Pets do not.
+- `setPct` stays 0 until Relic Sets exist (T-010 / T-025). `RelicSets.setPct(owned)` is the later source. A 0 is omitted, so a real level gain still prints.
 
 `tests/run.luau` already requires `./Progression.spec`. No new spec line.
 
