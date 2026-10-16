@@ -35,6 +35,7 @@ local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
+local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
@@ -355,21 +356,37 @@ local function buildRoom(
 	return placed
 end
 
-local function buildWorld()
-	local existing = workspace:FindFirstChild("ShardfallWorld")
-	if existing ~= nil then
-		existing:Destroy()
+local function purgeSavedWorld()
+	-- Rojo leaves every Workspace child in place. A saved ShardfallWorld
+	-- or an older hub (the one with "Spawn" and "Dungeon Portals" boards)
+	-- draws on top of the hub this server is about to build.
+	local removed = 0
+	for _, child in ipairs(workspace:GetChildren()) do
+		local humanoid = child:IsA("Model") and child:FindFirstChildOfClass("Humanoid") ~= nil
+		if SavedWorld.shouldRemove(child.Name, child.ClassName, humanoid) then
+			print(
+				string.format(
+					"[Shardfall] removed saved world %s (%s). Rojo does not manage Workspace.",
+					child:GetFullName(),
+					child.ClassName
+				)
+			)
+			child:Destroy()
+			removed += 1
+		end
 	end
+	if removed == 0 then
+		print("[Shardfall] no saved Workspace world to remove")
+	end
+end
+
+local function buildWorld()
+	purgeSavedWorld()
 
 	local world = Instance.new("Folder")
 	world.Name = "ShardfallWorld"
 	world.Parent = workspace
 	worldFolder = world
-
-	local staleHaven = workspace:FindFirstChild("Haven")
-	if staleHaven ~= nil then
-		staleHaven:Destroy()
-	end
 	-- Persistent before the model is parented, and a direct Workspace child
 	-- so it shows up next to Terrain instead of inside a folder.
 	local hub = Instance.new("Model")

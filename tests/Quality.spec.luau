@@ -82,6 +82,8 @@ describe("Quality", function()
 		expect(Quality.drawn(0, 0, true, 0)).toBeFalse()
 		expect(Quality.modelShown(0, 0, true, 121, 1.3)).toBeFalse()
 		expect(Quality.modelShown(0, 0, true, 121, 6.2)).toBeTrue()
+		expect(Quality.drawn(0, 0, true, 121, 0)).toBeFalse()
+		expect(Quality.drawn(0, 0, true, 121, 8)).toBeTrue()
 		local far = 400
 		local hideFall =
 			Quality.lodHide("Waterfall", nil, nil, false, "large", false, far, "med", 0, 0)

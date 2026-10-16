@@ -49,9 +49,15 @@ describe("HavenLife", function()
 				expect((piece.drift or 0) >= 70).toBeTrue()
 			end
 			if piece.name == "Waterfall" then
-				expect(math.abs(piece.rx) >= 60).toBeTrue()
-				local top = piece.y + math.cos(math.rad(piece.rx)) * (piece.size[2] / 2)
-				expect(top >= 1).toBeTrue()
+				-- Local Z is the long axis. A steep pitch hangs that axis
+				-- down, so the sheet is a curtain and not a flat deck.
+				expect(piece.size[3] > piece.size[1] and piece.size[3] > piece.size[2]).toBeTrue()
+				expect(piece.material).toEqual("Neon")
+				expect(piece.transparency < 0.5).toBeTrue()
+				local tilt = math.rad(piece.rx)
+				expect(math.abs(math.sin(tilt)) >= 0.9).toBeTrue()
+				local top = piece.y + math.abs(math.sin(tilt)) * (piece.size[3] / 2)
+				expect(top >= 8).toBeTrue()
 				local islands = {
 					{ x = 0, z = 0, radius = Haven.PLAZA_RADIUS },
 				}
@@ -72,6 +78,8 @@ describe("HavenLife", function()
 					end
 				end
 				expect(nearestReach > nearest.radius + 8).toBeTrue()
+				local hang = math.abs(math.cos(tilt)) * (piece.size[3] / 2) + piece.size[2] / 2
+				expect(nearestReach - hang > nearest.radius + 8).toBeTrue()
 			end
 		end
 		expect(orbitNamed).toEqual(0)

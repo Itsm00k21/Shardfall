@@ -105,12 +105,28 @@ local GOLD = { 255, 186, 96 }
 local PINK = { 255, 150, 190 }
 local CLOTH = { 86, 124, 210 }
 
-local function outer(x: number, z: number, radius: number, push: number): (number, number)
+-- A point just outside an island. inward keeps the curtain on the side that
+-- faces the plaza, and side steps it off the bridge so the sheet is not
+-- hidden in the deck.
+local function fallPoint(
+	x: number,
+	z: number,
+	radius: number,
+	push: number,
+	inward: boolean,
+	side: number
+): (number, number)
 	local reach = math.sqrt(x * x + z * z)
-	if reach < 1 then
-		return x, z - radius - push
+	local dirx = 0
+	local dirz = -1
+	if reach >= 1 then
+		dirx = x / reach
+		dirz = z / reach
 	end
-	return x + x / reach * (radius + push), z + z / reach * (radius + push)
+	local sign = if inward then -1 else 1
+	local px = x + dirx * sign * (radius + push)
+	local pz = z + dirz * sign * (radius + push)
+	return px - dirz * side, pz + dirx * side
 end
 
 function HavenLife.pieces(): { Piece }
@@ -149,29 +165,33 @@ function HavenLife.pieces(): { Piece }
 		)
 	end
 
+	-- Plaza falls flank the heart in the spawn view. A sheet on the north
+	-- rim sits behind the crystal. District falls face the walk in.
 	local falls = {
-		{ 0, 0, Haven.PLAZA_RADIUS },
+		{ math.sin(math.rad(-28)) * 8, -math.cos(math.rad(-28)) * 8, Haven.PLAZA_RADIUS, false },
+		{ math.sin(math.rad(28)) * 8, -math.cos(math.rad(28)) * 8, Haven.PLAZA_RADIUS, false },
 	}
 	for _, district in ipairs(Haven.DISTRICTS) do
-		table.insert(falls, { district.x, district.z, district.radius or 30 })
+		table.insert(falls, { district.x, district.z, district.radius or 30, true })
 	end
 	for _, fall in ipairs(falls) do
-		-- Past the rock lip (the rock overhangs the floor by 8). A 68 degree
-		-- sheet whose top sits on the walk hangs down the cliff instead of
-		-- lying inside the island.
-		local fx, fz = outer(fall[1], fall[2], fall[3], 16)
+		-- Long axis is local Z. The builder yaws first, then pitches, so the
+		-- sheet hangs as a curtain instead of lying flat on the cliff.
+		local inward = fall[4] == true
+		local side = if inward then 22 else 0
+		local fx, fz = fallPoint(fall[1], fall[2], fall[3], 18, inward, side)
 		local yaw = math.atan2(fx - fall[1], fz - fall[2])
-		local length = 28
-		local tilt = 68
-		local top = 2.2
-		local centerY = top - math.cos(math.rad(tilt)) * (length / 2)
+		local length = 36
+		local tilt = 78
+		local top = 14
+		local centerY = top - math.sin(math.rad(tilt)) * (length / 2)
 		add(
 			piece(
 				"Waterfall",
 				"Part",
-				10,
+				18,
+				2.6,
 				length,
-				2.8,
 				fx,
 				centerY,
 				fz,
@@ -183,21 +203,22 @@ function HavenLife.pieces(): { Piece }
 				"large",
 				0,
 				nil,
-				"mist"
+				"mist",
+				true
 			)
 		)
-		local lipX, lipZ = outer(fall[1], fall[2], fall[3], 1)
+		local lipX, lipZ = fallPoint(fall[1], fall[2], fall[3], 2, inward, side)
 		add(
 			piece(
 				"FallLip",
 				"WedgePart",
-				8,
-				0.7,
-				3.2,
+				10,
+				0.8,
+				4,
 				lipX,
-				0.7,
+				1.2,
 				lipZ,
-				28,
+				tilt,
 				math.deg(yaw),
 				0,
 				MIST,
@@ -459,9 +480,9 @@ function HavenLife.rigs(): { Rig }
 				piece(
 					"Body",
 					"Part",
-					3.2,
+					3.6,
 					height,
-					2.2,
+					2.4,
 					0,
 					height / 2,
 					0,
@@ -469,9 +490,12 @@ function HavenLife.rigs(): { Rig }
 					0,
 					0,
 					cloak[index],
-					"SmoothPlastic",
+					"Neon",
 					"large",
-					0
+					0,
+					nil,
+					nil,
+					true
 				),
 				piece(
 					"Head",
@@ -494,11 +518,11 @@ function HavenLife.rigs(): { Rig }
 				piece(
 					"TownsfolkFlag",
 					"Part",
-					0.8,
-					14,
-					0.8,
+					8,
+					20,
+					1.4,
 					0,
-					height + 8,
+					height + 12,
 					0,
 					0,
 					0,

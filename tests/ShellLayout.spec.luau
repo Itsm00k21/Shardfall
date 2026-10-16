@@ -46,6 +46,7 @@ describe("ShellLayout", function()
 		end
 		expect(ShellLayout.TITLE_ROW > 0).toBeTrue()
 		expect(ShellLayout.HIDE_ROW >= 44).toBeTrue()
+		expect(ShellLayout.BANNER_SECONDS >= 3 and ShellLayout.BANNER_SECONDS <= 4).toBeTrue()
 		expect(ShellLayout.ZONE_MAX_DISTANCE <= 80).toBeTrue()
 		expect(ShellLayout.ZONE_WIDTH_STUDS > 0).toBeTrue()
 		expect(ShellLayout.zoneScale(0)).toEqual(1)

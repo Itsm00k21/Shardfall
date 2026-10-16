@@ -22,6 +22,10 @@ ShellLayout.ZONE_HEIGHT_STUDS = 2.4
 ShellLayout.TITLE_ROW = 36
 ShellLayout.HIDE_ROW = 44
 
+-- Gold status line. Long enough to read, short enough that a closed panel
+-- does not leave the last hint on screen.
+ShellLayout.BANNER_SECONDS = 3.5
+
 export type Box = {
 	w: number,
 	h: number,

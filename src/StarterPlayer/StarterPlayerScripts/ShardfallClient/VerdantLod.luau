@@ -28,8 +28,7 @@ local tierId = "med"
 local nextScan = 0
 local bases: { [ParticleEmitter]: number } = {}
 local pinned: { BasePart } = {}
-local lastArtLine = ""
-local reportedTrim = false
+local reportedArt = false
 
 function VerdantLod.setTier(id: string)
 	local known = Quality.normalize(id)
@@ -102,16 +101,29 @@ local function pair(before: number, after: number): string
 	return string.format("%.2f>%.2f", before, after)
 end
 
+local function sizeText(size: Vector3): string
+	return string.format("%.1f,%.1f,%.1f", size.X, size.Y, size.Z)
+end
+
+local function sizePair(before: Vector3, after: Vector3): string
+	local left = sizeText(before)
+	local right = sizeText(after)
+	if left == right then
+		return left
+	end
+	return left .. ">" .. right
+end
+
 local function describe(
 	part: BasePart,
 	origin: Vector3?,
 	tBefore: number,
-	ltmBefore: number
+	ltmBefore: number,
+	sizeBefore: Vector3
 ): string
-	local cam = -1
 	local stream = "nocam"
 	if origin ~= nil then
-		cam = (part.Position - origin).Magnitude
+		local cam = (part.Position - origin).Magnitude
 		local radius = 512
 		local ok, value = pcall(function()
 			return Workspace.StreamingTargetRadius
@@ -126,19 +138,59 @@ local function describe(
 		parentName = part.Parent:GetFullName()
 	end
 	return string.format(
-		"%s t=%s ltm=%s y=%.1f size=%.1f,%.1f,%.1f parent=%s inWorkspace=%s cam=%.0f stream=%s",
+		"%s t=%s ltm=%s y=%.1f size=%s parent=%s inWorkspace=%s stream=%s",
 		part.Name,
 		pair(tBefore, part.Transparency),
 		pair(ltmBefore, part.LocalTransparencyModifier),
 		part.Position.Y,
-		part.Size.X,
-		part.Size.Y,
-		part.Size.Z,
+		sizePair(sizeBefore, part.Size),
 		parentName,
 		tostring(part:IsDescendantOf(Workspace)),
-		cam,
 		stream
 	)
+end
+
+local function fadeBillboards(origin: Vector3)
+	for _, descendant in ipairs(Workspace:GetDescendants()) do
+		if descendant:IsA("BillboardGui") then
+			if descendant.Name == "ShardfallBar" or descendant.Name == "DropLabel" then
+				continue
+			end
+			local host = descendant.Parent
+			local point: Vector3? = nil
+			if host ~= nil and host:IsA("BasePart") then
+				point = host.Position
+			end
+			local adornee = descendant.Adornee
+			if point == nil and adornee ~= nil and adornee:IsA("BasePart") then
+				point = adornee.Position
+			end
+			if point ~= nil then
+				local distance = (point - origin).Magnitude
+				local visible = ShellLayout.zoneVisible(distance)
+				descendant.Enabled = visible
+				descendant.MaxDistance = ShellLayout.ZONE_MAX_DISTANCE
+				descendant.AlwaysOnTop = false
+				if visible and host ~= nil and host:GetAttribute("HavenLabel") ~= nil then
+					local scale = math.max(ShellLayout.zoneScale(distance), 0.35)
+					descendant.Size = UDim2.fromScale(
+						ShellLayout.ZONE_WIDTH_STUDS * scale,
+						ShellLayout.ZONE_HEIGHT_STUDS * scale
+					)
+				end
+			end
+		end
+	end
+end
+
+local function savedSize(part: BasePart): Vector3?
+	local x = part:GetAttribute("ShardfallSizeX")
+	local y = part:GetAttribute("ShardfallSizeY")
+	local z = part:GetAttribute("ShardfallSizeZ")
+	if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then
+		return nil
+	end
+	return Vector3.new(x, y, z)
 end
 
 type Sample = {
@@ -169,6 +221,9 @@ function VerdantLod.start()
 		end
 		local camera = Workspace.CurrentCamera
 		local origin = if camera ~= nil then camera.CFrame.Position else nil
+		if origin ~= nil then
+			fadeBillboards(origin)
+		end
 		table.clear(pinned)
 		local trimIndex = 0
 		local shown = 0
@@ -193,32 +248,25 @@ function VerdantLod.start()
 		local heartSample: Sample? = nil
 
 		for _, descendant in ipairs(haven:GetDescendants()) do
-			if descendant:IsA("BillboardGui") then
-				local host = descendant.Parent
-				if
-					origin ~= nil
-					and host ~= nil
-					and host:IsA("BasePart")
-					and host:GetAttribute("HavenLabel") ~= nil
-				then
-					local distance = (host.Position - origin).Magnitude
-					local scale = ShellLayout.zoneScale(distance)
-					descendant.Enabled = ShellLayout.zoneVisible(distance)
-					descendant.MaxDistance = ShellLayout.ZONE_MAX_DISTANCE
-					descendant.Size = UDim2.fromScale(
-						ShellLayout.ZONE_WIDTH_STUDS * scale,
-						ShellLayout.ZONE_HEIGHT_STUDS * scale
-					)
-				end
-			elseif descendant:IsA("BasePart") then
+			if descendant:IsA("BasePart") then
 				parts += 1
 				local names = ancestorsOf(descendant)
 				local tBefore = descendant.Transparency
 				local ltmBefore = descendant.LocalTransparencyModifier
+				local sizeBefore = descendant.Size
+				local remembered = savedSize(descendant)
+				if remembered ~= nil then
+					local current = longest(descendant)
+					local stored = math.max(remembered.X, remembered.Y, remembered.Z)
+					if current < 1 and stored > 1 then
+						descendant.Size = remembered
+					end
+				end
+				local span = longest(descendant)
 				local inWorld = descendant:IsDescendantOf(Workspace)
 				local y = descendant.Position.Y
-				local visible = Quality.drawn(tBefore, ltmBefore, inWorld, y)
-				local big = Quality.modelShown(tBefore, ltmBefore, inWorld, y, longest(descendant))
+				local visible = Quality.drawn(tBefore, ltmBefore, inWorld, y, span)
+				local big = Quality.modelShown(tBefore, ltmBefore, inWorld, y, span)
 				local landmark = isLandmark(descendant, names)
 				if descendant.Name == "Waterfall" then
 					waterfalls += 1
@@ -320,7 +368,7 @@ function VerdantLod.start()
 						end
 					end
 				end
-				local text = describe(descendant, origin, tBefore, ltmBefore)
+				local text = describe(descendant, origin, tBefore, ltmBefore, sizeBefore)
 				if
 					descendant.Name == "Waterfall"
 					and fallSample ~= nil
@@ -382,12 +430,9 @@ function VerdantLod.start()
 			bit(skySample),
 			bit(heartSample)
 		)
-		if line ~= lastArtLine then
-			lastArtLine = line
+		if not reportedArt then
+			reportedArt = true
 			print(line)
-		end
-		if not reportedTrim then
-			reportedTrim = true
 			print(
 				string.format(
 					"[HavenArt] haven cosmetics hidden %d by tier %s (hub only, not the whole place)",

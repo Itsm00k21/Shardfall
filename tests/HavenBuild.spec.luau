@@ -1138,5 +1138,93 @@ describe("HavenBuilder", function()
 				error(portal.id .. " lintel is not across the top", 2)
 			end
 		end
+
+		local landmarkNames = {
+			Waterfall = true,
+			FallLip = true,
+			Waystone = true,
+			WaystoneCrystal = true,
+			SkyShard = true,
+			LumenHeart = true,
+			ForgeFlame = true,
+			ForgeBasin = true,
+			Anvil = true,
+			TownsfolkFlag = true,
+			CrystalShard = true,
+			LightBeam = true,
+			OrbitShard = true,
+		}
+		local seen: { [string]: number } = {}
+		for _, part in ipairs(hub:GetDescendants()) do
+			if part:IsA("BasePart") and landmarkNames[part.Name] == true then
+				seen[part.Name] = (seen[part.Name] or 0) + 1
+				local size = part.Size
+				local mag = math.sqrt(size.X * size.X + size.Y * size.Y + size.Z * size.Z)
+				if mag <= 1 then
+					error(string.format("%s size magnitude %.2f", part.Name, mag), 2)
+				end
+				if type(part.Transparency) ~= "number" or part.Transparency >= 0.5 then
+					error(string.format("%s transparency %.2f", part.Name, part.Transparency), 2)
+				end
+			end
+		end
+		for _, name in ipairs({
+			"Waterfall",
+			"Waystone",
+			"LumenHeart",
+			"SkyShard",
+			"ForgeFlame",
+			"TownsfolkFlag",
+		}) do
+			if (seen[name] or 0) < 1 then
+				error(name .. " was not built", 2)
+			end
+		end
+		if (seen.Waterfall or 0) < 6 then
+			error("expected a waterfall on the plaza and each district", 2)
+		end
+
+		local inView = 0
+		for _, fall in ipairs(findAll(hub, "Waterfall")) do
+			if fall.Parent ~= hub then
+				error("waterfall should be a direct child of Haven", 2)
+			end
+			if math.abs(fall.CFrame.ZVector.Y) < 0.9 then
+				error(string.format("waterfall is flat (Z.Y=%.2f)", fall.CFrame.ZVector.Y), 2)
+			end
+			local _f0, bottom, _f2, _f3, top = worldBox(fall)
+			if top < Haven.FLOOR_Y + 8 then
+				error(string.format("waterfall top %.1f is too low to see from the walk", top), 2)
+			end
+			if bottom > Haven.FLOOR_Y - 4 then
+				error("waterfall does not hang below the walk", 2)
+			end
+			local pos = fall.CFrame.Position
+			local angle = math.atan2(pos.X - Haven.SPAWN.x, Haven.SPAWN.z - pos.Z)
+			if math.abs(angle) < math.rad(35) then
+				inView += 1
+			end
+		end
+		if inView < 2 then
+			error("plaza waterfalls are outside the spawn view", 2)
+		end
+
+		local folks = findAll(hub, "Townsfolk")
+		if #folks ~= 3 then
+			error(string.format("expected 3 townsfolk, found %d", #folks), 2)
+		end
+		for _, folk in ipairs(folks) do
+			if folk.Parent ~= hub then
+				error("townsfolk should be a direct child of Haven", 2)
+			end
+			local flag = folk:FindFirstChild("TownsfolkFlag")
+			if flag == nil or not flag:IsA("BasePart") then
+				error("townsfolk has no flag", 2)
+			end
+			local _n0, _n1, _n2, _n3, flagTop = worldBox(flag)
+			if flagTop < Haven.FLOOR_Y + 16 then
+				error(string.format("townsfolk flag top is only %.1f", flagTop), 2)
+			end
+		end
 	end)
 end)

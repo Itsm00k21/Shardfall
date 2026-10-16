@@ -236,7 +236,8 @@ function Quality.drawn(
 	transparency: number,
 	modifier: number,
 	inWorkspace: boolean,
-	y: number?
+	y: number?,
+	longest: number?
 ): boolean
 	if inWorkspace ~= true then
 		return false
@@ -255,6 +256,11 @@ function Quality.drawn(
 	end
 	if y ~= nil then
 		if type(y) ~= "number" or y ~= y or y < 90 or y > 280 then
+			return false
+		end
+	end
+	if longest ~= nil then
+		if type(longest) ~= "number" or longest ~= longest or longest < 1 then
 			return false
 		end
 	end

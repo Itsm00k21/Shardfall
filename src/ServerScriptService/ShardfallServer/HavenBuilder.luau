@@ -107,6 +107,9 @@ local function part(
 		piece.CFrame = cframe + Vector3.new(0, Haven.FLOOR_Y, 0)
 	end
 	piece.Parent = parent
+	piece:SetAttribute("ShardfallSizeX", piece.Size.X)
+	piece:SetAttribute("ShardfallSizeY", piece.Size.Y)
+	piece:SetAttribute("ShardfallSizeZ", piece.Size.Z)
 	return piece
 end
 
@@ -766,8 +769,8 @@ local function buildForge(parent: Instance)
 	local flame = part(
 		model,
 		"ForgeFlame",
-		Vector3.new(1.8, 2.8, 1.8),
-		anvil.CFrame * CFrame.new(0, 2.3, 0.15),
+		Vector3.new(3.2, 7, 3.2),
+		anvil.CFrame * CFrame.new(0, 4.4, 0.15),
 		Color3.fromRGB(255, 132, 36),
 		Enum.Material.Neon,
 		false,
@@ -1178,6 +1181,9 @@ local function dressHaven(parent: Instance)
 		local spun = CFrame.new(desc.x, desc.y, desc.z) * CFrame.Angles(desc.rx, desc.ry, desc.rz)
 		piece.CFrame = spun + Vector3.new(0, Haven.FLOOR_Y, 0)
 		piece:SetAttribute("ShardfallLod", desc.lod)
+		piece:SetAttribute("ShardfallSizeX", piece.Size.X)
+		piece:SetAttribute("ShardfallSizeY", piece.Size.Y)
+		piece:SetAttribute("ShardfallSizeZ", piece.Size.Z)
 		piece.Parent = foliage
 		if desc.light then
 			local light = Instance.new("PointLight")
@@ -1274,6 +1280,9 @@ local function stampLife(parent: Instance)
 		if KEEP_PIECE[desc.name] == true then
 			piece:SetAttribute("ShardfallKeep", true)
 		end
+		piece:SetAttribute("ShardfallSizeX", piece.Size.X)
+		piece:SetAttribute("ShardfallSizeY", piece.Size.Y)
+		piece:SetAttribute("ShardfallSizeZ", piece.Size.Z)
 		piece.Parent = host
 		if desc.light == true then
 			local glow = Instance.new("PointLight")
@@ -1306,7 +1315,20 @@ local function stampLife(parent: Instance)
 			worldZ = math.sin(angle) * desc.drift
 			yaw = math.deg(angle)
 		end
-		local piece = stampPiece(alive, desc, worldX, worldZ, yaw)
+		-- Waystones render as direct Haven children. Waterfalls in the Alive
+		-- folder did not, so the curtains live on Haven too.
+		local host = alive
+		if desc.name == "Waterfall" or desc.name == "FallLip" then
+			host = parent
+		end
+		local piece = stampPiece(host, desc, worldX, worldZ, yaw)
+		if desc.name == "Waterfall" or desc.name == "FallLip" then
+			-- Yaw, then pitch. A single Euler pitch+yaw lays the sheet flat
+			-- once the rim is not aligned with the world axes.
+			piece.CFrame = CFrame.new(worldX, Haven.FLOOR_Y + desc.y, worldZ)
+				* CFrame.Angles(0, math.rad(yaw), 0)
+				* CFrame.Angles(math.rad(desc.rx), 0, math.rad(desc.rz))
+		end
 		if desc.drift ~= nil then
 			table.insert(skyDrift, { part = piece, drift = desc.drift })
 		end
@@ -1329,7 +1351,9 @@ local function stampLife(parent: Instance)
 		model.Name = rig.name
 		model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 		model:SetAttribute("ShardfallKind", rig.kind)
-		model.Parent = alive
+		-- Townsfolk are their own models. Nesting them under Alive left the
+		-- bodies out of the client world even while sky shards in Alive showed.
+		model.Parent = if rig.kind == "folk" then parent else alive
 		local mover: Mover = {
 			kind = rig.kind,
 			x = rig.x,
@@ -1615,6 +1639,7 @@ function HavenBuilder.build(parent: Instance): number
 	local waterfalls = 0
 	local npcs = 0
 	local waystones = 0
+	local sizeLine = {}
 	for _, descendant in ipairs(parent:GetDescendants()) do
 		if descendant:IsA("BasePart") then
 			if descendant.Name == "Waterfall" then
@@ -1622,6 +1647,26 @@ function HavenBuilder.build(parent: Instance): number
 			end
 			if descendant.Name == "Waystone" then
 				waystones += 1
+			end
+			if
+				sizeLine[descendant.Name] == nil
+				and (
+					descendant.Name == "LumenHeart"
+					or descendant.Name == "Waystone"
+					or descendant.Name == "Waterfall"
+					or descendant.Name == "ForgeFlame"
+					or descendant.Name == "SkyShard"
+					or descendant.Name == "TownsfolkFlag"
+				)
+			then
+				sizeLine[descendant.Name] = string.format(
+					"%s size=%.1f,%.1f,%.1f t=%.2f",
+					descendant.Name,
+					descendant.Size.X,
+					descendant.Size.Y,
+					descendant.Size.Z,
+					descendant.Transparency
+				)
 			end
 		elseif descendant:IsA("Model") and descendant.Name == "Townsfolk" then
 			npcs += 1
@@ -1644,6 +1689,23 @@ function HavenBuilder.build(parent: Instance): number
 			npcs,
 			waystones
 		)
+	)
+	local function savedSize(name: string): string
+		return sizeLine[name] or (name .. " missing")
+	end
+	print(
+		"[HavenArt] server "
+			.. savedSize("LumenHeart")
+			.. "; "
+			.. savedSize("Waystone")
+			.. "; "
+			.. savedSize("Waterfall")
+			.. "; "
+			.. savedSize("ForgeFlame")
+			.. "; "
+			.. savedSize("SkyShard")
+			.. "; "
+			.. savedSize("TownsfolkFlag")
 	)
 	return count
 end

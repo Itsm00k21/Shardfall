@@ -219,7 +219,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		ZIndex = 20,
 	}, bannerGui) :: TextLabel
 	corner(banner, 8)
+	local bannerToken = 0
 	local function showBanner(text: string, kind: string)
+		bannerToken += 1
+		local token = bannerToken
+		local changed = banner.Text ~= text or not banner.Visible
 		banner.Text = text
 		banner.Visible = text ~= ""
 		local background = COLORS.gold
@@ -232,6 +236,19 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		banner.BackgroundColor3 = background
 		banner.TextColor3 = ink
+		if text == "" then
+			return
+		end
+		if changed then
+			print("[Toast] shown " .. text)
+		end
+		task.delay(ShellLayout.BANNER_SECONDS, function()
+			if token ~= bannerToken then
+				return
+			end
+			banner.Visible = false
+			banner.Text = ""
+		end)
 	end
 
 	local panel = new("ScrollingFrame", {
@@ -1426,6 +1443,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			page = "craft"
 			applyPage()
 			panel.CanvasPosition = Vector2.zero
+			print("[ForgeUI] opened")
 			return
 		end
 		page = "shards"
@@ -1444,7 +1462,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		applyPage()
 	end
 
+	local statusToken = 0
 	function controller.setStatus(text: string, kind: string)
+		statusToken += 1
+		local token = statusToken
 		status.Text = text
 		status.Visible = text ~= ""
 		toast.Text = text
@@ -1458,6 +1479,18 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		status.TextColor3 = color
 		toast.TextColor3 = color
+		if text == "" then
+			return
+		end
+		task.delay(ShellLayout.BANNER_SECONDS, function()
+			if token ~= statusToken then
+				return
+			end
+			status.Visible = false
+			status.Text = ""
+			toast.Visible = false
+			toast.Text = ""
+		end)
 	end
 
 	local function tonicCount(profile: any): number

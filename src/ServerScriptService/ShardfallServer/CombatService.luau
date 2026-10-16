@@ -554,8 +554,9 @@ local function releaseSwing(
 end
 
 function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)
+	-- Haven has nothing to swing at. The old tip sat on the gold banner
+	-- from the moment the player spawned.
 	if not hooks.inRun(player) then
-		hint(player, "Enter the Rootvault first. Click swings. Bows and staffs fire a shot.")
 		return
 	end
 	local hrp = rootPart(player)
