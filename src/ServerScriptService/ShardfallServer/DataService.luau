@@ -396,13 +396,22 @@ local function load(player: Player): (boolean, string?)
 		end
 
 		if reason == "newer" then
-			return failLoad(record, "This server is out of date for your Shardfall profile. Rejoin shortly.")
+			return failLoad(
+				record,
+				"This server is out of date for your Shardfall profile. Rejoin shortly."
+			)
 		end
 		if reason == "corrupt" then
-			return failLoad(record, "Your Shardfall profile could not be read. It was not overwritten.")
+			return failLoad(
+				record,
+				"Your Shardfall profile could not be read. It was not overwritten."
+			)
 		end
 		if reason == "busy" then
-			return failLoad(record, "Your data is still open on another server. Rejoin in a moment.")
+			return failLoad(
+				record,
+				"Your data is still open on another server. Rejoin in a moment."
+			)
 		end
 		return failLoad(record, "Could not load your Shardfall profile. Rejoin.")
 	end

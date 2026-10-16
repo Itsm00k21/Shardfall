@@ -15,19 +15,19 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build ff655d8+ client` in Output.
+	still leaves `[Shardfall] build c98e7b5+ client` in Output.
 ]]
 
-print("[Shardfall] build ff655d8+ client")
+print("[Shardfall] build c98e7b5+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local ForeignScripts =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
+local CaptureHud = require(script.CaptureHud)
 local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
 local DebugHud = require(script.DebugHud)
@@ -163,7 +163,6 @@ local travel
 local thumb
 local graphicsTier = "med"
 local graphicsSent = false
-local farmOn = false
 
 local function deviceIsTouch(): boolean
 	local preferred = ""
@@ -253,9 +252,7 @@ local function applyProfile(profile: any, saving: any)
 	local tier = Quality.resolve(profile.graphicsQuality, deviceIsTouch())
 	graphicsTier = tier
 	VerdantLod.setTier(tier)
-	if thumb ~= nil then
-		thumb.setGraphics(Quality.label(tier))
-	end
+	ui.setGraphics(Quality.label(tier))
 	if rollReel ~= nil then
 		rollReel.setProfile(profile)
 		rollReel.setTier(tier)
@@ -292,8 +289,10 @@ local function applyResult(result: any)
 	end
 end
 
+local cycleGraphics: () -> ()
+
 ui = Ui.mount(playerGui, {
-	showDev = RunService:IsStudio(),
+	showDev = false,
 	onCrack = function()
 		if rollReel ~= nil then
 			rollReel.request(false)
@@ -476,6 +475,14 @@ ui = Ui.mount(playerGui, {
 			applyResult(result)
 		end)
 	end,
+	onChests = function()
+		if inventory ~= nil then
+			inventory.openTab("chests")
+		end
+	end,
+	onGraphics = function()
+		cycleGraphics()
+	end,
 	onAutoFarm = function(enabled: boolean)
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -494,11 +501,7 @@ ui = Ui.mount(playerGui, {
 					"ok"
 				)
 			end
-			farmOn = applied
 			ui.setAutoFarm(applied)
-			if thumb ~= nil then
-				thumb.setFarm(applied)
-			end
 		end)
 	end,
 	onAutoAttack = function(enabled: boolean)
@@ -550,6 +553,43 @@ rollReel = RollReel.mount(playerGui, {
 		return graphicsTier
 	end,
 })
+
+local function hideMarket()
+	local gui = playerGui:FindFirstChild("ShardfallMarket")
+	if gui == nil then
+		return
+	end
+	local market = gui:FindFirstChild("Market")
+	if market ~= nil and market:IsA("GuiObject") then
+		market.Visible = false
+	end
+	local toggle = gui:FindFirstChild("OpenMarket")
+	if toggle ~= nil and toggle:IsA("GuiObject") then
+		toggle.Position = UDim2.new(0, 16, 1, -16)
+	end
+end
+
+local function closePanels(except: string?)
+	if except ~= "menu" then
+		ui.close()
+	end
+	if except ~= "inventory" and inventory ~= nil then
+		inventory.close()
+	end
+	if except ~= "travel" and travel ~= nil then
+		travel.close()
+	end
+	if except ~= "skills" then
+		ClassHud.close()
+	end
+	if except ~= "raid" then
+		RaidHud.close()
+	end
+	if except ~= "market" then
+		hideMarket()
+	end
+	DoorHud.suppress(except ~= nil)
+end
 
 inventory = InventoryHud.start(playerGui, {
 	onEquip = function(uid: string)
@@ -833,11 +873,19 @@ inventory = InventoryHud.start(playerGui, {
 		ui.setStatus(text, kind)
 	end,
 	onVisible = function(open: boolean)
+		if open then
+			closePanels("inventory")
+		end
 		ui.setCovered(open)
 	end,
 })
 
 travel = TravelHud.start(playerGui, {
+	onVisible = function(open: boolean)
+		if open then
+			closePanels("travel")
+		end
+	end,
 	onTravel = function(destinationId: string)
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -867,7 +915,7 @@ travel = TravelHud.start(playerGui, {
 	end,
 })
 
-local function cycleGraphics()
+function cycleGraphics()
 	local order = Quality.ids()
 	local nextId = order[1]
 	for index, id in ipairs(order) do
@@ -892,16 +940,38 @@ end
 
 thumb = ThumbBar.start(playerGui, {
 	onMenu = function()
-		ui.toggleMenu()
+		local opening = not ui.isOpen()
+		closePanels(if opening then "menu" else nil)
+		if opening then
+			ui.open()
+		end
 	end,
 	onInventory = function()
-		inventory.toggle()
+		local opening = not inventory.isOpen()
+		closePanels(if opening then "inventory" else nil)
+		if opening then
+			inventory.open()
+		end
 	end,
 	onTravel = function()
-		travel.toggle()
+		local opening = not travel.isOpen()
+		closePanels(if opening then "travel" else nil)
+		if opening then
+			travel.open()
+		end
 	end,
 	onAttack = function()
 		CombatHud.swing()
+	end,
+	onDodge = function()
+		CombatHud.dodge()
+	end,
+	onSkills = function()
+		local opening = not ClassHud.isVisible()
+		closePanels(if opening then "skills" else nil)
+		if opening then
+			ClassHud.setVisible(true)
+		end
 	end,
 	onTonic = function()
 		task.spawn(function()
@@ -921,41 +991,17 @@ thumb = ThumbBar.start(playerGui, {
 			)
 		end)
 	end,
-	onAutoFarm = function()
-		task.spawn(function()
-			local enabled = not farmOn
-			local ok, result = pcall(function()
-				return invoke("SetAutoFarm", enabled)
-			end)
-			local message = remoteError(ok, result, "Could not set auto farm.")
-			local applied = enabled
-			if message ~= nil then
-				applied = not enabled
-				ui.setStatus(message, "error")
-			else
-				ui.setStatus(
-					if enabled
-						then "Auto Farm is on. Wins and losses start the same run again."
-						else "Auto Farm is off.",
-					"ok"
-				)
-			end
-			farmOn = applied
-			ui.setAutoFarm(applied)
-			thumb.setFarm(applied)
-		end)
-	end,
-	onGraphics = cycleGraphics,
 })
-thumb.setGraphics(Quality.label(graphicsTier))
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)
 		if kind == "market" then
+			closePanels("market")
 			MarketHud.open()
 			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
 			return
 		end
+		closePanels("menu")
 		ui.openPanel(kind, areaId)
 		if kind == "craft" then
 			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")
@@ -975,11 +1021,17 @@ VerdantLod.start()
 MarketHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
+CaptureHud.start(invoke)
 PetHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
 LoopHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
+end)
+RaidHud.setListener(function(opening: boolean)
+	if opening then
+		closePanels("raid")
+	end
 end)
 RaidHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
@@ -997,6 +1049,11 @@ ClassHud.start(remotes :: Instance, function(action: string, ...: any)
 	return invoke(action, ...)
 end)
 CombatHud.start(remotes :: Instance, {
+	onDodgeCharges = function(charges: number)
+		if thumb ~= nil then
+			thumb.setDodge(charges)
+		end
+	end,
 	onRun = function(run)
 		ui.setRun(run)
 		musicController.syncRun(run)

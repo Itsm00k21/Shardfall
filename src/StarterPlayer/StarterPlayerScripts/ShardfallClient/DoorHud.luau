@@ -7,11 +7,27 @@
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 
 local DoorHud = {}
 local player = Players.LocalPlayer
 local invoke: ((string, ...any) -> any)? = nil
 local row: Frame? = nil
+local suppressed = false
+local lastRun: any = nil
+
+function DoorHud.suppress(hidden: boolean)
+	suppressed = hidden
+	if hidden then
+		if row ~= nil then
+			row.Visible = false
+		end
+		return
+	end
+	DoorHud.setRun(lastRun)
+end
 
 function DoorHud.start(callRemote: (string, ...any) -> any)
 	invoke = callRemote
@@ -22,12 +38,31 @@ function DoorHud.start(callRemote: (string, ...any) -> any)
 	screen.Parent = player:WaitForChild("PlayerGui")
 	local frame = Instance.new("Frame")
 	frame.Name = "Doors"
-	frame.AnchorPoint = Vector2.new(0.5, 1)
-	frame.Position = UDim2.new(0.5, 0, 1, -96)
+	frame.AnchorPoint = Vector2.new(0, 0)
+	frame.Position = UDim2.fromOffset(16, 200)
 	frame.Size = UDim2.fromOffset(420, 72)
 	frame.BackgroundTransparency = 1
 	frame.Visible = false
 	frame.Parent = screen
+	local function place()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local box = ShellLayout.doorRect(vx, vy)
+		frame.Position = UDim2.fromOffset(box.x, box.y)
+		frame.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	place()
+	local camera = workspace.CurrentCamera
+	if camera ~= nil then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	end
 	local list = Instance.new("UIListLayout")
 	list.FillDirection = Enum.FillDirection.Horizontal
 	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -37,6 +72,7 @@ function DoorHud.start(callRemote: (string, ...any) -> any)
 end
 
 function DoorHud.setRun(run: any)
+	lastRun = run
 	local frame = row
 	if frame == nil then
 		return
@@ -51,7 +87,7 @@ function DoorHud.setRun(run: any)
 		frame.Visible = false
 		return
 	end
-	frame.Visible = true
+	frame.Visible = not suppressed
 	for _, door in ipairs(doors) do
 		if type(door) == "table" and type(door.id) == "string" then
 			local button = Instance.new("TextButton")

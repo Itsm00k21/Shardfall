@@ -14,6 +14,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MobileShell = require(script.Parent.MobileShell)
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local WildCapture = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WildCapture"))
 
 local CaptureHud = {}
@@ -158,14 +159,34 @@ function CaptureHud.start(invoke: (string, ...any) -> any)
 
 	local panel = Instance.new("Frame")
 	panel.Name = "Capture"
-	panel.AnchorPoint = Vector2.new(0.5, 0.5)
-	panel.Position = UDim2.fromScale(0.5, 0.38)
+	panel.AnchorPoint = Vector2.new(0, 0)
+	panel.Position = UDim2.fromOffset(16, 140)
 	panel.Size = UDim2.fromOffset(340, 210)
 	panel.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
 	panel.BackgroundTransparency = 0.12
 	panel.BorderSizePixel = 0
 	panel.Visible = false
+	panel.ClipsDescendants = true
 	panel.Parent = screen
+	local function place()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local box = ShellLayout.captureRect(vx, vy)
+		panel.Position = UDim2.fromOffset(box.x, box.y)
+		panel.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	place()
+	local camera = workspace.CurrentCamera
+	if camera ~= nil then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	end
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = panel

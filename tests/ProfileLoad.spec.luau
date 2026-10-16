@@ -44,7 +44,8 @@ describe("Profile load", function()
 				return stored
 			end,
 		}
-		local opened = ProfileLoad.open(saved, "Player_1", now, "studio-test", 0, SessionLock.TIMEOUT_SECONDS)
+		local opened =
+			ProfileLoad.open(saved, "Player_1", now, "studio-test", 0, SessionLock.TIMEOUT_SECONDS)
 		expect(opened.session).toBeFalse()
 		expect(opened.reason).toEqual("claimed")
 		expect(opened.data.schemaVersion).toEqual(Schema.VERSION)

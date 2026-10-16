@@ -1,8 +1,9 @@
 --!strict
 
 --[[
-	Side panel for shards, the forge, and the dungeon. The bag itself lives
-	on the Inventory screen (the HUD button and the I key).
+	Menu sheet for shards, the forge, and the dungeon. It stays closed until
+	Menu, a Haven stall, or a chest shortcut opens it. The bag itself lives
+	on the Inventory screen (the action bar and the I key).
 
 	The panel stays short on purpose: stats, a pity line that counts up, and
 	one Shard Token crack. Odds is a labeled button above the Prism Token
@@ -61,6 +62,8 @@ export type Callbacks = {
 	onAutoAttack: (enabled: boolean) -> (),
 	onAutoFarm: (enabled: boolean) -> (),
 	onAudio: (music: number, sfx: number, commit: boolean) -> (),
+	onChests: (() -> ())?,
+	onGraphics: (() -> ())?,
 }
 
 local COLORS = {
@@ -177,7 +180,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Shardfall",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 10,
+		DisplayOrder = 18,
 	}, playerGui) :: ScreenGui
 	MobileShell.mount(screen)
 
@@ -259,8 +262,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local panel = new("ScrollingFrame", {
 		Name = "Panel",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 12),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(16, 140),
 		Size = UDim2.fromOffset(320, 480),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
@@ -282,7 +285,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		if vy < 1 then
 			vy = 720
 		end
-		local box = ShellLayout.sidePanel(vx, vy)
+		local box = ShellLayout.menuRect(vx, vy)
+		panel.Position = UDim2.fromOffset(box.x, box.y)
 		panel.Size = UDim2.fromOffset(box.w, box.h)
 	end
 	fitPanel()
@@ -290,8 +294,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	if fitCamera ~= nil then
 		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitPanel)
 	end
-	local touchOnly =
-		ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
 	list(panel, 8)
 	new("UIStroke", {
 		Color = COLORS.stroke,
@@ -345,11 +347,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Visible = false,
 	}, screen) :: TextButton
 	corner(restore, 8)
-	local userOpen = not touchOnly
+	local userOpen = false
 	local covered = false
 	local function applyChrome()
 		panel.Visible = userOpen and not covered
-		restore.Visible = (not userOpen) and not covered
+		restore.Visible = false
 	end
 	applyChrome()
 	minimize.MouseButton1Click:Connect(function()
@@ -1022,9 +1024,24 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = COLORS.muted,
-		Text = "Bag, materials, and tonics are on Inventory, or press I.",
+		Text = "Bag, materials, and tonics are on Items, or press I.",
 		LayoutOrder = 17,
 	}, panel)
+	local graphicsButton: TextButton? = nil
+	if callbacks.onChests ~= nil then
+		local chests = makeButton(panel, "Chests", COLORS.button, 21, 44)
+		local openChests = callbacks.onChests
+		chests.MouseButton1Click:Connect(function()
+			openChests()
+		end)
+	end
+	if callbacks.onGraphics ~= nil then
+		graphicsButton = makeButton(panel, "Graphics", COLORS.buttonDim, 22, 44)
+		local cycle = callbacks.onGraphics
+		graphicsButton.MouseButton1Click:Connect(function()
+			cycle()
+		end)
+	end
 
 	local devToggle: TextButton? = nil
 	local devBody: Frame? = nil
@@ -1572,9 +1589,29 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		paintFarm()
 	end
 
+	function controller.setGraphics(label: string)
+		if graphicsButton ~= nil then
+			graphicsButton.Text = "Graphics " .. label
+		end
+	end
+
 	function controller.toggleMenu()
 		userOpen = not userOpen
 		applyChrome()
+	end
+
+	function controller.open()
+		userOpen = true
+		applyChrome()
+	end
+
+	function controller.close()
+		userOpen = false
+		applyChrome()
+	end
+
+	function controller.isOpen(): boolean
+		return userOpen and not covered
 	end
 
 	function controller.setCovered(open: boolean)
