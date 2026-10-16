@@ -159,6 +159,28 @@ local function ensure(player: Player): State
 	return state
 end
 
+-- The body stays full so a fall cannot zero it. MaxHealth matches the combat
+-- bar (the place default is 500, which is what the overhead used to read
+-- while the HUD still said 100).
+local function syncBody(player: Player, maxHp: number)
+	local character = player.Character
+	if character == nil then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		return
+	end
+	local maxHealth = math.max(1, maxHp)
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	if humanoid.MaxHealth ~= maxHealth then
+		humanoid.MaxHealth = maxHealth
+	end
+	if humanoid.Health ~= humanoid.MaxHealth then
+		humanoid.Health = humanoid.MaxHealth
+	end
+end
+
 local function paint(part: BasePart, hp: number, maxHp: number)
 	part:SetAttribute("ShardfallHp", hp)
 	part:SetAttribute("ShardfallMax", maxHp)
@@ -181,9 +203,10 @@ local function publish(player: Player, state: State)
 		paint(hrp, hp, maxHp)
 		local nameLabel = hrp:FindFirstChild("Name", true)
 		if nameLabel ~= nil and nameLabel:IsA("TextLabel") then
-			nameLabel.Text = string.format("%d / %d", hp, maxHp)
+			nameLabel.Text = string.format("HP  %d / %d", hp, maxHp)
 		end
 	end
+	syncBody(player, maxHp)
 	fx(player, {
 		kind = "hp",
 		hp = hp,
@@ -210,7 +233,7 @@ local function ensureBar(part: BasePart, studs: number, color: Color3)
 	name.TextSize = 12
 	name.TextColor3 = Color3.fromRGB(240, 236, 248)
 	name.TextStrokeTransparency = 0.4
-	name.Text = part:GetAttribute("ShardfallName") or ""
+	name.Text = ""
 	name.Parent = gui
 
 	local back = Instance.new("Frame")
@@ -231,11 +254,18 @@ end
 
 local function attachCharacter(player: Player, character: Model)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		local waited = character:WaitForChild("Humanoid", 5)
+		if waited ~= nil and waited:IsA("Humanoid") then
+			humanoid = waited
+		end
+	end
 	if humanoid ~= nil then
 		-- Combat HP lives on the session, not on the Humanoid. Fall damage
 		-- and a stale Health script used to zero the body while the bar
 		-- still read 50/100. The body stays full so only damagePlayer can
-		-- down the player.
+		-- down the player. MaxHealth follows the combat max so the overhead
+		-- does not stay on the place default of 500.
 		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 		humanoid.BreakJointsOnDeath = false
 		pcall(function()
@@ -251,6 +281,7 @@ local function attachCharacter(player: Player, character: Model)
 			pinning = false
 		end
 		humanoid.HealthChanged:Connect(pin)
+		syncBody(player, ensure(player).maxHp)
 		pin()
 	end
 	local hrp = character:WaitForChild("HumanoidRootPart", 5)

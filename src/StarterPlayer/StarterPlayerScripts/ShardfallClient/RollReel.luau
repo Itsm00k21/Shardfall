@@ -112,6 +112,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	odds.BackgroundColor3 = Color3.fromRGB(18, 16, 28)
 	odds.BackgroundTransparency = 0.15
 	odds.BorderSizePixel = 0
+	odds.Visible = false
 	odds.Parent = gui
 	corner(odds, 10)
 	local oddsLayout = Instance.new("UIListLayout")
@@ -206,6 +207,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		button.TextColor3 = Color3.fromRGB(236, 232, 244)
 		button.Text = text
 		button.AutoButtonColor = true
+		button.Visible = false
 		button.Parent = gui
 		corner(button, 10)
 		return button
@@ -227,6 +229,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	rollButton.TextColor3 = Color3.fromRGB(28, 22, 16)
 	rollButton.Text = "Roll"
 	rollButton.AutoButtonColor = true
+	rollButton.Visible = false
 	rollButton.Parent = gui
 	corner(rollButton, 12)
 
@@ -239,7 +242,8 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	luckLabel.Font = Enum.Font.BuilderSansMedium
 	luckLabel.TextSize = 14
 	luckLabel.TextColor3 = Color3.fromRGB(236, 214, 140)
-	luckLabel.Text = "x2 Luck in 10"
+	luckLabel.Text = ""
+	luckLabel.Visible = false
 	luckLabel.Parent = gui
 
 	local pityLabel = Instance.new("TextLabel")
@@ -251,7 +255,8 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	pityLabel.Font = Enum.Font.BuilderSans
 	pityLabel.TextSize = 13
 	pityLabel.TextColor3 = Color3.fromRGB(186, 180, 204)
-	pityLabel.Text = RarityConfig.pityLine(0, 0)
+	pityLabel.Text = ""
+	pityLabel.Visible = false
 	pityLabel.Parent = gui
 
 	local card = Instance.new("Frame")
@@ -1129,9 +1134,27 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	print(string.format("[Roll] reel ready slots=%d", RarityConfig.REEL_SLOTS))
 	paint()
 
+	local function setOpen(open: boolean)
+		if not open then
+			auto = false
+		end
+		odds.Visible = open
+		autoButton.Visible = open
+		quickButton.Visible = open
+		shakeButton.Visible = open
+		rollButton.Visible = open
+		luckLabel.Visible = open
+		pityLabel.Visible = open
+		if open then
+			paint()
+		end
+	end
+	setOpen(false)
+
 	return {
 		request = request,
 		playChest = playChest,
+		setOpen = setOpen,
 		setProfile = function(nextProfile: any)
 			profile = nextProfile
 			paint()
