@@ -241,7 +241,13 @@ local function buildRoom(
 	local place = if placeIndex ~= nil then placeIndex else index
 	local model = Instance.new("Model")
 	model.Name = room.id
-	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	-- The waves arena used to stream in after the teleport, so the click
+	-- looked like it did nothing while the character fell through the void.
+	if place == Dungeons.WAVES_ROOM_INDEX then
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	else
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	end
 	model.Parent = parent
 
 	local floorColor = if dungeon.endless == true
@@ -1609,7 +1615,7 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build 917d688+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build 839fdbb+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)

@@ -159,12 +159,74 @@ function Quality.ids(): { string }
 	return { "low", "med", "high" }
 end
 
--- Waystones and waterfalls stay on every tier. Trim must not hide the hub landmarks.
-function Quality.alwaysVisible(name: string?, waystoneId: any): boolean
+-- Landmarks stay on every tier, at any distance. Trim only drops cosmetic extras.
+local LANDMARKS = {
+	Waystone = true,
+	WaystoneCrystal = true,
+	Waterfall = true,
+	FallLip = true,
+	Anvil = true,
+	ForgeBasin = true,
+	ForgeFlame = true,
+	SkyShard = true,
+	LumenHeart = true,
+	CrystalShard = true,
+	OrbitShard = true,
+	LightBeam = true,
+}
+
+function Quality.alwaysVisible(name: string?, waystoneId: any, ancestors: { string }?): boolean
 	if type(waystoneId) == "string" and waystoneId ~= "" then
 		return true
 	end
-	return name == "Waystone" or name == "Waterfall"
+	if type(name) == "string" and LANDMARKS[name] == true then
+		return true
+	end
+	if type(ancestors) == "table" then
+		for _, ancestor in ipairs(ancestors) do
+			if ancestor == "Townsfolk" or ancestor == "LumenHeart" then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- hide, next trim index, next shown count. Landmarks never hide.
+function Quality.lodHide(
+	name: string?,
+	waystoneId: any,
+	ancestors: { string }?,
+	keep: boolean,
+	lod: any,
+	trimAttr: boolean,
+	distance: number,
+	tierId: string,
+	trimIndex: number,
+	shown: number
+): (boolean, number, number)
+	if keep == true or Quality.alwaysVisible(name, waystoneId, ancestors) then
+		return false, trimIndex, shown
+	end
+	local trim = trimAttr == true or lod == "small"
+	local tagged = type(lod) == "string" or trim
+	if not tagged then
+		return false, trimIndex, shown
+	end
+	local tier = Quality.get(tierId)
+	if trim then
+		local index = trimIndex + 1
+		local kept = Quality.keepDecor(index, tierId) and shown < tier.partBudget
+		if not kept then
+			return true, index, shown
+		end
+		local limit = if lod == "small" then tier.lodHideAt else tier.lodFar
+		return distance > limit, index, shown + 1
+	end
+	if lod == "large" then
+		return distance > tier.lodFar, trimIndex, shown
+	end
+	return false, trimIndex, shown
 end
 
 return Quality

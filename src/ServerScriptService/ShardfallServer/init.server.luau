@@ -10,10 +10,10 @@
 	the hub build, is isolated so a map error cannot skip that profile push.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 917d688+ server` in Output.
+	still leaves `[Shardfall] build 839fdbb+ server` in Output.
 ]]
 
-print("[Shardfall] build 917d688+ server")
+print("[Shardfall] build 839fdbb+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)

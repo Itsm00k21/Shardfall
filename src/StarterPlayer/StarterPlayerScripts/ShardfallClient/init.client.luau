@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 917d688+ client` in Output.
+	still leaves `[Shardfall] build 839fdbb+ client` in Output.
 ]]
 
-print("[Shardfall] build 917d688+ client")
+print("[Shardfall] build 839fdbb+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -590,6 +590,9 @@ inventory = InventoryHud.start(playerGui, {
 	end,
 	onStatus = function(text: string, kind: string)
 		ui.setStatus(text, kind)
+	end,
+	onVisible = function(open: boolean)
+		ui.setCovered(open)
 	end,
 })
 

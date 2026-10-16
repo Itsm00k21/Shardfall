@@ -50,6 +50,28 @@ describe("HavenLife", function()
 			end
 			if piece.name == "Waterfall" then
 				expect(math.abs(piece.rx) >= 60).toBeTrue()
+				local top = piece.y + math.cos(math.rad(piece.rx)) * (piece.size[2] / 2)
+				expect(top >= 1).toBeTrue()
+				local islands = {
+					{ x = 0, z = 0, radius = Haven.PLAZA_RADIUS },
+				}
+				for _, district in ipairs(Haven.DISTRICTS) do
+					table.insert(islands, {
+						x = district.x,
+						z = district.z,
+						radius = district.radius or 30,
+					})
+				end
+				local nearest = islands[1]
+				local nearestReach = math.huge
+				for _, island in ipairs(islands) do
+					local reach = math.sqrt((piece.x - island.x) ^ 2 + (piece.z - island.z) ^ 2)
+					if reach < nearestReach then
+						nearest = island
+						nearestReach = reach
+					end
+				end
+				expect(nearestReach > nearest.radius + 8).toBeTrue()
 			end
 		end
 		expect(orbitNamed).toEqual(0)

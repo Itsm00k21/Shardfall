@@ -15,6 +15,7 @@ local UserInputService = game:GetService("UserInputService")
 local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
 local Materials = require(Shared:WaitForChild("Materials"))
@@ -36,6 +37,7 @@ export type Callbacks = {
 	onFeed: (keptUid: string, feederUid: string) -> (),
 	onTonic: () -> (),
 	onStatus: (text: string, kind: string) -> (),
+	onVisible: ((open: boolean) -> ())?,
 }
 
 local COLORS = {
@@ -163,8 +165,27 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Visible = false,
 	}, screen) :: Frame
 	corner(root, 12)
-	MobileShell.aspect(root, 0.62)
-	MobileShell.limit(root, 900, 1100)
+	local function phoneLayout(): boolean
+		return ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
+	end
+	local function fitRoot()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local box = ShellLayout.inventory(vx, vy, phoneLayout())
+		root.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	fitRoot()
+	local fitCamera = workspace.CurrentCamera
+	if fitCamera ~= nil then
+		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitRoot)
+	end
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 12),
 		PaddingBottom = UDim.new(0, 12),
@@ -177,28 +198,29 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.new(1, 0, 0, 36),
 	}, root) :: Frame
 	local title = new("TextLabel", {
+		Name = "Title",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(0.5, 1),
+		Size = UDim2.new(1, -196, 1, 0),
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.None,
 		TextColor3 = COLORS.text,
 		Text = "Inventory",
 	}, header) :: TextLabel
 	local capacity = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.35, 0),
-		Size = UDim2.fromScale(0.35, 1),
+		Visible = false,
+		Size = UDim2.fromOffset(0, 0),
 		Font = Enum.Font.BuilderSans,
 		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = COLORS.muted,
 		Text = "",
 	}, header) :: TextLabel
 	local expand = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -88, 0.5, 0),
-		Size = UDim2.fromOffset(96, 44),
+		Position = UDim2.new(1, -92, 0.5, 0),
+		Size = UDim2.fromOffset(88, 44),
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -221,14 +243,16 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(close, 6)
 
 	local tabBar = new("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 42),
-		Size = UDim2.new(1, 0, 0, 44),
+		Position = UDim2.fromOffset(0, 48),
+		Size = UDim2.new(1, 0, 0, 48),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 6,
+		ScrollingEnabled = true,
+		CanvasSize = UDim2.fromOffset(720, 44),
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollingDirection = Enum.ScrollingDirection.X,
+		ClipsDescendants = true,
 	}, root) :: ScrollingFrame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -237,14 +261,16 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, tabBar)
 
 	local filterBar = new("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 80),
-		Size = UDim2.new(1, 0, 0, 64),
+		Position = UDim2.fromOffset(0, 100),
+		Size = UDim2.new(1, 0, 0, 56),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 6,
+		ScrollingEnabled = true,
+		CanvasSize = UDim2.fromOffset(1400, 44),
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollingDirection = Enum.ScrollingDirection.X,
+		ClipsDescendants = true,
 	}, root) :: ScrollingFrame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -270,8 +296,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(search, 6)
 
 	local body = new("Frame", {
-		Position = UDim2.fromOffset(0, 152),
-		Size = UDim2.new(1, 0, 1, -152),
+		Position = UDim2.fromOffset(0, 164),
+		Size = UDim2.new(1, 0, 1, -164),
 		BackgroundTransparency = 1,
 	}, root) :: Frame
 
@@ -380,16 +406,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local pendingFeed: { string }? = nil
 	local tabButtons: { [string]: TextButton } = {}
 
-	local function narrow(): boolean
-		local camera = workspace.CurrentCamera
-		if camera == nil then
-			return false
-		end
-		return camera.ViewportSize.X < 760
-	end
-
 	local function placePanes()
-		local phone = narrow()
+		local phone = phoneLayout()
 		local showDetail = selectedId ~= nil
 		if phone then
 			grid.Visible = not showDetail
@@ -480,7 +498,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			then profile.inventoryCap
 			else Schema.inventoryCap(profile)
 		capacity.Text = string.format("%d / %d", used, cap)
-		title.Text = "Inventory"
+		title.Text = string.format("Inventory   %d / %d", used, cap)
 
 		for _, tab in ipairs(InventoryView.TABS) do
 			local button = tabButtons[tab]
@@ -564,7 +582,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 		clearGenerated(detail)
 		local order = 1
-		if narrow() and selectedId ~= nil then
+		if phoneLayout() and selectedId ~= nil then
 			local back = actionButton(detail, "Back", order, COLORS.buttonDim)
 			order += 1
 			back.MouseButton1Click:Connect(function()
@@ -969,8 +987,12 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		isOpen = open
 		root.Visible = open
 		openButton.Visible = false
+		fitRoot()
 		if open then
 			render()
+		end
+		if callbacks.onVisible ~= nil then
+			callbacks.onVisible(open)
 		end
 	end
 

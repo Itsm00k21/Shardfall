@@ -156,46 +156,54 @@ function HavenLife.pieces(): { Piece }
 		table.insert(falls, { district.x, district.z, district.radius or 30 })
 	end
 	for _, fall in ipairs(falls) do
-		local fx, fz = outer(fall[1], fall[2], fall[3], 3)
-		local yaw = math.atan2(fx, fz)
+		-- Past the rock lip (the rock overhangs the floor by 8). A 68 degree
+		-- sheet whose top sits on the walk hangs down the cliff instead of
+		-- lying inside the island.
+		local fx, fz = outer(fall[1], fall[2], fall[3], 16)
+		local yaw = math.atan2(fx - fall[1], fz - fall[2])
+		local length = 24
+		local tilt = 68
+		local top = 2.2
+		local centerY = top - math.cos(math.rad(tilt)) * (length / 2)
 		add(
 			piece(
 				"Waterfall",
 				"Part",
-				7,
-				18,
-				0.8,
+				8,
+				length,
+				1.4,
 				fx,
-				-6,
+				centerY,
 				fz,
-				72,
+				tilt,
 				math.deg(yaw),
 				0,
 				MIST,
 				"Glass",
 				"large",
-				0.35,
+				0.18,
 				nil,
 				"mist"
 			)
 		)
+		local lipX, lipZ = outer(fall[1], fall[2], fall[3], 1)
 		add(
 			piece(
 				"FallLip",
 				"WedgePart",
-				6,
-				1.2,
-				2.4,
-				fx,
-				1.2,
-				fz,
+				8,
+				0.7,
+				3.2,
+				lipX,
+				0.7,
+				lipZ,
 				28,
 				math.deg(yaw),
 				0,
 				MIST,
 				"Neon",
 				"small",
-				0.2
+				0.15
 			)
 		)
 	end
@@ -276,30 +284,6 @@ function HavenLife.pieces(): { Piece }
 			)
 		)
 	end
-
-	local forge = Haven.district("forge")
-	assert(forge ~= nil)
-	add(
-		piece(
-			"Anvil",
-			"Part",
-			2.4,
-			1.3,
-			1.2,
-			forge.x + 14,
-			1.15,
-			forge.z + 10,
-			0,
-			20,
-			0,
-			{ 70, 72, 80 },
-			"Metal",
-			"large",
-			0,
-			nil,
-			"sparks"
-		)
-	)
 
 	local garden = Haven.district("garden")
 	assert(garden ~= nil)

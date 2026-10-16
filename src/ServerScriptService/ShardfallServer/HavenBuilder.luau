@@ -25,6 +25,7 @@ local RunService = game:GetService("RunService")
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local HavenLife = require(ReplicatedStorage.Shared.HavenLife)
+local ShellLayout = require(ReplicatedStorage.Shared.ShellLayout)
 local Travel = require(ReplicatedStorage.Shared.Travel)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 
@@ -181,10 +182,12 @@ local function sign(parent: Instance, cframe: CFrame, text: string)
 	anchor.Transparency = 1
 	anchor:SetAttribute("HavenLabel", text)
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(math.max(140, #text * 11), 32)
-	gui.StudsOffset = Vector3.new(0, 1.5, 0)
-	gui.AlwaysOnTop = true
-	gui.MaxDistance = 420
+	gui.Size = UDim2.fromScale(ShellLayout.ZONE_WIDTH_STUDS, ShellLayout.ZONE_HEIGHT_STUDS)
+	gui.StudsOffset = Vector3.new(0, 4, 0)
+	gui.AlwaysOnTop = false
+	gui.MaxDistance = ShellLayout.ZONE_MAX_DISTANCE
+	gui.DistanceLowerLimit = 0
+	gui.DistanceUpperLimit = ShellLayout.ZONE_MAX_DISTANCE
 	gui.Parent = anchor
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
@@ -723,6 +726,61 @@ local function buildForge(parent: Instance)
 		embers.Color = ColorSequence.new(Color3.fromRGB(255, 140, 48))
 		embers.Parent = chimney
 	end
+	-- The hall is the dark block. The anvil, basin, and flame sit on the
+	-- walk in front of it, on this island model, so they render with the
+	-- greybox even when dressing streams or a tier trims cosmetics.
+	local function keep(piece: BasePart)
+		piece:SetAttribute("ShardfallKeep", true)
+		piece.CastShadow = true
+	end
+	local basin = part(
+		model,
+		"ForgeBasin",
+		Vector3.new(8, 1.4, 6),
+		hall.CFrame * CFrame.new(18, -hall.Size.Y / 2 + 0.7, 6),
+		Color3.fromRGB(62, 50, 46),
+		Enum.Material.Metal,
+		false,
+		true
+	)
+	keep(basin)
+	local anvil = part(
+		model,
+		"Anvil",
+		Vector3.new(4.8, 2.2, 2.6),
+		basin.CFrame * CFrame.new(0, 1.8, 0),
+		Color3.fromRGB(206, 210, 216),
+		Enum.Material.Metal,
+		false,
+		true
+	)
+	keep(anvil)
+	local flame = part(
+		model,
+		"ForgeFlame",
+		Vector3.new(1.8, 2.8, 1.8),
+		anvil.CFrame * CFrame.new(0, 2.3, 0.15),
+		Color3.fromRGB(255, 132, 36),
+		Enum.Material.Neon,
+		false,
+		true
+	)
+	keep(flame)
+	local fire = Instance.new("PointLight")
+	fire.Name = "PointLight"
+	fire.Color = flame.Color
+	fire.Brightness = 2
+	fire.Range = 18
+	fire.Shadows = false
+	fire.Parent = flame
+	local sparks = borrow("ParticleEmitter") :: ParticleEmitter
+	sparks.Name = "sparks"
+	sparks.Rate = 8
+	sparks.LightEmission = 0.8
+	sparks.Lifetime = NumberRange.new(0.4, 0.9)
+	sparks.Speed = NumberRange.new(1, 3)
+	sparks.Color = ColorSequence.new(Color3.fromRGB(255, 170, 64))
+	sparks.Parent = flame
 	local forge = stationPad(model, place.x, place.z, Color3.fromRGB(255, 120, 36))
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 140, 40)
@@ -1297,6 +1355,17 @@ local function stampLife(parent: Instance)
 		stone.CanQuery = true
 		stone.CastShadow = false
 		stone:SetAttribute("WaystoneId", dest.id)
+		local crystal = part(
+			alive,
+			"WaystoneCrystal",
+			Vector3.new(1.2, 1.8, 1.2),
+			CFrame.new(dest.stoneX, height + 1, dest.stoneZ) * CFrame.Angles(0, 0.4, 0.5),
+			Color3.fromRGB(186, 140, 255),
+			Enum.Material.Neon,
+			false
+		)
+		crystal:SetAttribute("WaystoneId", dest.id)
+		crystal:SetAttribute("ShardfallKeep", true)
 		local glow = Instance.new("PointLight")
 		glow.Name = "PointLight"
 		glow.Color = Color3.fromRGB(180, 160, 220)
@@ -1526,10 +1595,7 @@ function HavenBuilder.build(parent: Instance): number
 			if descendant.Name == "Waterfall" then
 				waterfalls += 1
 			end
-			if
-				descendant.Name == "Waystone"
-				or type(descendant:GetAttribute("WaystoneId")) == "string"
-			then
+			if descendant.Name == "Waystone" then
 				waystones += 1
 			end
 		elseif descendant:IsA("Model") and descendant.Name == "Townsfolk" then

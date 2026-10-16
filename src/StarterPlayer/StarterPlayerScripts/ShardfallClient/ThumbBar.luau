@@ -7,7 +7,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local ThumbBar = {}
@@ -31,22 +31,27 @@ local function new(className: string, props: { [string]: any }, parent: Instance
 	return instance
 end
 
-local function button(parent: Instance, name: string, text: string, color: Color3): TextButton
+local function button(
+	parent: Instance,
+	name: string,
+	text: string,
+	color: Color3,
+	width: number
+): TextButton
 	local widget = new("TextButton", {
 		Name = name,
 		BackgroundColor3 = color,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(Quality.THUMB, Quality.THUMB),
-		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(width, 56),
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 13,
-		TextWrapped = true,
+		TextSize = 16,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.None,
 		TextColor3 = Color3.fromRGB(240, 236, 248),
 		Text = text,
 		AutoButtonColor = true,
 	}, parent) :: TextButton
 	new("UICorner", { CornerRadius = UDim.new(0, 12) }, widget)
-	MobileShell.aspect(widget, 1)
 	return widget
 end
 
@@ -65,7 +70,7 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Position = UDim2.new(0, 12, 1, -12),
 		BackgroundTransparency = 1,
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, Quality.THUMB),
+		Size = UDim2.fromOffset(0, 56),
 	}, screen) :: Frame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -80,7 +85,7 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Position = UDim2.new(1, -12, 1, -12),
 		BackgroundTransparency = 1,
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, Quality.THUMB),
+		Size = UDim2.fromOffset(0, 56),
 	}, screen) :: Frame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -95,22 +100,43 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local dim = Color3.fromRGB(54, 46, 78)
 	local gold = Color3.fromRGB(255, 196, 64)
 
-	local menu = button(left, "Menu", "Menu", dim)
+	local function thumbWidth(): number
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		if vx < 1 then
+			vx = 1280
+		end
+		return ShellLayout.thumbSize(vx).w
+	end
+	local width = thumbWidth()
+
+	local menu = button(left, "Menu", "≡\nMenu", dim, width)
 	menu.LayoutOrder = 1
-	local inventory = button(left, "Inventory", "Inventory", purple)
+	local inventory = button(left, "Inventory", "▣\nItems", purple, width)
 	inventory.LayoutOrder = 2
-	local travel = button(left, "Travel", "Travel", purple)
+	local travel = button(left, "Travel", "→\nTravel", purple, width)
 	travel.LayoutOrder = 3
 
-	local graphics = button(right, "Graphics", "Med", dim)
+	local graphics = button(right, "Graphics", "◆\nMed", dim, width)
 	graphics.LayoutOrder = 1
-	local farm = button(right, "AutoFarm", "Auto Farm", dim)
+	local farm = button(right, "AutoFarm", "↻\nFarm", dim, width)
 	farm.LayoutOrder = 2
-	local tonic = button(right, "Tonic", "Tonic", dim)
+	local tonic = button(right, "Tonic", "+\nTonic", dim, width)
 	tonic.LayoutOrder = 3
-	local attack = button(right, "Attack", "Attack", gold)
+	local attack = button(right, "Attack", "×\nAttack", gold, width)
 	attack.LayoutOrder = 4
 	attack.TextColor3 = ink
+
+	local function applyWidth()
+		local nextWidth = thumbWidth()
+		for _, widget in ipairs({ menu, inventory, travel, graphics, farm, tonic, attack }) do
+			widget.Size = UDim2.fromOffset(nextWidth, 56)
+		end
+	end
+	local widthCamera = workspace.CurrentCamera
+	if widthCamera ~= nil then
+		widthCamera:GetPropertyChangedSignal("ViewportSize"):Connect(applyWidth)
+	end
 
 	menu.MouseButton1Click:Connect(callbacks.onMenu)
 	inventory.MouseButton1Click:Connect(callbacks.onInventory)
@@ -123,7 +149,7 @@ function ThumbBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local farmOn = false
 	return {
 		setGraphics = function(label: string)
-			graphics.Text = label
+			graphics.Text = "◆\n" .. label
 		end,
 		setFarm = function(enabled: boolean)
 			farmOn = enabled

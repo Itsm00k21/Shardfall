@@ -54,51 +54,90 @@ local function applyLighting(tier: Quality.Tier)
 	end
 end
 
-local artReported = false
+local lastArtLine = ""
+
+local function shownPart(part: BasePart): boolean
+	return part.Transparency < 0.95 and part.LocalTransparencyModifier < 0.5
+end
 
 local function reportArt(trimmed: number)
-	if artReported then
-		return
-	end
 	local haven = Workspace:FindFirstChild("Haven")
 	if haven == nil then
 		return
 	end
 	local parts = 0
 	local waterfalls = 0
-	local npcs = 0
+	local waterfallsShown = 0
 	local waystones = 0
+	local waystonesShown = 0
+	local forgeShown = 0
+	local npcShown = 0
+	local npcs = 0
 	for _, descendant in ipairs(haven:GetDescendants()) do
 		if descendant:IsA("BasePart") then
 			parts += 1
+			local visible = shownPart(descendant)
 			if descendant.Name == "Waterfall" then
 				waterfalls += 1
+				if visible then
+					waterfallsShown += 1
+				end
 			end
-			if
-				descendant.Name == "Waystone"
-				or type(descendant:GetAttribute("WaystoneId")) == "string"
-			then
+			if descendant.Name == "Waystone" then
 				waystones += 1
+				if visible then
+					waystonesShown += 1
+				end
+			end
+			if descendant.Name == "ForgeFlame" and visible then
+				forgeShown += 1
 			end
 		elseif descendant:IsA("Model") and descendant.Name == "Townsfolk" then
 			npcs += 1
+			local visible = false
+			for _, child in ipairs(descendant:GetDescendants()) do
+				if child:IsA("BasePart") and shownPart(child) then
+					visible = true
+					break
+				end
+			end
+			if visible then
+				npcShown += 1
+			end
 		end
 	end
 	if parts < 10 then
 		return
 	end
-	artReported = true
-	print(
-		string.format(
-			"[HavenArt] built %d parts: waterfalls %d, npcs %d, waystones %d; trimmed %d by tier %s",
-			parts,
-			waterfalls,
-			npcs,
-			waystones,
-			trimmed,
-			tierId
-		)
+	local line = string.format(
+		"[HavenArt] visible waterfalls %d/%d, npcs %d/%d, waystones %d/%d, forge %d; trimmed %d by tier %s",
+		waterfallsShown,
+		waterfalls,
+		npcShown,
+		npcs,
+		waystonesShown,
+		waystones,
+		forgeShown,
+		trimmed,
+		tierId
 	)
+	if line == lastArtLine then
+		return
+	end
+	lastArtLine = line
+	print(line)
+end
+
+local function ancestorsOf(instance: Instance): { string }
+	local names = {}
+	local cursor: Instance? = instance.Parent
+	local depth = 0
+	while cursor ~= nil and depth < 6 do
+		table.insert(names, cursor.Name)
+		cursor = cursor.Parent
+		depth += 1
+	end
+	return names
 end
 
 function VerdantLod.start()
@@ -117,38 +156,50 @@ function VerdantLod.start()
 		local trimmed = 0
 		for _, descendant in ipairs(Workspace:GetDescendants()) do
 			if descendant:IsA("BasePart") then
-				if
-					Quality.alwaysVisible(descendant.Name, descendant:GetAttribute("WaystoneId"))
-				then
-					descendant.LocalTransparencyModifier = 0
-					continue
-				end
 				local lod = descendant:GetAttribute("ShardfallLod")
-				local trim = descendant:GetAttribute("ShardfallTrim") == true or lod == "small"
+				local trimAttr = descendant:GetAttribute("ShardfallTrim") == true
+				local keep = descendant:GetAttribute("ShardfallKeep") == true
+				local names = ancestorsOf(descendant)
 				if camera == nil then
-					if type(lod) == "string" or trim then
+					local tagged = type(lod) == "string" or trimAttr or lod == "small"
+					local landmark = keep
+						or Quality.alwaysVisible(
+							descendant.Name,
+							descendant:GetAttribute("WaystoneId"),
+							names
+						)
+					if tagged or landmark then
 						descendant.LocalTransparencyModifier = 0
 					end
 					continue
 				end
 				local origin = camera.CFrame.Position
-				if type(lod) == "string" or trim then
-					local distance = (descendant.Position - origin).Magnitude
-					local hide = false
-					if trim then
-						trimIndex += 1
-						local kept = Quality.keepDecor(trimIndex, tierId)
-							and shown < tier.partBudget
-						if kept then
-							shown += 1
-							local limit = if lod == "small" then tier.lodHideAt else tier.lodFar
-							hide = distance > limit
-						else
-							hide = true
-						end
-					elseif lod == "large" then
-						hide = distance > tier.lodFar
-					end
+				local distance = (descendant.Position - origin).Magnitude
+				local hide, nextTrim, nextShown = Quality.lodHide(
+					descendant.Name,
+					descendant:GetAttribute("WaystoneId"),
+					names,
+					keep,
+					lod,
+					trimAttr,
+					distance,
+					tierId,
+					trimIndex,
+					shown
+				)
+				trimIndex = nextTrim
+				shown = nextShown
+				local landmark = keep
+					or Quality.alwaysVisible(
+						descendant.Name,
+						descendant:GetAttribute("WaystoneId"),
+						names
+					)
+				if landmark then
+					descendant.LocalTransparencyModifier = 0
+				end
+				local tagged = type(lod) == "string" or trimAttr or lod == "small"
+				if tagged or keep then
 					if hide then
 						trimmed += 1
 					end

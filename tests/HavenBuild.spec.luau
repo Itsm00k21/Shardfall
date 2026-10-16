@@ -18,6 +18,7 @@ local expect = framework.expect
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
 local HavenLife = require("../src/ReplicatedStorage/Shared/HavenLife")
+local ShellLayout = require("../src/ReplicatedStorage/Shared/ShellLayout")
 local Travel = require("../src/ReplicatedStorage/Shared/Travel")
 local VerdantScatter = require("../src/ReplicatedStorage/Shared/VerdantScatter")
 
@@ -414,6 +415,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 	local travelModule = instance("ModuleScript")
 	travelModule.Name = "Travel"
 	travelModule.Parent = shared
+	local shellModule = instance("ModuleScript")
+	shellModule.Name = "ShellLayout"
+	shellModule.Parent = shared
 
 	local runService = {
 		Heartbeat = {
@@ -521,6 +525,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			end
 			if module == travelModule then
 				return Travel
+			end
+			if module == shellModule then
+				return ShellLayout
 			end
 			error("unexpected require", 2)
 		end,

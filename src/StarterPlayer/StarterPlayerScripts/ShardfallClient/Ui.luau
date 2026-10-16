@@ -26,6 +26,7 @@ local UserInputService = game:GetService("UserInputService")
 local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local Areas = require(Shared:WaitForChild("Areas"))
 local Crafting = require(Shared:WaitForChild("Crafting"))
 local CraftingLevel = require(Shared:WaitForChild("CraftingLevel"))
@@ -177,11 +178,29 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, playerGui) :: ScreenGui
 	MobileShell.mount(screen)
 
+	local toast = new("TextLabel", {
+		Name = "Toast",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.32, 0, 0, 12),
+		Size = UDim2.new(0.46, 0, 0, 44),
+		BackgroundColor3 = COLORS.panel,
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextWrapped = true,
+		TextColor3 = COLORS.text,
+		Text = "",
+		Visible = false,
+		ZIndex = 30,
+	}, screen) :: TextLabel
+	corner(toast, 8)
+
 	local panel = new("ScrollingFrame", {
 		Name = "Panel",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.new(0.92, 0, 1, -168),
+		Size = UDim2.fromOffset(320, 480),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
@@ -192,11 +211,26 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: ScrollingFrame
 	corner(panel, 12)
 	padding(panel, 12)
-	MobileShell.aspect(panel, 0.62)
-	MobileShell.limit(panel, 420, 1200)
-	if UserInputService.TouchEnabled then
-		panel.Visible = false
+	local function fitPanel()
+		local camera = workspace.CurrentCamera
+		local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+		local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+		if vx < 1 then
+			vx = 1280
+		end
+		if vy < 1 then
+			vy = 720
+		end
+		local box = ShellLayout.sidePanel(vx, vy)
+		panel.Size = UDim2.fromOffset(box.w, box.h)
 	end
+	fitPanel()
+	local fitCamera = workspace.CurrentCamera
+	if fitCamera ~= nil then
+		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitPanel)
+	end
+	local touchOnly =
+		ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
 	list(panel, 8)
 	new("UIStroke", {
 		Color = COLORS.stroke,
@@ -207,23 +241,25 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local header = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.new(1, 0, 0, ShellLayout.TITLE_ROW + ShellLayout.HIDE_ROW),
 		LayoutOrder = 1,
 	}, panel) :: Frame
 	new("TextLabel", {
+		Name = "Title",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -176, 1, 0),
+		Size = UDim2.new(1, 0, 0, ShellLayout.TITLE_ROW),
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.None,
 		TextColor3 = COLORS.gold,
 		Text = "SHARDFALL",
 	}, header)
 	local minimize = new("TextButton", {
 		Name = "Minimize",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -104, 0.5, 0),
-		Size = UDim2.fromOffset(64, 44),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.fromOffset(72, 40),
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -248,23 +284,26 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Visible = false,
 	}, screen) :: TextButton
 	corner(restore, 8)
-	local function paintChrome()
-		restore.Visible = not panel.Visible
+	local userOpen = not touchOnly
+	local covered = false
+	local function applyChrome()
+		panel.Visible = userOpen and not covered
+		restore.Visible = (not userOpen) and not covered
 	end
-	paintChrome()
+	applyChrome()
 	minimize.MouseButton1Click:Connect(function()
-		panel.Visible = false
-		paintChrome()
+		userOpen = false
+		applyChrome()
 	end)
 	restore.MouseButton1Click:Connect(function()
-		panel.Visible = true
-		paintChrome()
+		userOpen = true
+		applyChrome()
 	end)
 
 	local saveBadge = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(96, 44),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1),
+		Size = UDim2.fromOffset(120, 40),
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -449,11 +488,18 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		callbacks.onDungeon("enter", "rootvault")
 	end)
-	wavesButton.MouseButton1Click:Connect(function()
+	wavesButton.Activated:Connect(function()
+		local text = "Entering Rootvault Waves…"
+		local color = COLORS.muted
 		if runState.active == true then
-			return
+			text = "Leave this run before starting Rootvault Waves."
+			color = COLORS.danger
+		else
+			callbacks.onDungeon("enter", "rootvault_waves")
 		end
-		callbacks.onDungeon("enter", "rootvault_waves")
+		toast.Text = text
+		toast.TextColor3 = color
+		toast.Visible = true
 	end)
 	leaveButton.MouseButton1Click:Connect(function()
 		callbacks.onDungeon("leave")
@@ -1308,13 +1354,18 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	function controller.toggleMenu()
-		panel.Visible = not panel.Visible
-		paintChrome()
+		userOpen = not userOpen
+		applyChrome()
+	end
+
+	function controller.setCovered(open: boolean)
+		covered = open
+		applyChrome()
 	end
 
 	function controller.openPanel(kind: string, areaId: string?)
-		panel.Visible = true
-		paintChrome()
+		userOpen = true
+		applyChrome()
 		if kind == "craft" then
 			page = "craft"
 			applyPage()
@@ -1339,13 +1390,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	function controller.setStatus(text: string, kind: string)
 		status.Text = text
 		status.Visible = text ~= ""
+		toast.Text = text
+		toast.Visible = text ~= ""
+		local color = COLORS.muted
 		if kind == "error" then
-			status.TextColor3 = COLORS.danger
+			color = COLORS.danger
 		elseif kind == "ok" then
-			status.TextColor3 = COLORS.ok
-		else
-			status.TextColor3 = COLORS.muted
+			color = COLORS.ok
 		end
+		status.TextColor3 = color
+		toast.TextColor3 = color
 	end
 
 	local function tonicCount(profile: any): number
