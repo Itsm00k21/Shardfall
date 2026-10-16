@@ -75,7 +75,7 @@ rojo serve
 
 Leave that terminal running. In Studio, create a Baseplate (or open any place), open the Rojo plugin, and connect to `localhost:34872`.
 
-Rojo only writes the instances this project describes. It leaves Workspace, lighting, and ReplicatedStorage extras alone. It **does** remove unknown scripts under `ServerScriptService` and `StarterPlayerScripts` on sync, so an old world script left in the place cannot keep spawning the grey-box hub.
+Rojo only writes the instances this project describes. It leaves Workspace, lighting, ReplicatedStorage, and `StarterPlayerScripts` extras alone, including Roblox's `PlayerModule` and `RbxCharacterSounds`. It **does** remove unknown scripts under `ServerScriptService` on sync, so an old world script left there cannot keep spawning the grey-box hub.
 
 You should see:
 
@@ -88,7 +88,7 @@ You should see:
 
 A panel named **SHARDFALL** sits on the right. **Hide** closes it. The **SHARDFALL** button that replaces it, and the bottom-corner **Menu** button, open it again.
 
-Open **View > Output**. The first server line must be `[Shardfall] build 917d688+ server`, and the client line `[Shardfall] build 917d688+ client`. Then paste the `[HavenArt]` and `[Rootvault]` lines. If those build lines are missing, this place is not running the synced scripts: in Explorer, delete every Script under `ServerScriptService`, `Workspace`, `StarterPlayer`, `StarterGui`, and `ReplicatedFirst` that is **not** inside `ShardfallServer` or `ShardfallClient`. Reconnect Rojo, press Play again, and read Output before judging the art.
+Open **View > Output**. The first server line must be `[Shardfall] build 917d688+ server`, and the client line `[Shardfall] build 917d688+ client`. Then paste the `[HavenArt]` and `[Rootvault]` lines. If those build lines are missing, this place is not running the synced scripts: in Explorer, delete every Script under `ServerScriptService`, `Workspace`, `StarterGui`, `StarterPack`, `ReplicatedFirst`, and `ServerStorage` that is **not** inside `ShardfallServer`. Leave `StarterPlayer` alone. `PlayerModule` and `RbxCharacterSounds` are Roblox's camera and control scripts. If a previous playtest left them Disabled, select each one and clear Disabled. Reconnect Rojo, press Play again, and read Output before judging the art.
 
 - You start at level 1 with **25 shard tokens**, 0 gold, 0 Shard Luck.
 - **Armory** and **Pets** are separate roll areas. You start in Verdant Wilds (Ascension 0). Sunken Reach, Emberforge, Frostveil, and Void Rift show as locked until your ascension reaches them.
@@ -315,6 +315,7 @@ src/ReplicatedStorage/Shared/
     Travel.luau               Waystone unlocks and the travel cooldown
     Quality.luau              Low, Med, and High graphics budgets
     Build.luau                Startup stamp printed in Output
+    ForeignScripts.luau       Which startup scripts the scan may disable
     InventoryStacks.luau      Loadout line and star feeders
     InventoryView.luau        Inventory filters, sorts, and compare
     ModelFactory.luau         Part rigs for monsters and the forest kit

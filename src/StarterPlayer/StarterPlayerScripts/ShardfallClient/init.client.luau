@@ -12,7 +12,7 @@
 	changed without a button press (the first load, for example).
 
 	The pool id is the realm selected in the current roll area. Armory and
-	Pets are separate. A realm above 	the player's ascension is not offered.
+	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
 	still leaves `[Shardfall] build 917d688+ client` in Output.
@@ -34,6 +34,35 @@ local Ui = require(script.Ui)
 local VerdantLod = require(script.VerdantLod)
 
 local player = Players.LocalPlayer
+
+-- Haven's walk surface is y=120. The default camera follows the Humanoid,
+-- which is what PlayerModule does. Set it here as well so a late control
+-- script cannot leave the camera in the void under the island.
+local function followCharacter(character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 8)
+	if humanoid == nil or not humanoid:IsA("Humanoid") then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	if camera == nil then
+		return
+	end
+	camera.CameraType = Enum.CameraType.Custom
+	camera.CameraSubject = humanoid
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root ~= nil and root:IsA("BasePart") then
+		local at = root.Position
+		camera.CFrame = CFrame.new(at + Vector3.new(0, 6, 14), at + Vector3.new(0, 2, 0))
+	end
+end
+
+if player.Character ~= nil then
+	task.spawn(followCharacter, player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	followCharacter(character)
+end)
+
 local playerGui = player:WaitForChild("PlayerGui")
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))

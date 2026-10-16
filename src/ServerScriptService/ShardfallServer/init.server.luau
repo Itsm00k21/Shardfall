@@ -16,29 +16,19 @@
 print("[Shardfall] build 917d688+ server")
 
 local function silenceForeignScripts()
-	local services = {
-		"ServerScriptService",
-		"Workspace",
-		"StarterPlayer",
-		"StarterGui",
-		"StarterPack",
-		"ReplicatedFirst",
-	}
+	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
 	local found = 0
-	for _, serviceName in ipairs(services) do
+	for _, serviceName in ipairs(ForeignScripts.SERVICES) do
 		local root = game:GetService(serviceName)
 		for _, descendant in ipairs(root:GetDescendants()) do
 			if descendant:IsA("BaseScript") then
-				local managed = false
-				local cursor: Instance? = descendant
+				local names = { descendant.Name }
+				local cursor: Instance? = descendant.Parent
 				while cursor ~= nil do
-					if cursor.Name == "ShardfallServer" or cursor.Name == "ShardfallClient" then
-						managed = true
-						break
-					end
+					table.insert(names, cursor.Name)
 					cursor = cursor.Parent
 				end
-				if not managed then
+				if ForeignScripts.shouldFlag(serviceName, names) then
 					found += 1
 					warn(
 						string.format(
