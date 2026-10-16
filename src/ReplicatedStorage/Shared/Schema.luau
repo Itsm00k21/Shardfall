@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 11.
+	The player profile shape, version 12.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -14,6 +14,7 @@
 	what DataStores can save and what a RemoteEvent can send.
 ]]
 
+local Audio = require("./Audio")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Quality = require("./Quality")
@@ -22,7 +23,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 11
+Schema.VERSION = 12
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -127,6 +128,8 @@ export type ProfileData = {
 	chestDuplicates: string,
 	chestSalvageBelow: string,
 	pendingChest: any,
+	musicVolume: number,
+	sfxVolume: number,
 }
 
 function Schema.template(): ProfileData
@@ -189,6 +192,8 @@ function Schema.template(): ProfileData
 		chestDuplicates = "dust",
 		chestSalvageBelow = "",
 		pendingChest = nil,
+		musicVolume = Audio.DEFAULT_MUSIC,
+		sfxVolume = Audio.DEFAULT_SFX,
 	}
 end
 
@@ -305,6 +310,8 @@ function Schema.reconcile(data: any): ProfileData
 	data.quickRollUntil = wholeNumber(data.quickRollUntil, 0, 0)
 	data.vip = data.vip == true
 	data.shake = data.shake ~= false
+	data.musicVolume = Audio.clampVolume(data.musicVolume)
+	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
 	end
@@ -673,6 +680,19 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 11
 	end
 
+	if version < 12 then
+		-- Music and SFX sliders. 1 is full. The Haven track still starts at
+		-- its own bed volume and the slider multiplies that.
+		if tonumber(raw.musicVolume) == nil then
+			raw.musicVolume = Audio.DEFAULT_MUSIC
+		end
+		if tonumber(raw.sfxVolume) == nil then
+			raw.sfxVolume = Audio.DEFAULT_SFX
+		end
+		raw.schemaVersion = 12
+		version = 12
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -865,6 +885,8 @@ function Schema.snapshot(data: ProfileData)
 		chestDuplicates = data.chestDuplicates,
 		chestSalvageBelow = data.chestSalvageBelow,
 		pendingChest = Schema.deepCopy(data.pendingChest),
+		musicVolume = data.musicVolume,
+		sfxVolume = data.sfxVolume,
 	}
 end
 

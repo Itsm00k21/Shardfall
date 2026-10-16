@@ -10,6 +10,7 @@
 local process = require("@lune/process")
 local framework = require("./framework")
 
+require("./Audio.spec")
 require("./RollMath.spec")
 require("./RarityConfig.spec")
 require("./ChestConfig.spec")

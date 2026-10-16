@@ -28,6 +28,7 @@ local MobileShell = require(script.Parent.MobileShell)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local Areas = require(Shared:WaitForChild("Areas"))
+local Audio = require(Shared:WaitForChild("Audio"))
 local Crafting = require(Shared:WaitForChild("Crafting"))
 local CraftingLevel = require(Shared:WaitForChild("CraftingLevel"))
 local Currencies = require(Shared:WaitForChild("Currencies"))
@@ -59,6 +60,7 @@ export type Callbacks = {
 	onAttack: () -> (),
 	onAutoAttack: (enabled: boolean) -> (),
 	onAutoFarm: (enabled: boolean) -> (),
+	onAudio: (music: number, sfx: number, commit: boolean) -> (),
 }
 
 local COLORS = {
@@ -876,6 +878,136 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, panel) :: TextLabel
 	corner(loadout, 8)
 	padding(loadout, 8)
+
+	local musicValue = Audio.DEFAULT_MUSIC
+	local sfxValue = Audio.DEFAULT_SFX
+	local audioBlock = new("Frame", {
+		Name = "Audio",
+		BackgroundColor3 = COLORS.panel,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 18,
+	}, panel) :: Frame
+	corner(audioBlock, 8)
+	padding(audioBlock, 8)
+	list(audioBlock, 6)
+	local audioTitle = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.gold,
+		Text = "Audio",
+		LayoutOrder = 1,
+	}, audioBlock) :: TextLabel
+	audioTitle.Name = "AudioTitle"
+
+	local function volumeRow(
+		title: string,
+		order: number,
+		current: () -> number,
+		apply: (number, boolean) -> ()
+	): (number) -> ()
+		local row = new("Frame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 64),
+			LayoutOrder = order,
+		}, audioBlock) :: Frame
+		local caption = new("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Enum.Font.BuilderSansMedium,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = COLORS.text,
+			Text = title,
+		}, row) :: TextLabel
+		local track = new("TextButton", {
+			Position = UDim2.fromOffset(0, 20),
+			Size = UDim2.new(1, 0, 0, 44),
+			BackgroundColor3 = COLORS.buttonDim,
+			BorderSizePixel = 0,
+			Text = "",
+			AutoButtonColor = false,
+		}, row) :: TextButton
+		corner(track, 8)
+		local fill = new("Frame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = COLORS.gold,
+			BorderSizePixel = 0,
+		}, track) :: Frame
+		corner(fill, 8)
+		local dragging = false
+		local function paint(volume: number)
+			local shown = Audio.clampVolume(volume)
+			fill.Size = UDim2.fromScale(shown, 1)
+			caption.Text = string.format("%s  %d%%", title, math.floor(shown * 100 + 0.5))
+		end
+		local function readInput(input: InputObject): number
+			local width = track.AbsoluteSize.X
+			if width < 1 then
+				return current()
+			end
+			return Audio.clampVolume((input.Position.X - track.AbsolutePosition.X) / width)
+		end
+		local function push(input: InputObject, commit: boolean)
+			local volume = readInput(input)
+			paint(volume)
+			apply(volume, commit)
+		end
+		track.InputBegan:Connect(function(input)
+			local kind = input.UserInputType
+			if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+				return
+			end
+			dragging = true
+			push(input, false)
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if not dragging then
+				return
+			end
+			local kind = input.UserInputType
+			if kind ~= Enum.UserInputType.MouseMovement and kind ~= Enum.UserInputType.Touch then
+				return
+			end
+			push(input, false)
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if not dragging then
+				return
+			end
+			local kind = input.UserInputType
+			if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+				return
+			end
+			dragging = false
+			push(input, true)
+		end)
+		paint(current())
+		return function(volume: number)
+			if dragging then
+				return
+			end
+			paint(volume)
+		end
+	end
+
+	local paintMusic = volumeRow("Music", 2, function()
+		return musicValue
+	end, function(volume: number, commit: boolean)
+		musicValue = volume
+		callbacks.onAudio(musicValue, sfxValue, commit)
+	end)
+	local paintSfx = volumeRow("SFX", 3, function()
+		return sfxValue
+	end, function(volume: number, commit: boolean)
+		sfxValue = volume
+		callbacks.onAudio(musicValue, sfxValue, commit)
+	end)
 
 	local inventoryNote = new("TextLabel", {
 		Name = "InventoryNote",
@@ -1920,6 +2052,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			gear.bonus
 		)
 		paintRealms()
+		musicValue = Audio.clampVolume(profile.musicVolume)
+		sfxValue = Audio.clampVolume(profile.sfxVolume)
+		paintMusic(musicValue)
+		paintSfx(sfxValue)
 	end
 
 	function controller.setPolicy(policy: any)

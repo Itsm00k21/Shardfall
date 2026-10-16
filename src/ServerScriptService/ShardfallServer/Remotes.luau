@@ -16,6 +16,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Audio = require(ReplicatedStorage.Shared.Audio)
 local ChestService = require(script.Parent.ChestService)
 local CombatService = require(script.Parent.CombatService)
 local CraftService = require(script.Parent.CraftService)
@@ -342,6 +343,23 @@ function Remotes.bind()
 				return { ok = false, error = "Shake must be on or off." }
 			end
 			return RollService.setShake(player, enabled)
+		end)
+	end
+
+	functionRemote("SetAudio").OnServerInvoke = function(player, music, sfx)
+		return guard(player, "SetAudio", function()
+			if tonumber(music) == nil or tonumber(sfx) == nil then
+				return { ok = false, error = "Volume needs a number." }
+			end
+			local ok, err = DataService.mutate(player, function(data)
+				data.musicVolume = Audio.clampVolume(music)
+				data.sfxVolume = Audio.clampVolume(sfx)
+				return nil
+			end)
+			if not ok then
+				return { ok = false, error = err }
+			end
+			return { ok = true }
 		end)
 	end
 

@@ -28,6 +28,7 @@ local UserInputService = game:GetService("UserInputService")
 local CombatHud = require(script.CombatHud)
 local HavenClient = require(script.HavenClient)
 local InventoryHud = require(script.InventoryHud)
+local MusicController = require(script.MusicController)
 local RollReel = require(script.RollReel)
 local ThumbBar = require(script.ThumbBar)
 local TravelHud = require(script.TravelHud)
@@ -84,6 +85,7 @@ end
 local shownOddsKey: string? = nil
 local ui
 local rollReel
+local musicController = MusicController.start()
 local inventory
 local travel
 local thumb
@@ -180,6 +182,7 @@ local function applyProfile(profile: any, saving: any)
 		rollReel.setProfile(profile)
 		rollReel.setTier(tier)
 	end
+	musicController.setVolumes(profile.musicVolume, profile.sfxVolume)
 	if Quality.normalize(profile.graphicsQuality) == nil and not graphicsSent then
 		graphicsSent = true
 		task.spawn(function()
@@ -374,6 +377,23 @@ ui = Ui.mount(playerGui, {
 	end,
 	onAttack = function()
 		CombatHud.swing()
+	end,
+	onAudio = function(music: number, sfx: number, commit: boolean)
+		musicController.setVolumes(music, sfx)
+		if not commit then
+			return
+		end
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetAudio", music, sfx)
+			end)
+			local message = remoteError(ok, result, "Could not save audio.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+		end)
 	end,
 	onAutoFarm = function(enabled: boolean)
 		task.spawn(function()

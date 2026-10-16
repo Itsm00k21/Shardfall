@@ -58,6 +58,10 @@ local function playSound(soundId: string, volume: number)
 		local sound = Instance.new("Sound")
 		sound.SoundId = soundId
 		sound.Volume = volume
+		local sfx = game:GetService("SoundService"):FindFirstChild("SFX")
+		if sfx ~= nil and sfx:IsA("SoundGroup") then
+			sound.SoundGroup = sfx
+		end
 		sound.Parent = workspace
 		sound:Play()
 		game:GetService("Debris"):AddItem(sound, 2)

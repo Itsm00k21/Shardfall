@@ -128,6 +128,9 @@
         "SetGraphicsQuality": {
           "$className": "RemoteFunction"
         },
+        "SetAudio": {
+          "$className": "RemoteFunction"
+        },
         "SetShake": {
           "$className": "RemoteFunction"
         },

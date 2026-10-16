@@ -395,5 +395,20 @@ describe("Schema", function()
 		local chestCopy = Schema.snapshot(keptRolls)
 		expect(chestCopy.chests.Mythic).toEqual(0)
 		expect(chestCopy.shardDust).toEqual(0)
+		expect(keptRolls.musicVolume).toEqual(1)
+		expect(keptRolls.sfxVolume).toEqual(1)
+		expect(chestCopy.musicVolume).toEqual(1)
+		expect(chestCopy.sfxVolume).toEqual(1)
+
+		local quiet = Schema.migrate({
+			schemaVersion = 12,
+			musicVolume = 0,
+			sfxVolume = 2,
+			gold = 3,
+		})
+		assert(quiet ~= nil)
+		expect(quiet.musicVolume).toEqual(0)
+		expect(quiet.sfxVolume).toEqual(1)
+		expect(quiet.gold).toEqual(3)
 	end)
 end)
