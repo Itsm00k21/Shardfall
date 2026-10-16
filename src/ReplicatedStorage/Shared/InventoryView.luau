@@ -8,6 +8,7 @@
 	how a selected piece lines up against the one already worn.
 ]]
 
+local ChestConfig = require("./ChestConfig")
 local ItemBases = require("./ItemBases")
 local Materials = require("./Materials")
 local Pools = require("./Pools")
@@ -56,7 +57,7 @@ export type CompareLine = {
 	delta: string,
 }
 
-InventoryView.TABS = { "weapons", "armor", "accessories", "pets", "materials", "items" }
+InventoryView.TABS = { "weapons", "armor", "accessories", "pets", "materials", "items", "chests" }
 
 InventoryView.SORTS = { "power", "rarity", "newest", "name" }
 
@@ -123,6 +124,9 @@ function InventoryView.emptyText(tab: string): string
 	end
 	if tab == "materials" then
 		return "No materials yet."
+	end
+	if tab == "chests" then
+		return "No chests yet. Daily login, Rootvault, and Verdant enemies can drop one."
 	end
 	return "No consumables, scrolls, or boosts."
 end
@@ -383,7 +387,42 @@ local function raritySelected(rarities: { [string]: boolean }): boolean
 	return false
 end
 
+local function chestRows(profile: any): { Row }
+	local rows = {}
+	local bag = if type(profile) == "table" then profile.chests else nil
+	for index, tier in ipairs(ChestConfig.TIERS) do
+		local count = 0
+		if type(bag) == "table" and type(bag[tier]) == "number" then
+			count = bag[tier]
+		end
+		table.insert(rows, {
+			id = "chest:" .. tier,
+			kind = "Chest",
+			name = tier .. " Chest",
+			rarity = tier,
+			realm = "",
+			slot = nil,
+			sockets = 0,
+			equipped = false,
+			locked = false,
+			favorite = false,
+			power = index,
+			obtainedAt = index,
+			count = count,
+			item = nil,
+		})
+	end
+	return rows
+end
+
 local function matches(row: Row, query: Query): boolean
+	if row.kind == "Chest" then
+		local needle = string.lower(query.search or "")
+		if needle ~= "" and string.find(string.lower(row.name), needle, 1, true) == nil then
+			return false
+		end
+		return true
+	end
 	if raritySelected(query.rarities) and query.rarities[row.rarity] ~= true then
 		return false
 	end
@@ -450,6 +489,8 @@ function InventoryView.query(profile: any, query: Query): { Row }
 		pool = materialRows(profile, false)
 	elseif query.tab == "items" then
 		pool = itemRows(profile, query.now or 0)
+	elseif query.tab == "chests" then
+		pool = chestRows(profile)
 	end
 
 	local rows = {}

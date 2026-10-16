@@ -18,6 +18,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
@@ -89,6 +90,13 @@ local function publishMythic(name: string, shard: string, rarity: string)
 	end)
 	if not ok then
 		warn("[Roll] cross-server announce failed: " .. tostring(err))
+	end
+end
+
+function RollService.announceDrop(name: string, shard: string, rarity: string, crossServer: boolean)
+	broadcast(name, shard, rarity, crossServer)
+	if crossServer then
+		publishMythic(name, shard, rarity)
 	end
 end
 
@@ -417,6 +425,24 @@ function RollService.devGrant(player: Player, kind: any)
 		end)
 		if not ok then
 			return reject(err or "Could not grant materials.")
+		end
+		return { ok = true }
+	end
+	if kind == "chests" then
+		local ok, err = DataService.mutate(player, function(data)
+			ChestConfig.ensure(data)
+			for _, tier in ipairs(ChestConfig.TIERS) do
+				data.chests[tier] = math.min(999, data.chests[tier] + 5)
+			end
+			data.shardKeys = math.min(99999, data.shardKeys + 1000)
+			data.shardDust = math.min(999999, data.shardDust + 20000)
+			data.materials.verdant_bark = (data.materials.verdant_bark or 0) + 20
+			data.materials.heartwood = (data.materials.heartwood or 0) + 20
+			data.materials.gnarl_seed = (data.materials.gnarl_seed or 0) + 6
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not grant chests.")
 		end
 		return { ok = true }
 	end

@@ -583,6 +583,137 @@ inventory = InventoryHud.start(playerGui, {
 			ui.setStatus(if type(note) == "string" then note else "Fed.", "ok")
 		end)
 	end,
+	onOpenChest = function(tier: string, count: number)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("OpenChest", tier, count)
+			end)
+			local message = remoteError(ok, result, "Could not open that chest.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local chest = if type(result) == "table" then result.chest else nil
+			if rollReel ~= nil and type(chest) == "table" then
+				rollReel.playChest(chest)
+			end
+			if count > 1 then
+				ui.setStatus(string.format("Opened %d %s chests.", count, tier), "ok")
+			else
+				ui.setStatus("Opened a " .. tier .. " chest.", "ok")
+			end
+		end)
+	end,
+	onMergeChest = function(tier: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("MergeChest", tier)
+			end)
+			local message = remoteError(ok, result, "Could not merge those chests.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local merged = if type(result) == "table" then result.merge else nil
+			local nextTier = if type(merged) == "table" then tostring(merged.to) else "the next"
+			ui.setStatus("Merged into a " .. nextTier .. " chest.", "ok")
+		end)
+	end,
+	onBuyChest = function(tier: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyChest", tier)
+			end)
+			local message = remoteError(ok, result, "Could not buy that chest.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Bought a " .. tier .. " chest with Shard Keys.", "ok")
+		end)
+	end,
+	onClaimLogin = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("ClaimLogin")
+			end)
+			local message = remoteError(ok, result, "Could not claim the daily chest.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Daily login claimed.", "ok")
+		end)
+	end,
+	onBuyDust = function(templateId: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyDustShard", templateId)
+			end)
+			local message = remoteError(ok, result, "Could not buy that shard.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local name = if type(result) == "table" then tostring(result.name) else "shard"
+			ui.setStatus("Bought " .. name .. " with Shard Dust.", "ok")
+		end)
+	end,
+	onBuyBundle = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyChestBundle")
+			end)
+			if ok and type(result) == "table" and result.ok == true then
+				applyResult(result)
+				return
+			end
+			if ok and type(result) == "table" and result.code == "stub" then
+				ui.setStatus("That bundle is not for sale yet. Odds stay on the chest tab.", "info")
+				return
+			end
+			local message = remoteError(ok, result, "Could not request that bundle.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			end
+		end)
+	end,
+	onChestOptions = function(mode: string, salvage: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetChestOptions", mode, salvage)
+			end)
+			local message = remoteError(ok, result, "Could not save chest options.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Chest options saved.", "ok")
+		end)
+	end,
+	onResumeChest = function(pending: any)
+		if rollReel == nil or type(pending) ~= "table" then
+			return
+		end
+		local reel = rollReel
+		task.spawn(function()
+			reel.playChest({
+				tier = "Mythic",
+				pending = pending,
+				results = {},
+				bestIndex = 1,
+				seconds = 4,
+				reelSeconds = 0,
+				luck = 1,
+			})
+		end)
+	end,
 	onTonic = function()
 		task.spawn(function()
 			local ok, result = pcall(function()

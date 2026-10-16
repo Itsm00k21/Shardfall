@@ -20,6 +20,30 @@
         "RollPaid": {
           "$className": "RemoteFunction"
         },
+        "OpenChest": {
+          "$className": "RemoteFunction"
+        },
+        "ChooseChest": {
+          "$className": "RemoteFunction"
+        },
+        "MergeChest": {
+          "$className": "RemoteFunction"
+        },
+        "BuyChest": {
+          "$className": "RemoteFunction"
+        },
+        "ClaimLogin": {
+          "$className": "RemoteFunction"
+        },
+        "BuyDustShard": {
+          "$className": "RemoteFunction"
+        },
+        "BuyChestBundle": {
+          "$className": "RemoteFunction"
+        },
+        "SetChestOptions": {
+          "$className": "RemoteFunction"
+        },
         "BuyPrism": {
           "$className": "RemoteFunction"
         },

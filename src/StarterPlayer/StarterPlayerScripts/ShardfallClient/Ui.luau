@@ -929,6 +929,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			callbacks.onDev("ascension")
 		end)
 		local grantMaterials = makeButton(devBody, "+ craft materials", COLORS.buttonDim, 4, 30)
+		local grantChests = makeButton(devBody, "Grant chests", COLORS.buttonDim, 10, 30)
+		grantChests.TextSize = 14
+		grantChests.MouseButton1Click:Connect(function()
+			callbacks.onDev("chests")
+		end)
 		local grantForge = makeButton(devBody, "Forge Boost 1h", COLORS.buttonDim, 9, 30)
 		grantForge.TextSize = 14
 		grantForge.MouseButton1Click:Connect(function()

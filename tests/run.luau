@@ -12,6 +12,7 @@ local framework = require("./framework")
 
 require("./RollMath.spec")
 require("./RarityConfig.spec")
+require("./ChestConfig.spec")
 require("./Schema.spec")
 require("./SessionLock.spec")
 require("./PaidRollPolicy.spec")

@@ -16,10 +16,12 @@ local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
+local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
+local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 local Schema = require(Shared:WaitForChild("Schema"))
 local Stars = require(Shared:WaitForChild("Stars"))
 
@@ -38,6 +40,14 @@ export type Callbacks = {
 	onTonic: () -> (),
 	onStatus: (text: string, kind: string) -> (),
 	onVisible: ((open: boolean) -> ())?,
+	onOpenChest: ((tier: string, count: number) -> ())?,
+	onMergeChest: ((tier: string) -> ())?,
+	onBuyChest: ((tier: string) -> ())?,
+	onClaimLogin: (() -> ())?,
+	onBuyDust: ((templateId: string) -> ())?,
+	onBuyBundle: (() -> ())?,
+	onChestOptions: ((mode: string, salvage: string) -> ())?,
+	onResumeChest: ((pending: any) -> ())?,
 }
 
 local COLORS = {
@@ -450,10 +460,11 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		parent: Instance,
 		text: string,
 		order: number,
-		color: Color3
+		color: Color3,
+		height: number?
 	): TextButton
 		local button = new("TextButton", {
-			Size = UDim2.new(1, 0, 0, 44),
+			Size = UDim2.new(1, 0, 0, if height ~= nil then height else 44),
 			BackgroundColor3 = color,
 			BorderSizePixel = 0,
 			Font = Enum.Font.BuilderSansBold,
@@ -465,6 +476,125 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		}, parent) :: TextButton
 		corner(button, 8)
 		return button
+	end
+
+	local function chestActions(startOrder: number): number
+		local profile = latest
+		if type(profile) ~= "table" then
+			return startOrder
+		end
+		local order = startOrder
+		local keys = if type(profile.shardKeys) == "number" then profile.shardKeys else 0
+		local dust = if type(profile.shardDust) == "number" then profile.shardDust else 0
+		label(detail, string.format("Shard Keys  %d", keys), order, COLORS.gold, 14)
+		order += 1
+		label(detail, string.format("Shard Dust  %d", dust), order, COLORS.gold, 14)
+		order += 1
+		label(detail, ChestConfig.pityLine(profile), order, COLORS.muted, 13)
+		order += 1
+		local streak = if type(profile.loginStreak) == "number" then profile.loginStreak else 0
+		label(detail, string.format("Login streak  %d", streak), order, COLORS.muted, 13)
+		order += 1
+		if type(profile.pendingChest) == "table" and callbacks.onResumeChest ~= nil then
+			local choose = actionButton(detail, "Choose Mythic card", order, COLORS.gold, 60)
+			order += 1
+			choose.TextColor3 = COLORS.ink
+			local pending = profile.pendingChest
+			choose.MouseButton1Click:Connect(function()
+				if callbacks.onResumeChest ~= nil then
+					callbacks.onResumeChest(pending)
+				end
+			end)
+		end
+		if callbacks.onClaimLogin ~= nil then
+			local login = actionButton(detail, "Daily login", order, COLORS.button, 60)
+			order += 1
+			login.MouseButton1Click:Connect(callbacks.onClaimLogin)
+		end
+		local mode = if profile.chestDuplicates == "star" then "star" else "dust"
+		local salvage = if type(profile.chestSalvageBelow) == "string"
+			then profile.chestSalvageBelow
+			else ""
+		if callbacks.onChestOptions ~= nil then
+			local modeButton = actionButton(
+				detail,
+				if mode == "star" then "Duplicates: +1 star" else "Duplicates: Shard Dust",
+				order,
+				COLORS.buttonDim,
+				60
+			)
+			order += 1
+			modeButton.MouseButton1Click:Connect(function()
+				if callbacks.onChestOptions == nil then
+					return
+				end
+				local nextMode = if mode == "star" then "dust" else "star"
+				callbacks.onChestOptions(nextMode, salvage)
+			end)
+			local salvageLabel = if salvage == ""
+				then "Auto-salvage: off"
+				else "Auto-salvage at " .. salvage
+			local salvageButton = actionButton(detail, salvageLabel, order, COLORS.buttonDim, 60)
+			order += 1
+			salvageButton.MouseButton1Click:Connect(function()
+				if callbacks.onChestOptions == nil then
+					return
+				end
+				local steps = { "", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }
+				local index = 1
+				for stepIndex, step in ipairs(steps) do
+					if step == salvage then
+						index = stepIndex
+					end
+				end
+				callbacks.onChestOptions(mode, steps[(index % #steps) + 1])
+			end)
+		end
+		label(detail, "Dust shop", order, COLORS.muted, 13)
+		order += 1
+		if callbacks.onBuyDust ~= nil then
+			for _, row in ipairs(ChestConfig.dustCatalog(profile)) do
+				local buy = actionButton(
+					detail,
+					string.format("%s  ·  %d dust", tostring(row.name), row.cost),
+					order,
+					COLORS.buttonDim,
+					60
+				)
+				order += 1
+				local templateId = row.templateId
+				buy.MouseButton1Click:Connect(function()
+					if callbacks.onBuyDust ~= nil and type(templateId) == "string" then
+						callbacks.onBuyDust(templateId)
+					end
+				end)
+			end
+		end
+		label(detail, "Paid bundle. Odds are listed before any purchase.", order, COLORS.muted, 13)
+		order += 1
+		label(
+			detail,
+			"1 Rare Chest and 1 Epic Chest. Legendary and Mythic chests are not sold.",
+			order,
+			COLORS.text,
+			13
+		)
+		order += 1
+		for _, tierName in ipairs({ "Rare", "Epic" }) do
+			label(detail, tierName .. " Chest", order, rarityColor(tierName), 13)
+			order += 1
+			for _, line in ipairs(ChestConfig.oddsLines(tierName, 1)) do
+				label(detail, line, order, COLORS.muted, 12)
+				order += 1
+			end
+		end
+		if callbacks.onBuyBundle ~= nil then
+			local bundle =
+				actionButton(detail, "Request Rare and Epic bundle", order, COLORS.buttonDim, 60)
+			order += 1
+			bundle.MouseButton1Click:Connect(callbacks.onBuyBundle)
+		end
+		return order
 	end
 
 	local render: () -> ()
@@ -597,7 +727,12 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 		end
 		if selected == nil then
-			label(detail, "Select an item.", order, COLORS.muted, 14)
+			if query.tab == "chests" then
+				label(detail, "Select a chest.", order, COLORS.muted, 14)
+				chestActions(order + 1)
+			else
+				label(detail, "Select an item.", order, COLORS.muted, 14)
+			end
 			return
 		end
 		local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
@@ -773,6 +908,97 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 					confirm.Visible = true
 				end)
 			end
+		elseif selected.kind == "Chest" then
+			local tier = selected.rarity
+			label(detail, string.format("Owned  %d", selected.count), order, COLORS.text, 14)
+			order += 1
+			local floorName = ChestConfig.FLOOR[tier]
+			if type(floorName) == "string" then
+				label(detail, "Floor  " .. floorName .. "+", order, COLORS.muted, 13)
+				order += 1
+			end
+			local luck = RarityConfig.luckFromProfile(profile)
+			for _, line in ipairs(ChestConfig.oddsLines(tier, luck)) do
+				label(detail, line, order, COLORS.muted, 12)
+				order += 1
+			end
+			if callbacks.onOpenChest ~= nil and selected.count > 0 then
+				local open = actionButton(detail, "Open", order, COLORS.button, 60)
+				order += 1
+				open.MouseButton1Click:Connect(function()
+					if callbacks.onOpenChest ~= nil then
+						callbacks.onOpenChest(tier, 1)
+					end
+				end)
+			end
+			if callbacks.onOpenChest ~= nil and selected.count > 1 and tier ~= "Mythic" then
+				local manyCount = math.min(selected.count, ChestConfig.OPEN_MANY_MAX)
+				local openMany = actionButton(
+					detail,
+					string.format("Open %d", manyCount),
+					order,
+					COLORS.button,
+					60
+				)
+				order += 1
+				openMany.MouseButton1Click:Connect(function()
+					if callbacks.onOpenChest ~= nil then
+						callbacks.onOpenChest(tier, manyCount)
+					end
+				end)
+			end
+			local rule = ChestConfig.MERGE[tier]
+			if type(rule) == "table" and callbacks.onMergeChest ~= nil then
+				local owned = if type(profile.materials) == "table" then profile.materials else {}
+				local bits = {}
+				if type(rule.materials) == "table" then
+					for id, count in pairs(rule.materials) do
+						local have = if type(owned[id]) == "number" then owned[id] else 0
+						table.insert(
+							bits,
+							string.format("%d %s (have %d)", count, Materials.displayName(id), have)
+						)
+					end
+				end
+				label(
+					detail,
+					string.format(
+						"Merge %d into a %s Chest. %s",
+						ChestConfig.MERGE_COUNT,
+						tostring(rule.next),
+						table.concat(bits, ", ")
+					),
+					order,
+					COLORS.text,
+					13
+				)
+				order += 1
+				local merge = actionButton(detail, "Merge 5", order, COLORS.gold, 60)
+				order += 1
+				merge.TextColor3 = COLORS.ink
+				merge.MouseButton1Click:Connect(function()
+					if callbacks.onMergeChest ~= nil then
+						callbacks.onMergeChest(tier)
+					end
+				end)
+			end
+			local price = ChestConfig.KEY_SHOP[tier]
+			if type(price) == "number" and callbacks.onBuyChest ~= nil then
+				local buy = actionButton(
+					detail,
+					string.format("Buy with %d Shard Keys", price),
+					order,
+					COLORS.buttonDim,
+					60
+				)
+				order += 1
+				buy.MouseButton1Click:Connect(function()
+					if callbacks.onBuyChest ~= nil then
+						callbacks.onBuyChest(tier)
+					end
+				end)
+			end
+			chestActions(order)
 		elseif selected.kind == "Consumable" then
 			label(detail, string.format("Owned  %d", selected.count), order, COLORS.text, 14)
 			order += 1

@@ -16,6 +16,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local ChestService = require(script.Parent.ChestService)
 local CombatService = require(script.Parent.CombatService)
 local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
@@ -172,6 +173,54 @@ function Remotes.bind()
 	functionRemote("BuyBoost").OnServerInvoke = function(player)
 		return guard(player, "BuyBoost", function()
 			return RollService.buyLuckBoost(player)
+		end)
+	end
+
+	functionRemote("OpenChest").OnServerInvoke = function(player, tier, count)
+		return guard(player, "OpenChest", function()
+			return ChestService.open(player, tier, count)
+		end)
+	end
+
+	functionRemote("ChooseChest").OnServerInvoke = function(player, index)
+		return guard(player, "ChooseChest", function()
+			return ChestService.choose(player, index)
+		end)
+	end
+
+	functionRemote("MergeChest").OnServerInvoke = function(player, tier)
+		return guard(player, "MergeChest", function()
+			return ChestService.merge(player, tier)
+		end)
+	end
+
+	functionRemote("BuyChest").OnServerInvoke = function(player, tier)
+		return guard(player, "BuyChest", function()
+			return ChestService.buy(player, tier)
+		end)
+	end
+
+	functionRemote("ClaimLogin").OnServerInvoke = function(player)
+		return guard(player, "ClaimLogin", function()
+			return ChestService.claimLogin(player)
+		end)
+	end
+
+	functionRemote("BuyDustShard").OnServerInvoke = function(player, templateId)
+		return guard(player, "BuyDustShard", function()
+			return ChestService.buyDust(player, templateId)
+		end)
+	end
+
+	functionRemote("BuyChestBundle").OnServerInvoke = function(player)
+		return guard(player, "BuyChestBundle", function()
+			return ChestService.buyBundle(player)
+		end)
+	end
+
+	functionRemote("SetChestOptions").OnServerInvoke = function(player, mode, salvage)
+		return guard(player, "SetChestOptions", function()
+			return ChestService.setOptions(player, mode, salvage)
 		end)
 	end
 

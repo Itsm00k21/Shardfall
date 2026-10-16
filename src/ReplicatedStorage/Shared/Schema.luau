@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 10.
+	The player profile shape, version 11.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -22,7 +22,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 10
+Schema.VERSION = 11
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -115,6 +115,18 @@ export type ProfileData = {
 	quickRollUntil: number,
 	vip: boolean,
 	shake: boolean,
+	chests: { [string]: number },
+	shardKeys: number,
+	shardDust: number,
+	rareChestsSinceEpic: number,
+	epicChestsSinceLegendary: number,
+	lastLoginDay: number,
+	loginStreak: number,
+	lastDailyBossDay: number,
+	lastWeeklyBossWeek: number,
+	chestDuplicates: string,
+	chestSalvageBelow: string,
+	pendingChest: any,
 }
 
 function Schema.template(): ProfileData
@@ -158,6 +170,25 @@ function Schema.template(): ProfileData
 		quickRollUntil = 0,
 		vip = false,
 		shake = true,
+		chests = {
+			Common = 0,
+			Uncommon = 0,
+			Rare = 0,
+			Epic = 0,
+			Legendary = 0,
+			Mythic = 0,
+		},
+		shardKeys = 0,
+		shardDust = 0,
+		rareChestsSinceEpic = 0,
+		epicChestsSinceLegendary = 0,
+		lastLoginDay = -1,
+		loginStreak = 0,
+		lastDailyBossDay = -1,
+		lastWeeklyBossWeek = -1,
+		chestDuplicates = "dust",
+		chestSalvageBelow = "",
+		pendingChest = nil,
 	}
 end
 
@@ -274,6 +305,42 @@ function Schema.reconcile(data: any): ProfileData
 	data.quickRollUntil = wholeNumber(data.quickRollUntil, 0, 0)
 	data.vip = data.vip == true
 	data.shake = data.shake ~= false
+	if type(data.chests) ~= "table" then
+		data.chests = {}
+	end
+	for _, tier in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }) do
+		data.chests[tier] = wholeNumber(data.chests[tier], 0, 0)
+		if data.chests[tier] > 999 then
+			data.chests[tier] = 999
+		end
+	end
+	data.shardKeys = wholeNumber(data.shardKeys, 0, 0)
+	if data.shardKeys > 99999 then
+		data.shardKeys = 99999
+	end
+	data.shardDust = wholeNumber(data.shardDust, 0, 0)
+	if data.shardDust > 999999 then
+		data.shardDust = 999999
+	end
+	data.rareChestsSinceEpic = wholeNumber(data.rareChestsSinceEpic, 0, 0)
+	data.epicChestsSinceLegendary = wholeNumber(data.epicChestsSinceLegendary, 0, 0)
+	data.loginStreak = wholeNumber(data.loginStreak, 0, 0)
+	local function stamp(value: any): number
+		local numberValue = tonumber(value)
+		if numberValue == nil or numberValue ~= numberValue then
+			return -1
+		end
+		return math.floor(numberValue)
+	end
+	data.lastLoginDay = stamp(data.lastLoginDay)
+	data.lastDailyBossDay = stamp(data.lastDailyBossDay)
+	data.lastWeeklyBossWeek = stamp(data.lastWeeklyBossWeek)
+	if data.chestDuplicates ~= "star" then
+		data.chestDuplicates = "dust"
+	end
+	if type(data.chestSalvageBelow) ~= "string" then
+		data.chestSalvageBelow = ""
+	end
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -566,6 +633,46 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 10
 	end
 
+	if version < 11 then
+		-- Chests, Shard Keys, and Shard Dust. Login and boss clocks stay
+		-- at -1 so the first claim of a week still pays.
+		if type(raw.chests) ~= "table" then
+			raw.chests = {}
+		end
+		if type(raw.shardKeys) ~= "number" then
+			raw.shardKeys = 0
+		end
+		if type(raw.shardDust) ~= "number" then
+			raw.shardDust = 0
+		end
+		if type(raw.rareChestsSinceEpic) ~= "number" then
+			raw.rareChestsSinceEpic = 0
+		end
+		if type(raw.epicChestsSinceLegendary) ~= "number" then
+			raw.epicChestsSinceLegendary = 0
+		end
+		if type(raw.lastLoginDay) ~= "number" then
+			raw.lastLoginDay = -1
+		end
+		if type(raw.loginStreak) ~= "number" then
+			raw.loginStreak = 0
+		end
+		if type(raw.lastDailyBossDay) ~= "number" then
+			raw.lastDailyBossDay = -1
+		end
+		if type(raw.lastWeeklyBossWeek) ~= "number" then
+			raw.lastWeeklyBossWeek = -1
+		end
+		if raw.chestDuplicates ~= "star" then
+			raw.chestDuplicates = "dust"
+		end
+		if type(raw.chestSalvageBelow) ~= "string" then
+			raw.chestSalvageBelow = ""
+		end
+		raw.schemaVersion = 11
+		version = 11
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -746,6 +853,18 @@ function Schema.snapshot(data: ProfileData)
 		quickRollUntil = data.quickRollUntil,
 		vip = data.vip,
 		shake = data.shake,
+		chests = Schema.deepCopy(data.chests),
+		shardKeys = data.shardKeys,
+		shardDust = data.shardDust,
+		rareChestsSinceEpic = data.rareChestsSinceEpic,
+		epicChestsSinceLegendary = data.epicChestsSinceLegendary,
+		lastLoginDay = data.lastLoginDay,
+		loginStreak = data.loginStreak,
+		lastDailyBossDay = data.lastDailyBossDay,
+		lastWeeklyBossWeek = data.lastWeeklyBossWeek,
+		chestDuplicates = data.chestDuplicates,
+		chestSalvageBelow = data.chestSalvageBelow,
+		pendingChest = Schema.deepCopy(data.pendingChest),
 	}
 end
 

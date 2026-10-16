@@ -359,4 +359,29 @@ describe("InventoryView", function()
 		local _, none = Crafting.salvageRarity(profile, "Common", 1)
 		expect(none).toEqual("Nothing of that rarity can be salvaged.")
 	end)
+
+	it("lists every chest tier on its own tab", function()
+		local chestQuery = InventoryView.defaultQuery()
+		chestQuery.tab = "chests"
+		local empty = InventoryView.query({}, chestQuery)
+		expect(#empty).toEqual(6)
+		local profile = Schema.template()
+		profile.chests.Rare = 3
+		local rows = InventoryView.query(profile, chestQuery)
+		expect(#rows).toEqual(6)
+		local rare = nil
+		for _, row in ipairs(rows) do
+			expect(row.kind).toEqual("Chest")
+			if row.rarity == "Rare" then
+				rare = row
+			end
+		end
+		assert(rare ~= nil)
+		expect(rare.count).toEqual(3)
+		expect(rare.id).toEqual("chest:Rare")
+		chestQuery.search = "myth"
+		local found = InventoryView.query(profile, chestQuery)
+		expect(#found).toEqual(1)
+		expect(found[1].rarity).toEqual("Mythic")
+	end)
 end)

@@ -25,6 +25,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Drops = require(ReplicatedStorage.Shared.Drops)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
@@ -805,6 +806,14 @@ local function grant(
 		if rolled.voucher == "armory" or rolled.voucher == "pets" then
 			data.vouchers[rolled.voucher] = (data.vouchers[rolled.voucher] or 0) + 1
 		end
+		if run.dungeon.endless == true then
+			-- Boss waves already paid their chest when the boss died.
+			if not Dungeons.isBossWave(run.wave) then
+				ChestConfig.grantSource(data, "room", os.time())
+			end
+		else
+			ChestConfig.grantSource(data, "clear", os.time())
+		end
 		return nil
 	end)
 	if not ok then
@@ -1024,8 +1033,18 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 	if enemy.hp <= 0 then
 		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
 		local landed = {}
+		local chestBits = {}
 		local saved, saveErr = DataService.mutate(player, function(data)
 			landed = Drops.apply(data.materials, enemy.kind, RollMath.defaultRng())
+			local drop = ChestConfig.enemyDrop(data, enemy.kind, RollMath.defaultRng())
+			if drop ~= nil then
+				table.insert(chestBits, drop.label)
+			end
+			if enemy.boss then
+				for _, row in ipairs(ChestConfig.bossKill(data, os.time())) do
+					table.insert(chestBits, row.label)
+				end
+			end
 			return nil
 		end)
 		if saved then
@@ -1039,6 +1058,9 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 						string.format("%s x%d", Materials.displayName(materialId), count)
 					)
 				end
+			end
+			for _, label in ipairs(chestBits) do
+				table.insert(bits, label)
 			end
 			if #bits > 0 then
 				-- The world label is the material, never the enemy that dropped it.
@@ -1074,6 +1096,10 @@ function DungeonService.damageEnemy(player: Player, enemyId: string, amount: num
 			elseif run.roomIndex >= #run.dungeon.rooms then
 				finish(player, true)
 			else
+				DataService.mutate(player, function(data)
+					ChestConfig.grantSource(data, "room", os.time())
+					return nil
+				end)
 				beginAdvance(
 					player,
 					run,
