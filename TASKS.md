@@ -45,7 +45,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 
 | id | title | owner | branch | files / folders | status | PR |
 |---|---|---|---|---|---|---|
-| T-025 | Verdant Relic Set rules module (pure, no wiring) | HELPER | `helper/relic-sets-9721` | new `src/ReplicatedStorage/Shared/RelicSets.luau`, new `tests/RelicSets.spec.luau`, one require line in `tests/run.luau`, new `docs/design/relic_sets.md` | claimed | — |
+| T-025 | Verdant Relic Set rules module (pure, no wiring) | HELPER | `helper/relic-sets-9721` | new `src/ReplicatedStorage/Shared/RelicSets.luau`, new `tests/RelicSets.spec.luau`, one require line in `tests/run.luau`, new `docs/design/relic_sets.md` | done | [#37](https://github.com/Itsm00k21/Shardfall/pull/37) |
 | T-027 | Raid conduct rules: AFK detection and vote-kick | HELPER | `helper/raid-conduct-9721` | new `src/ReplicatedStorage/Shared/RaidConduct.luau`, new `tests/RaidConduct.spec.luau`, `tests/run.luau` (one require line). Pure, server-authoritative rules from `docs/design/shardfall_raids.md`: AFK warning at 60 s with no input outside cutscenes, auto-remove at 90 s (rewards forfeited, backfill flagged); vote-kick needs 3/4 of the group plus a reason, is unavailable in the first 2 minutes and during combat, 1 kick per player per day, idle kicks drop queue priority, players kicked unfairly still keep their Marks, and kicking is disabled in Guided Raids. Do not edit `Raids.luau`, `RaidService.luau`, or T-012. Write a 'T-027 hooks for GHOST' section (RaidService call sites, and a suggested schema field for the daily kick count, since HELPER does not edit Schema). Queued until T-025 is done. | queued | — |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set (drops from Heartwood Hard, bound, never tradeable) with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. Pure data plus functions only: no edits to `Raids.luau`, `RaidService.luau`, Schema, remotes, ItemBases, or any GHOST file. Anything needing wiring goes in a "T-025 hooks for GHOST" section. Bonus numbers go in `docs/design/relic_sets.md` for Kevin to review. T-027 starts after that module lands.
@@ -729,6 +729,131 @@ That first-grant snapshot misses levels gained in Haven before the first clear. 
 `tests/run.luau` already requires `./Progression.spec`. No new spec line.
 
 Build stamp files are T-012. This branch does not change them. The module is not required by the client until the `CombatHud` line above, and prior HELPER branches skipped the stamp the same way.
+
+### T-025 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `Schema.luau`, `Remotes.luau`, `ItemBases.luau`, `Trading.luau`, `DungeonService.luau`, `CombatHud.luau`, or T-012. `RelicSets` is pure and ready to call. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged.
+
+Class ids match `Classes` (`warden`, `tidecaller`, `forgeborn`, `frostblade`, `voidcaster`). Slots match `Schema.ARMOR_SLOTS` (`helm`, `chest`, `legs`, `boots`). Piece ids are `verdant_<class>_<slot>`. They are not in `ItemBases` yet. `grovewarden_*` is a different set. Do not reuse those ids.
+
+Every piece is `bound = true` and `tradeable = false`. `RelicSets.stamp` copies a drop and sets those flags. It does not mutate the table you pass. `RelicSets.isRelic` is true for a piece id, a set id, or an item whose `templateId`, `id`, `pieceId`, or `setId` names one. A starter item with `bound = true` is not a relic. The check does not need the flag, so a save that dropped `bound` still refuses.
+
+`count` and `active` read what is worn. `setPct` reads what is owned. A duplicate piece counts once. Another class's pieces do not count. 0 or 1 piece is no bonus. 2 or 3 is the 2-piece. 4 is both, 2-piece first. `setPct` returns 0, 25, 50, 75, or 100 for the fullest set in the list. A number is a piece count, not a percent: `setPct(4)` is 100 and `setPct(5)` clamps to 100. A bare id string is 0. Pass a list, an inventory map, or a count.
+
+No bonus has a damage, health, defense, crit, or attack field. If a row has no damage field, do not invent one. Use the skill's existing coefficient. Numbers and the play reason are in `docs/design/relic_sets.md`.
+
+**T-010 / RaidService.** Require it next to `Raids`:
+
+```lua
+local RelicSets = require(ReplicatedStorage.Shared.RelicSets)
+```
+
+Heartwood Hard only (`RelicSets.RAID == "heartwood"`, `RelicSets.DIFFICULTY == "hard"`). Story and Normal do not drop these. `Raids.DIFFICULTIES` has no `hard` row yet (that is T-007). When the clear is Hard and the loot roll grants a piece, pick one the player's class does not already own:
+
+```lua
+local setDef = RelicSets.get(data.classId)
+if setDef == nil then
+	-- No class yet. Do not drop a relic.
+	return
+end
+local have = {}
+for _, item in pairs(data.inventory) do
+	if type(item) == "table" and type(item.templateId) == "string" then
+		have[item.templateId] = true
+	end
+end
+local missing = {}
+for _, piece in ipairs(setDef.pieces) do
+	if have[piece.id] ~= true then
+		table.insert(missing, piece)
+	end
+end
+-- `missing[1]` is a fair personal drop. Empty means the set is complete.
+local piece = missing[1]
+if piece ~= nil then
+	local drop = RelicSets.stamp({
+		templateId = piece.id,
+		name = piece.name,
+		kind = piece.kind,
+		rarity = piece.rarity,
+		slot = piece.slot,
+		setId = piece.setId,
+	})
+	-- Insert `drop` into the inventory with a new uid. It is already bound.
+end
+```
+
+The Vault uses the same list. A Hard week can offer one id from `missing`. Stamp it before it enters the bag. Do not offer a piece they already own. Do not add a Robux price. No Mark price is set in this module.
+
+The client must not send the bonus table. Call `active` on the server from the worn armor:
+
+```lua
+local equipped = {}
+local armor = data.equipped.armor
+if type(armor) == "table" then
+	for _, uid in pairs(armor) do
+		local item = data.inventory[uid]
+		if type(item) == "table" then
+			table.insert(equipped, item)
+		end
+	end
+end
+local bonuses = RelicSets.active(data.classId, equipped)
+```
+
+`bonuses[i].id` is what a raid panel can show (`bonuses[i].note`). Applying the taunt, cleanse, cone, or Chill spread is combat (T-001), not this call. T-010 does not need to change `CombatService`.
+
+**Heartwood Hard drop table.** Reference the ids from the module so they cannot drift. One personal piece per class per lockout is the intended shape. The final boss (`awakened`, Grandmother Gnarl Awakened) is the drop named in the raids doc. Other Hard bosses can use the same `setDef.pieces` list if the loot table should spread the set across the wing.
+
+| Class | Set id | Piece ids |
+|---|---|---|
+| warden | `verdant_warden` | `verdant_warden_helm`, `verdant_warden_chest`, `verdant_warden_legs`, `verdant_warden_boots` |
+| tidecaller | `verdant_tidecaller` | `verdant_tidecaller_helm`, `verdant_tidecaller_chest`, `verdant_tidecaller_legs`, `verdant_tidecaller_boots` |
+| forgeborn | `verdant_forgeborn` | `verdant_forgeborn_helm`, `verdant_forgeborn_chest`, `verdant_forgeborn_legs`, `verdant_forgeborn_boots` |
+| frostblade | `verdant_frostblade` | `verdant_frostblade_helm`, `verdant_frostblade_chest`, `verdant_frostblade_legs`, `verdant_frostblade_boots` |
+| voidcaster | `verdant_voidcaster` | `verdant_voidcaster_helm`, `verdant_voidcaster_chest`, `verdant_voidcaster_legs`, `verdant_voidcaster_boots` |
+
+`ItemBases` has no row for these. When you add one, copy `id`, `name`, `kind = "Armor"`, `rarity = "Epic"`, `slot`, and `setId` from `RelicSets.piece(id)`. Use the normal Epic helm/chest/legs/boots stat ranges. Do not put the 2-piece or 4-piece numbers on the item as stats. `RelicSets` stays the bonus source. No product id.
+
+**Trades.** `Trading.luau` is not edited here. `Trading.rejection` already returns `"Starter gear is bound."` when `item.bound == true`, which would catch a stamped relic with the wrong sentence, and it would miss a relic whose flag was stripped. Market listings go through the same `rejection`. Before the `isStarter` check:
+
+```lua
+local RelicSets = require("./RelicSets")
+```
+
+```lua
+if RelicSets.isRelic(item) then
+	return "Relic Set pieces are bound."
+end
+```
+
+Do not let the 2-hour same-run loot trade bypass that line. Relic pieces stay bound. Cosmetics and the starter check stay as they are.
+
+**DungeonService / recap.** T-016's victory payload still says `setPct = 0` until this exists. When T-026 wires that payload, replace the 0. Do not pass the sample 41 from `Progression.recap`. Owned pieces are the inventory, not only the worn ones. Equipped relics are still in the bag.
+
+`DungeonService.luau`, next to the other requires:
+
+```lua
+local RelicSets = require(ReplicatedStorage.Shared.RelicSets)
+```
+
+Inside the `grant` mutate, next to the level snapshot from the T-016 hooks:
+
+```lua
+local relicPct = RelicSets.setPct(data.inventory)
+```
+
+On the victory `recap` table, in place of `setPct = 0`:
+
+```lua
+setPct = relicPct,
+```
+
+`RelicSets.setPct` does not write the profile. No new remote and no schema field. `Schema.snapshot` already deep-copies `inventory`, and `sanitizeGear` does not strip unknown item keys, so `bound` and `tradeable` round-trip without a version bump. Adding them to the `Item` type is optional and belongs to T-012. Until then `isRelic` is the authority.
+
+`tests/run.luau` requires `./RelicSets.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
 
 ## Open
 
