@@ -24,6 +24,7 @@ local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
 local DungeonService = require(script.Parent.DungeonService)
 local InventoryService = require(script.Parent.InventoryService)
+local PetService = require(script.Parent.PetService)
 local OnboardingService = require(script.Parent.OnboardingService)
 local RateLimiter = require(script.Parent.RateLimiter)
 local PolicyCache = require(script.Parent.PolicyCache)
@@ -474,6 +475,32 @@ function Remotes.bind()
 			warn("[Shardfall] Attack:", err)
 		end
 	end)
+
+	functionRemote("HatchPet").OnServerInvoke = function(player)
+		return guard(player, "HatchPet", function()
+			return PetService.hatch(player)
+		end)
+	end
+	functionRemote("PetCare").OnServerInvoke = function(player, uid, kind)
+		return guard(player, "PetCare", function()
+			return PetService.care(player, uid, kind)
+		end)
+	end
+	functionRemote("FusePet").OnServerInvoke = function(player, keepUid, feedUid)
+		return guard(player, "FusePet", function()
+			return PetService.fuse(player, keepUid, feedUid)
+		end)
+	end
+	functionRemote("PaintPet").OnServerInvoke = function(player, uid, primary, secondary, glow)
+		return guard(player, "PaintPet", function()
+			return PetService.paint(player, uid, primary, secondary, glow)
+		end)
+	end
+	functionRemote("FavoritePet").OnServerInvoke = function(player, uid, locked)
+		return guard(player, "FavoritePet", function()
+			return PetService.favorite(player, uid, locked)
+		end)
+	end
 
 	functionRemote("UpgradeGear").OnServerInvoke = function(player, uid)
 		return guard(player, "UpgradeGear", function()

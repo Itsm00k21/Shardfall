@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 16.
+	The player profile shape, version 17.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -25,7 +25,7 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 16
+Schema.VERSION = 17
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -146,6 +146,8 @@ export type ProfileData = {
 	eventTokens: number,
 	ledger: { any },
 	receipts: { [string]: boolean },
+	eggs: number,
+	companions: { any },
 }
 
 function Schema.template(): ProfileData
@@ -224,6 +226,8 @@ function Schema.template(): ProfileData
 		eventTokens = 0,
 		ledger = {},
 		receipts = {},
+		eggs = 1,
+		companions = {},
 	}
 end
 
@@ -378,6 +382,10 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	if type(data.receipts) ~= "table" then
 		data.receipts = {}
+	end
+	data.eggs = wholeNumber(data.eggs, 0, 0)
+	if type(data.companions) ~= "table" then
+		data.companions = {}
 	end
 	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
 	if type(data.chests) ~= "table" then
@@ -810,6 +818,13 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 16
 	end
 
+	if version < 17 then
+		raw.eggs = 1
+		raw.companions = {}
+		raw.schemaVersion = 17
+		version = 17
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -1017,6 +1032,8 @@ function Schema.snapshot(data: ProfileData)
 		welcomeNote = data.welcomeNote,
 		gems = data.gems,
 		eventTokens = data.eventTokens,
+		eggs = data.eggs,
+		companions = Schema.deepCopy(data.companions),
 	}
 end
 

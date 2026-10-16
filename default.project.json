@@ -98,6 +98,11 @@
         "UpgradeGear": {
           "$className": "RemoteFunction"
         },
+        "HatchPet": { "$className": "RemoteFunction" },
+        "PetCare": { "$className": "RemoteFunction" },
+        "FusePet": { "$className": "RemoteFunction" },
+        "PaintPet": { "$className": "RemoteFunction" },
+        "FavoritePet": { "$className": "RemoteFunction" },
         "CombatFx": {
           "$className": "RemoteEvent"
         },
