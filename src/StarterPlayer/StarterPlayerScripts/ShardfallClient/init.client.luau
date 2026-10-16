@@ -15,16 +15,19 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 3558616+ client` in Output.
+	still leaves `[Shardfall] build b3c8748+ client` in Output.
 ]]
 
-print("[Shardfall] build 3558616+ client")
+print("[Shardfall] build b3c8748+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
+local ForeignScripts =
+	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
 local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
 local DebugHud = require(script.DebugHud)
@@ -74,6 +77,67 @@ player.CharacterAdded:Connect(function(character)
 end)
 
 local playerGui = player:WaitForChild("PlayerGui")
+
+local function scriptNames(instance: Instance): { string }
+	local names = { instance.Name }
+	local cursor: Instance? = instance.Parent
+	while cursor ~= nil do
+		table.insert(names, cursor.Name)
+		cursor = cursor.Parent
+	end
+	return names
+end
+
+local function dropStaleScripts(root: Instance)
+	local doomed = {}
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("BaseScript") and descendant ~= script then
+			if ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant)) then
+				table.insert(doomed, descendant)
+			end
+		end
+	end
+	for _, descendant in ipairs(doomed) do
+		warn(
+			string.format(
+				"[Shardfall] removed stale UI script %s so it cannot draw a second panel.",
+				descendant:GetFullName()
+			)
+		)
+		descendant:Destroy()
+	end
+end
+
+local function clearStaleGuis(gui: PlayerGui)
+	local doomed = {}
+	for _, child in ipairs(gui:GetChildren()) do
+		if child:IsA("ScreenGui") and ClientChrome.shouldClear(child.Name) then
+			table.insert(doomed, child)
+		end
+	end
+	for _, child in ipairs(doomed) do
+		child:Destroy()
+	end
+	local hosts: { [ScreenGui]: boolean } = {}
+	for _, descendant in ipairs(gui:GetDescendants()) do
+		if descendant:IsA("TextLabel") and ClientChrome.legacyReadout(descendant.Text) then
+			local host = descendant:FindFirstAncestorOfClass("ScreenGui")
+			if host ~= nil then
+				hosts[host] = true
+			end
+		end
+	end
+	for host in pairs(hosts) do
+		warn("[Shardfall] removed legacy panel " .. host:GetFullName())
+		host:Destroy()
+	end
+end
+
+if script.Parent ~= nil then
+	dropStaleScripts(script.Parent)
+end
+dropStaleScripts(playerGui)
+clearStaleGuis(playerGui)
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))

@@ -78,6 +78,7 @@ type Shot = {
 	critDamage: number,
 	lifesteal: number,
 	heavy: boolean,
+	landed: boolean?,
 }
 
 local classMods = function(_player: Player): { taken: number, dealt: number }
@@ -172,19 +173,21 @@ local function paint(part: BasePart, hp: number, maxHp: number)
 end
 
 local function publish(player: Player, state: State)
+	local hp, maxHp = CombatMath.clampVitals(state.hp, state.maxHp)
+	state.hp = hp
+	state.maxHp = maxHp
 	local hrp = rootPart(player)
 	if hrp ~= nil then
-		paint(hrp, state.hp, state.maxHp)
+		paint(hrp, hp, maxHp)
 		local nameLabel = hrp:FindFirstChild("Name", true)
 		if nameLabel ~= nil and nameLabel:IsA("TextLabel") then
-			nameLabel.Text =
-				string.format("%d / %d", math.max(0, math.floor(state.hp)), state.maxHp)
+			nameLabel.Text = string.format("%d / %d", hp, maxHp)
 		end
 	end
 	fx(player, {
 		kind = "hp",
-		hp = math.max(0, state.hp),
-		maxHp = state.maxHp,
+		hp = hp,
+		maxHp = maxHp,
 	})
 end
 
@@ -229,7 +232,26 @@ end
 local function attachCharacter(player: Player, character: Model)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid ~= nil then
+		-- Combat HP lives on the session, not on the Humanoid. Fall damage
+		-- and a stale Health script used to zero the body while the bar
+		-- still read 50/100. The body stays full so only damagePlayer can
+		-- down the player.
 		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		humanoid.BreakJointsOnDeath = false
+		pcall(function()
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+		end)
+		local pinning = false
+		local function pin()
+			if pinning or humanoid.Parent == nil then
+				return
+			end
+			pinning = true
+			humanoid.Health = humanoid.MaxHealth
+			pinning = false
+		end
+		humanoid.HealthChanged:Connect(pin)
+		pin()
 	end
 	local hrp = character:WaitForChild("HumanoidRootPart", 5)
 	if hrp ~= nil and hrp:IsA("BasePart") then
@@ -261,6 +283,13 @@ function CombatService.refresh(player: Player)
 	local previousMax = state.maxHp
 	state.defense = vitality.defense
 	state.maxHp = vitality.maxHealth
+	if state.ready and state.hp <= 0 then
+		-- A profile save on the killing blow used to add the new max onto
+		-- 0 (or onto a full bar: 100 + 3 = 103) and the label jumped.
+		state.hp = 0
+		publish(player, state)
+		return
+	end
 	if not state.ready then
 		state.hp = state.maxHp
 		state.ready = true
@@ -292,6 +321,9 @@ local function heal(player: Player, amount: number, x: number, y: number, z: num
 		return
 	end
 	local state = ensure(player)
+	if state.hp <= 0 then
+		return
+	end
 	local before = state.hp
 	state.hp = math.min(state.maxHp, state.hp + amount)
 	local gained = state.hp - before
@@ -340,17 +372,13 @@ function CombatService.damagePlayer(
 		return false
 	end
 	local mods = classMods(player)
-	rawDamage *= mods.taken
-	local hit = CombatMath.resolveHit(rawDamage, 0, 1, state.defense, 1, 0)
-	state.hp -= hit.amount
-	local down = state.hp <= 0
-	if down then
-		state.hp = 0
-	end
+	local nextHp, amount, down =
+		CombatMath.applyPlayerDamage(state.hp, state.maxHp, rawDamage, state.defense, mods.taken)
+	state.hp = nextHp
 	publish(player, state)
 	fx(player, {
 		kind = "damage",
-		amount = hit.amount,
+		amount = amount,
 		crit = false,
 		x = x,
 		y = y + 2,
@@ -883,18 +911,33 @@ local function stepShots(dt: number)
 				hit = true
 			end
 		else
-			local hrp = rootPart(shot.player)
-			if
-				hrp ~= nil
-				and CombatMath.within(x, y, z, hrp.Position.X, hrp.Position.Y, hrp.Position.Z, 3)
-			then
-				CombatService.damagePlayer(
-					shot.player,
-					shot.damage,
-					hrp.Position.X,
-					hrp.Position.Y,
-					hrp.Position.Z
-				)
+			if shot.landed ~= true then
+				local hrp = rootPart(shot.player)
+				if
+					hrp ~= nil
+					and CombatMath.within(
+						x,
+						y,
+						z,
+						hrp.Position.X,
+						hrp.Position.Y,
+						hrp.Position.Z,
+						3
+					)
+				then
+					-- Mark it before the hit so a hook that steps shots again
+					-- cannot apply this orb a second time.
+					shot.landed = true
+					CombatService.damagePlayer(
+						shot.player,
+						shot.damage,
+						hrp.Position.X,
+						hrp.Position.Y,
+						hrp.Position.Z
+					)
+				end
+			end
+			if shot.landed == true then
 				hit = true
 			end
 		end

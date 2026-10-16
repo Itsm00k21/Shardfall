@@ -9,7 +9,12 @@ local ForeignScripts = require("../src/ReplicatedStorage/Shared/ForeignScripts")
 
 describe("Foreign script scan", function()
 	it("skips Roblox player scripts and still flags a stray world script", function()
-		expect(table.find(ForeignScripts.SERVICES, "StarterPlayer")).toBeNil()
+		expect(table.find(ForeignScripts.SERVICES, "StarterPlayer") ~= nil).toBeTrue()
+		expect(ForeignScripts.shouldFlag("StarterPlayer", {
+			"LegacyHud",
+			"StarterPlayerScripts",
+			"StarterPlayer",
+		})).toBeTrue()
 
 		expect(ForeignScripts.shouldFlag("StarterPlayer", {
 			"RbxCharacterSounds",

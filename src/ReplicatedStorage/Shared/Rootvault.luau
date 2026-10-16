@@ -51,6 +51,16 @@ function Rootvault.scale(id: any, health: number, damage: number): (number, numb
 	return math.floor(health * row.hp + 0.5), math.floor(damage * row.damage + 0.5)
 end
 
+-- Phase fog and a telegraphed strike never land in the same heartbeat.
+-- Stacking them made an 8-damage orb look like it deleted a half-full bar.
+-- The strike wins the beat; the fog waits until the next one.
+function Rootvault.sameBeat(fogDue: boolean, strikeDue: boolean): (boolean, boolean)
+	if strikeDue then
+		return false, true
+	end
+	return fogDue == true, false
+end
+
 function Rootvault.gnarlPhase(health: number, maxHealth: number): number
 	if maxHealth <= 0 then
 		return 1

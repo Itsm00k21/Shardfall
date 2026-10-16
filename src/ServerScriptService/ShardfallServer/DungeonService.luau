@@ -653,10 +653,20 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
 	end
 	health, damage = Rootvault.scale(run.difficulty, health, damage)
+	local fog = definition.fogDamage
+	if fog > 0 and wave ~= nil then
+		fog = select(2, Dungeons.waveStats(1, fog, wave, definition.boss))
+	end
+	if fog > 0 then
+		fog = select(2, Rootvault.scale(run.difficulty, 0, fog))
+	end
 	if run.dungeon.id == Dungeons.HEARTWOOD_ID then
 		local hpMul, dmgMul = Raids.combatScale(run.difficulty, run.raidPlayers, run.healerPresent)
 		health = math.floor(health * hpMul + 0.5)
 		damage = math.floor(damage * dmgMul + 0.5)
+		if fog > 0 then
+			fog = math.floor(fog * dmgMul + 0.5)
+		end
 	end
 	local elite = false
 	if run.eliteNext and definition.boss ~= true then
@@ -753,7 +763,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		weakUntil = 0,
 		armoredMultiplier = definition.armoredMultiplier,
 		fogInterval = definition.fogInterval,
-		fogDamage = definition.fogDamage,
+		fogDamage = fog,
 		safeRadius = definition.safeRadius,
 		nextFog = 0,
 		nextAttack = os.clock() + 0.8,
@@ -799,6 +809,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 end
 
 local function spawnRoom(player: Player, run: Run)
+	CombatService.clearShots(player)
 	clearEnemies(run)
 	run.cleared = false
 	local room = run.dungeon.rooms[run.roomIndex]
@@ -818,6 +829,7 @@ local function spawnRoom(player: Player, run: Run)
 end
 
 local function spawnWave(player: Player, run: Run)
+	CombatService.clearShots(player)
 	clearEnemies(run)
 	run.cleared = false
 	run.advanceAt = nil
@@ -1404,7 +1416,14 @@ local function tickEnemy(
 		end
 	end
 
-	if enemy.boss and enemy.phase == 2 and run.sunbeam ~= nil and now >= enemy.nextFog then
+	local strikeDue = enemy.telegraphUntil > 0 and now >= enemy.telegraphUntil
+	local fogDue = enemy.boss
+		and enemy.phase == 2
+		and run.sunbeam ~= nil
+		and enemy.fogInterval > 0
+		and now >= enemy.nextFog
+	local doFog = (Rootvault.sameBeat(fogDue, strikeDue))
+	if doFog and run.sunbeam ~= nil then
 		local beam = run.sunbeam
 		local safe = CombatMath.withinPlanar(
 			hrp.Position.X,
@@ -1413,8 +1432,9 @@ local function tickEnemy(
 			beam.Position.Z,
 			enemy.safeRadius
 		)
+		local down = false
 		if not safe then
-			CombatService.damagePlayer(
+			down = CombatService.damagePlayer(
 				player,
 				enemy.fogDamage,
 				hrp.Position.X,
@@ -1436,7 +1456,7 @@ local function tickEnemy(
 			"spores"
 		)
 		enemy.nextFog = now + enemy.fogInterval
-		if runs[player] == nil then
+		if down or runs[player] == nil then
 			return
 		end
 	end
@@ -1603,6 +1623,16 @@ local function onHeartbeat(dt: number)
 		end
 		local hrp = rootPart(player)
 		if hrp == nil then
+			continue
+		end
+		if hrp.Position.Y < -40 then
+			if (fallAt[player] or 0) <= now then
+				fallAt[player] = now + 1
+				print(
+					"[Shardfall] " .. player.Name .. " fell out of the room; returning to the spawn"
+				)
+				teleport(player, roomSpawn(run.placeIndex))
+			end
 			continue
 		end
 		if run.cleared then
@@ -2097,7 +2127,7 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build 3558616+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build b3c8748+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
