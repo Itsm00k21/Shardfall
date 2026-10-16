@@ -3,9 +3,9 @@
 --[[
 	Server entry for the Haven Market Board.
 
-	Ghost wires handle() from the Market remote and calls start() before
-	DataService.start(). Listings live in memory until a persistence hook
-	loads them. exportBoard() / importBoard() are that hook.
+	Ghost wires handle() from the Market remote. start() runs after profiles
+	are listening. Listings stay in memory when DataStores are unavailable,
+	so a missing API does not stop the board from opening.
 
 	The listing fee and the sale both go through DataService.mutate. Buy
 	claims the listing inside the lock so a second buyer cannot take a
@@ -148,9 +148,14 @@ function MarketService.start()
 		return
 	end
 	started = true
-	Players.PlayerRemoving:Connect(function(player)
-		MarketService.onPlayerRemoving(player)
+	local connected, connectErr = pcall(function()
+		Players.PlayerRemoving:Connect(function(player)
+			MarketService.onPlayerRemoving(player)
+		end)
 	end)
+	if not connected then
+		warn("[Shardfall] market could not watch leaving players: " .. tostring(connectErr))
+	end
 end
 
 local function browse(payload: any)

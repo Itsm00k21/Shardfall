@@ -18,6 +18,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Materials = require(ReplicatedStorage.Shared.Materials)
@@ -105,7 +106,9 @@ function RollService.bindAnnouncements()
 		return
 	end
 	announcementsBound = true
-	local ok, err = pcall(function()
+	-- SubscribeAsync can hang in Studio when API access is off. The budget
+	-- returns so boot can continue; mythic announces stay on this server.
+	local ok, err = CallBudget.run(CallBudget.DATASTORE_SECONDS, function()
 		local MessagingService = game:GetService("MessagingService")
 		MessagingService:SubscribeAsync(RarityConfig.TOPIC, function(message)
 			local payload = message.Data

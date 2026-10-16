@@ -4,8 +4,8 @@
 	Server entry for direct trades.
 
 	Ghost wires this from Remotes and init.server. The handler does not
-	create RemoteFunctions itself. Call start() before DataService.start
-	so a leaving player is cancelled while the profile is still loaded.
+	create RemoteFunctions itself. start() loads the audit after profiles
+	are already listening. A DataStore failure keeps an empty in-memory log.
 
 	finish() is the only path that moves items. It runs while both user
 	ids are locked, re-reads both profiles, and asks Trading to commit
@@ -279,13 +279,24 @@ function TradeService.start()
 		return
 	end
 	started = true
-	local entries = TradeAudit.load()
-	if #entries > 0 then
+	local loaded, entries = pcall(function()
+		return TradeAudit.load()
+	end)
+	if not loaded then
+		warn("[Shardfall] trade audit unavailable, using an empty log: " .. tostring(entries))
+		entries = {}
+	end
+	if type(entries) == "table" and #entries > 0 then
 		Trading.restoreAudit(entries)
 	end
-	Players.PlayerRemoving:Connect(function(player)
-		TradeService.onPlayerRemoving(player)
+	local connected, connectErr = pcall(function()
+		Players.PlayerRemoving:Connect(function(player)
+			TradeService.onPlayerRemoving(player)
+		end)
 	end)
+	if not connected then
+		warn("[Shardfall] trade could not watch leaving players: " .. tostring(connectErr))
+	end
 end
 
 local function invite(player: Player, payload: any)
