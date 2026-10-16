@@ -24,6 +24,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Audio = require(Shared:WaitForChild("Audio"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local Pools = require(Shared:WaitForChild("Pools"))
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 
@@ -107,8 +108,16 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	local odds = Instance.new("Frame")
 	odds.Name = "Odds"
 	odds.AnchorPoint = Vector2.new(0, 0)
-	odds.Position = UDim2.fromOffset(12, 72)
-	odds.Size = UDim2.fromOffset(230, 250)
+	local function placeOdds()
+		local box = ShellLayout.oddsRect()
+		odds.Position = UDim2.fromOffset(box.x, box.y)
+		odds.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	placeOdds()
+	local oddsCamera = workspace.CurrentCamera
+	if oddsCamera ~= nil then
+		oddsCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placeOdds)
+	end
 	odds.BackgroundColor3 = Color3.fromRGB(18, 16, 28)
 	odds.BackgroundTransparency = 0.15
 	odds.BorderSizePixel = 0

@@ -49,8 +49,11 @@ function HavenClient.start(callbacks: Callbacks)
 	local recentAt = 0
 	local function open(action: any, objectText: any, message: any)
 		local now = os.clock()
-		local key = tostring(action) .. ":" .. tostring(objectText)
-		if key == recent and now - recentAt < 0.35 then
+		-- The server echoes HavenPrompt about a second after the client
+		-- prompt, and the echo has no ObjectText. Key on the action so that
+		-- echo does not open the menu again and dismiss the class picker.
+		local key = tostring(action)
+		if key == recent and now - recentAt < 2 then
 			return
 		end
 		recent = key

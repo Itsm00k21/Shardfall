@@ -119,16 +119,20 @@ local function clearGenerated(container: Instance)
 	end
 end
 
+local function chipWidth(text: string): number
+	return math.max(88, #text * 8 + 20)
+end
+
 local function chip(parent: Instance, text: string, order: number): TextButton
 	local button = new("TextButton", {
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(0, 44),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(chipWidth(text), 44),
 		Font = Enum.Font.BuilderSansMedium,
 		TextSize = 13,
 		TextColor3 = COLORS.text,
 		Text = text,
+		TextTruncate = Enum.TextTruncate.None,
 		AutoButtonColor = true,
 		LayoutOrder = order,
 	}, parent) :: TextButton
@@ -601,6 +605,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local render: () -> ()
+	local paintFilters: () -> ()
 
 	local function hideConfirm()
 		confirm.Visible = false
@@ -620,6 +625,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	render = function()
+		paintFilters()
 		placePanes()
 		local profile = latest
 		if type(profile) ~= "table" then
@@ -1060,23 +1066,46 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		return list[nextIndex]
 	end
 
-	local realmButton = chip(filterBar, "Realm: Any", 2)
-	local slotButton = chip(filterBar, "Type: Any", 3)
-	local socketButton = chip(filterBar, "Sockets: Any", 4)
+	local realmButton = chip(filterBar, "All realms", 2)
+	local slotButton = chip(filterBar, "All types", 3)
+	local socketButton = chip(filterBar, "All sockets", 4)
 	local equippedButton = chip(filterBar, "Worn: All", 5)
 	local lockedButton = chip(filterBar, "Lock: All", 6)
 	local sortButton = chip(filterBar, "Sort: Power", 7)
 
-	local function paintFilters()
-		realmButton.Text = "Realm: " .. (query.realm or "Any")
-		slotButton.Text = "Type: " .. (query.slot or "Any")
-		if query.socketsAtLeast ~= nil then
-			socketButton.Text = "Sockets: 3+"
-		elseif query.sockets ~= nil then
-			socketButton.Text = "Sockets: " .. tostring(query.sockets)
-		else
-			socketButton.Text = "Sockets: Any"
+	paintFilters = function()
+		local flags = InventoryView.activeFilters(query.tab)
+		if not flags.realm then
+			query.realm = nil
 		end
+		if not flags.slot then
+			query.slot = nil
+		end
+		if not flags.sockets then
+			query.sockets = nil
+			query.socketsAtLeast = nil
+		end
+		if not flags.worn then
+			query.equipped = "all"
+		end
+		if not flags.locked then
+			query.locked = "all"
+		end
+		if not flags.rarity then
+			table.clear(query.rarities)
+		end
+		realmButton.Visible = flags.realm
+		slotButton.Visible = flags.slot
+		socketButton.Visible = flags.sockets
+		equippedButton.Visible = flags.worn
+		lockedButton.Visible = flags.locked
+		sortButton.Visible = flags.sort
+		realmButton.Text = InventoryView.realmLabel(query.realm)
+		slotButton.Text = InventoryView.slotLabel(query.slot)
+		socketButton.Text = InventoryView.socketLabel(query.sockets, query.socketsAtLeast)
+		realmButton.Size = UDim2.fromOffset(chipWidth(realmButton.Text), 44)
+		slotButton.Size = UDim2.fromOffset(chipWidth(slotButton.Text), 44)
+		socketButton.Size = UDim2.fromOffset(chipWidth(socketButton.Text), 44)
 		equippedButton.Text = "Worn: "
 			.. string.upper(string.sub(query.equipped, 1, 1))
 			.. string.sub(query.equipped, 2)
@@ -1089,6 +1118,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			elseif query.sort == "newest" then "Newest"
 			else "Name"
 		sortButton.Text = "Sort: " .. sortName
+		sortButton.Size = UDim2.fromOffset(chipWidth(sortButton.Text), 44)
+		equippedButton.Size = UDim2.fromOffset(chipWidth(equippedButton.Text), 44)
+		lockedButton.Size = UDim2.fromOffset(chipWidth(lockedButton.Text), 44)
 		local rarityOn = false
 		for _, rarity in ipairs(Rarities.ORDER) do
 			if query.rarities[rarity] == true then
@@ -1098,6 +1130,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		for _, rarity in ipairs(Rarities.ORDER) do
 			local button = filterBar:FindFirstChild("Rarity_" .. rarity)
 			if button ~= nil and button:IsA("TextButton") then
+				button.Visible = flags.rarity
+				button.Size = UDim2.fromOffset(chipWidth(button.Text), 44)
 				local on = query.rarities[rarity] == true
 				button.BackgroundColor3 = if on then rarityColor(rarity) else COLORS.buttonDim
 				button.TextColor3 = if on
