@@ -51,7 +51,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-027 | Raid conduct rules: AFK detection and vote-kick | HELPER | `helper/raid-conduct-9721` | new `src/ReplicatedStorage/Shared/RaidConduct.luau`, new `tests/RaidConduct.spec.luau`, `tests/run.luau` (one require line). Pure, server-authoritative rules from `docs/design/shardfall_raids.md`: AFK warning at 60 s with no input outside cutscenes, auto-remove at 90 s (rewards forfeited, backfill flagged); vote-kick needs 3/4 of the group plus a reason, is unavailable in the first 2 minutes and during combat, 1 kick per player per day, idle kicks drop queue priority, players kicked unfairly still keep their Marks, and kicking is disabled in Guided Raids. Do not edit `Raids.luau`, `RaidService.luau`, or T-012. Write a 'T-027 hooks for GHOST' section (RaidService call sites, and a suggested schema field for the daily kick count, since HELPER does not edit Schema). | done | [#44](https://github.com/Itsm00k21/Shardfall/pull/44) |
 | T-031 | Relic tradeability follow-up | HELPER | `helper/relic-trade-9721` | `src/ReplicatedStorage/Shared/RelicSets.luau` (`stamp` and `isRelic` only), `tests/RelicSets.spec.luau`, `docs/design/relic_sets.md`, and the trade snippet in the T-025 hooks section of this file. Per Kevin, pieces are raid-drop only and tradeable on the Market Board. They are not bound. `stamp` sets `bound = false` and `tradeable = true`. `isRelic` still matches a piece id, a set id, or an item whose `templateId`, `id`, `pieceId`, or `setId` names one, and it must not treat `bound` as the relic test. The T-025 hooks trade snippet has no `Trading.rejection` block for relics (no `"Relic Set pieces are bound."` return). Keep it that way. Do not edit `Trading.luau`, `Raids.luau`, `RaidService.luau`, or T-012. | done | [#41](https://github.com/Itsm00k21/Shardfall/pull/41) |
 | T-034 | Relic catalog rows unbound | HELPER | `helper/relic-trade-fix-9721` | `src/ReplicatedStorage/Shared/RelicSets.luau` (`makePiece` only), `tests/RelicSets.spec.luau`, and any matching note in `docs/design/relic_sets.md`. Flip catalog `makePiece` to `bound = false` / `tradeable = true`. Assert every catalog piece is unbound and tradeable. Do not edit `Trading.luau`, `Raids.luau`, `RaidService.luau`, or T-012. | done | [#43](https://github.com/Itsm00k21/Shardfall/pull/43) |
-| T-035 | Raid leaver penalty rules | HELPER | `helper/raid-leaver-9721` | new `src/ReplicatedStorage/Shared/RaidLeaver.luau`, new `tests/RaidLeaver.spec.luau`, one require line in `tests/run.luau`, and a 'T-035 hooks for GHOST' section in this file. Pure, server-authoritative rules from `docs/design/shardfall_raids.md`: 3 leaves in one UTC day puts the player on a 15-minute Raid Finder cooldown; a disconnect opens a 3-minute rejoin window, rejoining inside it is not a leave and missing it counts as one; an AFK removal or a passed vote-kick (T-027 RaidConduct) is not a voluntary leave. Thresholds in a frozen CONFIG, time passed in as unix seconds (`os.time()`), no services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, Schema, or T-012; suggest profile fields (leave day/count, cooldown-until) in the hooks section. No build stamp, nothing premium. GHOST reviews and merges. | claimed | — |
+| T-035 | Raid leaver penalty rules | HELPER | `helper/raid-leaver-9721` | new `src/ReplicatedStorage/Shared/RaidLeaver.luau`, new `tests/RaidLeaver.spec.luau`, one require line in `tests/run.luau`, and a 'T-035 hooks for GHOST' section in this file. Pure, server-authoritative rules from `docs/design/shardfall_raids.md`: 3 leaves in one UTC day puts the player on a 15-minute Raid Finder cooldown; a disconnect opens a 3-minute rejoin window, rejoining inside it is not a leave and missing it counts as one; an AFK removal or a passed vote-kick (T-027 RaidConduct) is not a voluntary leave. Thresholds in a frozen CONFIG, time passed in as unix seconds (`os.time()`), no services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, Schema, or T-012; suggest profile fields (leave day/count, cooldown-until) in the hooks section. No build stamp, nothing premium. GHOST reviews and merges. Rules live in `RaidLeaver` and nothing calls them yet, so gameplay is unchanged. Status stays claimed for GHOST. | claimed | [#45](https://github.com/Itsm00k21/Shardfall/pull/45) |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -979,6 +979,159 @@ Questions for Ghost:
 8. `guided` is an explicit flag. Hard and Shardbreaker premades can still vote-kick. Should every Hard or Shardbreaker run count as Guided?
 9. T-008 lists `RaidService.luau` and `Raids.luau` only. The run heartbeat and the ability handlers live in `DungeonService` / `CombatService`. Should `noteInput` and the combat flag be called from those files, or do you want a `RaidService` heartbeat that only sees movement until a T-012 remote exists?
 10. The leaver penalty in the raids doc (3 leaves, 15-minute Finder cooldown, 3-minute rejoin) is T-035, not this module.
+
+### T-035 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `Schema.luau`, `Remotes.luau`, `RateLimiter.luau`, `DungeonService.luau`, or any other T-012 file. `RaidLeaver` is pure and ready to call. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged. No build stamp. No remote. Nothing here costs Robux.
+
+Thresholds are `RaidLeaver.CONFIG`: 3 counted leaves in one UTC day (`leavesPerDay`), then a 15-minute Finder cooldown (`cooldownSeconds` = 900), and a 3-minute rejoin window (`rejoinSeconds` = 180). The day length is `daySeconds` (86400). Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The leave day is UTC `floor(now / 86400)`, same as `tradeDay` and `RaidConduct.dayNumber`. `os.clock()` is not wall time. The module does not read the clock.
+
+Causes are exact strings on `RaidLeaver.CAUSES`: `leave`, `disconnect`, `afk`, `kick`. `"AFK"`, `"vote"`, and `"Leave"` are refused. A refused call returns `ok == false` and must not be written.
+
+`RaidService.luau`, next to the `Raids` require:
+
+```lua
+local RaidLeaver = require(ReplicatedStorage.Shared.RaidLeaver)
+```
+
+Build the record from the profile. Nil fields count as zeros, so a call before the migrate does not throw. It also does not persist.
+
+```lua
+local function leaveRecord(data)
+	return {
+		leaveDay = data.raidLeaveDay,
+		leaveCount = data.raidLeavesToday,
+		cooldownUntil = data.raidFinderCooldownUntil,
+		rejoinUntil = data.raidRejoinUntil,
+	}
+end
+```
+
+The module returns a new result and does not write `data`. Persist only when `result.ok == true`, inside `DataService.mutate`. An `ok == false` result echoes a readable record on a bad clock or a bad cause, and returns zeros when the record itself is non-finite. Writing that would wipe a real cooldown.
+
+```lua
+local function persistLeave(player: Player, result)
+	if result.ok ~= true then
+		return
+	end
+	DataService.mutate(player, function(data)
+		data.raidLeaveDay = result.leaveDay
+		data.raidLeavesToday = result.leaveCount
+		data.raidFinderCooldownUntil = result.cooldownUntil
+		data.raidRejoinUntil = result.rejoinUntil
+		return nil
+	end)
+end
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `depart(record, now, "leave")` | the player exits the run on purpose while still connected | one leave now. Clears any rejoin window. Does not open a new one. |
+| `depart(record, now, "disconnect")` | `PlayerRemoving`, or the teleport failed and they are gone | opens `rejoinUntil = now + 180` and does not count. A second disconnect while that window is open keeps the original deadline. If the previous window already expired, that miss counts as one leave, then a new window opens. |
+| `rejoin(record, now)` | they are back in the same run at or before `rejoinUntil` | `outcome == "cleared"` is not a leave. One second later, `outcome == "counted"`. |
+| `resolve(record, now)` | a heartbeat, a login, or the start of `queue`, when they are not back | an open window stays open and does not count (`outcome == "window"`). A missed window counts once. Calling it again does not count again. |
+| `finder(record, now)` | the Raid Finder gate, after `resolve` | `finderBlocked == true` refuses a new queue. It does not count a missed window. `missedWindow == true` means `resolve` has not been called yet. |
+| `depart(record, now, "afk")` | `RaidConduct.afk` returned `state == "remove"` | not a leave. Clears an open or already-expired window so a later `resolve` cannot count it. |
+| `depart(record, now, "kick")` | `RaidConduct.tally` returned `passed == true` | same as `afk`. A passed vote-kick is not a voluntary leave. |
+
+The third counted leave sets `cooldownStarted == true` and `cooldownUntil = now + 900`. A counted leave while that cooldown is still running increments the count and does not move `cooldownUntil`. After `now >= cooldownUntil`, another counted leave starts a fresh 15 minutes. `finder` blocks only while `cooldownUntil > now`. A count of 3 or more does not, by itself, block Finder once the 15 minutes are over. The end instant is free (`now == cooldownUntil` is not blocked). The rejoin deadline is still inside the window (`now == rejoinUntil` is a rejoin).
+
+A rejoin of the same run ignores `finderBlocked`. The cooldown refuses a new Finder queue. It does not lock them out of the run they dropped. `outcome == "cleared"` means put them back. Do not also call `finder` on that path.
+
+This module never forfeits Marks or rewards. Keep using `RaidConduct` for that. `forfeitRewards` on an AFK removal is still the T-027 rule. A leave only feeds this cooldown.
+
+**Finder gate.** `RaidService.queue` is the Finder entry. `join` calls `queue` today, so a premade listing would hit the same gate until those paths are split. `practice` does not call `queue`. Gate Finder only.
+
+At the top of `queue`, after the profile is loaded:
+
+```lua
+local now = os.time()
+local record = leaveRecord(profile)
+local settled = RaidLeaver.resolve(record, now)
+persistLeave(player, settled)
+if settled.ok == true and settled.outcome == "window" then
+	return reject("Rejoin your raid before the timer ends.")
+end
+local gate = RaidLeaver.finder({
+	leaveDay = settled.leaveDay,
+	leaveCount = settled.leaveCount,
+	cooldownUntil = settled.cooldownUntil,
+	rejoinUntil = settled.rejoinUntil,
+}, now)
+if gate.ok ~= true then
+	return reject(gate.error or RaidLeaver.ERRORS.time)
+end
+if gate.finderBlocked then
+	return reject(gate.error or RaidLeaver.ERRORS.cooling)
+end
+```
+
+The table passed into `finder` is those four fields off `settled`. `finder` does not write. `ERRORS.cooling` is "Raid Finder is cooling down after too many leaves." There is no remote for this. The client does not send the count or the deadline.
+
+While `outcome == "window"`, refuse the new queue and do not count yet. The miss counts when `resolve` later sees `now > rejoinUntil`. Do not call `depart(..., "leave")` from `queue`. That would count a player who still has time to rejoin.
+
+**Rejoin.** `RaidService.receive` currently calls `queue`. A return to the same reserved server inside the window must call `rejoin` and skip the Finder gate:
+
+```lua
+local now = os.time()
+local record = leaveRecord(profile)
+if record.rejoinUntil ~= nil and record.rejoinUntil > 0 then
+	local back = RaidLeaver.rejoin(record, now)
+	persistLeave(player, back)
+	if back.ok == true and back.outcome == "cleared" then
+		-- Same run. Do not call queue.
+		return
+	end
+end
+```
+
+If `outcome == "counted"`, the window was already over. Do not put them back in the run. Fall through to the Finder gate if this arrival is a new queue. Call `rejoin` only for the run they left. The module does not store a run id. Keep that id in memory on `RaidService` (the reserved code or the run token you already have). A hub visit is not a rejoin. The hub calls `resolve` on login and from `queue`, and counts the miss once the deadline passes.
+
+**Disconnect.** `RaidService` has no `PlayerRemoving`. The one that destroys a live run is `DungeonService`'s `Players.PlayerRemoving` (T-003). That file is not on this row. Suggested shape, called from there into `RaidService` so the rule stays next to Finder:
+
+```lua
+function RaidService.noteDepart(player: Player, cause: string)
+	local profile = DataService.get(player)
+	if profile == nil then
+		return
+	end
+	local result = RaidLeaver.depart(leaveRecord(profile), os.time(), cause)
+	persistLeave(player, result)
+end
+```
+
+On `PlayerRemoving`, if they were in a raid run, call `noteDepart(player, "disconnect")`. Do not call `"leave"`. Closing the client is a disconnect and gets the 3-minute window. There is no leave button today, so `"leave"` has no caller until you add a deliberate exit that fires while the player is still connected. A leave button would be a T-012 remote. This branch does not add one.
+
+**AFK and vote-kick.** When T-008 handles `RaidConduct.afk` and `state == "remove"`, also call `noteDepart(player, "afk")`. When `RaidConduct.tally` returns `passed == true`, call `noteDepart(player, "kick")` for the target. Do those instead of `resolve`. An AFK removal or a passed kick clears the rejoin window, including one that already expired, and does not add a leave. If you `resolve` first, the miss counts and the later `afk` / `kick` cannot take it back.
+
+**Schema.** HELPER does not edit `Schema.luau`. Suggested fields, same shape as `tradeDay` / `tradeValueToday` and the T-027 kick fields. Add them on whichever version is free when you wire this. Version 20 is current. T-015 sketched 21 for the pass fields, and T-027 asked for `raidKickDay` / `raidKicksToday` on the same kind of bump. One migrate can add the kick fields and these together. `ProfileData`, `template()`, the matching `migrate` arm, `sanitize`, and `snapshot` (so a Finder button can show the remaining time):
+
+```lua
+raidLeaveDay: number, -- floor(unix / 86400). 0 until the first counted leave.
+raidLeavesToday: number,
+raidFinderCooldownUntil: number, -- unix seconds. 0 when Finder is not cooling.
+raidRejoinUntil: number, -- unix seconds. 0 when no disconnect window is open.
+```
+
+Defaults: all four are 0. `RaidLeaver.dayNumber(now)` is the UTC day. If that differs from `raidLeaveDay`, the module treats the stored count as 0 and returns the new day. The cooldown is wall-clock. It still blocks after midnight until `raidFinderCooldownUntil`. Do not clear `raidFinderCooldownUntil` on the day change, and do not reset these on the Tuesday weekly raid reset. `wholeNumber` defaults match `tradeDay`. A non-finite field makes `finder` return `ok == false` and `finderBlocked == true`. If `sanitize` turns that into 0 before the check, the block is gone. Leave a non-finite cooldown for the module to refuse, or treat it as blocked inside `sanitize`.
+
+`tests/run.luau` requires `./RaidLeaver.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. A leave during the 15 minutes does not add time. A counted leave after `cooldownUntil` starts another 15 minutes, even though the count is already past 3. Should that be one cooldown per UTC day instead, or should every leave from the 3rd onward refresh the 15 minutes?
+2. The cooldown is wall-clock. Finder stays blocked after UTC midnight until `cooldownUntil`. The leave count resets at `floor(now / 86400)`. Does the cooldown survive midnight?
+3. A missed rejoin is counted when `resolve` or a late `rejoin` runs, on that call's UTC day, not backdated to the deadline. A window that crosses midnight rolls today's count to 0 and keeps the deadline. Is that the day you want?
+4. `depart` with `afk` or `kick` clears an open or already-expired rejoin window and does not count. Should an expired disconnect still count if the removal was an AFK removal or a passed vote-kick?
+5. The Finder gate is written for `RaidService.queue`. `join` calls `queue`, so a premade listing is blocked too. `practice` does not. Should Practice Grove and the premade board stay open during the cooldown?
+6. `PlayerRemoving` is `disconnect` (3-minute window), not an instant leave. There is no leave button, and that signal lives in `DungeonService`, which this row does not list. Should closing the client stay a disconnect, and is the one-line handoff from `DungeonService` into `RaidService.noteDepart` the call site you want?
+7. Rejoin is on time when `now <= rejoinUntil`. Finder is free when `now >= cooldownUntil`. Both edges favor the player by that instant. Should the deadline instant count as too late instead?
+8. A new Finder queue during an open window is refused with "Rejoin your raid before the timer ends." and does not count until the window actually expires. Should starting a new queue count as the leave immediately?
+9. This module does not forfeit Marks or ungranted rewards. Only the T-027 AFK removal does. Should a counted leave also forfeit the run?
 
 ## Open
 
