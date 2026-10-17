@@ -6,6 +6,9 @@
 	The grid is a view of InventoryView.query. Equip, lock, favorite, and
 	salvage are callbacks the client sends to the server. The dev menu stays
 	on the side panel and is not part of this screen.
+
+	While the server says a shard can go in, an open socket glows. This
+	panel does not send seen.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,6 +20,7 @@ local MobileShell = require(script.Parent.MobileShell)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
+local CodexCues = require(Shared:WaitForChild("CodexCues"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
@@ -414,6 +418,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local query = InventoryView.defaultQuery()
 	local selectedId: string? = nil
 	local latest: any = nil
+	local socketCue = false
 	local isOpen = false
 	local pendingRarity: string? = nil
 	local pendingFeed: { string }? = nil
@@ -667,6 +672,18 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			}, grid) :: TextButton
 			corner(card, 8)
 			strokeFor(card, row.rarity)
+			if socketCue and row.sockets >= 1 then
+				new("UIStroke", {
+					Name = "SocketGlow",
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					Thickness = 3,
+					Color = Color3.fromRGB(
+						CodexCues.COLOR.socket[1],
+						CodexCues.COLOR.socket[2],
+						CodexCues.COLOR.socket[3]
+					),
+				}, card)
+			end
 			new("UIPadding", {
 				PaddingTop = UDim.new(0, 8),
 				PaddingBottom = UDim.new(0, 22),
@@ -790,7 +807,15 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			or selected.kind == "Accessory"
 			or selected.kind == "Pet"
 		then
-			label(detail, string.format("Sockets  %d", selected.sockets), order, COLORS.text, 14)
+			local socketColor = COLORS.text
+			if socketCue and selected.sockets >= 1 then
+				socketColor = Color3.fromRGB(
+					CodexCues.COLOR.socket[1],
+					CodexCues.COLOR.socket[2],
+					CodexCues.COLOR.socket[3]
+				)
+			end
+			label(detail, string.format("Sockets  %d", selected.sockets), order, socketColor, 14)
 			order += 1
 		end
 		local item = selected.item
@@ -1284,6 +1309,15 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	-- I opens the Raids tab. The old inventory panel does not take that key.
 	RunService.RenderStepped:Connect(function()
 		local rotation = (os.clock() * 48) % 360
+		if socketCue then
+			local pulse = 0.1 + 0.25 * (0.5 + 0.5 * math.sin(os.clock() * 6))
+			for _, child in ipairs(grid:GetChildren()) do
+				local glow = child:FindFirstChild("SocketGlow")
+				if glow ~= nil and glow:IsA("UIStroke") then
+					glow.Transparency = pulse
+				end
+			end
+		end
 		for index = #gradients, 1, -1 do
 			local gradient = gradients[index]
 			if gradient.Parent == nil then
@@ -1330,6 +1364,30 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	paintFilters()
+	task.spawn(function()
+		local folder = ReplicatedStorage:WaitForChild("Remotes", 15)
+		if folder == nil then
+			return
+		end
+		local remote = folder:WaitForChild("CombatFx", 15)
+		if remote == nil or not remote:IsA("RemoteEvent") then
+			return
+		end
+		remote.OnClientEvent:Connect(function(payload)
+			local cue = CodexCues.accept(payload)
+			if cue.ok ~= true then
+				return
+			end
+			local nextCue = cue.shards == true
+			if nextCue == socketCue then
+				return
+			end
+			socketCue = nextCue
+			if isOpen then
+				render()
+			end
+		end)
+	end)
 	return controller
 end
 

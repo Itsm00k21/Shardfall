@@ -6,10 +6,16 @@
 	ProximityPrompt.Triggered only reaches a listener connected on that
 	machine. The server also fires HavenPrompt, because a prompt that
 	prints on both sides can still leave the panel on the wrong tab.
+
+	While the server says the Forge ask is up, an arrow points at the
+	Forge. This client does not send seen.
 ]]
 
+local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local CodexCues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CodexCues"))
 
 local HavenClient = {}
 
@@ -50,8 +56,127 @@ local function dispatch(callbacks: Callbacks, action: any, objectText: any, mess
 	end
 end
 
+local function forgePart(): BasePart?
+	local found = workspace:FindFirstChild("Forge", true)
+	if found == nil then
+		return nil
+	end
+	if found:IsA("BasePart") then
+		return found
+	end
+	if found:IsA("Model") then
+		if found.PrimaryPart ~= nil then
+			return found.PrimaryPart
+		end
+		local part = found:FindFirstChildWhichIsA("BasePart", true)
+		if part ~= nil and part:IsA("BasePart") then
+			return part
+		end
+	end
+	return nil
+end
+
 function HavenClient.start(callbacks: Callbacks)
 	print("[Shardfall] Haven prompts listening")
+	local crafting = false
+	local arrow: Beam? = nil
+	local fromAtt: Attachment? = nil
+	local toAtt: Attachment? = nil
+	local mark: BillboardGui? = nil
+
+	local function clearArrow()
+		if arrow ~= nil then
+			arrow:Destroy()
+			arrow = nil
+		end
+		if fromAtt ~= nil then
+			fromAtt:Destroy()
+			fromAtt = nil
+		end
+		if toAtt ~= nil then
+			toAtt:Destroy()
+			toAtt = nil
+		end
+		if mark ~= nil then
+			mark:Destroy()
+			mark = nil
+		end
+	end
+
+	local function showArrow()
+		clearArrow()
+		if not crafting then
+			return
+		end
+		local forge = forgePart()
+		local character = Players.LocalPlayer.Character
+		local hrp = if character ~= nil then character:FindFirstChild("HumanoidRootPart") else nil
+		if forge == nil or hrp == nil or not hrp:IsA("BasePart") then
+			return
+		end
+		local source = Instance.new("Attachment")
+		source.Name = "ForgeArrowFrom"
+		source.Parent = hrp
+		local target = Instance.new("Attachment")
+		target.Name = "ForgeArrowTo"
+		target.Parent = forge
+		local beam = Instance.new("Beam")
+		beam.Name = "ForgeArrow"
+		beam.Attachment0 = source
+		beam.Attachment1 = target
+		beam.FaceCamera = true
+		beam.LightEmission = 1
+		beam.LightInfluence = 0
+		beam.Width0 = 0.35
+		beam.Width1 = 1.1
+		beam.Color = ColorSequence.new(Color3.fromRGB(
+			CodexCues.COLOR.arrow[1],
+			CodexCues.COLOR.arrow[2],
+			CodexCues.COLOR.arrow[3]
+		))
+		beam.Transparency = NumberSequence.new(0.05)
+		beam.Parent = hrp
+		local billboard = Instance.new("BillboardGui")
+		billboard.Name = "ForgeArrow"
+		billboard.Size = UDim2.fromOffset(36, 36)
+		billboard.StudsOffset = Vector3.new(0, 8, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Parent = forge
+		local disc = Instance.new("Frame")
+		disc.Size = UDim2.fromScale(1, 1)
+		disc.BackgroundColor3 = Color3.fromRGB(
+			CodexCues.COLOR.iconInk[1],
+			CodexCues.COLOR.iconInk[2],
+			CodexCues.COLOR.iconInk[3]
+		)
+		disc.BorderSizePixel = 0
+		disc.Parent = billboard
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = disc
+		local glyph = Instance.new("TextLabel")
+		glyph.BackgroundTransparency = 1
+		glyph.Size = UDim2.fromScale(1, 1)
+		glyph.Font = Enum.Font.BuilderSansBold
+		glyph.TextSize = 22
+		glyph.TextColor3 = Color3.fromRGB(
+			CodexCues.COLOR.dodge[1],
+			CodexCues.COLOR.dodge[2],
+			CodexCues.COLOR.dodge[3]
+		)
+		glyph.Text = "→"
+		glyph.Parent = disc
+		fromAtt = source
+		toAtt = target
+		arrow = beam
+		mark = billboard
+	end
+
+	Players.LocalPlayer.CharacterAdded:Connect(function()
+		if crafting then
+			task.defer(showArrow)
+		end
+	end)
 	local recent = ""
 	local recentAt = 0
 	local function open(action: any, objectText: any, message: any)
@@ -84,6 +209,27 @@ function HavenClient.start(callbacks: Callbacks)
 		remote.OnClientEvent:Connect(function(action, message)
 			print("[Shardfall] Server asked the client to open:", action)
 			open(action, nil, message)
+		end)
+	end
+	local fx = remotes:FindFirstChild("CombatFx")
+	if fx == nil then
+		local waited = remotes:WaitForChild("CombatFx", 15)
+		if waited ~= nil then
+			fx = waited
+		end
+	end
+	if fx ~= nil and fx:IsA("RemoteEvent") then
+		fx.OnClientEvent:Connect(function(payload)
+			local cue = CodexCues.accept(payload)
+			if cue.ok ~= true then
+				return
+			end
+			local nextCue = cue.crafting == true
+			if nextCue == crafting and (not nextCue or arrow ~= nil) then
+				return
+			end
+			crafting = nextCue
+			showArrow()
 		end)
 	end
 end

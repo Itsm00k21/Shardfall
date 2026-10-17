@@ -30,6 +30,7 @@ local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
+local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
@@ -2049,14 +2050,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if not described or description == nil then
 				return
 			end
+			local rigName = HeroView.rig(humanoid.RigType.Name)
+			local rigType = if rigName == "R6"
+				then Enum.HumanoidRigType.R6
+				else Enum.HumanoidRigType.R15
 			local built, model = pcall(function()
-				return Players:CreateHumanoidModelFromDescription(
-					description,
-					Enum.HumanoidRigType.R15
-				)
+				return Players:CreateHumanoidModelFromDescription(description, rigType)
 			end)
-			if built and model ~= nil and viewport.Parent ~= nil then
+			local action = HeroView.place(built, model ~= nil, viewport.Parent ~= nil)
+			if action == "parent" then
 				model.Parent = world
+			elseif action == "destroy" then
+				model:Destroy()
 			end
 		end)
 
