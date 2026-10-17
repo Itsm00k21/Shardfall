@@ -13,6 +13,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MobileShell = require(script.Parent.MobileShell)
+local EchoChip = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("EchoChip"))
 local RaidPremadeHop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RaidPremadeHop"))
 
 local RaidHud = {}
@@ -120,8 +121,6 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	local chip = Instance.new("TextLabel")
 	chip.Name = "EchoChip"
 	chip.AnchorPoint = Vector2.new(0, 0)
-	chip.Position = UDim2.fromOffset(248, 16)
-	chip.Size = UDim2.fromOffset(128, 28)
 	chip.BackgroundColor3 = Color3.fromRGB(120, 186, 96)
 	chip.BorderSizePixel = 0
 	chip.Font = Enum.Font.BuilderSansBold
@@ -134,6 +133,23 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	chipCorner.CornerRadius = UDim.new(0, 12)
 	chipCorner.Parent = chip
 	chipRef = chip
+
+	-- Right edge of the safe rect. A side under 200 uses the portrait
+	-- phone, the same fallback EchoChip uses for a bad size.
+	local function placeChip()
+		local size = screen.AbsoluteSize
+		local vx = size.X
+		local vy = size.Y
+		if vx < 200 or vy < 200 then
+			vx = 390
+			vy = 844
+		end
+		local slot = EchoChip.place(vx, vy)
+		chip.Position = UDim2.fromOffset(slot.x, slot.y)
+		chip.Size = UDim2.fromOffset(slot.w, slot.h)
+	end
+	placeChip()
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeChip)
 
 	local row = Instance.new("Frame")
 	row.Name = "Raid"
