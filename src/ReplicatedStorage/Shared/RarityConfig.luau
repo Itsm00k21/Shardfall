@@ -16,7 +16,7 @@ local Rarities = require("./Rarities")
 local RarityConfig = {}
 
 -- Global kill switch for paid luck, Prism rolls, and Quick Roll.
-RarityConfig.PAID_LUCK_ENABLED = true
+RarityConfig.PAID_LUCK_ENABLED = false
 RarityConfig.REGION_MESSAGE = "Unavailable in your region"
 RarityConfig.PAID_OFF_MESSAGE = "Paid luck is turned off."
 RarityConfig.QUICK_OFF_MESSAGE = "Quick Roll is turned off."

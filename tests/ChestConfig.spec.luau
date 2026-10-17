@@ -90,7 +90,7 @@ describe("ChestConfig", function()
 		local pitch = ChestConfig.bundlePitch()
 		expect(string.find(pitch, "Legendary and Mythic chests are not sold.", 1, true) ~= nil).toBeTrue()
 		expect(string.find(pitch, "BUY NOW", 1, true) == nil).toBeTrue()
-		expect(ChestConfig.PAID_CHESTS_ENABLED).toEqual(true)
+		expect(ChestConfig.PAID_CHESTS_ENABLED).toEqual(false)
 	end)
 
 	it("merges 5 chests into the next tier and makes Mythic only that way", function()

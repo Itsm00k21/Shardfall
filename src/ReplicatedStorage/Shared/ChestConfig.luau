@@ -24,7 +24,7 @@ local Loops = require("./Loops")
 
 local ChestConfig = {}
 
-ChestConfig.PAID_CHESTS_ENABLED = true
+ChestConfig.PAID_CHESTS_ENABLED = false
 ChestConfig.REGION_MESSAGE = "Unavailable in your region."
 ChestConfig.PAID_OFF_MESSAGE = "Paid chests are turned off."
 ChestConfig.OPEN_MANY_MAX = 10
