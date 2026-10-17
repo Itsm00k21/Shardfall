@@ -139,6 +139,8 @@ local releasingFight: { [RaidEchoFight.Fight]: boolean } = {}
 local echoBossDown: { [RaidEchoFight.Fight]: { [string]: { [number]: boolean } } } = {}
 -- Room waiting on the rest of the party. Nil once everyone still in has cleared.
 local echoBossOwed: { [RaidEchoFight.Fight]: number } = {}
+-- userId already fully revived during this pull. A later copy death does not heal them again.
+local echoRevived: { [RaidEchoFight.Fight]: { [string]: boolean } } = {}
 local touchAt: { [Player]: number } = {}
 local fallAt: { [Player]: number } = {}
 local farmOn: { [Player]: boolean } = {}
@@ -981,9 +983,15 @@ local function heldNow(fight: RaidEchoFight.Fight): { Player }
 	return pending
 end
 
+-- One full revive per pull. A later copy death in that pull does not heal again.
 -- Bringing a held member back does not call wipe, so it cannot add a stack.
 local function reviveHeld(fight: RaidEchoFight.Fight, pending: { Player })
+	local seen = echoRevived[fight]
 	for _, member in ipairs(pending) do
+		local userId = tostring(member.UserId)
+		if seen ~= nil and seen[userId] == true then
+			continue
+		end
 		local memberRun = runs[member]
 		if
 			memberRun == nil
@@ -996,7 +1004,14 @@ local function reviveHeld(fight: RaidEchoFight.Fight, pending: { Player })
 		end
 		CombatService.revive(member)
 		if runs[member] == memberRun and memberRun.echoFight == fight then
-			RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
+			RaidEchoFight.setAlive(fight, userId, true)
+			local marked = echoRevived[fight]
+			if marked == nil then
+				marked = {}
+				echoRevived[fight] = marked
+			end
+			marked[userId] = true
+			seen = marked
 		end
 	end
 end
@@ -1126,6 +1141,8 @@ local function settleSharedBoss(fight: RaidEchoFight.Fight, actor: Player?)
 	bindEcho(fight)
 	spareEchoFloor(fight, standing)
 	reviveHeld(fight, downed)
+	-- That revive spent the cap. The next pull starts clean.
+	echoRevived[fight] = nil
 end
 
 local destroyRun: (Player, Run) -> ()
@@ -1241,6 +1258,7 @@ destroyRun = function(player: Player, run: Run)
 			RaidEchoFight.runEnd(fight)
 			echoBossDown[fight] = nil
 			echoBossOwed[fight] = nil
+			echoRevived[fight] = nil
 		end
 	end
 	CombatService.clearShots(player)
@@ -2674,6 +2692,8 @@ local function pullMember(member: Player, memberRun: Run, fight: RaidEchoFight.F
 end
 
 local function retryPull(fight: RaidEchoFight.Fight)
+	-- A wipe starts a new pull. The cap does not carry into the retry.
+	echoRevived[fight] = nil
 	local party = {}
 	for member, memberRun in pairs(runs) do
 		if memberRun.echoFight == fight and memberRun.resolving ~= true then
