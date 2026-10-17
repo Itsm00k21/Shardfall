@@ -137,45 +137,32 @@ local restartAt: { [Player]: Restart } = {}
 local idleNoted: { [Player]: boolean } = {}
 local tickFault: { [Player]: boolean } = {}
 local nextEnemyId = 0
-local echoHeals = false
 
 local function bindEcho(fight: RaidEchoFight.Fight)
-	for _, partyRun in pairs(runs) do
+	for member, partyRun in pairs(runs) do
 		if partyRun.echoFight == fight then
 			partyRun.echo = fight.state
+			-- Refresh publishes the echoed max. The bar reads that number.
+			CombatService.refresh(member)
 		end
 	end
 end
 
 local function rememberMax(player: Player, run: Run)
-	local fight = run.echoFight
-	if fight == nil then
+	if run.echoFight == nil then
 		return
 	end
-	local profile = DataService.get(player)
-	if profile == nil then
-		return
-	end
-	local _, vitality = CombatMath.loadout(profile)
-	RaidEchoFight.applyBase(fight, tostring(player.UserId), "maxHp", vitality.maxHealth)
+	-- refresh asks the echo hook for max HP from the unbuffed loadout.
+	CombatService.refresh(player)
 end
 
-local function installEchoHealing()
-	if echoHeals then
-		return
+local function echoScale(player: Player, amount: number, kind: "healing" | "maxHp"): number
+	local run = runs[player]
+	local fight = if run ~= nil then run.echoFight else nil
+	if fight == nil then
+		return amount
 	end
-	echoHeals = true
-	local healAmount = CombatService.healAmount
-	function CombatService.healAmount(player: Player, amount: number)
-		local run = runs[player]
-		local fight = if run ~= nil then run.echoFight else nil
-		if fight == nil then
-			healAmount(player, amount)
-			return
-		end
-		local healed = RaidEchoFight.applyBase(fight, tostring(player.UserId), "healing", amount)
-		healAmount(player, healed)
-	end
+	return RaidEchoFight.applyBase(fight, tostring(player.UserId), kind, amount)
 end
 local worldFolder: Folder? = nil
 local activeFolder: Folder? = nil
@@ -1292,6 +1279,12 @@ function DungeonService.damageEnemy(
 	if run == nil or run.resolving then
 		return
 	end
+	-- A held party member stays at 0 until the wipe retry. Their swings
+	-- must not clear the room or reset the shared stacks.
+	local hp = CombatService.vitals(player)
+	if hp <= 0 then
+		return false
+	end
 	local enemy = run.enemies[enemyId]
 	if enemy == nil or enemy.hp <= 0 then
 		return false
@@ -1486,6 +1479,20 @@ end
 function DungeonService.isInRun(player: Player): boolean
 	local run = runs[player]
 	return run ~= nil and not run.resolving
+end
+
+function DungeonService.echoParty(player: Player): { difficulty: string, practice: boolean }?
+	local run = runs[player]
+	if run == nil or run.resolving or run.echoFight == nil then
+		return nil
+	end
+	if run.dungeon.id ~= Dungeons.HEARTWOOD_ID then
+		return nil
+	end
+	return {
+		difficulty = run.difficulty,
+		practice = run.practice == true,
+	}
 end
 
 function DungeonService.isPractice(player: Player): boolean
@@ -2397,14 +2404,14 @@ function DungeonService.onPlayerDown(player: Player)
 	if fight ~= nil then
 		living, party = RaidEchoFight.counts(fight)
 	end
-	local storyRetry = fight ~= nil
+	local storyPull = fight ~= nil
 		and run.dungeon.id == Dungeons.HEARTWOOD_ID
 		and run.difficulty == "story"
 		and run.practice ~= true
 		and fight.practice ~= true
 		and fight.pullStarted == true
 		and party >= 1
-		and living == 0
+	local storyRetry = storyPull and living == 0
 	local action = EchoRetry.decision(run.retrying == true, storyRetry)
 	if action == "retry" and fight ~= nil then
 		run.retrying = true
@@ -2412,6 +2419,10 @@ function DungeonService.onPlayerDown(player: Player)
 		return
 	end
 	if action == "ignore" then
+		return
+	end
+	if EchoRetry.hold(party, living, storyPull) then
+		pushRun(player, "Down. The pull continues.")
 		return
 	end
 	finish(player, false)
@@ -2570,6 +2581,10 @@ function DungeonService.start()
 	RunService.Heartbeat:Connect(onHeartbeat)
 end
 
-installEchoHealing()
+CombatService.bindEcho(function(player: Player, amount: number): number
+	return echoScale(player, amount, "healing")
+end, function(player: Player, amount: number): number
+	return echoScale(player, amount, "maxHp")
+end)
 
 return DungeonService

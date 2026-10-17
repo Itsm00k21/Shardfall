@@ -33,4 +33,17 @@ function EchoRetry.decision(retrying: boolean, storyWipe: boolean): "ignore" | "
 	return "down"
 end
 
+-- A partial death in a shared Story pull stays in the fight. Ejecting
+-- that player drops them from the roster, so only the last survivor
+-- would be brought back by the wipe retry.
+function EchoRetry.hold(party: number, living: number, storyPull: boolean): boolean
+	if storyPull ~= true then
+		return false
+	end
+	if party ~= party or living ~= living then
+		return false
+	end
+	return party > 1 and living > 0
+end
+
 return EchoRetry

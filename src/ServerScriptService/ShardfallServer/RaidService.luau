@@ -11,6 +11,7 @@
 	while the first hop is still saving does not reserve or teleport.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -18,6 +19,7 @@ local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local DataService = require(script.Parent.DataService)
+local EchoParty = require(script.Parent.EchoParty)
 
 local RaidService = {}
 
@@ -75,21 +77,16 @@ local function launch(
 	phase: number,
 	practice: boolean
 )
-	local profile = DataService.get(player)
-	local echo = 0
-	if profile ~= nil and difficulty == "story" then
-		echo = profile.raidEcho or 0
-	end
 	local DungeonService = dungeon()
 	local entered = DungeonService.enter(player, "heartwood", difficulty, practice)
 	if entered.ok ~= true then
 		return entered
 	end
+	-- Stacks start at 0. The old permanent profile stack is not passed in.
 	return DungeonService.tuneRaid(player, {
 		practice = practice,
 		players = 1,
 		healer = healer,
-		echo = echo,
 		wing = wing,
 		phase = phase,
 	})
@@ -206,6 +203,40 @@ function RaidService.join(player: Player, listingId: any)
 	end
 	if found == nil then
 		return reject("That listing is gone.")
+	end
+	local DungeonService = dungeon()
+	local host = nil
+	if type(found.userId) == "number" then
+		host = Players:GetPlayerByUserId(found.userId)
+	end
+	local hostParty = if host ~= nil then DungeonService.echoParty(host) else nil
+	local route = EchoParty.route(
+		host ~= nil and host ~= player,
+		hostParty ~= nil,
+		EchoParty.samePull(
+			if hostParty ~= nil then hostParty.difficulty else nil,
+			if hostParty ~= nil then hostParty.practice else false,
+			found.difficulty
+		)
+	)
+	if route == "backfill" and host ~= nil then
+		local created = false
+		if not DungeonService.isInRun(player) then
+			local entered = DungeonService.enter(player, "heartwood", found.difficulty, false)
+			if entered.ok ~= true then
+				return entered
+			end
+			created = true
+		end
+		local filled = DungeonService.backfill(player, host)
+		if filled.ok == true then
+			filled.note = string.format("%s listing. Joined the pull.", found.tag)
+			return filled
+		end
+		if created then
+			DungeonService.leave(player)
+		end
+		return filled
 	end
 	local started = RaidService.queue(player, found.difficulty, "flex")
 	if started.ok == true then
