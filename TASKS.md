@@ -53,7 +53,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-031 | Relic tradeability follow-up | HELPER | `helper/relic-trade-9721` | `src/ReplicatedStorage/Shared/RelicSets.luau` (`stamp` and `isRelic` only), `tests/RelicSets.spec.luau`, `docs/design/relic_sets.md`, and the trade snippet in the T-025 hooks section of this file. Per Kevin, pieces are raid-drop only and tradeable on the Market Board. They are not bound. `stamp` sets `bound = false` and `tradeable = true`. `isRelic` still matches a piece id, a set id, or an item whose `templateId`, `id`, `pieceId`, or `setId` names one, and it must not treat `bound` as the relic test. The T-025 hooks trade snippet has no `Trading.rejection` block for relics (no `"Relic Set pieces are bound."` return). Keep it that way. Do not edit `Trading.luau`, `Raids.luau`, `RaidService.luau`, or T-012. | done | [#41](https://github.com/Itsm00k21/Shardfall/pull/41) |
 | T-034 | Relic catalog rows unbound | HELPER | `helper/relic-trade-fix-9721` | `src/ReplicatedStorage/Shared/RelicSets.luau` (`makePiece` only), `tests/RelicSets.spec.luau`, and any matching note in `docs/design/relic_sets.md`. Flip catalog `makePiece` to `bound = false` / `tradeable = true`. Assert every catalog piece is unbound and tradeable. Do not edit `Trading.luau`, `Raids.luau`, `RaidService.luau`, or T-012. | done | [#43](https://github.com/Itsm00k21/Shardfall/pull/43) |
 | T-035 | Raid leaver penalty rules | HELPER | `helper/raid-leaver-9721` | new `src/ReplicatedStorage/Shared/RaidLeaver.luau`, new `tests/RaidLeaver.spec.luau`, one require line in `tests/run.luau`, and a 'T-035 hooks for GHOST' section in this file. Pure, server-authoritative rules from `docs/design/shardfall_raids.md`: 3 leaves in one UTC day puts the player on a 15-minute Raid Finder cooldown; a disconnect opens a 3-minute rejoin window, rejoining inside it is not a leave and missing it counts as one; an AFK removal or a passed vote-kick (T-027 RaidConduct) is not a voluntary leave. Thresholds in a frozen CONFIG, time passed in as unix seconds (`os.time()`), no services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, Schema, or T-012; suggest profile fields (leave day/count, cooldown-until) in the hooks section. No build stamp, nothing premium. Rules live in `RaidLeaver` and nothing calls them yet, so gameplay is unchanged. | done | [#45](https://github.com/Itsm00k21/Shardfall/pull/45) |
-| T-037 | Raid personal loot trade rules | HELPER | `helper/raid-loot-trade-9721` | Pure rules. Raid gear stays soulbound for 2 hours and can only go to eligible players from the same run. Crafted Heartshard weapons become tradeable after the crafter's first clear. Raid cosmetics stay bound. Relic set pieces are exempt and stay freely tradeable. Do not edit raid code, Schema, or remotes. | claimed | — |
+| T-037 | Raid personal loot trade rules | HELPER | `helper/raid-loot-trade-9721` | Pure rules. Raid gear stays soulbound for 2 hours and can only go to eligible players from the same run. Crafted Heartshard weapons become tradeable after the crafter's first clear. Raid cosmetics stay bound. Relic set pieces are exempt and stay freely tradeable. Do not edit raid code, Schema, or remotes. | claimed | [#46](https://github.com/Itsm00k21/Shardfall/pull/46) |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -1134,6 +1134,122 @@ Questions for Ghost:
 7. Rejoin is on time when `now <= rejoinUntil`. Finder is free when `now >= cooldownUntil`. Both edges favor the player by that instant. Should the deadline instant count as too late instead?
 8. A new Finder queue during an open window is refused with "Rejoin your raid before the timer ends." and does not count until the window actually expires. Should starting a new queue count as the leave immediately?
 9. This module does not forfeit Marks or ungranted rewards. Only the T-027 AFK removal does. Should a counted leave also forfeit the run?
+
+### T-037 hooks for GHOST
+
+HELPER did not edit `Trading.luau`, `MarketBoard.luau`, `Raids.luau`, `RaidService.luau`, `RelicSets.luau`, `Schema.luau`, `Remotes.luau`, `RateLimiter.luau`, `DungeonService.luau`, `CraftService.luau`, or any other T-012 file. `RaidLootTrade` is pure and ready to call. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged. No build stamp. No remote. Nothing here costs Robux. The T-037 row stays `claimed`.
+
+Thresholds are `RaidLootTrade.CONFIG`: `bindSeconds` is 7200 (2 hours), `heartshardClears` is 1. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
+
+`RaidLootTrade.check(item, transfer)` returns `ok` and `reason`. `reason` is nil when `ok` is true. It does not write the item. Pass the profile copy, never a client table. `item.bound` and `item.tradeable` are ignored.
+
+`applies == false` and `category == "other"` means this module has no rule. Keep going with the existing Trading checks. `category == "invalid"` or (`applies == true` and `ok ~= true`) must return `reason` and must not move the item. A relic comes back `ok == true`, `category == "relic"`, `bound == false`. Do not add a `"Relic Set pieces are bound."` return, and do not put `RelicSets.isRelic` inside `Trading.rejection` as a refusal. `RelicSets.isRelic` is called from this module only, and it skips the 2-hour rule.
+
+`bound == true` means no legal recipient remains under these rules. `tradeable == true` means some legal trade still exists, even when this proposal is refused. Inside the window, an ineligible recipient is `ok == false`, `bound == false`, `tradeable == true`. After the window, `bound == true` and `tradeable == false`.
+
+`windowOpen` is the gear window. `remainingSeconds` on a check is 0 when the window does not apply. `RaidLootTrade.remaining(item, now)` is nil in that case, and nil when `now` or `droppedAt` cannot be used. For gear it is the seconds until `droppedAt + bindSeconds`. That value is 0 at the last instant and 0 after it. `RaidLootTrade.window(item, now).open` is how those two differ. A future `droppedAt` reports a remaining time longer than `bindSeconds` and `open == false`.
+
+Categories, first match: `relic`, `cosmetic`, `heartshard`, `gear`, `other`. Kind and source compares are lowercase, so `Weapon` and `WEAPON` are the same. Boss ids and run ids are exact, with no trim.
+
+**Item fields to stamp.** Gear, at the moment the personal loot is granted:
+
+```lua
+droppedAt = now, -- os.time(). Do not stamp 0. A 0 with a present-day now is already bound.
+runId = runId,
+bossId = bossId, -- optional. Exact id, such as "twins" or "awakened".
+droppedFor = player.UserId, -- the player this personal loot was awarded to
+roster = roster, -- { number } userIds in the run when the boss died, or { [userId] = true }
+eligible = eligible, -- the subset who could loot that boss
+traded = false,
+kind = "Weapon", -- or "Armor" or "Accessory"
+source = "raid",
+```
+
+`roster` and `eligible` accept a list of positive integer userIds or a set whose values are `true`. A string id does not match. One list per drop, for that boss. This module does not read the weekly lockout.
+
+Crafted Heartshard, at the Forge, not as a raid drop. Do not set `droppedAt` on a craft. If both are set, the clear rule wins and the window does not.
+
+```lua
+heartshard = true,
+crafted = true,
+kind = "Weapon",
+source = "forge", -- or "craft" / "crafted", or crafted = true
+templateId = templateId, -- a lowercase "heartshard" in templateId or id also counts
+crafterClears = clears, -- whole number. 0 until the crafter has a clear
+crafterUserId = player.UserId,
+```
+
+Raid cosmetic:
+
+```lua
+kind = "Cosmetic",
+source = "raid",
+raidCosmetic = true, -- also binds a Pet, mount, title, dye, or aura
+```
+
+A relic stays on `RelicSets.stamp`. Do not also treat it as gear. Extra `droppedAt` or `runId` fields do not put it back under the window.
+
+**Where to stamp.** The personal-loot grant is not in `RaidService` yet. T-010 owns that grant. When it lands, stamp the gear fields there, in the same server mutate that inserts the item, using the run's reserved id as `runId` and the boss that just died as `bossId`. Build `roster` from the seats still in the run. Build `eligible` as the players who were in the run when that boss died, were not weekly-locked for that boss and difficulty, and were not removed for AFK (T-027 forfeits rewards). A disconnect that is still inside the T-035 rejoin window can stay eligible if they were present for the kill. The client must not send these lists.
+
+The Heartshard craft stamp belongs in `CraftService` when the resonant pattern is crafted. That file is not on this row. Until `crafterClears` is updated, pass the live count into `check` from the crafter's profile. A buyer does not need their own clear. The number is the crafter's.
+
+Suggested profile field, same shape as `tradeDay`. HELPER does not edit `Schema.luau`. Optional, because the item field is enough when the trade passes it or the item already has it. Add it on whichever version is free. Version 20 is current. T-015 sketched 21, and T-027 / T-035 asked for raid fields on the same kind of bump.
+
+```lua
+raidClears: number, -- whole raid clears. 0 until the first. Not a weekly lockout.
+```
+
+Default `0`. This module does not know which raid that number is. Question 6 asks what "1 clear" counts.
+
+**Trading.rejection.** The only caller today is the local `checkOffer` in `Trading.luau`. `Trading.preview` and `Trading.finish` know both actors. `Trading.inspect` is one-sided (a Market Board list). Add an optional context argument. Existing 4-arg calls keep working. `toUserId` nil means there is no named buyer.
+
+Inside `Trading.rejection`, after the exploit check and before `isStarter`:
+
+```lua
+local RaidLootTrade = require(ReplicatedStorage.Shared.RaidLootTrade)
+
+local context = context or {}
+local loot = RaidLootTrade.check(item, {
+	now = now,
+	fromUserId = actor.userId,
+	toUserId = context.toUserId,
+	crafterClears = context.crafterClears,
+	runId = context.runId,
+	bossId = context.bossId,
+})
+if loot.category == "invalid" or (loot.applies == true and loot.ok ~= true) then
+	return loot.reason or "That item cannot be traded."
+end
+```
+
+There is no `RelicSets.isRelic` branch and no `"Relic Set pieces are bound."` string. A relic falls through. Cosmetics and the starter check stay as they are after this block.
+
+`runId` on that table is the recipient's run, not a copy of `item.runId`. Omit it when you do not know where the recipient was. A mismatch refuses the trade even if that user is on `eligible`. `bossId`, when you pass it, must equal `item.bossId`.
+
+From `Trading.finish` / `Trading.preview`, each side's items use the other actor as `toUserId`. A direct trade of in-window gear fails closed until that id is passed. From `Trading.inspect`, leave `toUserId` nil, so in-window raid gear cannot be listed. Relics, a crafted Heartshard with at least 1 clear, and items with `applies == false` can still be listed.
+
+`crafterClears` is optional. When it is nil, the module reads `item.crafterClears`, then `item.clears`, then 0. Pass the crafter's count, not the buyer's. An explicit 0 overrides a higher number stored on the item.
+
+On a successful gear trade, set `traded = true` on the copy that arrives, or set `droppedFor` to the new owner before any later trade. This module will refuse the next one while the window is open. After the window it is bound either way. Do not clear `droppedAt` to keep the window alive.
+
+`tests/run.luau` requires `./RaidLootTrade.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The window includes the exact end: `now == droppedAt + bindSeconds` still allows an eligible same-run trade, and `remaining` is 0 at that instant. One second later the piece is bound for good. Should the end instant be too late instead?
+2. A missing `droppedAt` is bound, so a forgotten stamp cannot stay tradeable. A missing `runId` while the window is open refuses the trade and does not bind it, so a repaired stamp can still move inside the window. A `droppedAt` of 0 with a present-day `now` is already past the window and bound. Should a missing `runId` bind the piece too?
+3. `now < droppedAt` refuses with "That drop is not live yet" and does not bind. Should a future stamp be treated as open, or as bound?
+4. `RelicSets.isRelic` skips the 2-hour rule, the run, and the roster, even if the row is also stamped `bound`, `raidCosmetic`, or crafted Heartshard, and even though `docs/design/shardfall_raids.md` still says relics are bound. This follows `docs/design/relic_sets.md` and T-031/T-034. The snippet does not return "Relic Set pieces are bound." Confirm that is still the call.
+5. Raid cosmetics are `raidCosmetic == true`, or `kind == "Cosmetic"` with raid provenance or a `runId`. The Gnarlling pet, Rootstrider mount, titles ("Heartbreaker"), dyes, and the raid aura are not bound unless stamped that way. A plain raid Pet stays outside this module. Should those exclusive drops be raid cosmetics?
+6. Crafted Heartshard weapons unlock at `crafterClears >= 1` (the call, else `item.crafterClears`, else `item.clears`, else 0). A non-integer or negative count is refused. A dropped Heartshard that is not crafted uses the 2-hour rule, and a high clear count does not skip that window. Is "1 clear" any raid clear, or a clear of that weapon's raid and difficulty? Should the count be frozen onto the item at the first clear, or read from the crafter's profile at trade time?
+7. Inside the window, `traded == true` or a `droppedFor` user id other than the sender binds the piece (one trade). If `droppedFor` is absent, the current holder may trade once. Should repeat trades stay legal until the window ends?
+8. `runId` on the proposal is the recipient's run. If it is set and differs from `item.runId`, the trade is refused even when that user is on `eligible`. If it is omitted, `eligible` is enough even when `roster` omits them. On `roster` but not `eligible` is "not eligible". On neither is "not in this run". The sender does not have to be on either list. Should an eligible player also have to be on the roster?
+9. A Market Board list has no buyer, so `toUserId` nil is refused for in-window raid gear ("Name someone from that run.") and allowed for relics, unlocked Heartshards, and items this module does not govern. Direct trades pass the other party's user id. Should in-window raid gear be direct-trade only?
+10. Heartwood Vendor gear, Raid Marks purchases, and raid materials are not bound here. Only weapon, armor, and accessory drops, raid cosmetics, crafted Heartshards, and the relic exemption. Should vendor gear be soulbound?
+11. User ids must be positive integers. Strings are not coerced. A self-trade is refused. Boss ids are exact strings. A proposal `bossId` that differs from the item, or a proposal boss with no item boss, is "not eligible". A missing item `bossId` is fine when the proposal omits it. Is that the stamp shape you want?
+12. Eligible means the list you stamp. The suggestion is: in the run when the boss died, not weekly-locked for that boss and difficulty, and not removed for AFK. A disconnect inside the T-035 rejoin window can stay eligible if they were present for the kill. This module does not compute that. Is that the list you want?
 
 ## Open
 
