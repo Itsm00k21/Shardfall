@@ -78,18 +78,66 @@ local function launch(
 	practice: boolean
 )
 	local DungeonService = dungeon()
-	local entered = DungeonService.enter(player, "heartwood", difficulty, practice)
+	-- Reserved server only. Studio and a failed hop stay a fresh fight.
+	-- Practice Grove never shares, and a different difficulty stays separate.
+	local share = practice ~= true
+		and not ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+	-- A previous launch that threw must not leave this player unhostable.
+	DungeonService.holdEchoJoin(player, false)
+	local held = false
+	if share and DungeonService.echoHost(player, difficulty) ~= nil then
+		-- Hold before enter. enter yields in RequestStreamAroundAsync, and
+		-- the fresh fight must not become someone else's host during that wait.
+		DungeonService.holdEchoJoin(player, true)
+		held = true
+	end
+	local function clearHold()
+		if held then
+			DungeonService.holdEchoJoin(player, false)
+		end
+	end
+	local enterOk, entered = pcall(DungeonService.enter, player, "heartwood", difficulty, practice)
+	if not enterOk then
+		clearHold()
+		error(entered)
+	end
 	if entered.ok ~= true then
+		clearHold()
 		return entered
 	end
-	-- Stacks start at 0. The old permanent profile stack is not passed in.
-	return DungeonService.tuneRaid(player, {
+	-- tuneRaid runs on the fresh fight. Backfill after that so setPractice
+	-- cannot flip the host's fight.
+	local tuneOk, tuned = pcall(DungeonService.tuneRaid, player, {
 		practice = practice,
 		players = 1,
 		healer = healer,
 		wing = wing,
 		phase = phase,
 	})
+	if not tuneOk then
+		clearHold()
+		error(tuned)
+	end
+	if tuned.ok ~= true then
+		clearHold()
+		return tuned
+	end
+	if not share then
+		return tuned
+	end
+	-- Host is whoever is already in this pull. Teleport data does not name them.
+	local host = DungeonService.echoHost(player, difficulty)
+	if host == nil then
+		clearHold()
+		return tuned
+	end
+	local filled = DungeonService.backfill(player, host)
+	clearHold()
+	if filled.ok ~= true then
+		return tuned
+	end
+	filled.note = "Joined the pull."
+	return filled
 end
 
 local function startQueue(player: Player, difficulty: any, role: any, allowHop: boolean)
@@ -153,7 +201,9 @@ local function startQueue(player: Player, difficulty: any, role: any, allowHop: 
 	if started.ok ~= true then
 		return started
 	end
-	started.note = "Solo test. No reserved server here. Damage is softened without a healer."
+	if started.note == nil then
+		started.note = "Solo test. No reserved server here. Damage is softened without a healer."
+	end
 	started.leaderboard = RaidService.leaderboard()
 	return started
 end
@@ -297,7 +347,8 @@ function RaidService.receive(player: Player)
 		return
 	end
 	-- Reserved servers report a private id and owner 0. Launch here.
-	-- Queueing would ReserveServer and hop again.
+	-- launch joins a matching in-progress pull on this server. The host is
+	-- that pull, not this payload. Queueing would ReserveServer and hop again.
 	local allowHop = ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
 	startQueue(player, payload.difficulty, payload.role or "flex", allowHop)
 end
