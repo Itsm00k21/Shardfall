@@ -328,12 +328,28 @@ local function load(player: Player): (boolean, string?)
 	}
 	records[player] = record
 	local studio = RunService:IsStudio()
+	-- Per player load, not process-wide. Another player's attempt must
+	-- not cancel this one. Bumping generation drops only this token.
+	local generation = 0
+	local function dropAttempt(token: number)
+		if generation == token then
+			generation += 1
+		end
+	end
 
 	for attempt = 1, LOAD_ATTEMPTS do
 		if record.released or player.Parent ~= Players then
 			return failLoad(record, "Left before the profile loaded.")
 		end
 
+		generation += 1
+		local token = generation
+		local watch: ProfileLoad.Attempt = {
+			token = token,
+			current = function(): number
+				return generation
+			end,
+		}
 		local reason = "error"
 		local callOk, outcome = CallBudget.run(CallBudget.DATASTORE_SECONDS, function()
 			return ProfileLoad.open(
@@ -342,11 +358,16 @@ local function load(player: Player): (boolean, string?)
 				os.time(),
 				serverId,
 				placeId,
-				SessionLock.TIMEOUT_SECONDS
+				SessionLock.TIMEOUT_SECONDS,
+				watch
 			)
 		end)
 
 		if not callOk then
+			-- CallBudget already returned. The spawned UpdateAsync can
+			-- still run its transform. Drop the token before any yield
+			-- so that transform cannot claim the lock or rewrite lastSeen.
+			dropAttempt(token)
 			reason = "error"
 			warn(
 				string.format(

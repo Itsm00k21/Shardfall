@@ -220,9 +220,19 @@ local function deviceIsTouch(): boolean
 	return Quality.touchDevice(UserInputService.TouchEnabled, named)
 end
 
+-- A missing remote must not yield this script forever. 15 seconds matches
+-- the server lookup. Callers already treat ok == false as a failed action.
+local REMOTE_WAIT_SECONDS = 15
+
 local function invoke(name: string, ...: any)
-	local remote = (remotes :: Instance):WaitForChild(name)
-	assert(remote:IsA("RemoteFunction"), name .. " is not a RemoteFunction")
+	local remote = (remotes :: Instance):WaitForChild(name, REMOTE_WAIT_SECONDS)
+	if remote == nil or not remote:IsA("RemoteFunction") then
+		warn("[Shardfall] " .. name .. " remote is not available")
+		return {
+			ok = false,
+			error = name .. " remote is not available",
+		}
+	end
 	return remote:InvokeServer(...)
 end
 

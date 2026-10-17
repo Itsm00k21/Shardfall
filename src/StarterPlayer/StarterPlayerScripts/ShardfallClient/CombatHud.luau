@@ -149,13 +149,27 @@ function CombatHud.setFeel(tier: string, shake: boolean)
 	allowShake = shake ~= false and tier ~= "low"
 end
 
+-- Same bound as the client's other remote lookups. A missing Attack,
+-- Dodge, or CombatFx used to yield start forever and skip the rest of
+-- the client script. Leave the combat remotes unset and return.
+local REMOTE_WAIT_SECONDS = 15
+
 function CombatHud.start(remotes: Instance, callbacks: Callbacks)
-	local attack = remotes:WaitForChild("Attack")
-	local dodge = remotes:WaitForChild("Dodge")
-	local fx = remotes:WaitForChild("CombatFx")
-	assert(attack:IsA("RemoteEvent"), "Attack remote missing")
-	assert(dodge:IsA("RemoteEvent"), "Dodge remote missing")
-	assert(fx:IsA("RemoteEvent"), "CombatFx remote missing")
+	local attack = remotes:WaitForChild("Attack", REMOTE_WAIT_SECONDS)
+	if attack == nil or not attack:IsA("RemoteEvent") then
+		warn("[Shardfall] Attack remote is not available")
+		return
+	end
+	local dodge = remotes:WaitForChild("Dodge", REMOTE_WAIT_SECONDS)
+	if dodge == nil or not dodge:IsA("RemoteEvent") then
+		warn("[Shardfall] Dodge remote is not available")
+		return
+	end
+	local fx = remotes:WaitForChild("CombatFx", REMOTE_WAIT_SECONDS)
+	if fx == nil or not fx:IsA("RemoteEvent") then
+		warn("[Shardfall] CombatFx remote is not available")
+		return
+	end
 	attackRemote = attack
 	dodgeRemote = dodge
 

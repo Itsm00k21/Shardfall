@@ -9,6 +9,13 @@
 	The session profile is a fresh migrated template. It is not written back
 	here, so a later retry cannot replace a real save with a blank one.
 
+	A load attempt carries a generation token. DataService bumps that
+	generation when CallBudget returns at the timeout, while the spawned
+	UpdateAsync can still be waiting to run its transform. A transform
+	whose token is no longer current returns nil. UpdateAsync then leaves
+	the key unchanged: no session lock, and no Progression.applyReturn
+	or lastSeen write for the attempt that was already abandoned.
+
 	release() writes the profile and clears the session lock. handoff()
 	does that before it calls teleport. A failed release does not teleport.
 	If teleport throws, handoff claims the lock back when it still can, so
@@ -54,6 +61,20 @@ export type Handoff = {
 	error: string?,
 }
 
+-- One load attempt. current() is the caller's generation. The transform
+-- writes only while current() still returns token.
+export type Attempt = {
+	token: number,
+	current: () -> number,
+}
+
+local function attemptLive(attempt: Attempt?): boolean
+	if attempt == nil then
+		return true
+	end
+	return attempt.current() == attempt.token
+end
+
 -- BindToClose may yield until the engine shuts the process down. That
 -- budget is 30 seconds. DataService used to return at 25, which is still
 -- inside the window, so a slow UpdateAsync was abandoned while it held
@@ -86,12 +107,20 @@ function ProfileLoad.open(
 	now: number,
 	serverId: string,
 	placeId: number,
-	timeout: number
+	timeout: number,
+	attempt: Attempt?
 ): Outcome
 	local migrated = nil
 	local reason = "error"
 	local ok, err = pcall(function()
 		adapter:updateAsync(key, function(document)
+			-- Abandoned after the budget. Nil tells UpdateAsync to skip
+			-- the write, so this attempt cannot claim or touch lastSeen.
+			if not attemptLive(attempt) then
+				reason = "abandoned"
+				migrated = nil
+				return nil
+			end
 			local source = nil
 			if type(document) == "table" then
 				source = Schema.deepCopy(document.Data)
