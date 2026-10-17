@@ -2787,6 +2787,147 @@ Answers from Ghost:
 12. Confirmed. No bad-luck bump and no paid skip. A 4th new uid returns `capped` and is not stored, so a replay of that uid is capped again rather than `duplicate`.
 13. Yes. `RaidService.noteResonant`, called from the Heartwood boss path in `DungeonService.damageEnemy`, once a real weapon drop exists. Ghost owns that wiring.
 
+### T-074 hooks for GHOST
+
+HELPER did not edit `RaidConduct.luau`, `RaidFinder.luau`, `RaidPremade.luau`, `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `MenuHub.luau`, `UiRouter.luau`, `RollHype.luau`, `Keybinds.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidGuided` is pure and ready to call. It does not require `RaidConduct`, `RaidFinder`, `RaidPremade`, `RaidMarks`, or `Raids`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. There is no paid skip of the oath, the half rule, or the score. T-074 is done. Wiring is still yours. T-072 owns `MenuHub.luau`. T-073 owns `DungeonService.luau`. Do not edit either for this.
+
+Where the row and `docs/design/shardfall_raids.md` disagree, the row won:
+
+- The design says a guild hosts "with at least half its members." The row says at least half the roster shares the host guild, half the run and not half of the whole guild. This module counts the run. A guild of any size with 2 of 4 in the run passes. Two hosts cannot fill a run of 8 with Seekers, because 2 is not half of 8. The whole guild being present does not waive that.
+- The Destiny research line says "Guardian Oath" and "Oathkeeper Score." The Shardfall section and the row say Oath of the Grove and a Guide Score. Accept is one boolean. No oath text is stored.
+- The design says kicking is disabled. The row says kicking is refused for the whole run, and an AFK removal stays in `RaidConduct` and is not a kick. This module does not edit `RaidConduct`. That module already refuses a vote when `guided == true`.
+
+`RaidMarks.CONFIG.doubleMarks` stays false. This module does not read it. A finish does not multiply Raid Marks. `marksMultiplier` on the result is 1.
+
+Thresholds are `RaidGuided.CONFIG`. `guideScore` is 1. `guidedPointScale` is 2. `minParty` is 4. `maxParty` is 8. `maxIdLength` is 64, the same placeholder cap as the practice guard. Do not hardcode those numbers beside the module. `DIFFICULTIES` is `hard` and `shardbreaker`. `REFUSED` is `story`, `normal`, `fracture`, `practice`, and `guided`. Guided is a mode, not a difficulty. `Raids.DIFFICULTIES` is still Story and Normal. Do not gate this on `Raids.difficulty("hard")`. Pass the string.
+
+`RaidService.luau`, next to the other raid requires, when you wire this:
+
+```lua
+local RaidGuided = require(ReplicatedStorage.Shared.RaidGuided)
+```
+
+**Return shape.** `open`, `join`, `oath`, `kick`, `release`, `finish`, and `view` each return one new table. They do not write the input. A bad arg does not throw. nil, a non-table, a blank id, and a wrong type take the failure path. Store the run when `persist == true`. `view.persist` is always false. An `ok == false` result with `persist == false` is a bad record or a refused call. Writing the blank record from a state error would wipe a real run. The run lives in memory on the raid server. It is not a player profile.
+
+| call | when | on success |
+|---|---|---|
+| `open(ctx)` | a guild opens Guided on Hard or Shardbreaker | `{ difficulty, hostGuildId, members = {}, finished = false, guideScore = 0, raidXp = 0, guidedPoints = 0 }` |
+| `join(state, player)` | one player joins | a new roster. The new member's `oath` is false. |
+| `oath(state, userId, accepted)` | that player accepts or declines | that member's boolean. `accepted` is how many have sworn. |
+| `kick(state, request)` | anything tries to kick | always refused. `removed` is false. The roster is unchanged. |
+| `release(state, userId, cause)` | `RaidConduct.afk` already returned `state == "remove"` | that player is off the roster. `kick` is false. |
+| `finish(state, raidXp)` | the clear is real and you have the unscaled guild raid XP | `counted == true`. Add `guideScore` and `guidedPoints` once. |
+| `view(state)` | the panel wants the roster math | `ready` means finish would pass the gates. It does not finish. |
+
+**Open.** `ctx` is `{ difficulty, hostGuildId }`. `difficulty` is trimmed and lowercased. `" Hard "` is `hard`. `"SHARDBREAKER"` is `shardbreaker`. Story, Normal, Fracture, Practice, and `guided` are `ERRORS.difficulty`. A Fracture id with a level (`"Fracture 3"`, `"fracture-1"`) is refused too. `practice = true` is `ERRORS.practice` even on Hard. `guided = false` is refused. `guided` nil means this call is the Guided open. `hostGuildId` is trimmed and not lowercased. A preloaded `members` list, a `guildSize`, and a starting `guideScore` are ignored. The run starts empty. One `open` does not admit the roster.
+
+**Join.** One player per call. A list, a `party`, `with`, or `companions` field, or a second argument is `ERRORS.seeker` and adds nobody. `userId` is a positive whole number. A duplicate is `ERRORS.duplicate`. The 9th player is `ERRORS.full`.
+
+A player whose trimmed guild id equals `hostGuildId` is a guide. Anyone else, including no guild and another guild, is a Seeker. `"Grove"` and `"grove"` are different. Omit `seeker` and the module infers it. `seeker = true` on a host member is `ERRORS.seeker`. `seeker = false` on anyone else is `ERRORS.host`. A join that sets `oath = true` still stores `oath = false`. There is no skip.
+
+Half is `ceil(size / 2)` of the run after the join, and of any larger size up to 8 if the empty slots can still be filled with hosts. A Seeker join that makes that impossible is `ERRORS.half` and does not add them. 4 Seekers and 0 hosts can still be joined, because 4 hosts can still be added to reach 4 of 8. A 5th Seeker with 0 hosts cannot, and is refused. 2 hosts and 4 Seekers can be joined. A 5th Seeker beside those 2 hosts is refused. Adding a host never needs a guild-wide census. `guildSize` is not a field.
+
+**Oath.** `accepted` must be a boolean. A string, a number, nil, or a fourth argument (the phrase) is `ERRORS.oath` and stores nothing. `true` swears. `false` is a decline, not an error, and `persist` is true only when the boolean changes. A repeat of the same boolean is `ok` and `persist == false`. The member must already be on the roster.
+
+**Finish.** Call it only for a real clear. This module does not know bosses, wipes, or roles. The gates, in order, are party size, half, then oath. Size must be 4 to 8. Hosts must be at least `ceil(size / 2)`. 5 needs 3. 7 needs 4. 2 of 4 passes. 1 of 4 does not. 4 of 8 passes. Every member still on the roster must have `oath == true`. One missing oath is `ERRORS.oath`, `counted == false`, and `guideScore` 0. The run stays unfinished.
+
+`raidXp` is the unscaled guild raid XP for this clear. You supply it. There is no per-difficulty table here. It must be a whole number >= 0. `guidedPoints = raidXp * CONFIG.guidedPointScale`. That replaces the base. Do not also add `raidXp`. `guideScore` is `CONFIG.guideScore` (1) for the host guild. Both numbers on the result are the delta. `marksMultiplier` is 1. There is no `marks` amount. Hard and Shardbreaker use the same placeholder score. `raidXp` 0 still counts and awards the score with 0 points. A negative, a fraction, a string, NaN, or inf is `ERRORS.points` and does not finish. A third argument (`{ skipOath = true }`) is `ERRORS.finish`.
+
+A second `finish` returns `ok == true`, `counted == false`, `persist == false`, `reason == "finished"`, and a zero delta. `state.guideScore` stays 1. Add to the guild only when `counted == true`.
+
+**Kick and AFK.** `kick` always returns `ok == false`, `removed == false`, `kick == false`, and the same roster. That holds before anyone joins, during the run, and after finish. A vote is a kick, including `passed == true` and a vote whose `reason` is `"afk"` or `"idle"`. Passing the AFK signal to `kick` (`"afk"`, `"remove"`, or `{ state = "remove" }`) returns `ERRORS.afk` and still removes nobody.
+
+`release` is the roster update after `RaidConduct.afk` has already decided. This module does not count idle seconds. Pass `"afk"`, `"remove"`, `" AFK "`, or `{ state = "remove" }`. `removed` is true and `kick` is false. `"kick"`, `"idle"`, `"vote"`, and `{ passed = true }` are `ERRORS.kick` and remove nobody. `"warning"` is `ERRORS.removal` and removes nobody. A table with `reason`, `votes`, `initiatorUserId`, `passed == true`, or `spentKick == true` is a kick even when it also says `removal = "afk"` or `state = "remove"`. The `RaidConduct.afk` remove result has none of those fields, so passing that table still removes. The released player's oath leaves with them. If the roster drops under 4, or under half (4 hosts and 4 Seekers, then one host leaves, is 3 of 7), `finish` does not count until a later `join` repairs it. `release` after `finish` is `ERRORS.finished`. The award is not clawed back.
+
+```lua
+local function saveGuided(run, result)
+	if result.persist ~= true then
+		return run
+	end
+	return result.state
+end
+```
+
+Nil `state` on `join`, `oath`, `kick`, `release`, `finish`, or `view` is `ERRORS.state`. It does not throw. Do not write that blank over the run.
+
+**Call sites, still yours.** Keep the run on the reserved server, next to the live roster. Do not fold these rules into `Raids`, `RaidConduct`, `RaidFinder`, or `RaidPremade`. Finder stays Story and Normal. The premade board does not list Guided. Pass `practice = true` only if you must refuse it. A normal Hard run does not call this module.
+
+```lua
+function RaidService.openGuided(difficulty, hostGuildId)
+	return RaidGuided.open({
+		difficulty = difficulty,
+		hostGuildId = hostGuildId,
+	})
+end
+
+function RaidService.joinGuided(run, userId, guildId)
+	local result = RaidGuided.join(run, {
+		userId = userId,
+		guildId = guildId,
+	})
+	return saveGuided(run, result), result
+end
+
+function RaidService.oathGuided(run, userId, accepted)
+	local result = RaidGuided.oath(run, userId, accepted)
+	return saveGuided(run, result), result
+end
+
+function RaidService.kickGuided(run, request)
+	return RaidGuided.kick(run, request)
+end
+
+function RaidService.releaseGuided(run, userId, afkResult)
+	local cause = if type(afkResult) == "table" then afkResult else "afk"
+	local result = RaidGuided.release(run, userId, cause)
+	return saveGuided(run, result), result
+end
+
+function RaidService.finishGuided(run, raidXp)
+	local result = RaidGuided.finish(run, raidXp)
+	if result.counted == true then
+		-- Add result.guideScore to the host guild's guideScore.
+		-- Add result.guidedPoints to that guild's raid XP.
+		-- Do not add result.raidXp again. Do not multiply Raid Marks.
+	end
+	return saveGuided(run, result), result
+end
+```
+
+Call `releaseGuided` only when `RaidConduct.afk` returned `state == "remove"`. Keep passing `guided = true` into `RaidConduct.openVote` so the vote dies there too. `kickGuided` is the same refusal for a caller that did not go through `RaidConduct`. Do not treat either call as the removal.
+
+`view` is safe to call for a panel. Do not save it. `ready == true` means the gates pass and the run has not finished. `reason` is nil when the run is ready. Otherwise it is `party`, `half`, `oath`, or `finished`.
+
+**Schema.** HELPER does not edit `Schema.luau`. Do not add this to the player profile. A per-player copy would diverge. Version 21 was current when T-074 opened. Do not assume 22 is still free. There is no guild schema in this repo. When a guild record exists, add this on that record. Do not assume its version number.
+
+```lua
+guideScore: number, -- default 0. Add RaidGuided finish.guideScore only when counted == true.
+```
+
+`guidedPoints` are not a second stored score unless you want one. Add them to the guild's raid XP total. The scale is the whole rule. The design perks that raid XP unlocks (+Marks, a cheaper Practice Grove, a banner) are not granted here. Practice Grove stays free (T-060). `doubleMarks` stays false.
+
+`tests/run.luau` requires `./RaidGuided.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Questions for Ghost:
+
+1. Odd sizes use `ceil(size / 2)`. 5 needs 3 hosts. 7 needs 4. Confirm.
+2. The design's "at least half its members" was not followed. Half is half of this run. A guild of 100 with 2 of 4 passes. Two hosts cannot take a 5th Seeker, even when those two are the whole guild. Confirm the row.
+3. Guild ids are trimmed and not lowercased. `"Grove"` and `"grove"` are different. Seekers are everyone who does not match the host guild, including no guild and another guild. A host member cannot join as a Seeker. Confirm, and confirm the wire passes a canonical guild id.
+4. A Seeker join that cannot reach half by filling the rest with hosts is refused at join. 4 Seekers with 0 hosts are still allowed. A 5th is not. Confirm, or should join always succeed and only `finish` enforce half?
+5. One player per join. A list, `party`, `with`, `companions`, or a second argument is refused. Hosts use the same one-player call. `oath = true` on the join is ignored and stored false. Confirm.
+6. The oath is one boolean, default false. `false` stores a decline. A string, a number, or a trailing phrase is refused and stored nowhere. The design line "helpful, attentive, willing to teach" is not a form. Everyone still on the roster must be true. Confirm.
+7. `kick` never removes, before the first join and after finish. A vote whose reason is `"afk"` or `"idle"` is still a kick. The 90s removal is `release` with `"afk"`, `"remove"`, or `{ state = "remove" }` after `RaidConduct.afk`. This module does not watch the clock. `"warning"` does not remove. Confirm that split.
+8. An AFK release that drops the run under 4, or under half, blocks the score until a later join repairs it. 4 hosts and 4 Seekers, then one host leaves, is 3 of 7 and does not count. The removed player's oath leaves with them. `release` after finish is refused, so the award is not clawed back. Confirm.
+9. A counted finish adds `guideScore` 1 and `guidedPoints = raidXp * 2`. That replaces the base guild raid XP. It does not add `raidXp` again. `marksMultiplier` is 1. `RaidMarks.CONFIG.doubleMarks` stays false. Confirm.
+10. `raidXp` is caller-supplied. There is no per-difficulty guild XP table here. It must be a whole number >= 0. 0 still awards the score and 0 points. Hard and Shardbreaker use the same placeholder. Confirm the base, and whether 0 should be refused.
+11. A second finish returns `counted == false` and a zero delta. `state` keeps the award. Add to the guild only when `counted == true`. Confirm.
+12. The suggested field is `guideScore` on a guild record, not on the player schema. There is no guild schema here. Version 21 is still the player schema. Do not assume 22. Should Guided points go into the guild raid XP total, or into a separate field? The +Marks perk, the cheaper Practice Grove, and the banner are not in this module. Practice Grove stays free. Confirm where the score lives and that those perks wait.
+13. No role check and no boss check. Do not call `Raids.difficulty` for Hard or Shardbreaker. Call `finish` only after a real clear, never on a wipe, and not from Finder or the premade board. `practice = true` is refused even on Hard. Any difficulty id that starts with `"fracture"` is refused. Confirm.
+14. The host is a guild id, not a player. The run can still finish if that guild still fills half after the original leader is AFK-removed. Confirm.
+15. There is no paid skip. A third argument on `finish` is refused, so a skip flag cannot count. Nothing here costs Robux. Confirm that stays true at wiring.
+
 ## Open
 
 No unassigned tasks.
