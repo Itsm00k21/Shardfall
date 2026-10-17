@@ -43,10 +43,12 @@ Copy the shape of a short free buff. Do not copy a rare pet that only exists in 
 | Line | `Epic  1 in 250  (0.3998%)` style. Under 1% prints four decimals. At or above 1% prints two | `RarityConfig.luau:372-377`, `RarityConfig.luau:446-452` |
 | Item odds | `disclose` also builds a per-entry chance | `RarityConfig.luau:420-431` |
 | Reel | Server picks. The client plays the seed. Quick Roll skips the reel. Mythic still plays | `RollReel.luau:6-8` |
-| Auto | Fires again only when auto is on, tokens remain, and the last rarity is below the stop. Stops are Off, Uncommon, Rare, Epic, Legendary. Stops when the app loses focus | `RollBoard.luau:18`, `RollBoard.luau:115-123`, `RollLoop.luau:403`, `RollReel.luau:9` |
+| Auto | Roll-tab auto chains another roll only while the hub is open on Roll, the player is alive, auto is on, tokens remain, the bag has room, the last item is not new and not an upgrade, and the last rarity is below the stop. Stops are Off, Uncommon, Rare, Epic, Legendary. A roll queued by a second press during the reveal skips that stop. This path does not watch window focus | `RollBoard.luau:18`, `RollBoard.luau:115-135`, `RollLoop.luau:50-62`, `RollLoop.luau:343-367`, `RollLoop.luau:395-412`, `MenuHub.luau:3061-3080` |
 | Paid luck | Off | `RarityConfig.luau:18-19` |
 
 The stop list ends at Legendary. A player cannot set the stop on Mythic or Secret. That is a product choice already in code, not a new one.
+
+The focus cut is not on the roll tab. `RollReel` turns its own auto off when the window loses focus (`RollReel.luau:947-950`) and will not start a roll while the window is closed (`RollReel.luau:854-857`). That auto button is created hidden, and the client never opens it (`RollReel.luau:1253-1268`, `init.client.luau:775-776`). Losing focus does not stop the live roll-tab auto.
 
 ## What to take home
 
@@ -54,7 +56,7 @@ The stop list ends at Legendary. A player cannot set the stop on Mythic or Secre
 |---|---|
 | One roll button and a reel | A second verb (dice, case battle, steal) |
 | 1-in-N percents, pity in the same notice | A display that hides the top tiers |
-| Auto-roll with a stop and a focus cut | Auto-roll locked behind a group, a like, or a pass |
+| Roll-tab auto-roll that stops at the chosen rarity | Auto-roll locked behind a group, a like, or a pass |
 | Quick Roll as a shorter reveal, not better odds | A luck potion, a cheaper pull, or a Robux egg |
 | Codex and a paused login streak | Limited pets that never return |
 | Class stays the pedestal | A roll that is the class |

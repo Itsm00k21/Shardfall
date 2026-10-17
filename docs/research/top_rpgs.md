@@ -45,7 +45,7 @@ This is the layout to keep. It was read in code, not guessed from the other game
 | keep | drop |
 |---|---|
 | Class on a pedestal. The shard changes the weapon. The roll is not the class | A random power that replaces the class |
-| Heartwood is 8 players with a role. Death ends the pull, not the character | Open-world PvP, bounty griefing, permadeath |
+| Heartwood is an 8-player raid. A Story wipe retries the pull. One downed player stays in it (`EchoRetry.luau:36-47`). The character is not deleted | Open-world PvP, bounty griefing, permadeath |
 | Rootvault, then a raid. The forge changes the weapon | A sea, then another sea |
 | Cosmetics and convenience only. Paid luck, paid chests, and the pass are off | XP boosts, stat resets, storage of power, a paid entry fee |
 | The first session stays small. The wider map waits until Haven | A full ocean before the first clear |
