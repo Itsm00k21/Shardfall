@@ -3088,6 +3088,143 @@ Questions for Ghost:
 12. The contest fields above are not player-schema fields. One server-wide record per raid, or two servers can each award a statue. Schema stays 21. Do not assume 22. Do not copy the record onto each profile. The season length is not here, and `state.statue` stays true. The emblem cosmetic id is not here. Confirm where the record lives, and whether a profile flag is still needed later so the emblem can render.
 13. Nothing here costs Robux. An extra argument, or a skip / waive / paid / robux / premium / price field, is refused. It does not open, lift the cap, or force the first clear. `RaidMarks.CONFIG.doubleMarks` stays false. This module does not pay Marks. `gear` never persists. `clear` does not re-check item level. A broken record returns `persist == false` and a blank state that must not replace the live record. Confirm that stays true at wiring, and that `RaidService` owns `openContest`, `contestGear`, and `contestClear`.
 
+### T-081 hooks for GHOST
+
+HELPER did not edit `Schema.luau`, `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `RaidMarks.luau`, `PracticeLoot.luau`, `RaidLuck.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidLockout` is pure and ready to call. It requires `RaidMarks` only to call `RaidMarks.weekKey`. It does not require `Raids`, `RaidLuck`, or `PracticeLoot`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. There is no paid skip of the lockout. T-081 is done. Wiring is still yours. Live loot still goes through `PracticeLoot.applyKill` into `Raids.applyClear`. Do not edit that path for this branch.
+
+Where the row and the live code disagree, the row won:
+
+- `docs/design/shardfall_raids.md` says personal loot locks once per boss per difficulty, and the Tuesday reset covers Vault, lockouts, and the Marks cap. `Raids.applyClear` still locks with `Raids.weekNumber` (Thursday epoch, `raidLock[boss .. ":" .. difficulty] = week`) and has no claim id. This module does not change that function. It calls `RaidMarks.weekKey` and does not copy `tuesdayOffset`, `weekSeconds`, or the Thursday helper.
+- On `1791849600` (2026-10-13 00:00:00 UTC, a Tuesday) `RaidLockout.weekKey` is 2963, the same as `RaidMarks.weekKey`. One second earlier is 2962. `Raids.weekNumber` on that Tuesday is 2962. Do not pass that number in.
+- Fracture has no lockout. Practice never locks and never loots. A reclear after a lock returns `lootEligible = false` and still allows Marks, Dust, and materials. This module does not pay them and does not roll gear.
+
+`RaidMarks.CONFIG.doubleMarks` stays false. This module does not read it and does not pay Marks.
+
+Tunables are `RaidLockout.CONFIG`. `maxIdLength` is 64. `retainWeeks` is 1, so a read keeps the current Tuesday week and drops every older week. `maxClaims` is 256 stored claim ids in that week. A full week refuses a new id. It does not forget an old one. Do not hardcode those numbers beside the module. There is no Tuesday offset in this CONFIG. `LOCKED` is story, normal, hard, and shardbreaker. `OPEN` is fracture. `REFUSED` is practice and guided. Guided is a mode, not a difficulty. `Raids.DIFFICULTIES` is still Story and Normal. Do not gate Hard or Shardbreaker on `Raids.difficulty`.
+
+`RaidService.luau`, next to the other raid requires, when you wire this:
+
+```lua
+local RaidLockout = require(ReplicatedStorage.Shared.RaidLockout)
+```
+
+**Return shape.** `fresh`, `view`, `status`, and `claim` each return a new table. They do not write the input. `weekKey` returns a number or nil, the same value as `RaidMarks.weekKey`, including a fractional unix second. A bad arg does not throw. nil, NaN, a non-table, and a wrong type take the failure path. Store `state` only when `persist == true`. An `ok == false` result with `persist == false` is a bad record, a bad clock, or a bad arg. A state error's `state.weeks` is empty. Writing that blank over the profile would wipe real locks. A clock error returns a copy of the record, including a future week, and `persist` is false.
+
+| call | when | on success |
+|---|---|---|
+| `weekKey(now)` | you need the Tuesday key and nothing else | the key, or nil when `now` cannot be used |
+| `fresh()` | a brand-new profile shape, if you want one | `{ weeks = {} }` |
+| `view(state, now)` | profile load, so old weeks can be dropped | the pruned record. `persist` is true only when a week was dropped |
+| `status(state, query, now)` | the raids panel asks if this pair is locked | `locked`, `lootEligible`, and `reclearRewards` for that pair. No claim id is stored |
+| `claim(state, claim, now)` | a boss clear is ready to resolve loot | the grant decision. The same claim id is a no-op |
+
+**What a claim is.** Pass `{ claimId, bossId, difficulty, practice, guided }`. `claimId` is a trimmed string or a positive whole number. It is not lowercased. `" same "` is `same`. `1` and `"1"` are different claims. A missing id, a blank, `0`, a negative, a fraction, NaN, inf, or a string longer than `maxIdLength` is `ERRORS.claimId`. A GUID from `HttpService:GenerateGUID(false)` is 36 characters and fits. `bossId` and `difficulty` are trimmed and lowercased. `" Twins "` / `" Hard "` is `twins` / `hard`. A colon in the boss id is `ERRORS.boss`. Boss ids are not checked against `Raids.WINGS`. Heartwood's room ids are `twins`, `sapwell`, `galecrown`, and `awakened`. A later raid can pass a new id.
+
+`practice` nil and false are a live clear. `practice = true` never locks and never loots: `lootEligible` false, `reclearRewards` false, `locked` false, `reason` `practice`. The id is not stored, so a later live claim with that same id can still loot. Any other practice type is `ERRORS.practice`, unless the id is already stored. `guided` nil, true, and false are accepted. Any other type is `ERRORS.guided`. Guided does not waive the lock and is not stored. Difficulty `practice` and difficulty `guided` are `ERRORS.difficulty`.
+
+The checks on `claim`, in order, are: extra argument, rules, state, time, a stored week newer than `now`, prune, claim shape, skip field, claim id, stored claim id, practice flag, guided flag, practice result, difficulty, boss, cap, then store.
+
+A stored claim id is a no-op even when the retry changes the boss, the difficulty, or sets `practice`. `ok` is true, `persist` is true only when prune dropped a week, `lootEligible` is false, `reclearRewards` is false, `locked` is false, `reason` is `duplicate`. Grant nothing. A skip field on that retry is `ERRORS.skip` instead, and it does not clear the lock. `1` replayed as `"1"` is not a duplicate.
+
+Story, Normal, Hard, and Shardbreaker each lock separately. The first accepted claim for that boss and difficulty this week is `reason` `loot`, `lootEligible` true, `reclearRewards` true, `locked` true. The lock string is `bossId .. ":" .. difficulty`, for example `twins:story`. A later new claim id for that same pair is `reason` `lockout`, `lootEligible` false, `reclearRewards` true, `locked` true. The lock list does not grow a duplicate. `reclearRewards` means Marks, Dust, and materials are allowed. It is also true on the first clear, so the wire can pay them from that flag alone. It is false for practice and for a duplicate.
+
+Fracture has no lockout. `fracture`, `Fracture-3`, `fracture 12`, and `fracture_2` are open. Each new claim id is `lootEligible` true, `reclearRewards` true, `locked` false, and no lock is stored. The same claim id is still a no-op. `fractured` and `fracture-` are `ERRORS.difficulty`. A `level` field is ignored. A `removal` field is ignored: `removal = "afk"` still locks and can loot. That is an open question.
+
+`status` uses the same difficulty rules and does not store a claim. `claimId` on the result is nil. A `claimId` on the query is ignored, so the panel cannot burn an id. `locked` false and `reason` `loot` means the next new claim would be loot eligible. `locked` true and `reason` `lockout` means a reclear. `status` does not check the cap. A full week can still look eligible until `claim` returns `ERRORS.full`. `view` only prunes.
+
+Nil `state`, or a table whose `weeks` is nil, is an empty record. The first accepted claim should be saved. A broken row (a hole, a duplicate week, a duplicate claim id, a lock that is not `boss:difficulty` of a locking difficulty, an uppercase boss, a claim id that still has spaces, a non-whole week, a week key below 0) is `ERRORS.state`. `persist` is false and `state.weeks` is empty. Do not write that blank over the profile. A week key above `2^53 - 1` is refused the same way. A negative, NaN, or infinite `now` is `ERRORS.time`. `weekKey` on that error is -1. A stored week newer than `now` is `ERRORS.clock`. Do not prune it and do not grant.
+
+An extra argument, or a `skip`, `waive`, `waiveLock`, `waiveLockout`, `bypass`, `bypassLock`, `paid`, `robux`, `premium`, `price`, `productId`, `gamePass`, `force`, `unlock`, `skipLock`, or `skipLockout` field, is `ERRORS.skip`. `false` still counts as present. It does not lock and it does not grant. The same field names already sitting on a saved profile are ignored. They do not waive the lock, and they are not copied onto the returned state.
+
+The cap is per kept week. Claim 256 stores. Claim 257 is `ERRORS.full`, `persist` false, `lootEligible` false, `reclearRewards` false. A duplicate of a stored id still no-ops when the week is full. The next Tuesday starts empty because the old week was pruned. Fracture ids count toward the same cap. A Fracture week that fills it also blocks a new Story lock until the reset.
+
+```lua
+local function lockoutState(data)
+	return data.raidLootLock
+end
+
+local function saveLockout(data, result)
+	if result.persist ~= true then
+		return
+	end
+	data.raidLootLock = result.state
+end
+```
+
+**Call sites, still yours.** Do not fold these rules into `Raids.applyClear`. That function still writes Thursday `raidLock` and may grant a chest. Calling both for one clear would lock the player on two different week keys. Add the functions below on `RaidService`. The boss death is the `enemy.hp <= 0` block in `DungeonService` that already calls `PracticeLoot.applyKill` for a Heartwood boss. Call `claimLoot` from that mutate when you are ready to switch, and stop using `applyClear` for the lock. Until that wire, leave the live path alone.
+
+```lua
+function RaidService.claimLoot(player, claim)
+	local now = os.time()
+	local claimed = nil
+	local ok, err = DataService.mutate(player, function(data)
+		claimed = RaidLockout.claim(lockoutState(data), claim, now)
+		saveLockout(data, claimed)
+		if claimed.ok ~= true then
+			return claimed.error
+		end
+		if claimed.reason == "duplicate" then
+			return nil
+		end
+		if claimed.lootEligible then
+			-- Roll personal loot once. This module does not know the bag.
+		end
+		if claimed.reclearRewards then
+			-- Marks, Dust, and materials. Not a second loot roll.
+		end
+		return nil
+	end)
+	return ok, claimed, err
+end
+
+function RaidService.lootLock(player, bossId, difficulty, practice, guided)
+	local now = os.time()
+	local status = nil
+	DataService.mutate(player, function(data)
+		status = RaidLockout.status(lockoutState(data), {
+			bossId = bossId,
+			difficulty = difficulty,
+			practice = practice == true,
+			guided = guided == true,
+		}, now)
+		saveLockout(data, status)
+		return nil
+	end)
+	return status
+end
+```
+
+`practice` on the live run is `run.practice == true`. Pass it through. A practice claim returns `ok` and does not loot. `guided` is not live. Pass `guided = true` only for a real Guided clear. It still locks Hard or Shardbreaker. `RaidService.lootLock` is a read. Save it when `persist` is true so a Tuesday login drops last week's rows. Grant from `claim`, in the same mutate as the save. A retry of a saved id must grant nothing. There is no paid skip of the lockout.
+
+**Schema.** HELPER does not edit `Schema.luau`. Add this on the next free schema version at wiring time. Do not assume a version number from this branch. Version 21 was current when T-081 opened. Do not assume 22 is still free. Do not reuse `raidLock`. That field stays the live Thursday map until you switch. Do not copy those rows into this table. The week keys do not match, and they have no claim ids.
+
+```lua
+raidLootLock: any, -- nil, or { weeks = { { weekKey, locks, claims } } }. Default nil.
+```
+
+Nil reads as no locks. `{ weeks = {} }` is the same. `weekKey` is `RaidLockout.weekKey`. `locks` is `{ "twins:story" }` for the current week. `claims` is the ids already resolved, in order, each a string or a positive whole number. One row per kept week. With `retainWeeks` 1, a saved profile holds at most one row after a successful read. Leave a broken row for the module to refuse. If `sanitize` turns it into nil, a corrupt record looks like a new player and can loot again.
+
+`tests/run.luau` requires `./RaidLockout.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Questions for Ghost:
+
+1. The suggested profile field is `raidLootLock`, shaped as `{ weeks = { { weekKey, locks, claims } } }`. Nil means no locks. `raidLock` stays the live Thursday map and is not reused. Schema stays 21. Do not assume 22 is free. Confirm the name, and confirm you will not copy `raidLock` rows into this table.
+2. `retainWeeks` is 1. A read in the new Tuesday drops every older week, including claim ids. A retry after the reset of an id that was saved last week is not recognized, so that id can loot again. Confirm, or should last week's ids stay idempotent (`retainWeeks` 2) while last week's locks do not block?
+3. `maxClaims` is 256 per kept week. The next new id is `ERRORS.full` and grants nothing, so an id is never dropped. Fracture stores one id per clear and never a lock, and those ids share the cap with Story, Normal, Hard, and Shardbreaker. A full Fracture week also blocks a new Story lock until Tuesday. Confirm the cap.
+4. Practice does not store the claim id. A later live claim with that same id can still loot. A stored live id replayed with `practice = true` is a duplicate and grants nothing. `practice = "true"` is an error unless that id is already stored. Confirm.
+5. Fracture never writes a lock. `fracture`, `fracture-3`, `fracture 12`, and `fracture_2` each stay loot eligible per new claim id. `fractured` and `fracture-` are refused. A `level` field is ignored, so every call that passes difficulty `fracture` shares "no lockout" and does not lock the others. Confirm the wire's fracture id.
+6. `guided = true` does not waive the lock and is not stored. Difficulty `guided` is refused. Guided Hard and Guided Shardbreaker share the lock with an unguided clear of that same boss and difficulty. Confirm.
+7. `removal` is not read. `removal = "afk"` or `"kick"` still locks and can loot. The raid design says an AFK removal loses rewards. Confirm whether the wire should skip `claim` for those removals, or this module should refuse them.
+8. A duplicate returns `ok` true, `lootEligible` false, `reclearRewards` false, and `persist` only when an older week was pruned. Grant nothing. Do the grant in the same mutate as the save. `1` and `"1"` differ. String ids are trimmed and not lowercased. Boss ids are trimmed and lowercased. `maxIdLength` is 64. Confirm the wire's claim id.
+9. The first clear returns `lootEligible` true and `reclearRewards` true. A reclear returns `lootEligible` false and `reclearRewards` true. This module does not pay Marks, Dust, or materials and does not roll gear. Confirm `RaidService` owns that split, and that the wire will not also call `Raids.applyClear` for the lock.
+10. Boss ids are not checked against `Raids.WINGS`. `" Twins "` is `twins`. A colon in the boss id is refused. Confirm Heartwood ids `twins`, `sapwell`, `galecrown`, and `awakened`, and that a later raid can pass a new id.
+11. The week key is `RaidMarks.weekKey`, called, not copied. `1791849600` is 2963. One second earlier is 2962. `Raids.weekNumber` on that Tuesday is 2962. A stored week newer than `now` is `ERRORS.clock` and must not replace the profile. A state error returns an empty `weeks` with `persist` false. Confirm the wire passes unix seconds and never saves `persist == false`.
+12. Nothing here costs Robux. An extra argument, or a skip / waive / paid / robux / premium / price field, is refused and does not clear the lock. The same names already stored on the profile are ignored. Confirm no paid skip will be added at wiring.
+13. `RaidLuck` should not gain pity when `lootEligible` is false. This module does not call `RaidLuck`. Confirm the wire passes that flag into the pity settle. T-045 called a dry lockout clear the clear that adds pity. A reclear is not that clear.
+14. `status` does not store a claim and does not check the cap. `view` on profile load is what prunes. Confirm the panel reads `status`, and that a full week is allowed to look eligible until `claim` returns `ERRORS.full`.
+
 ## Open
 
 No unassigned tasks.
