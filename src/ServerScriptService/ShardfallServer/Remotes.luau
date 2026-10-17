@@ -612,6 +612,11 @@ function Remotes.bind()
 			return RaidService.leave(player)
 		end)
 	end
+	functionRemote("RaidReady").OnServerInvoke = function(player)
+		return guard(player, "RaidReady", function()
+			return RaidService.ready(player)
+		end)
+	end
 
 	functionRemote("UpgradeGear").OnServerInvoke = function(player, uid)
 		return guard(player, "UpgradeGear", function()

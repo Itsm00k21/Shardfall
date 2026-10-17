@@ -12,9 +12,15 @@
 
 	The plaza board is the in-memory listings array. RaidPremade accepts or
 	refuses a row. A join takes a seat and does not start Raid Finder.
+	A full party does not launch on the last join. The host starts a ready
+	check, and Story or Normal launches only after every seated member is
+	ready. Hard and Shardbreaker never enter from that path. The host id,
+	the member list, and the ready flags come from this server.
 	A seated player can leave that seat while they are still connected.
+	A leave or a disconnect during the check cancels it.
 	RaidPost and RaidJoin keep the rate limits already on those remotes.
-	RaidLeave has its own limit. PlayerRemoving is a disconnect, not that leave.
+	RaidReady and RaidLeave use the same limit. PlayerRemoving is a
+	disconnect, not that leave. Nothing on this path spends Robux.
 ]]
 
 local Players = game:GetService("Players")
@@ -28,6 +34,7 @@ local Raids = require(ReplicatedStorage.Shared.Raids)
 local RaidPremade = require(ReplicatedStorage.Shared.RaidPremade)
 local DataService = require(script.Parent.DataService)
 local EchoParty = require(script.Parent.EchoParty)
+local RaidReady = require(script.Parent.RaidReady)
 
 local RaidService = {}
 
@@ -364,6 +371,12 @@ local function departUser(userId: number)
 		local result = RaidPremade.depart(row.listing, userId, now)
 		if result.ok == true and result.listing ~= nil then
 			row.listing = result.listing
+			-- A leave or disconnect during the check cancels it. The next
+			-- full party starts over. This does not launch.
+			if row.ready ~= nil or row.pulling == true then
+				row.ready = nil
+				row.readyToken = (row.readyToken or 0) + 1
+			end
 		end
 		index += 1
 	end
@@ -702,61 +715,346 @@ function RaidService.join(player: Player, listingId: any)
 		return reject(levelError)
 	end
 	found.listing = gate.listing
+	-- The last seat only fills the row. Launch waits for the ready check.
 	local state = RaidPremade.status(found.listing, now)
-	local full = state.ok == true
-		and state.full == true
-		and state.expired ~= true
-		and state.closed ~= true
-	local difficulty = found.listing.difficulty
-	if full and (difficulty == "story" or difficulty == "normal") then
-		local DungeonService = dungeon()
-		local host = nil
-		local hostUserId = found.listing.hostUserId
-		if type(hostUserId) == "number" then
-			host = Players:GetPlayerByUserId(hostUserId)
-		end
-		local hostParty = if host ~= nil then DungeonService.echoParty(host) else nil
-		local route = EchoParty.route(
-			host ~= nil and host ~= player,
-			hostParty ~= nil,
-			EchoParty.samePull(
-				if hostParty ~= nil then hostParty.difficulty else nil,
-				if hostParty ~= nil then hostParty.practice else false,
-				difficulty
-			)
-		)
-		if route == "backfill" and host ~= nil then
-			local created = false
-			if not DungeonService.isInRun(player) then
-				local entered = DungeonService.enter(player, "heartwood", difficulty, false)
-				if entered.ok ~= true then
-					return {
-						ok = true,
-						id = found.id,
-						board = RaidService.board(),
-						note = "Seated on the premade board.",
-					}
-				end
-				created = true
-			end
-			local filled = DungeonService.backfill(player, host)
-			if filled.ok == true then
-				filled.note = "Premade listing. Joined the pull."
-				return filled
-			end
-			if created then
-				DungeonService.leave(player)
-			end
-		end
-	end
+	local full = state.ok == true and state.full == true and state.active == true
 	return {
 		ok = true,
 		id = found.id,
 		board = RaidService.board(),
 		note = if full
-			then "Party is full. Ready check comes later."
+			then "Party is full. The host starts the ready check."
 			else "Seated on the premade board.",
 	}
+end
+
+local function partyHealer(listing: any): boolean
+	local members = listing.members
+	if type(members) ~= "table" then
+		return false
+	end
+	for _, member in ipairs(members) do
+		if type(member) == "table" then
+			if member.role == "healer" then
+				return true
+			end
+			if member.role == "flex" and type(member.userId) == "number" then
+				local person = Players:GetPlayerByUserId(member.userId)
+				if person ~= nil then
+					local profile = DataService.get(person)
+					if profile ~= nil and profile.classId == "tidecaller" then
+						return true
+					end
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- Story and Normal only. Hard and Shardbreaker return before enter, and
+-- this path does not call Raids.difficulty. The listing host is the anchor.
+-- EchoParty "queue" starts a fresh fight here. It does not call startQueue
+-- or teleport one player away from the party.
+local function launchPremade(row: any): any
+	local listing = row.listing
+	local difficulty = if type(listing) == "table" then listing.difficulty else nil
+	if difficulty ~= "story" and difficulty ~= "normal" then
+		return {
+			ok = true,
+			id = row.id,
+			board = RaidService.board(),
+			note = "Party is ready. Hard and Shardbreaker stay closed.",
+		}
+	end
+	if row.launched == true then
+		return {
+			ok = true,
+			id = row.id,
+			board = RaidService.board(),
+			note = "The party already launched.",
+		}
+	end
+	if row.pulling == true then
+		return reject("The party is already launching.")
+	end
+
+	local token = if type(row.readyToken) == "number" then row.readyToken else 0
+	row.readyToken = token
+	row.pulling = true
+	local created: { Player } = {}
+
+	local function unwind(dropCheck: boolean)
+		if dropCheck and row.readyToken == token then
+			row.ready = nil
+			row.readyToken = token + 1
+		end
+		row.pulling = false
+		local DungeonService = dungeon()
+		for index = #created, 1, -1 do
+			pcall(DungeonService.leave, created[index])
+		end
+	end
+
+	local function stillGoing(): boolean
+		if row.pulling ~= true or row.ready == nil or row.readyToken ~= token then
+			return false
+		end
+		if type(row.listing) ~= "table" then
+			return false
+		end
+		local now = os.time()
+		if not listingActive(row, now) then
+			return false
+		end
+		local state = RaidPremade.status(row.listing, now)
+		if state.ok ~= true or state.full ~= true or state.active ~= true then
+			return false
+		end
+		local vote = RaidReady.vote(
+			row.ready,
+			row.listing.hostUserId,
+			row.listing.hostUserId,
+			row.listing.members,
+			true
+		)
+		return vote.ok == true and vote.complete == true
+	end
+
+	local function hostPlayer(): Player?
+		if type(row.listing) ~= "table" or type(row.listing.hostUserId) ~= "number" then
+			return nil
+		end
+		return Players:GetPlayerByUserId(row.listing.hostUserId)
+	end
+
+	local function partyNow(): { Player }?
+		if type(row.listing) ~= "table" or type(row.listing.members) ~= "table" then
+			return nil
+		end
+		local seated = {}
+		for _, member in ipairs(row.listing.members) do
+			if type(member) ~= "table" or type(member.userId) ~= "number" then
+				return nil
+			end
+			local person = Players:GetPlayerByUserId(member.userId)
+			if person == nil then
+				return nil
+			end
+			table.insert(seated, person)
+		end
+		if #seated == 0 then
+			return nil
+		end
+		return seated
+	end
+
+	if not stillGoing() then
+		unwind(true)
+		return reject("The ready check was cancelled.")
+	end
+	local host = hostPlayer()
+	local seated = partyNow()
+	if host == nil or seated == nil then
+		unwind(true)
+		return reject("The host left the ready check.")
+	end
+
+	local DungeonService = dungeon()
+	local hostParty = DungeonService.echoParty(host)
+	local same = EchoParty.samePull(
+		if hostParty ~= nil then hostParty.difficulty else nil,
+		if hostParty ~= nil then hostParty.practice else false,
+		difficulty
+	)
+	if hostParty ~= nil and same ~= true then
+		unwind(false)
+		return reject("Leave your current run before the ready check.")
+	end
+	local route = EchoParty.route(true, hostParty ~= nil, same)
+	if route ~= "backfill" and DungeonService.isInRun(host) then
+		unwind(false)
+		return reject("Leave your current run before the ready check.")
+	end
+
+	local healer = partyHealer(row.listing)
+	local partyCount = #seated
+	local tune = {
+		practice = false,
+		players = partyCount,
+		healer = healer,
+		wing = 1,
+		phase = 1,
+	}
+
+	local function cancelled(): any
+		unwind(true)
+		return reject("The ready check was cancelled.")
+	end
+
+	if route ~= "backfill" then
+		local enterOk, entered = pcall(DungeonService.enter, host, "heartwood", difficulty, false)
+		if not enterOk then
+			table.insert(created, host)
+			unwind(false)
+			error(entered)
+		end
+		if type(entered) == "table" and entered.ok == true then
+			table.insert(created, host)
+		end
+		if not stillGoing() then
+			return cancelled()
+		end
+		if type(entered) ~= "table" or entered.ok ~= true then
+			unwind(false)
+			return if type(entered) == "table" then entered else reject("The Heartwood did not open.")
+		end
+		local tuneOk, tuned = pcall(DungeonService.tuneRaid, host, tune)
+		if not tuneOk then
+			unwind(false)
+			error(tuned)
+		end
+		if not stillGoing() then
+			return cancelled()
+		end
+		if type(tuned) ~= "table" or tuned.ok ~= true then
+			unwind(false)
+			return if type(tuned) == "table" then tuned else reject("The Heartwood did not open.")
+		end
+	end
+
+	local flying = partyNow()
+	local anchor = hostPlayer()
+	if flying == nil or anchor ~= host then
+		return cancelled()
+	end
+	for _, person in ipairs(flying) do
+		if person ~= host then
+			if not stillGoing() then
+				return cancelled()
+			end
+			if DungeonService.isInRun(person) then
+				local party = DungeonService.echoParty(person)
+				local memberSame = party ~= nil
+					and EchoParty.samePull(
+						party.difficulty,
+						party.practice,
+						difficulty
+					)
+				if memberSame ~= true then
+					unwind(false)
+					return reject("Leave your current run before the ready check.")
+				end
+			else
+				local enterOk, entered =
+					pcall(DungeonService.enter, person, "heartwood", difficulty, false)
+				if not enterOk then
+					table.insert(created, person)
+					unwind(false)
+					error(entered)
+				end
+				if type(entered) == "table" and entered.ok == true then
+					table.insert(created, person)
+				end
+				if not stillGoing() then
+					return cancelled()
+				end
+				if type(entered) ~= "table" or entered.ok ~= true then
+					unwind(false)
+					return if type(entered) == "table"
+						then entered
+						else reject("The Heartwood did not open.")
+				end
+				local tuneOk, tuned = pcall(DungeonService.tuneRaid, person, tune)
+				if not tuneOk then
+					unwind(false)
+					error(tuned)
+				end
+				if not stillGoing() then
+					return cancelled()
+				end
+				if type(tuned) ~= "table" or tuned.ok ~= true then
+					unwind(false)
+					return if type(tuned) == "table" then tuned else reject("The Heartwood did not open.")
+				end
+			end
+			local fillOk, filled = pcall(DungeonService.backfill, person, host)
+			if not fillOk then
+				unwind(false)
+				error(filled)
+			end
+			if not stillGoing() then
+				return cancelled()
+			end
+			if type(filled) ~= "table" or filled.ok ~= true then
+				unwind(false)
+				return if type(filled) == "table" then filled else reject("No raid party is up.")
+			end
+		end
+	end
+
+	if not stillGoing() or hostPlayer() ~= host then
+		return cancelled()
+	end
+	row.pulling = false
+	row.ready = nil
+	row.launched = true
+	row.readyToken = token + 1
+	return {
+		ok = true,
+		id = row.id,
+		board = RaidService.board(),
+		note = "Premade party launched.",
+	}
+end
+
+function RaidService.ready(player: Player)
+	local now = os.time()
+	sweep(now)
+	local seat = seatedRow(player.UserId, now)
+	if seat == nil or type(seat.listing) ~= "table" then
+		return reject("You are not seated on a premade listing.")
+	end
+	if seat.launched == true then
+		return {
+			ok = true,
+			id = seat.id,
+			board = RaidService.board(),
+			note = "The party already launched.",
+		}
+	end
+	if seat.pulling == true then
+		return reject("The party is already launching.")
+	end
+	local state = RaidPremade.status(seat.listing, now)
+	local full = state.ok == true and state.full == true and state.active == true
+	if full ~= true then
+		seat.ready = nil
+		return reject("Fill the party before the ready check.")
+	end
+	local vote = RaidReady.vote(
+		seat.ready,
+		player.UserId,
+		seat.listing.hostUserId,
+		seat.listing.members,
+		full
+	)
+	if vote.ok ~= true or vote.check == nil then
+		return reject(vote.error or "The ready check was refused.")
+	end
+	seat.ready = vote.check
+	if vote.complete ~= true then
+		local note = if vote.started == true
+			then "Ready check started."
+			else string.format("Ready %d/%d.", vote.readyCount, vote.partySize)
+		return {
+			ok = true,
+			id = seat.id,
+			board = RaidService.board(),
+			note = note,
+		}
+	end
+	return launchPremade(seat)
 end
 
 function RaidService.practice(player: Player, wing: any, phase: any)

@@ -3,7 +3,10 @@
 --[[
 	Heartwood buttons. Each target is 64px.
 	Story queue, Normal queue, a premade post, Practice Grove, the vendor,
-	and a premade leave. Leave drops the seat while the player is connected.
+	a premade leave, and the premade ready check. Leave drops the seat
+	while the player is connected. Ready asks the server to score the
+	seated party. The client does not send a host, a member list, or
+	anyone else's ready flag.
 ]]
 
 local Players = game:GetService("Players")
@@ -135,7 +138,7 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	row.Name = "Raid"
 	row.AnchorPoint = Vector2.new(0, 0)
 	row.Position = UDim2.fromOffset(120, 132)
-	row.Size = UDim2.fromOffset(420, 64)
+	row.Size = UDim2.fromOffset(420, 134)
 	row.BackgroundTransparency = 1
 	row.Visible = false
 	row.Parent = screen
@@ -143,13 +146,14 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.Padding = UDim.new(0, 6)
+	layout.Wraps = true
 	layout.Parent = row
 
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
 	note.AnchorPoint = Vector2.new(0, 0)
-	note.Position = UDim2.fromOffset(120, 198)
-	note.Size = UDim2.fromOffset(420, 20)
+	note.Position = UDim2.fromOffset(120, 272)
+	note.Size = UDim2.fromOffset(420, 32)
 	note.Font = Enum.Font.BuilderSans
 	note.TextSize = 13
 	note.TextColor3 = Color3.fromRGB(240, 236, 248)
@@ -204,6 +208,9 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	end)
 	button("Leave", "Leave", Color3.fromRGB(110, 118, 140), function()
 		show(invoke("RaidLeave"))
+	end)
+	button("Ready", "Ready", Color3.fromRGB(96, 168, 140), function()
+		show(invoke("RaidReady"))
 	end)
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
