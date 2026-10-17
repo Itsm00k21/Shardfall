@@ -112,7 +112,10 @@ function RaidService.queue(player: Player, difficulty: any, role: any)
 	local healer = role == "healer" or (role == "flex" and profile.classId == "tidecaller")
 	local code = reservedCode()
 	if code ~= nil then
-		local sent = pcall(function()
+		-- Save and clear the lock before the hop. A failed save stays on this
+		-- server; a failed hop reclaims the lock and falls through to the
+		-- local raid below.
+		local hopped, hopWhy = DataService.releaseForTeleport(player, function()
 			local TeleportService = game:GetService("TeleportService")
 			local options = Instance.new("TeleportOptions")
 			options.ReservedServerAccessCode = code
@@ -123,8 +126,14 @@ function RaidService.queue(player: Player, difficulty: any, role: any)
 			})
 			TeleportService:TeleportAsync(game.PlaceId, { player }, options)
 		end)
-		if sent then
+		if hopped == "teleported" then
 			return { ok = true, note = "Reserved server. Flying in." }
+		end
+		if hopped == "kept" or hopped == "closed" then
+			return reject(
+				hopWhy
+					or "Could not save your profile, so the raid teleport was cancelled. You are still on this server."
+			)
 		end
 	end
 	local started = launch(player, row.id, healer, 1, 1, false)

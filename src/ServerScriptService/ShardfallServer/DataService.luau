@@ -19,6 +19,11 @@
 	restores it if the callback returns an error string or throws, so a
 	rejected roll cannot eat a token.
 
+	A reserved-server teleport saves and clears this server's lock before
+	TeleportAsync runs. PlayerRemoving after that does not write the profile
+	again and does not take the lock back. If the save fails, the teleport
+	is cancelled and the player stays here with the lock still held.
+
 	save() writes that profile now, including when the adapter is the
 	in-memory store. savePair() writes two profiles and, if either write
 	fails, puts both backups back and writes those too. Trades use it so a
@@ -46,6 +51,9 @@ local DataService = {}
 local AUTOSAVE_SECONDS = 60
 local LOAD_ATTEMPTS = 5
 local LOAD_RETRY_SECONDS = 2
+local TELEPORT_SAVE_FAILED =
+	"Could not save your profile, so the raid teleport was cancelled. You are still on this server."
+local TELEPORT_CLOSED = "The raid teleport failed and your profile could not be reopened. Rejoin."
 
 -- Studio play sessions often have an empty JobId. A GUID still makes two
 -- Studio servers look like different owners to the lock.
@@ -61,6 +69,9 @@ type Record = {
 	loading: boolean,
 	failed: boolean,
 	released: boolean,
+	-- Set for the whole save-and-teleport yield. Autosave and PlayerRemoving
+	-- must not start a second write while this is true.
+	closing: boolean,
 	ephemeral: boolean,
 	error: string?,
 }
@@ -151,6 +162,9 @@ function DataService.mutate(
 	if record == nil or not record.loaded or record.released then
 		return false, "Profile is not loaded."
 	end
+	if record.closing then
+		return false, "Profile is closing for a teleport."
+	end
 	local backup = Schema.deepCopy(record.data)
 	local ok, result = pcall(mutator, record.data)
 	if not ok then
@@ -198,6 +212,9 @@ function DataService.save(player: Player): (boolean, string?)
 	if record == nil or not record.loaded or record.released then
 		return false, "Profile is not loaded."
 	end
+	if record.closing then
+		return false, "Profile is closing for a teleport."
+	end
 	if record.ephemeral then
 		return true, nil
 	end
@@ -212,7 +229,7 @@ end
 
 function DataService.replace(player: Player, data: any): boolean
 	local record = records[player]
-	if record == nil or not record.loaded or record.released then
+	if record == nil or not record.loaded or record.released or record.closing then
 		return false
 	end
 	record.data = Schema.deepCopy(data)
@@ -291,6 +308,7 @@ local function load(player: Player): (boolean, string?)
 		loading = true,
 		failed = false,
 		released = false,
+		closing = false,
 		ephemeral = false,
 	}
 	records[player] = record
@@ -421,7 +439,18 @@ end
 
 function DataService.release(player: Player)
 	local record = records[player]
-	if record == nil or record.released then
+	if record == nil then
+		return
+	end
+	-- A teleport handoff is already the final write. Wait it out, then drop
+	-- the record without saving again. A second write would either replay
+	-- stale memory or, if it claimed, take the lock back from the raid server.
+	while record.closing do
+		task.wait(0.05)
+	end
+	if record.released then
+		playerStarted[player] = false
+		records[player] = nil
 		return
 	end
 	record.released = true
@@ -435,6 +464,69 @@ function DataService.release(player: Player)
 		end
 	end
 	records[player] = nil
+end
+
+-- Saves, clears this server's lock, then runs teleport. "teleported" means
+-- the lock is clear and PlayerRemoving must not write. "kept" means the
+-- save failed and the player is still locked here. "retry-here" means
+-- teleport threw and the lock was claimed back. "closed" means teleport
+-- threw and another server already holds the profile.
+function DataService.releaseForTeleport(player: Player, teleport: () -> ()): (string, string?)
+	local record = records[player]
+	if record == nil or not record.loaded or record.released or record.closing then
+		return "kept", TELEPORT_SAVE_FAILED
+	end
+	if record.ephemeral then
+		local callOk, callErr = pcall(teleport)
+		if callOk then
+			return "teleported", nil
+		end
+		warn("[Shardfall] Teleport failed for", player.Name, callErr)
+		return "retry-here", nil
+	end
+	record.closing = true
+	local callOk, outcome: any = pcall(function()
+		return ProfileLoad.handoff(
+			currentAdapter(),
+			record.key,
+			os.time(),
+			serverId,
+			placeId,
+			SessionLock.TIMEOUT_SECONDS,
+			record.data,
+			teleport
+		)
+	end)
+	record.closing = false
+	if not callOk or type(outcome) ~= "table" then
+		warn("[Shardfall] Teleport save failed for", player.Name, outcome)
+		return "kept", TELEPORT_SAVE_FAILED
+	end
+	local handoff = outcome :: ProfileLoad.Handoff
+	if handoff.teleported == true then
+		record.released = true
+		record.loaded = false
+		return "teleported", nil
+	end
+	if handoff.reason == "teleport" then
+		warn("[Shardfall] Teleport failed for", player.Name, handoff.error)
+		return "retry-here", nil
+	end
+	if handoff.reason == "stolen" then
+		record.released = true
+		record.loaded = false
+		warn(
+			"[Shardfall] Teleport failed and the profile lock moved for",
+			player.Name,
+			handoff.error
+		)
+		if player.Parent == Players then
+			player:Kick(TELEPORT_CLOSED)
+		end
+		return "closed", TELEPORT_CLOSED
+	end
+	warn("[Shardfall] Teleport save failed for", player.Name, handoff.reason, handoff.error)
+	return "kept", TELEPORT_SAVE_FAILED
 end
 
 local function onPlayer(player: Player)
@@ -471,7 +563,12 @@ local function autosave()
 		for _, entry in ipairs(snapshot) do
 			local player = entry.player
 			local record = entry.record
-			if record.loaded and not record.released and player.Parent == Players then
+			if
+				record.loaded
+				and not record.released
+				and not record.closing
+				and player.Parent == Players
+			then
 				local ok, reason = write(record, false)
 				if not ok and reason == "lost" then
 					record.loaded = false
@@ -519,12 +616,18 @@ function DataService.start()
 		for _, player in ipairs(Players:GetPlayers()) do
 			pending += 1
 			task.spawn(function()
-				DataService.release(player)
+				local ok, err = pcall(DataService.release, player)
+				if not ok then
+					warn("[Shardfall] Shutdown save failed for", player.Name, err)
+				end
 				pending -= 1
 			end)
 		end
-		local deadline = os.clock() + 25
-		while pending > 0 and os.clock() < deadline do
+		-- Wait out in-flight writes until the engine's shutdown budget.
+		-- Returning at 25 seconds used to drop a slow UpdateAsync and leave
+		-- that player's lock held.
+		local shutdownAt = os.clock()
+		while ProfileLoad.shutdownStillWaiting(pending, os.clock() - shutdownAt) do
 			task.wait(0.1)
 		end
 	end)
