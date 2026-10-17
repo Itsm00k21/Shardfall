@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 25.
+	The player profile shape, version 26.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -63,7 +63,7 @@ local function blankCodex(): { unlocked: { [string]: boolean } }
 	return { unlocked = readCodexFlags(nil) }
 end
 
-local function codexRefused(value: any): boolean
+local function callRefused(value: any): boolean
 	if type(value) ~= "table" then
 		return false
 	end
@@ -91,15 +91,82 @@ function Schema.applyCodex(saved: any, result: any): { unlocked: { [string]: boo
 	local accepted = type(result) == "table"
 		and result.ok == true
 		and type(result.state) == "table"
-		and not codexRefused(result)
-		and not codexRefused(result.state)
+		and not callRefused(result)
+		and not callRefused(result.state)
 	if accepted then
 		return { unlocked = readCodexFlags(result.state) }
 	end
 	return { unlocked = readCodexFlags(saved) }
 end
 
-Schema.VERSION = 25
+local function wholeGrove(value: any): number
+	if type(value) ~= "number" or value ~= value or value >= math.huge or value <= -math.huge then
+		return 0
+	end
+	local floored = math.floor(value)
+	if floored < 0 then
+		return 0
+	end
+	return floored
+end
+
+local function blankGrove()
+	return {
+		hits = 0,
+		damage = 0,
+		healing = 0,
+		up = true,
+		dummy = false,
+		dodge = false,
+		colors = {
+			red = false,
+			yellow = false,
+			purple = false,
+			blue = false,
+		},
+		room = false,
+		cosmetic = false,
+	}
+end
+
+local function readGrove(value: any)
+	if type(value) ~= "table" then
+		return blankGrove()
+	end
+	local colors = if type(value.colors) == "table" then value.colors else nil
+	return {
+		hits = wholeGrove(value.hits),
+		damage = wholeGrove(value.damage),
+		healing = wholeGrove(value.healing),
+		up = value.up ~= false,
+		dummy = value.dummy == true,
+		dodge = value.dodge == true,
+		colors = {
+			red = colors ~= nil and colors.red == true,
+			yellow = colors ~= nil and colors.yellow == true,
+			purple = colors ~= nil and colors.purple == true,
+			blue = colors ~= nil and colors.blue == true,
+		},
+		room = value.room == true,
+		cosmetic = value.cosmetic == true,
+	}
+end
+
+-- A failed grove call keeps the previous record. Keys and gold are not stored.
+-- A product id, Robux, cost, skip, user id, or guild id is a failure.
+function Schema.applyGrove(saved: any, result: any)
+	local accepted = type(result) == "table"
+		and result.ok == true
+		and type(result.state) == "table"
+		and not callRefused(result)
+		and not callRefused(result.state)
+	if accepted then
+		return readGrove(result.state)
+	end
+	return readGrove(saved)
+end
+
+Schema.VERSION = 26
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -253,6 +320,7 @@ export type ProfileData = {
 	firstSession: any,
 	actionBars: { [string]: any },
 	codex: { unlocked: { [string]: boolean } },
+	trainingGrove: { [string]: any },
 }
 
 function Schema.template(): ProfileData
@@ -364,6 +432,7 @@ function Schema.template(): ProfileData
 		firstSession = firstSessionKit().blank(false),
 		actionBars = ActionSlots.fresh(),
 		codex = blankCodex(),
+		trainingGrove = blankGrove(),
 	}
 end
 
@@ -556,6 +625,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.firstSession = firstSessionKit().normalize(data.firstSession)
 	data.actionBars = ActionSlots.reconcile(data.actionBars, data)
 	data.codex = { unlocked = readCodexFlags(data.codex) }
+	data.trainingGrove = readGrove(data.trainingGrove)
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -1083,6 +1153,14 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 25
 	end
 
+	-- Training Grove. A save from 25 starts empty. Do not copy another profile.
+	-- Do not fold this into codex. Keys and gold are not stored.
+	if version < 26 then
+		raw.trainingGrove = blankGrove()
+		raw.schemaVersion = 26
+		version = 26
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -1315,6 +1393,7 @@ function Schema.snapshot(data: ProfileData)
 		starterGoalTracker = StarterGoalPay.tracker(data),
 		actionBars = Schema.deepCopy(data.actionBars),
 		codex = { unlocked = readCodexFlags(data.codex) },
+		trainingGrove = readGrove(data.trainingGrove),
 	}
 end
 

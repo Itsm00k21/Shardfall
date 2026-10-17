@@ -359,7 +359,7 @@ describe("Raid Marks payout", function()
 	end)
 
 	it("leaves the paid switches and the schema version alone", function()
-		expect(Schema.VERSION).toEqual(25)
+		expect(Schema.VERSION).toEqual(26)
 		expect(Loops.PREMIUM_ENABLED).toEqual(false)
 		expect(Loops.PASS_PRODUCT_ID).toEqual(0)
 		expect(Loops.ARCHIVE_PRODUCT_ID).toEqual(0)
