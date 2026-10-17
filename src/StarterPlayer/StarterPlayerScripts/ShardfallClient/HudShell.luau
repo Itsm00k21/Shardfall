@@ -668,12 +668,36 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			promptNo.Text = current.no
 		end
 	end
-	local function answerPrompt()
+	-- Same remote MenuHub and the bag already call. No new remote.
+	local function equipItem(uid: string)
+		task.spawn(function()
+			local folder = ReplicatedStorage:FindFirstChild("Remotes")
+			if folder == nil then
+				return
+			end
+			local remote = folder:FindFirstChild("EquipItem")
+			if remote ~= nil and remote:IsA("RemoteFunction") then
+				pcall(function()
+					remote:InvokeServer(uid)
+				end)
+			end
+		end)
+	end
+	local function onYes()
+		local current = ToastQueue.currentPrompt(notices)
+		local uid = if current ~= nil then current.uid else nil
+		notices = ToastQueue.answer(notices)
+		paintNotices()
+		if type(uid) == "string" and uid ~= "" then
+			equipItem(uid)
+		end
+	end
+	local function onNo()
 		notices = ToastQueue.answer(notices)
 		paintNotices()
 	end
-	promptYes.Activated:Connect(answerPrompt)
-	promptNo.Activated:Connect(answerPrompt)
+	promptYes.Activated:Connect(onYes)
+	promptNo.Activated:Connect(onNo)
 
 	local stamp = Instance.new("TextLabel")
 	stamp.Name = "BuildStamp"
@@ -914,9 +938,22 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				end)
 			end
 		end,
-		prompt = function(text: string)
-			notices = ToastQueue.pushPrompt(notices, text, "Equip", "Keep")
+		prompt = function(text: string, uid: string?)
+			local seen: { [number]: boolean } = {}
+			for _, row in ipairs(notices.toasts) do
+				seen[row.id] = true
+			end
+			notices = ToastQueue.pushPrompt(notices, text, "Equip", "Keep", uid)
 			paintNotices()
+			for _, row in ipairs(notices.toasts) do
+				if seen[row.id] ~= true then
+					local id = row.id
+					task.delay(3, function()
+						notices = ToastQueue.dropToast(notices, id)
+						paintNotices()
+					end)
+				end
+			end
 		end,
 		place = place,
 		ratio = function(): number
