@@ -4,12 +4,12 @@ G-013. Ten main-story quests for the first session, from the Lumen Heart crack t
 
 The chain follows `docs/design/shardfall_onboarding.md` and the live steps in `Onboarding.STEPS`. Haven, the Forge, the Armory, the Pet Garden, the Guild Hall, and the Verdant portal are the places in `Haven.luau`. Rootvault Normal is the live crawl in `Dungeons.luau`. Every number below is suggested. Nothing here changes `Onboarding.luau`, `RollMath.luau`, `Recipes.luau`, or `ItemBases.luau`.
 
-Choice: quests 1 through 8 pay the starter kit once. A skip grants that same kit and opens quest 8. Quests 9 and 10 pay on top, on both paths. The first reel is one guaranteed Rare or better from the Verdant armory pool. There is no element-shard item in the catalog, so the roll is a normal item. Pity still counts.
+Choice: quests 1 through 8 are one grant of the starter kit. The played path pays those rows. The skip path pays `Onboarding.starter` instead and opens quest 8. Do not pay both. Quests 9 and 10 pay on top, on both paths. The first reel is one guaranteed Rare or better from the Verdant armory pool. There is no element-shard item in the catalog, so the roll is a normal item. Pity still counts.
 
 | rule | suggested |
 |---|---|
 | Order | Linear. Each row opens the next. |
-| Skip | Mark quests 1–7 done. Grant the kit once. Start at quest 8. `Onboarding.starter` already sets `onboardStep` to `haven`. Do not add this kit on top of that grant. |
+| Skip | Mark quests 1–7 done and start at quest 8. `Onboarding.starter` is the only gold, key, tonic, and chest grant on this path: 250 gold, 40 keys, 1 Rare chest, 1 Uncommon chest, 3 tonics. It already sets `onboardStep` to `haven`. Do not also pay the quest 1–8 gold, key, tonic, or chest cells. Quest 8's 20 gold and 40 keys are already inside that grant. Also grant the one Gladecloth Vest, which that function does not contain. |
 | Bound | The class weapon, Gladecloth Vest, Moss Band, Heartglow Pin, and the tutorial turtle are bound. |
 | Keys | Shard Keys (`shardKeys`). The crawl's 3 shard tokens stay on the clear card. This chapter does not grant tokens or Prism Tokens. |
 | Login | Quest 8 asks for the live claim. `ChestConfig.SOURCES.login` pays a Common chest and 5 keys. That payout is not in the quest column. |
@@ -38,7 +38,7 @@ Choice: quests 1 through 8 pay the starter kit once. A skip grants that same kit
 
 ## Kit
 
-Quests 1 through 8, added together, equal this kit. Grant it once.
+Quests 1 through 8, added together, equal this kit on the played path. Pay those rows once, and do not also run the gold, key, tonic, and chest increments in `Onboarding.starter`. The skip path uses that function instead of these rows. The Gladecloth Vest is not inside `Onboarding.starter`, so a skipper still receives that one vest. The class weapon and Mossback Turtle stay inside the skipper's unopened Rare chest, and are not granted as items too.
 
 | source | gold | shard keys | also |
 |---|---|---|---|
@@ -48,7 +48,7 @@ Quests 1 through 8, added together, equal this kit. Grant it once.
 | Quest 4 | 40 | 0 | — |
 | Quest 5 | 40 | 0 | One Rare-or-better Verdant armory roll. |
 | Quest 6 | 40 | 0 | 3 Healing Tonics. Gladecloth Vest. |
-| Quest 7 | 30 | 0 | Class weapon. Mossback Turtle. |
+| Quest 7 | 30 | 0 | Class weapon. Mossback Turtle. 1 Uncommon chest, unopened. |
 | Quest 8 | 20 | 40 | Daily login unlocks. |
 | Kit total | 250 | 40 | Matches the gold and keys in `Onboarding.starter`. |
 
@@ -222,7 +222,7 @@ Gladecloth Vest is the Uncommon chest piece in `docs/content/armor_batch1.md`. B
 
 | gold | shard keys | items |
 |---|---|---|
-| 30 | 0 | The class weapon. 1 Mossback Turtle. |
+| 30 | 0 | The class weapon. 1 Mossback Turtle. 1 Uncommon chest, unopened. |
 
 | when | speaker | line |
 |---|---|---|
@@ -231,7 +231,7 @@ Gladecloth Vest is the Uncommon chest piece in `docs/content/armor_batch1.md`. B
 
 Choice: the turtle is fixed. `Pets.hatch` can roll any of the eight species, including an Epic. This egg does not roll, and it does not spend `Pets.EGG_COST` (50). Mossback Turtle is the live Uncommon Guardian.
 
-The Rare chest from `Onboarding.starter` is this open chest. Do not also add a Rare chest to the bag. The Uncommon chest in that function is the one unopened chest a skipper keeps, so the played path should add one Uncommon chest here too. Suggested.
+The Rare chest from `Onboarding.starter` is this open chest. Do not also add a Rare chest to the bag. The Uncommon chest in that function is the same one chest: the played path puts it in the bag here, unopened, and the skip path already has it. Do not give a second one. Suggested.
 
 ## Haven Remembers
 
@@ -255,6 +255,8 @@ The Rare chest from `Onboarding.starter` is this open chest. Do not also add a R
 | Hand-in | Nessa Pike | The plaza is yours. The big arches stay shut. |
 
 Sable Ilen is a person walking past. This is not the Patron aura.
+
+Skip path: do not pay this row's 20 gold or 40 keys. `Onboarding.starter` already paid them. The live login claim is still once, on both paths.
 
 ## The Forge Remembers
 
