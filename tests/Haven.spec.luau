@@ -9,7 +9,7 @@ local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
 
 describe("Haven", function()
-	it("lays the districts and the five realm arches around the plaza", function()
+	it("lays the districts and six gates on the crescent", function()
 		expect(Haven.district("forge") ~= nil).toBeTrue()
 		expect(Haven.district("market") ~= nil).toBeTrue()
 		expect(Haven.district("guild") ~= nil).toBeTrue()
@@ -18,25 +18,74 @@ describe("Haven", function()
 		expect(Haven.ARMORY.station).toEqual("armory")
 		expect(Haven.district("forge").station).toEqual("craft")
 		expect(Haven.district("garden").station).toEqual("pets")
-		expect(#Haven.PORTALS).toEqual(5)
+		expect(#Haven.PORTALS).toEqual(6)
+		expect(Haven.SPAWN.x).toEqual(0)
+		expect(Haven.SPAWN.z).toEqual(30)
+		expect(Haven.SPAWN.lookX).toEqual(0)
+		expect(Haven.SPAWN.lookZ).toEqual(108)
+		expect(Haven.ARMORY.x).toEqual(-38)
+		expect(Haven.ARMORY.z).toEqual(-35.8)
+		expect(Haven.SHOP.x).toEqual(-70.5)
+		expect(Haven.SHOP.z).toEqual(1.5)
+		expect(Haven.SHRINE.x).toEqual(28.5)
+		expect(Haven.SHRINE.z).toEqual(-40.5)
+		expect(Haven.SHRINE.message).toEqual("The shrine wakes inside a run.")
+		expect(#Haven.NOVICE.z).toEqual(5)
+		expect(Haven.NOVICE.x).toEqual(-40)
+		expect(Haven.NOVICE.z[1]).toEqual(18)
+		expect(Haven.NOVICE.z[5]).toEqual(-14)
 	end)
 
-	it("leaves only Verdant Wilds open into the Rootvault", function()
-		local openCount = 0
-		for _, portal in ipairs(Haven.PORTALS) do
+	it("leaves Rootvault and Heartwood live and seals the rest", function()
+		local openIds = {}
+		for index, portal in ipairs(Haven.PORTALS) do
+			expect(portal.bearing).toEqual((index - 1) * Haven.GATE_STEP)
+			local dx = portal.x - Haven.SPAWN.x
+			local dz = portal.z - Haven.SPAWN.z
+			local radius = math.sqrt(dx * dx + dz * dz)
+			expect(math.abs(radius - Haven.GATE_RADIUS) < 0.1).toBeTrue()
+			if index > 1 then
+				local previous = Haven.PORTALS[index - 1]
+				local chord = math.sqrt(
+					(portal.x - previous.x) * (portal.x - previous.x)
+						+ (portal.z - previous.z) * (portal.z - previous.z)
+				)
+				expect(math.abs(chord - 16.3) < 0.15).toBeTrue()
+			end
 			if portal.open == true then
-				openCount += 1
-				expect(portal.id).toEqual("verdant")
-				expect(portal.dungeonId).toEqual(Dungeons.ROOTVAULT_ID)
+				table.insert(openIds, portal.id)
 			else
 				expect(type(portal.message) == "string").toBeTrue()
 			end
 		end
-		expect(openCount).toEqual(1)
-		expect(Haven.portal("sunken").open).toEqual(false)
-		expect(Haven.portal("ember").open).toEqual(false)
-		expect(Haven.portal("frost").open).toEqual(false)
-		expect(Haven.portal("void").open).toEqual(false)
+		expect(openIds).toEqual({ "rootvault", "heartwood" })
+		expect(Haven.portal("rootvault").dungeonId).toEqual(Dungeons.ROOTVAULT_ID)
+		expect(Haven.portal("heartwood").dungeonId).toEqual(Dungeons.HEARTWOOD_ID)
+		expect(Haven.portal("tidecrypt").open).toEqual(false)
+		expect(Haven.portal("tidecrypt").message).toEqual("Sunken Reach is sealed.")
+		expect(Haven.portal("ember").message).toEqual("Emberforge is sealed.")
+		expect(Haven.portal("frost").message).toEqual("Frostveil is sealed.")
+		expect(Haven.portal("void").message).toEqual("Void Rift is sealed.")
+	end)
+
+	it("gives every live dungeon exactly one arch", function()
+		local counts: { [string]: number } = {}
+		for _, portal in ipairs(Haven.PORTALS) do
+			if type(portal.dungeonId) == "string" then
+				local id = portal.dungeonId :: string
+				counts[id] = (counts[id] or 0) + 1
+			end
+		end
+		local live = 0
+		for _, dungeon in ipairs(Dungeons.all()) do
+			if dungeon.implemented == true and dungeon.endless ~= true then
+				live += 1
+				expect(counts[dungeon.id]).toEqual(1)
+			elseif dungeon.endless == true then
+				expect(counts[dungeon.id] or 0).toEqual(0)
+			end
+		end
+		expect(live).toEqual(2)
 	end)
 
 	it("treats a fall below the sky island as leaving the hub", function()

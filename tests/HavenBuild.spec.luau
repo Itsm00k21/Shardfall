@@ -582,11 +582,13 @@ describe("HavenBuilder", function()
 		expect(findNamed(hub, "GuildHall") ~= nil).toBeTrue()
 		expect(findNamed(hub, "PetGarden") ~= nil).toBeTrue()
 		expect(findNamed(hub, "Observatory") ~= nil).toBeTrue()
-		expect(findNamed(hub, "verdant") ~= nil).toBeTrue()
-		expect(findNamed(hub, "sunken") ~= nil).toBeTrue()
+		expect(findNamed(hub, "rootvault") ~= nil).toBeTrue()
+		expect(findNamed(hub, "heartwood") ~= nil).toBeTrue()
+		expect(findNamed(hub, "tidecrypt") ~= nil).toBeTrue()
 		expect(findNamed(hub, "ember") ~= nil).toBeTrue()
 		expect(findNamed(hub, "frost") ~= nil).toBeTrue()
 		expect(findNamed(hub, "void") ~= nil).toBeTrue()
+		expect(findNamed(hub, "RealmArches"):FindFirstChild("Ground")).toBeNil()
 
 		local enter = findNamed(hub, "EnterPad")
 		expect(enter ~= nil).toBeTrue()
@@ -847,24 +849,23 @@ describe("HavenBuilder", function()
 		local bridges = findAll(hub, "Bridge")
 		local landings = findAll(hub, "Landing")
 		local goals = {}
+		local rimGoals = {}
 		for _, district in ipairs(Haven.DISTRICTS) do
-			table.insert(goals, {
+			local goal = {
 				name = district.name,
 				x = district.x,
 				z = district.z,
 				halfX = district.radius,
 				halfZ = district.radius,
-			})
+			}
+			if district.id == "garden" or district.id == "observatory" then
+				table.insert(rimGoals, goal)
+			else
+				table.insert(goals, goal)
+			end
 		end
-		local shelf = findNamed(hub, "RealmArches"):FindFirstChild("Ground")
-		table.insert(goals, {
-			name = "portal shelf",
-			x = shelf.CFrame.Position.X,
-			z = shelf.CFrame.Position.Z,
-			halfX = shelf.Size.X / 2,
-			halfZ = shelf.Size.Z / 2,
-		})
-		if #bridges < #goals or #landings < #goals then
+		walk(Haven.SPAWN.x, Haven.SPAWN.z, Haven.SHOP.x, Haven.SHOP.z, "spawn to shop")
+		if #bridges < #goals + #rimGoals or #landings < #goals + #rimGoals then
 			error("missing a bridge", 2)
 		end
 		for _, span in ipairs(bridges) do
@@ -993,6 +994,73 @@ describe("HavenBuilder", function()
 			onto(goal.x, goal.z, goal.halfX, goal.halfZ, 0, 0)
 		end
 
+		local function segmentDistance(
+			x1: number,
+			z1: number,
+			x2: number,
+			z2: number,
+			px: number,
+			pz: number
+		): number
+			local dx = x2 - x1
+			local dz = z2 - z1
+			local length = dx * dx + dz * dz
+			local t = 0
+			if length > 1e-6 then
+				t = ((px - x1) * dx + (pz - z1) * dz) / length
+				if t < 0 then
+					t = 0
+				elseif t > 1 then
+					t = 1
+				end
+			end
+			local missX = px - (x1 + dx * t)
+			local missZ = pz - (z1 + dz * t)
+			return math.sqrt(missX * missX + missZ * missZ)
+		end
+
+		for _, goal in ipairs(rimGoals) do
+			local rimX, rimZ = Haven.courtRim(goal.x, goal.z)
+			walk(Haven.SPAWN.x, Haven.SPAWN.z, rimX, rimZ, "spawn to " .. goal.name .. " rim")
+			walk(rimX, rimZ, goal.x, goal.z, goal.name)
+			local function ontoRim(
+				cx: number,
+				cz: number,
+				halfX: number,
+				halfZ: number,
+				tx: number,
+				tz: number
+			)
+				local dx = tx - cx
+				local dz = tz - cz
+				local distance = math.sqrt(dx * dx + dz * dz)
+				local dirX = dx / distance
+				local dirZ = dz / distance
+				local face = faceExit(halfX, halfZ, dirX, dirZ)
+				local ox = cx + dirX * (face - 2)
+				local oz = cz + dirZ * (face - 2)
+				if not onBridge(ox, oz) then
+					error(goal.name .. " bridge tongue does not reach 2 studs under the floor", 2)
+				end
+			end
+			ontoRim(rimX, rimZ, 8, 8, goal.x, goal.z)
+			ontoRim(goal.x, goal.z, goal.halfX, goal.halfZ, rimX, rimZ)
+			for _, portal in ipairs(Haven.PORTALS) do
+				local miss = segmentDistance(rimX, rimZ, goal.x, goal.z, portal.x, portal.z)
+				if miss < 8 then
+					error(
+						string.format(
+							"%s bridge passes %.1f studs from %s",
+							goal.name,
+							miss,
+							portal.name
+						),
+						2
+					)
+				end
+			end
+		end
+
 		-- Flat horizontal tops that overlap in XZ must not share a Y.
 		local function flatTop(part: Mock): boolean
 			if part.Transparency >= 1 then
@@ -1103,18 +1171,11 @@ describe("HavenBuilder", function()
 		local left = Haven.PORTALS[1]
 		local right = Haven.PORTALS[#Haven.PORTALS]
 		walk(left.x, left.z, right.x, right.z, "portal row")
-		local names = {
-			verdant = "Verdant Wilds",
-			sunken = "Sunken Reach",
-			ember = "Emberforge",
-			frost = "Frostveil",
-			void = "Void Rift",
-		}
 		for _, portal in ipairs(Haven.PORTALS) do
 			local arch = findNamed(hub, portal.id)
 			local labeled = false
 			for _, child in ipairs(arch:GetDescendants()) do
-				if child:GetAttribute("HavenLabel") == names[portal.id] then
+				if child:GetAttribute("HavenLabel") == portal.name then
 					labeled = true
 				end
 				if child.Name == "Sign" and child.CanCollide == true then
@@ -1122,10 +1183,13 @@ describe("HavenBuilder", function()
 				end
 			end
 			if not labeled then
-				error(portal.id .. " is not labeled " .. names[portal.id], 2)
+				error(portal.id .. " is not labeled " .. portal.name, 2)
 			end
 			if not supported(portal.x, portal.z) then
-				error(portal.name .. " arch is not on the shelf", 2)
+				error(portal.name .. " arch is not on the court", 2)
+			end
+			if portal.z > 200 then
+				error(portal.name .. " is still on the old shelf", 2)
 			end
 		end
 		local districtLabels = {
@@ -1153,20 +1217,46 @@ describe("HavenBuilder", function()
 		local armoryLabel = false
 		local armoryPrompt = false
 		local petsPrompt = false
+		local marketPrompt = false
+		local shrinePrompt = false
 		for _, child in ipairs(hub:GetDescendants()) do
 			if child:GetAttribute("HavenLabel") == "Armory" then
 				armoryLabel = true
 			end
 			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "armory" then
 				armoryPrompt = true
+				expect(child.ActionText).toEqual("Armory")
 			end
 			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "pets" then
 				petsPrompt = true
+			end
+			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "market" then
+				marketPrompt = true
+				expect(child.ActionText).toEqual("Market Board")
+				local host: any = child.Parent
+				local onRim = false
+				while host ~= nil do
+					if host.Name == "RimShop" then
+						onRim = true
+					end
+					if host.Name == "Market" then
+						error("Market Board prompt is still on the island", 2)
+					end
+					host = host.Parent
+				end
+				expect(onRim).toBeTrue()
+			end
+			if child:IsA("ProximityPrompt") and child.ActionText == "Shrine" then
+				shrinePrompt = true
+				expect(child:GetAttribute("HavenMessage")).toEqual("The shrine wakes inside a run.")
+				expect(child:GetAttribute("HavenAction")).toEqual("soon")
 			end
 		end
 		expect(armoryLabel).toBeTrue()
 		expect(armoryPrompt).toBeTrue()
 		expect(petsPrompt).toBeTrue()
+		expect(marketPrompt).toBeTrue()
+		expect(shrinePrompt).toBeTrue()
 
 		local heart = findNamed(hub, "LumenHeart")
 		if shapeName(heart) == "Enum.PartType.Cylinder" then
@@ -1216,6 +1306,126 @@ describe("HavenBuilder", function()
 			requireNear(pillarBottom, Haven.FLOOR_Y, 0.5, portal.id .. " pillar base")
 			if lintel.CFrame.Position.Y < pillarTop - 1 then
 				error(portal.id .. " lintel is not across the top", 2)
+			end
+		end
+
+		local liveCounts: { [string]: number } = {}
+		for _, dungeon in ipairs(Dungeons.all()) do
+			if dungeon.implemented == true and dungeon.endless ~= true then
+				liveCounts[dungeon.id] = 0
+			end
+		end
+		local enterPads = 0
+		for _, portal in ipairs(Haven.PORTALS) do
+			local arch = findNamed(hub, portal.id)
+			local lights = 0
+			local prompt = nil
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("PointLight") then
+					lights += 1
+					if child.Shadows == true or child.Range > 18 then
+						error(portal.id .. " accent light is out of budget", 2)
+					end
+				end
+				if child:IsA("ProximityPrompt") then
+					prompt = child
+				end
+				if child.Name == "EnterPad" then
+					enterPads += 1
+					expect(child:GetAttribute("EnterDungeon")).toEqual(Dungeons.ROOTVAULT_ID)
+				end
+			end
+			if lights ~= 1 then
+				error(portal.id .. " needs one accent light", 2)
+			end
+			if prompt == nil or prompt.MaxActivationDistance ~= Haven.GATE_REACH then
+				error(portal.id .. " prompt reach is not the gate reach", 2)
+			end
+			if portal.id == "rootvault" then
+				expect(prompt:GetAttribute("HavenAction")).toEqual("rootvault")
+				expect(prompt.ActionText).toEqual("Enter")
+			elseif portal.id == "heartwood" then
+				expect(prompt:GetAttribute("HavenAction")).toEqual("heartwood")
+				expect(prompt.ActionText).toEqual("Queue")
+				expect(arch:FindFirstChild("EnterPad")).toBeNil()
+			else
+				expect(prompt:GetAttribute("HavenAction")).toEqual("soon")
+				expect(prompt:GetAttribute("HavenMessage")).toEqual(portal.message)
+				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
+				expect(arch:FindFirstChild("EnterPad")).toBeNil()
+			end
+			local dungeonId = arch:GetAttribute("DungeonId")
+			if type(dungeonId) == "string" and liveCounts[dungeonId] ~= nil then
+				liveCounts[dungeonId] += 1
+			end
+		end
+		expect(enterPads).toEqual(1)
+		for id, count in pairs(liveCounts) do
+			if count ~= 1 then
+				error(id .. " has " .. tostring(count) .. " arches", 2)
+			end
+		end
+
+		local stones = findAll(hub, "NoviceStone")
+		if #stones ~= 5 then
+			error(string.format("expected 5 novice stones, found %d", #stones), 2)
+		end
+		for _, stone in ipairs(stones) do
+			for _, child in ipairs(stone:GetDescendants()) do
+				if child:IsA("ProximityPrompt") then
+					error("novice stone has a prompt", 2)
+				end
+			end
+		end
+
+		local inlayTop = Haven.FLOOR_Y + Haven.LAYER
+		local function laneHit(x: number, z: number): string?
+			for _, part in ipairs(hub:GetDescendants()) do
+				if
+					part:IsA("BasePart")
+					and part.Name ~= "HubSpawn"
+					and part.CanCollide == true
+					and (part.Transparency == nil or part.Transparency < 1)
+				then
+					local top = part.CFrame.Position.Y + part.CFrame.YVector.Y * part.Size.Y / 2
+					if top > inlayTop + 0.02 then
+						local localPoint = part.CFrame:PointToObjectSpace(vector3(x, part.CFrame.Position.Y, z))
+						if
+							math.abs(localPoint.X) <= part.Size.X / 2
+							and math.abs(localPoint.Z) <= part.Size.Z / 2
+						then
+							local owner = if part.Parent ~= nil then part.Parent.Name else "?"
+							return owner .. "." .. part.Name
+						end
+					end
+				end
+			end
+			return nil
+		end
+		for _, portal in ipairs(Haven.PORTALS) do
+			local bearing = math.rad(portal.bearing or 0)
+			local dirX = math.sin(bearing)
+			local dirZ = math.cos(bearing)
+			local sideX = math.cos(bearing)
+			local sideZ = -math.sin(bearing)
+			for radius = 8, Haven.GATE_RADIUS - 8, 2 do
+				for _, side in ipairs({ -5, 0, 5 }) do
+					local x = Haven.SPAWN.x + dirX * radius + sideX * side
+					local z = Haven.SPAWN.z + dirZ * radius + sideZ * side
+					local hit = laneHit(x, z)
+					if hit ~= nil then
+						error(
+							string.format(
+								"%s lane hits %s at (%.1f, %.1f)",
+								portal.name,
+								hit,
+								x,
+								z
+							),
+							2
+						)
+					end
+				end
 			end
 		end
 
