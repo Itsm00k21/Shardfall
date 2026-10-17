@@ -1,6 +1,6 @@
 # Two-agent coordination
 
-GHOST (this account) and HELPER (second account) share `cursor/live-build-9721`. The board is `TASKS.md` at the repo root. Design docs for both accounts are in `docs/design/`.
+GHOST (this account) and HELPER (second account) share `cursor/live-build-9721`. The board is `TASKS.md` at the repo root. Design docs for both accounts are in `docs/design/`. Echo fallback protocol: issue #15, comment 6228878047 (https://github.com/Itsm00k21/Shardfall/issues/15#issuecomment-6228878047).
 
 ## Branches
 
