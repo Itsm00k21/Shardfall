@@ -1390,6 +1390,140 @@ Questions for Ghost:
 10. `doubleMarks` is false and `eventMultiplier` is 2. `event = true` pays 1x until the switch is true. One switch covers Heartwood Night and the old-raid Echo. Guild "+Marks" and Guided double guild points are outside this module. Should those live here later, and is one switch enough?
 11. `canSpend` takes no clock and does not roll the week. A cost of 0 returns `ok` and `spent` 0. A short wallet returns "Not enough Raid Marks." Is a zero cost a legal no-op?
 
+### T-041 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Trading.luau`, `MarketBoard.luau`, `Remotes.luau`, `RateLimiter.luau`, or any other T-012 file. `RaidFinder` is pure and ready to call. It does not require `RaidLeaver` or `RaidConduct`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged. No build stamp. No remote. No MemoryStore. Nothing here costs Robux. The T-041 row stays `claimed`.
+
+Thresholds are `RaidFinder.CONFIG`. Party size is `minParty` 4 through `maxParty` 8. Healer wait is `healerWaitSeconds` 180. Boss damage is `bossDamage` 1, and a healerless start uses `healerlessDamage` 0.85 (15% less). `healingSpring` is true, so that start also flags a free Healing Spring. Mentor eligibility is `mentorClears` 10. Queue priority starts at `defaultPriority` 0 and an idle kick stores `droppedPriority` -1. Higher sorts first. The UTC day is `daySeconds` 86400, `floor(now / 86400)`, same as `tradeDay`. Role targets are placeholders: 4 is 1 tank / 1 healer / 2 DPS, 5 is 1 / 1 / 3, 6 is 1 / 1 / 4, 7 is 1 / 1 / 5, and 8 is 2 / 1 / 5. HP scale placeholders are 0.5, 0.625, 0.75, 0.875, and 1 for sizes 4 through 8. `fillOrder` is tank, then healer, then DPS. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
+
+`RaidFinder.DIFFICULTIES` is story and normal. `RaidFinder.REFUSED` is hard and shardbreaker. `RaidFinder.ROLES` is tank, healer, dps, and flex. `RaidFinder.IDLE_REASONS` is `idle` and `afk`, the same two strings as `RaidConduct.IDLE_REASONS`. `RaidFinder.WARDEN_ID` is the placeholder `"warden_golem"`. Strings are trimmed and lowercased. `" Story "` is story. `" AFK "` is an idle kick.
+
+`RaidService.luau`, next to the `Raids` require, when you wire the calls:
+
+```lua
+local RaidFinder = require(ReplicatedStorage.Shared.RaidFinder)
+```
+
+The live `RaidService.queue` still checks `Raids.difficulty`, `Raids.roleOk`, level 15, and a Story clear before Normal, then launches one player. Leave those four checks where they are. Call `canQueue` after them, before a ticket is accepted. This module does not repeat the level gate or the Story-before-Normal gate.
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `canQueue(ticket, now)` | a player asks to enter Finder | `queued == true` means they may sit in the list. Gear score and clear count are ignored. |
+| `filters(difficulty)` | a Finder screen is about to show a gear or clear slider | story and normal return both filters false. |
+| `form(proposal, now)` | one difficulty has 4 to 8 tickets | `mayStart == true` is the only launch signal. `freshCount` is the RaidMarks first-timer count. |
+| `priority(record, now, idleKick)` | an idle vote-kick passes, and again at the start of `queue` so a new UTC day restores 0 | the number to store. Higher sorts first. |
+| `mentor(clears, optedIn)` | a mentor badge, with no group | `eligible` when clears are at least 10 and they opted in. |
+| `hpScale(players)` | you have a count and no proposal | the CONFIG scale, or nil outside 4 to 8. |
+
+`canQueue` reads `difficulty`, `role`, and `cooldownUntil`. It does not read `gearScore`, `clearCount`, `clears`, `level`, or `raidStory`. A missing cooldown is 0. A negative cooldown is 0. `cooldownUntil > now` returns `ok == true`, `queued == false`, `finderBlocked == true`, and `remainingSeconds`. The deadline itself may queue, same as `RaidLeaver.finder`. Pass `data.raidFinderCooldownUntil` from the T-035 field. This module does not call `RaidLeaver`.
+
+Hard and Shardbreaker return `ok == false` and `ERRORS.guided` ("Hard and Shardbreaker are premade. Guided Raids come later."). Fracture and any other name return `ERRORS.difficulty`. A bad role returns `ERRORS.role`. A bad clock, a non-finite cooldown, or a missing ticket returns `ok == false` and `finderBlocked == true`, so a broken stamp does not enter the list. `gearFiltered` and `clearFiltered` stay false on every result. Show `error` whenever `queued ~= true`.
+
+Hold accepted tickets in memory on `RaidService`, one list per difficulty. The design's MemoryStore queue is a later cross-server task. This module does not create one. Sort that list by `priority` descending before you pick a proposal. A dropped player still queues. They sort last.
+
+`form` takes the players you already chose. It does not pull from a queue. `waitingSince` is the unix time this roster started waiting on a healer. Nil means the wait is 0, so a missing stamp cannot auto-scale. A `waitingSince` later than `now` returns `ERRORS.clock` and `mayStart == false`.
+
+Flex seats fill `fillOrder` in party order. The first flex takes the first short target. One flex with both tank and healer missing becomes the tank. A later flex, or a flex when a tank is already seated, becomes the healer. Leftover flex becomes DPS. A queued tank, healer, or DPS keeps that role. Extra tanks do not convert into healers. A short DPS count does not block `mayStart`.
+
+`mayStart` is true when the tank target is covered and the healer target is covered. Story covers a missing tank with `wardenCount` golems, one per missing tank (`WARDEN_ID`). Normal leaves `wardenCount` at 0 and will not start while a tank is missing. A missing healer covers itself only when `waitedSeconds >= healerWaitSeconds`. That sets `autoScale`, `bossDamageScale` to 0.85, and `healingSpring`. Under 180 seconds those stay off and `mayStart` is false. A healer already in the group, including a flex who filled healer, keeps `bossDamage` at 1 even after the clock has run out. `healerTimeout` is only the clock. Launch on `mayStart`, not on `healerTimeout` or `autoScale` alone. HP scale is the player count. Golems are not players, so they do not change `hpScale`.
+
+`Raids.combatScale` already multiplies boss damage by 0.85 whenever `healer` is false, with no wait, and it scales HP as `difficulty.hp * count/8`. Wiring both that branch and `bossDamageScale` cuts twice. Use `form.hpScale` and `form.bossDamageScale` for a Finder launch. The difficulty row in `Raids.DIFFICULTIES` can still supply the tier (story damage 0.85, normal 1, story HP 1, normal 1.35). This module's scale is the player-count multiplier and the Finder healer rule on top of that choice. See question 3 before you multiply them.
+
+`fresh == true` sets `freshShard` on that seat. Nil is false. A number is refused. `freshCount` is how many seats are fresh. Pass it to `RaidMarks.payout` as `firstTimers` when T-040 wires the clear. This module does not decide what "first time" means. You set the boolean. `clears` is only the mentor count. It is not a Finder filter, and it does not turn the Fresh Shard on.
+
+`mentor` on a seat is `clears >= 10` and `mentorOptIn == true`. Nil opt-in is false. A non-boolean is refused. The module does not grant Mentor Tokens or cosmetics. `form` echoes `priority` and does not roll the UTC day. Call `priority` first, persist it, and pass that number on the seat.
+
+A member with `cooldownUntil > now` makes `form` return `ok == false`, `mayStart == false`, and `ERRORS.cooling`. The deadline itself is allowed. A repeated `userId` returns `ERRORS.duplicate`. A missing `userId` is allowed. `form` returns new tables and does not write the proposal. An `ok == false` result has empty `seats`. Do not launch it.
+
+`priority` returns a new record. It does not write the one you passed. Nil becomes priority 0 and day 0. A new UTC day restores `defaultPriority` unless this call is also an idle kick. An idle kick then stores `droppedPriority` and stamps today. Pass `true`, or the reason `"idle"` or `"afk"`. `"unfair"` leaves the stored number alone. A second idle kick on the same day stays at -1. A bad flag returns `ok == false`. Persist only when `ok == true`.
+
+When `RaidConduct.tally` returns `dropQueuePriority == true` for the kicked player, inside the same mutate that already records the kick:
+
+```lua
+local now = os.time()
+local nextPriority = RaidFinder.priority({
+	priority = data.raidQueuePriority,
+	priorityDay = data.raidQueuePriorityDay,
+}, now, true)
+if nextPriority.ok == true then
+	data.raidQueuePriority = nextPriority.priority
+	data.raidQueuePriorityDay = nextPriority.priorityDay
+end
+```
+
+At the start of `queue`, roll the day before you sort. `idleKick` is false here. The kick already happened.
+
+```lua
+local now = os.time()
+local rolled = RaidFinder.priority({
+	priority = data.raidQueuePriority,
+	priorityDay = data.raidQueuePriorityDay,
+}, now, false)
+local changed = rolled.priority ~= data.raidQueuePriority
+	or rolled.priorityDay ~= data.raidQueuePriorityDay
+if rolled.ok == true and changed then
+	data.raidQueuePriority = rolled.priority
+	data.raidQueuePriorityDay = rolled.priorityDay
+end
+local ticket = {
+	difficulty = difficulty,
+	role = role,
+	cooldownUntil = data.raidFinderCooldownUntil,
+}
+local gate = RaidFinder.canQueue(ticket, now)
+if gate.queued ~= true then
+	return { ok = false, error = gate.error }
+end
+```
+
+Ignore `gearScore` and `clearCount` on the client payload. `filters` is the same rule for the Finder screen: story and normal keep both false, so the slider should not exist there. The premade board's clear-count tag is a different surface. This module does not read it.
+
+When the in-memory list for that difficulty has between 4 and 8 players, build `members` from those tickets and call `form`. Launch only when `formed.ok == true` and `formed.mayStart == true`. Pass `formed.playerCount`, `formed.hpScale`, `formed.bossDamageScale`, `formed.healingSpring`, and `formed.wardenCount` into the raid. Spawn `wardenCount` copies of `RaidFinder.WARDEN_ID` on Story. `healingSpring` means the run gets the free totem. This module does not spawn it. `formed.freshCount` is the number T-040 should pass as `firstTimers`. The solo Studio fallback in `queue` can stay until that roster exists, so a one-player test still runs. A Finder start uses `form`.
+
+```lua
+local formed = RaidFinder.form({
+	difficulty = difficulty,
+	waitingSince = roster.waitingSince,
+	members = members,
+}, now)
+if formed.ok ~= true or formed.mayStart ~= true then
+	return { ok = false, error = formed.error }
+end
+```
+
+Reset `waitingSince` when the roster changes: a healer (or a flex who will fill healer) joins, or the group drops someone and is no longer the group you are forming. Stamp it to `now` the first time the roster is short a healer. Leaving it nil keeps the wait at 0.
+
+**Schema.** HELPER does not edit `Schema.luau`. Two new fields, plus one boolean. Add them on whichever version is free when you wire this. Version 20 is current. T-015 sketched 21 for the pass fields, and T-027 / T-035 / T-039 asked for raid fields on the same kind of bump. One migrate can add these with those. `raidFinderCooldownUntil` is the T-035 field. Reuse it. Mentor clears should reuse `raidClears` once T-038 adds it. Until that field exists, pass 0 into `mentor` and into the seat, so nobody is a mentor yet.
+
+```lua
+raidQueuePriority: number, -- 0 normal. Idle kick stores droppedPriority (-1). Higher sorts first.
+raidQueuePriorityDay: number, -- UTC day the priority was stamped. 0 until the first call.
+raidMentor: boolean, -- opted in. Clears are raidClears, passed in by the caller.
+```
+
+`ProfileData`, `template()`, the matching `migrate` arm, `sanitize`, and `snapshot` (so a queue icon can show a dropped priority and a mentor opt-in): defaults `raidQueuePriority = 0`, `raidQueuePriorityDay = 0`, `raidMentor = false`. A non-finite priority makes `priority` return `ok == false`. Leave that value for the module to refuse. Do not reset these on the Tuesday weekly raid reset. The UTC day inside `priority` restores 0.
+
+There is no mentor opt-in remote yet. A remote is T-012. When you add one, write `data.raidMentor` from a server mutate. The client must not send `now`, `cooldownUntil`, `fresh`, or `clears`.
+
+`tests/run.luau` requires `./RaidFinder.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. Role targets are placeholders. Sizes 4 through 7 are 1 tank, 1 healer, and the rest DPS. Size 8 is 2 tanks, 1 healer, and 5 DPS. The design's 8-player line is 1–2 Wardens, 1–2 Tidecallers, and 4–5 DPS. Are these the minimums to start without a golem or a healer timeout?
+2. Flex fills tank, then healer, then DPS, walking the party in order. One flex with both roles missing becomes the tank, so the healer timeout still applies. Should that flex become the healer instead?
+3. Story spawns one `warden_golem` per missing tank (two if an 8-player group has none). Normal never spawns one and cannot start while short a tank. HP scale is the player count only (0.5 at 4 through 1 at 8) and ignores golems. `Raids.combatScale` is `difficulty.hp * count/8` and also cuts damage 15% whenever `healer` is false, with no 180s wait. Should a Finder launch use this module's scales instead of that function, so the cut happens once and only after the wait? Should golems count toward HP?
+4. Fresh Shard is the `fresh` boolean you pass. `freshCount` is how many seats have it, for `RaidMarks.payout` `firstTimers`. It is not `clears == 0`. Is fresh "never cleared this raid", "never cleared this difficulty", or a new account? A seat can be fresh and a mentor together if you set both.
+5. Mentor is `clears >= 10` and `mentorOptIn == true`. This module does not grant Mentor Tokens or cosmetics. Queue priority is a number, higher first: 0 is normal, an idle kick sets -1, and the next UTC day restores 0. A dropped player can still queue. Should the drop last the rest of that UTC day, and do you want any priority besides 0 and -1?
+6. Story and Normal ignore gear score and clear count. Level 15 and "clear Story before Normal" stay in `RaidService.queue`. Hard and Shardbreaker are refused. Anything else, including fracture, is refused as not Finder. Should those two `RaidService` gates move into this module?
+7. `canQueue` blocks one player while `cooldownUntil > now`. The deadline may queue, same as `RaidLeaver`. `form` refuses the whole proposal if any member is still cooling. Should `form` drop that member and form the rest instead? This module does not require `RaidLeaver`.
+8. Class is not checked. `Raids.roleOk` still requires Warden for tank and Tidecaller for healer, and it allows any class as DPS or Flex. Forgeborn off-tank is not a rule here. Should Finder refuse a tank who is not a Warden?
+9. Extra tanks and healers keep the role they queued. A short DPS count does not block `mayStart`. Only a missing tank on Normal, or a missing healer before 180s, holds the launch. Is that the start rule?
+10. `waitingSince` is the unix time this roster started waiting on a healer. Nil means the wait is 0. Should that stamp be the oldest ticket in the queue, or the moment this forming roster first had everyone except a healer?
+
 ## Open
 
 No unassigned tasks.
