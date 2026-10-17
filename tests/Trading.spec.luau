@@ -136,8 +136,108 @@ describe("Trading", function()
 		expect(Trading.CAPS.Receipt).toEqual(150000)
 		expect(Trading.CAPS.Receipt).toEqual(Trading.CAPS.StandardMax)
 		expect(Trading.CAPS.Trusted).toEqual(2000000)
-		expect(Trading.dailyCap(actor(1, 4, 1, { patron = true }))).toEqual(math.huge)
+		expect(Trading.dailyCap(actor(1, 4, 1, { patron = true }))).toEqual(2000)
 		expect(Trading.ROBUX_ITEM_TRADING_ENABLED).toEqual(false)
+	end)
+
+	spec("exploit: vip does not raise the patron daily cap", function()
+		local function flags(extra: any?, patron: boolean): any
+			local copy = { patron = patron }
+			if type(extra) == "table" then
+				for key, value in pairs(extra) do
+					copy[key] = value
+				end
+			end
+			copy.patron = patron
+			return copy
+		end
+
+		local function sameCap(level: number, age: number, extra: any?)
+			local paid = actor(1, level, age, flags(extra, true))
+			local free = actor(1, level, age, flags(extra, false))
+			local freeExtra = flags(extra, false)
+			local cap = Trading.dailyCap(paid)
+			expect(cap).toEqual(Trading.dailyCap(free))
+			expect(cap < math.huge).toBeTrue()
+			expect(cap <= Trading.CAPS.Trusted).toBeTrue()
+			expect(cap).toEqual(Trading.tradeCap(paid))
+			local earnedTrusted = age >= Trading.NEW_ACCOUNT_DAYS
+				and (
+					level >= Trading.TRUSTED_LEVEL
+					or (freeExtra.clean or age) >= Trading.CLEAN_DAYS
+				)
+			if not earnedTrusted then
+				expect(cap <= Trading.CAPS.Receipt).toBeTrue()
+			end
+		end
+
+		expect(Trading.tier(actor(1, 4, 1, { patron = true }))).toEqual("Patron")
+		expect(Trading.dailyCap(actor(1, 4, 1, { patron = true }))).toEqual(Trading.CAPS.New)
+		expect(Trading.dailyCap(actor(1, 4, 1, { patron = true }))).toEqual(2000)
+		sameCap(4, 1)
+		sameCap(10, 30)
+		sameCap(15, 14)
+		sameCap(39, 30)
+		sameCap(40, 14)
+		sameCap(55, 30)
+		sameCap(10, 20, { spender = true })
+		sameCap(12, 80, { clean = 60 })
+		sameCap(10, 80, { verified = true, clean = 60 })
+
+		local opted = actor(1, 10, 80, { verified = true, clean = 60 })
+		expect(Trading.tier(opted)).toEqual("Patron")
+		expect(Trading.dailyCap(opted)).toEqual(Trading.CAPS.Trusted)
+		expect(Trading.dailyCap(opted) < math.huge).toBeTrue()
+
+		local youngVip = actor(1, 40, 13, { patron = true })
+		expect(Trading.tier(youngVip)).toEqual("Patron")
+		expect(Trading.dailyCap(youngVip)).toEqual(2000)
+
+		local standardVip = actor(1, 39, 30, { patron = true })
+		expect(Trading.dailyCap(standardVip)).toEqual(150000)
+		expect(Trading.dailyCap(standardVip)).toEqual(Trading.CAPS.Receipt)
+		expect(Trading.dailyCap(standardVip)).toEqual(Trading.dailyCap(actor(1, 39, 30)))
+
+		local trustedVip = actor(1, 40, 14, { patron = true })
+		local trustedFree = actor(1, 40, 14)
+		expect(Trading.dailyCap(trustedVip)).toEqual(Trading.dailyCap(trustedFree))
+		expect(Trading.dailyCap(trustedVip)).toEqual(Trading.CAPS.Trusted)
+		expect(Trading.dailyCap(trustedVip) > Trading.CAPS.Receipt).toBeTrue()
+
+		local now = 90_000
+		local ctx = context()
+		local other = actor(2, 40, 80)
+		local serial = 0
+		local function goldTrade(who: Trading.Actor, gold: number): Trading.Result
+			serial += 1
+			local left = profile(gold + 1000)
+			local right = profile(0)
+			local session = Trading.open("patron-cap-" .. tostring(serial), who.userId, 2, now)
+			assert(session ~= nil)
+			expect(Trading.setOffer(session, who.userId, { gold = gold }, now)).toEqual(true)
+			local ready = now + Trading.LOCK_SECONDS
+			expect(Trading.confirm(session, who.userId, ready)).toEqual(true)
+			expect(Trading.confirm(session, 2, ready)).toEqual(true)
+			return Trading.finish(session, who.userId, left, right, who, other, ctx, ready, true)
+		end
+
+		local overNew = goldTrade(actor(9, 4, 1, { patron = true }), 2001)
+		expect(overNew.ok).toEqual(false)
+		expect(overNew.error).toEqual("That trade is over today's limit.")
+		local atNew = goldTrade(actor(9, 4, 1, { patron = true }), 2000)
+		expect(atNew.ok).toEqual(true)
+
+		local overReceipt = goldTrade(actor(8, 39, 30, { patron = true }), 150001)
+		expect(overReceipt.ok).toEqual(false)
+		expect(overReceipt.error).toEqual("That trade is over today's limit.")
+		local atReceipt = goldTrade(actor(8, 39, 30, { patron = true }), 150000)
+		expect(atReceipt.ok).toEqual(true)
+
+		local overTrusted = goldTrade(actor(7, 40, 14, { patron = true }), 2000001)
+		expect(overTrusted.ok).toEqual(false)
+		expect(overTrusted.error).toEqual("That trade is over today's limit.")
+		local atTrusted = goldTrade(actor(7, 40, 14, { patron = true }), 2000000)
+		expect(atTrusted.ok).toEqual(true)
 	end)
 
 	spec("taxes gold at 10 percent and describes an item", function()

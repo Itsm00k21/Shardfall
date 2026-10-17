@@ -43,7 +43,6 @@ RarityConfig.AUTO_DISMISS = 1.5
 RarityConfig.BONUS_EVERY = 10
 RarityConfig.EPIC_PITY = 100
 RarityConfig.LEGENDARY_PITY = 1000
-RarityConfig.VIP_MULT = 1.2
 
 local ONE_IN: { [string]: number } = {
 	Common = 2,
@@ -88,9 +87,10 @@ function RarityConfig.oneIn(rarity: string): number
 	return ONE_IN[rarity] or 2
 end
 
--- ((1 + base) * bonusRoll + potion) * vip
+-- (1 + base) * bonusRoll + potion
 -- base and potion are luck points / 100. The 10th roll sets bonusRoll to 2.
--- Paid potion and VIP drop out while the kill switch is off.
+-- The paid potion drops out while the kill switch is off.
+-- vip is cosmetic. It is not a term in this formula.
 function RarityConfig.luckMultiplier(input: any): number
 	local source = if type(input) == "table" then input else {}
 	local base = whole(source.shardLuck, 0) / 100
@@ -112,11 +112,7 @@ function RarityConfig.luckMultiplier(input: any): number
 		end
 	end
 	local bonus = if (rolls + 1) % RarityConfig.BONUS_EVERY == 0 then 2 else 1
-	local vip = 1
-	if paid and source.vip == true then
-		vip = RarityConfig.VIP_MULT
-	end
-	local value = ((1 + base) * bonus + potion) * vip
+	local value = (1 + base) * bonus + potion
 	if value ~= value or value < 1 then
 		return 1
 	end

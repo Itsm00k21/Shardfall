@@ -2656,12 +2656,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local infoPool = if rollKind == "pets"
 				then Pools.get(rollPoolId())
 				else Pools.get("verdant_armory")
-			local infoOdds = RollBoard.oddsLines(
-				infoPool,
-				luck,
-				boost,
-				UiRouter.oddsSince(legendaryCount)
-			)
+			local infoOdds =
+				RollBoard.oddsLines(infoPool, profile, 0, UiRouter.oddsSince(legendaryCount))
 			for index, text in ipairs(infoOdds) do
 				line(info, text, 3 + index, rgb("text"))
 			end
@@ -2812,14 +2808,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		legendaryFillShown = nextLegendaryFill
 		legendaryFlashRoll = nextLegendarySeen
-		local luck = if type(profile) == "table" then profile.shardLuck or 0 else 0
-		local boost = if type(profile) == "table" then profile.luckBoost or 0 else 0
 		line(roll, "Odds", 12, rgb("gold"))
 		local oddsSince =
 			UiRouter.oddsSince(if type(sinceLegendary) == "number" then sinceLegendary else 0)
-		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, oddsSince)
+		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)
 		if rollKind == "pets" then
-			odds = RollBoard.oddsLines(Pools.get(rollPoolId()), luck, boost, oddsSince)
+			odds = RollBoard.oddsLines(Pools.get(rollPoolId()), profile, 0, oddsSince)
 		end
 		if #odds == 0 then
 			line(roll, "Odds are unavailable.", 13, rgb("muted"))

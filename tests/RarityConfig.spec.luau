@@ -84,19 +84,62 @@ describe("RarityConfig", function()
 			luckBoost = 25,
 			vip = true,
 			paidLuck = true,
-		})).toEqual(1.25 * 1.2)
+		})).toEqual(1.25)
 		expect(RarityConfig.luckMultiplier({
 			shardRolls = 9,
 			luckBoost = 25,
 			vip = true,
 			paidLuck = true,
-		})).toEqual((1 * 2 + 0.25) * 1.2)
+		})).toEqual(1 * 2 + 0.25)
 		expect(RarityConfig.luckMultiplier({
 			luckBoost = 100,
 			vip = true,
 			paidLuck = false,
 		})).toEqual(1)
 		expect(RarityConfig.PAID_LUCK_ENABLED).toEqual(false)
+	end)
+
+	it("exploit: vip does not change luck", function()
+		local function same(input: any)
+			local withVip = {}
+			local withoutVip = {}
+			if type(input) == "table" then
+				for key, value in pairs(input) do
+					withVip[key] = value
+					withoutVip[key] = value
+				end
+			end
+			withVip.vip = true
+			withoutVip.vip = false
+			expect(RarityConfig.luckMultiplier(withVip)).toEqual(
+				RarityConfig.luckMultiplier(withoutVip)
+			)
+		end
+		same({})
+		same({ shardLuck = 100 })
+		same({ shardRolls = 9 })
+		same({ luckBoost = 25, paidLuck = true })
+		same({ shardLuck = 100, luckBoost = 50, shardRolls = 9, paidLuck = true })
+		same({ shardLuck = 100, luckBoost = 50, shardRolls = 9, paidLuck = false })
+		expect((RarityConfig :: any).VIP_MULT).toBeNil()
+
+		local stored = {
+			shardLuck = 80,
+			luckBoost = 25,
+			shardRolls = 9,
+			vip = true,
+		}
+		local plain = {
+			shardLuck = 80,
+			luckBoost = 25,
+			shardRolls = 9,
+			vip = false,
+		}
+		expect(RarityConfig.luckFromProfile(stored)).toEqual(RarityConfig.luckFromProfile(plain))
+		expect(RarityConfig.luckFromProfile(stored)).toEqual((1 + 0.8) * 2)
+		expect(RarityConfig.luckFromProfile(stored)).toEqual(
+			RarityConfig.luckMultiplier({ shardLuck = 80, shardRolls = 9 })
+		)
 	end)
 
 	it("shows x2 luck on the 10th roll and pity counters", function()
