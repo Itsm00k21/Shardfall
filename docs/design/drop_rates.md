@@ -2,11 +2,11 @@
 
 G-028. Live chances per source, plus suggested rates where a second table disagrees. This file does not change code.
 
-Read `Rarities.luau`, `RarityConfig.luau`, and `Drops.luau`, then the modules that actually grant the drop. Choice: the odds sheet matches the draw in `RarityConfig.pick`. Pool weights stay the split inside a rarity. Numbers in the suggested column are suggestions.
+Read `Rarities.luau`, `RarityConfig.luau`, and `Drops.luau`, then the modules that actually grant the drop. Decision, Ghost, 2026-10-17: the Roll sheet keeps the 1-in-N draw. `RarityConfig.pick` and `RarityConfig.disclose` are the authoritative odds (Common about 76.46% at luck x1, Epic about 0.3998%). Pool weights only split items inside a chosen rarity. They are not the rarity odds. Numbers in the suggested column are suggestions.
 
 ## Rolls
 
-The server draws a rarity with `RarityConfig.pick` (`RollService.luau:234`), then an item of that rarity by pool weight (`RarityConfig.chooseEntry`). `GetOdds` returns `RarityConfig.disclose` (`Remotes.luau:169`). The Roll tab's Odds frame paints `RollMath.odds` (`MenuHub.luau:2448`), which reads pool weights (`Pools.luau:8-9`, `RollMath.luau:10`).
+The server draws a rarity with `RarityConfig.pick` (`RollService.luau:234`), then an item of that rarity by pool weight (`RarityConfig.chooseEntry`). `GetOdds` returns `RarityConfig.disclose` (`Remotes.luau:169`). The Roll tab's always-visible Odds lines paint `RollMath.odds` through `RollBoard.oddsLines` (`MenuHub.luau:2604-2613`, `RollBoard.luau:77-100`), formatted `%.1f%%`. Those lines read pool weights (`Pools.luau:8-9`, `RollMath.luau:281`). The Info toggle starts closed (`MenuHub.luau:296`) and, when opened, paints the same weights (`MenuHub.luau:2448`). `RollReel` uses `disclose` (`RollReel.luau:515`).
 
 `Rarities.ORDER` is Common, Uncommon, Rare, Epic, Legendary, Mythic, Secret (`Rarities.luau:15`). Secret stays on the sheet. A hidden outcome is called out in `RarityConfig.luau:9-11`.
 
@@ -22,12 +22,12 @@ Live 1-in-N at luck x1, full ladder, rarest first. The listed 1-in-N is the chec
 | Mythic | 25000 | 0.0040% | 0.18% |
 | Secret | 100000 | 0.0010% | 0.02% |
 
-The 1-in-N column is `RarityConfig` (`RarityConfig.luau:48-56`). The percent column is `disclose` at multiplier 1. The pool-weight column is Verdant armory and Verdant pets, whose rarity weights are the same 10,000: 6000, 2500, 1000, 400, 80, 18, 2 (`Pools.luau:98-147`). At 0 luck those weights are the `RollMath.odds` percents. Epic on that panel is 4%. Epic on the draw is 0.3998%.
+The 1-in-N column is `RarityConfig` (`RarityConfig.luau:48-56`). The percent column is `disclose` at multiplier 1. That column is the sheet. The pool-weight column is Verdant armory and Verdant pets, whose rarity weights are the same 10,000: 6000, 2500, 1000, 400, 80, 18, 2 (`Pools.luau:98-147`). At 0 luck those weights are the `RollMath.odds` percents. The Roll tab line reads `Epic  4.0%`. Epic on the draw is 0.3998%.
 
 | rule | live | suggested |
 |---|---|---|
 | Draw | `RarityConfig.pick`, rarest first | Keep |
-| Sheet the player reads | Roll tab uses `RollMath.odds`. `GetOdds` uses `RarityConfig.disclose` | One sheet: `RarityConfig.disclose` |
+| Sheet the player reads | Roll tab uses `RollMath.odds`. `GetOdds` uses `RarityConfig.disclose` | Decided. The sheet is the 1-in-N draw (`RarityConfig.disclose`). Pool weights only split items inside the rarity. |
 | Epic pity | Guarantee Epic+ at 100 (`RarityConfig.luau:44`) | Keep. Pity stays off the percent |
 | Legendary pity | Guarantee Legendary+ at 1000 (`RarityConfig.luau:45`) | Keep |
 | Pool `pityLegendaryAt` | 50 on every pool (`Pools.luau:83`). The draw does not read it | Leave it off the sheet |
@@ -70,7 +70,7 @@ Chance 1 pays every kill. A range rolls an integer from min to max.
 | Grandmother Gnarl | boss | Gnarl's Seed | 1 | 1 |
 | Grandmother Gnarl | boss | Thornbound Scroll | 0.35 | 1 |
 
-Realm bundle: normal pays the common primary, elite the rare primary, boss the boss primary (`Drops.luau:36-55`). Verdant primaries are Verdant Bark, Heartwood, and Gnarl's Seed (`Materials.luau:91-105`). The scroll is Verdant only (`Drops.luau:60`). Boss scroll chance is `min(1, 0.15 + 0.2)`.
+Realm bundle: normal pays the common primary, elite the rare primary, boss the boss primary (`Drops.luau:36-55`). Verdant primaries are Verdant Bark, Heartwood, and Gnarl's Seed (`Materials.luau:83-105`). The scroll is Verdant only (`Drops.luau:60`). Boss scroll chance is `min(1, 0.15 + 0.2)`.
 
 A non-boss Verdant kill also rolls a Common chest at 0.02 (`ChestConfig.luau:34`, `ChestConfig.luau:393-402`). Bosses skip that roll.
 

@@ -15,7 +15,7 @@ Choice: beta stays cosmetics and convenience only, and no Robux product ships in
 | Paid luck kill switch is known | in code | `RarityConfig.PAID_LUCK_ENABLED` (`RarityConfig.luau:19`) |
 | Premium track stays off for v0.1 | confirm | `Loops.PREMIUM_ENABLED` is called out as false on the board |
 | No Robux product id is processed | in code | `ReceiptService.grant` records the receipt and does not grant a catalog item (`ReceiptService.luau:20-29`) |
-| Odds on the Roll tab match the server draw | missing | Draw and `GetOdds` use `RarityConfig`. The Roll tab paints `RollMath.odds` (`MenuHub.luau:2448`). See `docs/design/drop_rates.md` |
+| Odds on the Roll tab match the server draw | missing | Draw and `GetOdds` use `RarityConfig`. The Roll tab's Odds lines paint `RollMath.odds` (`MenuHub.luau:2607`, `RollBoard.luau:87`). See `docs/design/drop_rates.md` |
 | Server fill and reserved servers tested with two players | confirm | Raid hop saves and clears the lock before teleport (`DataService.luau:22-26`) |
 
 ## Age questionnaire
