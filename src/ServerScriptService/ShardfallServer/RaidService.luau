@@ -14,10 +14,14 @@
 	refuses a row. A join takes a seat and does not start Raid Finder.
 	A full party does not launch on the last join. The host starts a ready
 	check, and Story or Normal launches only after every seated member is
-	ready. Hard and Shardbreaker never enter from that path. The host id,
-	the member list, and the ready flags come from this server.
+	ready. Outside Studio that launch reserves one server and teleports the
+	seated party together. A failed or partial teleport puts them back on
+	the board seats. Studio still enters on this server. Hard and
+	Shardbreaker never enter from that path. The host id, the member list,
+	and the ready flags come from this server.
 	A seated player can leave that seat while they are still connected.
-	A leave or a disconnect during the check cancels it.
+	A leave or a disconnect during the check cancels it. A hop in flight
+	does not count as that leave.
 	RaidPost and RaidJoin keep the rate limits already on those remotes.
 	RaidReady and RaidLeave use the same limit. PlayerRemoving is a
 	disconnect, not that leave. Nothing on this path spends Robux.
@@ -32,6 +36,7 @@ local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local RaidPremade = require(ReplicatedStorage.Shared.RaidPremade)
+local RaidPremadeHop = require(ReplicatedStorage.Shared.RaidPremadeHop)
 local DataService = require(script.Parent.DataService)
 local EchoParty = require(script.Parent.EchoParty)
 local RaidReady = require(script.Parent.RaidReady)
@@ -41,6 +46,18 @@ local RaidService = {}
 local listings: { any } = {}
 local ranks: { { name: string, seconds: number } } = {}
 local nextId = 0
+-- Set while a premade hop is in flight so PlayerRemoving does not free the seat.
+local hopHold: { [number]: boolean } = {}
+local forming = false
+
+type Arrival = {
+	bucket: any,
+	players: { [number]: Player },
+	started: boolean,
+	generation: number,
+}
+
+local arrivals: { [string]: Arrival } = {}
 
 -- Active rows only. Expired and closed rows are removed, not evicted.
 local BOARD_CAP = 20
@@ -95,7 +112,8 @@ local function launch(
 	healer: boolean,
 	wing: number,
 	phase: number,
-	practice: boolean
+	practice: boolean,
+	partyPlayers: number?
 )
 	local DungeonService = dungeon()
 	-- Reserved server only. Studio and a failed hop stay a fresh fight.
@@ -127,9 +145,18 @@ local function launch(
 	end
 	-- tuneRaid runs on the fresh fight. Backfill after that so setPractice
 	-- cannot flip the host's fight.
+	local count = 1
+	if
+		type(partyPlayers) == "number"
+		and partyPlayers >= 1
+		and partyPlayers <= 8
+		and partyPlayers == math.floor(partyPlayers)
+	then
+		count = partyPlayers
+	end
 	local tuneOk, tuned = pcall(DungeonService.tuneRaid, player, {
 		practice = practice,
-		players = 1,
+		players = count,
 		healer = healer,
 		wing = wing,
 		phase = phase,
@@ -160,7 +187,14 @@ local function launch(
 	return filled
 end
 
-local function startQueue(player: Player, difficulty: any, role: any, allowHop: boolean)
+local function startQueue(
+	player: Player,
+	difficulty: any,
+	role: any,
+	allowHop: boolean,
+	partyPlayers: number?,
+	partyHealer: boolean?
+)
 	local row = Raids.difficulty(difficulty)
 	if row == nil then
 		return reject("Pick Story or Normal.")
@@ -186,6 +220,9 @@ local function startQueue(player: Player, difficulty: any, role: any, allowHop: 
 		return reject("Clear Story once before Normal.")
 	end
 	local healer = role == "healer" or (role == "flex" and profile.classId == "tidecaller")
+	if partyHealer ~= nil then
+		healer = partyHealer == true
+	end
 	if allowHop then
 		local code = reservedCode()
 		if code ~= nil then
@@ -217,7 +254,7 @@ local function startQueue(player: Player, difficulty: any, role: any, allowHop: 
 			end
 		end
 	end
-	local started = launch(player, row.id, healer, 1, 1, false)
+	local started = launch(player, row.id, healer, 1, 1, false, partyPlayers)
 	if started.ok ~= true then
 		return started
 	end
@@ -364,6 +401,9 @@ local function findListing(id: number): (any?, number?)
 end
 
 local function departUser(userId: number)
+	if hopHold[userId] == true then
+		return
+	end
 	local now = os.time()
 	local index = 1
 	while index <= #listings do
@@ -383,6 +423,36 @@ local function departUser(userId: number)
 	sweep(now)
 end
 
+local function sendHome(row: Arrival, except: Player?)
+	local home = row.bucket.homeJobId
+	if type(home) ~= "string" or home == "" then
+		return
+	end
+	local TeleportService = game:GetService("TeleportService")
+	for _, person in pairs(row.players) do
+		if person ~= except and person.Parent == Players then
+			pcall(function()
+				TeleportService:TeleportToPlaceInstance(game.PlaceId, home, person)
+			end)
+		end
+	end
+end
+
+local function forgetArrival(player: Player)
+	for token, row in pairs(arrivals) do
+		if row.started == true or row.players[player.UserId] == nil then
+			continue
+		end
+		row.players[player.UserId] = nil
+		local nextBucket, state = RaidPremadeHop.drop(row.bucket, player.UserId)
+		row.generation += 1
+		arrivals[token] = nil
+		if nextBucket ~= nil and state ~= "empty" then
+			sendHome(row, player)
+		end
+	end
+end
+
 -- Disconnect path. DungeonService.PlayerRemoving should call this too.
 -- A second call is safe. This is not the seated leave button.
 function RaidService.memberLeft(player: Player)
@@ -390,6 +460,7 @@ function RaidService.memberLeft(player: Player)
 end
 
 Players.PlayerRemoving:Connect(function(leaving: Player)
+	forgetArrival(leaving)
 	departUser(leaving.UserId)
 end)
 
@@ -761,10 +832,124 @@ local function partyHealer(listing: any): boolean
 	return false
 end
 
+local function hopPremade(
+	row: any,
+	token: number,
+	seated: { Player },
+	difficulty: string,
+	stillGoing: () -> boolean
+): any
+	local function stop(dropCheck: boolean, message: string)
+		for _, person in ipairs(seated) do
+			hopHold[person.UserId] = nil
+		end
+		if dropCheck and row.readyToken == token then
+			row.ready = nil
+			row.readyToken = token + 1
+		end
+		row.pulling = false
+		return reject(message)
+	end
+
+	if not stillGoing() then
+		return stop(true, "The ready check was cancelled.")
+	end
+	local DungeonService = dungeon()
+	for _, person in ipairs(seated) do
+		if DungeonService.isInRun(person) then
+			return stop(false, RaidPremadeHop.ERRORS.run)
+		end
+		if DataService.teleportHold(person) ~= nil then
+			return stop(false, RaidPremadeHop.ERRORS.hold)
+		end
+		if DataService.get(person) == nil then
+			return stop(false, RaidPremadeHop.ERRORS.save)
+		end
+	end
+	local tries, gate = RaidPremadeHop.spend(row.hopTries)
+	if tries == nil or gate ~= "go" then
+		return stop(true, RaidPremadeHop.ERRORS.capped)
+	end
+	row.hopTries = tries
+	if not stillGoing() then
+		return stop(true, "The ready check was cancelled.")
+	end
+	local listing = row.listing
+	if type(listing) ~= "table" or type(listing.members) ~= "table" then
+		return stop(true, "The ready check was cancelled.")
+	end
+	local members = {}
+	for _, member in ipairs(listing.members) do
+		if type(member) == "table" then
+			table.insert(members, { userId = member.userId, role = member.role })
+		end
+	end
+	local home = game.JobId
+	local packed = RaidPremadeHop.pack({
+		difficulty = difficulty,
+		members = members,
+		token = game:GetService("HttpService"):GenerateGUID(false),
+		homeJobId = home,
+		healer = partyHealer(listing),
+	})
+	if packed == nil or home == "" then
+		return stop(true, RaidPremadeHop.ERRORS.server)
+	end
+	for _, person in ipairs(seated) do
+		hopHold[person.UserId] = true
+	end
+	local code = reservedCode()
+	if code == nil or not stillGoing() then
+		local message = if code == nil
+			then RaidPremadeHop.ERRORS.server
+			else "The ready check was cancelled."
+		return stop(true, message)
+	end
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = code
+	options:SetTeleportData(packed)
+	local TeleportService = game:GetService("TeleportService")
+	local callOk, status, away = pcall(DataService.releasePartyForTeleport, seated, function()
+		TeleportService:TeleportAsync(game.PlaceId, seated, options)
+	end)
+	if not callOk or status ~= "teleported" then
+		if type(away) == "table" then
+			for _, person in ipairs(away) do
+				pcall(function()
+					TeleportService:TeleportToPlaceInstance(game.PlaceId, home, person)
+				end)
+			end
+		end
+		local message = RaidPremadeHop.ERRORS.seated
+		if status == "kept" then
+			message = RaidPremadeHop.ERRORS.save
+		elseif status == "closing" then
+			message = RaidPremadeHop.ERRORS.hold
+		end
+		return stop(true, message)
+	end
+	for _, person in ipairs(seated) do
+		hopHold[person.UserId] = nil
+	end
+	for _, person in ipairs(seated) do
+		departUser(person.UserId)
+	end
+	row.pulling = false
+	row.ready = nil
+	row.launched = true
+	row.readyToken = token + 1
+	return {
+		ok = true,
+		id = row.id,
+		board = RaidService.board(),
+		note = "Reserved server. The party is flying in.",
+	}
+end
+
 -- Story and Normal only. Hard and Shardbreaker return before enter, and
 -- this path does not call Raids.difficulty. The listing host is the anchor.
--- EchoParty "queue" starts a fresh fight here. It does not call startQueue
--- or teleport one player away from the party.
+-- Outside Studio the ready party reserves one server and teleports together.
+-- Studio enters here. The hop helper does not open a finder queue.
 local function launchPremade(row: any): any
 	local listing = row.listing
 	local difficulty = if type(listing) == "table" then listing.difficulty else nil
@@ -869,6 +1054,10 @@ local function launchPremade(row: any): any
 		return reject("The host left the ready check.")
 	end
 
+	if not RunService:IsStudio() then
+		return hopPremade(row, token, seated, difficulty, stillGoing)
+	end
+
 	local DungeonService = dungeon()
 	local hostParty = DungeonService.echoParty(host)
 	local same = EchoParty.samePull(
@@ -916,7 +1105,9 @@ local function launchPremade(row: any): any
 		end
 		if type(entered) ~= "table" or entered.ok ~= true then
 			unwind(false)
-			return if type(entered) == "table" then entered else reject("The Heartwood did not open.")
+			return if type(entered) == "table"
+				then entered
+				else reject("The Heartwood did not open.")
 		end
 		local tuneOk, tuned = pcall(DungeonService.tuneRaid, host, tune)
 		if not tuneOk then
@@ -945,11 +1136,7 @@ local function launchPremade(row: any): any
 			if DungeonService.isInRun(person) then
 				local party = DungeonService.echoParty(person)
 				local memberSame = party ~= nil
-					and EchoParty.samePull(
-						party.difficulty,
-						party.practice,
-						difficulty
-					)
+					and EchoParty.samePull(party.difficulty, party.practice, difficulty)
 				if memberSame ~= true then
 					unwind(false)
 					return reject("Leave your current run before the ready check.")
@@ -984,7 +1171,9 @@ local function launchPremade(row: any): any
 				end
 				if type(tuned) ~= "table" or tuned.ok ~= true then
 					unwind(false)
-					return if type(tuned) == "table" then tuned else reject("The Heartwood did not open.")
+					return if type(tuned) == "table"
+						then tuned
+						else reject("The Heartwood did not open.")
 				end
 			end
 			local fillOk, filled = pcall(DungeonService.backfill, person, host)
@@ -1125,6 +1314,97 @@ function RaidService.receive(player: Player)
 	-- Reserved servers report a private id and owner 0. Launch here.
 	-- launch joins a matching in-progress pull on this server. The host is
 	-- that pull, not this payload. Queueing would ReserveServer and hop again.
+	local reserved = not ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+	if payload.premade == true then
+		if not reserved then
+			return
+		end
+		local partyToken = payload.token
+		local existing = if type(partyToken) == "string" then arrivals[partyToken] else nil
+		local bucket, state = RaidPremadeHop.admit(
+			if existing ~= nil then existing.bucket else nil,
+			player.UserId,
+			payload
+		)
+		if bucket == nil or state == "refuse" then
+			return
+		end
+		local row = existing
+		if row == nil then
+			row = {
+				bucket = bucket,
+				players = {},
+				started = false,
+				generation = 0,
+			}
+			arrivals[bucket.token] = row
+			local generation = row.generation
+			local waited = bucket.token
+			task.delay(RaidPremadeHop.CONFIG.waitSeconds, function()
+				local current = arrivals[waited]
+				if
+					current == nil
+					or current.started == true
+					or current.generation ~= generation
+				then
+					return
+				end
+				arrivals[waited] = nil
+				sendHome(current, nil)
+			end)
+		end
+		row.bucket = bucket
+		row.players[player.UserId] = player
+		if state ~= "ready" or row.started == true then
+			return
+		end
+		local party = {}
+		for _, id in ipairs(RaidPremadeHop.ids(bucket)) do
+			local person = row.players[id]
+			if person == nil or person.Parent ~= Players then
+				row.generation += 1
+				arrivals[bucket.token] = nil
+				sendHome(row, nil)
+				return
+			end
+			table.insert(party, person)
+		end
+		row.started = true
+		local entered = {}
+		local failed = false
+		for _, person in ipairs(party) do
+			while forming do
+				task.wait()
+			end
+			forming = true
+			local role = RaidPremadeHop.roleFor(bucket.roles, person.UserId)
+			local callOk, result = pcall(
+				startQueue,
+				person,
+				bucket.difficulty,
+				role,
+				false,
+				bucket.partySize,
+				bucket.healer
+			)
+			forming = false
+			if not callOk or type(result) ~= "table" or result.ok ~= true then
+				failed = true
+				warn("[Shardfall] Premade arrival failed", person.UserId, result)
+				break
+			end
+			table.insert(entered, person)
+		end
+		if failed then
+			local DungeonService = dungeon()
+			for _, person in ipairs(entered) do
+				pcall(DungeonService.leave, person)
+			end
+			arrivals[bucket.token] = nil
+			sendHome(row, nil)
+		end
+		return
+	end
 	local allowHop = ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
 	startQueue(player, payload.difficulty, payload.role or "flex", allowHop)
 end

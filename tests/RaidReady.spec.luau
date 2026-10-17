@@ -135,7 +135,9 @@ describe("RaidReady wire", function()
 		local filter = between(raid, "local function filterTitle", "local function copyStrings")
 
 		expect(string.find(raid, "function RaidService.ready(player: Player)", 1, true) ~= nil).toBeTrue()
-		expect(string.find(raid, "local RaidReady = require(script.Parent.RaidReady)", 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(raid, "local RaidReady = require(script.Parent.RaidReady)", 1, true) ~= nil
+		).toBeTrue()
 		expect(string.find(ready, "player.UserId", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ready, "seat.listing.hostUserId", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ready, "seat.listing.members", 1, true) ~= nil).toBeTrue()
@@ -148,7 +150,9 @@ describe("RaidReady wire", function()
 		expect(string.find(ready, "Raids.difficulty", 1, true)).toBeNil()
 		local completeAt = string.find(ready, "vote.complete ~= true", 1, true)
 		local launchAt = string.find(ready, "launchPremade(seat)", 1, true)
-		expect(completeAt ~= nil and launchAt ~= nil and (completeAt :: number) < (launchAt :: number)).toBeTrue()
+		expect(
+			completeAt ~= nil and launchAt ~= nil and (completeAt :: number) < (launchAt :: number)
+		).toBeTrue()
 
 		expect(string.find(join, "DungeonService", 1, true)).toBeNil()
 		expect(string.find(join, "EchoParty", 1, true)).toBeNil()
@@ -156,9 +160,7 @@ describe("RaidReady wire", function()
 		expect(string.find(join, "startQueue", 1, true)).toBeNil()
 		expect(string.find(join, "launch(", 1, true)).toBeNil()
 		expect(string.find(join, "Raids.difficulty", 1, true)).toBeNil()
-		expect(
-			string.find(join, "Party is full. The host starts the ready check.", 1, true) ~= nil
-		).toBeTrue()
+		expect(string.find(join, "Party is full. The host starts the ready check.", 1, true) ~= nil).toBeTrue()
 		expect(string.find(join, "Ready check comes later.", 1, true)).toBeNil()
 
 		local gateAt =
@@ -178,7 +180,14 @@ describe("RaidReady wire", function()
 		expect(string.find(launch, "MarketplaceService", 1, true)).toBeNil()
 		expect(string.find(launch, "PromptProduct", 1, true)).toBeNil()
 		expect(string.find(launch, "Robux", 1, true)).toBeNil()
+		expect(string.find(launch, "RunService:IsStudio()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(launch, "hopPremade(", 1, true) ~= nil).toBeTrue()
+		-- The studio branch still enters here. The reserve lives in hopPremade.
 		expect(string.find(launch, "TeleportAsync", 1, true)).toBeNil()
+		local studioAt = string.find(launch, "RunService:IsStudio()", 1, true)
+		local hopAt = string.find(launch, "hopPremade(", 1, true)
+		expect(studioAt ~= nil and hopAt ~= nil and (studioAt :: number) < (hopAt :: number)).toBeTrue()
+		expect(hopAt ~= nil and enterAt ~= nil and (hopAt :: number) < (enterAt :: number)).toBeTrue()
 
 		expect(string.find(depart, "row.ready = nil", 1, true) ~= nil).toBeTrue()
 		expect(string.find(depart, "row.readyToken", 1, true) ~= nil).toBeTrue()
@@ -197,7 +206,8 @@ describe("RaidReady wire", function()
 		local project = fs.readFile("default.project.json")
 		local hud =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RaidHud.luau")
-		local remote = between(remotes, 'functionRemote("RaidReady")', 'functionRemote("UpgradeGear")')
+		local remote =
+			between(remotes, 'functionRemote("RaidReady")', 'functionRemote("UpgradeGear")')
 		expect(string.find(remote, "RaidService.ready(player)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(remote, "listingId", 1, true)).toBeNil()
 		expect(string.find(remote, "payload", 1, true)).toBeNil()
