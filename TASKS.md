@@ -57,7 +57,7 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 
 T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault and the wiring. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
 
-Next free id is T-063.
+Next free id is T-065. T-064 is reserved by GHOST for a DungeonService practice-loot leak check.
 
 ## Claimed by HELPER
 
@@ -79,6 +79,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-053 | Raid leaderboard rules: fastest clear (pure, no wiring) | HELPER | `helper/raid-leaderboard-9721` | new `src/ReplicatedStorage/Shared/RaidLeaderboard.luau`, new `tests/RaidLeaderboard.spec.luau`, one require line in `tests/run.luau`, and a 'T-053 hooks for GHOST' section in this file. Pure rules for the beta 'basic leaderboard (fastest Normal clear)' in `docs/design/shardfall_raids.md` (Firsts and races, Scope). Boards are keyed by difficulty and party size; a frozen CONFIG lists which boards are live (beta: normal only, story off), a top-N size, and a sanity floor on clear time. `submit(board, record)` takes a plain clear record (runId, difficulty, size, start and end times or duration, roster userIds, practice flag, removals) and returns a new board without writing the input: reject practice runs, unknown or disabled difficulties, bad times, and clears under the floor; credit only roster members who were not AFK-removed or vote-kicked; the same runId twice is a no-op; sort by duration with a deterministic tiebreak (earlier clear, then lower runId) and trim to top N. Also `personalBest(board, userId)` and a `rankOf` helper. Inputs are plain tables. No OrderedDataStore, MemoryStore, remotes, Schema, or TextService. Do not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, Schema, or any T-012 file. No build stamp, nothing premium. | done | [#58](https://github.com/Itsm00k21/Shardfall/pull/58) |
 | T-057 | Raid Story Echo buff rules (pure, no wiring) | HELPER | `helper/raid-echo-9721` | new `src/ReplicatedStorage/Shared/RaidEcho.luau`, new `tests/RaidEcho.spec.luau`, one require line in `tests/run.luau`, and a 'T-057 hooks for GHOST' section in this file. Pure, server-authoritative rules for the Story-tier Echo buff in `docs/design/shardfall_raids.md` (Difficulty ladder: 'An Echo buff (+5% per wipe, max +25%) stacks after wipes'). Frozen CONFIG: 5% per wipe, cap 25%, Story only (Normal live but never gets Echo; Hard/Shardbreaker/Fracture never). A wipe is a whole-party death after a boss pull started; partial deaths, Practice Grove pulls, and resets before the pull do not count. Expose: a fresh per-run state, `wipe(state, ctx)` returning a new state (no input writes), `bonus(state, difficulty)` as a fraction 0 to 0.25, `apply(stat, state, difficulty)` for player damage, healing, and max HP multipliers, and a reset on boss kill or run end. The buff is party-wide and shown to the party, not per player. Time and difficulty are passed in. No services, remotes, DataStores, RNG, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, or T-012. Nothing requires it until GHOST wires it, so gameplay is unchanged. Open questions (per-boss vs whole-run stacking, whether a backfill inherits the stacks, whether it shows on the RaidRecap panel) go in the hooks section. | done | [#61](https://github.com/Itsm00k21/Shardfall/pull/61) (f1f79e41bff4b8b5b86756cd1e5eeb85390959f7) |
 | T-060 | Practice Grove rules (pure, no wiring) | HELPER | `helper/raid-practice-9721` | new `src/ReplicatedStorage/Shared/RaidPractice.luau`, new `tests/RaidPractice.spec.luau`, one require line in `tests/run.luau`, and a 'T-060 hooks for GHOST' section in this file. Pure, server-authoritative rules for Practice Grove in `docs/design/shardfall_raids.md` (Guild raid prep, and the beta Scope line): a free, lootless sandbox for each unlocked boss, with practice dummies, a jump to any phase, time slowed to 0.75x, individual mechanics turned on or off, and a record of damage, deaths, and mechanic hits. Frozen CONFIG: `slowScale` 0.75, `phases` 3, `shardbreakerPhases` 4 (every boss has 3 phases, 4 on Shardbreaker). Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. Difficulties are story, normal, hard, and shardbreaker. Fracture and guided are not difficulties in this module. Cost is 0. `rewards` is always empty: no gear, Marks, dust, materials, pets, titles, or cosmetics. API, each call returns a new table and does not write the input: `fresh(ctx)` starts `{ bossId, difficulty, phase = 1, slow = false, dummies = true, mechanics = {}, damage = 0, deaths = 0, hits = {} }` and requires `ctx.unlocked == true` (unknown boss or difficulty is an error); `jump(state, phase)` moves to an integer phase from 1 through 3, or 1 through 4 on shardbreaker; `setSlow(state, on)` selects 0.75 when on and 1 when off, and no other scale exists; `scale(state)` returns that number; `toggle(state, mechanicId, enabled)` stores an override for a non-empty mechanic id, with a missing id meaning the mechanic is on (there is no frozen mechanic catalog; T-007 owns Hard mechanic design); `note(state, event)` adds a non-negative finite `damage` amount, adds 1 `death`, or increments `hits[mechanicId]`; `rewards(state)` stays empty even after notes. Store `state` only when `ok == true`. A failure returns a copy and the caller keeps the previous save. Phase jump and slow do not reset the record. Dummies are a flag, default true, and are not a second boss. A practice session is not a clear, a lockout, a Marks payout, or a leaderboard row. Do not require `Raids`, `RaidService`, `DungeonService`, `RaidEcho`, `RaidMarks`, `RaidLuck`, `RaidLeaderboard`, or `RaidRecap`. `RaidService.practice` already launches a lootless Story run. Do not edit that function. Nothing in `src` requires this module, so the live launch stays as it is. No services, remotes, DataStores, MemoryStore, RNG, clock, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, `RaidEcho.luau`, `Remotes.luau`, any T-012 file, or `docs/offload/`. Open questions go in the hooks section: the guild perk "cheaper Practice Grove" has no price and the sandbox stays free, whether live practice stays Story-only while this module accepts Normal, Hard, and Shardbreaker, whether mechanic ids stay caller-supplied, whether 0.75x should scale an enrage timer (no enrage number lives here), and whether the record stays on the in-memory session. | done | [#67](https://github.com/Itsm00k21/Shardfall/pull/67) |
+| T-063 | Practice Grove input guard (pure, no wiring) | HELPER | `helper/raid-practice-guard-9721` | new `src/ReplicatedStorage/Shared/RaidPracticeGuard.luau`, new `tests/RaidPracticeGuard.spec.luau`, one require line in `tests/run.luau`, and a 'T-063 hooks for GHOST' section in this file. Pure, server-authoritative validation of raw remote-style args before the server calls RaidPractice. Never throws on nil, NaN, huge strings, tables, or wrong types. Returns `ok, value, err`. A wing number maps through `Raids.WINGS` (1 twins, 2 sapwell, 3 galecrown, 4 awakened) and an unknown wing is refused. Difficulty and phase match RaidPractice: story, normal, hard, and shardbreaker only; phase 1 through 3, or 1 through 4 only on shardbreaker. Mechanic ids must be on a caller-supplied allowlist, because `Raids.luau` has no frozen per-boss mechanic list. A frozen CONFIG caps distinct mechanic ids on one session and caps damage on one call (finite and at least 0). A hit for a mechanic that is toggled off is refused. No services, remotes, DataStores, MemoryStore, RNG, or clock. Nothing in `src` requires this module. Do not edit `Raids.luau`, `RaidPractice.luau`, `RaidService.luau`, `DungeonService.luau`, `PracticeLoot.luau`, Schema, remotes, or any T-012 file. No build stamp. Nothing costs Robux. Open questions go in the hooks section. | done | [#68](https://github.com/Itsm00k21/Shardfall/pull/68) |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -2301,6 +2302,127 @@ Questions for Ghost:
 23. Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. `"grandmother"`, `"dummy"`, and `"heartwood"` are `ERRORS.boss`. Confirm those four ids, with wing 4 as `awakened`.
 24. An explicit `mechanics[id] == true` and a missing id both mean on. Only `false` means off. Confirm the caller treats `~= false` as on.
 25. In `DungeonService.damageEnemy`, a Heartwood boss kill skips `Raids.applyClear` when `run.practice == true`, and still calls `Drops.apply`, `ChestConfig.enemyDrop`, and `ChestConfig.bossKill` inside the same mutate. `grant` already returns before loot when practice is true. This row does not list `DungeonService.luau`. Confirm those other writes should stay off a Practice Grove kill.
+
+### T-063 hooks for GHOST
+
+HELPER did not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `RaidPractice.luau`, `PracticeLoot.luau`, `Schema.luau`, `Remotes.luau`, or any other T-012 file. `RaidPracticeGuard` is pure and ready to call. It requires `Raids` and reads `Raids.WINGS` only. It does not call `applyClear`, `buy`, or `weekNumber`. It does not require `RaidPractice`, so loading the guard does not load the practice rules. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidPracticeGuard` yet, so this branch does not change a live run. `RaidService.practice` still clamps a bad wing and still launches a lootless Story run. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. The T-063 row stays `claimed`. Wiring is yours.
+
+Call the guard on the raw remote args, and only call `RaidPractice` when `ok == true`. The guard does not start a session and it does not grant loot.
+
+When you wire this, require it next to the other raid rules:
+
+```lua
+local RaidPracticeGuard = require(ReplicatedStorage.Shared.RaidPracticeGuard)
+local RaidPractice = require(ReplicatedStorage.Shared.RaidPractice)
+```
+
+**Return shape.** Every call returns three values: `ok`, `value`, `err`. This is not a `RaidPractice` result table. On success `ok == true`, `value` is the cleaned arg, and `err` is nil. On failure `ok == false`, `value` is nil, and `err` is one string from `RaidPracticeGuard.ERRORS`. Check `ok == true` before you read `value`. A bad arg does not throw. nil, NaN, a huge string, a table, and a wrong type all take the failure path.
+
+| call | when | value on success |
+|---|---|---|
+| `boss(wing)` | the remote sends a wing number | the boss id string |
+| `difficulty(value)` | the server picks a difficulty | `story`, `normal`, `hard`, or `shardbreaker` |
+| `phase(difficulty, phase)` | the remote sends a phase | the integer phase |
+| `start(wing, difficulty, phase)` | a practice session is requested | `{ bossId, difficulty, phase }` |
+| `mechanic(bossId, mechanicId, allowlist, state)` | an id must be legal for this session | the trimmed mechanic id |
+| `toggle(bossId, mechanicId, enabled, allowlist, state)` | the player switches one mechanic | `{ mechanicId, enabled }` |
+| `hit(state, mechanicId, allowlist)` | a mechanic hit is about to be recorded | the trimmed mechanic id |
+| `damage(amount)` | a damage note is about to be recorded | the finite number |
+
+`start` does not call `RaidPractice.fresh`. `fresh` always begins at phase 1 and ignores a phase on the context. After `fresh` succeeds, call `jump` with `opening.phase`. Pass `opening.bossId` and `opening.difficulty`. Keep passing `unlocked` yourself. This module does not know which bosses the player has cleared.
+
+```lua
+local ok, opening, err = RaidPracticeGuard.start(wing, "story", phase)
+if ok ~= true or opening == nil then
+	return reject(err or RaidPracticeGuard.ERRORS.wing)
+end
+local started = RaidPractice.fresh({
+	bossId = opening.bossId,
+	difficulty = opening.difficulty,
+	unlocked = unlocked == true,
+})
+if started.ok ~= true then
+	return reject(started.error)
+end
+session = started.state
+local jumped = RaidPractice.jump(session, opening.phase)
+if jumped.ok == true then
+	session = jumped.state
+end
+```
+
+**Wings.** `boss` reads `Raids.WINGS`. Index 1 is `twins`, 2 is `sapwell`, 3 is `galecrown`, 4 is `awakened`. The id is the row's `id`, trimmed and lowercased, and it has to be one of those four. An unknown index is `ERRORS.wing`. This module does not floor and does not clamp. `PracticeLoot.wing` still clamps to `1..count`. Leave that function alone. A string `"1"`, a fraction, `0`, `5`, NaN, and a table are `ERRORS.wing`. `1.0` is wing 1.
+
+**Difficulty and phase.** The same four difficulties as `RaidPractice`. Fracture and guided are refused. `" Story "` and `"HARD"` are trimmed and lowercased. Phase is an integer from 1 through `CONFIG.phases` (3). On shardbreaker the top is `CONFIG.shardbreakerPhases` (4). Those two numbers are copies of `RaidPractice.CONFIG`, checked by the spec, because this module does not require `RaidPractice`. Phase 4 on story, normal, or hard is `ERRORS.phase`. A bad difficulty is `ERRORS.difficulty`, including when it is passed to `phase`. `start` checks the wing, then the difficulty, then the phase. A missing difficulty is an error. It does not default to story.
+
+**Mechanics.** `Raids.luau` has no frozen per-boss mechanic list. T-007 still owns Hard mechanic design. This module ships no mechanic names. The caller passes an allowlist. An id that is not on that boss's list is `ERRORS.catalog`. There is no allow-all mode. `nil` is `ERRORS.allow`. An empty table is a real list of zero ids, so every id is `ERRORS.catalog`.
+
+The allowlist is one of these:
+
+- A flat array of strings. Each string is trimmed. `" Gust "` is the id `Gust`.
+- A flat set. A key whose value is `true` is on the list, after trim. `false` means that id is not on the list.
+- Keyed by boss id. `allowlist[bossId]` is a table, and that inner table is the list for that boss. The boss id is the lowercase id (`twins`, `sapwell`, `galecrown`, `awakened`). A boss table wins over any flat keys on the same table. A different boss falls through to the flat keys. A string key whose value is a table is a boss bucket only when that key is already a lowercase boss id. Any other shape is `ERRORS.allow`.
+
+Mechanic ids are trimmed and then kept as the caller spelled them. `"Gust"` and `"gust"` are different ids. Difficulty and boss ids are the ones that get lowercased. A raw string longer than `CONFIG.maxIdLength` (64) is refused. `CONFIG.allowCap` (64) is how many allowlist entries one call will read. A longer list is `ERRORS.allow`.
+
+`CONFIG.mechanicCap` (12) is how many distinct mechanic ids one session may hold. The count is the keys of `state.mechanics` plus the keys of `state.hits`. An id that is already in either map does not take a new slot. A new id at the cap is `ERRORS.cap`, including a toggle that turns that new id off. A stored map that is already over the cap, or a map that is not a boolean or hit-count table, is `ERRORS.state`. Pass the stored session. `nil` means nothing is held yet. `mechanic` and `toggle` take the boss id you already resolved. A wing number is `ERRORS.boss`. If the session's `bossId` or `boss` names a different boss, the error is `ERRORS.disagree`.
+
+`hit` reads the boss from `state.bossId` or `state.boss`. A missing boss is `ERRORS.state`. The check order is the mechanic id, then the record, then the allowlist, then the cap, then the off switch. `mechanic` checks the boss, then the id, then the record, then the allowlist, then the cap. `toggle` checks the boss, then the id, then that `enabled` is a boolean, then the same path as `mechanic`. `"true"` is `ERRORS.enabled`.
+
+**Hits that are off.** `RaidPractice` still records a hit when `mechanics[id] == false`. This guard refuses that hit with `ERRORS.off`, so do not call `RaidPractice.note` after a failed `hit`. A missing key and an explicit `true` both mean the mechanic is on. Only `false` is off. An id that is off and also missing from the allowlist is `ERRORS.catalog`, because the list is checked first.
+
+**Damage.** `damage` accepts a finite number `>= 0`, including `0` and a fraction. The per-call ceiling is `CONFIG.maxDamage` (100000). The ceiling is included. Above it is `ERRORS.ceiling`. A negative, NaN, infinity, or a non-number is `ERRORS.damage`. This is one call, not the session total. `RaidPractice.note` still adds the amount after the guard says yes.
+
+```lua
+local allowed, dealt, damageErr = RaidPracticeGuard.damage(rawDamage)
+if allowed == true and dealt ~= nil then
+	local noted = RaidPractice.note(session, { damage = dealt })
+	if noted.ok == true then
+		session = noted.state
+	end
+end
+
+local hitOk, mechanicId, hitErr = RaidPracticeGuard.hit(session, rawId, allowlist)
+if hitOk == true and mechanicId ~= nil then
+	local noted = RaidPractice.note(session, { mechanicId = mechanicId })
+	if noted.ok == true then
+		session = noted.state
+	end
+end
+
+local switchedOk, switch, switchErr =
+	RaidPracticeGuard.toggle(session.bossId, rawId, rawEnabled, allowlist, session)
+if switchedOk == true and switch ~= nil then
+	local switched = RaidPractice.toggle(session, switch.mechanicId, switch.enabled)
+	if switched.ok == true then
+		session = switched.state
+	end
+end
+```
+
+Store a `RaidPractice` state only when that call's `ok == true`. Store nothing from this guard except the cleaned args you just passed in. The guard returns new tables from `start` and `toggle` and does not write the session or the allowlist.
+
+`tests/run.luau` requires `./RaidPracticeGuard.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The return shape is `(ok, value, err)`, not a `RaidPractice` result table. Confirm the wire checks `ok == true` before it reads `value`.
+2. Unknown wings are refused. `PracticeLoot.wing` still clamps to `1..count`, and `RaidService.practice` still uses that clamp. Confirm the wire uses `boss` or `start` and stops clamping. `PracticeLoot.luau` was not edited.
+3. A missing difficulty is `ERRORS.difficulty`. The live practice path forces story and the remote does not send one. Confirm the wire passes `"story"` until normal, hard, and shardbreaker are actually playable.
+4. `Raids.luau` has no per-boss mechanic list, so the allowlist is caller-supplied. This module contains no mechanic names. Confirm you will pass the list, that an empty list refuses every id, and that there is no allow-all bypass while the catalog is missing.
+5. Which allowlist shape should the wire pass: a flat array, a `id = true` set, or a table keyed by `twins` / `sapwell` / `galecrown` / `awakened`? A boss table wins over flat keys on that same boss.
+6. `CONFIG.mechanicCap` is 12, a placeholder. Distinct ids are the keys in `mechanics` and `hits`. Turning a new mechanic off still uses a slot. Confirm the cap and that a toggle-off should count.
+7. `CONFIG.maxDamage` is 100000 per call, a placeholder. `0` is allowed. A fraction is allowed. Confirm the ceiling, and whether one note must be a whole number.
+8. A hit with `mechanics[id] == false` is `ERRORS.off` here. `RaidPractice.note` would still record it. Confirm the wire drops that hit and does not call `note`.
+9. A missing mechanic key still means on. Only `false` means off. Confirm the wire keeps that `RaidPractice` rule.
+10. Mechanic ids stay case-sensitive after trim. Boss ids and difficulties are trimmed and lowercased. Confirm `"Gust"` and `"gust"` stay different.
+11. Phase 4 is legal only on shardbreaker. The guard does not floor. `fresh` ignores the phase and starts at 1, so the wire has to `jump` to `opening.phase`. Confirm a Story phase 4 is refused before `fresh`.
+12. This module does not require `RaidPractice`. Nothing in `src` requires this module. The phase numbers are copied and the spec checks them against `RaidPractice.CONFIG`. Confirm they stay unwired until this pass, and that the copy is acceptable.
+13. `CONFIG.maxIdLength` is 64 and `CONFIG.allowCap` is 64. A longer remote string or a longer allowlist is refused and does not throw. Confirm those bounds.
+14. No profile field, no new remote, and no build stamp. The session stays the in-memory `RaidPractice` state. Confirm.
+15. T-064 is reserved for a `DungeonService` practice-loot leak check. This branch does not touch `DungeonService` or `PracticeLoot`. Confirm that leak check stays on T-064.
 
 ## Open
 
