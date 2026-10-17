@@ -103,7 +103,6 @@ end
 CombatStage.watchCamera()
 
 local playerGui = player:WaitForChild("PlayerGui")
-LoadingHud.start(playerGui)
 
 local function scriptNames(instance: Instance): { string }
 	local names = { instance.Name }
@@ -183,6 +182,9 @@ playerGui.ChildAdded:Connect(function(child)
 		child:Destroy()
 	end
 end)
+-- After the sweep. An earlier mount is destroyed: an unowned name is legacy,
+-- and an owned name is cleared as a leftover copy.
+LoadingHud.start(playerGui)
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))

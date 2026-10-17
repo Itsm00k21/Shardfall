@@ -7,6 +7,9 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local Build = require("../src/ReplicatedStorage/Shared/Build")
+local ClientChrome = require("../src/ReplicatedStorage/Shared/ClientChrome")
+local LegacyChrome = require("../src/ReplicatedStorage/Shared/LegacyChrome")
 local LoadingTips = require("../src/ReplicatedStorage/Shared/LoadingTips")
 
 local function trim(text: string): string
@@ -221,10 +224,15 @@ describe("LoadingTips isolation", function()
 		end
 		local client =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau")
-		expect(string.find(client, 'print("[Shardfall] build 2743749+ client")', 1, true)).toBeGreaterThan(
-			0
-		)
+		local stampLine = 'print("[Shardfall] build ' .. Build.STAMP .. ' client")'
+		expect(string.find(client, stampLine, 1, true)).toBeGreaterThan(0)
 		local _, mounts = string.gsub(client, "LoadingHud.start", "")
 		expect(mounts).toEqual(1)
+		local clearAt = string.find(client, "clearStaleGuis(playerGui)", 1, true)
+		local startAt = string.find(client, "LoadingHud.start(playerGui)", 1, true)
+		expect(clearAt ~= nil and startAt ~= nil).toBeTrue()
+		expect((clearAt :: number) < (startAt :: number)).toBeTrue()
+		expect(ClientChrome.shouldClear("ShardfallLoading")).toEqual(true)
+		expect(LegacyChrome.shouldDestroy("ShardfallLoading")).toEqual(false)
 	end)
 end)
