@@ -172,11 +172,13 @@ describe("RaidVault weekKey", function()
 		expect(RaidVault.weekKey(TUESDAY + WEEK)).toEqual(2964)
 	end)
 
-	it("rejects a negative, NaN, or infinite clock", function()
+	it("rejects a negative, NaN, infinite, or unsafe clock", function()
 		expect(RaidVault.weekKey(-1)).toBeNil()
 		expect(RaidVault.weekKey(0 / 0)).toBeNil()
 		expect(RaidVault.weekKey(math.huge)).toBeNil()
 		expect(RaidVault.weekKey(-math.huge)).toBeNil()
+		expect(RaidVault.weekKey(1e308)).toBeNil()
+		expect(RaidVault.weekKey(2 ^ 53 * WEEK)).toBeNil()
 	end)
 end)
 
@@ -258,13 +260,29 @@ describe("RaidVault progress", function()
 		expect(viewed.slots[3].open).toEqual(false)
 	end)
 
-	it("does not open the third choice on the four Heartwood bosses", function()
+	it("does not open the third choice on one difficulty of Heartwood", function()
 		local viewed = RaidVault.view(earn(fresh(), heartwood("shardbreaker"), TUESDAY), TUESDAY)
 		expect(viewed.killCount).toEqual(4)
 		expect(viewed.choiceCount).toEqual(2)
 		expect(viewed.slots[1].difficulty).toEqual("shardbreaker")
 		expect(viewed.slots[2].difficulty).toEqual("shardbreaker")
 		expect(viewed.slots[3].open).toEqual(false)
+	end)
+
+	it("opens 3 choices when the four Heartwood bosses fall on two difficulties", function()
+		local rows = heartwood("shardbreaker")
+		for _, row in ipairs(heartwood("hard")) do
+			table.insert(rows, row)
+		end
+		local viewed = RaidVault.view(earn(fresh(), rows, TUESDAY), TUESDAY)
+		expect(viewed.killCount).toEqual(8)
+		expect(viewed.choiceCount).toEqual(3)
+		expect(viewed.slots[1].difficulty).toEqual("shardbreaker")
+		expect(viewed.slots[1].rank).toEqual(4)
+		expect(viewed.slots[2].difficulty).toEqual("shardbreaker")
+		expect(viewed.slots[3].open).toEqual(true)
+		expect(viewed.slots[3].difficulty).toEqual("hard")
+		expect(viewed.slots[3].rank).toEqual(3)
 	end)
 
 	it("trims and lowercases the boss and the difficulty", function()
@@ -277,12 +295,13 @@ describe("RaidVault progress", function()
 end)
 
 describe("RaidVault same boss", function()
-	it("counts a boss once and upgrades it to a higher difficulty", function()
+	it("counts each boss and difficulty once and keeps the earlier row", function()
 		local first = RaidVault.note(nil, boss("twins", "story"), TUESDAY)
 		expect(first.killCount).toEqual(1)
 		local again = RaidVault.note(first.state, boss("twins", "story"), TUESDAY)
 		expect(again.ok).toEqual(true)
 		expect(again.counted).toEqual(false)
+		expect(again.upgraded).toEqual(false)
 		expect(again.duplicate).toEqual(true)
 		expect(again.reason).toEqual(REASONS.duplicate)
 		expect(again.killCount).toEqual(1)
@@ -290,21 +309,38 @@ describe("RaidVault same boss", function()
 		expect(first.state.kills[1].difficulty).toEqual("story")
 
 		local higher =
-			RaidVault.note(again.state, boss("twins", "shardbreaker", { guided = false }), TUESDAY)
+			RaidVault.note(again.state, boss("twins", "shardbreaker", { guided = true }), TUESDAY)
 		expect(higher.ok).toEqual(true)
-		expect(higher.counted).toEqual(false)
-		expect(higher.upgraded).toEqual(true)
-		expect(higher.reason).toEqual(REASONS.upgrade)
+		expect(higher.counted).toEqual(true)
+		expect(higher.upgraded).toEqual(false)
+		expect(higher.duplicate).toEqual(false)
 		expect(higher.persist).toEqual(true)
-		expect(higher.killCount).toEqual(1)
-		expect(higher.state.kills[1].difficulty).toEqual("shardbreaker")
+		expect(higher.killCount).toEqual(2)
+		expect(higher.state.kills[1].difficulty).toEqual("story")
+		expect(higher.state.kills[1].guided).toEqual(false)
+		expect(higher.state.kills[2].difficulty).toEqual("shardbreaker")
+		expect(higher.state.kills[2].guided).toEqual(true)
 		expect(again.state.kills[1].difficulty).toEqual("story")
 
 		local lower = RaidVault.note(higher.state, boss("twins", "normal"), TUESDAY)
-		expect(lower.duplicate).toEqual(true)
+		expect(lower.counted).toEqual(true)
 		expect(lower.upgraded).toEqual(false)
-		expect(lower.killCount).toEqual(1)
-		expect(lower.state.kills[1].difficulty).toEqual("shardbreaker")
+		expect(lower.duplicate).toEqual(false)
+		expect(lower.killCount).toEqual(3)
+		expect(lower.state.kills[1].difficulty).toEqual("story")
+
+		local sameHigh =
+			RaidVault.note(lower.state, boss("twins", "shardbreaker", { guided = false }), TUESDAY)
+		expect(sameHigh.duplicate).toEqual(true)
+		expect(sameHigh.counted).toEqual(false)
+		expect(sameHigh.persist).toEqual(false)
+		expect(sameHigh.killCount).toEqual(3)
+		expect(sameHigh.state.kills[2].guided).toEqual(true)
+
+		local viewed = RaidVault.view(sameHigh.state, TUESDAY)
+		expect(viewed.choiceCount).toEqual(1)
+		expect(viewed.slots[1].difficulty).toEqual("normal")
+		expect(viewed.slots[2].open).toEqual(false)
 	end)
 
 	it("counts the same boss on a second id as a different kill", function()
@@ -350,9 +386,13 @@ describe("RaidVault skips", function()
 		expect(same.duplicate).toEqual(true)
 		expect(same.state.kills[1].guided).toEqual(true)
 		local higher = RaidVault.note(noted.state, boss("twins", "shardbreaker"), TUESDAY)
-		expect(higher.upgraded).toEqual(true)
-		expect(higher.state.kills[1].guided).toEqual(false)
-		expect(higher.state.kills[1].difficulty).toEqual("shardbreaker")
+		expect(higher.counted).toEqual(true)
+		expect(higher.upgraded).toEqual(false)
+		expect(higher.killCount).toEqual(2)
+		expect(higher.state.kills[1].guided).toEqual(true)
+		expect(higher.state.kills[1].difficulty).toEqual("hard")
+		expect(higher.state.kills[2].guided).toEqual(false)
+		expect(higher.state.kills[2].difficulty).toEqual("shardbreaker")
 	end)
 
 	it("lets practice win when a removal is also set", function()
@@ -454,8 +494,8 @@ describe("RaidVault reset", function()
 			boss("awakened", "story"),
 		}, TUESDAY)
 		local items = {
-			{ id = "edge", slot = "weapon" },
-			{ id = "helm", slot = "head" },
+			{ id = "edge", slot = "weapon", difficulty = "hard", stats = { power = 1 } },
+			{ id = "helm", slot = "head", difficulty = "story" },
 		}
 		local offered = RaidVault.offer(earned, items, TUESDAY + WEEK)
 		expect(offered.ok).toEqual(true)
@@ -470,8 +510,11 @@ describe("RaidVault reset", function()
 		expect(offered.choices[2].item.id).toEqual("helm")
 		expect(identical(offered.choices[1].item, items[1])).toEqual(false)
 		items[1].id = "changed"
+		items[1].stats.power = 9
 		expect(offered.state.vault.choices[1].id).toEqual("edge")
+		expect(offered.state.vault.choices[1].stats.power).toEqual(1)
 		expect(offered.choices[1].item.id).toEqual("edge")
+		expect(offered.choices[1].item.stats.power).toEqual(1)
 
 		local picked = RaidVault.pick(offered.state, 1, TUESDAY + WEEK + 20)
 		expect(picked.ok).toEqual(true)
@@ -501,18 +544,106 @@ describe("RaidVault reset", function()
 		expect(picked.state.vault.choices[1].id).toEqual("edge")
 	end)
 
-	it("replaces an offer that has not been picked", function()
+	it("locks the first offer so a second offer cannot reroll", function()
 		local earned =
 			earn(fresh(), { boss("twins", "normal"), boss("sapwell", "normal") }, TUESDAY)
-		local first = RaidVault.offer(earned, { "heartshard" }, TUESDAY + WEEK)
+		local first = RaidVault.offer(earned, {
+			{ id = "heartshard", difficulty = "normal" },
+		}, TUESDAY + WEEK)
 		expect(first.ok).toEqual(true)
-		expect(first.choices[1].item).toEqual("heartshard")
-		local second = RaidVault.offer(first.state, { "  sapwell-helm  " }, TUESDAY + WEEK + 1)
-		expect(second.ok).toEqual(true)
-		expect(second.choices[1].item).toEqual("sapwell-helm")
-		local picked = RaidVault.pick(second.state, 1, TUESDAY + WEEK + 2)
+		expect(first.choices[1].item.id).toEqual("heartshard")
+		expect(first.choices[1].difficulty).toEqual("normal")
+		local second = RaidVault.offer(first.state, {
+			{ id = "sapwell-helm", difficulty = "normal" },
+		}, TUESDAY + WEEK + 1)
+		expect(second.ok).toEqual(false)
+		expect(second.error).toEqual(ERRORS.locked)
+		expect(second.persist).toEqual(false)
+		expect(second.state.vault.choices[1].id).toEqual("heartshard")
+		expect(first.state.vault.choices[1].id).toEqual("heartshard")
+		local picked = RaidVault.pick(first.state, 1, TUESDAY + WEEK + 2)
 		expect(picked.ok).toEqual(true)
-		expect(picked.item).toEqual("sapwell-helm")
+		expect(picked.item.id).toEqual("heartshard")
+		expect(picked.difficulty).toEqual("normal")
+	end)
+
+	it("refuses an item whose difficulty does not match its slot", function()
+		local earned = earn(fresh(), {
+			boss("twins", "shardbreaker"),
+			boss("sapwell", "hard"),
+			boss("galecrown", "normal"),
+			boss("awakened", "story"),
+		}, TUESDAY)
+		local claim = TUESDAY + WEEK
+		local swapped = RaidVault.offer(earned, {
+			{ id = "edge", difficulty = "story" },
+			{ id = "helm", difficulty = "hard" },
+		}, claim)
+		expect(swapped.ok).toEqual(false)
+		expect(swapped.error).toEqual(ERRORS.quality)
+		expect(swapped.persist).toEqual(true)
+		expect(swapped.state.vault.choices).toBeNil()
+		expect(swapped.state.vault.picked).toBeNil()
+
+		local missing = RaidVault.offer(swapped.state, {
+			{ id = "edge", quality = 1 },
+			{ id = "helm", difficulty = "story" },
+		}, claim + 1)
+		expect(missing.error).toEqual(ERRORS.quality)
+		expect(missing.persist).toEqual(false)
+		expect(missing.state.vault.choices).toBeNil()
+
+		local disagree = RaidVault.offer(missing.state, {
+			{ id = "edge", difficulty = "hard", quality = "story" },
+			{ id = "helm", difficulty = "story" },
+		}, claim + 1)
+		expect(disagree.error).toEqual(ERRORS.quality)
+
+		local text = RaidVault.offer(missing.state, { "heartshard", "helm" }, claim + 1)
+		expect(text.error).toEqual(ERRORS.quality)
+
+		local cycle: any = { id = "edge", difficulty = "hard" }
+		cycle.self = cycle
+		local looped = RaidVault.offer(missing.state, {
+			cycle,
+			{ id = "helm", difficulty = "story" },
+		}, claim + 1)
+		expect(looped.error).toEqual(ERRORS.item)
+		expect(looped.state.vault.choices).toBeNil()
+
+		local matched = RaidVault.offer(missing.state, {
+			{ id = "edge", difficulty = " Hard " },
+			{ id = "helm", quality = "story" },
+		}, claim + 1)
+		expect(matched.ok).toEqual(true)
+		expect(matched.choices[1].difficulty).toEqual("hard")
+		expect(matched.choices[2].difficulty).toEqual("story")
+		expect(matched.state.vault.choices[1].difficulty).toEqual(" Hard ")
+
+		local crafted = RaidVault.view(
+			earn(fresh(), {
+				boss("twins", "normal"),
+				boss("sapwell", "normal"),
+			}, TUESDAY),
+			TUESDAY + WEEK
+		)
+		local tampered = {
+			weekKey = crafted.state.weekKey,
+			kills = crafted.state.kills,
+			vault = {
+				earnedWeek = crafted.state.vault.earnedWeek,
+				kills = crafted.state.vault.kills,
+				choices = { { id = "wrong", difficulty = "story" } },
+				picked = nil,
+			},
+		}
+		local denied = RaidVault.pick(tampered, 1, TUESDAY + WEEK)
+		expect(denied.ok).toEqual(false)
+		expect(denied.error).toEqual(ERRORS.quality)
+		expect(denied.item).toBeNil()
+		expect(denied.persist).toEqual(false)
+		expect(denied.state.vault.picked).toBeNil()
+		expect(tampered.vault.picked).toBeNil()
 	end)
 
 	it("refuses the wrong number of items and a pick before the offer", function()
@@ -537,7 +668,9 @@ describe("RaidVault reset", function()
 
 	it("accepts a pick through the last second and expires it on the next Tuesday", function()
 		local earned = earn(fresh(), { boss("twins", "hard"), boss("sapwell", "hard") }, TUESDAY)
-		local offered = RaidVault.offer(earned, { { id = "keep" } }, TUESDAY + WEEK)
+		local offered = RaidVault.offer(earned, {
+			{ id = "keep", difficulty = "hard" },
+		}, TUESDAY + WEEK)
 		local inTime = RaidVault.pick(offered.state, 1, TUESDAY + (2 * WEEK) - 1)
 		expect(inTime.ok).toEqual(true)
 		expect(inTime.item.id).toEqual("keep")
@@ -633,6 +766,28 @@ describe("RaidVault guards", function()
 		)
 		expect(RaidVault.view({ weekKey = 0 / 0, kills = {} }, TUESDAY).error).toEqual(ERRORS.state)
 		expect(RaidVault.view({ weekKey = 1.5, kills = {} }, TUESDAY).error).toEqual(ERRORS.state)
+		expect(RaidVault.view({ weekKey = 1e16, kills = {} }, TUESDAY).error).toEqual(ERRORS.state)
+		local negative = RaidVault.view({
+			weekKey = -50,
+			kills = { { bossId = "twins", difficulty = "hard", guided = false } },
+		}, TUESDAY)
+		expect(negative.ok).toEqual(true)
+		expect(negative.killCount).toEqual(0)
+		expect(negative.vault).toBeNil()
+		expect(RaidVault.view({
+			weekKey = 2963,
+			kills = {
+				{ bossId = "twins", difficulty = "story", guided = false },
+				{ bossId = "twins", difficulty = "story", guided = true },
+			},
+		}, TUESDAY).error).toEqual(ERRORS.state)
+		expect(RaidVault.view({
+			weekKey = 2963,
+			kills = {
+				{ bossId = "twins", difficulty = "hard", guided = false },
+				{ bossId = "twins", difficulty = "story", guided = true },
+			},
+		}, TUESDAY).killCount).toEqual(2)
 		expect(RaidVault.view({ weekKey = 2963, kills = "nope" }, TUESDAY).error).toEqual(
 			ERRORS.state
 		)
@@ -660,11 +815,15 @@ describe("RaidVault guards", function()
 	it("refuses a pick index that is not an open choice", function()
 		local earned =
 			earn(fresh(), { boss("twins", "normal"), boss("sapwell", "normal") }, TUESDAY)
-		local offered = RaidVault.offer(earned, { { id = "one" } }, TUESDAY + WEEK)
+		local offered = RaidVault.offer(earned, {
+			{ id = "one", difficulty = "normal" },
+		}, TUESDAY + WEEK)
 		expect(RaidVault.pick(offered.state, 0, TUESDAY + WEEK).error).toEqual(ERRORS.pick)
 		expect(RaidVault.pick(offered.state, 2, TUESDAY + WEEK).error).toEqual(ERRORS.pick)
 		expect(RaidVault.pick(offered.state, 1.5, TUESDAY + WEEK).error).toEqual(ERRORS.pick)
 		expect(RaidVault.pick(offered.state, "1", TUESDAY + WEEK).error).toEqual(ERRORS.pick)
+		expect(RaidVault.pick(offered.state, 0 / 0, TUESDAY + WEEK).error).toEqual(ERRORS.pick)
+		expect(RaidVault.pick(offered.state, math.huge, TUESDAY + WEEK).error).toEqual(ERRORS.pick)
 		expect(RaidVault.pick(offered.state, 1, TUESDAY + WEEK).ok).toEqual(true)
 	end)
 

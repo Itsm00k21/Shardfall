@@ -10,16 +10,17 @@
 	supplies the choice items. Thresholds live in CONFIG. Nothing
 	here costs Robux.
 
-	Killing 2, 4, or 6 different raid bosses in one Tuesday week opens
-	1, 2, or 3 choices. The same boss counts once, at the highest
-	difficulty recorded that week. A later higher difficulty upgrades
-	that boss. A repeat or a lower difficulty does not add a kill.
+	Killing 2, 4, or 6 distinct (boss, difficulty) pairs in one Tuesday
+	week opens 1, 2, or 3 choices. The same pair counts once. The same
+	boss on a second difficulty is a new pair. A repeat of the same
+	pair does not add a kill and does not replace the stored row.
 	Practice Grove, an AFK removal, and a passed vote-kick do not count.
 
-	Slot quality is the difficulty of the 2nd, 4th, or 6th boss after
+	Slot quality is the difficulty of the 2nd, 4th, or 6th pair after
 	sorting from highest difficulty to lowest. The player picks one
-	supplied item at the next Tuesday reset. An unpicked Vault expires
-	at the Tuesday after that and is not granted.
+	supplied item at the next Tuesday reset. The first offer locks.
+	An item whose difficulty does not match its slot is refused. An
+	unpicked Vault expires at the Tuesday after that and is not granted.
 
 	The week key matches the Tuesday 00:00 UTC shape: week 1 starts at
 	1970-01-06 00:00:00 UTC. This file does not load the Marks module.
@@ -74,6 +75,8 @@ RaidVault.ERRORS = table.freeze({
 	pick = "That Vault choice is not open.",
 	picked = "A Vault choice was already taken.",
 	offer = "Offer the Vault choices before the pick.",
+	locked = "The Vault choices are already set.",
+	quality = "That choice does not match its slot.",
 	expired = "That Vault expired.",
 })
 
@@ -198,11 +201,24 @@ type Incoming = {
 	removal: string?,
 }
 
+-- 2^53 - 1. A larger week key is not a safe integer to store.
+local MAX_WEEK = 9007199254740991
+
 local function finite(value: any): number?
 	if type(value) ~= "number" then
 		return nil
 	end
 	if value ~= value or value == math.huge or value == -math.huge then
+		return nil
+	end
+	return value
+end
+
+local function safeWeek(value: number): number?
+	if value ~= value or value == math.huge or value == -math.huge then
+		return nil
+	end
+	if value < 0 or value > MAX_WEEK or value ~= math.floor(value) then
 		return nil
 	end
 	return value
@@ -302,11 +318,54 @@ local function arraySize(value: any): number?
 	return count
 end
 
+-- Plain data only. Nested tables are new tables, so a later edit of the
+-- caller's item cannot change the stored choice. A cycle, a function, or
+-- a non-finite number is refused.
+local function copyPlain(value: any, depth: number, seen: { [any]: boolean }): (any?, boolean)
+	local kind = type(value)
+	if kind == "boolean" or kind == "string" then
+		return value, true
+	end
+	if kind == "number" then
+		if value ~= value or value == math.huge or value == -math.huge then
+			return nil, false
+		end
+		return value, true
+	end
+	if kind ~= "table" then
+		return nil, false
+	end
+	if depth > 8 or seen[value] == true then
+		return nil, false
+	end
+	seen[value] = true
+	local copy = {}
+	for key, child in pairs(value) do
+		local keyKind = type(key)
+		if
+			keyKind ~= "string" and (keyKind ~= "number" or key ~= key or key ~= math.floor(key))
+		then
+			return nil, false
+		end
+		local copied, ok = copyPlain(child, depth + 1, seen)
+		if ok ~= true then
+			return nil, false
+		end
+		copy[key] = copied
+	end
+	seen[value] = nil
+	return copy, true
+end
+
 local function copyItem(item: any): any
 	if type(item) ~= "table" then
 		return item
 	end
-	return table.clone(item)
+	local copy, ok = copyPlain(item, 1, {})
+	if ok ~= true then
+		return nil
+	end
+	return copy
 end
 
 local function copyKill(kill: Kill): Kill
@@ -371,7 +430,8 @@ function RaidVault.weekKey(now: number): number?
 	if at < offset then
 		return 0
 	end
-	return math.floor((at - offset) / span) + 1
+	local key = math.floor((at - offset) / span) + 1
+	return safeWeek(key)
 end
 
 local function sortKills(kills: { Kill }): { Kill }
@@ -459,13 +519,21 @@ local function readKills(value: any): { Kill }?
 		return nil
 	end
 	local kills = {}
-	local seen: { [string]: boolean } = {}
+	local seen: { [string]: { [string]: boolean } } = {}
 	for index = 1, count do
 		local kill = readKill(value[index])
-		if kill == nil or seen[kill.bossId] == true then
+		if kill == nil then
 			return nil
 		end
-		seen[kill.bossId] = true
+		local byBoss = seen[kill.bossId]
+		if byBoss == nil then
+			byBoss = {}
+			seen[kill.bossId] = byBoss
+		end
+		if byBoss[kill.difficulty] == true then
+			return nil
+		end
+		byBoss[kill.difficulty] = true
 		kills[index] = kill
 	end
 	return kills
@@ -565,6 +633,8 @@ local function readState(value: any): (State?, string?)
 	end
 	if key < 0 then
 		key = -1
+	elseif key > MAX_WEEK then
+		return nil, RaidVault.ERRORS.state
 	end
 	local kills = readKills(value.kills)
 	if kills == nil then
@@ -705,18 +775,8 @@ local function applyKill(
 	guided: boolean
 ): ({ Kill }, boolean, boolean, boolean)
 	local nextKills = copyKills(kills)
-	local rank = rankOf(difficulty) or 0
-	for index, kill in ipairs(nextKills) do
-		if kill.bossId == bossId then
-			local oldRank = rankOf(kill.difficulty) or 0
-			if rank > oldRank then
-				nextKills[index] = {
-					bossId = bossId,
-					difficulty = difficulty,
-					guided = guided,
-				}
-				return nextKills, false, true, false
-			end
+	for _, kill in ipairs(nextKills) do
+		if kill.bossId == bossId and kill.difficulty == difficulty then
 			return nextKills, false, false, true
 		end
 	end
@@ -966,6 +1026,51 @@ function RaidVault.view(state: State?, now: number): View
 	}
 end
 
+-- The slot's quality is its difficulty. A string `quality` is the same
+-- tier. A numeric gear-roll quality is not a tier and is ignored.
+local function itemTier(item: any): string?
+	if type(item) ~= "table" then
+		return nil
+	end
+	local fromDifficulty = nil
+	if item.difficulty ~= nil then
+		if type(item.difficulty) ~= "string" then
+			return nil
+		end
+		fromDifficulty = normalize(item.difficulty)
+		if fromDifficulty == nil or rankOf(fromDifficulty) == nil then
+			return nil
+		end
+	end
+	local fromQuality = nil
+	if type(item.quality) == "string" then
+		fromQuality = normalize(item.quality)
+		if fromQuality == nil or rankOf(fromQuality) == nil then
+			return nil
+		end
+	end
+	if fromDifficulty ~= nil and fromQuality ~= nil and fromDifficulty ~= fromQuality then
+		return nil
+	end
+	if fromDifficulty ~= nil then
+		return fromDifficulty
+	end
+	return fromQuality
+end
+
+local function tiersMatch(items: { any }, slots: { Slot }, choiceCount: number): boolean
+	local placed = 0
+	for _, slot in ipairs(slots) do
+		if slot.open == true and placed < choiceCount then
+			placed += 1
+			if itemTier(items[placed]) ~= slot.difficulty then
+				return false
+			end
+		end
+	end
+	return placed == choiceCount
+end
+
 local function parseItems(value: any): ({ any }?, string?)
 	local count = arraySize(value)
 	if count == nil or count < 1 then
@@ -1033,6 +1138,9 @@ function RaidVault.offer(state: State?, items: any, now: number): Offer
 	if nextRecord.vault ~= nil and nextRecord.vault.picked ~= nil then
 		return offerFail(RaidVault.ERRORS.picked, nextRecord, rolled, expired, shown.choiceCount)
 	end
+	if nextRecord.vault ~= nil and nextRecord.vault.choices ~= nil then
+		return offerFail(RaidVault.ERRORS.locked, nextRecord, rolled, expired, shown.choiceCount)
+	end
 	local parsed, itemError = parseItems(items)
 	if parsed == nil then
 		return offerFail(
@@ -1045,6 +1153,9 @@ function RaidVault.offer(state: State?, items: any, now: number): Offer
 	end
 	if #parsed ~= shown.choiceCount then
 		return offerFail(RaidVault.ERRORS.count, nextRecord, rolled, expired, shown.choiceCount)
+	end
+	if tiersMatch(parsed, shown.slots, shown.choiceCount) ~= true then
+		return offerFail(RaidVault.ERRORS.quality, nextRecord, rolled, expired, shown.choiceCount)
 	end
 	local saved: State = {
 		weekKey = nextRecord.weekKey,
@@ -1124,6 +1235,10 @@ function RaidVault.pick(state: State?, index: any, now: number): Pick
 		return pickFail(RaidVault.ERRORS.pick, nextRecord, rolled, expired)
 	end
 	local choice = shown.choices[choiceIndex]
+	local granted = copyItem(choice.item)
+	if itemTier(choice.item) ~= choice.difficulty or granted == nil then
+		return pickFail(RaidVault.ERRORS.quality, nextRecord, rolled, expired)
+	end
 	local saved: State = {
 		weekKey = nextRecord.weekKey,
 		kills = copyKills(nextRecord.kills),
@@ -1143,7 +1258,7 @@ function RaidVault.pick(state: State?, index: any, now: number): Pick
 		threshold = choice.threshold,
 		difficulty = choice.difficulty,
 		rank = choice.rank,
-		item = copyItem(choice.item),
+		item = granted,
 		rolled = rolled,
 		expired = expired,
 		error = nil,
