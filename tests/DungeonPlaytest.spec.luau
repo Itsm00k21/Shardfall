@@ -24,9 +24,10 @@ describe("Dungeon playtest", function()
 		local ui = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/Ui.luau")
 		expect(string.find(ui, "banner.Visible = shown ~= \"\"", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "banner.Visible = false", 1, true) ~= nil).toBeTrue()
-		-- Layout stays put for the gold-banner fit.
-		expect(string.find(ui, "IgnoreGuiInset = true", 1, true) ~= nil).toBeTrue()
-		expect(string.find(ui, "Size = UDim2.new(0.92, 0, 0, 56)", 1, true) ~= nil).toBeTrue()
+		-- Gold-banner fit owns the safe inset. Hide-when-empty stays.
+		expect(string.find(ui, "IgnoreGuiInset = false", 1, true) ~= nil).toBeTrue()
+		expect(string.find(ui, "ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets", 1, true) ~= nil).toBeTrue()
+		expect(string.find(ui, "Size = UDim2.new(0.92, 0, 0, 56)", 1, true)).toBeNil()
 
 		local hud = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
 		expect(string.find(hud, "string.upper(colorName)", 1, true)).toBeNil()
