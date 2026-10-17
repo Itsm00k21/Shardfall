@@ -7,7 +7,8 @@
 	dodges, and ButtonY dodges on a gamepad. ButtonR1 light-attacks
 	while the menu is closed and still changes tabs while it is open.
 	F is the interact prompt
-	and only shows while a prompt is up. The Dodge chip shows Y while a
+	and only shows while a prompt is up. On a phone, Heavy sits above
+	Dodge and plays the heavy slash. The Dodge chip shows Y while a
 	gamepad was the last input.
 	On a gamepad the D-pad uses slots 1-4, and holding LB uses slots 5-8.
 	The corner shows that glyph while a gamepad was the last input, and
@@ -32,6 +33,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
+local HeavyChip = require(Shared:WaitForChild("HeavyChip"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local PadLight = require(Shared:WaitForChild("PadLight"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
@@ -44,6 +46,7 @@ export type Callbacks = {
 	onDodge: () -> (),
 	onDodgeChip: (() -> ())?,
 	onLight: () -> (),
+	onHeavy: () -> (),
 	onSkill: () -> (),
 	onToast: (string) -> (),
 	onResult: (any) -> (),
@@ -370,6 +373,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local dodge = promptButton("Dodge", "Shift")
+	local heavy = promptButton("Heavy", "Heavy")
+	heavy.Visible = false
 	local dodgePulse = Instance.new("UIStroke")
 	dodgePulse.Name = "DodgePulse"
 	dodgePulse.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -591,6 +596,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			note()
 		end
 	end)
+	heavy.Activated:Connect(function()
+		callbacks.onHeavy()
+	end)
 
 	local lastInputName = UserInputService:GetLastInputType().Name
 	local function dodgeFace(mobile: boolean): string
@@ -625,6 +633,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		if bind ~= nil and bind:IsA("TextLabel") then
 			bind.Text = dodgeFace(mobile)
 		end
+		local heavySpot = HeavyChip.place(size.X, size.Y)
+		heavy.Position = UDim2.fromOffset(heavySpot.x, heavySpot.y)
+		heavy.Size = UDim2.fromOffset(heavySpot.w, heavySpot.h)
+		heavy.Visible = HeavyChip.show(mobile)
 	end
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
