@@ -41,6 +41,8 @@ local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local Progression = require(ReplicatedStorage.Shared.Progression)
 local RaidEchoFight = require(ReplicatedStorage.Shared.RaidEchoFight)
 local Raids = require(ReplicatedStorage.Shared.Raids)
+local EchoRetry = require(script.Parent.EchoRetry)
+local RunTick = require(script.Parent.RunTick)
 local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local Rootvault = require(ReplicatedStorage.Shared.Rootvault)
@@ -116,6 +118,9 @@ type Run = {
 	-- Party Echo. The state table is shared with a backfill. Nil outside Heartwood.
 	echoFight: RaidEchoFight.Fight?,
 	echo: { stacks: number }?,
+	-- True from a Story wipe retry until every party member has streamed
+	-- back in. A hit in that window must not wipe or start another retry.
+	retrying: boolean?,
 }
 
 type Restart = {
@@ -130,6 +135,7 @@ local farmOn: { [Player]: boolean } = {}
 local farmSince: { [Player]: number } = {}
 local restartAt: { [Player]: Restart } = {}
 local idleNoted: { [Player]: boolean } = {}
+local tickFault: { [Player]: boolean } = {}
 local nextEnemyId = 0
 local echoHeals = false
 
@@ -1748,41 +1754,105 @@ local function farmPath(player: Player, run: Run, hrp: BasePart)
 	end
 end
 
+local function tickOne(player: Player, run: Run, step: number, now: number)
+	if run.resolving or player.Parent == nil then
+		return
+	end
+	local hrp = rootPart(player)
+	if hrp == nil then
+		return
+	end
+	if hrp.Position.Y < -40 then
+		if (fallAt[player] or 0) <= now then
+			fallAt[player] = now + 1
+			print("[Shardfall] " .. player.Name .. " fell out of the room; returning to the spawn")
+			teleport(player, roomSpawn(run.placeIndex))
+		end
+		return
+	end
+	if run.cleared then
+		tickAdvance(player, run, now)
+		return
+	end
+	for _, enemy in pairs(run.enemies) do
+		if runs[player] == nil or run.resolving then
+			break
+		end
+		tickEnemy(player, run, enemy, hrp, step, now)
+	end
+	if runs[player] ~= nil and not run.resolving and not run.cleared then
+		CombatService.companionTick(player)
+		CombatService.autoTick(player)
+		farmPath(player, run, hrp)
+	end
+end
+
+local function tickRestart(player: Player, plan: Restart, now: number)
+	if restartAt[player] ~= plan then
+		return
+	end
+	if farmOn[player] ~= true or player.Parent == nil or runs[player] ~= nil then
+		restartAt[player] = nil
+		return
+	end
+	if now >= plan.at then
+		restartAt[player] = nil
+		local result = DungeonService.enter(player, plan.dungeonId)
+		if result.ok ~= true then
+			pushRun(player, result.error)
+		end
+	end
+end
+
+local function tickHub(player: Player, now: number)
+	if runs[player] ~= nil or player.Parent == nil then
+		return
+	end
+	local hrp = rootPart(player)
+	if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
+		return
+	end
+	if (fallAt[player] or 0) > now then
+		return
+	end
+	fallAt[player] = now + 2
+	print("[Shardfall] " .. player.Name .. " fell off Haven; returning to HubSpawn")
+	teleport(player, hubCFrame())
+end
+
+-- A tick fault destroys the run. It does not call finish or grant,
+-- so a half-cleared room cannot pay twice and Practice stays loot-free.
+local function faultPlayer(player: Player, err: any)
+	local run = runs[player]
+	local warnNow, destroy =
+		RunTick.fault(tickFault[player] == true, run ~= nil, run ~= nil and run.resolving == true)
+	if warnNow then
+		tickFault[player] = true
+		warn("[Shardfall] " .. player.Name .. " dungeon tick failed: " .. tostring(err))
+	end
+	if not destroy or run == nil then
+		return
+	end
+	run.resolving = true
+	restartAt[player] = nil
+	pcall(CombatService.revive, player)
+	local dropped, dropErr = pcall(destroyRun, player, run)
+	if not dropped then
+		runs[player] = nil
+		pcall(CombatService.clearShots, player)
+		warn("[Shardfall] " .. player.Name .. " dungeon tick cleanup failed: " .. tostring(dropErr))
+	end
+end
+
 local function onHeartbeat(dt: number)
 	local step = math.min(dt, 0.1)
 	local now = os.clock()
+	-- pcall(fn, args) so one bad run cannot abort the others, and the
+	-- hot path does not allocate a closure per player per frame.
 	for player, run in pairs(runs) do
-		if run.resolving or player.Parent == nil then
-			continue
-		end
-		local hrp = rootPart(player)
-		if hrp == nil then
-			continue
-		end
-		if hrp.Position.Y < -40 then
-			if (fallAt[player] or 0) <= now then
-				fallAt[player] = now + 1
-				print(
-					"[Shardfall] " .. player.Name .. " fell out of the room; returning to the spawn"
-				)
-				teleport(player, roomSpawn(run.placeIndex))
-			end
-			continue
-		end
-		if run.cleared then
-			tickAdvance(player, run, now)
-			continue
-		end
-		for _, enemy in pairs(run.enemies) do
-			if runs[player] == nil or run.resolving then
-				break
-			end
-			tickEnemy(player, run, enemy, hrp, step, now)
-		end
-		if runs[player] ~= nil and not run.resolving and not run.cleared then
-			CombatService.companionTick(player)
-			CombatService.autoTick(player)
-			farmPath(player, run, hrp)
+		local tickOk, tickErr = pcall(tickOne, player, run, step, now)
+		if not tickOk then
+			faultPlayer(player, tickErr)
 		end
 	end
 	local pending = {}
@@ -1790,37 +1860,16 @@ local function onHeartbeat(dt: number)
 		table.insert(pending, { player = player, plan = plan })
 	end
 	for _, row in ipairs(pending) do
-		local player = row.player
-		local plan = row.plan
-		if restartAt[player] ~= plan then
-			continue
-		end
-		if farmOn[player] ~= true or player.Parent == nil or runs[player] ~= nil then
-			restartAt[player] = nil
-			continue
-		end
-		if now >= plan.at then
-			restartAt[player] = nil
-			local result = DungeonService.enter(player, plan.dungeonId)
-			if result.ok ~= true then
-				pushRun(player, result.error)
-			end
+		local restartOk, restartErr = pcall(tickRestart, row.player, row.plan, now)
+		if not restartOk then
+			faultPlayer(row.player, restartErr)
 		end
 	end
 	for _, player in ipairs(Players:GetPlayers()) do
-		if runs[player] ~= nil or player.Parent == nil then
-			continue
+		local hubOk, hubErr = pcall(tickHub, player, now)
+		if not hubOk then
+			faultPlayer(player, hubErr)
 		end
-		local hrp = rootPart(player)
-		if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
-			continue
-		end
-		if (fallAt[player] or 0) > now then
-			continue
-		end
-		fallAt[player] = now + 2
-		print("[Shardfall] " .. player.Name .. " fell off Haven; returning to HubSpawn")
-		teleport(player, hubCFrame())
 	end
 end
 
@@ -1930,6 +1979,7 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		healerPresent = false,
 		echoFight = echoFight,
 		echo = if echoFight ~= nil then echoFight.state else nil,
+		retrying = false,
 	}
 	runs[player] = run
 	CombatService.refresh(player)
@@ -2246,6 +2296,26 @@ local function bindTouches()
 	end
 end
 
+local function quietRoom(player: Player, run: Run)
+	CombatService.clearShots(player)
+	clearEnemies(run)
+end
+
+local function pullMember(member: Player, memberRun: Run, fight: RaidEchoFight.Fight)
+	CombatService.revive(member)
+	RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
+	rememberMax(member, memberRun)
+	teleport(member, roomSpawn(memberRun.placeIndex))
+	if runs[member] ~= memberRun or memberRun.retrying ~= true or memberRun.resolving then
+		return
+	end
+	CombatService.revive(member)
+	spawnRoom(member, memberRun)
+	local label = RaidEchoFight.chip(fight.state, fight.difficulty)
+	local text = if label ~= nil then "Wiped. " .. label .. "." else "Wiped."
+	pushRun(member, text)
+end
+
 local function retryPull(fight: RaidEchoFight.Fight)
 	local party = {}
 	for member, memberRun in pairs(runs) do
@@ -2253,25 +2323,67 @@ local function retryPull(fight: RaidEchoFight.Fight)
 			table.insert(party, member)
 		end
 	end
+	-- Every guard goes up before any Destroy or stream yield. A hit on
+	-- the next party member cannot wipe while this one is still arming.
 	for _, member in ipairs(party) do
 		local memberRun = runs[member]
-		if memberRun ~= nil then
-			CombatService.revive(member)
-			RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
-			rememberMax(member, memberRun)
-			teleport(member, roomSpawn(memberRun.placeIndex))
-			spawnRoom(member, memberRun)
-			local label = RaidEchoFight.chip(fight.state, fight.difficulty)
-			local text = if label ~= nil then "Wiped. " .. label .. "." else "Wiped."
-			pushRun(member, text)
+		if memberRun ~= nil and memberRun.resolving ~= true then
+			memberRun.retrying = true
 		end
+	end
+	for _, member in ipairs(party) do
+		local memberRun = runs[member]
+		if memberRun ~= nil and memberRun.retrying == true then
+			local quiet, quietErr = pcall(quietRoom, member, memberRun)
+			if not quiet then
+				warn(
+					"[Shardfall] "
+						.. member.Name
+						.. " retry could not clear the room: "
+						.. tostring(quietErr)
+				)
+			end
+		end
+	end
+	for _, member in ipairs(party) do
+		local memberRun = runs[member]
+		if memberRun == nil or memberRun.retrying ~= true or memberRun.resolving then
+			continue
+		end
+		local pulled, pullErr = pcall(pullMember, member, memberRun, fight)
+		if not pulled then
+			warn("[Shardfall] " .. member.Name .. " retry failed: " .. tostring(pullErr))
+			-- A push that fails after the boss is back must not spawn a second one.
+			if
+				runs[member] == memberRun
+				and memberRun.retrying == true
+				and next(memberRun.enemies) == nil
+			then
+				pcall(spawnRoom, member, memberRun)
+			end
+		end
+	end
+	for _, member in ipairs(party) do
+		local memberRun = runs[member]
+		if memberRun == nil or runs[member] ~= memberRun or memberRun.retrying ~= true then
+			continue
+		end
+		if memberRun.resolving then
+			memberRun.retrying = false
+			continue
+		end
+		pcall(CombatService.revive, member)
+		if memberRun.echoFight == fight then
+			RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
+		end
+		memberRun.retrying = false
 	end
 	bindEcho(fight)
 end
 
 function DungeonService.onPlayerDown(player: Player)
 	local run = runs[player]
-	if run == nil or run.resolving then
+	if run == nil or run.resolving or EchoRetry.blocked(run.retrying == true) then
 		return
 	end
 	local fight = run.echoFight
@@ -2293,8 +2405,13 @@ function DungeonService.onPlayerDown(player: Player)
 		and fight.pullStarted == true
 		and party >= 1
 		and living == 0
-	if storyRetry and fight ~= nil then
+	local action = EchoRetry.decision(run.retrying == true, storyRetry)
+	if action == "retry" and fight ~= nil then
+		run.retrying = true
 		retryPull(fight)
+		return
+	end
+	if action == "ignore" then
 		return
 	end
 	finish(player, false)
@@ -2447,6 +2564,7 @@ function DungeonService.start()
 		farmOn[player] = nil
 		restartAt[player] = nil
 		idleNoted[player] = nil
+		tickFault[player] = nil
 	end)
 
 	RunService.Heartbeat:Connect(onHeartbeat)
