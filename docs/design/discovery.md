@@ -85,7 +85,7 @@ Background `(16, 14, 24)` from `UiTheme` `background`, so the glass edge stays v
 | 3 | A red telegraph and a dodge, Glass Kestrel's pane only if the flash follows the dodge | The combat verb | After KF-1 in `docs/qa/qa_kestrel_flash.md` passes |
 | 4 | One roll card at Epic, rarity color `(186, 120, 232)`, odds line readable | The roll, without a fake percent | Now, if the card shows the live odds |
 | 5 | Shardjaw beside the player, low and angular, no smile | A pet that is useful | When the mesh exists. Block pet is honest until then |
-| 6 | Heartwood gate, four to eight players, no loot pile | The raid | When the gate has a mesh. Today Heartwood has no arch |
+| 6 | Heartwood gate, four to eight players, no loot pile | The raid | When that gate has its own mesh. The blockout arch is already open in `RealmArches` (`Haven.luau` portal `heartwood`, bark, `(214, 140, 64)`) |
 
 Thumbnail 4 must not show Epic as 4% or Legendary as 0.0%. The live sheet is the 1-in-N draw. Do not invent a new percent on the art.
 

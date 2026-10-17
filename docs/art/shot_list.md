@@ -28,14 +28,14 @@ Live parts in `HavenBuilder`. One mesh each, unless the note says a tint.
 | `hub_spawn` | Hub spawn pad | P0 | Flat 12×12 pad at the plaza. No glow. Not a statue. |
 | `forge` | Forge | P0 | Stone workshop, chimneys, a small fire, orange sparks. The fire is a forge, not a wound. |
 | `market` | Market | P0 | Stall roofs on the rim. Cloth and wood. No glow. |
-| `guild` | Guild hall | P0 | A hall mass on the rim. Dark wood, one dull lantern. No banners with words. |
-| `garden` | Pet garden | P0 | Low beds, moss, one still pool. Soft green. No cute statues. |
-| `observatory` | Observatory | P0 | A round dark building on the east island. One pale window. |
+| `guild` | Guild hall | P0 | Pale limestone hall, blue-gray slate roof, wood door. The station says coming soon. No banners with words. |
+| `garden` | Pet garden | P0 | Three trees and a blue glass pond `(70, 160, 210)`. Live canopies are grass balls `(240, 140, 180)`. No beds. No cute statues. |
+| `observatory` | Observatory | P0 | Limestone drum, blue glass dome, one metal scope, on the east island. The station says coming soon. |
 | `gate_court` | Gate court | P0 | The paved court the live hub already stamps. Keep it empty enough to walk. |
 | `rim_shop` | Rim shop | P0 | One stall, wood counter, no floating sign text. |
-| `realm_arch` | Realm arch | P0 | One arch mesh, five tints. Verdant `(64, 196, 96)` is open. Sunken `(50, 150, 255)`, Ember `(255, 150, 40)`, Frost `(186, 228, 255)`, and Void `(150, 70, 220)` read closed. |
+| `realm_arch` | Realm arch | P0 | One arch mesh, six tints, the live `Haven.PORTALS` mouths. Rootvault `(64, 196, 96)` and Heartwood `(214, 140, 64)` are open. Tidecrypt `(36, 96, 140)`, Emberforge edge `(255, 150, 40)`, Frostveil `(186, 228, 255)`, and Void Rift edge `(150, 70, 220)` read closed. Not the plaza proposal's Sunken `(50, 150, 255)`. |
 | `bridge` | Bridge | P0 | Stone deck off the plaza. No rails that block the camera. |
-| `waystone` | Waystone | P0 | Gray-lilac pillar and a small glass crystal. Six placements. They do not collide. Soft crystal glow. |
+| `waystone` | Waystone | P0 | Gray-lilac pillar and a small glass crystal. Five placements (`Travel.DESTINATIONS`: spawn, forge, armory, pets, market). They do not collide. Soft crystal glow. |
 | `townsfolk` | Townsfolk | P0 | A simple walker, cloth and a plain flag. No face detail. Not a class. |
 | `bird` | Haven bird | P0 | A small dark bird, circle path. Not a pet. |
 | `armory_stand` | Armory stand | P0 | Wood board 8×6×2. This is the live roll stand. The onboarding doc calls it the Roll Shrine. One mesh, either name. |
