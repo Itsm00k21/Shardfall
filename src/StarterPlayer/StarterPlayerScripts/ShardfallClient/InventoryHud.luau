@@ -30,6 +30,7 @@ local Rarities = require(Shared:WaitForChild("Rarities"))
 local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 local Schema = require(Shared:WaitForChild("Schema"))
 local Stars = require(Shared:WaitForChild("Stars"))
+local TextFit = require(Shared:WaitForChild("TextFit"))
 
 local InventoryHud = {}
 
@@ -605,6 +606,25 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		return order
 	end
 
+	-- Access text scale. BaseText keeps the size the label was built at.
+	local bagScale: any = 1
+
+	local function fitBagText()
+		for _, desc in ipairs(screen:GetDescendants()) do
+			if desc:GetAttribute("SkipTextScale") == true then
+				continue
+			end
+			if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+				local base = desc:GetAttribute("BaseText")
+				if type(base) ~= "number" then
+					base = desc.TextSize
+					desc:SetAttribute("BaseText", base)
+				end
+				desc.TextSize = TextFit.px(base, bagScale)
+			end
+		end
+	end
+
 	local render: () -> ()
 	local paintFilters: () -> ()
 
@@ -631,6 +651,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local profile = latest
 		if type(profile) ~= "table" then
 			capacity.Text = ""
+			fitBagText()
 			return
 		end
 		local used = Schema.countItems(profile)
@@ -770,6 +791,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			else
 				label(detail, "Select an item.", order, COLORS.muted, 14)
 			end
+			fitBagText()
 			return
 		end
 		local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
@@ -1072,6 +1094,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				end
 			end
 		end
+		fitBagText()
 	end
 
 	for index, tab in ipairs(InventoryView.TABS) do
@@ -1332,9 +1355,20 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.setProfile(profile: any)
 		latest = profile
+		bagScale = 1
+		if type(profile) == "table" then
+			local settings = profile.uiSettings
+			if type(settings) == "table" then
+				local access = settings.access
+				if type(access) == "table" and access.textScale ~= nil then
+					bagScale = access.textScale
+				end
+			end
+		end
 		if isOpen then
 			render()
 		end
+		fitBagText()
 	end
 
 	function controller.toggle()
