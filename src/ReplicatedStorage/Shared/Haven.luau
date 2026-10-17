@@ -14,6 +14,9 @@
 	crescent south of spawn. The old realm shelf is gone.
 ]]
 
+local Dungeons = require("./Dungeons")
+local Raids = require("./Raids")
+
 local Haven = {}
 
 Haven.WALK_SPEED = 16
@@ -156,8 +159,9 @@ Haven.DISTRICTS = {
 } :: { Place }
 
 -- Left to right from the pad: Rootvault, then each later gate to the right.
--- Rootvault and Heartwood are live prompts. Heartwood is painted shut until 15.
--- The other four stay sealed. `color` is the mouth accent the M1 light already uses.
+-- Open versus sealed is Haven.gateOpen: implemented dungeons, plus the
+-- Heartwood raid. Rootvault and Heartwood are open. The other four stay
+-- sealed. `color` is the mouth accent the light already uses.
 Haven.PORTALS = {
 	{
 		id = "rootvault",
@@ -183,7 +187,7 @@ Haven.PORTALS = {
 		z = 106.3,
 		bearing = 12,
 		open = true,
-		sealed = true,
+		sealed = false,
 		dungeonId = "heartwood",
 		color = { 214, 140, 64 },
 		body = { 92, 140, 72 },
@@ -304,9 +308,44 @@ function Haven.portal(id: string): Place?
 	return nil
 end
 
--- The inlay lights only for a gate that is not painted shut.
+-- Open when the dungeon is implemented (an endless arena is not a gate)
+-- or this arch is the Heartwood raid. The painted `sealed` flag is not read.
+function Haven.gateOpen(portal: Place): boolean
+	local dungeonId = portal.dungeonId
+	if type(dungeonId) == "string" then
+		local dungeon = Dungeons.get(dungeonId)
+		if dungeon ~= nil and dungeon.implemented == true and dungeon.endless ~= true then
+			return true
+		end
+	end
+	if portal.id == Dungeons.HEARTWOOD_ID and Raids.difficulty("story") ~= nil then
+		return true
+	end
+	return false
+end
+
+-- The inlay and the court ring light for an open gate.
 function Haven.gateLit(portal: Place): boolean
-	return portal.sealed ~= true
+	return Haven.gateOpen(portal)
+end
+
+-- An open plate names the level and the party. A sealed plate keeps its line.
+function Haven.gatePlate(portal: Place): string
+	local line = portal.subline
+	if Haven.gateOpen(portal) then
+		if type(line) == "string" and string.find(line, "Sealed", 1, true) == nil then
+			return line
+		end
+		local level = portal.level
+		if type(level) ~= "number" then
+			level = 1
+		end
+		return string.format("Lv %d", level)
+	end
+	if type(line) == "string" then
+		return line
+	end
+	return "Sealed"
 end
 
 -- Point on the court rim (a circle around spawn) toward a district.

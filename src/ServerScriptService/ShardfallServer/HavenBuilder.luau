@@ -10,7 +10,8 @@
 	each arch and its name plate. Milestone 3 puts one shadowless light in
 	each mouth, a quiet emitter under the forge rate cap, and a flat court
 	ring. An open mouth pulses. A sealed mouth stays dim until someone
-	stands close. Global Lighting is left on the day cycle. No new sound id.
+	stands close. Open versus sealed follows Haven.gateOpen. Global Lighting
+	is left on the day cycle. No new sound id.
 
 	StreamingEnabled cannot be set from a script. It lives on Workspace in
 	default.project.json. The hub model is Persistent so the islands stay
@@ -1672,7 +1673,9 @@ local function buildPortals(parent: Instance)
 		arch.Name = portal.id
 		arch.Parent = shelf
 		arch:SetAttribute("GateDress", dress)
-		arch:SetAttribute("GateSealed", portal.sealed == true)
+		local open = Haven.gateOpen(portal)
+		local sealed = not open
+		arch:SetAttribute("GateSealed", sealed)
 		if type(portal.dungeonId) == "string" then
 			arch:SetAttribute("DungeonId", portal.dungeonId)
 		end
@@ -1716,7 +1719,6 @@ local function buildPortals(parent: Instance)
 			Enum.Material.Neon,
 			false
 		)
-		local sealed = portal.sealed == true
 		local restTransparency = if sealed then 0.75 else 0.35
 		fill.Transparency = restTransparency
 		fill.CanTouch = false
@@ -1891,7 +1893,7 @@ local function buildPortals(parent: Instance)
 				emitters = glowEmitters,
 			})
 		end
-		gatePlate(arch, at(0, leftH + lintelSize.Y + 2.6, 0), portal.name, portal.subline or portal.name)
+		gatePlate(arch, at(0, leftH + lintelSize.Y + 2.6, 0), portal.name, Haven.gatePlate(portal))
 	end
 
 	-- Flat ring on the court. Lit segments point at open gates. The top

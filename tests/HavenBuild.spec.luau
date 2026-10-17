@@ -1352,7 +1352,7 @@ describe("HavenBuilder", function()
 				expect(prompt.ActionText).toEqual("Finder")
 				expect(prompt.ObjectText).toEqual("Opens at level 15.")
 				expect(arch:FindFirstChild("EnterPad")).toBeNil()
-				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
+				expect(arch:FindFirstChild("Seal")).toBeNil()
 			else
 				expect(prompt:GetAttribute("HavenAction")).toEqual("soon")
 				expect(prompt:GetAttribute("HavenMessage")).toEqual(portal.message)
@@ -1697,12 +1697,16 @@ describe("HavenBuilder", function()
 			if glow == nil then
 				error(portal.id .. " has no mouth", 2)
 			end
-			if portal.sealed == true then
+			if not Haven.gateOpen(portal) then
 				expect(glow.Transparency).toEqual(0.75)
 				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
 			else
 				expect(glow.Transparency).toEqual(0.35)
 				expect(arch:FindFirstChild("Seal")).toBeNil()
+				local color = portal.color
+				expect(glow.Color.R).toEqual(color[1])
+				expect(glow.Color.G).toEqual(color[2])
+				expect(glow.Color.B).toEqual(color[3])
 			end
 			local pillar = arch:FindFirstChild("PillarL")
 			if portal.dress == "roots" or portal.dress == "bark" then
@@ -1770,7 +1774,12 @@ describe("HavenBuilder", function()
 		end)
 		expect(inlays[1]:GetAttribute("GateId")).toEqual("rootvault")
 		expect(inlays[1]:GetAttribute("GateLit")).toEqual(true)
-		for index = 2, #inlays do
+		expect(inlays[2]:GetAttribute("GateId")).toEqual("heartwood")
+		expect(inlays[2]:GetAttribute("GateLit")).toEqual(true)
+		expect(inlays[2].Color.R).toEqual(214)
+		expect(inlays[2].Color.G).toEqual(140)
+		expect(inlays[2].Color.B).toEqual(64)
+		for index = 3, #inlays do
 			expect(inlays[index]:GetAttribute("GateLit")).toEqual(false)
 		end
 
@@ -1911,7 +1920,7 @@ describe("HavenBuilder", function()
 			if glow == nil or glow.Material.__enum ~= "Enum.Material.Neon" or glow.Transparency >= 1 then
 				error(portal.id .. " neon mouth does not read", 2)
 			end
-			if portal.sealed == true then
+			if not Haven.gateOpen(portal) then
 				expect(light.Enabled).toEqual(false)
 				expect(light.Brightness).toEqual(0)
 				expect(glow.Transparency).toEqual(0.75)
@@ -2003,17 +2012,23 @@ describe("HavenBuilder", function()
 				end
 				if child:GetAttribute("GateLit") == true then
 					litGuides += 1
-					if child:GetAttribute("GateId") ~= "rootvault" or child.Transparency >= 0.5 then
-						error("open court guide is not the bright rootvault mark", 2)
+					local gateId = child:GetAttribute("GateId")
+					local marked = if type(gateId) == "string" then Haven.portal(gateId) else nil
+					if marked == nil or Haven.gateOpen(marked) ~= true or child.Transparency >= 0.5 then
+						error("open court guide is not a bright live-gate mark", 2)
+					end
+					local color = marked.color
+					if child.Color.R ~= color[1] or child.Color.G ~= color[2] or child.Color.B ~= color[3] then
+						error(tostring(gateId) .. " court guide is not that gate's color", 2)
 					end
 				elseif child.Transparency < 0.8 then
 					error("sealed court guide is too bright", 2)
 				end
 			end
 		end
-		-- Six ring ticks, plus one path toward the only open gate.
-		expect(guides).toEqual(7)
-		expect(litGuides).toEqual(2)
+		-- Six ring ticks, plus one path toward each open gate.
+		expect(guides).toEqual(8)
+		expect(litGuides).toEqual(4)
 
 		for i = 1, #promptHosts do
 			for j = i + 1, #promptHosts do
@@ -2064,8 +2079,13 @@ describe("HavenBuilder", function()
 		local heart = findNamed(hub, "heartwood")
 		local heartGlow = heart:FindFirstChild("Glow")
 		local heartLight = heartGlow:FindFirstChild("PointLight")
-		expect(heartLight.Enabled).toEqual(false)
-		expect(heart:FindFirstChild("Seal") ~= nil).toBeTrue()
+		expect(heartLight.Enabled).toEqual(true)
+		requireNear(heartLight.Brightness, 0.425, 0.002, "heartwood pulse")
+		expect(heartGlow.Transparency).toEqual(0.35)
+		expect(heartGlow.Color.R).toEqual(214)
+		expect(heartGlow.Color.G).toEqual(140)
+		expect(heartGlow.Color.B).toEqual(64)
+		expect(heart:FindFirstChild("Seal")).toBeNil()
 		local mouth = rootGlow.CFrame.Position
 		builder.stepGates(0, {
 			{ x = mouth.X, z = mouth.Z, reduced = false },
@@ -2082,8 +2102,86 @@ describe("HavenBuilder", function()
 			{ x = heartAt.X, z = heartAt.Z + 6, reduced = false },
 		})
 		expect(heartLight.Enabled).toEqual(true)
-		expect(heartLight.Brightness).toEqual(builder.SEALED_NEAR)
-		expect(heart:FindFirstChild("Seal") ~= nil).toBeTrue()
-		expect(heartGlow.Transparency > 0.6).toBeTrue()
+		requireNear(heartLight.Brightness, 0.605, 0.002, "heartwood approach")
+		requireNear(heartGlow.Transparency, 0.2, 0.002, "heartwood approach neon")
+		expect(heart:FindFirstChild("Seal")).toBeNil()
+		local tide = findNamed(hub, "tidecrypt")
+		local tideGlow = tide:FindFirstChild("Glow")
+		local tideLight = tideGlow:FindFirstChild("PointLight")
+		local tideAt = tideGlow.CFrame.Position
+		builder.stepGates(0, {
+			{ x = tideAt.X, z = tideAt.Z + 6, reduced = false },
+		})
+		expect(tideLight.Enabled).toEqual(true)
+		expect(tideLight.Brightness).toEqual(builder.SEALED_NEAR)
+		expect(tide:FindFirstChild("Seal") ~= nil).toBeTrue()
+		expect(tideGlow.Transparency > 0.6).toBeTrue()
+	end)
+
+	it("matches each gate's seal and court ring to its live prompt", function()
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+		local ring = findNamed(hub, "CourtRing")
+		if ring == nil then
+			error("court ring is missing", 2)
+		end
+		for _, portal in ipairs(Haven.PORTALS) do
+			local arch = findNamed(hub, portal.id)
+			local glow = arch:FindFirstChild("EnterPad") or arch:FindFirstChild("Glow")
+			if glow == nil then
+				error(portal.id .. " has no mouth", 2)
+			end
+			local prompt = nil
+			for _, child in ipairs(glow:GetDescendants()) do
+				if child:IsA("ProximityPrompt") and child.Parent == glow then
+					prompt = child
+				end
+			end
+			if prompt == nil then
+				error(portal.id .. " mouth has no prompt", 2)
+			end
+			local live = prompt:GetAttribute("HavenAction") ~= "soon"
+			local seal = arch:FindFirstChild("Seal")
+			local segment = false
+			local litSegment = false
+			for _, child in ipairs(ring:GetDescendants()) do
+				if child.Name == "CourtGuide" and child:GetAttribute("GateId") == portal.id then
+					segment = true
+					if child:GetAttribute("GateLit") == true and child.Transparency < 0.5 then
+						litSegment = true
+					end
+				end
+			end
+			local plate = nil
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("TextLabel") and child.Name == "Subline" then
+					plate = child.Text
+				end
+			end
+			if live then
+				if seal ~= nil then
+					error(portal.id .. " live prompt still has a seal bar", 2)
+				end
+				if not litSegment then
+					error(portal.id .. " live prompt has no lit ring segment", 2)
+				end
+				if type(plate) ~= "string" or string.find(plate, "Sealed", 1, true) ~= nil then
+					error(portal.id .. " name plate says Sealed", 2)
+				end
+				expect(string.find(plate, tostring(portal.level), 1, true) ~= nil).toBeTrue()
+			else
+				if seal == nil or not segment then
+					error(portal.id .. " sealed prompt is missing its seal or ring segment", 2)
+				end
+				if litSegment then
+					error(portal.id .. " sealed prompt lights a ring segment", 2)
+				end
+				if type(plate) ~= "string" or string.find(plate, "Sealed", 1, true) == nil then
+					error(portal.id .. " sealed name plate dropped Sealed", 2)
+				end
+			end
+		end
 	end)
 end)
