@@ -22,8 +22,12 @@ local tier = "med"
 local intensity = 1
 local chain = 0
 local lastSwing = 0
+local swingStart = -1
 local weapon: BasePart? = nil
+local grip: Motor6D? = nil
 local tracks: { [string]: AnimationTrack } = {}
+
+local REST_GRIP = CFrame.new(0, -0.2, -1.2)
 
 local function hand(character: Model): BasePart?
 	local found = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
@@ -55,12 +59,16 @@ local function holdWeapon(character: Model)
 	blade.CanQuery = false
 	blade.CanTouch = false
 	blade.Massless = true
-	blade.CFrame = limb.CFrame * CFrame.new(0, -0.2, -1.2)
+	blade.CFrame = limb.CFrame * REST_GRIP
 	blade.Parent = character
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = limb
-	weld.Part1 = blade
-	weld.Parent = blade
+	local motor = Instance.new("Motor6D")
+	motor.Name = "WeaponGrip"
+	motor.Part0 = limb
+	motor.Part1 = blade
+	motor.C0 = REST_GRIP
+	motor.C1 = CFrame.new()
+	motor.Parent = limb
+	grip = motor
 	weapon = blade
 end
 
@@ -95,7 +103,7 @@ local function playClip(character: Model, name: string): boolean
 	return true
 end
 
-local function slash(character: Model, sparks: number)
+local function slash(_character: Model, sparks: number)
 	local blade = weapon
 	if blade == nil or sparks <= 0 then
 		return
@@ -132,18 +140,6 @@ local function slash(character: Model, sparks: number)
 			trail:Destroy()
 		end
 	end)
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if root ~= nil and root:IsA("BasePart") and blade.Parent ~= nil then
-		blade.CFrame = root.CFrame
-			* CFrame.new(1.1, 1.2, -1.4)
-			* CFrame.Angles(0, math.rad(70), math.rad(80))
-		task.delay(0.16, function()
-			local limb = hand(character)
-			if limb ~= nil and blade.Parent ~= nil then
-				blade.CFrame = limb.CFrame * CFrame.new(0, -0.2, -1.2)
-			end
-		end)
-	end
 end
 
 local function mark(name: string, seconds: number)
@@ -183,18 +179,16 @@ function CombatStage.swing()
 	chain = step.chain
 	lastSwing = now
 	local clip = CombatFeel.attackAnim(step.index)
-	if not playClip(character, clip) then
-		slash(
-			character,
-			CombatFeel.vfxBudget(
-				tier,
-				intensity,
-				CombatFeel.juice(if step.heavy then "heavy" else "light")
-			)
-		)
-	else
-		slash(character, CombatFeel.vfxBudget(tier, intensity, CombatFeel.juice("light")))
+	swingStart = now
+	local sparks = CombatFeel.vfxBudget(
+		tier,
+		intensity,
+		CombatFeel.juice(if step.heavy then "heavy" else "light")
+	)
+	if playClip(character, clip) then
+		sparks = CombatFeel.vfxBudget(tier, intensity, CombatFeel.juice("light"))
 	end
+	slash(character, sparks)
 	mark("Attack", 0.35)
 end
 
@@ -218,6 +212,15 @@ end
 
 function CombatStage.watchCamera()
 	RunService.RenderStepped:Connect(function()
+		local motor = grip
+		if motor ~= nil and motor.Parent ~= nil then
+			local alpha = 0
+			if swingStart >= 0 then
+				alpha = CombatFeel.swingAlpha(os.clock() - swingStart, CombatFeel.SWING_SECONDS)
+			end
+			local pitch = -CombatFeel.SWING_PITCH * alpha
+			motor.C0 = REST_GRIP * CFrame.Angles(math.rad(pitch), 0, math.rad(50 * alpha))
+		end
 		local player = Players.LocalPlayer
 		local character = if player ~= nil then player.Character else nil
 		local camera = workspace.CurrentCamera

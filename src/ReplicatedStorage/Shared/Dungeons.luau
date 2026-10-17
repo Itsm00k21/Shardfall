@@ -255,9 +255,15 @@ Dungeons.ENEMIES = {
 		id = "grandmother_gnarl",
 		name = "Grandmother Gnarl",
 		maxHealth = 220,
-		damage = 18,
+		-- Level 2, starter bar (CombatMath.BASE_HEALTH 100, little defense).
+		-- Was 18: six failed slams deleted the bar. 10 is ten failed slams.
+		-- Walking out of the red square deals none of this.
+		damage = 10,
 		defense = 0,
-		attackSpeed = 0.25,
+		-- Cooldown after a slam lands is 1/attackSpeed. Was 0.25 (4.0s).
+		-- 0.20 is 5.0s, and the boss windup is CombatFeel.TELEGRAPH_BOSS
+		-- (1.8s), so the next red square does not open on top of the last.
+		attackSpeed = 0.2,
 		moveSpeed = 6,
 		range = 16,
 		style = "melee",
@@ -269,8 +275,10 @@ Dungeons.ENEMIES = {
 		phase2At = 0.5,
 		weakSeconds = 1.6,
 		armoredMultiplier = 0.45,
-		fogInterval = 4,
-		fogDamage = 14,
+		-- Was 4s / 14 damage, which stacked with the slam on a fresh bar.
+		-- 7s / 8, and Rootvault.sameBeat still keeps fog off a slam heartbeat.
+		fogInterval = 7,
+		fogDamage = 8,
 		safeRadius = 8,
 		color = { 36, 92, 58 },
 		size = { 8, 9, 7 },
@@ -406,6 +414,23 @@ end
 
 function Dungeons.enemy(kind: string): EnemyDef?
 	return Dungeons.ENEMIES[kind]
+end
+
+-- Defeat copy follows the realm. Rootvault and Heartwood are Verdant Wilds,
+-- so a forest clear does not say Rockdust or name the dungeon as if it
+-- were the hazard. Endless keeps the wave line.
+function Dungeons.defeatLine(dungeon: DungeonDef?): string
+	if dungeon ~= nil and dungeon.endless == true then
+		return "The waves stop when you fall. Rewards from cleared waves are still yours."
+	end
+	local realm = if dungeon ~= nil and type(dungeon.realm) == "string" then dungeon.realm else ""
+	if realm == "Verdant Wilds" then
+		return "The wilds push you out. Materials from earlier clears are still yours."
+	end
+	if realm ~= "" then
+		return realm .. " pushes you out. Materials from earlier clears are still yours."
+	end
+	return "You fall. Materials from earlier clears are still yours."
 end
 
 function Dungeons.lightLayout(

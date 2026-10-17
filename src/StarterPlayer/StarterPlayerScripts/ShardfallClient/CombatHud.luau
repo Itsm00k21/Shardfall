@@ -16,9 +16,11 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
+local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
@@ -265,14 +267,51 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	cueLabel.AnchorPoint = Vector2.new(0, 0)
 	cueLabel.Position = UDim2.fromOffset(16, 72)
 	cueLabel.Size = UDim2.fromOffset(280, 36)
-	cueLabel.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
-	cueLabel.BackgroundTransparency = 0.15
-	cueLabel.Font = Enum.Font.BuilderSansBold
-	cueLabel.TextSize = 18
-	cueLabel.TextColor3 = Color3.fromRGB(255, 80, 70)
+	cueLabel.BackgroundTransparency = 1
 	cueLabel.Text = ""
 	cueLabel.Visible = false
 	cueLabel.Parent = screen
+
+	local cueEdge = Instance.new("Frame")
+	cueEdge.Name = "CueEdge"
+	cueEdge.Size = UDim2.fromScale(1, 1)
+	cueEdge.BackgroundTransparency = 1
+	cueEdge.BorderSizePixel = 0
+	cueEdge.Active = false
+	cueEdge.Visible = false
+	cueEdge.ZIndex = 2
+	cueEdge.Parent = screen
+	local cueStroke = Instance.new("UIStroke")
+	cueStroke.Name = "Pulse"
+	cueStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	cueStroke.Thickness = 5
+	cueStroke.Color = Color3.fromRGB(220, 64, 56)
+	cueStroke.Transparency = 0.35
+	cueStroke.Parent = cueEdge
+
+	local combatHint = Instance.new("TextLabel")
+	combatHint.Name = "CombatHint"
+	combatHint.AnchorPoint = Vector2.new(0, 1)
+	combatHint.Position = UDim2.new(0, 16, 1, -120)
+	combatHint.Size = UDim2.fromOffset(280, 36)
+	combatHint.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	combatHint.BackgroundTransparency = 0.15
+	combatHint.BorderSizePixel = 0
+	combatHint.Font = Enum.Font.BuilderSansBold
+	combatHint.TextSize = 16
+	combatHint.TextColor3 = Color3.fromRGB(110, 210, 140)
+	combatHint.TextXAlignment = Enum.TextXAlignment.Left
+	combatHint.Text = ""
+	combatHint.Visible = false
+	combatHint.ZIndex = 4
+	combatHint.Parent = screen
+	local hintCorner = Instance.new("UICorner")
+	hintCorner.CornerRadius = UDim.new(0, 8)
+	hintCorner.Parent = combatHint
+	local hintPad = Instance.new("UIPadding")
+	hintPad.PaddingLeft = UDim.new(0, 10)
+	hintPad.PaddingRight = UDim.new(0, 10)
+	hintPad.Parent = combatHint
 
 	local flash = Instance.new("Frame")
 	flash.Name = "HitFlash"
@@ -291,6 +330,9 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		local cue = ShellLayout.cueRect(vx, vy)
 		cueLabel.Position = UDim2.fromOffset(cue.x, cue.y)
 		cueLabel.Size = UDim2.fromOffset(cue.w, cue.h)
+		local bar = ShellLayout.actionBar(vx, vy)
+		combatHint.Position = UDim2.fromOffset(16, math.max(96, bar.y - 12))
+		combatHint.Size = UDim2.fromOffset(math.min(320, math.max(160, vx - 32)), 36)
 	end
 	placeChrome()
 	local chromeCamera = workspace.CurrentCamera
@@ -301,6 +343,34 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 
 	local shakeUntil = 0
 	local flashUntil = 0
+	local cuesSeen = 0
+	local cueUntil = 0
+	local hintToken = 0
+	local function showCombatHint(text: string)
+		hintToken += 1
+		local token = hintToken
+		local shown = if type(text) == "string" then text else ""
+		combatHint.Text = shown
+		combatHint.TextTransparency = 0
+		combatHint.BackgroundTransparency = 0.15
+		combatHint.Visible = shown ~= ""
+		if shown == "" then
+			return
+		end
+		local fade = TweenService:Create(
+			combatHint,
+			TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 1.6),
+			{ TextTransparency = 1, BackgroundTransparency = 1 }
+		)
+		fade.Completed:Connect(function()
+			if token ~= hintToken then
+				return
+			end
+			combatHint.Visible = false
+			combatHint.Text = ""
+		end)
+		fade:Play()
+	end
 	local hitstopUntil = 0
 	local downHold = false
 	local latchedHp = 100
@@ -317,6 +387,11 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		local bar = hrp:FindFirstChild("ShardfallBar")
 		if bar == nil then
 			return
+		end
+		-- The shell already shows this player's HP. Other clients still
+		-- see the server bar for party members and enemies.
+		if bar:IsA("BillboardGui") then
+			bar.Enabled = false
 		end
 		local label = bar:FindFirstChild("Vitals")
 		if label == nil then
@@ -558,14 +633,22 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			floater(Vector3.new(x, y, z), text, color, numberSize)
 			playCue("hit")
 		elseif payload.kind == "telegraph" then
-			local verb = if type(payload.verb) == "string" then payload.verb else "dodge"
 			local colorName = if type(payload.color) == "string" then payload.color else "red"
-			cueLabel.Text = string.upper(colorName) .. "  " .. verb
-			cueLabel.Visible = true
+			cueLabel.Text = ""
+			cueLabel.Visible = false
 			playCue(colorName)
-			task.delay(numberFrom(payload, "seconds") or 0.8, function()
-				cueLabel.Visible = false
-			end)
+			local lesson = cuesSeen
+			cuesSeen += 1
+			if CombatFeel.teachCue(lesson) then
+				local rgb = CombatFeel.TELEGRAPHS[colorName]
+				if rgb ~= nil then
+					cueStroke.Color = Color3.fromRGB(rgb.rgb[1], rgb.rgb[2], rgb.rgb[3])
+				end
+				cueUntil = os.clock() + (numberFrom(payload, "seconds") or CombatFeel.TELEGRAPH_NORMAL)
+				cueEdge.Visible = true
+			else
+				cueEdge.Visible = false
+			end
 		elseif payload.kind == "dodge" then
 			local charges = numberFrom(payload, "charges")
 			if charges ~= nil and callbacks.onDodgeCharges ~= nil then
@@ -625,11 +708,19 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		elseif payload.kind == "run" then
 			callbacks.onRun(payload.run)
 			if type(payload.text) == "string" and payload.text ~= "" then
-				callbacks.onHint(payload.text)
+				if CombatFeel.hintOnBanner(payload.text) then
+					callbacks.onHint(payload.text)
+				else
+					showCombatHint(payload.text)
+				end
 			end
 		elseif payload.kind == "hint" then
 			if type(payload.text) == "string" then
-				callbacks.onHint(payload.text)
+				if CombatFeel.hintOnBanner(payload.text) then
+					callbacks.onHint(payload.text)
+				else
+					showCombatHint(payload.text)
+				end
 			end
 		elseif payload.kind == "victory" then
 			local title = if type(payload.dungeonName) == "string"
@@ -649,6 +740,8 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			-- the card closes so the fill and the text agree.
 			downHold = true
 			drawHp()
+			showCombatHint("")
+			cueEdge.Visible = false
 			showCard(
 				"Defeated",
 				text,
@@ -697,6 +790,14 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	end
 	RunService.RenderStepped:Connect(function()
 		local now = os.clock()
+		if cueEdge.Visible then
+			if now >= cueUntil then
+				cueEdge.Visible = false
+			else
+				local pulse = 0.25 + 0.75 * math.abs(math.sin(now * 8))
+				cueStroke.Transparency = 1 - pulse
+			end
+		end
 		if now < flashUntil then
 			flash.BackgroundTransparency = 0.72
 		else

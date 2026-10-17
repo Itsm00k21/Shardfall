@@ -37,6 +37,8 @@ Rootvault.SHRINES = { "might", "ward", "haste" }
 Rootvault.TREASURE_GOLD = 200
 Rootvault.ELITE_HP = 1.6
 Rootvault.ELITE_DAMAGE = 1.35
+-- Door buttons cross-fade when the offer changes. Same offer does not rebuild.
+Rootvault.DOOR_FADE = 0.18
 Rootvault.PHASE2 = 0.6
 Rootvault.PHASE3 = 0.25
 
@@ -98,6 +100,20 @@ function Rootvault.offer(roomIndex: number, roomCount: number, roll: number)
 		second = pool[((roll + 1) % #pool) + 1]
 	end
 	return { Rootvault.DOORS[first], Rootvault.DOORS[second] }
+end
+
+function Rootvault.doorSignature(doors: any): string
+	if type(doors) ~= "table" then
+		return ""
+	end
+	local ids = {}
+	for _, door in ipairs(doors) do
+		if type(door) == "table" and type(door.id) == "string" then
+			local name = if type(door.name) == "string" then door.name else door.id
+			table.insert(ids, door.id .. ":" .. name)
+		end
+	end
+	return table.concat(ids, "|")
 end
 
 function Rootvault.shrine(roll: number): string

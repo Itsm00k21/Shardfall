@@ -14,10 +14,11 @@
 	ItemBases has no Accessory row. verdant_ring is a combo flag, not
 	gear, so the ring slot stays empty.
 
-	TODO(G-078): Kevin picks the first pet from docs/content/first_pet.md
-	(shardjaw, thorn_lantern, or glass_kestrel). Cool and useful, not
-	cute. Do not mint moss_hare, acorn_newt, mossback, or tide_sprite.
-	The pet slot stays empty until that pick. Do not hatch a pet.
+	The first companion is Shardjaw. A new accepted grant adds one
+	companion when that species is not already on the profile.
+	Existing companions stay, including a returning mossback. This
+	does not hatch, and it does not put a pet in the inventory.
+	Cute ids stay banned.
 ]]
 
 local FirstSession = require("./FirstSession")
@@ -128,6 +129,36 @@ local function catalogRow(templateId: string): any
 	return base
 end
 
+local function shardjawRecord()
+	return {
+		species = "shardjaw",
+		name = "Shardjaw",
+		role = "Gatherer",
+		rarity = "Common",
+		personality = "Grumpy",
+		level = 1,
+		xp = 0,
+		bond = 1,
+		affinity = 1,
+		favorite = false,
+		colors = { primary = "slate", secondary = "shard", glow = "none" },
+		journal = { "First companion" },
+		perk = "auto_collect",
+	}
+end
+
+local function ownsShardjaw(data: any): boolean
+	if type(data.companions) ~= "table" then
+		return false
+	end
+	for _, pet in pairs(data.companions) do
+		if type(pet) == "table" and pet.species == "shardjaw" then
+			return true
+		end
+	end
+	return false
+end
+
 local function mint(templateId: string, uid: string, sockets: number): any?
 	local base = catalogRow(templateId)
 	if base == nil then
@@ -163,7 +194,12 @@ function FirstSessionKit.grant(data: any)
 	elseif weapon.rarity ~= "Rare" then
 		return refused(FirstSession.ERRORS.rules)
 	end
-	if armor == nil or armor.kind ~= "Armor" or armor.rarity ~= "Common" or armor.slot ~= "chest" then
+	if
+		armor == nil
+		or armor.kind ~= "Armor"
+		or armor.rarity ~= "Common"
+		or armor.slot ~= "chest"
+	then
 		return refused(FirstSession.ERRORS.rules)
 	end
 	local record = FirstSessionKit.normalize(data.firstSession)
@@ -230,6 +266,14 @@ function FirstSessionKit.grant(data: any)
 		returning = skipped.state.returning,
 		granted = skipped.state.granted,
 	})
+	local petId = nil
+	if not ownsShardjaw(data) then
+		if type(data.companions) ~= "table" then
+			data.companions = {}
+		end
+		table.insert(data.companions, shardjawRecord())
+		petId = "shardjaw"
+	end
 	return {
 		ok = true,
 		accepted = true,
@@ -237,7 +281,7 @@ function FirstSessionKit.grant(data: any)
 		weaponId = if open.chest == true then weaponId else nil,
 		armorId = if open.miniboss == true then FirstSessionKit.ARMOR_ID else nil,
 		ringId = FirstSessionKit.RING_ID,
-		petId = nil,
+		petId = petId,
 	}
 end
 

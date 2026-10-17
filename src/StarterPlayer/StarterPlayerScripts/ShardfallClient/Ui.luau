@@ -259,9 +259,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local function showBanner(text: string, kind: string, hold: boolean?)
 		bannerToken += 1
 		local token = bannerToken
-		local changed = banner.Text ~= text or not banner.Visible
-		banner.Text = text
-		banner.Visible = text ~= ""
+		local shown = if type(text) == "string" then string.match(text, "^%s*(.-)%s*$") or "" else ""
+		local changed = banner.Text ~= shown or banner.Visible ~= (shown ~= "")
+		banner.Text = shown
+		banner.Visible = shown ~= ""
+		if shown == "" then
+			return
+		end
 		local background = COLORS.gold
 		local ink = COLORS.ink
 		if kind == "error" then
@@ -273,14 +277,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		banner.BackgroundColor3 = background
 		banner.TextColor3 = ink
 		applyBannerFit()
-		if text == "" or hold == true then
-			if text ~= "" and changed then
-				print("[Toast] shown " .. text)
+		if hold == true then
+			if changed then
+				print("[Toast] shown " .. shown)
 			end
 			return
 		end
 		if changed then
-			print("[Toast] shown " .. text)
+			print("[Toast] shown " .. shown)
 		end
 		task.delay(ShellLayout.BANNER_SECONDS, function()
 			if token ~= bannerToken then

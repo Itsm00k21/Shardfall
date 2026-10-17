@@ -839,6 +839,7 @@ function ModelFactory.buildEnemy(
 	local root = Instance.new("Part")
 	root.Name = if displayName ~= "" then displayName else kind
 	root.Size = rootSize
+	root.Shape = Enum.PartType.Block
 	root.CFrame = rootCFrame
 	root.Anchored = true
 	root.CanCollide = false
@@ -846,9 +847,15 @@ function ModelFactory.buildEnemy(
 	root.CanQuery = true
 	root.CastShadow = false
 	root.Massless = true
+	-- Hit volume. Transparency 1, and it is not the Highlight adornee.
+	-- Visuals live on Body so a rim light cannot draw this block.
 	root.Transparency = 1
+	root:SetAttribute("ShardfallHitbox", true)
 	root.Parent = model
 	model.PrimaryPart = root
+	local body = Instance.new("Model")
+	body.Name = "Body"
+	body.Parent = model
 	local foot = -rootSize.Y / 2
 	for _, source in ipairs(laid) do
 		local ox = source.offset[1]
@@ -856,7 +863,7 @@ function ModelFactory.buildEnemy(
 		local oz = source.offset[3]
 		local localCf = CFrame.new(ox, oy, oz)
 			* CFrame.Angles(source.rotation[1], source.rotation[2], source.rotation[3])
-		local visual = spawnPiece(root, source, root.CFrame * localCf, true)
+		local visual = spawnPiece(body, source, root.CFrame * localCf, true)
 		visual:SetAttribute("Ox", ox)
 		visual:SetAttribute("Oy", oy)
 		visual:SetAttribute("Oz", oz)
@@ -884,6 +891,37 @@ function ModelFactory.buildEnemy(
 	return root
 end
 
+-- Highlight and hit-flash adorn this, never the transparent hit volume.
+function ModelFactory.adorn(root: BasePart): Instance
+	local model = root.Parent
+	if model ~= nil then
+		local body = model:FindFirstChild("Body")
+		if body ~= nil then
+			return body
+		end
+	end
+	return root
+end
+
+local function visualParts(root: BasePart): { BasePart }
+	local scope: Instance = ModelFactory.adorn(root)
+	local parts = {}
+	if scope == root then
+		for _, child in ipairs(root:GetChildren()) do
+			if child:IsA("BasePart") then
+				table.insert(parts, child)
+			end
+		end
+		return parts
+	end
+	for _, descendant in ipairs(scope:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(parts, descendant)
+		end
+	end
+	return parts
+end
+
 function ModelFactory.step(root: BasePart, time: number, moving: boolean)
 	local kind = root.Parent
 	local kindName = if kind ~= nil then kind.Name else ""
@@ -896,7 +934,7 @@ function ModelFactory.step(root: BasePart, time: number, moving: boolean)
 		root.CanCollide = false
 		root.CanTouch = false
 	end
-	for _, child in ipairs(root:GetChildren()) do
+	for _, child in ipairs(visualParts(root)) do
 		if child:IsA("BasePart") then
 			if child.Anchored ~= true or child.CanCollide == true or child.CanTouch == true then
 				if child:GetAttribute("ShardfallLoose") ~= true then
@@ -943,8 +981,7 @@ function ModelFactory.flash(root: BasePart)
 	highlight.OutlineColor = Color3.fromRGB(255, 220, 140)
 	highlight.FillTransparency = 0.35
 	highlight.OutlineTransparency = 0.1
-	local host = root.Parent
-	local adorn: Instance = if host ~= nil and host:IsA("Model") then host else root
+	local adorn = ModelFactory.adorn(root)
 	highlight.Adornee = adorn
 	highlight.Parent = adorn
 	task.delay(0.12, function()
@@ -955,7 +992,7 @@ function ModelFactory.flash(root: BasePart)
 end
 
 function ModelFactory.tintNamed(root: BasePart, name: string, color: Color3?)
-	for _, descendant in ipairs(root:GetDescendants()) do
+	for _, descendant in ipairs(visualParts(root)) do
 		if descendant:IsA("BasePart") and descendant.Name == name then
 			if color == nil then
 				local red = descendant:GetAttribute("BaseR")
@@ -973,14 +1010,17 @@ end
 
 function ModelFactory.dissolve(root: BasePart)
 	local fading = {}
-	for _, descendant in ipairs(root:GetDescendants()) do
-		if descendant:IsA("BasePart") and descendant ~= root then
+	for _, descendant in ipairs(visualParts(root)) do
+		if descendant ~= root then
 			descendant.CanCollide = false
 			table.insert(fading, descendant)
-		elseif descendant:IsA("ParticleEmitter") or descendant:IsA("PointLight") then
-			(descendant :: any).Enabled = false
-		elseif descendant:IsA("Motor6D") then
-			descendant.Transform = CFrame.new()
+			for _, child in ipairs(descendant:GetChildren()) do
+				if child:IsA("ParticleEmitter") or child:IsA("PointLight") then
+					child.Enabled = false
+				elseif child:IsA("Motor6D") then
+					child.Transform = CFrame.new()
+				end
+			end
 		end
 	end
 	local puff = Instance.new("ParticleEmitter")

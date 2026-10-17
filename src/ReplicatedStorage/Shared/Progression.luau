@@ -125,6 +125,11 @@ function Progression.applyReturn(data: any, now: number)
 	return { rest = rest, welcome = welcome }
 end
 
+-- Mastery ranks start after the beta cap. Every level in this beta is 0.
+function Progression.mastery(_level: number): number
+	return 0
+end
+
 function Progression.recap(
 	beforeLevel: number,
 	afterLevel: number,

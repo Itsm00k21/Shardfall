@@ -42,7 +42,25 @@ describe("Dungeons", function()
 		local boss = Dungeons.enemy("grandmother_gnarl")
 		assert(boss ~= nil)
 		expect(boss.boss).toEqual(true)
+		expect(boss.name).toEqual("Grandmother Gnarl")
 		expect(boss.weakSeconds > 0).toEqual(true)
+		-- Lv 2 starter bar is 100. Ten failed slams, not six.
+		expect(boss.damage).toEqual(10)
+		expect(math.floor(100 / boss.damage)).toEqual(10)
+		expect(boss.attackSpeed).toEqual(0.2)
+		expect(boss.fogInterval).toEqual(7)
+		expect(boss.fogDamage).toEqual(8)
+		expect(Dungeons.defeatLine(dungeon)).toEqual(
+			"The wilds push you out. Materials from earlier clears are still yours."
+		)
+		local waves = Dungeons.get(Dungeons.WAVES_ID)
+		expect(Dungeons.defeatLine(waves)).toEqual(
+			"The waves stop when you fall. Rewards from cleared waves are still yours."
+		)
+		local tide = Dungeons.get("tidecrypt")
+		expect(Dungeons.defeatLine(tide)).toEqual(
+			"Sunken Reach pushes you out. Materials from earlier clears are still yours."
+		)
 		expect(Dungeons.isUnlocked(dungeon, 0)).toEqual(true)
 	end)
 

@@ -86,6 +86,8 @@ type Enemy = {
 	stunUntil: number,
 	telegraphUntil: number,
 	telegraphColor: string,
+	markX: number,
+	markZ: number,
 	hover: number,
 	color: Color3,
 	part: BasePart,
@@ -658,7 +660,6 @@ local function dropPickup(
 					orb.AssemblyLinearVelocity = unit * 36
 				end
 				if delta.Magnitude < 3.5 then
-					fx(player, { kind = "hint", text = "+" .. name })
 					orb:Destroy()
 					beam:Destroy()
 					if follow ~= nil then
@@ -686,7 +687,7 @@ local function enemyBar(part: BasePart, name: string, color: Color3, lift: numbe
 	gui.Name = "ShardfallBar"
 	gui.Size = UDim2.fromOffset(96, 28)
 	gui.StudsOffset = Vector3.new(0, lift, 0)
-	gui.AlwaysOnTop = true
+	gui.AlwaysOnTop = false
 	gui.Parent = part
 	local label = Instance.new("TextLabel")
 	label.Name = "Name"
@@ -835,7 +836,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	)
 	part:SetAttribute("EnemyId", id)
 	part:SetAttribute("ShardfallKind", kind)
-	local rimHost = if rigModel ~= nil then rigModel else part
+	local rimHost = ModelFactory.adorn(part)
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "Rim"
 	highlight.Adornee = rimHost
@@ -877,6 +878,8 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		stunUntil = 0,
 		telegraphUntil = 0,
 		telegraphColor = "red",
+		markX = 0,
+		markZ = 0,
 		hover = definition.hover,
 		color = color,
 		part = part,
@@ -1460,9 +1463,13 @@ local function finish(player: Player, victory: boolean)
 	if victory then
 		saved = grant(player, run, nil, cardSeconds)
 	else
-		local text = if endless
-			then "The waves stop when you fall. Rewards from cleared waves are still yours."
-			else "The Rootvault pushes you out. Materials from earlier clears are still yours."
+		for _, enemy in pairs(run.enemies) do
+			local bar = enemy.part:FindFirstChild("ShardfallBar")
+			if bar ~= nil then
+				bar:Destroy()
+			end
+		end
+		local text = Dungeons.defeatLine(run.dungeon)
 		fx(player, {
 			kind = "defeat",
 			text = text,
@@ -1740,12 +1747,15 @@ function DungeonService.damageEnemy(
 				table.insert(bits, label)
 			end
 			if #bits > 0 then
-				-- The world label is the material, never the enemy that dropped it.
+				-- The line is the material, never the enemy that dropped it.
 				dropPickup(run.folder, enemy.part.Position, landed, player)
-				fx(player, {
-					kind = "hint",
-					text = "Picked up " .. table.concat(bits, ", ") .. ".",
-				})
+				local note = Materials.lootHint(bits, enemy.name)
+				if note ~= "" then
+					fx(player, {
+						kind = "hint",
+						text = note,
+					})
+				end
 			end
 		else
 			warn("[Shardfall] Drop failed:", saveErr)
@@ -2009,6 +2019,13 @@ local function tickEnemy(
 		local position = enemy.part.Position
 		enemy.telegraphUntil = 0
 		enemy.nextAttack = now + CombatMath.cooldown(enemy.attackSpeed)
+		local struck = CombatFeel.insideMarker(
+			hrp.Position.X,
+			hrp.Position.Z,
+			enemy.markX,
+			enemy.markZ,
+			CombatFeel.MARKER_HALF
+		)
 		if enemy.style == "projectile" then
 			CombatService.launchEnemyShot(
 				player,
@@ -2018,7 +2035,7 @@ local function tickEnemy(
 				enemy.projectileSpeed,
 				enemy.range
 			)
-		else
+		elseif struck then
 			CombatService.damagePlayer(
 				player,
 				enemy.damage,
@@ -2049,8 +2066,10 @@ local function tickEnemy(
 	elseif enemy.kind == "thorn_sprite" then
 		colorName = "red"
 	end
-	local cue = CombatFeel.telegraph(colorName, "normal")
+	local cue = CombatFeel.telegraph(colorName, "normal", if enemy.boss then "boss" else nil)
 	enemy.telegraphColor = cue.color
+	enemy.markX = hrp.Position.X
+	enemy.markZ = hrp.Position.Z
 	enemy.telegraphUntil = now + cue.seconds
 	CombatService.noteTelegraph(player, enemy.telegraphUntil)
 	fx(player, {

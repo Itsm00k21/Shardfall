@@ -253,7 +253,7 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	end
 
 	local function skillLine(skill: Classes.Skill): string
-		return string.format("%s\n%d sec cooldown\n%s", skill.name, skill.cooldown, skill.note)
+		return string.format("%s\n%s\n%s", skill.name, Classes.cooldownText(skill), skill.note)
 	end
 
 	local function drawPicker()
