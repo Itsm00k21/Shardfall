@@ -954,9 +954,10 @@ local function storyEcho(run: Run, fight: RaidEchoFight.Fight): boolean
 		and fight.practice ~= true
 end
 
--- A held Story member is at 0 because someone else is still up. Bringing
--- them back does not call wipe, so it cannot add a stack.
-local function reviveHeld(fight: RaidEchoFight.Fight)
+-- Down before bindEcho. A stack reset can drop a hurt player to 0 HP.
+-- That player was not held, and this list must not turn the refresh into a full heal.
+local function heldNow(fight: RaidEchoFight.Fight): { Player }
+	local pending = {}
 	for member, memberRun in pairs(runs) do
 		if memberRun.echoFight ~= fight or not storyEcho(memberRun, fight) then
 			continue
@@ -967,13 +968,29 @@ local function reviveHeld(fight: RaidEchoFight.Fight)
 		local hp = CombatService.vitals(member)
 		local userId = tostring(member.UserId)
 		local row = fight.members[userId]
-		local held = hp <= 0 or (row ~= nil and row.alive ~= true)
-		if not held then
+		if hp <= 0 or (row ~= nil and row.alive ~= true) then
+			table.insert(pending, member)
+		end
+	end
+	return pending
+end
+
+-- Bringing a held member back does not call wipe, so it cannot add a stack.
+local function reviveHeld(fight: RaidEchoFight.Fight, pending: { Player })
+	for _, member in ipairs(pending) do
+		local memberRun = runs[member]
+		if
+			memberRun == nil
+			or memberRun.echoFight ~= fight
+			or not storyEcho(memberRun, fight)
+			or memberRun.resolving == true
+			or memberRun.retrying == true
+		then
 			continue
 		end
 		CombatService.revive(member)
 		if runs[member] == memberRun and memberRun.echoFight == fight then
-			RaidEchoFight.setAlive(fight, userId, true)
+			RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
 		end
 	end
 end
@@ -1462,13 +1479,16 @@ function DungeonService.damageEnemy(
 	end
 	if enemy.hp <= 0 then
 		if enemy.boss and run.echoFight ~= nil then
+			-- Snapshot before the refresh. bindEcho can zero a hurt player
+			-- who was still standing. They are not a held member.
+			local downed = heldNow(run.echoFight)
 			-- Once, outside the per-player loot mutate. The next boss starts at 0.
 			RaidEchoFight.bossKill(run.echoFight)
 			rememberMax(player, run)
 			bindEcho(run.echoFight)
 			-- Held members are in their own rooms. This kill must not ask
 			-- them to clear, and it must not wipe again.
-			reviveHeld(run.echoFight)
+			reviveHeld(run.echoFight, downed)
 		end
 		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
 		-- Practice returns before any of that: no materials, chests, marks, or XP.
