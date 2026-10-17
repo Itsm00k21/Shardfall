@@ -228,7 +228,8 @@ local function promptOn(
 	actionText: string,
 	objectText: string,
 	action: string,
-	message: string?
+	message: string?,
+	district: string?
 )
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = actionText
@@ -240,6 +241,9 @@ local function promptOn(
 	prompt:SetAttribute("HavenAction", action)
 	if message ~= nil then
 		prompt:SetAttribute("HavenMessage", message)
+	end
+	if type(district) == "string" then
+		prompt:SetAttribute("HavenDistrict", district)
 	end
 	prompt.Parent = host
 end
@@ -903,7 +907,7 @@ local function buildGuild(parent: Instance)
 		true
 	)
 	local closed = stationPad(model, place.x, place.z, Color3.fromRGB(180, 180, 190))
-	promptOn(closed, "Coming Soon", "Guild Hall", "soon", place.message)
+	promptOn(closed, "Coming Soon", "Guild Hall", "soon", place.message, "guild")
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Guild Hall")
 end
 
@@ -1670,6 +1674,14 @@ function HavenBuilder.build(parent: Instance): number
 				end
 				if type(action) ~= "string" then
 					return
+				end
+				if descendant:GetAttribute("HavenDistrict") == "guild" then
+					local DataService = require(script.Parent.DataService)
+					local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
+					DataService.mutate(player, function(data)
+						StarterGoalPay.grant(data, "guild", { browse = true })
+						return nil
+					end)
 				end
 				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 				local remote = if remotes ~= nil then remotes:FindFirstChild("HavenPrompt") else nil
