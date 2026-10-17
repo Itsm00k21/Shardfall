@@ -5,12 +5,17 @@
 
 	A reserved server is attempted outside Studio. If that teleport cannot
 	start, the same raid runs here as a solo test so Kevin can play it.
+
+	Arriving on a reserved server starts the raid here. Queueing again from
+	receive would reserve another server and hop in a loop. A second queue
+	while the first hop is still saving does not reserve or teleport.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
+local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local DataService = require(script.Parent.DataService)
 
@@ -90,10 +95,16 @@ local function launch(
 	})
 end
 
-function RaidService.queue(player: Player, difficulty: any, role: any)
+local function startQueue(player: Player, difficulty: any, role: any, allowHop: boolean)
 	local row = Raids.difficulty(difficulty)
 	if row == nil then
 		return reject("Pick Story or Normal.")
+	end
+	-- Before ReserveServer. A second click while the first hop is saving
+	-- must not reserve another instance or call TeleportAsync again.
+	local hold = DataService.teleportHold(player)
+	if hold ~= nil then
+		return reject(hold)
 	end
 	local profile = DataService.get(player)
 	if profile == nil then
@@ -110,30 +121,35 @@ function RaidService.queue(player: Player, difficulty: any, role: any)
 		return reject("Clear Story once before Normal.")
 	end
 	local healer = role == "healer" or (role == "flex" and profile.classId == "tidecaller")
-	local code = reservedCode()
-	if code ~= nil then
-		-- Save and clear the lock before the hop. A failed save stays on this
-		-- server; a failed hop reclaims the lock and falls through to the
-		-- local raid below.
-		local hopped, hopWhy = DataService.releaseForTeleport(player, function()
-			local TeleportService = game:GetService("TeleportService")
-			local options = Instance.new("TeleportOptions")
-			options.ReservedServerAccessCode = code
-			options:SetTeleportData({
-				raid = "heartwood",
-				difficulty = row.id,
-				role = role,
-			})
-			TeleportService:TeleportAsync(game.PlaceId, { player }, options)
-		end)
-		if hopped == "teleported" then
-			return { ok = true, note = "Reserved server. Flying in." }
-		end
-		if hopped == "kept" or hopped == "closed" then
-			return reject(
-				hopWhy
-					or "Could not save your profile, so the raid teleport was cancelled. You are still on this server."
-			)
+	if allowHop then
+		local code = reservedCode()
+		if code ~= nil then
+			-- Save and clear the lock before the hop. A failed save stays on this
+			-- server; a failed hop reclaims the lock and falls through to the
+			-- local raid below.
+			local hopped, hopWhy = DataService.releaseForTeleport(player, function()
+				local TeleportService = game:GetService("TeleportService")
+				local options = Instance.new("TeleportOptions")
+				options.ReservedServerAccessCode = code
+				options:SetTeleportData({
+					raid = "heartwood",
+					difficulty = row.id,
+					role = role,
+				})
+				TeleportService:TeleportAsync(game.PlaceId, { player }, options)
+			end)
+			if hopped == "teleported" then
+				return { ok = true, note = "Reserved server. Flying in." }
+			end
+			if hopped == "closing" then
+				return reject(hopWhy or ProfileLoad.TELEPORT_ALREADY)
+			end
+			if hopped == "kept" or hopped == "closed" then
+				return reject(
+					hopWhy
+						or "Could not save your profile, so the raid teleport was cancelled. You are still on this server."
+				)
+			end
 		end
 	end
 	local started = launch(player, row.id, healer, 1, 1, false)
@@ -143,6 +159,10 @@ function RaidService.queue(player: Player, difficulty: any, role: any)
 	started.note = "Solo test. No reserved server here. Damage is softened without a healer."
 	started.leaderboard = RaidService.leaderboard()
 	return started
+end
+
+function RaidService.queue(player: Player, difficulty: any, role: any)
+	return startQueue(player, difficulty, role, true)
 end
 
 function RaidService.board()
@@ -245,7 +265,10 @@ function RaidService.receive(player: Player)
 	if payload.raid ~= "heartwood" then
 		return
 	end
-	RaidService.queue(player, payload.difficulty, payload.role or "flex")
+	-- Reserved servers report a private id and owner 0. Launch here.
+	-- Queueing would ReserveServer and hop again.
+	local allowHop = ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+	startQueue(player, payload.difficulty, payload.role or "flex", allowHop)
 end
 
 return RaidService
