@@ -1091,10 +1091,7 @@ local function openHub(tab: string)
 	if not menuHub.isOpen() then
 		closePanels("menu")
 	end
-	menuHub.open(tab)
-	if hudShell ~= nil then
-		hudShell.setRail(tab)
-	end
+	menuHub.toggle(tab)
 end
 
 menuHub = MenuHub.start(playerGui, {
@@ -1104,7 +1101,7 @@ menuHub = MenuHub.start(playerGui, {
 			rollReel.request(false)
 		end
 		if menuHub ~= nil then
-			menuHub.close()
+			menuHub.handoffRoll()
 		end
 	end,
 	onBag = function()
@@ -1122,11 +1119,8 @@ menuHub = MenuHub.start(playerGui, {
 		end
 	end,
 	onDim = function(open: boolean)
-		if hudShell ~= nil then
-			hudShell.setDimmed(open)
-			if not open then
-				hudShell.setRail("")
-			end
+		if hudShell ~= nil and not open then
+			hudShell.setRail("")
 		end
 	end,
 	onTab = function(id: string)
@@ -1138,17 +1132,9 @@ menuHub = MenuHub.start(playerGui, {
 
 hudShell = HudShell.start(playerGui, {
 	onHero = function()
-		if menuHub ~= nil and menuHub.isOpen() and menuHub.current() == "hero" then
-			menuHub.close()
-			return
-		end
 		openHub("hero")
 	end,
 	onBag = function()
-		if menuHub ~= nil and menuHub.isOpen() and menuHub.current() == "bag" then
-			menuHub.close()
-			return
-		end
 		openHub("bag")
 	end,
 	onRoll = function()

@@ -368,7 +368,6 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local buttonScale = 1
 	local savedLayout: { [string]: { number } } = {}
 	local hudHidden = false
-	local hubOpen = false
 	local function skillButton(name: string, fire: () -> ())
 		local button = Instance.new("TextButton")
 		button.Name = name
@@ -793,8 +792,6 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			place()
 			if hudHidden then
 				chrome.GroupTransparency = 1
-			elseif hubOpen then
-				chrome.GroupTransparency = 0.45
 			else
 				chrome.GroupTransparency = 0
 			end
@@ -802,19 +799,6 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		toast = function(text: string)
 			toast.Text = text
 			toast.Visible = text ~= ""
-		end,
-		setDimmed = function(open: boolean)
-			hubOpen = open
-			if hudHidden then
-				chrome.GroupTransparency = 1
-				return
-			end
-			local goal = if open then 0.45 else 0
-			TweenService:Create(
-				chrome,
-				TweenInfo.new(UiTheme.MOTION.open, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{ GroupTransparency = goal }
-			):Play()
 		end,
 		place = place,
 		ratio = function(): number

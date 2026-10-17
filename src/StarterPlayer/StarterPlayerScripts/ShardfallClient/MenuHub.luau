@@ -2,13 +2,16 @@
 
 --[[
 	One modal stack. Tabs replace each other. Esc and the backdrop pop.
-	The rail fades, then the panel follows. Debug grants live here and
-	only while Studio is running.
+	The panel is a Frame, so the first open still receives tab clicks.
+	The backdrop dim is copied off UiRouter on every open and every close.
+	Debug grants live here and only while Studio is running.
 
 	Bag, pets, roll, and hero draw cards. Market, raids, and the pass
 	use an empty state. A missing class opens the class cards.
 ]]
 
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -26,6 +29,7 @@ local RollMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
+local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
 
@@ -60,6 +64,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	screen.DisplayOrder = 80
 	screen.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
 	screen.IgnoreGuiInset = false
+	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.Enabled = false
 	screen.Parent = playerGui
 	local uiScale = Instance.new("UIScale")
@@ -74,6 +79,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	backdrop.BackgroundTransparency = 1 - UiTheme.BACKDROP
 	backdrop.Text = ""
 	backdrop.AutoButtonColor = false
+	backdrop.Modal = false
+	backdrop.Active = true
 	backdrop.ZIndex = 1
 	backdrop.Parent = screen
 
@@ -89,15 +96,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	shadowCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	shadowCorner.Parent = shadow
 
-	local panel = Instance.new("CanvasGroup")
+	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
 	panel.BackgroundColor3 = rgb("body")
 	panel.BackgroundTransparency = 0.04
 	panel.BorderSizePixel = 0
-	panel.GroupTransparency = 1
+	panel.ClipsDescendants = true
 	panel.Visible = false
 	panel.ZIndex = 3
 	panel.Parent = screen
+	local openScale = Instance.new("UIScale")
+	openScale.Name = "OpenScale"
+	openScale.Scale = 1
+	openScale.Parent = panel
 	local panelCorner = Instance.new("UICorner")
 	panelCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	panelCorner.Parent = panel
@@ -186,6 +197,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	classModal.Size = UDim2.fromScale(1, 1)
 	classModal.BackgroundTransparency = 1
 	classModal.Visible = false
+	classModal.Active = false
 	classModal.ZIndex = 8
 	classModal.Parent = screen
 	local classPanel = Instance.new("Frame")
@@ -249,10 +261,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	local profile: any = nil
 	local draft = Settings.default()
-	local stack: { string } = {}
+	local route = UiRouter.initial()
+	local apply: (UiRouter.State) -> ()
 	local pages: { [string]: Frame } = {}
 	local capturing: string? = nil
-	local hubOpen = false
 	local classDismissed = false
 	local detailOpen = false
 	local selectedUid: string? = nil
@@ -262,6 +274,93 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local restColor: { [GuiButton]: Color3 } = {}
 	local tabButtons: { [string]: TextButton } = {}
 	local tabAccents: { [string]: Frame } = {}
+	local tabCaptions: { [string]: TextLabel } = {}
+	local openTween: Tween? = nil
+	local worldBlocked = false
+	local controls: any = nil
+
+	local function sink(): Enum.ContextActionResult
+		return Enum.ContextActionResult.Sink
+	end
+
+	local function playerControls(): any
+		if controls ~= nil then
+			return controls
+		end
+		local localPlayer = Players.LocalPlayer
+		if localPlayer == nil then
+			return nil
+		end
+		local scripts = localPlayer:FindFirstChild("PlayerScripts")
+		if scripts == nil then
+			return nil
+		end
+		local moduleScript = scripts:FindFirstChild("PlayerModule")
+		if moduleScript == nil or not moduleScript:IsA("ModuleScript") then
+			return nil
+		end
+		local ok, module = pcall(require, moduleScript)
+		if not ok or type(module) ~= "table" or type(module.GetControls) ~= "function" then
+			return nil
+		end
+		local fetchedOk, fetched = pcall(function()
+			return module:GetControls()
+		end)
+		if fetchedOk then
+			controls = fetched
+		end
+		return controls
+	end
+
+	-- Modal on the backdrop stops the mouse from steering the camera.
+	-- The sink stops the character. Shoulder buttons stay free for tabs.
+	local function setWorldInput(blocked: boolean)
+		if blocked == worldBlocked then
+			return
+		end
+		worldBlocked = blocked
+		if blocked then
+			ContextActionService:BindActionAtPriority(
+				"ShardfallMenuSink",
+				sink,
+				false,
+				Enum.ContextActionPriority.High.Value,
+				Enum.KeyCode.W,
+				Enum.KeyCode.A,
+				Enum.KeyCode.S,
+				Enum.KeyCode.D,
+				Enum.KeyCode.Space,
+				Enum.KeyCode.LeftShift,
+				Enum.KeyCode.RightShift,
+				Enum.KeyCode.E,
+				Enum.KeyCode.Q,
+				Enum.KeyCode.R,
+				Enum.KeyCode.F,
+				Enum.KeyCode.Two,
+				Enum.KeyCode.C,
+				Enum.KeyCode.B,
+				Enum.KeyCode.P,
+				Enum.KeyCode.I,
+				Enum.KeyCode.M,
+				Enum.KeyCode.Thumbstick1
+			)
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		else
+			ContextActionService:UnbindAction("ShardfallMenuSink")
+		end
+		local pad = playerControls()
+		if type(pad) == "table" then
+			if blocked and type(pad.Disable) == "function" then
+				pcall(function()
+					pad:Disable()
+				end)
+			elseif type(pad.Enable) == "function" then
+				pcall(function()
+					pad:Enable()
+				end)
+			end
+		end
+	end
 
 	local function view(): (number, number)
 		local size = screen.AbsoluteSize
@@ -276,15 +375,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		shadow.Position = UDim2.fromOffset(box.x + 4, box.y + 6)
 		shadow.Size = UDim2.fromOffset(box.w, box.h)
 		local column = HudLayout.tabColumn(box.w, box.h)
-		tabs.Position = UDim2.fromOffset(column.x, column.y)
-		tabs.Size = UDim2.fromOffset(column.w, math.max(44, column.h - UiTheme.HEADER))
+		tabs.Position = UDim2.fromOffset(column.x, UiTheme.HEADER)
+		tabs.Size = UDim2.fromOffset(column.w, math.max(44, box.h - UiTheme.HEADER - 8))
 		local inner = HudLayout.hubBody(box.w, box.h)
 		body.Position = UDim2.fromOffset(inner.x, inner.y)
 		body.Size = UDim2.fromOffset(inner.w, inner.h)
 		title.Position = UDim2.fromOffset(inner.x, 8)
 		title.Size = UDim2.fromOffset(math.max(44, inner.w - 8), 32)
-		classPanel.Position = UDim2.fromOffset(box.x, box.y)
-		classPanel.Size = UDim2.fromOffset(box.w, box.h)
+		classPanel.Position = UDim2.fromOffset(box.x + inner.x, box.y + inner.y)
+		classPanel.Size = UDim2.fromOffset(inner.w, inner.h)
 		local grid = HudLayout.cardGrid(math.max(44, inner.w - 8), inner.h, 4)
 		classGrid.CellSize = UDim2.fromOffset(grid.cellW, grid.cellH)
 		classGrid.CellPadding = UDim2.fromOffset(grid.gap, grid.gap)
@@ -535,15 +634,31 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return Classes.get(profile.classId) == nil
 	end
 
-	local function syncScreen()
-		local modal = classModal.Visible
-		screen.Enabled = hubOpen or modal
-		shadow.Visible = hubOpen
-		panel.Visible = hubOpen
-		if hubOpen or modal then
-			hooks.onDim(true)
-		else
-			hooks.onDim(false)
+	local function pageFor(state: UiRouter.State): string
+		local top = UiRouter.top(state)
+		if top == "sets" then
+			return "sets"
+		end
+		if top == "class" then
+			return state.stack[1] or "hero"
+		end
+		return top
+	end
+
+	local function paintHints()
+		for id, caption in pairs(tabCaptions) do
+			local label = id
+			for _, tab in ipairs(ClientChrome.TABS) do
+				if tab.id == id then
+					label = tab.label
+				end
+			end
+			local key = draft.controls.hotkeys[id]
+			if type(key) == "string" and key ~= "" then
+				caption.Text = label .. "  " .. key
+			else
+				caption.Text = label
+			end
 		end
 	end
 
@@ -993,8 +1108,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local classId = entry.id
 			choose.Activated:Connect(function()
 				classDismissed = true
-				classModal.Visible = false
-				syncScreen()
+				if UiRouter.top(route) == "class" then
+					apply(UiRouter.pop(route))
+				else
+					classModal.Visible = false
+				end
 				task.spawn(function()
 					pcall(hooks.invoke, "SetClass", classId)
 				end)
@@ -1004,20 +1122,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	local function showClassPrompt(force: boolean)
 		if not classMissing() or ClassHud.holdsChoice() then
-			if not classMissing() then
+			if not classMissing() and UiRouter.top(route) == "class" then
 				classDismissed = false
-				classModal.Visible = false
-				syncScreen()
+				apply(UiRouter.pop(route))
 			end
 			return
 		end
 		if not force and classDismissed then
 			return
 		end
+		if route.open and UiRouter.top(route) == "class" then
+			paintClassCards()
+			return
+		end
 		classDismissed = false
 		paintClassCards()
-		classModal.Visible = true
-		syncScreen()
+		local nextState = route
+		if not nextState.open then
+			nextState = UiRouter.open(nextState, "hero")
+		end
+		apply(UiRouter.push(nextState, "class"))
 	end
 
 	local function paintHero()
@@ -1188,8 +1312,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		clear(bag)
 		local items = bagItems()
 		row(bag, "Sets", 1, function()
-			stack = { "bag", "sets" }
-			show("sets")
+			apply(UiRouter.push(route, "sets"))
 		end)
 		row(bag, "Open full bag", 2, function()
 			hooks.onBag()
@@ -1430,6 +1553,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	local function paint()
+		paintHints()
 		paintHero()
 		paintBag()
 		paintPets()
@@ -1454,9 +1578,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			function() end
 		)
 
-		local function cycle(label: string, order: number, apply: () -> ())
+		local function cycle(label: string, order: number, step: () -> ())
 			row(settingsPage, label, order, function()
-				apply()
+				step()
 				save()
 				paint()
 				show("settings")
@@ -1700,66 +1824,88 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
+	local function playOpenMotion(fromClosed: boolean)
+		if openTween ~= nil then
+			openTween:Cancel()
+			openTween = nil
+		end
+		if not fromClosed then
+			openScale.Scale = 1
+			return
+		end
+		openScale.Scale = 0.96
+		local tween = TweenService:Create(
+			openScale,
+			TweenInfo.new(UiTheme.MOTION.open, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Scale = 1 }
+		)
+		openTween = tween
+		tween:Play()
+	end
+
+	function apply(state: UiRouter.State)
+		local wasOpen = route.open
+		if UiRouter.top(route) == "class" and UiRouter.top(state) ~= "class" then
+			classDismissed = true
+		end
+		route = state
+		backdrop.BackgroundTransparency = 1 - state.dim
+		backdrop.Modal = state.open
+		setWorldInput(state.open)
+		screen.Enabled = state.open
+		shadow.Visible = state.open
+		panel.Visible = state.open
+		classModal.Visible = state.open and UiRouter.top(state) == "class"
+		if state.open then
+			place()
+			show(pageFor(state))
+			playOpenMotion(not wasOpen)
+		else
+			playOpenMotion(false)
+		end
+		hooks.onDim(state.open)
+	end
+
 	local function close()
-		hubOpen = false
-		panel.GroupTransparency = 1
-		stack = {}
-		syncScreen()
+		apply(UiRouter.close(route))
+	end
+
+	local function handoffRoll()
+		apply(UiRouter.rollHandoff(route))
 	end
 
 	local function pop()
-		if classModal.Visible and not hubOpen then
-			classDismissed = true
-			classModal.Visible = false
-			syncScreen()
+		if not route.open then
 			return
 		end
-		if #stack > 1 then
-			table.remove(stack)
-			show(stack[#stack])
-			return
-		end
-		close()
+		apply(UiRouter.pop(route))
 	end
 
-	local function openTab(id: string, push: boolean)
-		if push and stack[#stack] ~= id then
-			table.insert(stack, id)
-		elseif not push then
-			stack = { id }
+	local function follow(nextState: UiRouter.State)
+		if nextState.generation == route.generation then
+			return
 		end
-		show(id)
+		local prompt = nextState.open
+			and nextState.tab == "hero"
+			and UiRouter.top(nextState) == "hero"
+			and not (route.open and route.tab == "hero" and UiRouter.top(route) == "hero")
+		apply(nextState)
+		if prompt then
+			showClassPrompt(true)
+		end
 	end
 
 	local function open(id: string)
-		local was = hubOpen
-		hubOpen = true
-		panel.Visible = true
-		shadow.Visible = true
-		screen.Enabled = true
-		place()
-		openTab(id, false)
 		paint()
-		show(id)
-		if id == "hero" then
-			showClassPrompt(true)
+		follow(UiRouter.open(route, id))
+	end
+
+	local function toggle(id: string)
+		local nextState = UiRouter.toggle(route, id)
+		if nextState.open then
+			paint()
 		end
-		hooks.onDim(true)
-		panel.GroupTransparency = 1
-		local delay = if was then 0 else UiTheme.MOTION.stagger
-		task.delay(delay, function()
-			if hubOpen then
-				TweenService:Create(
-					panel,
-					TweenInfo.new(
-						UiTheme.MOTION.open - delay,
-						Enum.EasingStyle.Quad,
-						Enum.EasingDirection.Out
-					),
-					{ GroupTransparency = 0 }
-				):Play()
-			end
-		end)
+		follow(nextState)
 	end
 
 	for index, tab in ipairs(ClientChrome.TABS) do
@@ -1800,23 +1946,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		motion(button)
 		local tabId = tab.id
 		button.Activated:Connect(function()
-			openTab(tabId, false)
 			paint()
-			show(tabId)
-			if tabId == "hero" then
-				showClassPrompt(true)
-			end
+			follow(UiRouter.switch(route, tabId))
 		end)
 		tabButtons[tab.id] = button
 		tabAccents[tab.id] = accent
+		tabCaptions[tab.id] = caption
 	end
+	paintHints()
 
 	backdrop.Activated:Connect(pop)
 	closeButton.Activated:Connect(pop)
 	classClose.Activated:Connect(function()
 		classDismissed = true
-		classModal.Visible = false
-		syncScreen()
+		pop()
 	end)
 	detailBack.Activated:Connect(function()
 		detailOpen = false
@@ -1842,21 +1985,34 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.ButtonB then
-			if screen.Enabled then
+			if route.open then
 				pop()
 			end
 			return
 		end
-		if input.UserInputType ~= Enum.UserInputType.Keyboard then
+		if route.open and input.KeyCode == Enum.KeyCode.ButtonL1 then
+			follow(UiRouter.shoulder(route, -1))
 			return
 		end
-		local pressed = string.upper(string.sub(input.KeyCode.Name, 1, 1))
-		for _, tab in ipairs(ClientChrome.TABS) do
-			local hotkey = draft.controls.hotkeys[tab.id]
-			if type(hotkey) == "string" and hotkey == pressed then
-				open(tab.id)
-			end
+		if route.open and input.KeyCode == Enum.KeyCode.ButtonR1 then
+			follow(UiRouter.shoulder(route, 1))
+			return
 		end
+		if route.open then
+			local nextState = UiRouter.key(route, input.KeyCode.Name, draft.controls.hotkeys)
+			if nextState.generation ~= route.generation then
+				follow(nextState)
+			end
+			return
+		end
+		if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
+			return
+		end
+		local nextState = UiRouter.key(route, input.KeyCode.Name, draft.controls.hotkeys)
+		if nextState.open then
+			paint()
+		end
+		follow(nextState)
 	end)
 
 	paint()
@@ -1864,11 +2020,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	return {
 		open = open,
 		close = close,
+		toggle = toggle,
+		handoffRoll = handoffRoll,
 		isOpen = function(): boolean
-			return hubOpen
+			return route.open
 		end,
 		current = function(): string
-			return stack[#stack] or "hero"
+			return pageFor(route)
+		end,
+		root = function(): string
+			return route.stack[1] or route.tab
+		end,
+		hasModal = function(): boolean
+			return #route.stack > 1
 		end,
 		promptClass = function(force: boolean?)
 			showClassPrompt(force == true)
@@ -1879,11 +2043,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				draft = Settings.normalize(nextProfile.uiSettings)
 				uiScale.Scale = draft.hud.scale
 				autoOn = draft.rolls.autoConfirm == true
+				paintHints()
 			end
-			if hubOpen or classModal.Visible then
-				local current = stack[#stack] or "hero"
+			if route.open then
 				paint()
-				show(current)
+				show(pageFor(route))
 			end
 			showClassPrompt(false)
 		end,
