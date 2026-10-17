@@ -24,6 +24,14 @@
 	again and does not take the lock back. If the save fails, the teleport
 	is cancelled and the player stays here with the lock still held.
 
+	TeleportAsync can return and still fail. TeleportInitFailed then reclaims
+	the lock when this server still has the player, and restores the loaded
+	record so mutate works. If reclaim reports the lock was taken, the player
+	is kicked to rejoin. Released is set before closing clears, so
+	PlayerRemoving and BindToClose cannot write over a hop that already
+	freed the lock. A second queue while closing is in flight does not
+	teleport again.
+
 	save() writes that profile now, including when the adapter is the
 	in-memory store. savePair() writes two profiles and, if either write
 	fails, puts both backups back and writes those too. Trades use it so a
@@ -53,7 +61,6 @@ local LOAD_ATTEMPTS = 5
 local LOAD_RETRY_SECONDS = 2
 local TELEPORT_SAVE_FAILED =
 	"Could not save your profile, so the raid teleport was cancelled. You are still on this server."
-local TELEPORT_CLOSED = "The raid teleport failed and your profile could not be reopened. Rejoin."
 
 -- Studio play sessions often have an empty JobId. A GUID still makes two
 -- Studio servers look like different owners to the lock.
@@ -78,7 +85,15 @@ type Record = {
 
 type Listener = (Player, any, boolean) -> ()
 
+type HopWatch = {
+	conn: any,
+	settled: boolean,
+	initFailed: boolean,
+	initError: string,
+}
+
 local records: { [Player]: Record } = {}
+local hopWatch: { [Player]: HopWatch } = {}
 local listeners: { Listener } = {}
 -- Set synchronously so PlayerAdded and the existing-player loop cannot both load.
 local playerStarted: { [Player]: boolean } = {}
@@ -437,7 +452,122 @@ local function load(player: Player): (boolean, string?)
 	return failLoad(record, "Could not load your Shardfall profile. Rejoin.")
 end
 
+-- Released is published before closing clears. PlayerRemoving and
+-- BindToClose wait on closing. If they wake early they save again and
+-- either steal a freed lock or kick a hop that already succeeded.
+local function settleRecord(record: Record, released: boolean, loaded: boolean)
+	record.released = released
+	record.loaded = loaded
+	record.closing = false
+end
+
+local function disconnectHop(player: Player)
+	local watch = hopWatch[player]
+	if watch == nil then
+		return
+	end
+	-- A callback already queued must not reclaim after the player leaves
+	-- or after a newer hop replaces this watch.
+	watch.settled = false
+	hopWatch[player] = nil
+	if watch.conn ~= nil then
+		watch.conn:Disconnect()
+		watch.conn = nil
+	end
+end
+
+-- The hop already cleared the lock. Take it back when we still can, then
+-- follow ProfileLoad.failedHop. closing stays set across the yield so a
+-- leave or a shutdown waits instead of writing the freed document.
+local function recoverFailedHop(player: Player, record: Record): string
+	local again = ProfileLoad.reclaim(
+		currentAdapter(),
+		record.key,
+		os.time(),
+		serverId,
+		placeId,
+		SessionLock.TIMEOUT_SECONDS,
+		record.data
+	)
+	local stillHere = player.Parent == Players and records[player] == record
+	local action = ProfileLoad.failedHop(stillHere, again.ok == true)
+	disconnectHop(player)
+	if action == "restore" then
+		settleRecord(record, false, true)
+		notify(player)
+		return "retry-here"
+	end
+	if action == "release" then
+		-- PlayerRemoving is waiting on closing and writes the clear.
+		settleRecord(record, false, true)
+		return "closed"
+	end
+	if action == "kick" then
+		settleRecord(record, true, false)
+		warn(
+			"[Shardfall] Teleport failed and the profile lock moved for",
+			player.Name,
+			again.reason,
+			again.error
+		)
+		if player.Parent == Players then
+			player:Kick(ProfileLoad.HOP_REJOIN)
+		end
+		return "closed"
+	end
+	settleRecord(record, true, false)
+	return "closed"
+end
+
+-- Connect before TeleportAsync so a failure during the yield is visible,
+-- then yield once after it returns. TeleportInitFailed can also arrive
+-- after we have already reported success; that path reclaims below.
+local function beginHopWatch(player: Player, record: Record, teleport: () -> ()): () -> ()
+	disconnectHop(player)
+	local watch: HopWatch = {
+		conn = nil,
+		settled = false,
+		initFailed = false,
+		initError = "TeleportInitFailed",
+	}
+	hopWatch[player] = watch
+	local TeleportService = game:GetService("TeleportService")
+	watch.conn = TeleportService.TeleportInitFailed:Connect(function(who, _result, message)
+		if who ~= player then
+			return
+		end
+		watch.initFailed = true
+		if type(message) == "string" and message ~= "" then
+			watch.initError = message
+		end
+		if watch.settled ~= true then
+			return
+		end
+		watch.settled = false
+		if player.Parent ~= Players or records[player] ~= record or record.closing then
+			return
+		end
+		-- Ephemeral sessions never cleared a DataStore lock. Reclaim would
+		-- write this memory profile over a real save.
+		if record.ephemeral or record.released ~= true then
+			return
+		end
+		record.closing = true
+		task.spawn(function()
+			recoverFailedHop(player, record)
+		end)
+	end)
+	return function()
+		teleport()
+		task.wait()
+		if watch.initFailed then
+			error(watch.initError)
+		end
+	end
+end
+
 function DataService.release(player: Player)
+	disconnectHop(player)
 	local record = records[player]
 	if record == nil then
 		return
@@ -466,21 +596,44 @@ function DataService.release(player: Player)
 	records[player] = nil
 end
 
--- Saves, clears this server's lock, then runs teleport. "teleported" means
--- the lock is clear and PlayerRemoving must not write. "kept" means the
--- save failed and the player is still locked here. "retry-here" means
--- teleport threw and the lock was claimed back. "closed" means teleport
--- threw and another server already holds the profile.
+-- "teleported" means the lock is clear and PlayerRemoving must not write.
+-- "kept" means the save failed and the player is still locked here.
+-- "retry-here" means the hop failed and the lock was claimed back.
+-- "closed" means the hop failed and another server already holds the profile.
+-- "closing" means a hop is already in flight. No second teleport.
+function DataService.teleportHold(player: Player): string?
+	local record = records[player]
+	if record ~= nil and record.closing then
+		return ProfileLoad.TELEPORT_ALREADY
+	end
+	local watch = hopWatch[player]
+	if watch ~= nil and watch.settled == true then
+		return ProfileLoad.TELEPORT_ALREADY
+	end
+	return nil
+end
+
 function DataService.releaseForTeleport(player: Player, teleport: () -> ()): (string, string?)
 	local record = records[player]
-	if record == nil or not record.loaded or record.released or record.closing then
+	if record == nil or not record.loaded or record.released then
 		return "kept", TELEPORT_SAVE_FAILED
 	end
+	if record.closing then
+		return "closing", ProfileLoad.TELEPORT_ALREADY
+	end
+	local watched = beginHopWatch(player, record, teleport)
 	if record.ephemeral then
-		local callOk, callErr = pcall(teleport)
-		if callOk then
+		record.closing = true
+		local callOk, callErr = pcall(watched)
+		local watch = hopWatch[player]
+		local failed = (not callOk) or (watch ~= nil and watch.initFailed == true)
+		if not failed and watch ~= nil then
+			watch.settled = true
+			settleRecord(record, false, true)
 			return "teleported", nil
 		end
+		disconnectHop(player)
+		settleRecord(record, false, true)
 		warn("[Shardfall] Teleport failed for", player.Name, callErr)
 		return "retry-here", nil
 	end
@@ -494,37 +647,53 @@ function DataService.releaseForTeleport(player: Player, teleport: () -> ()): (st
 			placeId,
 			SessionLock.TIMEOUT_SECONDS,
 			record.data,
-			teleport
+			watched
 		)
 	end)
-	record.closing = false
+	local watch = hopWatch[player]
+	local initFailed = watch ~= nil and watch.initFailed == true
 	if not callOk or type(outcome) ~= "table" then
+		disconnectHop(player)
+		settleRecord(record, false, true)
 		warn("[Shardfall] Teleport save failed for", player.Name, outcome)
 		return "kept", TELEPORT_SAVE_FAILED
 	end
 	local handoff = outcome :: ProfileLoad.Handoff
+	if handoff.teleported == true and initFailed then
+		-- TeleportAsync returned and the failure was already flagged. The
+		-- lock is clear; handoff did not reclaim because teleport did not throw.
+		local status = recoverFailedHop(player, record)
+		if status == "retry-here" then
+			return "retry-here", nil
+		end
+		return "closed", ProfileLoad.HOP_REJOIN
+	end
 	if handoff.teleported == true then
-		record.released = true
-		record.loaded = false
+		if watch ~= nil then
+			watch.settled = true
+		end
+		settleRecord(record, true, false)
 		return "teleported", nil
 	end
+	disconnectHop(player)
 	if handoff.reason == "teleport" then
+		settleRecord(record, false, true)
 		warn("[Shardfall] Teleport failed for", player.Name, handoff.error)
 		return "retry-here", nil
 	end
 	if handoff.reason == "stolen" then
-		record.released = true
-		record.loaded = false
+		settleRecord(record, true, false)
 		warn(
 			"[Shardfall] Teleport failed and the profile lock moved for",
 			player.Name,
 			handoff.error
 		)
 		if player.Parent == Players then
-			player:Kick(TELEPORT_CLOSED)
+			player:Kick(ProfileLoad.HOP_REJOIN)
 		end
-		return "closed", TELEPORT_CLOSED
+		return "closed", ProfileLoad.HOP_REJOIN
 	end
+	settleRecord(record, false, true)
 	warn("[Shardfall] Teleport save failed for", player.Name, handoff.reason, handoff.error)
 	return "kept", TELEPORT_SAVE_FAILED
 end

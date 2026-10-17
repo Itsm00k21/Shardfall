@@ -336,4 +336,148 @@ describe("Session handoff", function()
 			expect(after.Data.gold).toEqual(40)
 		end
 	)
+
+	it("reclaims a returned hop and does not copy gold onto the raid server", function()
+		local store = MemoryStore.new()
+		local key = "Player_14"
+		local data = claim(store, key)
+		data.gold = 40
+		local result = ProfileLoad.handoff(
+			store,
+			key,
+			NOW + 5,
+			"server-a",
+			PLACE,
+			TIMEOUT,
+			data,
+			function() end
+		)
+		expect(result.teleported).toBeTrue()
+		local freed = read(store, key)
+		expect(freed.Lock.jobId).toEqual("")
+		expect(freed.Data.gold).toEqual(40)
+
+		-- TeleportAsync returned, then TeleportInitFailed. The player is still here.
+		local again = ProfileLoad.reclaim(store, key, NOW + 6, "server-a", PLACE, TIMEOUT, data)
+		expect(again.ok).toBeTrue()
+		expect(again.reason).toEqual("claimed")
+		expect(ProfileLoad.failedHop(true, true)).toEqual("restore")
+		local restored = read(store, key)
+		expect(restored.Lock.jobId).toEqual("server-a")
+		expect(restored.Data.gold).toEqual(40)
+		expect(SessionLock.canWrite(restored.Lock, NOW + 6, "server-a", TIMEOUT)).toBeTrue()
+
+		-- They left during the reclaim. The lock we just took has to be cleared
+		-- or the next server waits out the timeout.
+		expect(ProfileLoad.failedHop(false, true)).toEqual("release")
+		local cleared = ProfileLoad.release(store, key, NOW + 7, "server-a", PLACE, TIMEOUT, data)
+		expect(cleared.ok).toBeTrue()
+		local openAgain = ProfileLoad.open(store, key, NOW + 8, "server-b", PLACE, TIMEOUT)
+		expect(openAgain.reason).toEqual("claimed")
+		assert(openAgain.data ~= nil)
+		expect(openAgain.data.gold).toEqual(40)
+	end)
+
+	it("does not overwrite a raid server that won the lock during a late hop failure", function()
+		local store = MemoryStore.new()
+		local key = "Player_15"
+		local data = claim(store, key)
+		data.gold = 40
+		local result = ProfileLoad.handoff(
+			store,
+			key,
+			NOW + 5,
+			"server-a",
+			PLACE,
+			TIMEOUT,
+			data,
+			function() end
+		)
+		expect(result.teleported).toBeTrue()
+		store:updateAsync(key, function(document)
+			local written, reason =
+				SessionLock.tryClaim(document, NOW + 6, "server-b", PLACE, TIMEOUT, { gold = 99 })
+			expect(reason).toEqual("claimed")
+			return written
+		end)
+
+		local again = ProfileLoad.reclaim(store, key, NOW + 6, "server-a", PLACE, TIMEOUT, data)
+		expect(again.ok).toBeFalse()
+		expect(again.reason).toEqual("busy")
+		expect(ProfileLoad.failedHop(true, false)).toEqual("kick")
+		expect(ProfileLoad.failedHop(false, false)).toEqual("drop")
+		local after = read(store, key)
+		expect(after.Lock.jobId).toEqual("server-b")
+		expect(after.Data.gold).toEqual(99)
+	end)
+
+	it(
+		"keeps a reserved arrival in place and names a second queue without the save error",
+		function()
+			expect(ProfileLoad.hopOnArrival("", 0)).toBeTrue()
+			expect(ProfileLoad.hopOnArrival("reserved-code", 0)).toBeFalse()
+			expect(ProfileLoad.hopOnArrival("vip-code", 42)).toBeTrue()
+			expect(ProfileLoad.hopOnArrival(nil, 0)).toBeTrue()
+			expect(
+				string.find(string.lower(ProfileLoad.TELEPORT_ALREADY), "could not save", 1, true)
+			).toBeNil()
+			expect(
+				string.find(
+					string.lower(ProfileLoad.TELEPORT_ALREADY),
+					"already in progress",
+					1,
+					true
+				) ~= nil
+			).toBeTrue()
+			expect(string.find(ProfileLoad.HOP_REJOIN, "Rejoin", 1, true) ~= nil).toBeTrue()
+
+			local dataService =
+				fs.readFile("src/ServerScriptService/ShardfallServer/DataService.luau")
+			expect(string.find(dataService, "TeleportInitFailed", 1, true) ~= nil).toBeTrue()
+			expect(string.find(dataService, "ProfileLoad.reclaim", 1, true) ~= nil).toBeTrue()
+			expect(string.find(dataService, "ProfileLoad.failedHop", 1, true) ~= nil).toBeTrue()
+			expect(string.find(dataService, "ProfileLoad.TELEPORT_ALREADY", 1, true) ~= nil).toBeTrue()
+			local settleAt = string.find(dataService, "local function settleRecord", 1, true)
+			local releasedLine =
+				string.find(dataService, "record.released = released", settleAt, true)
+			local loadedLine = string.find(dataService, "record.loaded = loaded", settleAt, true)
+			local closingLine = string.find(dataService, "record.closing = false", settleAt, true)
+			expect(
+				settleAt ~= nil and releasedLine ~= nil and loadedLine ~= nil and closingLine ~= nil
+			).toBeTrue()
+			expect((releasedLine :: number) < (loadedLine :: number)).toBeTrue()
+			expect((loadedLine :: number) < (closingLine :: number)).toBeTrue()
+			local hopFn =
+				string.find(dataService, "function DataService.releaseForTeleport", 1, true)
+			local hopBody = string.sub(dataService, hopFn :: number)
+			expect(string.find(hopBody, "record.closing = false", 1, true)).toBeNil()
+			local releaseAt =
+				string.find(dataService, "function DataService.release(player: Player)", 1, true)
+			local disconnectAt = string.find(dataService, "disconnectHop(player)", releaseAt, true)
+			local whileAt = string.find(dataService, "while record.closing do", releaseAt, true)
+			expect(disconnectAt ~= nil and whileAt ~= nil).toBeTrue()
+			expect((disconnectAt :: number) < (whileAt :: number)).toBeTrue()
+			local watchAt = string.find(dataService, "local function beginHopWatch", 1, true)
+			local teleportCall = string.find(dataService, "teleport()", watchAt, true)
+			local waitAt = string.find(dataService, "task.wait()", teleportCall, true)
+			local initAt = string.find(dataService, "watch.initFailed", waitAt, true)
+			expect(teleportCall ~= nil and waitAt ~= nil and initAt ~= nil).toBeTrue()
+			expect((teleportCall :: number) < (waitAt :: number)).toBeTrue()
+			expect((waitAt :: number) < (initAt :: number)).toBeTrue()
+
+			local raid = fs.readFile("src/ServerScriptService/ShardfallServer/RaidService.luau")
+			local holdAt = string.find(raid, "DataService.teleportHold", 1, true)
+			local reserveCall = string.find(raid, "local code = reservedCode()", 1, true)
+			expect(holdAt ~= nil and reserveCall ~= nil).toBeTrue()
+			expect((holdAt :: number) < (reserveCall :: number)).toBeTrue()
+			expect(string.find(raid, 'hopped == "closing"', 1, true) ~= nil).toBeTrue()
+			local receiveAt =
+				string.find(raid, "function RaidService.receive(player: Player)", 1, true)
+			local receiveBody = string.sub(raid, receiveAt :: number)
+			expect(string.find(receiveBody, "ProfileLoad.hopOnArrival", 1, true) ~= nil).toBeTrue()
+			expect(string.find(receiveBody, "RaidService.queue", 1, true)).toBeNil()
+			expect(string.find(receiveBody, "TeleportAsync", 1, true)).toBeNil()
+			expect(string.find(receiveBody, "ReserveServer(", 1, true)).toBeNil()
+		end
+	)
 end)

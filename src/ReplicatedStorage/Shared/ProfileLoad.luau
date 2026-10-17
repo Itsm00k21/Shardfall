@@ -12,9 +12,17 @@
 	release() writes the profile and clears the session lock. handoff()
 	does that before it calls teleport. A failed release does not teleport.
 	If teleport throws, handoff claims the lock back when it still can, so
-	the player can stay on this server. A second save from the server that
-	just released does not take the lock again: trySave only writes an
-	owned lock, and a cleared lock is free.
+	the player can stay on this server. TeleportAsync can also return and
+	still fail (TeleportInitFailed). The caller should error from teleport
+	when that signal is already set, so the same reclaim runs. A failure
+	that arrives after a successful return uses failedHop: reclaim and
+	restore when this server still has the player, or kick when the lock
+	was taken. A second save from the server that just released does not
+	take the lock again: trySave only writes an owned lock, and a cleared
+	lock is free.
+
+	hopOnArrival is false on a reserved server (private id set, owner 0).
+	Queueing from there would reserve another server and hop forever.
 ]]
 
 local Progression = require("./Progression")
@@ -51,6 +59,14 @@ export type Handoff = {
 -- inside the window, so a slow UpdateAsync was abandoned while it held
 -- the lock.
 ProfileLoad.SHUTDOWN_BUDGET_SECONDS = 30
+
+-- A second queue while the first hop is still saving. Neutral on purpose:
+-- the profile save has not failed.
+ProfileLoad.TELEPORT_ALREADY = "A teleport is already in progress."
+
+-- Reclaim lost the race. The player has to rejoin the server that holds
+-- the profile. Do not restore a loaded record here.
+ProfileLoad.HOP_REJOIN = "The raid teleport failed and your profile could not be reopened. Rejoin."
 
 function ProfileLoad.shutdownStillWaiting(pending: number, elapsed: number): boolean
 	return pending > 0 and elapsed < ProfileLoad.SHUTDOWN_BUDGET_SECONDS
@@ -263,6 +279,38 @@ function ProfileLoad.handoff(
 		reason = "stolen",
 		error = tostring(callErr),
 	}
+end
+
+-- True on a public server and on a player-owned private server. False on
+-- a ReserveServer instance: PrivateServerId is set and PrivateServerOwnerId
+-- is 0. Receiving a raid there must launch in place.
+function ProfileLoad.hopOnArrival(privateServerId: any, ownerId: any): boolean
+	if type(privateServerId) ~= "string" or privateServerId == "" then
+		return true
+	end
+	if ownerId == 0 then
+		return false
+	end
+	return true
+end
+
+-- What to do after ProfileLoad.reclaim, once TeleportAsync has already
+-- cleared the lock and the hop then failed.
+--   restore  player is still here and this server owns the lock again
+--   release  reclaim won but the player already left; clear that lock
+--   kick     player is here and someone else owns the lock
+--   drop     player is gone and this server does not own the lock
+function ProfileLoad.failedHop(stillHere: boolean, reclaimed: boolean): string
+	if reclaimed then
+		if stillHere then
+			return "restore"
+		end
+		return "release"
+	end
+	if stillHere then
+		return "kick"
+	end
+	return "drop"
 end
 
 return ProfileLoad
