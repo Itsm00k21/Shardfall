@@ -42,13 +42,13 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-025 | S | content | Flavor names and descriptions for every material in `Materials.luau`, plus 10 suggested new ones | `docs/content/materials.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
 | G-026 | M | content | UI microcopy pass: button labels, empty states, error and confirm text for Bag, Pets, Roll, Raids, Market, Pass and Settings. Read `MenuHub.luau`. | `docs/content/ui_copy.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
 | G-027 | M | design | Economy audit: read `Economy.luau`, `Currencies.luau` and `docs/design/shardfall_economy.md`; list sources and sinks per currency, flag inflation risks, suggest numbers | `docs/design/economy_audit.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
-| G-028 | M | design | Drop-rate proposal per source (mobs, chests, bosses, raids, rolls). Read `Rarities.luau`, `RarityConfig.luau` and `Drops.luau`. | `docs/design/drop_rates.md` | done | @@PR@@ |
-| G-029 | M | design | XP curve for levels 1-100 with time-to-level targets. Read `Progression.luau`. | `docs/design/xp_curve.md` | done | @@PR@@ |
-| G-030 | M | design | Pacing plan: minute-by-minute first 30 minutes, then day 1, day 3, day 7 goals | `docs/design/pacing.md` | done | @@PR@@ |
+| G-028 | M | design | Drop-rate proposal per source (mobs, chests, bosses, raids, rolls). Read `Rarities.luau`, `RarityConfig.luau` and `Drops.luau`. | `docs/design/drop_rates.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
+| G-029 | M | design | XP curve for levels 1-100 with time-to-level targets. Read `Progression.luau`. | `docs/design/xp_curve.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
+| G-030 | M | design | Pacing plan: minute-by-minute first 30 minutes, then day 1, day 3, day 7 goals | `docs/design/pacing.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
 | G-031 | L | design | Fair monetization catalog: game passes, dev products, Shard Pass pricing in Robux. Cosmetics and convenience only, never paid power. Read `PaidRollPolicy.luau` and `StoreAdapter.luau`. | `docs/design/monetization_catalog.md` | todo | — |
 | G-032 | S | design | Store copy for every item in G-031 (title under 30 characters, two-line description) | `docs/design/store_copy.md` | todo | — |
-| G-033 | M | design | Launch checklist: Roblox settings, age rating questionnaire, thumbnails, icon, badges, analytics, DataStore safety, soft launch steps | `docs/design/launch_checklist.md` | done | @@PR@@ |
-| G-034 | S | design | Update-notes template and draft v0.1 beta notes from the merged features in `TASKS.md` | `docs/design/update_notes.md` | done | @@PR@@ |
+| G-033 | M | design | Launch checklist: Roblox settings, age rating questionnaire, thumbnails, icon, badges, analytics, DataStore safety, soft launch steps | `docs/design/launch_checklist.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
+| G-034 | S | design | Update-notes template and draft v0.1 beta notes from the merged features in `TASKS.md` | `docs/design/update_notes.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
 | G-035 | M | design | 30-minute playtest script with steps, what to watch, and a feedback form | `docs/design/playtest_script.md` | todo | — |
 | G-036 | M | design | Retention review: daily login, streaks, comeback rewards, weekly goals; what we have versus gaps | `docs/design/retention.md` | todo | — |
 | G-037 | M | design | Social plan: parties, friends bonus, guild concept, trading etiquette. Read `Trading.luau`. | `docs/design/social.md` | todo | — |
