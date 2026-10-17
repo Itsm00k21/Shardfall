@@ -57,11 +57,11 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-040 | M | art | 3D shot list: every model the game needs, grouped (weapons, pets, armor, enemies, bosses, props, Haven), with priority | `docs/art/shot_list.md` | done | https://github.com/Itsm00k21/Shardfall/pull/168 |
 | G-041 | M | art | Per-asset model prompts for every weapon in G-001 (style, silhouette, colors, poly budget, rarity glow) | `docs/art/model_prompts_weapons.md` | done | https://github.com/Itsm00k21/Shardfall/pull/168 |
 | G-042 | M | art | Per-asset model prompts for every pet in G-003 | `docs/art/model_prompts_pets.md` | done | https://github.com/Itsm00k21/Shardfall/pull/168 |
-| G-043 | M | art | Model prompts for bosses (G-010) and zone landmark props (G-011) | `docs/art/model_prompts_world.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 |
-| G-044 | S | art | Icon list matching every key in `src/ReplicatedStorage/Shared/UiIcons.luau`: purpose, size, style, tint, prompt | `docs/art/icon_list.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 |
-| G-045 | M | art | Rarity style sheet: color hex, glow, border, particle, sound per rarity. Read `UiTheme.luau` and `RarityConfig.luau`; note any mismatch. | `docs/art/rarity_style.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 |
-| G-046 | M | art | VFX list for combat, rolls and loot. Read `CombatFeel.luau` and `RollReveal.luau`. | `docs/art/vfx_list.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 |
-| G-047 | S | art | Audio cue list (SFX and music moods). Read `docs/design/shardfall_audio.md` and `Audio.luau`. | `docs/art/audio_cues.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 |
+| G-043 | M | art | Model prompts for bosses (G-010) and zone landmark props (G-011) | `docs/art/model_prompts_world.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
+| G-044 | S | art | Icon list matching every key in `src/ReplicatedStorage/Shared/UiIcons.luau`: purpose, size, style, tint, prompt | `docs/art/icon_list.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
+| G-045 | M | art | Rarity style sheet: color hex, glow, border, particle, sound per rarity. Read `UiTheme.luau` and `RarityConfig.luau`; note any mismatch. | `docs/art/rarity_style.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
+| G-046 | M | art | VFX list for combat, rolls and loot. Read `CombatFeel.luau` and `RollReveal.luau`. | `docs/art/vfx_list.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
+| G-047 | S | art | Audio cue list (SFX and music moods). Read `docs/design/shardfall_audio.md` and `Audio.luau`. | `docs/art/audio_cues.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
 | G-048 | M | research | Top 10 Roblox action RPGs: core loop, menu layout, monetization, what Shardfall should copy or avoid | `docs/research/top_rpgs.md` | todo | — |
 | G-049 | M | research | Top Roblox RNG / roll games: roll feel, pity, auto-roll, rarity display, retention hooks | `docs/research/top_rng.md` | todo | — |
 | G-050 | L | research | Next game brief, merge-army v1: one pad, about 15 tiers, free early auto-merge, PvE only, rebirth, mutated-merge RNG twist, dailies, unit Index, ad boosts; no PvP power | `docs/research/merge_army.md` | todo | — |

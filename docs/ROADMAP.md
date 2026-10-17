@@ -49,10 +49,12 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #177 The board marks T-159 done and files T-160. Docs only.
 - #178 A late hero avatar is destroyed, and an R6 rig still builds. That is T-160 (`e510db4`).
 - #179 Codex cues and the dodge pulse paint from the server-named moment. The hint stays Dodge!. That is T-106 (`cc789b8`).
-- #180 World prompts, icons, rarity, VFX, and audio notes. Docs only.
+- #180 World prompts, icons, rarity, VFX, and audio notes. Docs only (`6e2d9e5`). G-043 through G-047 are done.
 - #181 The action-bar drag and phone 2×4 checklist is on the soft-launch list. That is T-147 (`441a1b6`). The same pass files the MenuHub hotfix row and the deferred door-nameplate restyle.
 - #182 The menu loads again. `MenuHub.start` stays under the 200-local cap (`f95c210`).
 - #183 The board records that hotfix on T-161. Docs only (`9069ddc`).
+- #184 The board marks T-160 done and files Echo's T-163. Docs only (`72808fc`).
+- #185 The board files the hub rarity color row. Docs only (`8eab46d`).
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
@@ -61,7 +63,7 @@ Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABL
 The next week or two.
 
 - Echo's next row is T-163. The Story Echo chip stays off the HP bar on a phone, on `helper/echo-chip-9721`. Brief: `docs/hooks/T-163.md`. T-160 is done in #178 (`e510db4`).
-- T-164 is the hub rarity colors. Mythic is red and Secret is white with a rainbow. The hub currently paints Mythic in Legendary gold. Branch `cursor/hub-rarity-9721`.
+- T-164 is the hub rarity palette. Mythic is red `#E6404E` and Secret is white with a rainbow. Mythic inventory strokes drop the rainbow so only Secret keeps it. The hub currently paints Mythic in Legendary gold. Branch `cursor/hub-rarity-9721`.
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
 - T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first.
 - The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166 and #175. The hero viewport landed in #178. The menu load landed in #182.
