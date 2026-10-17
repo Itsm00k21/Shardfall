@@ -273,7 +273,7 @@ describe("RaidPremadeHop wire", function()
 		expect(
 			string.find(limiter, "RaidReady = { capacity = 3, perSecond = 0.5 }", 1, true) ~= nil
 		).toBeTrue()
-		expect(Schema.VERSION).toEqual(25)
+		expect(Schema.VERSION).toEqual(26)
 
 		local dataService = fs.readFile("src/ServerScriptService/ShardfallServer/DataService.luau")
 		local partyBody = between(

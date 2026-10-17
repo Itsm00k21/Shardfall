@@ -419,7 +419,7 @@ describe("Schema", function()
 			gold = 5,
 		})
 		assert(profile ~= nil)
-		expect(profile.schemaVersion).toEqual(25)
+		expect(profile.schemaVersion).toEqual(26)
 		expect(profile.gold).toEqual(5)
 		local bar = profile.actionBars.tidecaller
 		expect(bar.locked).toEqual(false)
@@ -454,7 +454,7 @@ describe("Schema", function()
 			},
 		})
 		assert(kept ~= nil)
-		expect(kept.schemaVersion).toEqual(25)
+		expect(kept.schemaVersion).toEqual(26)
 		expect(kept.gold).toEqual(1)
 		expect(kept.actionBars.tidecaller.locked).toEqual(true)
 		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
@@ -491,9 +491,9 @@ describe("Codex seen flags", function()
 	end
 
 	it("starts a new profile and a version 24 save locked", function()
-		expect(Schema.VERSION).toEqual(25)
+		expect(Schema.VERSION).toEqual(26)
 		local fresh = Schema.template()
-		expect(fresh.schemaVersion).toEqual(25)
+		expect(fresh.schemaVersion).toEqual(26)
 		expectLocked(fresh.codex)
 
 		local old = Schema.migrate({
@@ -502,7 +502,7 @@ describe("Codex seen flags", function()
 			codex = { unlocked = { attack = true } },
 		})
 		assert(old ~= nil)
-		expect(old.schemaVersion).toEqual(25)
+		expect(old.schemaVersion).toEqual(26)
 		expect(old.gold).toEqual(7)
 		expectLocked(old.codex)
 	end)
@@ -520,7 +520,7 @@ describe("Codex seen flags", function()
 			codex = { unlocked = unlocked, paid = true },
 		})
 		assert(kept ~= nil)
-		expect(kept.schemaVersion).toEqual(25)
+		expect(kept.schemaVersion).toEqual(26)
 		expect(kept.gold).toEqual(4)
 		expect(kept.codex.unlocked.attack).toEqual(true)
 		expect(kept.codex.unlocked.rarity).toEqual(true)
@@ -640,5 +640,194 @@ describe("Codex seen flags", function()
 		expect(stored.unlocked.skills).toEqual(false)
 		expect(saved.unlocked.dodge).toEqual(false)
 		expect(opened.state.unlocked.dodge).toEqual(true)
+	end)
+end)
+
+describe("Training Grove record", function()
+	local function expectEmpty(grove: any)
+		expect(grove.hits).toEqual(0)
+		expect(grove.damage).toEqual(0)
+		expect(grove.healing).toEqual(0)
+		expect(grove.up).toEqual(true)
+		expect(grove.dummy).toEqual(false)
+		expect(grove.dodge).toEqual(false)
+		expect(grove.room).toEqual(false)
+		expect(grove.cosmetic).toEqual(false)
+		expect(grove.colors.red).toEqual(false)
+		expect(grove.colors.yellow).toEqual(false)
+		expect(grove.colors.purple).toEqual(false)
+		expect(grove.colors.blue).toEqual(false)
+		expect(grove.keys).toBeNil()
+		expect(grove.gold).toBeNil()
+	end
+
+	it("starts a new profile and a version 25 save empty", function()
+		expect(Schema.VERSION).toEqual(26)
+		local fresh = Schema.template()
+		expect(fresh.schemaVersion).toEqual(26)
+		expectEmpty(fresh.trainingGrove)
+		expect(fresh.codex.unlocked.attack).toEqual(false)
+
+		local old = Schema.migrate({
+			schemaVersion = 25,
+			gold = 6,
+			codex = {
+				unlocked = {
+					attack = true,
+					dodge = false,
+					perfect = false,
+					skills = false,
+					telegraphs = false,
+					shards = false,
+					doors = false,
+					pets = false,
+					crafting = false,
+					rarity = false,
+				},
+			},
+			trainingGrove = { hits = 9, cosmetic = true, keys = 10, gold = 15 },
+		})
+		assert(old ~= nil)
+		expect(old.schemaVersion).toEqual(26)
+		expect(old.gold).toEqual(6)
+		expect(old.codex.unlocked.attack).toEqual(true)
+		expect(old.codex.unlocked.dodge).toEqual(false)
+		expectEmpty(old.trainingGrove)
+		expect(old.codex.hits).toBeNil()
+	end)
+
+	it("keeps a saved grove and does not fold it into codex", function()
+		local kept = Schema.migrate({
+			schemaVersion = 26,
+			gold = 3,
+			codex = { unlocked = { attack = true } },
+			trainingGrove = {
+				hits = 4,
+				damage = 12,
+				healing = 1.9,
+				up = false,
+				dummy = true,
+				dodge = true,
+				colors = { red = true, yellow = false, purple = 1, blue = "true" },
+				room = true,
+				cosmetic = true,
+				keys = 10,
+				gold = 15,
+			},
+		})
+		assert(kept ~= nil)
+		expect(kept.schemaVersion).toEqual(26)
+		expect(kept.gold).toEqual(3)
+		expect(kept.codex.unlocked.attack).toEqual(true)
+		expect(kept.trainingGrove.hits).toEqual(4)
+		expect(kept.trainingGrove.damage).toEqual(12)
+		expect(kept.trainingGrove.healing).toEqual(1)
+		expect(kept.trainingGrove.up).toEqual(false)
+		expect(kept.trainingGrove.dummy).toEqual(true)
+		expect(kept.trainingGrove.dodge).toEqual(true)
+		expect(kept.trainingGrove.colors.red).toEqual(true)
+		expect(kept.trainingGrove.colors.yellow).toEqual(false)
+		expect(kept.trainingGrove.colors.purple).toEqual(false)
+		expect(kept.trainingGrove.colors.blue).toEqual(false)
+		expect(kept.trainingGrove.room).toEqual(true)
+		expect(kept.trainingGrove.cosmetic).toEqual(true)
+		expect(kept.trainingGrove.keys).toBeNil()
+		expect(kept.trainingGrove.gold).toBeNil()
+
+		local missing = Schema.migrate({ schemaVersion = 26, gold = 1 })
+		assert(missing ~= nil)
+		expectEmpty(missing.trainingGrove)
+
+		local copy = Schema.snapshot(kept)
+		expect(copy.trainingGrove.hits).toEqual(4)
+		copy.trainingGrove.hits = 0
+		expect(kept.trainingGrove.hits).toEqual(4)
+	end)
+
+	it("keeps the saved record when a grove call fails", function()
+		local saved = {
+			hits = 2,
+			damage = 8,
+			healing = 0,
+			up = true,
+			dummy = true,
+			dodge = false,
+			colors = { red = true, yellow = false, purple = false, blue = false },
+			room = false,
+			cosmetic = false,
+		}
+		table.freeze(saved.colors)
+		table.freeze(saved)
+		local failed = {
+			ok = false,
+			keys = 10,
+			gold = 15,
+			paid = true,
+			productId = 0,
+			robux = 0,
+			cost = 0,
+			skip = false,
+			state = { hits = 0, cosmetic = true, keys = 10, gold = 15 },
+		}
+		table.freeze(failed.state)
+		table.freeze(failed)
+		local kept = Schema.applyGrove(saved, failed)
+		expect(kept.hits).toEqual(2)
+		expect(kept.cosmetic).toEqual(false)
+		expect(kept.colors.red).toEqual(true)
+		expect(kept.keys).toBeNil()
+		expect(kept.gold).toBeNil()
+		expect(saved.hits).toEqual(2)
+		expect(failed.state.hits).toEqual(0)
+		expect(kept == saved).toBeFalse()
+
+		local skipped = Schema.applyGrove(saved, {
+			ok = true,
+			skip = true,
+			state = { hits = 9, cosmetic = true },
+		})
+		expect(skipped.hits).toEqual(2)
+		expect(skipped.cosmetic).toEqual(false)
+
+		local named = Schema.applyGrove(saved, {
+			ok = true,
+			guildId = "grove",
+			state = { hits = 9 },
+		})
+		expect(named.hits).toEqual(2)
+
+		local opened = {
+			ok = true,
+			paid = true,
+			keys = 10,
+			gold = 15,
+			state = {
+				hits = 3,
+				damage = 20,
+				healing = 0,
+				up = true,
+				dummy = true,
+				dodge = true,
+				colors = { red = true, yellow = true, purple = true, blue = true },
+				room = true,
+				cosmetic = true,
+				keys = 10,
+				gold = 15,
+			},
+		}
+		table.freeze(opened.state.colors)
+		table.freeze(opened.state)
+		table.freeze(opened)
+		local stored = Schema.applyGrove(saved, opened)
+		expect(stored.hits).toEqual(3)
+		expect(stored.damage).toEqual(20)
+		expect(stored.dodge).toEqual(true)
+		expect(stored.colors.blue).toEqual(true)
+		expect(stored.room).toEqual(true)
+		expect(stored.cosmetic).toEqual(true)
+		expect(stored.keys).toBeNil()
+		expect(stored.gold).toBeNil()
+		expect(saved.hits).toEqual(2)
+		expect(opened.state.hits).toEqual(3)
 	end)
 end)
