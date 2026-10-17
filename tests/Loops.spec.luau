@@ -321,4 +321,102 @@ describe("Loops", function()
 			error(err, 2)
 		end
 	end)
+
+	it("matches weekly text to the live goal and leaves dailies alone", function()
+		expect(table.isfrozen(Loops.WEEKLY)).toEqual(true)
+		expect(#Loops.WEEKLY).toEqual(5)
+		expect(Loops.WEEKLY).toEqual({
+			{ id = "rooms", text = "Clear 6 Rootvault rooms", goal = 6 },
+			{ id = "dodge", text = "Dodge 15 attacks", goal = 15 },
+			{ id = "hatch", text = "Hatch 3 eggs", goal = 3 },
+			{ id = "forge", text = "Upgrade 3 pieces of gear", goal = 3 },
+			{ id = "pet", text = "Pet or feed a companion 3 times", goal = 3 },
+		})
+		for _, row in ipairs(Loops.WEEKLY) do
+			expect(table.isfrozen(row)).toEqual(true)
+		end
+
+		expect(Loops.POOL).toEqual({
+			{ id = "rooms", text = "Clear 2 Rootvault rooms", goal = 2 },
+			{ id = "dodge", text = "Dodge 5 attacks", goal = 5 },
+			{ id = "hatch", text = "Hatch an egg", goal = 1 },
+			{ id = "forge", text = "Upgrade a piece of gear", goal = 1 },
+			{ id = "pet", text = "Pet or feed a companion", goal = 1 },
+		})
+		local dailies = Loops.rollDailies(8, 0)
+		expect(#dailies).toEqual(3)
+		expect(dailies[1].id).toEqual("rooms")
+		expect(dailies[1].text).toEqual("Clear 2 Rootvault rooms")
+		expect(dailies[1].goal).toEqual(2)
+		expect(dailies[2].id).toEqual("dodge")
+		expect(dailies[2].text).toEqual("Dodge 5 attacks")
+		expect(dailies[2].goal).toEqual(5)
+		expect(dailies[3].id).toEqual("hatch")
+		expect(dailies[3].text).toEqual("Hatch an egg")
+		expect(dailies[3].goal).toEqual(1)
+		local later = Loops.rollDailies(8, 3)
+		expect(later[1].id).toEqual("forge")
+		expect(later[1].text).toEqual("Upgrade a piece of gear")
+		expect(later[1].goal).toEqual(1)
+		expect(later[2].id).toEqual("pet")
+		expect(later[2].text).toEqual("Pet or feed a companion")
+		expect(later[2].goal).toEqual(1)
+
+		local weeklies = Loops.rollWeekly(9, 0)
+		expect(#weeklies).toEqual(5)
+		local ids = {}
+		for index, quest in ipairs(weeklies) do
+			ids[index] = quest.id
+			expect(quest.text).toEqual(Loops.WEEKLY[index].text)
+			expect(quest.goal).toEqual(Loops.WEEKLY[index].goal)
+			expect(quest.progress).toEqual(0)
+			expect(quest.done).toEqual(false)
+			expect(quest.born).toEqual(9)
+		end
+		expect(ids).toEqual({ "rooms", "dodge", "hatch", "forge", "pet" })
+		local rotated = Loops.rollWeekly(9, 2)
+		expect(rotated[1].id).toEqual("hatch")
+		expect(rotated[1].text).toEqual("Hatch 3 eggs")
+		expect(rotated[1].goal).toEqual(3)
+		expect(rotated[2].id).toEqual("forge")
+		expect(rotated[2].goal).toEqual(3)
+		expect(rotated[3].id).toEqual("pet")
+		expect(rotated[3].text).toEqual("Pet or feed a companion 3 times")
+		expect(rotated[4].id).toEqual("rooms")
+		expect(rotated[4].text).toEqual("Clear 6 Rootvault rooms")
+		expect(rotated[4].goal).toEqual(6)
+		expect(rotated[5].id).toEqual("dodge")
+		expect(rotated[5].text).toEqual("Dodge 15 attacks")
+		expect(rotated[5].goal).toEqual(15)
+
+		local board = { dailies = {}, weekly = weeklies }
+		expect(Loops.apply(board, "rooms", 5)).toEqual(0)
+		expect(weeklies[1].progress).toEqual(5)
+		expect(weeklies[1].done).toEqual(false)
+		expect(Loops.apply(board, "rooms", 1)).toEqual(1)
+		expect(weeklies[1].progress).toEqual(6)
+		expect(weeklies[1].done).toEqual(true)
+
+		expect(Loops.PREMIUM_ENABLED).toEqual(false)
+		local savedProduct = Loops.PASS_PRODUCT_ID
+		Loops.PASS_PRODUCT_ID = 101
+		local data = {
+			receipts = {},
+			gems = 5,
+			passPremium = false,
+		}
+		local ok, err = pcall(function()
+			local granted, duplicate, reason = Loops.grantPremium(data, "receipt-weekly", 101)
+			expect(granted).toEqual(false)
+			expect(duplicate).toEqual(false)
+			expect(reason).toEqual("The premium track is not for sale yet.")
+			expect(data.receipts["receipt-weekly"]).toEqual(nil)
+			expect(data.passPremium).toEqual(false)
+			expect(data.gems).toEqual(5)
+		end)
+		Loops.PASS_PRODUCT_ID = savedProduct
+		if not ok then
+			error(err, 2)
+		end
+	end)
 end)

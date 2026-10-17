@@ -44,6 +44,16 @@ Loops.POOL = {
 	{ id = "pet", text = "Pet or feed a companion", goal = 1 },
 }
 
+-- Same five ids LoopService.progress already reports. The sentence matches
+-- the goal. rollWeekly reads this table and does not multiply again.
+Loops.WEEKLY = table.freeze({
+	table.freeze({ id = "rooms", text = "Clear 6 Rootvault rooms", goal = 6 }),
+	table.freeze({ id = "dodge", text = "Dodge 15 attacks", goal = 15 }),
+	table.freeze({ id = "hatch", text = "Hatch 3 eggs", goal = 3 }),
+	table.freeze({ id = "forge", text = "Upgrade 3 pieces of gear", goal = 3 }),
+	table.freeze({ id = "pet", text = "Pet or feed a companion 3 times", goal = 3 }),
+})
+
 -- 4 rows, 4 columns, and both diagonals. Rewards still fire at 1, 2, and 3.
 Loops.LINE_CELLS = {
 	{ 1, 2, 3, 4 },
@@ -519,13 +529,13 @@ function Loops.rollWeekly(week: number, salt: number)
 	local cursor = salt
 	while #picked < 5 do
 		cursor += 1
-		local row = Loops.POOL[((cursor - 1) % #Loops.POOL) + 1]
+		local row = Loops.WEEKLY[((cursor - 1) % #Loops.WEEKLY) + 1]
 		if used[row.id] ~= true then
 			used[row.id] = true
 			table.insert(picked, {
 				id = row.id,
 				text = row.text,
-				goal = row.goal * 3,
+				goal = row.goal,
 				progress = 0,
 				born = week,
 				done = false,
