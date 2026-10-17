@@ -4,8 +4,9 @@
 	Verdant Relic Sets. Heartwood Hard drops one 4-piece set per class.
 
 	Pieces are raid-drop only. They are tradeable on the Market Board
-	and not bound. stamp sets bound = false and tradeable = true on a
-	copy and does not write the input. Two pieces unlock a 2-piece
+	and not bound. Catalog rows from makePiece use bound = false and
+	tradeable = true. stamp sets the same flags on a copy and does not
+	write the input. Two pieces unlock a 2-piece
 	bonus. Four unlock that and a 4-piece bonus. The bonuses change how
 	the class plays. They do not add flat damage, health, or defense,
 	and nothing here costs Robux.
@@ -95,8 +96,8 @@ local function makePiece(classId: string, setId: string, slot: string, name: str
 		kind = "Armor",
 		rarity = "Epic",
 		source = RelicSets.SOURCE,
-		bound = true,
-		tradeable = false,
+		bound = false,
+		tradeable = true,
 	}
 end
 
