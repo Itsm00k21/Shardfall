@@ -12,6 +12,10 @@
 	The old cluster used the settings gear, the help-tab question mark, and
 	an empty icon, and it dropped the key when the engine had already
 	handled it. These slots bind above that and show the skill glyph.
+
+	A Codex snapshot on CombatFx glows skill slots and pulses Dodge.
+	The server named that moment. This bar does not send seen. The hint
+	is CodexCues.HINT ("Dodge!") and nothing after it.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -23,6 +27,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
+local CodexCues = require(Shared:WaitForChild("CodexCues"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 
@@ -60,6 +65,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local holdToken = 0
 	local heldTip = false
 	local promptsShown = 0
+	local skillsCue = false
+	local dodgeCue = false
 	local payloadMoved = false
 	local payloadOrigin = Vector2.zero
 	local showTip: (number) -> ()
@@ -131,6 +138,14 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		stroke.Thickness = UiTheme.STROKE_BOLD
 		stroke.Color = theme("accent")
 		stroke.Parent = button
+		local skillGlow = Instance.new("UIStroke")
+		skillGlow.Name = "SkillGlow"
+		skillGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		skillGlow.Thickness = 3
+		skillGlow.Color = Color3.fromRGB(CodexCues.COLOR.skill[1], CodexCues.COLOR.skill[2], CodexCues.COLOR.skill[3])
+		skillGlow.Transparency = 0.15
+		skillGlow.Enabled = false
+		skillGlow.Parent = button
 		local glyph = Instance.new("TextLabel")
 		glyph.Name = "Glyph"
 		glyph.BackgroundTransparency = 1
@@ -344,6 +359,37 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local dodge = promptButton("Dodge", "Shift")
+	local dodgePulse = Instance.new("UIStroke")
+	dodgePulse.Name = "DodgePulse"
+	dodgePulse.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	dodgePulse.Thickness = 3
+	dodgePulse.Color = Color3.fromRGB(
+		CodexCues.COLOR.dodgePulse[1],
+		CodexCues.COLOR.dodgePulse[2],
+		CodexCues.COLOR.dodgePulse[3]
+	)
+	dodgePulse.Transparency = 0.1
+	dodgePulse.Enabled = false
+	dodgePulse.Parent = dodge
+	local dodgeHint = Instance.new("TextLabel")
+	dodgeHint.Name = "DodgeHint"
+	dodgeHint.BackgroundColor3 = theme("panel")
+	dodgeHint.BackgroundTransparency = 0
+	dodgeHint.BorderSizePixel = 0
+	dodgeHint.Font = Enum.Font.BuilderSansBold
+	dodgeHint.TextSize = UiTheme.MIN_TEXT
+	dodgeHint.TextColor3 = Color3.fromRGB(CodexCues.COLOR.dodge[1], CodexCues.COLOR.dodge[2], CodexCues.COLOR.dodge[3])
+	dodgeHint.Text = ""
+	dodgeHint.Visible = false
+	dodgeHint.ZIndex = 8
+	dodgeHint.Parent = screen
+	local dodgeHintCorner = Instance.new("UICorner")
+	dodgeHintCorner.CornerRadius = UDim.new(0, 8)
+	dodgeHintCorner.Parent = dodgeHint
+	local dodgeHintStroke = Instance.new("UIStroke")
+	dodgeHintStroke.Thickness = 1
+	dodgeHintStroke.Color = Color3.fromRGB(12, 8, 20)
+	dodgeHintStroke.Parent = dodgeHint
 	local interact = promptButton("Interact", "F")
 	interact.Visible = false
 
@@ -416,6 +462,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			if border ~= nil and border:IsA("UIStroke") then
 				border.Color = rgb(ActionSlots.border(slot, profile))
+			end
+			local skillGlow = button:FindFirstChild("SkillGlow")
+			if skillGlow ~= nil and skillGlow:IsA("UIStroke") then
+				skillGlow.Enabled = skillsCue and slot.kind == "skill"
 			end
 			local count = ActionSlots.stacks(slot, profile)
 			if stacks ~= nil and stacks:IsA("TextLabel") then
@@ -535,6 +585,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		dodge.Size = UDim2.fromOffset(chips.dodge.w, chips.dodge.h)
 		interact.Position = UDim2.fromOffset(chips.interact.x, chips.interact.y)
 		interact.Size = UDim2.fromOffset(chips.interact.w, chips.interact.h)
+		dodgeHint.Position = UDim2.fromOffset(chips.dodge.x, math.max(0, chips.dodge.y - 32))
+		dodgeHint.Size = UDim2.fromOffset(math.max(chips.dodge.w, 88), 28)
+		dodgeHint.Text = if dodgeCue then CodexCues.HINT else ""
+		dodgeHint.Visible = dodgeCue
 		local bind = dodge:FindFirstChild("Bind")
 		if bind ~= nil and bind:IsA("TextLabel") then
 			bind.Text = if mobile then "Dodge" else "Shift"
@@ -802,7 +856,37 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				local untilFlash = flashUntil[index]
 				flash.BackgroundTransparency = if type(untilFlash) == "number" and now < untilFlash then 0.45 else 1
 			end
+			local skillGlow = button:FindFirstChild("SkillGlow")
+			if skillGlow ~= nil and skillGlow:IsA("UIStroke") and skillGlow.Enabled then
+				skillGlow.Transparency = 0.1 + 0.25 * (0.5 + 0.5 * math.sin(now * 6))
+			end
 		end
+		dodgePulse.Enabled = dodgeCue
+		if dodgeCue then
+			dodgePulse.Transparency = 0.05 + 0.3 * (0.5 + 0.5 * math.sin(now * 8))
+		end
+	end)
+
+	task.spawn(function()
+		local folder = ReplicatedStorage:WaitForChild("Remotes", 15)
+		if folder == nil then
+			return
+		end
+		local remote = folder:WaitForChild("CombatFx", 15)
+		if remote == nil or not remote:IsA("RemoteEvent") then
+			return
+		end
+		remote.OnClientEvent:Connect(function(payload)
+			local cue = CodexCues.accept(payload)
+			if cue.ok ~= true then
+				return
+			end
+			skillsCue = cue.skills == true
+			dodgeCue = cue.dodge == true
+			dodgeHint.Text = if dodgeCue then CodexCues.HINT else ""
+			dodgeHint.Visible = dodgeCue
+			paint()
+		end)
 	end)
 
 	return {
