@@ -6,6 +6,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MobileShell = require(script.Parent.MobileShell)
 
@@ -14,7 +15,26 @@ local player = Players.LocalPlayer
 local statusLabel: TextLabel? = nil
 local rowRef: Frame? = nil
 local toggleRef: TextButton? = nil
+local chipRef: TextLabel? = nil
 local listener: ((boolean) -> ())? = nil
+
+local function showEcho(label: any)
+	local chip = chipRef
+	if chip == nil then
+		return
+	end
+	if type(label) ~= "string" or label == "" then
+		chip.Text = ""
+		chip.Visible = false
+		return
+	end
+	chip.Text = label
+	chip.Visible = true
+end
+
+function RaidHud.showEcho(label: any)
+	showEcho(label)
+end
 
 function RaidHud.setListener(fn: (boolean) -> ())
 	listener = fn
@@ -89,6 +109,24 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	toggleCorner.Parent = toggle
 	toggleRef = toggle
 
+	local chip = Instance.new("TextLabel")
+	chip.Name = "EchoChip"
+	chip.AnchorPoint = Vector2.new(0, 0)
+	chip.Position = UDim2.fromOffset(248, 16)
+	chip.Size = UDim2.fromOffset(128, 28)
+	chip.BackgroundColor3 = Color3.fromRGB(120, 186, 96)
+	chip.BorderSizePixel = 0
+	chip.Font = Enum.Font.BuilderSansBold
+	chip.TextSize = 14
+	chip.TextColor3 = Color3.fromRGB(16, 14, 24)
+	chip.Text = ""
+	chip.Visible = false
+	chip.Parent = screen
+	local chipCorner = Instance.new("UICorner")
+	chipCorner.CornerRadius = UDim.new(0, 12)
+	chipCorner.Parent = chip
+	chipRef = chip
+
 	local row = Instance.new("Frame")
 	row.Name = "Raid"
 	row.AnchorPoint = Vector2.new(0, 0)
@@ -160,6 +198,29 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	button("Marks", "Marks", Color3.fromRGB(186, 96, 120), function()
 		show(invoke("RaidBuy", "rare_chest"))
 	end)
+
+	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	local fx = remotes:WaitForChild("CombatFx")
+	if fx:IsA("RemoteEvent") then
+		fx.OnClientEvent:Connect(function(payload: any)
+			if type(payload) ~= "table" then
+				return
+			end
+			if payload.kind == "victory" or payload.kind == "defeat" then
+				showEcho(nil)
+				return
+			end
+			if payload.kind ~= "run" then
+				return
+			end
+			local run = payload.run
+			if type(run) ~= "table" or run.active ~= true then
+				showEcho(nil)
+				return
+			end
+			showEcho(run.echoLabel)
+		end)
+	end
 end
 
 return RaidHud
