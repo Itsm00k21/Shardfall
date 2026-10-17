@@ -79,18 +79,24 @@ describe("RarityConfig", function()
 		expect(RarityConfig.luckMultiplier({})).toEqual(1)
 		expect(RarityConfig.luckMultiplier({ shardRolls = 9 })).toEqual(2)
 		expect(RarityConfig.luckMultiplier({ shardLuck = 100 })).toEqual(2)
-		expect(RarityConfig.luckMultiplier({ luckBoost = 25, vip = true })).toEqual(1.25 * 1.2)
+		expect(RarityConfig.luckMultiplier({ luckBoost = 25, vip = true })).toEqual(1)
+		expect(RarityConfig.luckMultiplier({
+			luckBoost = 25,
+			vip = true,
+			paidLuck = true,
+		})).toEqual(1.25 * 1.2)
 		expect(RarityConfig.luckMultiplier({
 			shardRolls = 9,
 			luckBoost = 25,
 			vip = true,
+			paidLuck = true,
 		})).toEqual((1 * 2 + 0.25) * 1.2)
 		expect(RarityConfig.luckMultiplier({
 			luckBoost = 100,
 			vip = true,
 			paidLuck = false,
 		})).toEqual(1)
-		expect(RarityConfig.PAID_LUCK_ENABLED).toEqual(true)
+		expect(RarityConfig.PAID_LUCK_ENABLED).toEqual(false)
 	end)
 
 	it("shows x2 luck on the 10th roll and pity counters", function()
