@@ -9,8 +9,10 @@
 	a key. R is the heavy attack, so the Roll tab is T. 	Slots are 1 through
 	8. Shift is dodge. The bar binds it above the control script, which
 	would otherwise sink Left Shift as sprint. F is interact, and only while
-	a prompt is showing. On a gamepad the D-pad fires slots 1-4, and holding
-	LB fires 5-8. Jump, the camera, ButtonX, and Shift stay off that map.
+	a prompt is showing. 	On a gamepad the D-pad fires slots 1-4, and holding
+	LB fires 5-8. ButtonY dodges. Jump, the camera, ButtonX, and Shift
+	stay off that map. Display keeps the name ButtonY so the letter Y
+	is not a combat key. The Dodge chip shortens the glyph to Y.
 ]]
 
 local Keybinds = {}
@@ -32,9 +34,11 @@ Keybinds.COMBAT = {
 -- Sprint is not a skill. A tab still cannot take it.
 Keybinds.SPRINT = { "LeftShift", "RightShift" }
 
--- Heavy on a controller. Keyboard heavy stays R.
+-- Heavy on a controller is ButtonX. Keyboard heavy stays R.
+-- Dodge on a controller is ButtonY. ButtonX stays heavy.
 Keybinds.GAMEPAD = {
 	heavy = "ButtonX",
+	dodge = "ButtonY",
 }
 
 -- Direct fire for the eight slots. The four directions are slots 1-4,
@@ -75,11 +79,13 @@ Keybinds.PAD_GLYPH = padGlyphs
 
 -- Already owned. The slot map must not use these.
 -- ButtonA jumps. ButtonX is heavy and the proximity prompt (F on a keyboard).
--- ButtonL2 and ButtonR2 zoom the camera. Thumbstick2 looks. Shift dodges.
+-- ButtonY dodges. ButtonL2 and ButtonR2 zoom the camera. Thumbstick2 looks.
+-- Shift dodges.
 -- ButtonB closes the menu. ButtonR1 moves between tabs while it is open.
 local padReserved: { [string]: string } = {
 	ButtonA = "jump",
 	ButtonX = "interact",
+	ButtonY = "dodge",
 	ButtonL2 = "camera",
 	ButtonR2 = "camera",
 	ButtonL3 = "camera",
