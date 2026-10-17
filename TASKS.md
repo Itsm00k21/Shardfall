@@ -60,9 +60,9 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 | T-068 | Story Echo party follow-ups | GHOST | `cursor/story-echo-followups-9721` | (1) `DungeonService.backfill` has no caller, so Echo stacks aren't shared across the party. (2) In a shared fight, one player going down ejects them, so only the last survivor gets the wipe retry. (3) The Echo max-HP bonus is calculated, but CombatService max HP and the HP bar don't apply it. (4) RaidService still passes the stale `profile.raidEcho` value. (5) Replace the `CombatService.healAmount` monkeypatch with a direct hook. | open | — |
 | T-069 | Wire RollHype into the Roll screen | GHOST | `cursor/roll-hype-wire-9721` | `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau` (Roll tab: `beginRoll`, `paintRoll`, milestone toast, personal-best flash) and the Roll route in `src/ReplicatedStorage/Shared/UiRouter.luau`. Call `RollHype.note`, `RollHype.pity`, and `RollHype.tempo` from that screen. Store `state` only when `ok == true`. One legendary pity bar, driven by the server's real post-roll counter: verify `RollMath.rollsSinceLegendary` and the pool's `pityLegendaryAt` against profile `sinceLegendary` and `RarityConfig.LEGENDARY_PITY`, and use whichever counter the server actually uses for the guarantee. Show the counter after the roll so a Legendary visibly resets the bar. `totalRolls` is not pity. One `pity` call for that one bar. Full-animation build-up only (`RollHype.tempo` when the animation is full and reduced motion is off). `RollLoop.seconds` and `RollReveal.duration` stay for short, instant, skip, and reduced motion. Milestone toasts use `callout` at 10, 25, 50, and 100 and stay rarity-free. Personal-best flash only when `newPersonalBest == true`, using `noted.rarity`. A miss does not show `state.best`. A bad rarity shows nothing. A Prism crack counts as a real roll. Streak stays consecutive landed rolls. The session stays in client memory. Goal: a compelling slot-machine feel with honest odds. Do not edit `RollHype.luau`, `RollLoop.luau`, `RollReveal.luau`, `RollMath.luau`, `RollBoard.luau`, `PaidRollPolicy.luau`, or Schema. No near-miss. | open | — |
 
-T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault wiring. The rules are HELPER's T-070 `RaidVault.luau`, and T-010 does not edit that module. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
+T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault wiring. The rules are HELPER's T-070 `RaidVault.luau`, and T-010 does not edit that module. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010. Wiring must surface a clear claim reminder before an unpicked Vault expires. Do not auto-grant. Revisit that reminder after playtest.
 
-Next free id is T-071. T-070 is the weekly Vault rules.
+Next free id is T-072. T-071 is the Resonant Heartshard rules.
 
 ## Claimed by HELPER
 
@@ -86,7 +86,8 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-060 | Practice Grove rules (pure, no wiring) | HELPER | `helper/raid-practice-9721` | new `src/ReplicatedStorage/Shared/RaidPractice.luau`, new `tests/RaidPractice.spec.luau`, one require line in `tests/run.luau`, and a 'T-060 hooks for GHOST' section in this file. Pure, server-authoritative rules for Practice Grove in `docs/design/shardfall_raids.md` (Guild raid prep, and the beta Scope line): a free, lootless sandbox for each unlocked boss, with practice dummies, a jump to any phase, time slowed to 0.75x, individual mechanics turned on or off, and a record of damage, deaths, and mechanic hits. Frozen CONFIG: `slowScale` 0.75, `phases` 3, `shardbreakerPhases` 4 (every boss has 3 phases, 4 on Shardbreaker). Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. Difficulties are story, normal, hard, and shardbreaker. Fracture and guided are not difficulties in this module. Cost is 0. `rewards` is always empty: no gear, Marks, dust, materials, pets, titles, or cosmetics. API, each call returns a new table and does not write the input: `fresh(ctx)` starts `{ bossId, difficulty, phase = 1, slow = false, dummies = true, mechanics = {}, damage = 0, deaths = 0, hits = {} }` and requires `ctx.unlocked == true` (unknown boss or difficulty is an error); `jump(state, phase)` moves to an integer phase from 1 through 3, or 1 through 4 on shardbreaker; `setSlow(state, on)` selects 0.75 when on and 1 when off, and no other scale exists; `scale(state)` returns that number; `toggle(state, mechanicId, enabled)` stores an override for a non-empty mechanic id, with a missing id meaning the mechanic is on (there is no frozen mechanic catalog; T-007 owns Hard mechanic design); `note(state, event)` adds a non-negative finite `damage` amount, adds 1 `death`, or increments `hits[mechanicId]`; `rewards(state)` stays empty even after notes. Store `state` only when `ok == true`. A failure returns a copy and the caller keeps the previous save. Phase jump and slow do not reset the record. Dummies are a flag, default true, and are not a second boss. A practice session is not a clear, a lockout, a Marks payout, or a leaderboard row. Do not require `Raids`, `RaidService`, `DungeonService`, `RaidEcho`, `RaidMarks`, `RaidLuck`, `RaidLeaderboard`, or `RaidRecap`. `RaidService.practice` already launches a lootless Story run. Do not edit that function. Nothing in `src` requires this module, so the live launch stays as it is. No services, remotes, DataStores, MemoryStore, RNG, clock, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, `RaidEcho.luau`, `Remotes.luau`, any T-012 file, or `docs/offload/`. Open questions go in the hooks section: the guild perk "cheaper Practice Grove" has no price and the sandbox stays free, whether live practice stays Story-only while this module accepts Normal, Hard, and Shardbreaker, whether mechanic ids stay caller-supplied, whether 0.75x should scale an enrage timer (no enrage number lives here), and whether the record stays on the in-memory session. | done | [#67](https://github.com/Itsm00k21/Shardfall/pull/67) |
 | T-063 | Practice Grove input guard (pure, no wiring) | HELPER | `helper/raid-practice-guard-9721` | new `src/ReplicatedStorage/Shared/RaidPracticeGuard.luau`, new `tests/RaidPracticeGuard.spec.luau`, one require line in `tests/run.luau`, and a 'T-063 hooks for GHOST' section in this file. Pure, server-authoritative validation of raw remote-style args before the server calls RaidPractice. Never throws on nil, NaN, huge strings, tables, or wrong types. Returns `ok, value, err`. A wing number maps through `Raids.WINGS` (1 twins, 2 sapwell, 3 galecrown, 4 awakened) and an unknown wing is refused. Difficulty and phase match RaidPractice: story, normal, hard, and shardbreaker only; phase 1 through 3, or 1 through 4 only on shardbreaker. Mechanic ids must be on a caller-supplied allowlist, because `Raids.luau` has no frozen per-boss mechanic list. A frozen CONFIG caps distinct mechanic ids on one session and caps damage on one call (finite and at least 0). A hit for a mechanic that is toggled off is refused. No services, remotes, DataStores, MemoryStore, RNG, or clock. Nothing in `src` requires this module. Do not edit `Raids.luau`, `RaidPractice.luau`, `RaidService.luau`, `DungeonService.luau`, `PracticeLoot.luau`, Schema, remotes, or any T-012 file. No build stamp. Nothing costs Robux. Open questions go in the hooks section. | done | [#68](https://github.com/Itsm00k21/Shardfall/pull/68) |
 | T-066 | RollHype rules (pure, no wiring) | HELPER | `helper/roll-hype-9721` | new `src/ReplicatedStorage/Shared/RollHype.luau`, new `tests/RollHype.spec.luau`, one require line in `tests/run.luau`, and a 'T-066 hooks for GHOST' section in this file. Pure display rules for the Roll screen. A session tracks the roll count, the current streak, the best rarity this session, and an all-time personal-best flag. Milestone callouts fire at 10, 25, 50, and 100 landed rolls. The pity meter is a fill from 0 to 1 taken from a caller-supplied counter and goal, because `RollMath` has no 0-1 fill. Reveal tempo is a tier per rarity, with a longer build-up for a higher rarity. Honesty: never surface a rarity that was not rolled, no fake near-miss, the pity meter shows only real progress, and a paid roll uses the same display rules as a free roll. Each call returns a new table and does not write the input. No clock. No RNG. No services, remotes, or DataStores. Do not edit `RollLoop`, `RollReveal`, `RollMath`, `RollBoard`, `PaidRollPolicy`, Schema, Remotes, or any T-012 file. No build stamp. Nothing costs Robux. Nothing in `src` requires this module. Open questions go in the hooks section. | done | [#72](https://github.com/Itsm00k21/Shardfall/pull/72) |
-| T-070 | Weekly Vault rules (pure, no wiring) | HELPER | `helper/raid-vault-rules-9721` | new `src/ReplicatedStorage/Shared/RaidVault.luau`, new `tests/RaidVault.spec.luau`, one require line in `tests/run.luau`, and a 'T-070 hooks for GHOST' section in this file. Pure rules for the weekly Vault in `docs/design/shardfall_raids.md` (Loot and the chase, and the Tuesday reset): killing 2, 4, or 6 raid bosses opens 1, 2, or 3 choices, at the quality of the highest difficulty counted for that slot, and the player picks 1 when the week resets. Frozen CONFIG holds the thresholds, the choice counts, and the difficulty rank. The week key is Tuesday 00:00 UTC, the same shape as `RaidMarks.weekKey`, and this module does not require `RaidMarks`. Each call returns a new table and does not write the input. No RNG: the caller supplies the choice items. No services, remotes, DataStores, MemoryStore, or clock. Unix seconds come in. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `RelicSets.luau`, `RaidMarks.luau`, `RaidLuck.luau`, Schema, remotes, or any T-012 file. T-010 wires the Vault later and does not edit this module. No build stamp. Nothing costs Robux. Nothing in `src` requires this module. Open questions are in the hooks section. | claimed | — |
+| T-070 | Weekly Vault rules (pure, no wiring) | HELPER | `helper/raid-vault-rules-9721` | new `src/ReplicatedStorage/Shared/RaidVault.luau`, new `tests/RaidVault.spec.luau`, one require line in `tests/run.luau`, and a 'T-070 hooks for GHOST' section in this file. Pure rules for the weekly Vault in `docs/design/shardfall_raids.md` (Loot and the chase, and the Tuesday reset): killing 2, 4, or 6 distinct (boss, difficulty) pairs opens 1, 2, or 3 choices, at the difficulty of the 2nd, 4th, or 6th highest pair, and the player picks 1 when the week resets. The same pair counts once. The first offer locks. An item whose difficulty does not match its slot is refused. Frozen CONFIG holds the thresholds, the choice counts, and the difficulty rank. The week key is Tuesday 00:00 UTC, the same shape as `RaidMarks.weekKey`, and this module does not require `RaidMarks`. Each call returns a new table and does not write the input. No RNG: the caller supplies the choice items. No services, remotes, DataStores, MemoryStore, or clock. Unix seconds come in. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `RelicSets.luau`, `RaidMarks.luau`, `RaidLuck.luau`, Schema, remotes, or any T-012 file. T-010 wires the Vault later and does not edit this module. No build stamp. Nothing costs Robux. Nothing in `src` requires this module. Decisions are in the hooks section. | done | [#74](https://github.com/Itsm00k21/Shardfall/pull/74) |
+| T-071 | Resonant Heartshard pattern rules (pure, no wiring) | HELPER | `helper/raid-resonant-9721` | new `src/ReplicatedStorage/Shared/RaidResonant.luau`, new `tests/RaidResonant.spec.luau`, one require line in `tests/run.luau`, and a 'T-071 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md` (Heartshard weapons): a Resonant drop (red border) counts toward that weapon. Three Resonant drops of the same weapon unlock its Forge pattern. Frozen CONFIG holds the threshold 3. A drop is `{ weaponId, resonant, practice, uid }`. `weaponId` is a trimmed non-empty string; do not hardcode the content catalog and do not require `docs/content/`. The same `uid` does not count twice. A missing `uid` is refused so a retry cannot double-count. `resonant ~= true` does not count. Practice Grove does not count. The count sticks at 3. Unlock stays set. Each call returns a new table and does not write the input. No craft, no Marks spend, no materials, no RNG, no clock, no services, remotes, DataStores, or MemoryStore. Nothing costs Robux. No paid skip of the three drops. Do not edit `Crafting.luau`, `Recipes.luau`, `Raids.luau`, `RaidService.luau`, `RaidLootTrade.luau`, Schema, remotes, or any T-012 file. Suggest profile fields in the hooks section for the next free schema version at wiring time. No build stamp. Nothing in `src` requires this module. Open questions go in the hooks section. | claimed | — |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -2523,18 +2524,149 @@ Questions for Ghost:
 
 ### T-070 hooks for GHOST
 
-HELPER has not written `RaidVault` yet. This section is the assignment. The module stays pure and unwired. T-010 wires the Vault later and does not edit `RaidVault.luau`. Nothing in `src` should require it on the HELPER branch. No build stamp. No new remote. No DataStore. No RNG. No clock. Nothing here costs Robux.
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `RelicSets.luau`, `RaidMarks.luau`, `RaidLuck.luau`, `Schema.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidVault` is pure and ready to call. It does not require `RaidMarks`, `Raids`, `RelicSets`, or `RaidLuck`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. T-070 is done. T-010 wires the Vault and does not edit this module. Wiring must surface a clear claim reminder before an unpicked Vault expires, and must not auto-grant. Revisit that reminder after playtest.
 
-Open questions for the module:
+Thresholds are `RaidVault.CONFIG`. `thresholds` is 2, 4, 6. `choiceCounts` is 1, 2, 3. `rank` is story 1, normal 2, hard 3, shardbreaker 4. Fracture and guided are not ranks. `weekSeconds` is 604800. `tuesdayOffset` is 432000 (1970-01-06 00:00:00 UTC), the same Tuesday as `RaidMarks.weekKey`. Do not hardcode the numbers beside the module. Pass unix seconds in as `now`. The module does not read the clock. `os.clock()` is not wall time.
 
-1. Does a boss kill count once per boss per week, or does every clear count, including a reclear of the same boss? The design says "killing 2, 4 or 6 raid bosses."
-2. Is the slot quality the highest difficulty among the kills that opened that slot, or the highest difficulty of the whole week?
-3. Difficulties in rank order for that quality: story, then normal, then hard, then shardbreaker. Fracture stays out of the Vault for this module. Confirm.
-4. The Tuesday key should match `RaidMarks.weekKey` without requiring that module. A kill after the reset starts the next week at 0. Confirm the reset instant is Tuesday 00:00 UTC, inclusive of that second for the new week.
-5. Choices are items the caller passes in. This module does not roll loot and does not read `Raids` drop tables. Confirm.
-6. The player picks exactly one choice at reset, and only from a slot that is open. A second pick in the same week is refused. An unpicked Vault expires at the next reset and does not bank. Confirm.
-7. Practice Grove, an AFK removal, and a vote-kick do not count as a boss kill. Confirm.
-8. No profile field on this branch. Suggest the save shape in the hooks (week key, kill count, highest difficulty per slot, picked flag) for a later GHOST Schema pass. Confirm the session can stay caller-supplied until T-010.
+`RaidVault.weekKey(now)` is that Tuesday week. Week 1 is `tuesdayOffset`. The reset instant belongs to the new week: `1791849600` (2026-10-13 00:00:00 UTC) is key 2963, and one second earlier is 2962. A time before the first Tuesday is key 0. A negative, NaN, or infinite time returns nil. `Raids.weekNumber` stays Thursday 00:00 UTC. On that same Tuesday it returns 2962. This module does not change it. Pass only keys from `RaidVault.weekKey`, or a stored key below 0 for "never stamped".
+
+`RaidService.luau`, next to the `Raids` require, when you wire T-010:
+
+```lua
+local RaidVault = require(ReplicatedStorage.Shared.RaidVault)
+```
+
+**Return shape.** `fresh`, `note`, `view`, `offer`, and `pick` each return one new table. They do not write the input. `weekKey` returns a number or nil, the same shape as `RaidMarks.weekKey`. A bad arg does not throw. nil, NaN, a non-table, and a wrong type take the failure path. Store `state` when `persist == true`, including a failed `offer` or `pick` whose week rolled (`expired` or a count mismatch after the reset). Grant `pick.item` only when `pick.ok == true`. An `ok == false` result with `persist == false` is a bad clock, a bad record, or a bad arg. Writing the blank record from a state error would wipe a real Vault.
+
+| call | when | on success |
+|---|---|---|
+| `weekKey(now)` | you need the Tuesday key and nothing else | the key, or nil when `now` cannot be used |
+| `fresh()` | a brand-new profile, before the first stamp | `{ weekKey = -1, kills = {}, vault = nil }` |
+| `note(state, kill, now)` | a Heartwood boss dies | a new state. `counted` means a new (boss, difficulty) row. `upgraded` stays false. |
+| `view(state, now)` | profile load, and when the raids panel should be current | the week rolled, progress slots, and the claim Vault if one is open |
+| `offer(state, items, now)` | you have built one item per open slot | the choices, tagged with that slot's difficulty. No loot roll lives here. |
+| `pick(state, index, now)` | the player takes one choice during the claim week | `item` is the copy to grant. `index` is 1-based into the offer. |
+
+**What a kill is.** Pass `{ bossId, difficulty, practice, guided, removal }`. `bossId` and `difficulty` are trimmed and lowercased. `" Twins "` / `" Hard "` is `twins` / `hard`. Boss ids are not checked against `Raids.WINGS`. Heartwood's room ids are `twins`, `sapwell`, `galecrown`, and `awakened`. A later raid can pass a new id. Each distinct `(bossId, difficulty)` pair counts once per week. The same boss on a second difficulty is a new row and sets `counted`. It does not replace the earlier row, and `upgraded` stays false. The same pair again sets `duplicate` and keeps the stored `guided` flag. One difficulty of the four Heartwood bosses opens at most 2 choices. Those four bosses on two difficulties are 8 pairs and can open 3 choices. The 6-pair slot does not need six different boss ids.
+
+Practice Grove (`practice = true`) does not count. `removal = "afk"` (the T-027 90s removal) and `removal = "kick"` (a passed vote-kick) do not count. `" AFK "` is afk. `"idle"`, `"leave"`, and `""` are refused, so a typo is not a kill. Guided is a flag, not a difficulty. `guided = true` counts and is stored on that pair. A repeat of the same pair keeps the stored flag. A second difficulty stores its own flag on the new row. Practice wins when a removal is also set. Fracture is `ERRORS.difficulty`.
+
+**Slot quality.** Sort the week's pairs from highest rank to lowest. Ties keep record order. Slot 1 (2 pairs) uses the 2nd pair in that list. Slot 2 (4 pairs) uses the 4th. Slot 3 (6 pairs) uses the 6th. The slot's quality is that pair's difficulty. One shardbreaker and one hard open a single choice at hard, not shardbreaker. Three hard and one story open two choices: the first hard, the second story. Six shardbreaker pairs open three shardbreaker choices. A 7th pair does not open a fourth choice. `choiceCount` on the progress result is how many choices this earning week would open at the next reset. It is 0 below 2 pairs.
+
+**The week.** Kills during week W open the Vault at the next Tuesday (week W + 1). The player may pick from that Tuesday until the following Tuesday, exclusive of that next reset instant. A kill at exactly Tuesday 00:00 UTC lands in the new week, and that same `note` opens last week's Vault. A week key below 0 stamps the current Tuesday and does not carry any kills that were sitting on the unstamped record. Save `weekKey` and `kills` from the same result.
+
+An unpicked Vault is dropped at the following Tuesday. `expired == true`. `item` is nil. Do not grant it and do not bank it. If that same roll also opens a new Vault from the week just finished, `vault` is the new one and `expired` still means the previous unclaimed Vault was discarded. A Vault that was already picked is dropped the same way and `expired` stays false, so you do not grant it twice. One boss, or zero, never sets `expired`. Skipping the whole claim week (no login during W + 1) also sets `expired` when the missed week would have opened a slot, and it does not grant.
+
+`offer` before the reset returns `ERRORS.early` when this week already has 2 or more pairs. `ERRORS.closed` means there is nothing to claim and this week has not opened a slot. `offer` takes one item per open slot, in slot order. Each item is a table. A string has no tier and is `ERRORS.quality`. A table is deep-copied: nested tables are new, and a cycle, a function, or a non-finite number is `ERRORS.item`. The item's vault tier is `difficulty`, or a string `quality` when `difficulty` is absent. A numeric gear-roll `quality` is not a tier. Both strings, when present, must agree. The tier must equal that slot's difficulty or the offer is `ERRORS.quality` and `choices` stay nil. `" Hard "` matches `hard`. The first successful offer locks. A second `offer` before the pick returns `ERRORS.locked` and does not replace the items. `offer` after the pick returns `ERRORS.picked`. `pick` before `offer` returns `ERRORS.offer`. `pick` also refuses a stored item whose tier does not match its slot, does not set `picked`, and does not grant it. A second `pick` returns `ERRORS.picked` and `item` nil. Index 0, 1.5, `"1"`, NaN, and inf return `ERRORS.pick`. A week key above `2^53 - 1` is `ERRORS.state` on a stored record and nil from `weekKey`. A negative stored key is still unstamped.
+
+```lua
+local function vaultState(data)
+	return {
+		weekKey = data.raidVaultWeek,
+		kills = data.raidVaultKills,
+		vault = data.raidVaultClaim,
+	}
+end
+
+local function saveVault(data, result)
+	if result.persist ~= true then
+		return
+	end
+	data.raidVaultWeek = result.state.weekKey
+	data.raidVaultKills = result.state.kills
+	data.raidVaultClaim = result.state.vault
+end
+```
+
+Nil fields are a fresh record (`weekKey` nil counts as -1, `kills` nil counts as empty). A call before the migrate does not throw. It also does not persist when `persist ~= true`.
+
+**Call sites, still yours.** The boss death is the `enemy.hp <= 0` block in `DungeonService` that already calls `PracticeLoot.applyKill` for a Heartwood boss. T-010's row lists `RaidService.luau` and `Raids.luau`, not `DungeonService`. Add the four functions below on `RaidService` and call `noteVault` from that mutate. Do not fold the rules into `Raids.applyClear`. Calling both is fine: `applyClear` still owns loot, Marks, and the Thursday lock. This module does not read `raidLock`.
+
+```lua
+function RaidService.noteVault(player, bossId, difficulty, practice, guided, removal)
+	local now = os.time()
+	return DataService.mutate(player, function(data)
+		local result = RaidVault.note(vaultState(data), {
+			bossId = bossId,
+			difficulty = difficulty,
+			practice = practice == true,
+			guided = guided == true,
+			removal = removal,
+		}, now)
+		saveVault(data, result)
+		return nil
+	end)
+end
+
+function RaidService.vault(player)
+	local now = os.time()
+	DataService.mutate(player, function(data)
+		saveVault(data, RaidVault.view(vaultState(data), now))
+		return nil
+	end)
+	return DataService.snapshot(player)
+end
+
+function RaidService.offerVault(player, items)
+	local now = os.time()
+	local offered = nil
+	local ok, err = DataService.mutate(player, function(data)
+		offered = RaidVault.offer(vaultState(data), items, now)
+		saveVault(data, offered)
+		if offered.ok ~= true then
+			return offered.error
+		end
+		return nil
+	end)
+	return ok, offered, err
+end
+
+function RaidService.pickVault(player, index)
+	local now = os.time()
+	local picked = nil
+	local ok, err = DataService.mutate(player, function(data)
+		picked = RaidVault.pick(vaultState(data), index, now)
+		saveVault(data, picked)
+		if picked.ok ~= true then
+			return picked.error
+		end
+		-- Grant picked.item here. This module does not know your bag.
+		return nil
+	end)
+	return ok, picked, err
+end
+```
+
+`practice` on the live run is `run.practice == true`. `RaidService.practice` launches with that flag set. Pass it through. A practice `note` returns `ok` and `counted == false`, and `persist` is true only when the week also rolled. Guided is not live. Pass `guided = true` only for a real Guided clear. `removal` is nil, `"afk"`, or `"kick"`. Leave it nil for a player who finished the boss. `RaidService.vault` on profile load is what expires an unclaimed Vault before the panel draws. `items` are yours: one per `vault.choiceCount`, in slot order, each stamped with `difficulty` equal to `vault.slots[i].difficulty` (a string `quality` of that same tier also passes). This module will not roll them. There is no paid reroll, no paid extra choice, and no paid skip of the thresholds. The first offer locks, so build the items once.
+
+**Schema.** HELPER does not edit `Schema.luau`. Add these on the next free schema version at wiring time. Do not assume a version number from this branch. Version 21 was current when T-070 opened. Do not assume 22 is still free.
+
+```lua
+raidVaultWeek: number, -- RaidVault.weekKey. Default -1.
+raidVaultKills: { any }, -- { { bossId, difficulty, guided } } for the earning week.
+raidVaultClaim: any, -- nil, or { earnedWeek, kills, choices, picked }.
+```
+
+`choices` is nil until `offer`. `picked` is nil until `pick`, then the 1-based index into `choices`. The slot difficulties are derived from `kills` and `CONFIG`, so they do not need their own fields. `wholeNumber` fits `raidVaultWeek` with default -1, the same way `raidMarkWeek` works. Leave a non-finite week or a bad kill row for the module to refuse. If `sanitize` turns a broken week into -1 and drops the kills, a corrupt record looks like a new player. `snapshot` should send the view (`choiceCount`, slot difficulties, `offered`, `picked`) when the raids panel shows the Vault. The profile can keep the raw state.
+
+`tests/run.luau` requires `./RaidVault.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Answers from Ghost:
+
+1. Each distinct `(boss, difficulty)` pair counts once per week. The four Heartwood bosses cleared on two difficulties can open 3 choices. The same boss on the same difficulty still counts once and does not replace the stored row.
+2. Keep the 2nd, 4th, and 6th highest rule. Slot quality is that pair's difficulty.
+3. Keep expiry in this module. Nothing is auto-granted or banked. T-010 must surface a clear claim reminder before the Vault expires. Revisit that reminder after playtest.
+4. Confirmed. Guided counts. Practice Grove, an AFK removal, and a passed vote-kick do not.
+5. The first offer locks. A second offer before the pick is `ERRORS.locked`. That blocks a reroll.
+6. Confirmed. The player picks exactly one index during the claim week. A pick during the earning week is `ERRORS.early`. A second pick is refused.
+7. Confirmed. The fields stay `raidVaultWeek`, `raidVaultKills`, and `raidVaultClaim`. T-010 adds them on the next free schema version at wiring time.
+8. Confirmed. No paid reroll, no paid extra choice, and no paid skip of the boss thresholds, ever.
+9. Confirmed. Fracture stays out, including Fracture boss kills.
+10. Confirmed. The week key is Tuesday, the same shape as `RaidMarks.weekKey`. Do not use `Raids.weekNumber`.
+11. Confirmed. Do not carry kills stored on a week key below 0.
+12. `offer` refuses an item whose tier does not match its slot. `pick` refuses a stored mismatch and does not grant it. The loot builder still stamps the slot difficulty. This check is defense in depth.
 
 ## Open
 
