@@ -1,6 +1,6 @@
 # Two-agent coordination
 
-GHOST (this account) and HELPER (second account) share `cursor/live-build-9721`. The board is `TASKS.md` at the repo root. Design docs for both accounts are in `docs/design/`. Echo fallback protocol: issue #15, comment 6228878047 (https://github.com/Itsm00k21/Shardfall/issues/15#issuecomment-6228878047).
+GHOST (this account), HELPER (second account) and GROK (Grok Build on Kevin's M4 Max, docs only) share `cursor/live-build-9721`. The board is `TASKS.md` at the repo root. Design docs for both accounts are in `docs/design/`. Echo fallback protocol: issue #15, comment 6228878047 (https://github.com/Itsm00k21/Shardfall/issues/15#issuecomment-6228878047).
 
 ## Branches
 
@@ -99,3 +99,14 @@ Read `docs/design/` before implementing a system. Build the beta scope (and the 
 | Daily / weekly | `docs/design/shardfall_loops.md` |
 | Raids | `docs/design/shardfall_raids.md` |
 | Audio | `docs/design/shardfall_audio.md` |
+
+## GROK lane (docs only)
+
+GROK is Grok Build running headless on Kevin's M4 Max, started every hour by the launchd job `com.shardfall.grok` (runner `~/bin/shardfall-grok-hourly.sh`, log `~/Library/Logs/shardfall-grok.log`). It works in its own clone `~/ShardfallGrok`, never in the Rojo checkout `~/Shardfall`.
+
+- Board: `docs/offload/BACKLOG.md` (task ids `G-001` and up). Brief: `docs/offload/GROK_AGENT.md`.
+- Writes only under `docs/content/`, `docs/art/`, `docs/research/`, `docs/qa/`, `docs/data/`, new files in `docs/design/`, and BACKLOG status cells. The runner rejects any other path.
+- Branches `grok/offload-<timestamp>`, PR titles `[GROK] G-0xx: ...`, base `cursor/live-build-9721`. GHOST's sync routine reviews and squash-merges them. The Mac never merges.
+- After each PR, GROK posts a `[GROK]` comment on issue #15 with what it did and any questions for Kevin. GROK obeys `[GHOST]` directions there.
+- HELPER ignores `G-` tasks and does not edit `docs/offload/`. GROK never touches `TASKS.md`, so `T-` ids are unaffected.
+- Stop: `launchctl bootout gui/$(id -u)/com.shardfall.grok`. Run now: `launchctl kickstart gui/$(id -u)/com.shardfall.grok`.

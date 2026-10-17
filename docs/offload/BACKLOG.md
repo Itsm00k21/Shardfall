@@ -1,0 +1,93 @@
+# GROK lane backlog
+
+Owner: GROK (Grok Build on Kevin's M4 Max, run hourly by launchd). Rules: `docs/offload/GROK_AGENT.md`.
+
+GROK writes only under `docs/content/`, `docs/design/` (new files only), `docs/art/`, `docs/research/`, `docs/qa/`, `docs/data/`, and the status and PR cells of this file. Never `src/`, `tests/`, `TASKS.md`, `default.project.json`, `docs/COORDINATION.md`, `docs/handoffs/`, or any HELPER file.
+
+Status values: `todo`, `doing` (picked by an open GROK PR), `done`. Size: S (about 15 min), M (about 30 min), L (a whole run). When you finish a task in a run, set its status to `done` and its PR cell to `@@PR@@`. The runner swaps that token for the real PR link.
+
+GHOST may add, reorder or edit rows. New ids continue from the last row. Keep at least 20 `todo` rows: when fewer remain, the run's last task is to add 15 new rows in the same areas (an S task).
+
+Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, Uncommon, Rare, Epic, Legendary, Mythic. Tone: dark-fantasy shards and crystals, ages 10+, no gore. Existing names: Thorn Dagger, Beastbone Hammer, Malaphar's Staff. Heartwood is the first raid (8 players: 1 tank, 1 healer, 6 DPS); Rootvault is the first dungeon; Haven is the hub. The 3D art pass comes last, so every content entry carries a visual note (shape, colors, glow) for the artist.
+
+## Tasks
+
+| id | size | area | title | target | status | PR |
+|---|---|---|---|---|---|---|
+| G-001 | M | content | 30 weapons across all six rarities (swords, daggers, hammers, staffs, bows): name, type, rarity, flavor line of 12 words or fewer, visual note. Read `ItemBases.luau` first and do not reuse its names. | `docs/content/weapons_batch1.md` | todo | — |
+| G-002 | M | content | 30 more weapons, weighted to Epic and above, plus 6 Heartshard raid weapons tied to the Heartwood raid | `docs/content/weapons_batch2.md` | todo | — |
+| G-003 | M | content | 20 pets across all rarities: name, rarity, small % passive idea (suggested), visual note. Read `Pets.luau` and `docs/design/shardfall_pets.md` first. | `docs/content/pets_batch1.md` | todo | — |
+| G-004 | M | content | 8 pet evolution lines (3 stages each), matching the rules in `PetEvolution.luau` | `docs/content/pet_evolutions.md` | todo | — |
+| G-005 | M | content | 24 armor pieces (helm, chest, legs, boots) across rarities, grouped into 6 themed looks | `docs/content/armor_batch1.md` | todo | — |
+| G-006 | S | content | 20 accessories (rings, amulets, charms) with a suggested stat line | `docs/content/accessories.md` | todo | — |
+| G-007 | M | content | 8 armor set bonuses (2-piece and 4-piece, suggested numbers). Read `docs/design/relic_sets.md` and `RelicSets.luau`; do not duplicate Relic Sets. | `docs/content/set_bonuses.md` | todo | — |
+| G-008 | L | content | 6 skill concepts for each of the five classes (name, role, cooldown suggestion, VFX note). Read `docs/design/shardfall_classes.md` and `Classes.luau`. | `docs/content/class_skills.md` | todo | — |
+| G-009 | S | content | One ultimate per class: name, fantasy, animation beats, VFX and SFX note | `docs/content/class_ultimates.md` | todo | — |
+| G-010 | M | content | 8 world bosses: name, zone, 3 phases, signature mechanic, loot theme, visual note | `docs/content/bosses.md` | todo | — |
+| G-011 | M | content | 6 zones after Haven and Heartwood: name, level band, mood, landmarks, enemy theme, music mood | `docs/content/zones.md` | todo | — |
+| G-012 | M | content | 30 regular enemies across the zones in G-011: name, role (melee, ranged, caster, swarm), one move, visual note | `docs/content/enemies.md` | todo | — |
+| G-013 | L | content | Main story chapter 1: 10 quests with objectives, rewards (suggested) and short NPC lines | `docs/content/quests_ch1.md` | todo | — |
+| G-014 | M | content | 20 side quests for Haven and the first zone | `docs/content/quests_side.md` | todo | — |
+| G-015 | M | content | Haven NPC dialogue: 8 NPCs with a greeting, 3 idle lines, a shop line and a quest hand-in line | `docs/content/npc_dialogue_haven.md` | todo | — |
+| G-016 | M | content | 50 achievements (combat, rolls, pets, raids, social, collection) with a reward idea | `docs/content/achievements.md` | todo | — |
+| G-017 | S | content | 40 titles with unlock conditions and rarity tint | `docs/content/titles.md` | todo | — |
+| G-018 | L | content | Shard Pass season 1: 50 tiers, free and premium tracks, cosmetics and convenience only, a season theme and name | `docs/content/shard_pass_s1.md` | todo | — |
+| G-019 | M | content | Shard Pass season 2 theme and 50-tier outline (cosmetics and convenience only) | `docs/content/shard_pass_s2.md` | todo | — |
+| G-020 | S | content | 60 loading-screen tips (controls, rolls, pity, raids, pets, crafting), each under 90 characters | `docs/content/loading_tips.md` | todo | — |
+| G-021 | M | content | Codex lore entries for every Mythic item and pet named so far in `docs/content/` | `docs/content/lore_mythics.md` | todo | — |
+| G-022 | M | content | 40 daily and weekly quest templates. Read `docs/design/shardfall_loops.md` and `Loops.luau`. | `docs/content/dailies.md` | todo | — |
+| G-023 | M | content | 30 cosmetics (auras, trails, weapon dyes, name plates) with rarity and visual note | `docs/content/cosmetics.md` | todo | — |
+| G-024 | S | content | 15 mount concepts with rarity and visual note (cosmetic speed only, no combat power) | `docs/content/mounts.md` | todo | — |
+| G-025 | S | content | Flavor names and descriptions for every material in `Materials.luau`, plus 10 suggested new ones | `docs/content/materials.md` | todo | — |
+| G-026 | M | content | UI microcopy pass: button labels, empty states, error and confirm text for Bag, Pets, Roll, Raids, Market, Pass and Settings. Read `MenuHub.luau`. | `docs/content/ui_copy.md` | todo | — |
+| G-027 | M | design | Economy audit: read `Economy.luau`, `Currencies.luau` and `docs/design/shardfall_economy.md`; list sources and sinks per currency, flag inflation risks, suggest numbers | `docs/design/economy_audit.md` | todo | — |
+| G-028 | M | design | Drop-rate proposal per source (mobs, chests, bosses, raids, rolls). Read `Rarities.luau`, `RarityConfig.luau` and `Drops.luau`. | `docs/design/drop_rates.md` | todo | — |
+| G-029 | M | design | XP curve for levels 1-100 with time-to-level targets. Read `Progression.luau`. | `docs/design/xp_curve.md` | todo | — |
+| G-030 | M | design | Pacing plan: minute-by-minute first 30 minutes, then day 1, day 3, day 7 goals | `docs/design/pacing.md` | todo | — |
+| G-031 | L | design | Fair monetization catalog: game passes, dev products, Shard Pass pricing in Robux. Cosmetics and convenience only, never paid power. Read `PaidRollPolicy.luau` and `StoreAdapter.luau`. | `docs/design/monetization_catalog.md` | todo | — |
+| G-032 | S | design | Store copy for every item in G-031 (title under 30 characters, two-line description) | `docs/design/store_copy.md` | todo | — |
+| G-033 | M | design | Launch checklist: Roblox settings, age rating questionnaire, thumbnails, icon, badges, analytics, DataStore safety, soft launch steps | `docs/design/launch_checklist.md` | todo | — |
+| G-034 | S | design | Update-notes template and draft v0.1 beta notes from the merged features in `TASKS.md` | `docs/design/update_notes.md` | todo | — |
+| G-035 | M | design | 30-minute playtest script with steps, what to watch, and a feedback form | `docs/design/playtest_script.md` | todo | — |
+| G-036 | M | design | Retention review: daily login, streaks, comeback rewards, weekly goals; what we have versus gaps | `docs/design/retention.md` | todo | — |
+| G-037 | M | design | Social plan: parties, friends bonus, guild concept, trading etiquette. Read `Trading.luau`. | `docs/design/social.md` | todo | — |
+| G-038 | M | design | Pity and anti-frustration review of `RollMath.luau`, `RollBoard.luau` and `RollLoop.luau`, with player-facing explanations | `docs/design/pity_review.md` | todo | — |
+| G-039 | S | design | Discovery plan: game title options, description, tags, thumbnail and icon concepts | `docs/design/discovery.md` | todo | — |
+| G-040 | M | art | 3D shot list: every model the game needs, grouped (weapons, pets, armor, enemies, bosses, props, Haven), with priority | `docs/art/shot_list.md` | todo | — |
+| G-041 | M | art | Per-asset model prompts for every weapon in G-001 (style, silhouette, colors, poly budget, rarity glow) | `docs/art/model_prompts_weapons.md` | todo | — |
+| G-042 | M | art | Per-asset model prompts for every pet in G-003 | `docs/art/model_prompts_pets.md` | todo | — |
+| G-043 | M | art | Model prompts for bosses (G-010) and zone landmark props (G-011) | `docs/art/model_prompts_world.md` | todo | — |
+| G-044 | S | art | Icon list matching every key in `src/ReplicatedStorage/Shared/UiIcons.luau`: purpose, size, style, tint, prompt | `docs/art/icon_list.md` | todo | — |
+| G-045 | M | art | Rarity style sheet: color hex, glow, border, particle, sound per rarity. Read `UiTheme.luau` and `RarityConfig.luau`; note any mismatch. | `docs/art/rarity_style.md` | todo | — |
+| G-046 | M | art | VFX list for combat, rolls and loot. Read `CombatFeel.luau` and `RollReveal.luau`. | `docs/art/vfx_list.md` | todo | — |
+| G-047 | S | art | Audio cue list (SFX and music moods). Read `docs/design/shardfall_audio.md` and `Audio.luau`. | `docs/art/audio_cues.md` | todo | — |
+| G-048 | M | research | Top 10 Roblox action RPGs: core loop, menu layout, monetization, what Shardfall should copy or avoid | `docs/research/top_rpgs.md` | todo | — |
+| G-049 | M | research | Top Roblox RNG / roll games: roll feel, pity, auto-roll, rarity display, retention hooks | `docs/research/top_rng.md` | todo | — |
+| G-050 | L | research | Next game brief, merge-army v1: one pad, about 15 tiers, free early auto-merge, PvE only, rebirth, mutated-merge RNG twist, dailies, unit Index, ad boosts; no PvP power | `docs/research/merge_army.md` | todo | — |
+| G-051 | M | research | Merge-army economy and monetization model (deep but no PvP power), v2 and v3 parking lot | `docs/research/merge_army_loop.md` | todo | — |
+| G-052 | M | research | Reusable starter kit inventory: list every module in `src/` that can be reused in a new game, what to strip, and a folder layout | `docs/research/starter_kit.md` | todo | — |
+| G-053 | S | research | Roblox rules summary for paid random items, age ratings, ads and policy services, with what Shardfall already does | `docs/research/roblox_policy.md` | todo | — |
+| G-054 | S | research | Onboarding research: first-5-minute patterns in top Roblox games versus `docs/design/shardfall_onboarding.md` | `docs/research/onboarding_research.md` | todo | — |
+| G-055 | M | qa | Test-case list for rolls: read `RollMath.luau`, `RollLoop.luau`, `RollBoard.luau` and their specs; list missing cases | `docs/qa/qa_rolls.md` | todo | — |
+| G-056 | M | qa | Bug-risk review of the menu: `UiRouter.luau`, `MenuHub.luau`, `HudShell.luau` (stuck tabs, lost dim, overlap, input leaks) | `docs/qa/qa_menu.md` | todo | — |
+| G-057 | L | qa | Bug-risk review of saves: `DataService.luau`, `Schema.luau`, `ProfileLoad.luau`, `SessionLock.luau` (data loss, migrate gaps) | `docs/qa/qa_data.md` | todo | — |
+| G-058 | M | qa | Exploit review of trading: `Trading.luau`, `TradeService.luau`, `TradeAudit.luau` (dupes, races, scams) | `docs/qa/qa_trading.md` | todo | — |
+| G-059 | M | qa | Remote coverage review: every remote in `Remotes.luau` and `default.project.json` versus its `RateLimiter.luau` rule and server-side validation | `docs/qa/qa_remotes.md` | todo | — |
+| G-060 | M | qa | Test-case list for raid rules (RaidFinder, RaidPremade, RaidMarks, RaidLeaver, RaidLuck, RaidRecap, RaidLeaderboard) | `docs/qa/qa_raids.md` | todo | — |
+| G-061 | S | qa | Manual layout test matrix: phone, tablet, laptop, console sizes for every panel. Read `HudLayout.luau` and `ShellLayout.luau`. | `docs/qa/qa_mobile.md` | todo | — |
+| G-062 | M | qa | Bug-risk review of combat: `CombatService.luau`, `CombatHud.luau`, `CombatFeel.luau` (hit validation, cooldown desync) | `docs/qa/qa_combat.md` | todo | — |
+| G-063 | S | data | Luau-ready table for G-001 weapons (plain `return { ... }`, fields match `ItemBases.luau` style) | `docs/data/weapons_batch1.luau` | todo | — |
+| G-064 | S | data | Luau-ready table for G-003 pets (fields match `Pets.luau` style) | `docs/data/pets_batch1.luau` | todo | — |
+| G-065 | S | data | Luau-ready table for G-016 achievements | `docs/data/achievements.luau` | todo | — |
+| G-066 | S | data | Luau-ready table for G-020 loading tips | `docs/data/loading_tips.luau` | todo | — |
+| G-067 | S | data | Luau-ready table for G-018 Shard Pass season 1 | `docs/data/shard_pass_s1.luau` | todo | — |
+| G-068 | S | data | Luau-ready table for G-029 XP curve | `docs/data/xp_curve.luau` | todo | — |
+
+Data tasks need their source task `done` first. Skip a row whose source is still `todo`.
+
+## Questions for Kevin
+
+GROK adds a row here when a task needs Kevin's call, and also asks it in the run's [GROK] comment on issue #15. GHOST relays the question and writes the answer here.
+
+| id | task | question | answer |
+|---|---|---|---|
