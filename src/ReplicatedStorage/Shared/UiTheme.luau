@@ -10,6 +10,8 @@
 local UiTheme = {}
 
 UiTheme.PAD = 8
+-- Space between cards and rows. The three steps are 8, 12, and 16.
+UiTheme.GAP = 12
 -- Past device safe insets. 8px still left the debug toggle's right edge flat
 -- against the viewport, so the control sits further in.
 UiTheme.EDGE = 16
@@ -18,6 +20,11 @@ UiTheme.CORNER = 10
 UiTheme.TAP = 64
 UiTheme.TOUCH = 44
 UiTheme.STROKE = 1
+UiTheme.STROKE_BOLD = 2
+UiTheme.HEADER = 48
+UiTheme.ACCENT = 3
+-- Drop shadow sits behind a panel. 0 is opaque, 1 is invisible.
+UiTheme.SHADOW = 0.55
 UiTheme.HEADER_FONT = "BuilderSansBold"
 UiTheme.BODY_FONT = "BuilderSans"
 UiTheme.BACKDROP = 0.5
@@ -49,6 +56,15 @@ local rgbRows: { [string]: { number } } = {
 	buttonDim = { 54, 46, 78 },
 	debug = { 72, 52, 36 },
 	ok = { 120, 210, 150 },
+	-- Layered chrome. Panels are a dark body plus a header, not one purple fill.
+	header = { 42, 36, 58 },
+	body = { 18, 16, 28 },
+	shadow = { 0, 0, 0 },
+	divider = { 78, 70, 102 },
+	loss = { 220, 92, 96 },
+	hover = { 64, 56, 92 },
+	press = { 36, 30, 54 },
+	accent = { 255, 206, 96 },
 }
 UiTheme.RGB = rgbRows
 
@@ -58,6 +74,20 @@ end
 
 function UiTheme.safeMargin(): number
 	return math.max(8, UiTheme.EDGE)
+end
+
+-- Positive is a gain, negative is a loss, zero is unchanged.
+function UiTheme.compareTone(delta: number): string
+	if type(delta) ~= "number" or delta ~= delta then
+		return "same"
+	end
+	if delta > 0 then
+		return "gain"
+	end
+	if delta < 0 then
+		return "loss"
+	end
+	return "same"
 end
 
 function UiTheme.rarityColor(name: string): (number, number, number)

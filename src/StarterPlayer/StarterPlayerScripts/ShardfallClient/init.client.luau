@@ -288,9 +288,11 @@ local function applyProfile(profile: any, saving: any)
 	CombatHud.setWallet(profile.gold or 0, profile.shardTokens or 0, profile.gems or 0)
 	if hudShell ~= nil then
 		hudShell.setProfile(profile)
+		hudShell.noteDevice(deviceIsTouch())
 	end
 	if menuHub ~= nil then
 		menuHub.setProfile(profile)
+		menuHub.promptClass(false)
 	end
 	ClassHud.setProfile(profile)
 	OnboardHud.setProfile(profile)
@@ -1090,6 +1092,9 @@ local function openHub(tab: string)
 		closePanels("menu")
 	end
 	menuHub.open(tab)
+	if hudShell ~= nil then
+		hudShell.setRail(tab)
+	end
 end
 
 menuHub = MenuHub.start(playerGui, {
@@ -1119,17 +1124,32 @@ menuHub = MenuHub.start(playerGui, {
 	onDim = function(open: boolean)
 		if hudShell ~= nil then
 			hudShell.setDimmed(open)
+			if not open then
+				hudShell.setRail("")
+			end
+		end
+	end,
+	onTab = function(id: string)
+		if hudShell ~= nil then
+			hudShell.setRail(id)
 		end
 	end,
 })
 
 hudShell = HudShell.start(playerGui, {
-	onMenu = function()
-		if menuHub ~= nil and menuHub.isOpen() then
+	onHero = function()
+		if menuHub ~= nil and menuHub.isOpen() and menuHub.current() == "hero" then
 			menuHub.close()
 			return
 		end
 		openHub("hero")
+	end,
+	onBag = function()
+		if menuHub ~= nil and menuHub.isOpen() and menuHub.current() == "bag" then
+			menuHub.close()
+			return
+		end
+		openHub("bag")
 	end,
 	onRoll = function()
 		openHub("roll")

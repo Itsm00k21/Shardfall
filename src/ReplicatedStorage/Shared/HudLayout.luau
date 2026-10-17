@@ -85,4 +85,122 @@ function HudLayout.bottomLeftEmpty(viewportX: number, viewportY: number): Rect
 	return rect(0, viewportY - 96, math.floor(viewportX * 0.28), 96)
 end
 
+-- Left icon column inside the hub panel. Buttons stay at least 44 tall;
+-- the column itself scrolls when the panel is short.
+function HudLayout.tabColumn(panelW: number, panelH: number): Rect
+	local pad = 8
+	local width = math.min(132, math.max(96, math.floor(panelW * 0.28)))
+	if width > panelW - pad * 2 then
+		width = math.max(44, panelW - pad * 2)
+	end
+	return rect(pad, pad, width, math.max(44, panelH - pad * 2))
+end
+
+-- Page area to the right of the tab column, under the header bar.
+function HudLayout.hubBody(panelW: number, panelH: number): Rect
+	local tabs = HudLayout.tabColumn(panelW, panelH)
+	local gap = 12
+	local header = 48
+	local x = tabs.x + tabs.w + gap
+	local y = header
+	local w = math.max(44, panelW - x - 8)
+	local h = math.max(44, panelH - y - 8)
+	return rect(x, y, w, h)
+end
+
+export type Grid = {
+	columns: number,
+	rows: number,
+	cellW: number,
+	cellH: number,
+	gap: number,
+}
+
+-- Card cells stay at least 44px and the row fits the host width.
+function HudLayout.cardGrid(width: number, height: number, count: number): Grid
+	local gap = 12
+	local minCell = 44
+	local prefer = 112
+	local host = math.max(1, math.floor(width))
+	local columns = 1
+	if host >= prefer then
+		columns = math.max(1, math.floor((host + gap) / (prefer + gap)))
+	end
+	local function cellOf(cols: number): number
+		if cols <= 1 then
+			return host
+		end
+		return math.floor((host - gap * (cols - 1)) / cols)
+	end
+	while columns > 1 and cellOf(columns) < minCell do
+		columns -= 1
+	end
+	while columns > 1 and cellOf(columns) * columns + gap * (columns - 1) > host do
+		columns -= 1
+	end
+	local cellW = cellOf(columns)
+	if cellW < minCell and host >= minCell then
+		cellW = minCell
+		columns = 1
+	end
+	local cellH = math.max(120, math.min(168, cellW + 48))
+	if height >= 120 and height < cellH then
+		cellH = math.floor(height)
+	end
+	local rows = math.max(1, math.ceil(math.max(count, 1) / columns))
+	return {
+		columns = columns,
+		rows = rows,
+		cellW = cellW,
+		cellH = cellH,
+		gap = gap,
+	}
+end
+
+export type RailFit = { x: number, y: number, w: number, h: number, button: number }
+
+-- Shrinks the icon only after the preferred size no longer fits.
+-- The button never drops below `minimum` (44).
+function HudLayout.railFit(
+	viewportY: number,
+	margin: number,
+	count: number,
+	preferred: number,
+	minimum: number
+): RailFit
+	local gap = 8
+	local safeCount = math.max(1, count)
+	local floorSize = math.max(1, minimum)
+	local button = math.max(floorSize, preferred)
+	local function heightOf(size: number): number
+		return safeCount * size + (safeCount - 1) * gap
+	end
+	local available = math.max(floorSize, viewportY - margin * 2)
+	if heightOf(button) > available then
+		button = math.floor((available - (safeCount - 1) * gap) / safeCount)
+		if button < floorSize then
+			button = floorSize
+		end
+	end
+	local height = heightOf(button)
+	local y = math.floor((viewportY - height) / 2)
+	if y < margin then
+		y = margin
+	end
+	if y + height > viewportY - margin then
+		y = math.max(0, viewportY - margin - height)
+	end
+	return { x = margin, y = y, w = button, h = height, button = button }
+end
+
+-- Bottom-left of the safe area. Hidden on a phone unless debug is on.
+function HudLayout.stamp(viewportY: number, margin: number, touch: boolean, debug: boolean): Rect?
+	if touch and not debug then
+		return nil
+	end
+	local height = 16
+	local y = math.max(margin, viewportY - margin - height)
+	return rect(margin, y, 140, height)
+end
+
 return HudLayout
