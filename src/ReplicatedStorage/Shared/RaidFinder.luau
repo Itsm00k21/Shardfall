@@ -29,7 +29,7 @@ local roleTargets = {
 	[5] = table.freeze({ tank = 1, healer = 1, dps = 3 }),
 	[6] = table.freeze({ tank = 1, healer = 1, dps = 4 }),
 	[7] = table.freeze({ tank = 1, healer = 1, dps = 5 }),
-	[8] = table.freeze({ tank = 2, healer = 1, dps = 5 }),
+	[8] = table.freeze({ tank = 1, healer = 1, dps = 6 }),
 }
 
 RaidFinder.CONFIG = table.freeze({
