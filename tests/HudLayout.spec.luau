@@ -1,11 +1,15 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
 local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
+local ToastQueue = require("../src/ReplicatedStorage/Shared/ToastQueue")
+local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 describe("Hud layout", function()
 	it("keeps the shell inside 1280, 1920, and 844", function()
@@ -53,7 +57,7 @@ describe("Hud layout", function()
 			expect(grid.columns >= 1).toBeTrue()
 			local span = grid.columns * grid.cellW + (grid.columns - 1) * grid.gap
 			expect(span <= body.w + 0.01).toBeTrue()
-			local railFit = HudLayout.railFit(vy, margin, 7, 64, 44)
+			local railFit = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, 64, 44)
 			expect(railFit.button >= 44).toBeTrue()
 			expect(railFit.x >= margin).toBeTrue()
 			expect(railFit.y + railFit.h <= vy).toBeTrue()
@@ -88,7 +92,7 @@ describe("Hud layout", function()
 		}
 		for _, view in ipairs(views) do
 			local margin = 16
-			local rail = HudLayout.railFit(view[2], margin, 7, 64, 44)
+			local rail = HudLayout.railFit(view[2], margin, HudLayout.RAIL_COUNT, 64, 44)
 			expect(rail.button >= 44).toBeTrue()
 			local stamp = HudLayout.stamp(view[2], margin, false, false, rail.x + rail.w + 12)
 			expect(stamp ~= nil).toBeTrue()
@@ -99,6 +103,44 @@ describe("Hud layout", function()
 				expect(stamp.y + stamp.h <= view[2]).toBeTrue()
 			end
 		end
+	end)
+
+	it("owns the rail count, the toast stack, and the equip prompt", function()
+		expect(HudLayout.RAIL_COUNT).toEqual(7)
+		expect(HudLayout.PROMPT_LABEL).toEqual(36)
+		local margin = 16
+		local gap = UiTheme.PAD
+		for _, vx in ipairs({ 390, 800, 844, 1280 }) do
+			local toast = HudLayout.toast(vx, margin)
+			local host = HudLayout.toastHost(vx, margin)
+			local prompt = HudLayout.equipPrompt(vx, margin)
+			expect(host).toEqual({
+				x = toast.x,
+				y = toast.y,
+				w = toast.w,
+				h = toast.h * ToastQueue.MAX + gap * (ToastQueue.MAX - 1),
+			})
+			expect(prompt).toEqual({
+				x = host.x,
+				y = host.y + host.h + gap,
+				w = host.w,
+				h = HudLayout.PROMPT_LABEL + UiTheme.TOUCH + gap,
+			})
+			expect(HudLayout.overlaps(host, prompt)).toEqual(false)
+		end
+		local shell =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau")
+		local railAt = string.find(shell, "local RAIL = {", 1, true)
+		expect(railAt ~= nil).toBeTrue()
+		local railEnd = string.find(shell, "\n}\n", railAt :: number, true)
+		expect(railEnd ~= nil).toBeTrue()
+		local rail = string.sub(shell, railAt :: number, railEnd :: number)
+		local _, buttons = string.gsub(rail, "id = ", "")
+		expect(buttons).toEqual(HudLayout.RAIL_COUNT)
+		expect(string.find(shell, "HudLayout.RAIL_COUNT", 1, true) ~= nil).toBeTrue()
+		expect(string.find(shell, "HudLayout.toastHost", 1, true) ~= nil).toBeTrue()
+		expect(string.find(shell, "HudLayout.equipPrompt", 1, true) ~= nil).toBeTrue()
+		expect(string.find(shell, "HudLayout.PROMPT_LABEL", 1, true) ~= nil).toBeTrue()
 	end)
 
 	it("names Gold, Mastery, and Shards", function()

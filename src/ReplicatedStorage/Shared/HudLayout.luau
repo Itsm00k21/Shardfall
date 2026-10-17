@@ -3,11 +3,21 @@
 --[[
 	Rects for the always-on shell. Coordinates are inside the safe GUI,
 	so CoreUISafeInsets are already applied by the ScreenGui.
+
+	RAIL_COUNT is the mid-left rail. toastHost is the card stack
+	HudShell draws from toast. equipPrompt sits one pad under that
+	stack. BannerFit and the starter-goal tracker read those rects.
 ]]
 
+local ToastQueue = require("./ToastQueue")
 local UiTheme = require("./UiTheme")
 
 local HudLayout = {}
+
+-- HudShell's RAIL list stays this long.
+HudLayout.RAIL_COUNT = 7
+-- Equip and Keep start this far down the prompt frame.
+HudLayout.PROMPT_LABEL = 36
 
 export type Rect = { x: number, y: number, w: number, h: number }
 
@@ -64,6 +74,23 @@ function HudLayout.toast(viewportX: number, margin: number): Rect
 	local width = math.min(420, math.max(160, viewportX - 240))
 	local x = math.floor((viewportX - width) / 2)
 	return rect(x, margin + 64, width, 36)
+end
+
+-- ToastQueue.MAX cards, with one pad between each card.
+function HudLayout.toastHost(viewportX: number, margin: number): Rect
+	local toast = HudLayout.toast(viewportX, margin)
+	local gap = UiTheme.PAD
+	local cards = ToastQueue.MAX
+	local height = toast.h * cards + gap * (cards - 1)
+	return rect(toast.x, toast.y, toast.w, height)
+end
+
+-- The Equip / Keep frame, one pad under the toast stack.
+function HudLayout.equipPrompt(viewportX: number, margin: number): Rect
+	local host = HudLayout.toastHost(viewportX, margin)
+	local gap = UiTheme.PAD
+	local height = HudLayout.PROMPT_LABEL + UiTheme.TOUCH + gap
+	return rect(host.x, host.y + host.h + gap, host.w, height)
 end
 
 -- Skills sit to the left and above the jump button. The jump rect is in

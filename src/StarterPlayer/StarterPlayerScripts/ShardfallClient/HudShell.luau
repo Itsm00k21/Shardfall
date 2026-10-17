@@ -38,6 +38,7 @@ export type Callbacks = {
 	onSettings: () -> (),
 }
 
+-- Length is HudLayout.RAIL_COUNT. BannerFit clears that many buttons.
 local RAIL = {
 	{ id = "Hero", icon = "hero", call = "onHero" },
 	{ id = "Bag", icon = "bag", call = "onBag" },
@@ -456,7 +457,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local function promptButton(name: string, label: string, x: number): TextButton
 		local button = Instance.new("TextButton")
 		button.Name = name
-		button.Position = UDim2.fromOffset(x, 36)
+		button.Position = UDim2.fromOffset(x, HudLayout.PROMPT_LABEL)
 		button.Size = UDim2.fromOffset(UiTheme.TOUCH * 2, UiTheme.TOUCH)
 		button.BackgroundColor3 = rgb("button")
 		button.Font = Enum.Font.BuilderSansBold
@@ -552,7 +553,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local row = HudLayout.pills(vx, margin)
 		pills.Position = UDim2.fromOffset(row.x, row.y)
 		pills.Size = UDim2.fromOffset(row.w, row.h)
-		local side = HudLayout.railFit(vy, margin, #RAIL, UiTheme.TAP, UiTheme.TOUCH)
+		local side = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
 		rail.Position = UDim2.fromOffset(side.x, side.y)
 		rail.Size = UDim2.fromOffset(side.w, side.h)
 		for _, button in ipairs(railButtons) do
@@ -567,16 +568,17 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			stamp.Position = UDim2.fromOffset(stampBox.x, stampBox.y)
 			stamp.Size = UDim2.fromOffset(stampBox.w, stampBox.h)
 		end
-		local note = HudLayout.toast(vx, margin)
-		toastHost.Position = UDim2.fromOffset(note.x, note.y)
-		toastHost.Size =
-			UDim2.fromOffset(note.w, note.h * ToastQueue.MAX + 8 * (ToastQueue.MAX - 1))
+		local host = HudLayout.toastHost(vx, margin)
+		toastHost.Position = UDim2.fromOffset(host.x, host.y)
+		toastHost.Size = UDim2.fromOffset(host.w, host.h)
+		local card = HudLayout.toast(vx, margin)
 		for index, label in ipairs(toastLabels) do
-			label.Position = UDim2.fromOffset(0, (index - 1) * (note.h + 8))
-			label.Size = UDim2.fromOffset(note.w, note.h)
+			label.Position = UDim2.fromOffset(0, (index - 1) * (card.h + UiTheme.PAD))
+			label.Size = UDim2.fromOffset(card.w, card.h)
 		end
-		prompt.Position = UDim2.fromOffset(note.x, note.y + toastHost.Size.Y.Offset + 8)
-		prompt.Size = UDim2.fromOffset(note.w, 36 + UiTheme.TOUCH + 8)
+		local ask = HudLayout.equipPrompt(vx, margin)
+		prompt.Position = UDim2.fromOffset(ask.x, ask.y)
+		prompt.Size = UDim2.fromOffset(ask.w, ask.h)
 	end
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)

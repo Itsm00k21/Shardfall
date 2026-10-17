@@ -10,7 +10,6 @@ local expect = framework.expect
 local BannerFit = require("../src/ReplicatedStorage/Shared/BannerFit")
 local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
 local ShellLayout = require("../src/ReplicatedStorage/Shared/ShellLayout")
-local ToastQueue = require("../src/ReplicatedStorage/Shared/ToastQueue")
 local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 local PHONES = {
@@ -34,25 +33,22 @@ local function offToast(box: { x: number, y: number, w: number, h: number }, vx:
 end
 
 local function railBox(viewportY: number)
-	local rail = HudLayout.railFit(viewportY, UiTheme.safeMargin(), 7, UiTheme.TAP, UiTheme.TOUCH)
+	local rail = HudLayout.railFit(
+		viewportY,
+		UiTheme.safeMargin(),
+		HudLayout.RAIL_COUNT,
+		UiTheme.TAP,
+		UiTheme.TOUCH
+	)
 	return { x = rail.x, y = rail.y, w = rail.w, h = rail.h }
 end
 
--- Same stack HudShell paints: ToastQueue.MAX cards, then the equip prompt.
 local function toastHost(viewportX: number)
-	local toast = HudLayout.toast(viewportX, UiTheme.safeMargin())
-	local h = toast.h * ToastQueue.MAX + UiTheme.PAD * (ToastQueue.MAX - 1)
-	return { x = toast.x, y = toast.y, w = toast.w, h = h }
+	return HudLayout.toastHost(viewportX, UiTheme.safeMargin())
 end
 
 local function equipPrompt(viewportX: number)
-	local host = toastHost(viewportX)
-	return {
-		x = host.x,
-		y = host.y + host.h + UiTheme.PAD,
-		w = host.w,
-		h = 36 + UiTheme.TOUCH + UiTheme.PAD,
-	}
+	return HudLayout.equipPrompt(viewportX, UiTheme.safeMargin())
 end
 
 describe("BannerFit", function()
@@ -148,6 +144,7 @@ describe("BannerFit", function()
 	end)
 
 	it("clears the portrait, the HP bar, the rail, the chips, and the hub close", function()
+		expect(HudLayout.RAIL_COUNT).toEqual(7)
 		local margin = UiTheme.safeMargin()
 		for _, view in ipairs(PHONES) do
 			local vx = view[1]
@@ -231,5 +228,20 @@ describe("BannerFit", function()
 		expect(string.find(ui, "settings.access.textScale", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "BannerFit.fit", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "banner.TextSize = box.textSize", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("treats a missing, zero, or fractional viewport as a safe rect", function()
+		local empty = BannerFit.fit(0, 0, 1)
+		inside(empty, 0, 0)
+		expect(empty.w).toEqual(0)
+		expect(empty.h).toEqual(0)
+		expect(empty.textSize).toEqual(16)
+		expect(BannerFit.fit(nil, nil, nil)).toEqual(empty)
+		expect(BannerFit.fit(0 / 0, math.huge, 1)).toEqual(empty)
+		expect(BannerFit.fit(-20, -5, 1)).toEqual(empty)
+		local odd = BannerFit.fit(390.9, 844.2, 1)
+		expect(odd).toEqual(BannerFit.fit(390, 844, 1))
+		inside(odd, 390, 844)
+		offToast(odd, 390)
 	end)
 end)

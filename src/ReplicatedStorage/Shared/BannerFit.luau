@@ -10,13 +10,14 @@
 
 	Height is one line, textSize plus 8px above and below. The rect
 	takes the highest strip that is at least 160px wide and misses
-	the portrait, the HP bar, the seven-button rail, the toast stack,
-	the equip prompt, the currency pills, and the hub close button.
-	On a landscape phone that strip is the top row, 8px in and to
-	the right of the HP bar. On a portrait phone the top row is
-	narrower than 160, so the strip sits 8px under the equip prompt
-	and 8px to the right of the rail. A line that would pass the
-	bottom of the viewport is shortened. The font is not.
+	the portrait, the HP bar, HudLayout.RAIL_COUNT rail buttons,
+	HudLayout.toastHost, HudLayout.equipPrompt, the currency pills,
+	and the hub close button. On a landscape phone that strip is
+	the top row, 8px in and to the right of the HP bar. On a portrait
+	phone the top row is narrower than 160, so the strip sits 8px
+	under the equip prompt and 8px to the right of the rail. A line
+	that would pass the bottom of the viewport is shortened. The
+	font is not.
 
 	Extra arguments are ignored. paid, a product id, Robux, cost,
 	and skip do not move the rect. No clock. No RNG. No services.
@@ -24,18 +25,13 @@
 ]]
 
 local HudLayout = require("./HudLayout")
-local ToastQueue = require("./ToastQueue")
 local UiTheme = require("./UiTheme")
 
 local BannerFit = {}
 
 local BASE_TEXT = 16
--- HudShell's rail list. This module does not require the client.
-local RAIL_COUNT = 7
 -- HudLayout.toast never goes under this width.
 local LANE_MIN = 160
--- HudShell prompt label, above the Equip and Keep buttons.
-local PROMPT_TEXT = 36
 
 export type Rect = {
 	x: number,
@@ -78,30 +74,18 @@ local function box(x: number, y: number, w: number, h: number): Box
 	return { x = x, y = y, w = w, h = h }
 end
 
--- The three-card stack HudShell draws from HudLayout.toast, then the
--- equip prompt under that stack.
-local function stack(vx: number, margin: number): (Box, Box)
-	local toast = HudLayout.toast(vx, margin)
-	local pad = UiTheme.PAD
-	local hostH = toast.h * ToastQueue.MAX + pad * (ToastQueue.MAX - 1)
-	local host = box(toast.x, toast.y, toast.w, hostH)
-	local prompt = box(toast.x, host.y + host.h + pad, toast.w, PROMPT_TEXT + UiTheme.TOUCH + pad)
-	return host, prompt
-end
-
 -- Portrait, HP, rail, toast stack, equip prompt, currency pills, and
 -- the hub close button. The lane has to miss every one of these.
 local function occupied(vx: number, vy: number, margin: number): { Box }
 	local pad = UiTheme.PAD
 	local hub = HudLayout.hub(vx, vy, margin)
-	local rail = HudLayout.railFit(vy, margin, RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
-	local host, prompt = stack(vx, margin)
+	local rail = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
 	return {
 		HudLayout.portrait(margin),
 		HudLayout.health(margin),
 		HudLayout.pills(vx, margin),
-		host,
-		prompt,
+		HudLayout.toastHost(vx, margin),
+		HudLayout.equipPrompt(vx, margin),
 		box(rail.x, rail.y, rail.w, rail.h),
 		box(hub.x + hub.w - pad - UiTheme.TOUCH, hub.y + pad, UiTheme.TOUCH, UiTheme.TOUCH),
 	}
@@ -212,7 +196,7 @@ function BannerFit.fit(viewportX: any, viewportY: any, textScale: any): Rect
 	local minWide = math.min(LANE_MIN, math.max(0, vx - pad * 2))
 	local chosen = top
 	if top.w < minWide then
-		local _, prompt = stack(vx, margin)
+		local prompt = HudLayout.equipPrompt(vx, margin)
 		local below = prompt.y + prompt.h + pad
 		if below < vy then
 			local lower = measure(vx, vy, below, line, blockers)
