@@ -41,6 +41,7 @@ local HavenClient = require(script.HavenClient)
 local HudShell = require(script.HudShell)
 local MenuHub = require(script.MenuHub)
 local InventoryHud = require(script.InventoryHud)
+local LoadingHud = require(script.LoadingHud)
 local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
@@ -102,6 +103,7 @@ end
 CombatStage.watchCamera()
 
 local playerGui = player:WaitForChild("PlayerGui")
+LoadingHud.start(playerGui)
 
 local function scriptNames(instance: Instance): { string }
 	local names = { instance.Name }
