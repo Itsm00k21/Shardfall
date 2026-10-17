@@ -114,7 +114,7 @@ describe("RollBoard", function()
 		expect(string.find(refused, "sinceEpic", 1, true)).toBeNil()
 
 		local schema = fs.readFile("src/ReplicatedStorage/Shared/Schema.luau")
-		expect(string.find(schema, "Schema.VERSION = 22", 1, true) ~= nil).toBeTrue()
+		expect(string.find(schema, "Schema.VERSION = 23", 1, true) ~= nil).toBeTrue()
 		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
 		expect(string.find(roll, "sinceEpic = data.sinceEpic", 1, true) ~= nil).toBeTrue()
 		expect(string.find(roll, "RarityConfig.pick", 1, true) ~= nil).toBeTrue()

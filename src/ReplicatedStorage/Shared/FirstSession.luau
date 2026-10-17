@@ -19,8 +19,8 @@
 	here costs Robux.
 
 	It requires Rarities for the ladder and nothing else. Classes has
-	no element field, so the class elements live in ELEMENTS. Nothing
-	in src requires this module.
+	no element field, so the class elements live in ELEMENTS.
+	FirstSessionKit is the only src module that loads this one.
 ]]
 
 local Rarities = require("./Rarities")

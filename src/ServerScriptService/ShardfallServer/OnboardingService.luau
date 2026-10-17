@@ -10,6 +10,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local FirstSessionKit = require(ReplicatedStorage.Shared.FirstSessionKit)
 local Onboarding = require(ReplicatedStorage.Shared.Onboarding)
 local DataService = require(script.Parent.DataService)
 
@@ -64,6 +65,7 @@ function OnboardingService.skip(player: Player)
 		if data.onboardDone ~= true then
 			Onboarding.starter(data)
 		end
+		FirstSessionKit.grant(data)
 		return nil
 	end)
 	if not saved then
