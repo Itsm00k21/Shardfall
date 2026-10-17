@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 21.
+	The player profile shape, version 22.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -23,11 +23,12 @@ local Progression = require("./Progression")
 local Quality = require("./Quality")
 local Settings = require("./Settings")
 local Stars = require("./Stars")
+local StarterGoalPay = require("./StarterGoalPay")
 local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 21
+Schema.VERSION = 22
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -177,6 +178,7 @@ export type ProfileData = {
 	tradeCleanSince: number,
 	tradeHandoff: boolean,
 	uiSettings: Settings.Data,
+	starterGoals: any,
 }
 
 function Schema.template(): ProfileData
@@ -284,6 +286,7 @@ function Schema.template(): ProfileData
 		tradeCleanSince = 0,
 		tradeHandoff = false,
 		uiSettings = Settings.default(),
+		starterGoals = StarterGoalPay.blank(),
 	}
 end
 
@@ -472,6 +475,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.tradeFlagged = data.tradeFlagged == true
 	data.verifiedTrader = data.verifiedTrader == true
 	data.tradeHandoff = data.tradeHandoff == true
+	data.starterGoals = StarterGoalPay.normalize(data.starterGoals)
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -965,6 +969,14 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	if version < 21 then
 		raw.uiSettings = Settings.default()
 		raw.schemaVersion = 21
+		version = 21
+	end
+
+	-- T-049 named 22 for raidLuck and never shipped. This is the free version.
+	-- A save from 21 starts unpaid. Do not copy onboardDone or another profile.
+	if version < 22 then
+		raw.starterGoals = StarterGoalPay.blank()
+		raw.schemaVersion = 22
 	end
 
 	return Schema.reconcile(raw), nil
@@ -1194,6 +1206,7 @@ function Schema.snapshot(data: ProfileData)
 		verifiedTrader = data.verifiedTrader,
 		tradeHandoff = data.tradeHandoff,
 		uiSettings = Settings.normalize(data.uiSettings),
+		starterGoalTracker = StarterGoalPay.tracker(data),
 	}
 end
 

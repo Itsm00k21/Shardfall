@@ -88,6 +88,12 @@ local function requiresGoals(source: string): boolean
 	if string.find(source, "WaitForChild('StarterGoals')", 1, true) ~= nil then
 		return true
 	end
+	if string.find(source, 'require("./StarterGoals")', 1, true) ~= nil then
+		return true
+	end
+	if string.find(source, "require('./StarterGoals')", 1, true) ~= nil then
+		return true
+	end
 	return false
 end
 
@@ -622,7 +628,7 @@ describe("StarterGoals inputs", function()
 end)
 
 describe("StarterGoals isolation", function()
-	it("is required by nothing in src and does not roll, wait, or read the clock", function()
+	it("is required only by the server pay module and does not roll, wait, or read the clock", function()
 		local source = fs.readFile("src/ReplicatedStorage/Shared/StarterGoals.luau")
 		expect(string.find(source, "require(", 1, true)).toBeNil()
 		expect(string.find(source, "FirstSession", 1, true)).toBeNil()
@@ -642,6 +648,6 @@ describe("StarterGoals isolation", function()
 				table.insert(callers, path)
 			end
 		end
-		expect(callers).toEqual({})
+		expect(callers).toEqual({ "src/ReplicatedStorage/Shared/StarterGoalPay.luau" })
 	end)
 end)

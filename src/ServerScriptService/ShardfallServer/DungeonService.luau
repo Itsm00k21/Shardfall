@@ -49,6 +49,7 @@ local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local Rootvault = require(ReplicatedStorage.Shared.Rootvault)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
+local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
 local OnboardingService = require(script.Parent.OnboardingService)
@@ -1334,6 +1335,15 @@ local function grant(
 		data.passXp = select(1, Loops.passXp(data.passXp or 0, 40))
 		xpShown = xpGain
 		levels = Progression.addXp(data, xpGain)
+		if
+			run.dungeon.id == Dungeons.ROOTVAULT_ID
+			and run.dungeon.endless ~= true
+			and run.practice ~= true
+			and run.difficulty == "normal"
+		then
+			StarterGoalPay.grant(data, "rootvault", { rootvault = true })
+		end
+		StarterGoalPay.grant(data, "level", nil)
 		if
 			run.dungeon.id == Dungeons.HEARTWOOD_ID
 			and run.difficulty == "normal"

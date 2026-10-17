@@ -29,6 +29,7 @@ local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local Settings = require(ReplicatedStorage.Shared.Settings)
+local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local DataService = require(script.Parent.DataService)
 local PolicyCache = require(script.Parent.PolicyCache)
 
@@ -246,6 +247,7 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 		data.sinceEpic = counters.sinceEpic
 		data.sinceLegendary = counters.sinceLegendary
 		data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
+		StarterGoalPay.grant(data, "rolls", nil)
 		local bucket = Schema.pityBucket(data, pool.id)
 		if Rarities.isLegendaryOrBetter(item.rarity) then
 			bucket.rollsSinceLegendary = 0

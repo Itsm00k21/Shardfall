@@ -25,8 +25,8 @@
 	a user id or a guild id. Each call returns a new table and does
 	not write the input. No clock. No RNG. Nothing here costs Robux.
 
-	It stands alone. It does not load another module. Nothing in
-	src loads this module.
+	It stands alone. It does not load another module. StarterGoalPay
+	is the only src module that loads this one.
 ]]
 
 local StarterGoals = {}

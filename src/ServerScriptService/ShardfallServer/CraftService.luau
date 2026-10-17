@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Crafting = require(ReplicatedStorage.Shared.Crafting)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
+local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local DataService = require(script.Parent.DataService)
 local LoopService = require(script.Parent.LoopService)
 
@@ -46,6 +47,9 @@ function CraftService.craft(player: Player, recipeId: any, targetUid: string?)
 			return reason or "Could not craft that."
 		end
 		captured = summary
+		if summary.rerolled ~= true then
+			StarterGoalPay.grant(data, "forge", { craft = true })
+		end
 		return nil
 	end)
 	if not ok or captured == nil then
