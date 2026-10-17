@@ -9,10 +9,15 @@
 	list, or a result that is not ok, hides the tracker.
 
 	The frame is a child of Chrome, so the shell hide and the
-	access text walk include it. HudLayout.place(viewportX,
-	viewportY, rowCount) supplies the rect when that function
-	exists. Until then the rect sits under the health bar and
-	drops below the toast host when they would overlap.
+	access text walk include it. A row is at least 18px, and it
+	grows with the access text so a 20px label is not clipped in
+	an 18px line. HudLayout.place(viewportX, viewportY, rowCount)
+	supplies the rect when that function exists. Until then the
+	rect sits under the health bar and drops below the toast host
+	when they would overlap. On a phone it also stays off the
+	equip prompt. A viewport that cannot hold that rect collapses
+	the tracker instead of clamping it into the toast or off the
+	screen.
 
 	The server sends the rows. This module does not count, and it
 	does not load the rules module. The frame starts hidden.
@@ -33,6 +38,8 @@ local BASE_TEXT = UiTheme.MIN_TEXT
 local RAIL_COUNT = 7
 local TOAST_CARDS = 3
 local TOAST_GAP = 8
+-- HudShell prompt.Size is 36 + UiTheme.TOUCH + 8, under that host.
+local PROMPT_TEXT = 36
 
 export type Row = {
 	text: string,
@@ -41,12 +48,19 @@ export type Row = {
 	line: string,
 }
 
-export type Rect = { x: number, y: number, w: number, h: number }
+export type Rect = {
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	collapsed: boolean?,
+}
 
 export type Chrome = {
 	hidden: boolean,
 	textScale: number,
 	textSize: number,
+	lineHeight: number,
 }
 
 local labels: { TextLabel } = {}
@@ -127,6 +141,15 @@ function StarterGoalHud.rows(result: any): { Row }
 	return rows
 end
 
+-- 18px holds 14px text. The extra 4px stays as the text grows, so nothing clips.
+function StarterGoalHud.lineHeight(textSize: any): number
+	local size = finite(textSize)
+	if size == nil or size < BASE_TEXT then
+		size = BASE_TEXT
+	end
+	return math.max(ROW_H, math.floor(size) + ROW_H - BASE_TEXT)
+end
+
 -- Same hide and text rule as the shell. A profile or its uiSettings both work.
 function StarterGoalHud.chrome(settings: any): Chrome
 	if type(settings) == "table" and type(settings.uiSettings) == "table" then
@@ -152,6 +175,7 @@ function StarterGoalHud.chrome(settings: any): Chrome
 		hidden = hidden,
 		textScale = textScale,
 		textSize = textSize,
+		lineHeight = StarterGoalHud.lineHeight(textSize),
 	}
 end
 
@@ -169,7 +193,60 @@ local function toastHost(viewportX: number, margin: number): Rect
 	return { x = toast.x, y = toast.y, w = toast.w, h = height }
 end
 
-local function fallback(viewportX: number, viewportY: number, rowCount: number): Rect
+-- Same spot as HudShell's equip prompt: just under the three-card host.
+local function equipPrompt(viewportX: number, margin: number): Rect
+	local toast = HudLayout.toast(viewportX, margin)
+	local host = toastHost(viewportX, margin)
+	return {
+		x = toast.x,
+		y = host.y + host.h + TOAST_GAP,
+		w = toast.w,
+		h = PROMPT_TEXT + UiTheme.TOUCH + TOAST_GAP,
+	}
+end
+
+local function hideRect(): Rect
+	return { x = 0, y = 0, w = 0, h = 0, collapsed = true }
+end
+
+local function onScreen(box: Rect, viewportX: number, viewportY: number, margin: number): boolean
+	if box.w < UiTheme.TOUCH or box.h <= 0 then
+		return false
+	end
+	if box.x < margin or box.y < margin then
+		return false
+	end
+	if box.x + box.w > viewportX - margin then
+		return false
+	end
+	if box.y + box.h > viewportY - margin then
+		return false
+	end
+	return true
+end
+
+local function fitWidth(viewportX: number, margin: number, originX: number): number?
+	local room = viewportX - margin - originX
+	if room < UiTheme.TOUCH then
+		return nil
+	end
+	if room < WIDTH then
+		return math.floor(room)
+	end
+	return WIDTH
+end
+
+local function clearOf(box: Rect, block: Rect, prompt: Rect, rail: Rect): boolean
+	if HudLayout.overlaps(box, block) or HudLayout.overlaps(box, prompt) then
+		return false
+	end
+	if HudLayout.overlaps(box, rail) then
+		return false
+	end
+	return true
+end
+
+local function fallback(viewportX: number, viewportY: number, rowCount: number, lineH: number): Rect
 	local margin = UiTheme.safeMargin()
 	local rows = rowCount
 	if rows < 1 then
@@ -178,44 +255,102 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number):
 		rows = ROW_COUNT
 	end
 	local health = HudLayout.health(margin)
-	local height = rows * ROW_H + 8
+	local height = rows * lineH + 8
 	local x = health.x + 8
 	local y = health.y + health.h + 8
-	local room = viewportX - margin - x
-	local width = WIDTH
-	if room < width then
-		width = math.max(UiTheme.TOUCH, math.floor(room))
+	local width = fitWidth(viewportX, margin, x)
+	if width == nil then
+		return hideRect()
 	end
 	local box: Rect = { x = x, y = y, w = width, h = height }
 	local block = toastHost(viewportX, margin)
+	local prompt = equipPrompt(viewportX, margin)
+	local railFit = HudLayout.railFit(viewportY, margin, RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
+	local rail: Rect = { x = railFit.x, y = railFit.y, w = railFit.w, h = railFit.h }
+	local railRight = railFit.x + railFit.w + TOAST_GAP
+	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"
+
 	if HudLayout.overlaps(box, block) then
-		local rail = HudLayout.railFit(viewportY, margin, RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
-		local railRight = rail.x + rail.w + 8
-		if x < railRight then
-			x = railRight
+		local nextX = x
+		if nextX < railRight then
+			nextX = railRight
 		end
-		y = block.y + block.h + 8
-		room = viewportX - margin - x
-		width = WIDTH
-		if room < width then
-			width = math.max(UiTheme.TOUCH, math.floor(room))
+		local nextW = fitWidth(viewportX, margin, nextX)
+		if nextW ~= nil then
+			box = { x = nextX, y = block.y + block.h + TOAST_GAP, w = nextW, h = height }
 		end
-		box = { x = x, y = y, w = width, h = height }
 	end
-	if box.y + box.h > viewportY - margin then
-		box.y = math.max(margin, viewportY - margin - box.h)
+
+	-- Phones only. Prefer the full width just under the prompt. A short
+	-- phone that cannot hold that uses the gap beside the prompt instead.
+	if phone and HudLayout.overlaps(box, prompt) then
+		local moved = false
+		local originX = x
+		if originX < railRight then
+			originX = railRight
+		end
+		local belowW = fitWidth(viewportX, margin, originX)
+		if belowW ~= nil then
+			local below: Rect = {
+				x = originX,
+				y = prompt.y + prompt.h + TOAST_GAP,
+				w = belowW,
+				h = height,
+			}
+			if
+				onScreen(below, viewportX, viewportY, margin)
+				and clearOf(below, block, prompt, rail)
+			then
+				box = below
+				moved = true
+			end
+		end
+		if not moved then
+			local slots: { Rect } = {}
+			local limit = math.min(block.x, prompt.x) - TOAST_GAP
+			local leftW = math.floor(limit - railRight)
+			if leftW > WIDTH then
+				leftW = WIDTH
+			end
+			if leftW >= UiTheme.TOUCH then
+				table.insert(slots, { x = railRight, y = box.y, w = leftW, h = height })
+			end
+			local rightX = math.max(block.x + block.w, prompt.x + prompt.w) + TOAST_GAP
+			if rightX < railRight then
+				rightX = railRight
+			end
+			local rightW = fitWidth(viewportX, margin, rightX)
+			if rightW ~= nil then
+				table.insert(slots, { x = rightX, y = box.y, w = rightW, h = height })
+			end
+			for _, slot in ipairs(slots) do
+				if
+					onScreen(slot, viewportX, viewportY, margin)
+					and clearOf(slot, block, prompt, rail)
+				then
+					box = slot
+					break
+				end
+			end
+		end
 	end
-	if box.x + box.w > viewportX - margin then
-		box.w = math.max(UiTheme.TOUCH, viewportX - margin - box.x)
+
+	if not onScreen(box, viewportX, viewportY, margin) or HudLayout.overlaps(box, block) then
+		return hideRect()
 	end
-	if HudLayout.overlaps(box, block) then
-		box.y = block.y + block.h + 8
+	if phone and HudLayout.overlaps(box, prompt) then
+		return hideRect()
 	end
 	return box
 end
 
 -- HudLayout.place(viewportX, viewportY, rowCount) wins when it returns a rect.
-function StarterGoalHud.place(viewportX: number, viewportY: number, rowCount: number): Rect
+function StarterGoalHud.place(
+	viewportX: number,
+	viewportY: number,
+	rowCount: number,
+	textSize: number?
+): Rect
 	local vx = finite(viewportX)
 	local vy = finite(viewportY)
 	if vx == nil or vx < 1 then
@@ -244,7 +379,7 @@ function StarterGoalHud.place(viewportX: number, viewportY: number, rowCount: nu
 			return placed
 		end
 	end
-	return fallback(vx :: number, vy :: number, count)
+	return fallback(vx :: number, vy :: number, count, StarterGoalHud.lineHeight(textSize))
 end
 
 local function viewport(): (number, number)
@@ -263,26 +398,34 @@ local function apply(rows: { Row })
 	if frame == nil then
 		return
 	end
-	local chromeState: Chrome? = nil
+	local textSize = BASE_TEXT
+	local lineH = ROW_H
 	if heldSettings ~= nil then
-		chromeState = StarterGoalHud.chrome(heldSettings)
+		local chromeState = StarterGoalHud.chrome(heldSettings)
+		textSize = chromeState.textSize
+		lineH = chromeState.lineHeight
 	end
-	local show = StarterGoalHud.shown(#rows, heldSettings)
-	frame.Visible = show
 	local count = if #rows > 0 then #rows else 1
 	local vx, vy = viewport()
-	local box = StarterGoalHud.place(vx, vy, count)
-	frame.Position = UDim2.fromOffset(box.x, box.y)
-	if #rows > 0 then
-		frame.Size = UDim2.fromOffset(box.w, box.h)
+	local box = StarterGoalHud.place(vx, vy, count, textSize)
+	local show = StarterGoalHud.shown(#rows, heldSettings)
+	if box.collapsed == true then
+		show = false
+	end
+	frame.Visible = show
+	if box.collapsed ~= true then
+		frame.Position = UDim2.fromOffset(box.x, box.y)
+		if #rows > 0 then
+			frame.Size = UDim2.fromOffset(box.w, box.h)
+		end
 	end
 	for index = 1, ROW_COUNT do
 		local label = labels[index]
 		local row = rows[index]
 		if label ~= nil then
-			if chromeState ~= nil then
-				label.TextSize = chromeState.textSize
-			end
+			label.TextSize = textSize
+			label.Position = UDim2.fromOffset(8, 4 + (index - 1) * lineH)
+			label.Size = UDim2.new(1, -16, 0, lineH)
 			if row ~= nil then
 				label.Visible = true
 				label.Text = row.line

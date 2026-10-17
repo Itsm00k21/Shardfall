@@ -24,6 +24,7 @@ local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Q
 local ToastQueue = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ToastQueue"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
+local StarterGoalHud = require(script.Parent.StarterGoalHud)
 
 local HudShell = {}
 
@@ -921,6 +922,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			else
 				chrome.GroupTransparency = 0
 			end
+			StarterGoalHud.applyChrome(profile.uiSettings)
 		end,
 		toast = function(text: string)
 			if text == "" then
