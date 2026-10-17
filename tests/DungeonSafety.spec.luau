@@ -174,10 +174,62 @@ describe("Echo retry window", function()
 		local practiceAt = at(down, "run.practice ~= true")
 		local decisionAt = at(down, "EchoRetry.decision")
 		local retryAt = at(down, "retryPull(")
+		local holdAt = at(down, "EchoRetry.hold")
+		local finishAt = at(down, "finish(")
 		expect(blockedAt < aliveAt).toBeTrue()
 		expect(practiceAt < retryAt).toBeTrue()
 		expect(decisionAt < retryAt).toBeTrue()
+		expect(decisionAt < holdAt).toBeTrue()
+		expect(holdAt < finishAt).toBeTrue()
+		expect(string.find(down, "fight.pullStarted == true", 1, true) ~= nil).toBeTrue()
 		expect(string.find(down, "aliveCount", 1, true)).toBeNil()
+	end)
+
+	it("holds a partial Story death so the last down retries the whole party", function()
+		expect(EchoRetry.hold(2, 1, true)).toEqual(true)
+		expect(EchoRetry.hold(3, 2, true)).toEqual(true)
+		expect(EchoRetry.hold(2, 0, true)).toEqual(false)
+		expect(EchoRetry.hold(1, 0, true)).toEqual(false)
+		expect(EchoRetry.hold(2, 1, false)).toEqual(false)
+		expect(EchoRetry.hold(0 / 0, 1, true)).toEqual(false)
+
+		local function resolve(fight: RaidEchoFight.Fight, id: string, storyPull: boolean): string
+			RaidEchoFight.setAlive(fight, id, false)
+			local living, party = RaidEchoFight.counts(fight)
+			local action = EchoRetry.decision(false, storyPull and living == 0)
+			if action == "retry" then
+				return "retry"
+			end
+			if EchoRetry.hold(party, living, storyPull) then
+				return "hold"
+			end
+			RaidEchoFight.depart(fight, id)
+			return "eject"
+		end
+
+		local fight = RaidEchoFight.open("story", false, "1")
+		RaidEchoFight.backfill(fight, "2")
+		RaidEchoFight.notePull(fight, "twins")
+		expect(resolve(fight, "1", true)).toEqual("hold")
+		expect(fight.members["1"].alive).toEqual(false)
+		expect(fight.state.stacks).toEqual(0)
+		expect(resolve(fight, "2", true)).toEqual("retry")
+		expect(fight.state.stacks).toEqual(1)
+		local living, party = RaidEchoFight.counts(fight)
+		expect(living).toEqual(0)
+		expect(party).toEqual(2)
+
+		local early = RaidEchoFight.open("story", false, "1")
+		RaidEchoFight.backfill(early, "2")
+		expect(resolve(early, "1", false)).toEqual("eject")
+		expect(early.members["1"]).toBeNil()
+		expect(early.state.stacks).toEqual(0)
+
+		local solo = RaidEchoFight.open("story", false, "1")
+		RaidEchoFight.notePull(solo, "twins")
+		expect(resolve(solo, "1", true)).toEqual("retry")
+		expect(solo.state.stacks).toEqual(1)
+		expect(solo.members["1"] ~= nil).toBeTrue()
 	end)
 end)
 

@@ -330,5 +330,40 @@ describe("Raid echo wire", function()
 		expect(string.find(hud, 'chip.Name = "EchoChip"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(hud, "run.echoLabel", 1, true) ~= nil).toBeTrue()
 		expect(string.find(dungeon, "echoLabel", 1, true) ~= nil).toBeTrue()
+
+		local raid = fs.readFile("src/ServerScriptService/ShardfallServer/RaidService.luau")
+		local combat = fs.readFile("src/ServerScriptService/ShardfallServer/CombatService.luau")
+		local bar =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
+		expect(string.find(raid, "profile.raidEcho", 1, true)).toBeNil()
+		expect(string.find(raid, "raidEcho", 1, true)).toBeNil()
+		local join = between(raid, "function RaidService.join", "function RaidService.practice")
+		expect(string.find(join, "DungeonService.backfill", 1, true) ~= nil).toBeTrue()
+		expect(string.find(join, "EchoParty.route", 1, true) ~= nil).toBeTrue()
+		expect(string.find(dungeon, "function CombatService.healAmount", 1, true)).toBeNil()
+		expect(string.find(dungeon, "CombatService.bindEcho", 1, true) ~= nil).toBeTrue()
+		expect(string.find(dungeon, '"healing"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(dungeon, '"maxHp"', 1, true) ~= nil).toBeTrue()
+		local refresh =
+			between(combat, "function CombatService.refresh", "function CombatService.revive")
+		expect(string.find(refresh, "EchoVitals.maxHp", 1, true) ~= nil).toBeTrue()
+		expect(string.find(refresh, "vitality.maxHealth", 1, true) ~= nil).toBeTrue()
+		expect(string.find(refresh, "publish(player, state)", 1, true) ~= nil).toBeTrue()
+		local heal =
+			between(combat, "function CombatService.healAmount", "function CombatService.strike")
+		expect(string.find(heal, "EchoVitals.heal", 1, true) ~= nil).toBeTrue()
+		expect(string.find(combat, "function CombatService.bindEcho", 1, true) ~= nil).toBeTrue()
+		-- The bar paints the server hp payload. It does not compute Echo.
+		expect(string.find(bar, 'payload.kind == "hp"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "setHp(hp, maxHp)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "RaidEcho", 1, true)).toBeNil()
+		local hits = between(
+			dungeon,
+			"function DungeonService.damageEnemy",
+			"function DungeonService.enemyViews"
+		)
+		local downedAt = string.find(hits, "CombatService.vitals", 1, true)
+		local killAt = string.find(hits, "PracticeLoot.applyKill", 1, true)
+		expect(downedAt ~= nil and killAt ~= nil and downedAt < killAt).toBeTrue()
 	end)
 end)

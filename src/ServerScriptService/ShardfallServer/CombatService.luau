@@ -24,6 +24,7 @@ local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Quality = require(ReplicatedStorage.Shared.Quality)
 local DataService = require(script.Parent.DataService)
+local EchoVitals = require(script.Parent.EchoVitals)
 local LoopService = require(script.Parent.LoopService)
 local OnboardingService = require(script.Parent.OnboardingService)
 
@@ -98,6 +99,11 @@ local hooks: Hooks = {
 		return false
 	end,
 }
+
+-- DungeonService registers these. Nil keeps the unbuffed number.
+-- The client never supplies either value.
+local echoHeal: ((Player, number) -> number)? = nil
+local echoMax: ((Player, number) -> number)? = nil
 
 local vitals: { [Player]: State } = {}
 local telegraphs: { [Player]: { CombatFeel.Telegraph } } = {}
@@ -323,6 +329,14 @@ function CombatService.bindHooks(nextHooks: Hooks)
 	hooks = nextHooks
 end
 
+function CombatService.bindEcho(
+	heal: (Player, number) -> number,
+	maxHealth: (Player, number) -> number
+)
+	echoHeal = heal
+	echoMax = maxHealth
+end
+
 function CombatService.refresh(player: Player)
 	local state = ensure(player)
 	local profile = DataService.get(player)
@@ -331,8 +345,14 @@ function CombatService.refresh(player: Player)
 	end
 	local _, vitality = CombatMath.loadout(profile)
 	local previousMax = state.maxHp
+	local baseMax = vitality.maxHealth
+	local scaledMax = baseMax
+	if echoMax ~= nil then
+		scaledMax = echoMax(player, baseMax)
+	end
 	state.defense = vitality.defense
-	state.maxHp = vitality.maxHealth
+	-- Unbuffed loadout in, echoed max out. publish sends this to the HP bar.
+	state.maxHp = EchoVitals.maxHp(baseMax, scaledMax)
 	if state.ready and state.hp <= 0 then
 		-- A profile save on the killing blow used to add the new max onto
 		-- 0 (or onto a full bar: 100 + 3 = 103) and the label jumped.
@@ -815,6 +835,9 @@ function CombatService.spendUlt(player: Player)
 end
 
 function CombatService.healAmount(player: Player, amount: number)
+	if echoHeal ~= nil then
+		amount = EchoVitals.heal(amount, echoHeal(player, amount))
+	end
 	local hrp = rootPart(player)
 	local x, y, z = 0, 0, 0
 	if hrp ~= nil then
