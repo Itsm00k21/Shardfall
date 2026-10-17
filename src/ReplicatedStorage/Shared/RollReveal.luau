@@ -119,6 +119,27 @@ function RollReveal.face(record: Record?): Face
 	}
 end
 
+-- Reel caption when the roll did not land. The words are the server's
+-- reason, unchanged. A missing reason, a blank reason, or a non-result
+-- stays "Miss". paid does not rewrite it.
+function RollReveal.reelCaption(result: any): string
+	if type(result) ~= "table" then
+		return "Miss"
+	end
+	local reason = result.error
+	if type(reason) ~= "string" then
+		return "Miss"
+	end
+	if string.find(reason, "\n", 1, true) ~= nil then
+		return "Miss"
+	end
+	local trimmed = string.match(reason, "^%s*(.-)%s*$")
+	if trimmed == nil or trimmed == "" then
+		return "Miss"
+	end
+	return trimmed
+end
+
 function RollReveal.duration(settings: Settings.Data, rarity: string, paid: boolean): number
 	local seconds = Settings.rollDuration(settings)
 	if Settings.skipsCutscene(settings, rarity) then

@@ -147,25 +147,83 @@ describe("Roll reveal", function()
 		expect(nextLand.visible).toEqual(true)
 	end)
 
-	it("hides the hub reveal card when the reel says Miss", function()
+	it("captions a refused roll with the server reason and a miss stays Miss", function()
+		expect(RollReveal.reelCaption({
+			ok = false,
+			error = "Roll cooling down.",
+		})).toEqual("Roll cooling down.")
+		expect(RollReveal.reelCaption({
+			ok = false,
+			paid = true,
+			error = "You need a Shard Token to crack a shard.",
+		})).toEqual("You need a Shard Token to crack a shard.")
+		expect(RollReveal.reelCaption({
+			ok = false,
+			error = "Inventory is full.",
+		})).toEqual("Inventory is full.")
+		expect(RollReveal.reelCaption({
+			ok = false,
+			error = "  Roll cooling down.  ",
+		})).toEqual("Roll cooling down.")
+		expect(RollReveal.reelCaption({ ok = false })).toEqual("Miss")
+		expect(RollReveal.reelCaption({ error = "" })).toEqual("Miss")
+		expect(RollReveal.reelCaption({ error = "   " })).toEqual("Miss")
+		expect(RollReveal.reelCaption({ error = 12 })).toEqual("Miss")
+		expect(RollReveal.reelCaption(nil)).toEqual("Miss")
+		expect(RollReveal.reelCaption("Inventory is full.")).toEqual("Miss")
+		expect(RollReveal.reelCaption({ error = "Roll cooling down.\nstack" })).toEqual("Miss")
+		local cooled = RollReveal.capture({ ok = false, error = "Roll cooling down." })
+		expect(cooled).toBeNil()
+		expect(RollReveal.face(cooled)).toEqual({
+			visible = false,
+			name = "",
+			rarity = "",
+		})
+	end)
+
+	it("hides the reveal card on leave, on every hide, and on a refused roll", function()
 		local hub =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
-		local faceAt = string.find(hub, "local face = RollReveal.face(nil)", 1, true)
-		expect(faceAt ~= nil).toBeTrue()
-		local missAt = string.find(hub, 'paintReelIdle("Miss")', faceAt or 1, true)
-		expect(missAt ~= nil).toBeTrue()
-		local slice = string.sub(hub, faceAt or 1, (missAt or 1) + #'paintReelIdle("Miss")')
-		expect(string.find(slice, "revealCard.Visible = face.visible", 1, true) ~= nil).toBeTrue()
-		expect(string.find(slice, "revealTitle.Text = face.name", 1, true) ~= nil).toBeTrue()
-		expect(string.find(slice, "revealRarity.Text = face.rarity", 1, true) ~= nil).toBeTrue()
-		expect(string.find(slice, "bumpCardGeneration()", 1, true) ~= nil).toBeTrue()
-		expect(string.find(slice, "activeReveal = nil", 1, true) ~= nil).toBeTrue()
-		expect(string.find(slice, "applyClose(close)", 1, true) ~= nil).toBeTrue()
-		expect(string.find(slice, "showCloseBeat", 1, true)).toBeNil()
-		expect(string.find(slice, "revealCard.Visible = true", 1, true)).toBeNil()
+		local blankAt = string.find(hub, "local function blankReveal()", 1, true)
+		expect(blankAt ~= nil).toBeTrue()
+		local blankEnd = string.find(hub, "local closeBeat = Instance.new", blankAt or 1, true)
+		expect(blankEnd ~= nil and (blankEnd :: number) > (blankAt :: number)).toBeTrue()
+		local blank = string.sub(hub, blankAt or 1, (blankEnd or 1) - 1)
+		expect(string.find(blank, "local face = RollReveal.face(nil)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(blank, "revealCard.Visible = face.visible", 1, true) ~= nil).toBeTrue()
+		expect(string.find(blank, "revealTitle.Text = face.name", 1, true) ~= nil).toBeTrue()
+		expect(string.find(blank, "revealRarity.Text = face.rarity", 1, true) ~= nil).toBeTrue()
+		expect(string.find(blank, "bumpCardGeneration()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(blank, "activeReveal = nil", 1, true) ~= nil).toBeTrue()
+		expect(string.find(blank, "showCloseBeat", 1, true)).toBeNil()
+		expect(string.find(blank, "revealCard.Visible = true", 1, true)).toBeNil()
+
+		local leaveAt = string.find(hub, 'local leftRoll = shownId == "roll" and id ~= "roll"', 1, true)
+		local leaveEnd = string.find(hub, "local function publishBadges", leaveAt or 1, true)
+		local leave = string.sub(hub, leaveAt or 1, (leaveEnd or 1) - 1)
+		expect(string.find(leave, "stopRollChain()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(leave, "blankReveal()", 1, true) ~= nil).toBeTrue()
+
+		local _, blankCalls = string.gsub(hub, "blankReveal%(%)", "")
+		-- The definition plus leave, the miss, and the three other hides.
+		expect(blankCalls).toEqual(6)
+		local _, hidden = string.gsub(hub, "revealCard%.Visible = false", "")
+		expect(hidden).toEqual(1)
+
+		local rollAt = string.find(hub, "beginRoll = function()", 1, true)
+		local finishAt = string.find(hub, "local function pointerDown", rollAt or 1, true)
+		local body = string.sub(hub, rollAt or 1, (finishAt or 1) - 1)
+		expect(string.find(body, "paintReelIdle(RollReveal.reelCaption(result))", 1, true) ~= nil).toBeTrue()
+		expect(string.find(body, 'paintReelIdle("Miss")', 1, true)).toBeNil()
+		expect(string.find(hub, "placeReelWindows(false)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "placeReelWindows(wide)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(body, "blankReveal()", 1, true) ~= nil).toBeTrue()
+		local _, bodyBlanks = string.gsub(body, "blankReveal%(%)", "")
+		expect(bodyBlanks).toEqual(4)
+		expect(string.find(body, "revealTitle.Text =", 1, true)).toBeNil()
+
 		local heartbeat = string.find(hub, "active.generation ~= cardGeneration", 1, true)
 		expect(heartbeat ~= nil).toBeTrue()
-		local rollAt = string.find(hub, "beginRoll = function()", 1, true)
 		local invokeAt = string.find(hub, 'hooks.invoke, "RollShard"', rollAt or 1, true)
 		local opening = string.sub(hub, rollAt or 1, (invokeAt or 2) - 1)
 		expect(string.find(opening, "bumpCardGeneration()", 1, true) ~= nil).toBeTrue()

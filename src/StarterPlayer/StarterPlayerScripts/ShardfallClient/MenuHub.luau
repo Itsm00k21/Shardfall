@@ -813,6 +813,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	flashCover.ZIndex = 12
 	flashCover.Parent = rollPage
 
+	-- Same card clear a miss uses. Leaving the tab and every other
+	-- beginRoll hide go through here so the previous name cannot stay.
+	local function blankReveal()
+		local face = RollReveal.face(nil)
+		bumpCardGeneration()
+		activeReveal = nil
+		revealCard.Visible = face.visible
+		revealTitle.Text = face.name
+		revealRarity.Text = face.rarity
+		revealNew.Visible = false
+		revealEquip.Visible = false
+		revealBest.Visible = false
+		revealEquip:SetAttribute("Uid", "")
+		revealFly.TextTransparency = 1
+		revealScale.Scale = 1
+		revealCard.BackgroundColor3 = rgb("header")
+		revealStroke.Color = rgb("accent")
+		revealStroke.Thickness = UiTheme.STROKE
+		flashCover.BackgroundTransparency = 1
+	end
+
 	local closeBeat = Instance.new("TextLabel")
 	closeBeat.Name = "CloseCall"
 	closeBeat.AnchorPoint = Vector2.new(1, 1)
@@ -966,6 +987,29 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		label.BackgroundColor3 = if focus then rarityColor3(rarity) else rgb("body")
 	end
 
+	-- A server reason is a sentence. Give it the whole reel so a phone still
+	-- shows the words. A spin puts the three windows back.
+	local function placeReelWindows(wide: boolean)
+		if wide then
+			reelLeft.Visible = false
+			reelRight.Visible = false
+			reelCenter.Position =
+				UDim2.new(0, 4, reelCenter.Position.Y.Scale, reelCenter.Position.Y.Offset)
+			reelCenter.Size = UDim2.new(1, -8, reelCenter.Size.Y.Scale, reelCenter.Size.Y.Offset)
+			return
+		end
+		reelLeft.Visible = true
+		reelRight.Visible = true
+		reelLeft.Position = UDim2.new(0, 4, reelLeft.Position.Y.Scale, reelLeft.Position.Y.Offset)
+		reelLeft.Size = UDim2.new(0.28, -8, reelLeft.Size.Y.Scale, reelLeft.Size.Y.Offset)
+		reelCenter.Position =
+			UDim2.new(0.28, 4, reelCenter.Position.Y.Scale, reelCenter.Position.Y.Offset)
+		reelCenter.Size = UDim2.new(0.44, -8, reelCenter.Size.Y.Scale, reelCenter.Size.Y.Offset)
+		reelRight.Position =
+			UDim2.new(0.72, 4, reelRight.Position.Y.Scale, reelRight.Position.Y.Offset)
+		reelRight.Size = UDim2.new(0.28, -8, reelRight.Size.Y.Scale, reelRight.Size.Y.Offset)
+	end
+
 	local function paintReel(slots: { UiRouter.ReelSlot }?, index: number)
 		local function at(slotIndex: number): (string, string)
 			if slots == nil or slotIndex < 1 or slotIndex > #slots then
@@ -977,6 +1021,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local leftName, leftRarity = at(index - 1)
 		local midName, midRarity = at(index)
 		local rightName, rightRarity = at(index + 1)
+		placeReelWindows(false)
 		paintWindow(reelLeft, leftName, leftRarity, false)
 		paintWindow(reelCenter, midName, midRarity, slots ~= nil)
 		paintWindow(reelRight, rightName, rightRarity, false)
@@ -988,6 +1033,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	paintReelIdle = function(caption: string)
 		reelStreak.Text = UiRouter.streakText(hype.streak, lastMissed)
 		reelStreak.TextColor3 = rgb(UiRouter.streakTone(hype.streak, lastMissed))
+		local wide = caption ~= "Roll" and caption ~= "Miss"
+		placeReelWindows(wide)
 		paintWindow(reelLeft, "—", "Common", false)
 		paintWindow(reelCenter, caption, "Common", false)
 		paintWindow(reelRight, "—", "Common", false)
@@ -1191,6 +1238,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		noteView(id)
 		if leftRoll then
 			stopRollChain()
+			blankReveal()
 		end
 	end
 
@@ -2764,26 +2812,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 				lastMissed = true
 				loop = RollLoop.idle()
-				local face = RollReveal.face(nil)
-				bumpCardGeneration()
-				activeReveal = nil
-				revealCard.Visible = face.visible
-				revealTitle.Text = face.name
-				revealRarity.Text = face.rarity
-				revealNew.Visible = false
-				revealEquip.Visible = false
-				revealBest.Visible = false
-				revealEquip:SetAttribute("Uid", "")
-				revealFly.TextTransparency = 1
-				revealScale.Scale = 1
-				revealCard.BackgroundColor3 = rgb("header")
-				revealStroke.Color = rgb("accent")
-				revealStroke.Thickness = UiTheme.STROKE
-				flashCover.BackgroundTransparency = 1
+				blankReveal()
 				reelMilestone.Visible = false
 				setPulse(true)
 				applyClose(close)
-				paintReelIdle("Miss")
+				paintReelIdle(RollReveal.reelCaption(result))
 				paintRoll()
 				return
 			end
@@ -2796,9 +2829,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local close = closeFor(record.rarity, true)
 			if noted.ok ~= true or noted.rarity == nil then
 				loop = RollLoop.idle()
-				activeReveal = nil
-				revealCard.Visible = false
-				revealBest.Visible = false
+				blankReveal()
 				setPulse(true)
 				hideCloseBeat()
 				paintReelIdle("Roll")
@@ -2812,8 +2843,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local card = UiRouter.rollCard(noted, item)
 			if card == nil then
 				loop = RollLoop.idle()
-				activeReveal = nil
-				revealCard.Visible = false
+				blankReveal()
 				setPulse(true)
 				hideCloseBeat()
 				paintReelIdle("Roll")
@@ -2855,8 +2885,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			})
 			if duration == nil then
 				loop = RollLoop.idle()
-				activeReveal = nil
-				revealCard.Visible = false
+				blankReveal()
 				setPulse(true)
 				hideCloseBeat()
 				paintReelIdle("Roll")
