@@ -216,6 +216,9 @@ function MusicController.start()
 				watch()
 			end
 		end,
+		setUiVolume = function(ui: number)
+			uiGroup.Volume = Audio.clampVolume(ui)
+		end,
 		-- Later zones call this. The position watch takes over again when
 		-- the character actually changes between Haven and a crawl.
 		setZone = function(zoneId: string)

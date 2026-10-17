@@ -166,6 +166,9 @@
         "SetGraphicsQuality": {
           "$className": "RemoteFunction"
         },
+        "SetSettings": {
+          "$className": "RemoteFunction"
+        },
         "SetAudio": {
           "$className": "RemoteFunction"
         },

@@ -29,20 +29,31 @@ local OWNED: { [string]: boolean } = {
 	ShardfallRoll = true,
 	ShardfallTouch = true,
 	ShardfallTravel = true,
+	ShardfallHud = true,
+	ShardfallHub = true,
 }
 
 function ClientChrome.shouldClear(name: string): boolean
 	return OWNED[name] == true
 end
 
--- Join draws the combat HUD (HP and currency), the action bar, and the
--- Studio debug toggle. Every other owned gui stays hidden until a button.
+-- Join draws the shell only. Combat still exists for the overhead bar and
+-- hit flash, with its old corner frames hidden. The hub stays closed.
 function ClientChrome.visibleAtJoin(name: string): boolean
-	return name == "ShardfallCombat" or name == "ShardfallActions" or name == "ShardfallDebug"
+	return name == "ShardfallHud"
 end
 
--- One menu. Each entry opens that sheet and closes the others.
-ClientChrome.MENU = { "Codes", "Daily", "Pass", "Settings", "Roll", "Craft", "Bossrush" }
+-- Hub tabs. The letter is the PC hotkey. Settings is the gear, not a letter.
+ClientChrome.TABS = {
+	{ id = "hero", label = "Hero", key = "C" },
+	{ id = "bag", label = "Bag", key = "B" },
+	{ id = "pets", label = "Pets", key = "P" },
+	{ id = "roll", label = "Roll", key = "R" },
+	{ id = "raids", label = "Raids", key = "I" },
+	{ id = "market", label = "Market", key = "M" },
+	{ id = "pass", label = "Shard Pass", key = "" },
+	{ id = "settings", label = "Settings", key = "" },
+}
 
 -- The current roll line is "Pity 0 / 50 toward Legendary". 0/80 is a leftover.
 function ClientChrome.legacyReadout(text: string): boolean

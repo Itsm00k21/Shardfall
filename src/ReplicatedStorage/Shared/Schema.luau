@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 20.
+	The player profile shape, version 21.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -21,12 +21,13 @@ local Materials = require("./Materials")
 local Loops = require("./Loops")
 local Progression = require("./Progression")
 local Quality = require("./Quality")
+local Settings = require("./Settings")
 local Stars = require("./Stars")
 local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 20
+Schema.VERSION = 21
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -175,6 +176,7 @@ export type ProfileData = {
 	verifiedTrader: boolean,
 	tradeCleanSince: number,
 	tradeHandoff: boolean,
+	uiSettings: Settings.Data,
 }
 
 function Schema.template(): ProfileData
@@ -281,6 +283,7 @@ function Schema.template(): ProfileData
 		verifiedTrader = false,
 		tradeCleanSince = 0,
 		tradeHandoff = false,
+		uiSettings = Settings.default(),
 	}
 end
 
@@ -394,6 +397,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.vip = data.vip == true
 	data.shake = data.shake ~= false
 	data.musicVolume = Audio.clampVolume(data.musicVolume)
+	data.uiSettings = Settings.normalize(data.uiSettings)
 	if Classes.get(data.classId) == nil then
 		data.classId = ""
 	end
@@ -955,6 +959,12 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		raw.tradeCleanSince = 0
 		raw.tradeHandoff = false
 		raw.schemaVersion = 20
+		version = 20
+	end
+
+	if version < 21 then
+		raw.uiSettings = Settings.default()
+		raw.schemaVersion = 21
 	end
 
 	return Schema.reconcile(raw), nil
@@ -1183,6 +1193,7 @@ function Schema.snapshot(data: ProfileData)
 		tradeFlagged = data.tradeFlagged,
 		verifiedTrader = data.verifiedTrader,
 		tradeHandoff = data.tradeHandoff,
+		uiSettings = Settings.normalize(data.uiSettings),
 	}
 end
 
