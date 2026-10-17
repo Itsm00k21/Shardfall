@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 24.
+	The player profile shape, version 25.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -33,7 +33,73 @@ local function firstSessionKit()
 	return require("./FirstSessionKit")
 end
 
-Schema.VERSION = 24
+-- Frozen Codex ids. A true flag sticks. Only boolean true counts.
+local CODEX_IDS = {
+	"attack",
+	"dodge",
+	"perfect",
+	"skills",
+	"telegraphs",
+	"shards",
+	"doors",
+	"pets",
+	"crafting",
+	"rarity",
+}
+
+local function readCodexFlags(value: any): { [string]: boolean }
+	local source = nil
+	if type(value) == "table" and type(value.unlocked) == "table" then
+		source = value.unlocked
+	end
+	local unlocked = {}
+	for _, id in ipairs(CODEX_IDS) do
+		unlocked[id] = source ~= nil and source[id] == true
+	end
+	return unlocked
+end
+
+local function blankCodex(): { unlocked: { [string]: boolean } }
+	return { unlocked = readCodexFlags(nil) }
+end
+
+local function codexRefused(value: any): boolean
+	if type(value) ~= "table" then
+		return false
+	end
+	if value.productId ~= nil or value.robux ~= nil or value.cost ~= nil or value.skip ~= nil then
+		return true
+	end
+	if
+		value.userId ~= nil
+		or value.UserId ~= nil
+		or value.playerId ~= nil
+		or value.PlayerId ~= nil
+	then
+		return true
+	end
+	if value.guildId ~= nil or value.GuildId ~= nil then
+		return true
+	end
+	return false
+end
+
+-- A failed unlock keeps the previous flags. A success stores that state.
+-- A product id, Robux, cost, skip, user id, or guild id is a failure.
+-- Neither call writes the arguments. Nothing here grants keys or gold.
+function Schema.applyCodex(saved: any, result: any): { unlocked: { [string]: boolean } }
+	local accepted = type(result) == "table"
+		and result.ok == true
+		and type(result.state) == "table"
+		and not codexRefused(result)
+		and not codexRefused(result.state)
+	if accepted then
+		return { unlocked = readCodexFlags(result.state) }
+	end
+	return { unlocked = readCodexFlags(saved) }
+end
+
+Schema.VERSION = 25
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -186,6 +252,7 @@ export type ProfileData = {
 	starterGoals: any,
 	firstSession: any,
 	actionBars: { [string]: any },
+	codex: { unlocked: { [string]: boolean } },
 }
 
 function Schema.template(): ProfileData
@@ -296,6 +363,7 @@ function Schema.template(): ProfileData
 		starterGoals = StarterGoalPay.blank(),
 		firstSession = firstSessionKit().blank(false),
 		actionBars = ActionSlots.fresh(),
+		codex = blankCodex(),
 	}
 end
 
@@ -487,6 +555,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.starterGoals = StarterGoalPay.normalize(data.starterGoals)
 	data.firstSession = firstSessionKit().normalize(data.firstSession)
 	data.actionBars = ActionSlots.reconcile(data.actionBars, data)
+	data.codex = { unlocked = readCodexFlags(data.codex) }
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -1007,6 +1076,13 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 24
 	end
 
+	-- Codex seen flags. A save from 24 starts locked. Do not copy another profile.
+	if version < 25 then
+		raw.codex = blankCodex()
+		raw.schemaVersion = 25
+		version = 25
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -1238,6 +1314,7 @@ function Schema.snapshot(data: ProfileData)
 		uiSettings = Settings.normalize(data.uiSettings),
 		starterGoalTracker = StarterGoalPay.tracker(data),
 		actionBars = Schema.deepCopy(data.actionBars),
+		codex = { unlocked = readCodexFlags(data.codex) },
 	}
 end
 

@@ -835,7 +835,7 @@ describe("Trading", function()
 	end)
 
 	spec("a forged or ungranted receipt does not lift the trade cap", function()
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(25)
 		local saved = Schema.migrate({
 			schemaVersion = 24,
 			gold = 12,
@@ -843,7 +843,7 @@ describe("Trading", function()
 			verifiedSpender = true,
 		})
 		assert(saved ~= nil)
-		expect(saved.schemaVersion).toEqual(24)
+		expect(saved.schemaVersion).toEqual(25)
 		expect(saved.gold).toEqual(12)
 		expect(saved.receipts.legacy).toEqual(true)
 		expect(Trading.verifiedFromReceipts(saved)).toEqual(false)

@@ -85,7 +85,7 @@ describe("Reserved follow-in", function()
 		expect(string.find(receive, "RaidPremadeHop.admit", 1, true) ~= nil).toBeTrue()
 		expect(string.find(receive, "\n\t\t\t\tfalse,\n", 1, true) ~= nil).toBeTrue()
 
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(25)
 		expect(Loops.PREMIUM_ENABLED).toEqual(false)
 		expect(Loops.PASS_PRODUCT_ID).toEqual(0)
 		expect(Loops.ARCHIVE_PRODUCT_ID).toEqual(0)

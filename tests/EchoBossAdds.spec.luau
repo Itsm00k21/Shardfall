@@ -110,7 +110,7 @@ describe("Boss-plus-adds Echo seat", function()
 	end)
 
 	it("leaves the schema and the paid switches alone", function()
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(25)
 		expect(Loops.PREMIUM_ENABLED).toEqual(false)
 		expect(Loops.PASS_PRODUCT_ID).toEqual(0)
 		expect(Loops.ARCHIVE_PRODUCT_ID).toEqual(0)

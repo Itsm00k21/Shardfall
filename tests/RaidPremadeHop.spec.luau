@@ -251,7 +251,7 @@ describe("RaidPremadeHop wire", function()
 		).toBeTrue()
 		local hud =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RaidHud.luau")
-		expect(string.find(hud, "payload.kind == \"premadeRecall\"", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hud, 'payload.kind == "premadeRecall"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(hud, "RaidPremadeHop.ERRORS.seated", 1, true) ~= nil).toBeTrue()
 		expect(RaidPremadeHop.ERRORS.seated).toEqual(
 			"The raid teleport failed. The party is still seated."
@@ -260,7 +260,7 @@ describe("RaidPremadeHop wire", function()
 		expect(string.find(hud, "payload.host", 1, true)).toBeNil()
 		expect(string.find(receive, "FireClient(player", 1, true)).toBeNil()
 		local recallFn = between(raid, "local function recallLine", "local function sendHome")
-		expect(string.find(recallFn, "kind = \"premadeRecall\"", 1, true) ~= nil).toBeTrue()
+		expect(string.find(recallFn, 'kind = "premadeRecall"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(recallFn, "userId", 1, true)).toBeNil()
 
 		local home = between(raid, "local function sendHome", "local function forgetArrival")
@@ -273,7 +273,7 @@ describe("RaidPremadeHop wire", function()
 		expect(
 			string.find(limiter, "RaidReady = { capacity = 3, perSecond = 0.5 }", 1, true) ~= nil
 		).toBeTrue()
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(25)
 
 		local dataService = fs.readFile("src/ServerScriptService/ShardfallServer/DataService.luau")
 		local partyBody = between(
