@@ -3389,6 +3389,167 @@ Questions for Ghost:
 12. A broken board returns `ok == false`, `persist == false`, and `{ markers = {} }`. A broken preset book returns `ok == false`, `persist == false`, and `{ guilds = {} }`. Writing that blank would wipe the live board or the guild book. An extra argument does the same. A skip field on a valid request returns a copy of the valid record and still does not persist. Confirm the wire writes `state` only when `persist == true`, and adopts a loaded board only when `ok == true`.
 13. Nothing here costs Robux. An extra argument, or a `skip`, `waive`, `paid`, `robux`, `premium`, `price`, `productId`, `gamePass`, `force`, `unlock`, `paidMarker`, `paidPreset`, `skipCap`, `buyMarker`, or `buyPreset` field, is `ERRORS.skip`. `false` still counts as present. `force` does not place, bypass the cap, or bypass the lead. Confirm no paid marker, preset, or skip will be added at wiring.
 
+### T-085 hooks for GHOST
+
+HELPER did not edit `RaidStrategy.luau`, `RaidFinder.luau`, `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Keybinds.luau`, `UiRouter.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidCalendar` is pure and ready to call. It requires nothing. It does not require `RaidFinder` or `RaidStrategy`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. There is no paid RSVP, extra slot, or skip. T-085 is done. Wiring is still yours. The row stays `claimed`.
+
+Where the row and `docs/design/shardfall_raids.md` disagree, the row won:
+
+- The Guild calendar bullets say players get an in-game notice when the raid forms. The row says `form` returns a notice flag and does not send the notice. There is no remote and no message. The wire sends only when this module returns `notice == true`.
+- Those bullets say attendance is tracked automatically. The row says `form` takes the user ids the caller says are present. This module does not read a clock to decide who was there, and it does not scan a server.
+- The calendar bullets do not name seats. In the same Matchmaking section, Raid Finder's queue roles are Tank, Healer, DPS, and Flex, and flex fills a missing tank, then a missing healer, then DPS. Guild raid prep names Raid Lead and Assistants. The row's roles are `tank`, `healer`, `dps`, and `flex`, and each one is a seat. `lead` and `assistant` are refused. Flex stays flex. It is not filled into another role.
+- The design does not cap the calendar. The row caps events kept per guild, role slots on one night, and the RSVP list. A full list refuses a new entry. It does not drop an old one.
+- The design does not say a player holds one slot. The row does. The same player upserts that slot. A move into a full role is refused and the old slot stays.
+- The same Matchmaking section sends cross-server queues through MemoryStore. This module does not. The row forbids MemoryStore.
+
+`RaidMarks.CONFIG.doubleMarks` stays false. This module does not read it and does not pay Marks. A raid night is not loot and it is not a Tuesday week. `1791849600` is not special here.
+
+Tunables are `RaidCalendar.CONFIG`. `maxEvents` is 8 nights kept per guild. `maxRoleSlots` is 3 seats of one role on one night. `maxRsvps` is 8 RSVPs on one night, across every role. `maxIdLength` is 64, the same placeholder cap used for other raid ids. `roles` is `tank`, `healer`, `dps`, and `flex`, and that inner table is frozen too. `maxRoleSlots` is 3, not 2, so a role can fill while another role still has a seat. If every role had 2 seats, 4 times 2 would equal the RSVP cap, and a new player could not hit a full RSVP list while a role still had room. Do not hardcode those numbers beside the module.
+
+`RaidService.luau`, next to the other raid requires, when you wire this:
+
+```lua
+local RaidCalendar = require(ReplicatedStorage.Shared.RaidCalendar)
+```
+
+**Return shape.** `fresh`, `view`, `schedule`, `rsvp`, and `form` each return a new table. They do not write the input. A bad arg does not throw. nil, NaN, a non-table, a blank id, and a wrong type take the failure path. `persist` means "write this call's `state`". Store the book only when `persist == true`. An `ok == false` result with `persist == false` must not replace the live book. A broken book's `state.guilds` is empty. Writing that blank would wipe the real calendar. `attended` is always a table. It is empty except on a successful `form`. `notice` is true only on the first successful `form`. `night` is the night inside `state` when this call is about one night that is still on the calendar. It is nil on `view`, on a missing night, and on a broken record.
+
+| call | when | on success |
+|---|---|---|
+| `fresh()` | a guild has no calendar yet | `{ guilds = {} }` |
+| `view(book, now)` | load, so past nights can be dropped | the pruned book. `persist` is true only when a night or an empty guild was dropped. `notice` is false |
+| `schedule(book, request, now)` | the server adds or moves one raid night | the book. The same id and the same `startsAt` keep that night. A new id appends |
+| `rsvp(book, request, now)` | the server seats one player | the night. The same player keeps that seat and changes role in place |
+| `form(book, request, now)` | the server says who is present | `attended` in RSVP order, and `notice` true the first time. This call does not send the notice |
+
+**Schedule.** `request` is `{ guildId, id, startsAt }`. `guildId` and `id` are trimmed and not lowercased. `" Grove "` is `Grove`. `"Grove"` and `"grove"` are different guilds, and each gets 8 nights. `"A"` and `"a"` are different nights. A blank, a number, or a string longer than `maxIdLength` is `ERRORS.guild` or `ERRORS.id`. `startsAt` is a whole unix second from 0 through `2^53 - 1`. `-0` is stored as `0`. A negative, a fraction, NaN, inf, -inf, or a string is `ERRORS.time`. A whole `startsAt` strictly before `now` is `ERRORS.past`. `now == startsAt` is still current.
+
+The checks on `schedule`, in order, are: extra argument, rules, book, `now`, prune, request shape, skip field, guild id, night id, the current night if that id is still on the calendar, `startsAt`, the cap for a new id, then upsert. A bad `startsAt` on a night that is still current returns that night and does not move it. The same id and the same `startsAt` is `ok` with `persist == false`, and it keeps RSVPs, `formed`, and `attended`. A new `startsAt` on that id keeps the RSVPs, clears `formed`, and clears `attended`. A new id on a guild that already has 8 current nights is `ERRORS.full`. Those 8 stay, including the first. Moving an existing id still works when the list is full. A second guild can still take its first night.
+
+**RSVP.** `request` is `{ guildId, id, userId, role }`. `userId` is a positive whole number from 1 through `2^53 - 1`. `0`, a negative, a fraction, NaN, inf, a boolean, and `"1"` are `ERRORS.user`. `1` and `"1"` are not the same player. `role` is trimmed and lowercased. `" Tank "` and `"FLEX"` are `tank` and `flex`. `lead`, `assistant`, `"Raid Lead"`, `support`, a blank, and a missing role are `ERRORS.role`. One player holds one seat. The same player updates that seat and stays in place. A new player appends.
+
+The checks on `rsvp`, in order, are: extra argument, rules, book, `now`, prune, request shape, skip field, guild id, night id, user id, role, the night, then the caps. A bad role is `ERRORS.role` even when the night is missing. A good role on a missing night is `ERRORS.missing`. For a new player, a full role is `ERRORS.roleFull` before the RSVP cap is checked. Then a full RSVP list is `ERRORS.rsvpsFull`. Nobody already seated is dropped. For a player who already has a seat, the same role is `ok`. A move into a full role is `ERRORS.roleFull` and the old role stays. A move into a role that still has room succeeds even when the RSVP list is full, because that player is already on the list.
+
+With these placeholders, 3 tanks and a 4th tank is `ERRORS.roleFull` while the list still has room. 3 tank, 3 healer, and 2 dps fills the list at 8. A new flex is `ERRORS.rsvpsFull` because flex still has room. A new tank on that same full night is `ERRORS.roleFull`, because the role is checked first. The first seat stays.
+
+**Form.** `request` is `{ guildId, id, present }`. `present` is an array of user ids, the same kind `rsvp` accepts. A hole, a duplicate, a blank, a string, `0`, a fraction, NaN, or inf is `ERRORS.present`. An empty array is a real form: nobody from the RSVP list was present. The checks, in order, are: extra argument, rules, book, `now`, prune, request shape, skip field, guild id, night id, `present`, the night, then attendance. A bad `present` is `ERRORS.present` even when the night is missing, and `night` on that result is nil. A good `present` on a missing night is `ERRORS.missing`.
+
+`attended` is the RSVP user ids who are also in `present`, in RSVP order, not in `present` order. A present id with no seat is left out. An RSVP who is absent is left out. The first successful form sets `formed` and returns `notice == true`. A later form with the same attendance is `ok`, `notice == false`, and `persist == false` unless a past night was dropped. A later form that changes attendance updates `attended`, returns `notice == false`, and persists. This module does not send the notice. There is no `sent` field.
+
+**Time and prune.** `now` is a whole unix second from 0 through `2^53 - 1`, passed in by the caller. A bad `now` is `ERRORS.time`. That result is a copy of the book, including past nights, and `persist` is false. Do not prune it yourself. A night is past when `startsAt < now`. `now == startsAt` stays. Every successful read drops past nights, then drops a guild that has no nights left. `view` sets `persist` true only when that drop happened. A second `view` of the pruned book is `persist == false`. A refusal does not persist, even when the returned `state` has already omitted a past night. Call `view` on load if you need that drop saved without an RSVP. A past night is gone before `schedule` looks the id up, so the same id with a future `startsAt` after that starts a new empty night. RSVPs from the pruned night are not copied forward. Attendance on a pruned night is gone with it. Read `attended` from the `form` result in that same call if you need a longer record.
+
+**One book.** Nil `book`, or a table whose `guilds` is nil, is `{ guilds = {} }`. Nil `nights` is an empty guild, and `view` drops that shell. `practice`, `difficulty`, `week`, `weekKey`, `loot`, `rewards`, `marks`, `bossId`, `guided`, and `userId` on `schedule` or `form` are ignored. They are not copied onto the night. `userId` on `form` is not an attendee. Only `present` counts. A `player` table on the request is ignored, so a nested client guild id is not read. Unknown string keys on a stored book are dropped on the copy. A `paid` or `robux` field already stored on the record does not waive a cap and is not copied. A non-string key, a hole, a duplicate guild id, a duplicate night id, a duplicate user id, a stored id that still has spaces, a stored role that is not exactly `tank`, `healer`, `dps`, or `flex`, a stored `startsAt` that is not a whole second from 0, a role with more than 3 seats, or a night with more than 8 RSVPs is `ERRORS.state`. More than 8 nights on one guild is `ERRORS.state` too. It is not trimmed, even when every one of those nights is past. `formed` must be a boolean when it is present. A missing `formed` means false. `attended` must list a subset of the RSVP user ids in RSVP order. `{ 1 }` is valid while user 2 also has a seat. `{ 2, 1 }` is `ERRORS.state` when user 1 comes first. A non-empty `attended` while `formed` is false is `ERRORS.state`.
+
+An extra argument is `ERRORS.skip` and the returned `state` is blank, because the record is not read. A skip field on the request is also `ERRORS.skip`, and that result keeps the pruned copy of a valid record. `false` still counts as present. The names are `skip`, `waive`, `waiveLock`, `waiveLockout`, `bypass`, `bypassLock`, `paid`, `robux`, `premium`, `price`, `productId`, `gamePass`, `force`, `unlock`, `skipLock`, `skipLockout`, `paidRsvp`, `extraSlot`, `buySlot`, `skipCap`, `paidSlot`, and `skipPrune`. `force` does not schedule, does not beat a cap, and does not form. It is refused before the guild id.
+
+```lua
+local function saveCalendar(book, result)
+	if result.persist ~= true then
+		return book
+	end
+	return result.state
+end
+```
+
+**Call sites, still yours.** Keep the book on the guild record. Do not fold these rules into `RaidFinder` or `RaidStrategy`. Pass `guildId` and `userId` from the server. Do not copy either off the client payload. Pass `present` as the user ids the server says are there, not a list the client assembled.
+
+```lua
+function RaidService.scheduleRaidNight(book, guildId, nightId, startsAt)
+	local now = os.time()
+	local result = RaidCalendar.schedule(book, {
+		guildId = guildId,
+		id = nightId,
+		startsAt = startsAt,
+	}, now)
+	return saveCalendar(book, result), result
+end
+
+function RaidService.rsvpRaidNight(book, guildId, nightId, userId, role)
+	local now = os.time()
+	local result = RaidCalendar.rsvp(book, {
+		guildId = guildId,
+		id = nightId,
+		userId = userId,
+		role = role,
+	}, now)
+	return saveCalendar(book, result), result
+end
+
+function RaidService.formRaidNight(book, guildId, nightId, present)
+	local now = os.time()
+	local result = RaidCalendar.form(book, {
+		guildId = guildId,
+		id = nightId,
+		present = present,
+	}, now)
+	-- Send the in-game notice only when result.ok == true and result.notice == true.
+	-- This module does not send it. Read result.attended in this same call.
+	return saveCalendar(book, result), result
+end
+
+function RaidService.readCalendar(book)
+	local now = os.time()
+	local result = RaidCalendar.view(book, now)
+	return saveCalendar(book, result), result
+end
+```
+
+`readCalendar` is the load path that drops past nights. Save it when `persist == true`. Save `scheduleRaidNight` and `rsvpRaidNight` only when `persist == true`. `formRaidNight` saves on that same flag. Send the notice only from `result.notice`. Do not send it from `schedule` or `rsvp`. Both of those return `notice == false`.
+
+**Where the calendar lives.** HELPER does not edit `Schema.luau`. Do not add this to the player profile. A per-player copy would diverge, and the row says the server passes the guild id. Version 21 was current when T-085 opened. Do not assume 22 is still free. There is no guild schema in this repo. When a guild record exists, add this on that record, beside the T-074 `guideScore` field and the T-083 `strategyPresets` field. Do not assume that record's version.
+
+```lua
+raidCalendar: any, -- nil, or { nights = { { id, startsAt, rsvps = { { userId, role } }, formed, attended } } }
+```
+
+Nil means that guild has no nights. The module's book is one table for every guild you want to pass in one call. Wrap one guild, or pass a book if one record holds all of them:
+
+```lua
+{
+	guilds = {
+		{
+			guildId = "Grove",
+			nights = {
+				{
+					id = "Tuesday",
+					startsAt = 1791849600,
+					rsvps = {
+						{ userId = 1, role = "tank" },
+					},
+					formed = false,
+					attended = {},
+				},
+			},
+		},
+	},
+}
+```
+
+Pass the server's guild id into `schedule`, `rsvp`, and `form`. Do not copy the book onto a profile. Do not key it by user id, boss, difficulty, or Tuesday week.
+
+`tests/run.luau` requires `./RaidCalendar.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Questions for Ghost:
+
+1. The suggested guild-record field is `raidCalendar`, shaped as `{ nights = { { id, startsAt, rsvps, formed, attended } } }` and passed to the module as `{ guilds = { { guildId, nights } } }`. It is not a player-schema field. There is no guild schema in this repo. Player schema was 21 when this opened. Do not assume 22 is free. Do not assume a guild-record version. Put it beside `guideScore` and `strategyPresets` when a guild record exists. Confirm the name and where the book lives.
+2. `maxEvents` is 8 per guild id. `maxRoleSlots` is 3 seats of one role. `maxRsvps` is 8 on one night. `maxIdLength` is 64. The role cap is 3 so a full RSVP list can still refuse a player whose role has a free seat. A stored guild with more than 8 nights, a role with more than 3 seats, or a night with more than 8 RSVPs is `ERRORS.state` and is not trimmed. Confirm the caps, or should tank and healer be smaller than DPS the way Raid Finder builds a party?
+3. A night is past when `startsAt < now`. `now == startsAt` is still on the calendar, so RSVP and `form` work in that second. One second later the night is gone and `form` is `ERRORS.missing`. There is no grace after the start. Confirm, or should a formed night stay readable for a window after `startsAt`?
+4. `notice` is true only on the first successful `form`. This module does not send it. The same `present` list again returns `notice == false`. A later `form` that changes `attended` also returns `notice == false`. Moving the night to a new `startsAt` clears `formed`, so the next `form` notices again. Confirm the wire sends in the same turn as the first `notice == true`, and that a moved night should notice again.
+5. `attended` is the RSVP user ids who are also in `present`, in RSVP order. A present id with no seat is left out. An RSVP who is absent is left out. An empty `present` still forms, `attended` is empty, and the first time `notice` is true. Confirm, and confirm `present` is the server's list rather than a client payload.
+6. There is no withdraw and no cancel. A player changes role in place and cannot clear the seat. `schedule` of a current night to a new `startsAt` keeps the RSVPs and clears `formed` and `attended`. Confirm, or should a player be able to leave and a lead be able to cancel a night?
+7. `schedule` does not read a role and does not require a user id. A `userId` on that request is ignored and is not stored. Confirm `RaidService` only calls `schedule` for the raid lead, using the server guild id.
+8. `userId` is a positive whole number from 1 through `2^53 - 1`. `"1"`, `0`, a negative, a fraction, NaN, and inf are `ERRORS.user`. `1` and `"1"` are not the same player. Confirm the wire passes the server user id and never a client string.
+9. Guild ids and night ids are trimmed and not lowercased. `" Grove "` is `Grove`. `"Grove"` and `"grove"` each get 8 nights. `"A"` and `"a"` are different nights. `maxIdLength` is 64. Confirm the wire's ids and the cap.
+10. Roles are trimmed and lowercased to `tank`, `healer`, `dps`, and `flex`. `" Tank "` is `tank`. `lead`, `assistant`, `"Raid Lead"`, and `support` are refused. Flex is a seat. It is not filled into tank, healer, or dps, and this module does not require `RaidFinder`. Confirm the catalog.
+11. One player holds one seat and stays in that position when the role changes. A new player into a full role is `ERRORS.roleFull` and nobody is dropped. A move into a full role is `ERRORS.roleFull` and the old role stays. A new player into an open role when the RSVP list is full is `ERRORS.rsvpsFull` and the first seat stays. An existing player can still move into a role that has room while the list is full. When the role and the list are both full, a new player for that role gets `ERRORS.roleFull` because the role is checked first. Confirm that order.
+12. A past night is pruned before `schedule` looks the id up. The same id with a future `startsAt` after that is a new empty night, and the old RSVPs are gone. A move that happens while `startsAt >= now` keeps the RSVPs and clears `formed` and `attended`. The same `startsAt` keeps `formed` and `attended`. Confirm both.
+13. An RSVP after `form` is allowed and does not change `attended` until `form` runs again. `practice`, `difficulty`, `bossId`, `loot`, `weekKey`, and `guided` are ignored. They are not stored. `loot` grants nothing. This night is not a lockout and not a week key. Confirm the wire will not expect a per-player, per-boss, or per-week calendar.
+14. A broken book returns `ok == false`, `persist == false`, and `{ guilds = {} }`. It is not trimmed. Do not write that blank. An extra argument does the same and does not read the book. A bad `now` returns a copy, including past nights, and does not prune. A skip field returns the pruned copy and does not persist. A refusal returns the pruned copy and does not persist, so a past night stays on the live book until `view` or a successful call. Confirm the wire writes `state` only when `persist == true`, and that load calls `view`.
+15. Nothing here costs Robux. An extra argument, or a `skip`, `waive`, `paid`, `robux`, `premium`, `price`, `productId`, `gamePass`, `force`, `unlock`, `paidRsvp`, `extraSlot`, `buySlot`, `skipCap`, `paidSlot`, or `skipPrune` field, is `ERRORS.skip`. `false` still counts as present. `force` does not schedule, add a seat, beat a cap, or form. The same names already stored on the record are dropped on the copy and do not waive a cap. Confirm no paid RSVP, extra slot, or skip will be added at wiring.
+16. The server passes the guild id and the user id. This module accepts the ids on the request and cannot tell a client field from a server field. A nested `player` table is ignored. Confirm `RaidService` will not copy `guildId` or `userId` off the client payload.
+
 ## Open
 
 No unassigned tasks.
