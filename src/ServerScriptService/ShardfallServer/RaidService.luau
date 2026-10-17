@@ -447,6 +447,9 @@ local function sendHome(row: Arrival, except: Player?)
 	-- The plaza kept the seats. The token is the one this server packed.
 	-- The payload does not name a player. The arriving server uses the
 	-- player who actually landed.
+	-- Release the lock before the return hop. The callback runs only
+	-- after that save clears it. A failed save stays here. One profile
+	-- at a time, so a missing save does not hold the rest of the party.
 	local recall = {
 		raid = "heartwood",
 		premadeRecall = true,
@@ -455,7 +458,7 @@ local function sendHome(row: Arrival, except: Player?)
 	local TeleportService = game:GetService("TeleportService")
 	for _, person in pairs(row.players) do
 		if person ~= except and person.Parent == Players then
-			pcall(function()
+			DataService.releaseForTeleport(person, function()
 				TeleportService:TeleportToPlaceInstance(game.PlaceId, home, person, nil, recall)
 			end)
 		end
