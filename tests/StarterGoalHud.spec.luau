@@ -491,7 +491,8 @@ describe("StarterGoalHud chrome", function()
 			expect(placed.y >= margin).toBeTrue()
 			expect(placed.x + placed.w <= vx - margin + 0.01).toBeTrue()
 			expect(placed.y + placed.h <= vy - margin + 0.01).toBeTrue()
-			local rail = HudLayout.railFit(vy, margin, 7, UiTheme.TAP, UiTheme.TOUCH)
+			local rail =
+				HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
 			expect(HudLayout.overlaps(placed, {
 				x = rail.x,
 				y = rail.y,
@@ -514,15 +515,7 @@ end)
 
 describe("StarterGoalHud polish", function()
 	local function promptOf(viewportX: number)
-		local margin = UiTheme.safeMargin()
-		local toast = HudLayout.toast(viewportX, margin)
-		local hostH = toast.h * 3 + 8 * 2
-		return {
-			x = toast.x,
-			y = toast.y + hostH + 8,
-			w = toast.w,
-			h = 36 + UiTheme.TOUCH + 8,
-		}
+		return HudLayout.equipPrompt(viewportX, UiTheme.safeMargin())
 	end
 
 	local function withPlace(hook: any, body: () -> ())

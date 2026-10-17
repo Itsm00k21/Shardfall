@@ -27,10 +27,28 @@ local function inside(box: { x: number, y: number, w: number, h: number }, vx: n
 	expect(box.y + box.h <= vy).toBeTrue()
 end
 
-local function aboveToast(box: { x: number, y: number, w: number, h: number }, vx: number)
+local function offToast(box: { x: number, y: number, w: number, h: number }, vx: number)
 	local toast = HudLayout.toast(vx, UiTheme.safeMargin())
-	expect(box.y + box.h <= toast.y).toBeTrue()
 	expect(HudLayout.overlaps(box, toast)).toEqual(false)
+end
+
+local function railBox(viewportY: number)
+	local rail = HudLayout.railFit(
+		viewportY,
+		UiTheme.safeMargin(),
+		HudLayout.RAIL_COUNT,
+		UiTheme.TAP,
+		UiTheme.TOUCH
+	)
+	return { x = rail.x, y = rail.y, w = rail.w, h = rail.h }
+end
+
+local function toastHost(viewportX: number)
+	return HudLayout.toastHost(viewportX, UiTheme.safeMargin())
+end
+
+local function equipPrompt(viewportX: number)
+	return HudLayout.equipPrompt(viewportX, UiTheme.safeMargin())
 end
 
 describe("BannerFit", function()
@@ -43,7 +61,7 @@ describe("BannerFit", function()
 			expect(box.h).toEqual(16 + UiTheme.PAD * 2)
 			expect(box.h >= box.textSize).toBeTrue()
 			inside(box, vx, vy)
-			aboveToast(box, vx)
+			offToast(box, vx)
 		end
 		local first = BannerFit.fit(390, 844, 1)
 		local second = BannerFit.fit(390, 844, 1)
@@ -61,7 +79,7 @@ describe("BannerFit", function()
 			expect(box.h).toEqual(box.textSize + UiTheme.PAD * 2)
 			expect(box.h >= box.textSize).toBeTrue()
 			inside(box, vx, vy)
-			aboveToast(box, vx)
+			offToast(box, vx)
 		end
 	end)
 
@@ -109,28 +127,38 @@ describe("BannerFit", function()
 		expect(asScale.skip).toEqual(true)
 	end)
 
-	it("shortens a tall line so the bottom stops above the toast", function()
-		local box = BannerFit.fit(390, 844, 10)
-		local toast = HudLayout.toast(390, UiTheme.safeMargin())
-		expect(box.textSize).toEqual(math.max(UiTheme.MIN_TEXT, math.floor(16 * 10 + 0.5)))
-		expect(box.h < box.textSize + UiTheme.PAD * 2).toBeTrue()
-		expect(box.y + box.h <= toast.y).toBeTrue()
+	it("shortens a line that would pass the bottom of the viewport", function()
+		local box = BannerFit.fit(390, 844, 40)
+		local textSize = math.max(UiTheme.MIN_TEXT, math.floor(16 * 40 + 0.5))
+		local line = textSize + UiTheme.PAD * 2
+		expect(box.textSize).toEqual(textSize)
+		expect(line > 844 - box.y).toBeTrue()
+		expect(box.h < line).toBeTrue()
+		expect(box.y + box.h).toEqual(844)
 		inside(box, 390, 844)
-		aboveToast(box, 390)
+		offToast(box, 390)
+		local margin = UiTheme.safeMargin()
+		expect(HudLayout.overlaps(box, HudLayout.portrait(margin))).toEqual(false)
+		expect(HudLayout.overlaps(box, HudLayout.health(margin))).toEqual(false)
+		expect(HudLayout.overlaps(box, railBox(844))).toEqual(false)
 	end)
 
-	it("clears the phone chips, the tracker band, and the hub close inset", function()
+	it("clears the portrait, the HP bar, the rail, the chips, and the hub close", function()
+		expect(HudLayout.RAIL_COUNT).toEqual(7)
 		local margin = UiTheme.safeMargin()
 		for _, view in ipairs(PHONES) do
 			local vx = view[1]
 			local vy = view[2]
 			for _, scale in ipairs({ 1, 1.4 }) do
 				local box = BannerFit.fit(vx, vy, scale)
-				local pills = HudLayout.pills(vx, margin)
-				expect(HudLayout.overlaps(box, pills)).toEqual(false)
-				expect(box.y + box.h <= pills.y).toBeTrue()
-				local health = HudLayout.health(margin)
-				expect(box.y + box.h <= health.y + health.h + 8).toBeTrue()
+				expect(box.h).toEqual(box.textSize + UiTheme.PAD * 2)
+				expect(HudLayout.overlaps(box, HudLayout.portrait(margin))).toEqual(false)
+				expect(HudLayout.overlaps(box, HudLayout.health(margin))).toEqual(false)
+				expect(HudLayout.overlaps(box, railBox(vy))).toEqual(false)
+				expect(HudLayout.overlaps(box, HudLayout.toast(vx, margin))).toEqual(false)
+				expect(HudLayout.overlaps(box, toastHost(vx))).toEqual(false)
+				expect(HudLayout.overlaps(box, equipPrompt(vx))).toEqual(false)
+				expect(HudLayout.overlaps(box, HudLayout.pills(vx, margin))).toEqual(false)
 				local hub = HudLayout.hub(vx, vy, margin)
 				local close = {
 					x = hub.x + hub.w - UiTheme.PAD - UiTheme.TOUCH,
@@ -140,7 +168,23 @@ describe("BannerFit", function()
 				}
 				expect(HudLayout.overlaps(box, close)).toEqual(false)
 				inside(box, vx, vy)
+				expect(box.x + box.w).toEqual(vx - UiTheme.PAD)
 			end
+		end
+		local health = HudLayout.health(margin)
+		for _, view in ipairs({ { 844, 390 }, { 800, 380 } }) do
+			for _, scale in ipairs({ 1, 1.4 }) do
+				local box = BannerFit.fit(view[1], view[2], scale)
+				expect(box.y).toEqual(UiTheme.PAD)
+				expect(box.x).toEqual(health.x + health.w + UiTheme.PAD)
+			end
+		end
+		for _, scale in ipairs({ 1, 1.4 }) do
+			local box = BannerFit.fit(390, 844, scale)
+			local prompt = equipPrompt(390)
+			local rail = railBox(844)
+			expect(box.y).toEqual(prompt.y + prompt.h + UiTheme.PAD)
+			expect(box.x).toEqual(rail.x + rail.w + UiTheme.PAD)
 		end
 	end)
 
@@ -184,5 +228,20 @@ describe("BannerFit", function()
 		expect(string.find(ui, "settings.access.textScale", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "BannerFit.fit", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "banner.TextSize = box.textSize", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("treats a missing, zero, or fractional viewport as a safe rect", function()
+		local empty = BannerFit.fit(0, 0, 1)
+		inside(empty, 0, 0)
+		expect(empty.w).toEqual(0)
+		expect(empty.h).toEqual(0)
+		expect(empty.textSize).toEqual(16)
+		expect(BannerFit.fit(nil, nil, nil)).toEqual(empty)
+		expect(BannerFit.fit(0 / 0, math.huge, 1)).toEqual(empty)
+		expect(BannerFit.fit(-20, -5, 1)).toEqual(empty)
+		local odd = BannerFit.fit(390.9, 844.2, 1)
+		expect(odd).toEqual(BannerFit.fit(390, 844, 1))
+		inside(odd, 390, 844)
+		offToast(odd, 390)
 	end)
 end)

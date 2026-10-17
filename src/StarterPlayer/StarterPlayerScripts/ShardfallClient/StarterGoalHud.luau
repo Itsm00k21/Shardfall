@@ -37,12 +37,8 @@ local ROW_COUNT = 3
 local ROW_H = 18
 local WIDTH = 320
 local BASE_TEXT = UiTheme.MIN_TEXT
--- Shell rail length, and the three-card toast host in HudShell.
-local RAIL_COUNT = 7
-local TOAST_CARDS = 3
+-- Tracker gutters. The toast host, equip prompt, and rail count are HudLayout's.
 local TOAST_GAP = 8
--- HudShell prompt.Size is 36 + UiTheme.TOUCH + 8, under that host.
-local PROMPT_TEXT = 36
 
 export type Row = {
 	text: string,
@@ -191,21 +187,14 @@ function StarterGoalHud.shown(rowCount: number, settings: any): boolean
 end
 
 local function toastHost(viewportX: number, margin: number): Rect
-	local toast = HudLayout.toast(viewportX, margin)
-	local height = toast.h * TOAST_CARDS + TOAST_GAP * (TOAST_CARDS - 1)
-	return { x = toast.x, y = toast.y, w = toast.w, h = height }
+	local host = HudLayout.toastHost(viewportX, margin)
+	return { x = host.x, y = host.y, w = host.w, h = host.h }
 end
 
--- Same spot as HudShell's equip prompt: just under the three-card host.
+-- Same frame HudShell places from HudLayout.equipPrompt.
 local function equipPrompt(viewportX: number, margin: number): Rect
-	local toast = HudLayout.toast(viewportX, margin)
-	local host = toastHost(viewportX, margin)
-	return {
-		x = toast.x,
-		y = host.y + host.h + TOAST_GAP,
-		w = toast.w,
-		h = PROMPT_TEXT + UiTheme.TOUCH + TOAST_GAP,
-	}
+	local prompt = HudLayout.equipPrompt(viewportX, margin)
+	return { x = prompt.x, y = prompt.y, w = prompt.w, h = prompt.h }
 end
 
 local function hideRect(): Rect
@@ -268,7 +257,8 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	local box: Rect = { x = x, y = y, w = width, h = height }
 	local block = toastHost(viewportX, margin)
 	local prompt = equipPrompt(viewportX, margin)
-	local railFit = HudLayout.railFit(viewportY, margin, RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
+	local railFit =
+		HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
 	local rail: Rect = { x = railFit.x, y = railFit.y, w = railFit.w, h = railFit.h }
 	local railRight = railFit.x + railFit.w + TOAST_GAP
 	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"
