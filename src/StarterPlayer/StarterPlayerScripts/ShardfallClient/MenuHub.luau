@@ -3442,7 +3442,63 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		follow(nextState)
 	end)
 
-	local function bindLife(character: Model)
+	-- Combat pins Humanoid.Health to MaxHealth, so Died never fires on a
+	-- dungeon down. The chain follows ShardfallHp and a defeat / down
+	-- CombatFx. A body that loads at 0 Health is not that down, and a Died
+	-- from a character that is no longer ours must not latch the new life.
+	local localPlayer = Players.LocalPlayer
+	local holdDown = false
+
+	local function aliveCharacter(): Model?
+		if localPlayer == nil then
+			return nil
+		end
+		return localPlayer.Character
+	end
+
+	local function stillHere(character: Model): boolean
+		return aliveCharacter() == character
+	end
+
+	local function readCombatHp(character: Model): number?
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if root == nil or not root:IsA("BasePart") then
+			return nil
+		end
+		local hp = root:GetAttribute("ShardfallHp")
+		if type(hp) ~= "number" or hp ~= hp or hp == math.huge then
+			return nil
+		end
+		return hp
+	end
+
+	local function markDown(character: Model)
+		if not stillHere(character) then
+			return
+		end
+		holdDown = true
+		playerAlive = false
+		stopRollChain()
+	end
+
+	local function noteCombatHp(character: Model)
+		if not stillHere(character) then
+			return
+		end
+		local hp = readCombatHp(character)
+		if hp == nil then
+			return
+		end
+		if hp <= 0 then
+			markDown(character)
+			return
+		end
+		if not holdDown then
+			playerAlive = true
+		end
+	end
+
+	local function bindHumanoid(character: Model)
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid == nil then
 			local waited = character:WaitForChild("Humanoid", 8)
@@ -3450,28 +3506,124 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				humanoid = waited
 			end
 		end
-		if humanoid == nil or not humanoid:IsA("Humanoid") then
+		if humanoid == nil or not humanoid:IsA("Humanoid") or not stillHere(character) then
 			return
 		end
-		local function died()
-			playerAlive = false
-			stopRollChain()
-		end
-		if humanoid.Health <= 0 then
-			died()
-		end
-		humanoid.Died:Connect(died)
+		local sawPositive = humanoid.Health > 0
+		humanoid.HealthChanged:Connect(function(health: number)
+			if health > 0 then
+				sawPositive = true
+			end
+		end)
+		humanoid.Died:Connect(function()
+			if not stillHere(character) or not sawPositive then
+				return
+			end
+			markDown(character)
+		end)
 	end
 
-	local localPlayer = Players.LocalPlayer
+	local function bindCombatHp(character: Model)
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if root == nil then
+			local waited = character:WaitForChild("HumanoidRootPart", 8)
+			if waited ~= nil and waited:IsA("BasePart") then
+				root = waited
+			end
+		end
+		if root == nil or not root:IsA("BasePart") or not stillHere(character) then
+			return
+		end
+		noteCombatHp(character)
+		root:GetAttributeChangedSignal("ShardfallHp"):Connect(function()
+			noteCombatHp(character)
+		end)
+	end
+
+	local function bindLife(character: Model)
+		task.spawn(bindHumanoid, character)
+		task.spawn(bindCombatHp, character)
+	end
+
+	local function watchCombatFx()
+		local folder = ReplicatedStorage:FindFirstChild("Remotes")
+		if folder == nil then
+			local waited = ReplicatedStorage:WaitForChild("Remotes", 30)
+			if waited ~= nil then
+				folder = waited
+			end
+		end
+		if folder == nil then
+			return
+		end
+		local remote = folder:FindFirstChild("CombatFx")
+		if remote == nil then
+			local waited = folder:WaitForChild("CombatFx", 30)
+			if waited ~= nil then
+				remote = waited
+			end
+		end
+		if remote == nil or not remote:IsA("RemoteEvent") then
+			return
+		end
+		remote.OnClientEvent:Connect(function(payload: any)
+			if type(payload) ~= "table" then
+				return
+			end
+			local character = aliveCharacter()
+			if character == nil then
+				return
+			end
+			local kind = payload.kind
+			if kind == "defeat" or kind == "down" then
+				markDown(character)
+				return
+			end
+			if kind ~= "hp" then
+				return
+			end
+			local hp = payload.hp
+			if type(hp) ~= "number" or hp ~= hp or hp == math.huge then
+				return
+			end
+			if hp <= 0 then
+				markDown(character)
+			elseif not holdDown then
+				playerAlive = true
+			end
+		end)
+	end
+
+	-- The roll Heartbeat is already connected. This one runs after it, so a
+	-- down this frame fails the chain check before the hold clears.
+	RunService.Heartbeat:Connect(function()
+		if not holdDown then
+			return
+		end
+		if rollBusy or activeReveal ~= nil or loop.phase ~= "idle" then
+			playerAlive = false
+			return
+		end
+		holdDown = false
+		local character = aliveCharacter()
+		if character == nil then
+			playerAlive = true
+			return
+		end
+		local hp = readCombatHp(character)
+		playerAlive = hp == nil or hp > 0
+	end)
+
 	if localPlayer ~= nil then
 		localPlayer.CharacterAdded:Connect(function(character)
+			holdDown = false
 			playerAlive = true
 			task.spawn(bindLife, character)
 		end)
 		if localPlayer.Character ~= nil then
 			task.spawn(bindLife, localPlayer.Character)
 		end
+		task.spawn(watchCombatFx)
 	end
 
 	paint()

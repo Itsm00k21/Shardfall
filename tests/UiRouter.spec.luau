@@ -89,6 +89,52 @@ describe("UiRouter", function()
 		expect(state.dim).toEqual(0)
 	end)
 
+	it("opens a tab only from a single-letter key name", function()
+		local hotkeys = {
+			hero = "C",
+			bag = "B",
+			pets = "P",
+			roll = "T",
+			raids = "I",
+			market = "M",
+			pass = "S",
+			settings = "L",
+		}
+		local closed = UiRouter.initial()
+		local roll = UiRouter.hotkey(closed, "T", hotkeys)
+		expect(roll.open).toEqual(true)
+		expect(roll.tab).toEqual("roll")
+		local bag = UiRouter.key(roll, "B", hotkeys)
+		expect(bag.open).toEqual(true)
+		expect(bag.tab).toEqual("bag")
+		expect(UiRouter.hotkey(bag, "P", hotkeys).tab).toEqual("pets")
+		expect(UiRouter.hotkey(bag, "I", hotkeys).tab).toEqual("raids")
+		expect(UiRouter.hotkey(bag, "M", hotkeys).tab).toEqual("market")
+		expect(UiRouter.hotkey(bag, "C", hotkeys).tab).toEqual("hero")
+		expect(UiRouter.hotkey(closed, "S", hotkeys).tab).toEqual("pass")
+		expect(UiRouter.hotkey(closed, "L", hotkeys).tab).toEqual("settings")
+		local hero = UiRouter.hotkey(closed, "C", hotkeys)
+		for _, name in ipairs({
+			"Two",
+			"Tab",
+			"Space",
+			"LeftShift",
+			"Backspace",
+			"Comma",
+			"Period",
+			"Minus",
+			"Insert",
+		}) do
+			local stayed = UiRouter.hotkey(closed, name, hotkeys)
+			expect(stayed.open).toEqual(false)
+			expect(stayed.generation).toEqual(closed.generation)
+			local still = UiRouter.key(hero, name, hotkeys)
+			expect(still.open).toEqual(true)
+			expect(still.tab).toEqual("hero")
+			expect(still.generation).toEqual(hero.generation)
+		end
+	end)
+
 	it("lets a hotkey change tabs while the menu is open", function()
 		local state = UiRouter.open(UiRouter.initial(), "hero")
 		state = UiRouter.key(state, "B", HOTKEYS)
