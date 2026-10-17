@@ -26,7 +26,7 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-010 | M | content | 8 world bosses: name, zone, 3 phases, signature mechanic, loot theme, visual note | `docs/content/bosses.md` | done | https://github.com/Itsm00k21/Shardfall/pull/83 |
 | G-011 | M | content | 6 zones after Haven and Heartwood: name, level band, mood, landmarks, enemy theme, music mood | `docs/content/zones.md` | done | https://github.com/Itsm00k21/Shardfall/pull/83 |
 | G-012 | M | content | 30 regular enemies across the zones in G-011: name, role (melee, ranged, caster, swarm), one move, visual note | `docs/content/enemies.md` | done | https://github.com/Itsm00k21/Shardfall/pull/83 |
-| G-013 | L | content | Main story chapter 1: 10 quests with objectives, rewards (suggested) and short NPC lines | `docs/content/quests_ch1.md` | todo | — |
+| G-013 | L | content | Main story chapter 1: 10 quests with objectives, rewards (suggested) and short NPC lines | `docs/content/quests_ch1.md` | done | @@PR@@ |
 | G-014 | M | content | 20 side quests for Haven and the first zone | `docs/content/quests_side.md` | todo | — |
 | G-015 | M | content | Haven NPC dialogue: 8 NPCs with a greeting, 3 idle lines, a shop line and a quest hand-in line | `docs/content/npc_dialogue_haven.md` | todo | — |
 | G-016 | M | content | 50 achievements (combat, rolls, pets, raids, social, collection) with a reward idea | `docs/content/achievements.md` | todo | — |
