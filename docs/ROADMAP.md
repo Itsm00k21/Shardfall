@@ -57,6 +57,9 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #185 The board files the hub rarity color row. Docs only (`8eab46d`).
 - #186 The board locks the rarity palette row and marks G-043 through G-047 done in #180 (`6e2d9e5`). Docs only (`c6a0602`).
 - #187 Mythic is red `#E6404E` and Secret stays white. Only Secret inventory strokes keep the rainbow. That is T-164 (`90a4818`).
+- #189 The Story Echo chip stays off the HP bar on a phone. That is T-163 (`7dd700e`).
+- #190 The on-screen Dodge button flashes Glass Kestrel. That is T-165 (`52a5717`).
+- #191 A controller dodges on ButtonY. ButtonX stays heavy. That is T-166 (`961bf5e`).
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
@@ -64,7 +67,8 @@ Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABL
 
 The next week or two.
 
-- Echo's next row is T-163. The Story Echo chip stays off the HP bar on a phone, on `helper/echo-chip-9721`. Brief: `docs/hooks/T-163.md`. T-160 is done in #178 (`e510db4`).
+- Echo's next row is T-167. The bag follows the text-size slider, on `helper/bag-text-scale-9721`. Brief: `docs/hooks/T-167.md`. T-163 is done in #189 (`7dd700e`).
+- T-165 landed in #190 (`52a5717`). The on-screen Dodge button flashes Glass Kestrel. T-166 landed in #191 (`961bf5e`). ButtonY dodges and ButtonX stays heavy.
 - T-164 landed in #187 (`90a4818`). Mythic is red `#E6404E` and Secret is white. Only Secret inventory strokes keep the rainbow.
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
 - T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first.
@@ -80,7 +84,7 @@ Kevin asked to hold the lighting pass. The older queue stays behind the plaza an
 - T-107 is done. Loading tips show, including during a hop.
 - T-108 is decided. The Training Grove hands in one ribbon and 15 gold. The ribbon is a collectible and is not worn yet.
 - T-109 landed in #174. The grove record saves on schema 26. T-110 landed in #176. The dummy stands on the plaza.
-- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-164 landed in #187 (`90a4818`). T-162, the door nameplates, stays with the lighting pass.
+- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-163 landed in #189 (`7dd700e`). T-164 landed in #187 (`90a4818`). T-165 landed in #190 (`52a5717`). T-166 landed in #191 (`961bf5e`). T-162, the door nameplates, stays with the lighting pass.
 - T-082 wires the raid contest once gear has a whole-number item level. The statue is one server-wide record.
 - T-084 wires the weekly loot lock. A reclear pays marks, dust, and materials.
 - T-036 wires the raid-leaver rules and four save fields: leaves today, the finder cooldown, and the rejoin window.
