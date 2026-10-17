@@ -68,7 +68,7 @@ describe("Haven", function()
 		expect(Haven.portal("void").message).toEqual("Void Rift is sealed.")
 	end)
 
-	it("paints Rootvault open and seals the other gates with a level line", function()
+	it("paints Rootvault and Heartwood open and seals the other gates with a level line", function()
 		local lit = {}
 		for _, portal in ipairs(Haven.PORTALS) do
 			expect(type(portal.subline) == "string").toBeTrue()
@@ -77,26 +77,86 @@ describe("Haven", function()
 			expect(string.find(portal.subline :: string, tostring(portal.level), 1, true) ~= nil).toBeTrue()
 			if Haven.gateLit(portal) then
 				table.insert(lit, portal.id)
+				expect(string.find(Haven.gatePlate(portal), "Sealed", 1, true)).toBeNil()
 			else
 				expect(type(portal.message) == "string").toBeTrue()
+				expect(string.find(Haven.gatePlate(portal), "Sealed", 1, true) ~= nil).toBeTrue()
 			end
 		end
-		expect(lit).toEqual({ "rootvault" })
+		expect(lit).toEqual({ "rootvault", "heartwood" })
 		expect(Haven.NAMEPLATE_DISTANCE >= 90).toBeTrue()
 		expect(Haven.PIER_REACH < Haven.GATE_REACH).toBeTrue()
 		expect(Haven.portal("rootvault").dress).toEqual("roots")
 		expect(Haven.portal("rootvault").subline).toEqual("Lv 1 · Solo")
+		expect(Haven.gatePlate(Haven.portal("rootvault"))).toEqual("Lv 1 · Solo")
 		expect(Haven.portal("heartwood").open).toEqual(true)
-		expect(Haven.portal("heartwood").sealed).toEqual(true)
+		expect(Haven.portal("heartwood").sealed).toEqual(false)
 		expect(Haven.portal("heartwood").dress).toEqual("bark")
 		expect(Haven.portal("heartwood").message).toEqual("Opens at level 15.")
 		expect(Haven.portal("heartwood").subline).toEqual("Lv 15 · 4–8")
+		expect(Haven.gatePlate(Haven.portal("heartwood"))).toEqual("Lv 15 · 4–8")
 		expect(Haven.portal("heartwood").height).toEqual(22)
 		expect(Haven.portal("tidecrypt").dress).toEqual("coral")
 		expect(Haven.portal("ember").dress).toEqual("basalt")
 		expect(Haven.portal("frost").dress).toEqual("ice")
 		expect(Haven.portal("void").dress).toEqual("obsidian")
 		expect(Haven.portal("void").glow).toEqual({ 18, 16, 24 })
+	end)
+
+	it("opens a gate from implemented dungeons and the Heartwood raid", function()
+		local openIds = {}
+		for _, portal in ipairs(Haven.PORTALS) do
+			local open = Haven.gateOpen(portal)
+			expect(Haven.gateLit(portal)).toEqual(open)
+			if open then
+				table.insert(openIds, portal.id)
+			end
+		end
+		expect(openIds).toEqual({ "rootvault", "heartwood" })
+		local painted = {
+			id = "rootvault",
+			name = "Rootvault",
+			x = 0,
+			z = 0,
+			dungeonId = Dungeons.ROOTVAULT_ID,
+			sealed = true,
+		}
+		expect(Haven.gateOpen(painted)).toEqual(true)
+		expect(Haven.gateOpen({
+			id = "heartwood",
+			name = "Heartwood",
+			x = 0,
+			z = 0,
+			dungeonId = "missing",
+			sealed = true,
+		})).toEqual(true)
+		expect(Haven.gateOpen({
+			id = "waves",
+			name = "Waves",
+			x = 0,
+			z = 0,
+			dungeonId = Dungeons.WAVES_ID,
+			sealed = false,
+		})).toEqual(false)
+		expect(Haven.gateOpen({
+			id = "tidecrypt",
+			name = "Tidecrypt",
+			x = 0,
+			z = 0,
+			dungeonId = "tidecrypt",
+			sealed = false,
+			open = true,
+		})).toEqual(false)
+		local shut = {
+			id = "heartwood",
+			name = "Heartwood",
+			x = 0,
+			z = 0,
+			level = 15,
+			subline = "Lv 15 · Sealed",
+			sealed = true,
+		}
+		expect(Haven.gatePlate(shut)).toEqual("Lv 15")
 	end)
 
 	it("gives every live dungeon exactly one arch", function()
