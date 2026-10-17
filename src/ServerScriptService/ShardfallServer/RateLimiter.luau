@@ -74,6 +74,7 @@ local RULES: { [string]: Rule } = {
 	RaidPractice = { capacity = 3, perSecond = 0.5 },
 	RaidBuy = { capacity = 3, perSecond = 0.5 },
 	RaidLeave = { capacity = 3, perSecond = 0.5 },
+	RaidReady = { capacity = 3, perSecond = 0.5 },
 	Dungeon = { capacity = 4, perSecond = 1 },
 	Craft = { capacity = 4, perSecond = 1 },
 	Salvage = { capacity = 4, perSecond = 1 },
