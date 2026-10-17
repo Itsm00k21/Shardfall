@@ -1654,6 +1654,117 @@ Questions for Ghost:
 13. `roleTargets[8]` is 1 tank / 1 healer / 6 DPS, including the T-041 hooks paragraph.
 14. `join` must not call `queue`. A full listing does not launch by itself. Hard and Shardbreaker cannot go through `Raids.difficulty`. Level 15, Story-before-Normal, and `Raids.roleOk` stay out of this module. Should a full premade launch immediately or wait for a ready check, and should post and join still call `roleOk`?
 
+### T-045 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Trading.luau`, `MarketBoard.luau`, `RaidMarks.luau`, `RaidLootTrade.luau`, `Remotes.luau`, `RateLimiter.luau`, or any other T-012 file. The T-009 loot table was not edited. `RaidLuck` is pure and ready to call. It requires `RelicSets` so a piece id counts as gear. It does not require `Raids`, `RaidMarks`, or `RaidLootTrade`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidLuck` yet, so this branch does not change a live run. No build stamp. No remote. No DataStore. Nothing here costs Robux. The T-045 row stays `claimed`.
+
+Thresholds are `RaidLuck.CONFIG`. `stepPct` is 0.1. `maxBonus` is 0.6, a placeholder. Six dry clears fill the bonus. Do not hardcode those numbers beside the module. The stored bonus is a fraction. The add is done in millionths, so three steps land on 0.3. There is no RNG in this module. The caller rolls.
+
+`RaidLuck.DIFFICULTIES` is story, normal, hard, and shardbreaker. Strings are trimmed and lowercased. `" Story "` is story. Fracture, guided, and any other name are refused. Hard and shardbreaker are accepted here even though `Raids.DIFFICULTIES` is still story and normal. The bonus is one number per difficulty on one player's record. Story does not raise Normal. `bossId` is not read, so the Twins and Sapwell share the Story bonus.
+
+`RaidService.luau` is not the live grant. The live call is `Raids.applyClear` inside the Heartwood boss mutate in `DungeonService.luau` (`enemy.boss`, Heartwood, `run.practice ~= true`). That file is yours. When you wire this, require the module next to `Raids`:
+
+```lua
+local RaidLuck = require(ReplicatedStorage.Shared.RaidLuck)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `chance(base, state, difficulty)` | you are about to roll gear | `ok == true` and `chance` in 0..1. `bonus` is the fraction added to `base`. |
+| `settle(state, outcome)` | the clear's grants are known | `ok == true` is the only signal to store `state`. The input record is not written. |
+| `classify(drop)` | you want to know if one drop is gear | `gear == true` means it resets. `ok == false` means the drop is unusable. |
+
+`chance` reads `state.bonus[difficulty]`. A missing record, a missing `bonus`, and a missing key are 0. A stored value above `maxBonus` is read as the cap. The returned chance is `base + bonus`, then clamped to 0..1. A base of -0.1 with a 0.6 bonus is 0.5. A base of 0.95 with a 0.6 bonus is 1. A non-finite base is `ERRORS.base`. Pass `Raids.DROP_BASE` (0.2) until T-009 has a real per-item base. This number is the gear roll only. Pets, mounts, titles, dyes, cosmetics, and auras keep their own rates and must not use this chance.
+
+`settle` returns a new `state`. Persist `result.state.bonus` only when `ok == true`. An `ok == false` result is a bad record, a bad difficulty, a bad flag, or a drop the module cannot classify. The caller's table is left alone. Writing the failure would be a guess.
+
+A loot-eligible clear with no gear drop adds `stepPct` on that difficulty, and the sum stops at `maxBonus`. The sixth dry clear lands on 0.6 with `added == true` and `capped == true`. A seventh stays at 0.6 with `added == false`. A gear drop sets that difficulty to 0 (`reset == true`) and leaves the other difficulties alone. `capped` means this clear was allowed to add and the bonus is now at the cap. A skip reports `capped == false`.
+
+`outcome` fields that are read: `difficulty`, `locked`, `removal`, `eligible`, `drops`. Anything else is ignored, including `bossId`, `userId`, and `clears`. `locked` nil means false. `eligible` nil means true. `drops` nil means nothing dropped.
+
+`removal` nil means the player stayed. `"afk"` is the T-027 90s removal. `"kick"` is a T-027 passed vote-kick. `" AFK "` is afk. `"idle"`, `"leave"`, and `"vote"` are refused.
+
+Skips do not add and do not reset, including when `drops` lists gear. The reason order is afk, then lockout, then ineligible. `reason` is omitted when the clear was allowed to change the bonus. `eligible` on the result is true only then.
+
+| outcome | what settle does |
+|---|---|
+| `removal == "afk"` | `reason = "afk"`. Bonus stays. |
+| `locked == true` | `reason = "lockout"`. Bonus stays. A reclear after lockout. |
+| `eligible == false` | `reason = "ineligible"`. Practice Grove and any clear that should not roll. |
+| a gear drop, and none of the above | that difficulty becomes 0 |
+| no gear drop, and none of the above | add `stepPct`, capped at `maxBonus` |
+
+Gear is raid gear, a Heartshard weapon, or a Relic Set piece. `classify` returns gear for those. An excluded kind is a pet, mount, title, dye, cosmetic, or aura: it does not reset, and a dye whose id contains `"heartshard"` stays a dye. Dust, marks, materials, gold, shards, tokens, and emblems do not reset either. A clear that drops only those still takes the +10%. A pet and a piece of gear in the same list resets. A chest string, a bare `"weapon"`, and a Rootvault armor are `ERRORS.drop`, so the bonus does not move. A Relic piece is `RelicSets.isRelic`, including `{ id = "verdant_warden_helm" }` and `{ kind = "Armor", id = "verdant_warden_helm" }`. A Heartshard is `heartshard == true`, family or weaponFamily `"heartshard"`, kind `"heartshard"`, or an id that contains `"heartshard"`. Raid gear is kind `gear`, `raid`, or `raid_gear`, or kind weapon, armor, or accessory with `raid == true` or a raid `source` (`raid`, `heartwood`, `heartwood_story`, `heartwood_normal`, `heartwood_hard`, `heartwood_shardbreaker`, `shardbreaker`). An excluded kind combined with a heartshard flag is refused. Kind and category must match when both are set.
+
+Inside the same `DataService.mutate` that already calls `Raids.applyClear`, after you know the lock and whether this player was removed. Keep the mark lines until T-040. Replace the pity roll. Calling `settle` and leaving the `raidPity` lines in `applyClear` runs two bonuses.
+
+```lua
+local removal = nil
+if afkRemoved then
+	removal = "afk"
+elseif voteKicked then
+	removal = "kick"
+end
+local record = { bonus = data.raidLuck }
+local locked = lockoutThisBoss
+local view = RaidLuck.chance(Raids.DROP_BASE, record, difficulty)
+local drops = {}
+local rollGear = view.ok == true and removal ~= "afk" and locked ~= true
+if rollGear then
+	local roll = math.random()
+	if roll < view.chance then
+		-- T-009 appends the gear item it actually granted.
+		-- Do not append the Rare/Epic chest stand-in.
+	end
+end
+-- Pet, mount, title, dye, and cosmetic rolls stay on their own rates.
+local settled = RaidLuck.settle(record, {
+	difficulty = difficulty,
+	locked = locked,
+	removal = removal,
+	eligible = true,
+	drops = drops,
+})
+if settled.ok == true then
+	data.raidLuck = settled.state.bonus
+end
+```
+
+`lockoutThisBoss` is the same test `applyClear` uses today: this boss, this difficulty, this week. A locked Twins reclear does not grow Story, and a first Sapwell clear that same week still can. `afkRemoved` is `RaidConduct.afk` returning `state == "remove"` for this player before this grant. `voteKicked` is `RaidConduct.tally` returning `passed == true`. The `math.random()` stays in `DungeonService`. Practice Grove already skips `applyClear` because `run.practice ~= true`. Leave that skip. If a later path calls `settle` for practice, pass `eligible = false` and do not roll.
+
+Several gear pieces in one clear read `chance` from the same record, then `settle` once. Settling between those rolls would raise the second roll in the same clear.
+
+**Schema.** HELPER does not edit `Schema.luau`. One new field. Add it on whichever version is free when you wire this. Version 21 is current.
+
+```lua
+raidLuck: { [string]: number }, -- difficulty -> bonus fraction, 0 to maxBonus. Missing key is 0.
+```
+
+`template()` and the migrate set `raidLuck = {}`. A missing field is an empty bonus, so a call before the migrate does not throw. It also does not persist until you write `settled.state.bonus`. Do not reuse `raidPity`. That map is a miss count per `bossId:difficulty`, and `Raids.applyClear` still writes it. This bonus is a fraction per difficulty. Sanitizing a non-table to `{}` is enough. Leave a non-finite or negative entry in place: `chance` and `settle` return `ok == false` for that record, and the hook above skips the write. Turning the bad entry into 0 would wipe the streak. An unknown key, including `fracture`, also refuses the record. `"Story"` and `"story"` together refuse it. A stored fraction above `maxBonus` is returned as the cap, including on a lockout skip, so persisting `ok == true` pulls 0.9 down to 0.6.
+
+This module does not read a clear count. The beta clear count on the other raid rows is total Heartwood `raidClears` once T-038 adds it. Luck does not scale with that number. No second clear counter.
+
+`tests/run.luau` requires `./RaidLuck.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The bonus is per difficulty. A dry Story clear does not raise Normal. I would keep it that way: Story gear and Normal gear are different chases. Should one bonus be shared across difficulties instead?
+2. `bossId` is ignored, so every Heartwood boss on Story shares one bonus. Live `raidPity` is per boss (`bossId:difficulty`), so a Twins miss does not help Sapwell today. Should this stay per difficulty, or match the live per-boss key?
+3. `maxBonus` is 0.6. Live `Raids.DROP_CAP` is 0.8 on a 0.2 base, which is the same 0.6 of bonus, and the total chance stops at 0.8. Here the bonus stops at 0.6 and `chance` still clamps the sum to 1, so a base above 0.4 can reach 1. Should the cap stay on the bonus, or should the total chance stay at 0.8?
+4. A gear drop resets only that difficulty. Should a Heartwood drop reset every difficulty?
+5. An AFK removal and a lockout reclear do not add and do not reset, even when `drops` lists gear. A passed vote-kick still settles: a dry clear adds, a gear drop resets. Should a kick skip the way AFK does?
+6. Pets, mounts, titles, dyes, cosmetics, auras, dust, marks, and materials do not reset. A clear that drops only those still adds 10%. Is a dust-and-pet clear a dry gear clear?
+7. A Relic piece matches `RelicSets.isRelic`. A Heartshard is a flag, a family, or an id that contains `"heartshard"`. Raid gear is kind `gear` / `raid` / `raid_gear`, or weapon, armor, or accessory with a raid source. A bare `"weapon"`, a Rootvault armor, and a `"chest"` are refused. Are those the shapes T-009 will pass?
+8. `eligible = false` is the Practice Grove switch. Fracture is refused. Hard and shardbreaker are accepted now. Should fracture track a bonus, and is `eligible = false` the right practice switch?
+9. The suggested field is `raidLuck`, a map of difficulty to the bonus fraction. `raidPity` stays until you stop writing it. Version 21 is current. Should the migrate start everyone at `{}`, or copy something out of `raidPity`?
+10. Today's `applyClear` grants a chest. A chest is refused, so passing `"chest"` fails the settle, and passing no drops would add 10% on every loot-eligible clear, including chest grants. Should this call wait until T-009 grants real gear, Heartshard weapons, and Relic pieces?
+11. One boss with several gear rolls should read `chance` from the same record and `settle` once. Should each piece settle on its own?
+12. A stored bonus above `maxBonus` comes back as the cap on any `ok == true` settle, including a lockout skip. Persisting that pulls 0.9 down to 0.6. `chance` already uses the cap. Should a skip leave the stored number alone?
+
 ## Open
 
 No unassigned tasks.
