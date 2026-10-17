@@ -3227,6 +3227,167 @@ Questions for Ghost:
 13. `RaidLuck` should not gain pity when `lootEligible` is false. This module does not call `RaidLuck`. Confirm the wire passes that flag into the pity settle. T-045 called a dry lockout clear the clear that adds pity. A reclear is not that clear.
 14. `status` does not store a claim and does not check the cap. `view` on profile load is what prunes. Confirm the panel reads `status`, and that a full week is allowed to look eligible until `claim` returns `ERRORS.full`.
 
+### T-083 hooks for GHOST
+
+HELPER did not edit `RaidLockout.luau`, `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Keybinds.luau`, `UiRouter.luau`, `RaidMarks.luau`, `RaidPractice.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidStrategy` is pure and ready to call. It requires nothing. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. There is no paid marker, preset, or skip. T-083 is done. Wiring is still yours. The row stays `claimed`.
+
+Where the row and `docs/design/shardfall_raids.md` disagree, the row won:
+
+- The design says the raid leader drags markers (stack spots, soak 1, soak 2). The row says `place` upserts by id, and the kinds are `stack`, `soak1`, and `soak2`. There is no drag delta here. Send the new `x` and `y`.
+- The design says presets can be saved per guild. The row caps one board at 16 markers and one guild at 8 presets. A full list refuses a new entry. It does not drop an old one. `load` does not write the preset.
+- The design names Raid Lead and Assistants. `RaidFinder` seats are tank, healer, dps, and flex. Those are other roles. They cannot place, move, or remove. The accepted token is `lead`, not `Raid Lead`.
+- Practice Grove, difficulty, and the Tuesday reset do not change this board. This module does not require `RaidPractice`, `RaidMarks`, or `Raids`. It has no week key.
+
+`RaidMarks.CONFIG.doubleMarks` stays false. This module does not read it and does not pay Marks. A marker is not loot.
+
+Tunables are `RaidStrategy.CONFIG`. `maxMarkers` is 16. `maxPresets` is 8, per guild id, not a global cap. `maxIdLength` is 64, the same placeholder cap used for other raid ids. `leadRole` is `lead`. `kinds` is `stack`, `soak1`, and `soak2`, and that inner table is frozen too. Do not hardcode those numbers beside the module.
+
+`RaidService.luau`, next to the other raid requires, when you wire this:
+
+```lua
+local RaidStrategy = require(ReplicatedStorage.Shared.RaidStrategy)
+```
+
+**Return shape.** `fresh`, `freshPresets`, `view`, `place`, `remove`, `save`, and `load` each return a new table. They do not write the input. A bad arg does not throw. nil, NaN, a non-table, a blank id, and a wrong type take the failure path. `persist` means "write this call's `state`". `place` and `remove` use `state` as the shared board. `save` and `load` use `state` as the preset book, and they also return `board`. Store the board or the book only when `persist == true`. An `ok == false` result with `persist == false` must not replace the live board or the guild book. A broken board's `state.markers` is empty. A broken book's `state.guilds` is empty. Writing that blank would wipe the real one.
+
+| call | when | on success |
+|---|---|---|
+| `fresh()` | a raid server wants an empty shared board | `{ markers = {} }` |
+| `freshPresets()` | a guild has no preset book yet | `{ guilds = {} }` |
+| `view(board)` | any party member reads the board | a canonical copy. `persist` is false. No role |
+| `place(board, request)` | the lead adds or moves one marker | the board. The same id keeps its slot. A new id appends |
+| `remove(board, request)` | the lead removes one id | the board without that marker |
+| `save(book, request)` | someone copies the current board under a guild and a name | the book, with a new copy of the markers. `persist` is false when that copy was already stored |
+| `load(book, request)` | the party wants a preset on the shared board | `board` is a new board. `persist` is false. The preset is not written |
+
+**Place and remove.** `request` for `place` is `{ role, id, kind, x, y }`. `request` for `remove` is `{ role, id }`. `role` is trimmed and lowercased. `" Lead "` is `lead`. `"Raid Lead"`, `"assistant"`, `"tank"`, `"healer"`, `"dps"`, `"flex"`, a blank, and a missing role are `ERRORS.role`. The board is unchanged. `id` is trimmed and not lowercased. `" a "` and `"a"` are the same marker. `"A"` and `"a"` differ. A number, a blank, or a string longer than `maxIdLength` is `ERRORS.id`. `kind` is trimmed and lowercased. `" Soak1 "` is `soak1`. `spread`, `soak`, `soak 1`, and `soak3` are `ERRORS.kind`. `x` and `y` must each be a number in 0..1 inclusive. `0` and `1` are on the board. A string, nil, NaN, inf, or -inf is `ERRORS.coord`. Nothing is clamped. `-0` is stored as `0`.
+
+The checks on `place`, in order, are: extra argument, rules, board, request shape, skip field, role, id, kind, coordinates, cap, then upsert. An assistant with a bad coordinate still gets `ERRORS.role`. A lead with kind `spread` and `x = 5` gets `ERRORS.kind`. `remove` uses the same order through the id, then `ERRORS.missing` when that id is not on the board. A missing id removes nothing.
+
+The same id updates `kind`, `x`, and `y` and stays in its slot. A new id appends. A repeat of the same kind and coordinates is `ok` with `persist == false`. The 17th new id is `ERRORS.full`. The 16 stay, including the first. Moving an existing id still works on a full board. After a remove, a new id fits again.
+
+**Presets.** `request` for `save` is `{ guildId, name, board }`. `request` for `load` is `{ guildId, name }`. `guildId` and `name` are trimmed and not lowercased. `" Grove "` is `Grove`. `"P1"` and `"p1"` differ. `"Grove"` and `"grove"` are different guilds, and each gets 8 names. A blank or a string longer than `maxIdLength` is `ERRORS.guild` or `ERRORS.name`. `save` copies `request.board`. A later `place` on the live board does not change the preset. The marker tables in the book are not the live marker tables. `load` copies them out again. `load`'s `persist` is false even when `ok` is true. Do not write `load`'s `state`. Replace the shared board with `load`'s `board` only when `ok == true`. A missing name is `ERRORS.preset`, `persist` false, and `board` is empty. Adopting that empty board would clear the live one. An empty live board can be saved. `role` on `save` or `load` is ignored, so an assistant can overwrite a preset today.
+
+A new name on a guild that already has 8 is `ERRORS.presetsFull`. Those 8 stay. Saving an existing name still copies when the list is full. A second guild can still take its first preset. An identical copy is `ok` with `persist == false`.
+
+The checks on `save`, in order, are: extra argument, rules, book, request shape, skip field, guild id, name, board, cap for a new name, then copy. `load` uses the same order through the name, then the missing preset. Neither call reads `role`.
+
+**One board.** Nil `board` is `{ markers = {} }`. Nil book, or a book whose `guilds` is nil, is `{ guilds = {} }`. A missing `markers` key is an empty board. `practice`, `difficulty`, `week`, `weekKey`, `userId`, `player`, `loot`, `rewards`, `marks`, `bossId`, `guided`, and `phase` on a request are ignored. They are not copied onto the marker or the result. Two places with different `userId`s append to the same marker list. `loot` grants nothing. There is no `marks` field on the result. `bossId` does not split the book. The preset name is the only label. Unknown string keys on a stored board are dropped on the copy. A non-string key, a hole, a duplicate id, a stored id that still has spaces, a stored kind that is not exactly `stack`, `soak1`, or `soak2`, a stored coordinate outside 0..1, NaN, or inf is `ERRORS.state`. A stored board with more than 16 markers is `ERRORS.state`. It is not trimmed. A duplicate guild id, a duplicate preset name, or a guild with more than 8 presets is `ERRORS.presets`. It is not trimmed.
+
+An extra argument is `ERRORS.skip` and the returned `state` is blank, because the record is not read. A skip field on the request is also `ERRORS.skip`, and that result keeps a canonical copy of the valid record. `false` still counts as present. The names are `skip`, `waive`, `waiveLock`, `waiveLockout`, `bypass`, `bypassLock`, `paid`, `robux`, `premium`, `price`, `productId`, `gamePass`, `force`, `unlock`, `skipLock`, `skipLockout`, `paidMarker`, `paidPreset`, `skipCap`, `buyMarker`, and `buyPreset`. `force` does not place, does not beat the cap, and does not make an assistant into the lead. It is refused before the role check.
+
+```lua
+local function saveBoard(board, result)
+	if result.persist ~= true then
+		return board
+	end
+	return result.state
+end
+
+local function saveBook(book, result)
+	if result.persist ~= true then
+		return book
+	end
+	return result.state
+end
+```
+
+**Call sites, still yours.** Keep one board in memory on the raid server and replicate it to the whole party. Do not fold these rules into `Raids` or `RaidFinder`. Do not trust a client that sends `role = "lead"`. Pass `lead` only when that player is the raid lead on the server roster.
+
+```lua
+function RaidService.placeMarker(board, role, marker)
+	local result = RaidStrategy.place(board, {
+		role = role,
+		id = marker.id,
+		kind = marker.kind,
+		x = marker.x,
+		y = marker.y,
+	})
+	return saveBoard(board, result), result
+end
+
+function RaidService.removeMarker(board, role, id)
+	local result = RaidStrategy.remove(board, {
+		role = role,
+		id = id,
+	})
+	return saveBoard(board, result), result
+end
+
+function RaidService.readBoard(board)
+	return RaidStrategy.view(board)
+end
+
+function RaidService.saveStrategy(book, guildId, name, board)
+	local result = RaidStrategy.save(book, {
+		guildId = guildId,
+		name = name,
+		board = board,
+	})
+	return saveBook(book, result), result
+end
+
+function RaidService.loadStrategy(book, guildId, name)
+	local result = RaidStrategy.load(book, {
+		guildId = guildId,
+		name = name,
+	})
+	-- persist is false. Do not write the book.
+	-- When result.ok == true, the shared board becomes result.board.
+	return result
+end
+```
+
+`readBoard` is safe for a panel. Do not save it. Replicate after `placeMarker` or `removeMarker` only when `persist == true`. `saveStrategy` writes the book only when `persist == true`. `loadStrategy` never writes the book.
+
+**Where the presets live.** HELPER does not edit `Schema.luau`. Do not add this to the player profile. A per-player copy would diverge, and the row says the board is not per player. Version 21 was current when T-083 opened. Do not assume 22 is still free. There is no guild schema in this repo. When a guild record exists, add this on that record, beside the T-074 `guideScore` field. Do not assume that record's version.
+
+```lua
+strategyPresets: any, -- nil, or { presets = { { name, markers = { { id, kind, x, y } } } } }
+```
+
+Nil means that guild has no presets. The live board is not this field. The live board is one table on the raid server. Wrap one guild for the module, or pass a book of guilds if one record holds all of them:
+
+```lua
+{
+	guilds = {
+		{
+			guildId = "Grove",
+			presets = {
+				{
+					name = "Twins P2",
+					markers = {
+						{ id = "A", kind = "stack", x = 0.25, y = 0.5 },
+					},
+				},
+			},
+		},
+	},
+}
+```
+
+Pass the caller's guild id into `save` and `load`. Do not copy the book onto a profile. Do not key it by user id, boss, difficulty, or Tuesday week.
+
+`tests/run.luau` requires `./RaidStrategy.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Questions for Ghost:
+
+1. The lead token is `lead` after trim and lowercase. `" Lead "` may place. `"Raid Lead"`, `"assistant"`, `"tank"`, `"healer"`, `"dps"`, and `"flex"` may not. Confirm the roster token, and that `RaidService` sets `role` from the server roster rather than from the client payload.
+2. `place` and `remove` are the only role checks. `save` and `load` do not read `role`. An assistant can overwrite a guild preset and can load one. Confirm, or should `save` be lead-only while `load` stays open to the whole party?
+3. Guild presets are not player-schema fields. The live board is one shared table on the raid server. The preset book is suggested as `strategyPresets` on the guild record, passed in as `{ guilds = { { guildId, presets } } }`. There is no guild schema in this repo. Player schema was 21 when this opened. Do not assume 22 is free. Do not add the book to `Schema.luau`. Confirm where the book lives.
+4. `maxMarkers` is 16. A new id on a full board is `ERRORS.full` and drops nothing. A place of an existing id still moves it when the board is full. A stored board with more than 16 markers is `ERRORS.state` and is not trimmed. Confirm the cap.
+5. `maxPresets` is 8 per guild id, not a global cap. A new name on a full guild is `ERRORS.presetsFull` and drops nothing. Saving an existing name still copies when that guild is full. `"Grove"` and `"grove"` each get 8. A stored guild with more than 8 presets is `ERRORS.presets` and is not trimmed. Confirm.
+6. Marker ids, preset names, and guild ids are trimmed and not lowercased. `" a "` and `"a"` are the same marker. `"P1"` and `"p1"` are different presets. A number is refused. `maxIdLength` is 64. Confirm the wire's ids and the cap.
+7. Kinds are trimmed and lowercased to `stack`, `soak1`, and `soak2`. `" Soak1 "` is `soak1`. `spread`, `soak`, and `soak3` are refused. This module does not size a soak or store a color. Confirm the catalog.
+8. `x` and `y` must be numbers in 0..1 inclusive. `0` and `1` are on the board. A string, nil, NaN, inf, or -inf is refused. Values are not clamped. `-0` is stored as `0`. Confirm the arena uses that unit square.
+9. The same id updates kind, x, and y and keeps its slot. A new id appends. `remove` of an id that is not on the board is `ERRORS.missing` and removes nothing. A repeat place of the same kind and coordinates is `ok` with `persist == false`. Confirm.
+10. `save` copies the markers from `request.board`. Later places on the live board do not change the preset. `load` returns that copy as `board` and does not write the preset (`persist` is false). Replace the shared board with `result.board` only when `load` returns `ok == true`. An empty board can be saved. Confirm that adopt rule, and whether an empty preset should be refused.
+11. `practice`, `difficulty`, `week`, `weekKey`, `userId`, `loot`, and `bossId` on a request are ignored. They are not stored. A practice place uses the same cap, kinds, and lead rule. `userId` does not make a second board. `loot` grants nothing. `bossId` is ignored, so the book is not split by boss. The preset name is the only label. Confirm the wire will not expect a per-player, per-boss, or per-week board.
+12. A broken board returns `ok == false`, `persist == false`, and `{ markers = {} }`. A broken preset book returns `ok == false`, `persist == false`, and `{ guilds = {} }`. Writing that blank would wipe the live board or the guild book. An extra argument does the same. A skip field on a valid request returns a copy of the valid record and still does not persist. Confirm the wire writes `state` only when `persist == true`, and adopts a loaded board only when `ok == true`.
+13. Nothing here costs Robux. An extra argument, or a `skip`, `waive`, `paid`, `robux`, `premium`, `price`, `productId`, `gamePass`, `force`, `unlock`, `paidMarker`, `paidPreset`, `skipCap`, `buyMarker`, or `buyPreset` field, is `ERRORS.skip`. `false` still counts as present. `force` does not place, bypass the cap, or bypass the lead. Confirm no paid marker, preset, or skip will be added at wiring.
+
 ## Open
 
 No unassigned tasks.
