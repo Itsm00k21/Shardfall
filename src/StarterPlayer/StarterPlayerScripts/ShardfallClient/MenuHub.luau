@@ -8,6 +8,10 @@
 
 	Bag, pets, roll, and hero draw cards. Market, raids, and the pass
 	use an empty state. A missing class opens the class cards.
+
+	The roll tab presents the server result. RollHype tracks the session,
+	the legendary pity bar, and the full-animation build-up. The client
+	does not decide the roll.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -28,8 +32,10 @@ local InventoryView =
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NotifyBadges"))
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
+local Rarities = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarities"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
+local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollHype"))
 local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
 local RollMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollMath"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
@@ -296,23 +302,40 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local holdingRoll = false
 	local rollBusy = false
 	local playerAlive = true
-	local streak = 0
+	local openedHype = RollHype.fresh(nil)
+	local hype: RollHype.Session = if openedHype.ok
+		then openedHype.state
+		else {
+			rolls = 0,
+			streak = 0,
+			best = nil,
+			personalBest = false,
+			allTime = nil,
+		}
 	local bestPull: any = nil
 	local slideHistory = false
 	local revealToken = 0
 	local lastCrack = 0
 	local pityTween: Tween? = nil
-	local pityNow: { epic: number, legendary: number }? = nil
+	local serverSince: number? = nil
+	local serverEpic: number? = nil
+	local lastMissed = false
+	local lastLanded: string? = nil
+	local toastToken = 0
 	local sessionRolls: { any } = {}
 	local sessionTemplates: { string } = {}
 	local activeReveal: {
 		started: number,
 		duration: number,
 		rarity: string,
+		tier: number?,
 		flashed: boolean,
 		nextTick: number,
+		slots: { UiRouter.ReelSlot }?,
 	}? =
 		nil
+	local paintReelIdle: (string) -> () = function(_caption: string) end
+	local showMilestone: (string) -> () = function(_text: string) end
 	local tabDots: { [string]: Frame } = {}
 	local restColor: { [GuiButton]: Color3 } = {}
 	local tabButtons: { [string]: TextButton } = {}
@@ -405,6 +428,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return if size.X >= 200 then size.X else 1280, if size.Y >= 200 then size.Y else 800
 	end
 
+	local fitRoll: () -> () = function() end
+
 	local function place()
 		local vx, vy = view()
 		local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
@@ -425,6 +450,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local grid = HudLayout.cardGrid(math.max(44, inner.w - 8), inner.h, 4)
 		classGrid.CellSize = UDim2.fromOffset(grid.cellW, grid.cellH)
 		classGrid.CellPadding = UDim2.fromOffset(grid.gap, grid.gap)
+		fitRoll()
 	end
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
@@ -645,6 +671,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		loop = RollLoop.idle()
 		rollBusy = false
 		setPulse(true)
+		paintReelIdle("Roll")
 	end
 
 	local revealCard = Instance.new("Frame")
@@ -654,6 +681,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	revealCard.Size = UDim2.new(1, -24, 0, 112)
 	revealCard.BackgroundColor3 = rgb("header")
 	revealCard.BorderSizePixel = 0
+	revealCard.ClipsDescendants = true
 	revealCard.Visible = false
 	revealCard.ZIndex = 8
 	revealCard.Parent = rollPage
@@ -707,6 +735,22 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local newCorner = Instance.new("UICorner")
 	newCorner.CornerRadius = UDim.new(0, 8)
 	newCorner.Parent = revealNew
+	local revealBest = Instance.new("TextLabel")
+	revealBest.Name = "PersonalBest"
+	revealBest.AnchorPoint = Vector2.new(1, 0)
+	revealBest.Position = UDim2.new(1, -8, 0, 40)
+	revealBest.Size = UDim2.fromOffset(120, 28)
+	revealBest.BackgroundColor3 = rgb("gold")
+	revealBest.Font = headerFont()
+	revealBest.TextSize = UiTheme.MIN_TEXT
+	revealBest.TextColor3 = rgb("ink")
+	revealBest.Text = ""
+	revealBest.Visible = false
+	revealBest.ZIndex = 9
+	revealBest.Parent = revealCard
+	local bestCorner = Instance.new("UICorner")
+	bestCorner.CornerRadius = UDim.new(0, 8)
+	bestCorner.Parent = revealBest
 	local revealFly = Instance.new("TextLabel")
 	revealFly.Name = "Drip"
 	revealFly.BackgroundTransparency = 1
@@ -745,6 +789,189 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	flashCover.Active = false
 	flashCover.ZIndex = 12
 	flashCover.Parent = rollPage
+
+	local reelHost = Instance.new("Frame")
+	reelHost.Name = "Reel"
+	reelHost.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD)
+	reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, 68)
+	reelHost.BackgroundColor3 = rgb("header")
+	reelHost.BorderSizePixel = 0
+	reelHost.ClipsDescendants = true
+	reelHost.ZIndex = 6
+	reelHost.Parent = rollPage
+	local reelCorner = Instance.new("UICorner")
+	reelCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	reelCorner.Parent = reelHost
+	local reelStroke = Instance.new("UIStroke")
+	reelStroke.Name = "Glow"
+	reelStroke.Thickness = UiTheme.STROKE_BOLD
+	reelStroke.Color = rgb("accent")
+	reelStroke.Parent = reelHost
+	local reelStreak = Instance.new("TextLabel")
+	reelStreak.Name = "Streak"
+	reelStreak.BackgroundTransparency = 1
+	reelStreak.Position = UDim2.fromOffset(8, 2)
+	reelStreak.Size = UDim2.new(1, -16, 0, 18)
+	reelStreak.Font = headerFont()
+	reelStreak.TextSize = UiTheme.MIN_TEXT
+	reelStreak.TextXAlignment = Enum.TextXAlignment.Left
+	reelStreak.TextColor3 = rgb("gold")
+	reelStreak.Text = "Streak  0"
+	reelStreak.ZIndex = 7
+	reelStreak.Parent = reelHost
+	local function reelWindow(name: string, xScale: number, widthScale: number): TextLabel
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.Position = UDim2.new(xScale, 4, 0, 22)
+		label.Size = UDim2.new(widthScale, -8, 1, -28)
+		label.BackgroundColor3 = rgb("body")
+		label.Font = headerFont()
+		label.TextSize = UiTheme.MIN_TEXT
+		label.TextColor3 = rgb("text")
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+		label.Text = "—"
+		label.ZIndex = 7
+		label.Parent = reelHost
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = label
+		return label
+	end
+	local reelLeft = reelWindow("Left", 0, 0.28)
+	local reelCenter = reelWindow("Center", 0.28, 0.44)
+	local reelRight = reelWindow("Right", 0.72, 0.28)
+	reelCenter.Text = "Roll"
+	local reelMilestone = Instance.new("TextLabel")
+	reelMilestone.Name = "Milestone"
+	reelMilestone.Size = UDim2.fromScale(1, 1)
+	reelMilestone.BackgroundColor3 = rgb("gold")
+	reelMilestone.Font = headerFont()
+	reelMilestone.TextSize = 20
+	reelMilestone.TextColor3 = rgb("ink")
+	reelMilestone.Text = ""
+	reelMilestone.Visible = false
+	reelMilestone.Active = false
+	reelMilestone.ZIndex = 9
+	reelMilestone.Parent = reelHost
+	local milestoneCorner = Instance.new("UICorner")
+	milestoneCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	milestoneCorner.Parent = reelMilestone
+
+	local function rarityColor3(name: string): Color3
+		local row = Rarities.COLOR[name]
+		if type(row) ~= "table" then
+			local red, green, blue = UiTheme.rarityColor("Common")
+			return Color3.fromRGB(red, green, blue)
+		end
+		return Color3.fromRGB(row[1], row[2], row[3])
+	end
+
+	local function paintWindow(label: TextLabel, slotName: string, rarity: string, focus: boolean)
+		label.Text = slotName
+		label.TextColor3 = if focus then rgb("ink") else rgb("text")
+		label.BackgroundColor3 = if focus then rarityColor3(rarity) else rgb("body")
+	end
+
+	local function paintReel(slots: { UiRouter.ReelSlot }?, index: number)
+		local function at(slotIndex: number): (string, string)
+			if slots == nil or slotIndex < 1 or slotIndex > #slots then
+				return "—", "Common"
+			end
+			local row = slots[slotIndex]
+			return row.name, row.rarity
+		end
+		local leftName, leftRarity = at(index - 1)
+		local midName, midRarity = at(index)
+		local rightName, rightRarity = at(index + 1)
+		paintWindow(reelLeft, leftName, leftRarity, false)
+		paintWindow(reelCenter, midName, midRarity, slots ~= nil)
+		paintWindow(reelRight, rightName, rightRarity, false)
+		if slots ~= nil then
+			reelStroke.Color = rarityColor3(midRarity)
+		end
+	end
+
+	paintReelIdle = function(caption: string)
+		reelStreak.Text = UiRouter.streakText(hype.streak, lastMissed)
+		reelStreak.TextColor3 = rgb(UiRouter.streakTone(hype.streak, lastMissed))
+		paintWindow(reelLeft, "—", "Common", false)
+		paintWindow(reelCenter, caption, "Common", false)
+		paintWindow(reelRight, "—", "Common", false)
+		reelCenter.TextColor3 = rgb("text")
+		reelCenter.BackgroundColor3 = rgb("body")
+		reelStroke.Color = if hype.streak >= 5 then rgb("gold") else rgb("accent")
+	end
+
+	showMilestone = function(text: string)
+		toastToken += 1
+		local token = toastToken
+		reelMilestone.Text = text
+		reelMilestone.Visible = true
+		playUi("toast")
+		task.delay(1.8, function()
+			if token == toastToken then
+				reelMilestone.Visible = false
+			end
+		end)
+	end
+
+	local function flashPersonalBest(rarity: string)
+		revealBest.Text = rarity
+		revealBest.Visible = true
+		revealBest.BackgroundColor3 = rarityColor3(rarity)
+		flashCover.BackgroundColor3 = rarityColor3(rarity)
+		if UiMotion.reduced(draft) or draft.camera.flash == "reduced" then
+			flashCover.BackgroundTransparency = 1
+			return
+		end
+		flashCover.BackgroundTransparency = 0.45
+		TweenService:Create(
+			flashCover,
+			TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ BackgroundTransparency = 1 }
+		):Play()
+	end
+
+	fitRoll = function()
+		local height = rollPage.AbsoluteSize.Y
+		if height < 80 then
+			local vx, vy = view()
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local inner = HudLayout.hubBody(box.w, box.h)
+			height = inner.h
+		end
+		local chrome = UiRouter.rollChrome(height)
+		reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, chrome.reel)
+		local compact = chrome.reel < 52
+		reelStreak.Visible = not compact
+		local windowTop = if compact then 4 else 22
+		local windowTrim = if compact then 8 else 28
+		local function placeWindow(label: TextLabel)
+			label.Position = UDim2.new(label.Position.X.Scale, 4, 0, windowTop)
+			label.Size = UDim2.new(label.Size.X.Scale, -8, 1, -windowTrim)
+		end
+		placeWindow(reelLeft)
+		placeWindow(reelCenter)
+		placeWindow(reelRight)
+		rollButton.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, chrome.button)
+		local buttonText = if chrome.button < 56 then 20 else 28
+		rollButton.TextSize = buttonText
+		rollButton:SetAttribute("BaseText", buttonText)
+		local listTop = chrome.reel + UiTheme.PAD
+		roll.Position = UDim2.fromOffset(0, listTop)
+		roll.Size = UDim2.new(1, 0, 1, -(listTop + chrome.button + UiTheme.PAD))
+		revealCard.Size = UDim2.new(1, -24, 0, chrome.card)
+		revealCard.Position = UDim2.new(0.5, 0, 1, -(chrome.button + UiTheme.PAD + 4))
+		if chrome.card < 88 then
+			revealFly.Visible = false
+			revealEquip.Size = UDim2.fromOffset(88, 36)
+		else
+			revealFly.Visible = true
+			revealEquip.Size = UDim2.fromOffset(120, UiTheme.TOUCH)
+		end
+	end
+	fitRoll()
+	paintReelIdle("Roll")
 	setPulse(true)
 	local raids = scroll(page("raids"))
 	local market = scroll(page("market"))
@@ -841,7 +1068,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			detailOpen = false
 		end
 		if id ~= "roll" then
-			streak = 0
 			holdingRoll = false
 		end
 		detail.Visible = id == "bag" and detailOpen
@@ -1992,16 +2218,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			show("roll")
 		end)
 
-		local sinceEpic = if pityNow ~= nil
-			then pityNow.epic
+		local sinceEpic = if serverEpic ~= nil
+			then serverEpic
 			elseif type(profile) == "table" then profile.sinceEpic or 0
 			else 0
-		local sinceLegendary = if pityNow ~= nil
-			then pityNow.legendary
-			elseif type(profile) == "table" then profile.sinceLegendary or 0
-			else 0
-		line(roll, string.format("Streak  %d", streak), 4, rgb("gold"))
-		line(roll, string.format("Next Epic in %d", RollLoop.nextEpic(sinceEpic)), 5, rgb("text"))
+		local pityResult = if serverSince ~= nil
+			then { pity = { sinceLegendary = serverSince } }
+			else nil
+		local sinceLegendary, pityGoal = UiRouter.legendaryPity(profile, pityResult)
+		local pityMeter = RollHype.pity(sinceLegendary, pityGoal)
+		reelStreak.Text = UiRouter.streakText(hype.streak, lastMissed)
+		reelStreak.TextColor3 = rgb(UiRouter.streakTone(hype.streak, lastMissed))
+		line(
+			roll,
+			UiRouter.streakText(hype.streak, lastMissed),
+			4,
+			rgb(UiRouter.streakTone(hype.streak, lastMissed))
+		)
+		line(roll, string.format("Rolls  %d", hype.rolls), 5, rgb("text"))
+		line(roll, string.format("Next Epic in %d", RollLoop.nextEpic(sinceEpic)), 6, rgb("text"))
 		local bestText = "Best pull  —"
 		if type(bestPull) == "table" then
 			bestText = string.format(
@@ -2010,14 +2245,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				tostring(bestPull.rarity or "")
 			)
 		end
-		line(roll, bestText, 6, rgb("accent"))
+		line(roll, bestText, 7, rgb("accent"))
 		line(
 			roll,
 			RollLoop.indexText(
 				RollLoop.discoveries(profile, sessionTemplates),
 				RollLoop.indexTotal()
 			),
-			7,
+			8,
 			rgb("text")
 		)
 
@@ -2037,7 +2272,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			info.Size = UDim2.fromScale(1, 0)
 			info.AutomaticSize = Enum.AutomaticSize.Y
 			info.BorderSizePixel = 0
-			info.LayoutOrder = 8
+			info.LayoutOrder = 9
 			info.Parent = roll
 			local infoCorner = Instance.new("UICorner")
 			infoCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
@@ -2054,16 +2289,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			infoPad.Parent = info
 			line(info, string.format("Luck  %d", luck + boost), 1, rgb("gold"))
 			line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
-			line(info, RarityConfig.pityLine(sinceEpic, sinceLegendary), 3, rgb("text"))
+			local legendaryCount = if type(sinceLegendary) == "number" then sinceLegendary else 0
+			line(info, RarityConfig.pityLine(sinceEpic, legendaryCount), 3, rgb("text"))
 			local pool = Pools.get("verdant_armory")
 			if pool ~= nil then
 				local rolled, odds = pcall(RollMath.odds, pool, luck, {
 					luckBoost = boost,
-					rollsSinceLegendary = sinceLegendary,
+					rollsSinceLegendary = UiRouter.oddsSince(legendaryCount),
 				})
 				if rolled and type(odds) == "table" then
-					line(info, tostring(odds.notice), 4, rgb("muted"))
-					local order = 5
+					local order = 4
 					if type(odds.rarities) == "table" then
 						for _, rarity in ipairs(odds.rarities) do
 							line(
@@ -2079,10 +2314,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 
-		local bars = RollBoard.bars({
-			sinceEpic = sinceEpic,
-			sinceLegendary = sinceLegendary,
-		})
 		local function meter(
 			name: string,
 			caption: string,
@@ -2102,7 +2333,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			corner.Parent = host
 			local bar = Instance.new("Frame")
 			bar.Name = "Fill"
-			bar.Size = UDim2.fromScale(fill, 1)
+			bar.Size = UDim2.fromScale(math.clamp(fill, 0, 1), 1)
 			bar.BackgroundColor3 = if flash then rgb("gold") else rgb("accent")
 			bar.BorderSizePixel = 0
 			bar.Parent = host
@@ -2128,24 +2359,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			label.ZIndex = 2
 			label.Parent = host
 		end
-		meter(
-			"EpicPity",
-			string.format("Epic pity  %d%%", math.floor(bars.epic * 100 + 0.5)),
-			bars.epic,
-			9,
-			RollLoop.nearGuarantee(sinceEpic)
-		)
-		meter(
-			"LegendaryPity",
-			string.format("Legendary pity  %d%%", math.floor(bars.legendary * 100 + 0.5)),
-			bars.legendary,
-			10,
-			false
-		)
+		if pityMeter.ok == true and type(pityMeter.goal) == "number" then
+			local shown = math.floor(pityMeter.counter)
+			local goal = math.floor(pityMeter.goal)
+			local reset = false
+			if shown == 0 and lastLanded ~= nil then
+				reset = Rarities.isLegendaryOrBetter(lastLanded)
+			end
+			local caption = if reset
+				then string.format("Legendary reset  %d / %d", shown, goal)
+				else string.format("Legendary  %d / %d", shown, goal)
+			meter("LegendaryPity", caption, pityMeter.fill, 10, reset)
+		else
+			meter("LegendaryPity", "Legendary pity", 0, 10, false)
+		end
 		local luck = if type(profile) == "table" then profile.shardLuck or 0 else 0
 		local boost = if type(profile) == "table" then profile.luckBoost or 0 else 0
 		line(roll, "Odds", 11, rgb("gold"))
-		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, sinceLegendary)
+		local oddsSince =
+			UiRouter.oddsSince(if type(sinceLegendary) == "number" then sinceLegendary else 0)
+		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, oddsSince)
 		if #odds == 0 then
 			line(roll, "Odds are unavailable.", 12, rgb("muted"))
 		else
@@ -2301,11 +2534,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		revealCard.Visible = true
 		revealTitle.Text = record.name
 		revealRarity.Text = record.rarity
-		local red, green, blue = UiTheme.rarityColor(record.rarity)
-		local color = Color3.fromRGB(red, green, blue)
+		local color = rarityColor3(record.rarity)
 		revealRarity.TextColor3 = color
 		revealStroke.Color = color
 		revealNew.Visible = isNew
+		revealBest.Visible = false
 		local drip = RollLoop.drip()
 		revealFly.Text = drip.text
 		revealFly.TextTransparency = 0
@@ -2399,16 +2632,51 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			rollBusy = false
 			local record = if ok then RollReveal.capture(result) else nil
 			if record == nil or type(result) ~= "table" or type(result.item) ~= "table" then
-				streak = RollLoop.streak(streak, false)
+				local missed = RollHype.note(hype, { landed = false })
+				if missed.ok == true then
+					hype = missed.state
+				end
+				lastMissed = true
 				loop = RollLoop.idle()
 				activeReveal = nil
+				revealBest.Visible = false
+				reelMilestone.Visible = false
 				setPulse(true)
+				paintReelIdle("Miss")
 				paintRoll()
 				return
 			end
 			lastCrack = os.clock()
-			streak = RollLoop.streak(streak, true)
+			local paid = result.currency == "prism" or result.paid == true
+			local noted = RollHype.note(hype, {
+				rarity = record.rarity,
+				landed = true,
+				paid = paid,
+			})
+			if noted.ok ~= true or noted.rarity == nil then
+				loop = RollLoop.idle()
+				activeReveal = nil
+				revealCard.Visible = false
+				revealBest.Visible = false
+				setPulse(true)
+				paintReelIdle("Roll")
+				paintRoll()
+				return
+			end
+			hype = noted.state
+			lastMissed = false
+			lastLanded = noted.rarity
 			local item = result.item
+			local card = UiRouter.rollCard(noted, item)
+			if card == nil then
+				loop = RollLoop.idle()
+				activeReveal = nil
+				revealCard.Visible = false
+				setPulse(true)
+				paintReelIdle("Roll")
+				paintRoll()
+				return
+			end
 			local owned = RollLoop.ownedTemplates(
 				profile,
 				if type(item.uid) == "string" then item.uid else nil
@@ -2426,42 +2694,91 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			slideHistory = true
 			if type(result.pity) == "table" then
-				pityNow = {
-					epic = if type(result.pity.sinceEpic) == "number"
-						then result.pity.sinceEpic
-						else 0,
-					legendary = if type(result.pity.sinceLegendary) == "number"
-						then result.pity.sinceLegendary
-						else 0,
-				}
+				if type(result.pity.sinceEpic) == "number" then
+					serverEpic = result.pity.sinceEpic
+				end
+				if type(result.pity.sinceLegendary) == "number" then
+					serverSince = result.pity.sinceLegendary
+				end
 			end
 			local reduced = UiMotion.reduced(draft)
 			local quick = result.quick == true or quickOn
-			local duration = RollLoop.seconds(draft, record.rarity, quick, reduced)
-			paintResult(item, record, activeNew, activeUpgrade)
+			local pace = RollHype.tempo(noted.rarity, paid)
+			local duration = UiRouter.rollBuildUp(draft, noted.rarity, quick, reduced, {
+				ok = pace.ok,
+				buildUp = pace.buildUp,
+				rarity = pace.rarity,
+				tier = pace.tier,
+			})
+			if duration == nil then
+				loop = RollLoop.idle()
+				activeReveal = nil
+				revealCard.Visible = false
+				setPulse(true)
+				paintReelIdle("Roll")
+				paintRoll()
+				return
+			end
+			local shownRecord: RollReveal.Record = {
+				id = record.id,
+				name = card.name,
+				rarity = card.rarity,
+			}
+			local pool = Pools.get(poolId)
+			local seed = if type(result.fillerSeed) == "number" then result.fillerSeed else 1
+			local raw = if pool ~= nil
+				then RollReveal.strip(seed, pool, shownRecord)
+				else { shownRecord }
+			local slots = UiRouter.honestSlots(raw, card.name, card.rarity)
+			paintResult(item, shownRecord, activeNew, activeUpgrade)
+			local callout, personal = UiRouter.rollShout(noted)
+			if personal ~= nil then
+				flashPersonalBest(personal)
+			end
+			if callout ~= nil then
+				showMilestone(callout)
+			else
+				reelMilestone.Visible = false
+			end
 			paintRoll()
-			local red, green, blue = UiTheme.rarityColor(record.rarity)
+			local color = rarityColor3(card.rarity)
+			local pop = UiRouter.rollPop(pace.tier, reduced)
 			if duration <= 0 then
-				revealCard.BackgroundColor3 = Color3.fromRGB(red, green, blue)
-				if RollLoop.flash(record.rarity, reduced, draft.camera.flash == "reduced") then
+				paintReel(slots, #slots)
+				revealCard.BackgroundColor3 = color
+				revealScale.Scale = if reduced then 1 else pop
+				if not reduced then
+					TweenService:Create(
+						revealScale,
+						TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+						{ Scale = 1 }
+					):Play()
+				end
+				if RollLoop.flash(card.rarity, reduced, draft.camera.flash == "reduced") then
+					flashCover.BackgroundColor3 = color
 					flashCover.BackgroundTransparency = 0.45
 					TweenService
 						:Create(flashCover, TweenInfo.new(0.08), { BackgroundTransparency = 1 })
 						:Play()
 				end
-				if RollLoop.stinger(record.rarity, reduced) then
+				if RollLoop.stinger(card.rarity, reduced) then
 					playUi("stinger")
+				elseif not reduced and (pace.tier or 0) >= 3 then
+					playUi("confirm")
 				end
 				finishReveal()
 				return
 			end
 			revealCard.BackgroundColor3 = rgb("header")
+			paintReel(slots, 1)
 			activeReveal = {
 				started = os.clock(),
 				duration = duration,
-				rarity = record.rarity,
+				rarity = card.rarity,
+				tier = pace.tier,
 				flashed = false,
 				nextTick = os.clock(),
+				slots = slots,
 			}
 		end)
 	end
@@ -2525,28 +2842,36 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local elapsed = os.clock() - active.started
 		local reduced = UiMotion.reduced(draft)
 		local tint = RollLoop.tint(elapsed, active.duration, active.rarity)
-		local red, green, blue = UiTheme.rarityColor(active.rarity)
+		local color = rarityColor3(active.rarity)
+		local progress = if active.duration <= 0
+			then 1
+			else RollReveal.spinProgress(elapsed, active.duration)
+		if active.slots ~= nil then
+			paintReel(active.slots, UiRouter.reelCenter(#active.slots, progress))
+		end
+		if active.rarity == "Secret" and not reduced then
+			reelStroke.Color = Color3.fromHSV((os.clock() * 0.35) % 1, 0.45, 1)
+		end
 		if tint ~= nil or elapsed >= active.duration then
-			revealCard.BackgroundColor3 = Color3.fromRGB(red, green, blue)
-			revealStroke.Color = Color3.fromRGB(red, green, blue)
+			revealCard.BackgroundColor3 = color
+			revealStroke.Color = color
 			revealStroke.Thickness = if tint ~= nil then 3 else UiTheme.STROKE
 		else
 			revealCard.BackgroundColor3 = rgb("header")
 			revealStroke.Thickness = UiTheme.STROKE
 		end
-		if RollLoop.slowmo(elapsed, active.duration, active.rarity, reduced) then
+		local morph = RollReveal.morph(elapsed, active.duration)
+		local pop = UiRouter.rollPop(active.tier, reduced)
+		if morph ~= nil and not reduced then
+			revealScale.Scale = RollReveal.morphScale(morph) * pop
+		elseif RollLoop.slowmo(elapsed, active.duration, active.rarity, reduced) then
 			revealScale.Scale = 1.08
 		else
 			revealScale.Scale = 1
 		end
-		if
-			RollLoop.anticipates(active.rarity, reduced)
-			and tint ~= nil
-			and os.clock() >= active.nextTick
-		then
+		if not reduced and active.duration > 0 and os.clock() >= active.nextTick then
 			playUi("click")
-			local progress = RollReveal.spinProgress(elapsed, active.duration)
-			active.nextTick = os.clock() + math.clamp(0.05 + (1 - progress) * 0.18, 0.05, 0.22)
+			active.nextTick = os.clock() + math.clamp(0.05 + (1 - progress) * 0.16, 0.05, 0.2)
 		end
 		if
 			not active.flashed
@@ -2554,6 +2879,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			and RollLoop.flash(active.rarity, reduced, draft.camera.flash == "reduced")
 		then
 			active.flashed = true
+			flashCover.BackgroundColor3 = color
 			flashCover.BackgroundTransparency = 0.45
 			TweenService:Create(
 				flashCover,
@@ -3172,7 +3498,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end,
 		setProfile = function(nextProfile: any)
 			profile = nextProfile
-			pityNow = nil
+			serverSince = nil
+			serverEpic = nil
 			if type(nextProfile) == "table" and type(nextProfile.uiSettings) == "table" then
 				draft = Settings.normalize(nextProfile.uiSettings)
 				uiScale.Scale = draft.hud.scale

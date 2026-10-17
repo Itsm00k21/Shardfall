@@ -9,6 +9,10 @@ local expect = framework.expect
 
 local ClientChrome = require("../src/ReplicatedStorage/Shared/ClientChrome")
 local Keybinds = require("../src/ReplicatedStorage/Shared/Keybinds")
+local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
+local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
+local RollHype = require("../src/ReplicatedStorage/Shared/RollHype")
+local Settings = require("../src/ReplicatedStorage/Shared/Settings")
 local UiRouter = require("../src/ReplicatedStorage/Shared/UiRouter")
 
 local HOTKEYS = Keybinds.copyMenu(nil)
@@ -169,5 +173,147 @@ describe("UiRouter", function()
 		expect(state.tab).toEqual("bag")
 		state = UiRouter.open(state, UiRouter.havenTab("market", nil) :: string)
 		expect(state.tab).toEqual("market")
+	end)
+
+	it("uses the live legendary counter, not the pool pity or total rolls", function()
+		local counter, goal = UiRouter.legendaryPity({
+			sinceLegendary = 12,
+			totalRolls = 400,
+		}, {
+			pity = {
+				sinceLegendary = 0,
+				rollsSinceLegendary = 49,
+				pityLegendaryAt = 50,
+				totalRolls = 900,
+				legendaryAt = 50,
+			},
+		})
+		expect(counter).toEqual(0)
+		expect(goal).toEqual(RarityConfig.LEGENDARY_PITY)
+		expect(goal).toEqual(1000)
+		local fromProfile = UiRouter.legendaryPity({
+			sinceLegendary = 12,
+			rollsSinceLegendary = 49,
+			totalRolls = 400,
+		}, {
+			pity = {
+				rollsSinceLegendary = 49,
+				totalRolls = 400,
+			},
+		})
+		expect(fromProfile).toEqual(12)
+		local empty, emptyGoal = UiRouter.legendaryPity(nil, nil)
+		expect(empty).toEqual(0)
+		expect(emptyGoal).toEqual(1000)
+	end)
+
+	it("keeps natural odds until the live guarantee is the next roll", function()
+		expect(UiRouter.oddsSince(49)).toEqual(0)
+		expect(UiRouter.oddsSince(0)).toEqual(0)
+		expect(UiRouter.oddsSince(nil)).toEqual(0)
+		expect(UiRouter.oddsSince(RarityConfig.LEGENDARY_PITY - 1)).toEqual(999)
+		expect(UiRouter.oddsSince(math.huge)).toEqual(0)
+	end)
+
+	it("uses the hype build-up only for a full animation", function()
+		local settings = Settings.default()
+		local epic = RollHype.tempo("Epic", false)
+		local paid = RollHype.tempo("Epic", true)
+		expect(epic.buildUp).toEqual(paid.buildUp)
+		expect(UiRouter.rollBuildUp(settings, "Epic", false, false, epic)).toEqual(1.2)
+		settings.rolls.animation = "short"
+		expect(UiRouter.rollBuildUp(settings, "Epic", false, false, epic)).toEqual(0.7)
+		settings.rolls.animation = "instant"
+		expect(UiRouter.rollBuildUp(settings, "Epic", false, false, epic)).toEqual(0)
+		settings.rolls.animation = "full"
+		expect(UiRouter.rollBuildUp(settings, "Epic", false, true, epic)).toEqual(0)
+		expect(
+			UiRouter.rollBuildUp(settings, "Legendary", false, false, RollHype.tempo("Legendary"))
+		).toEqual(0)
+		settings.rolls.skipAt = "off"
+		local secret = RollHype.tempo("Secret", true)
+		expect(UiRouter.rollBuildUp(settings, "Secret", true, false, secret)).toEqual(3)
+		expect(
+			UiRouter.rollBuildUp(settings, "Secret", false, false, RollHype.tempo("Secret", false))
+		).toEqual(3)
+		local bad = RollHype.tempo("Godly")
+		expect(UiRouter.rollBuildUp(settings, "Godly", false, false, bad)).toBeNil()
+	end)
+
+	it("toasts the callout and flashes only a new personal best", function()
+		local opened = RollHype.fresh(nil)
+		expect(opened.ok).toEqual(true)
+		local first = RollHype.note(opened.state, { rarity = "Common", paid = true })
+		expect(first.ok).toEqual(true)
+		local callout, personal = UiRouter.rollShout(first)
+		expect(callout).toBeNil()
+		expect(personal).toEqual("Common")
+		local state = first.state
+		for _ = 1, 8 do
+			local step = RollHype.note(state, { rarity = "Common" })
+			expect(step.ok).toEqual(true)
+			state = step.state
+		end
+		local tenth = RollHype.note(state, { rarity = "Common", paid = false })
+		expect(tenth.ok).toEqual(true)
+		callout, personal = UiRouter.rollShout(tenth)
+		expect(callout).toEqual("10 rolls")
+		expect(personal).toBeNil()
+		expect(string.find(callout :: string, "Common", 1, true)).toBeNil()
+		local card = UiRouter.rollCard(tenth, { name = "Vinewood Sword" })
+		expect(card).toEqual({ name = "Vinewood Sword", rarity = "Common" })
+		local missed = RollHype.note(tenth.state, { landed = false, rarity = "Legendary" })
+		expect(missed.ok).toEqual(true)
+		expect(missed.state.best).toEqual("Common")
+		expect(UiRouter.rollCard(missed, { name = "Vinewood Sword" })).toBeNil()
+		expect(UiRouter.rollShout(missed)).toBeNil()
+		local bad = RollHype.note(tenth.state, { rarity = "Godly" })
+		expect(bad.ok).toEqual(false)
+		expect(UiRouter.rollCard(bad, { name = "Nope", rarity = "Godly" })).toBeNil()
+		expect(bad.state.rolls).toEqual(tenth.state.rolls)
+	end)
+
+	it("lands the reel on the rolled item and never above it", function()
+		local slots = UiRouter.honestSlots({
+			{ name = "Crown", rarity = "Legendary" },
+			{ name = "Fern", rarity = "Uncommon" },
+			{ name = "Myth", rarity = "Mythic" },
+			{ name = "Vine", rarity = "Common" },
+		}, "Vine", "Common")
+		expect(#slots).toEqual(4)
+		for _, row in ipairs(slots) do
+			expect((Rarities.INDEX[row.rarity] or 99) <= Rarities.INDEX.Common).toBeTrue()
+		end
+		expect(slots[#slots]).toEqual({ name = "Vine", rarity = "Common" })
+		expect(UiRouter.reelCenter(#slots, 0)).toEqual(1)
+		expect(UiRouter.reelCenter(#slots, 1)).toEqual(#slots)
+		expect(UiRouter.honestSlots(nil, "Vine", "NotARarity")).toEqual({})
+	end)
+
+	it("keeps the roll chrome inside a short phone panel", function()
+		for _, height in ipairs({ 80, 120, 180, 240, 320, 480 }) do
+			local chrome = UiRouter.rollChrome(height)
+			expect(chrome.reel >= 0).toBeTrue()
+			expect(chrome.button >= 0).toBeTrue()
+			expect(chrome.card >= 0).toBeTrue()
+			expect(chrome.reel + chrome.button + chrome.card + 20 <= height).toBeTrue()
+		end
+		local desktop = UiRouter.rollChrome(0)
+		expect(desktop.reel).toEqual(68)
+		expect(desktop.button).toEqual(72)
+		expect(desktop.card).toEqual(112)
+	end)
+
+	it("wires RollHype into the roll screen without a paid prompt", function()
+		local hub =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		expect(string.find(hub, "RollHype.note", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "RollHype.pity", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "RollHype.tempo", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "noted.ok", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "near-miss", 1, true)).toBeNil()
+		expect(string.find(hub, "Near miss", 1, true)).toBeNil()
+		expect(string.find(hub, "Robux", 1, true)).toBeNil()
+		expect(string.find(hub, "BuyPrism", 1, true)).toBeNil()
 	end)
 end)

@@ -524,7 +524,7 @@ describe("RollHype tempo", function()
 end)
 
 describe("RollHype isolation", function()
-	it("is not required by src and does not roll, wait, or read the clock", function()
+	it("is required only by the roll screen and does not roll, wait, or read the clock", function()
 		local source = fs.readFile("src/ReplicatedStorage/Shared/RollHype.luau")
 		local requires = {}
 		for path in string.gmatch(source, 'require%("([^"]+)"%)') do
@@ -545,6 +545,9 @@ describe("RollHype isolation", function()
 				table.insert(callers, path)
 			end
 		end
-		expect(callers).toEqual({})
+		table.sort(callers)
+		expect(callers).toEqual({
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau",
+		})
 	end)
 end)
