@@ -83,17 +83,14 @@ describe("RollBoard", function()
 		expect(#lines).toEqual(#disclosed.rarities)
 		local sum = 0
 		for index, text in ipairs(lines) do
-			local rarity, percent = string.match(text, "^(%a+)  (%d+%.%d)%%$")
-			expect(rarity).toEqual(disclosed.rarities[index].rarity)
-			local shown = tonumber(percent)
-			assert(shown ~= nil)
-			sum += shown
-			local raw = disclosed.rarities[index].chance * 100
-			if index < #lines then
-				expect(math.abs(shown - raw) <= 0.1).toBeTrue()
-			end
+			local row = disclosed.rarities[index]
+			expect(text).toEqual(RarityConfig.formatLine(row))
+			sum += row.chance
+			expect(string.find(text, "(0.0%)", 1, true)).toBeNil()
+			expect(string.find(text, "(0.00%)", 1, true)).toBeNil()
+			expect(string.find(text, "(0.0000%)", 1, true)).toBeNil()
 		end
-		expect(math.abs(sum - 100) <= 0.1).toBeTrue()
+		expect(math.abs(sum - 1) < 1e-9).toBeTrue()
 	end)
 
 	it("matches the server odds for a stored luck boost and vip", function()
@@ -105,18 +102,9 @@ describe("RollBoard", function()
 			vip = true,
 		}
 		local function sheet(odds: any): { string }
-			local rows = odds.rarities
 			local expected = {}
-			local used = 0
-			for index, row in ipairs(rows) do
-				local percent = row.chance * 100
-				if index < #rows then
-					percent = math.floor(percent * 10 + 0.5) / 10
-					used += percent
-				else
-					percent = math.floor((100 - used) * 10 + 0.5) / 10
-				end
-				table.insert(expected, string.format("%s  %.1f%%", row.rarity, percent))
+			for _, row in ipairs(odds.rarities) do
+				table.insert(expected, RarityConfig.formatLine(row))
 			end
 			return expected
 		end
@@ -200,5 +188,55 @@ describe("RollBoard", function()
 		expect(string.find(roll, "sinceEpic = data.sinceEpic", 1, true) ~= nil).toBeTrue()
 		expect(string.find(roll, "RarityConfig.pick", 1, true) ~= nil).toBeTrue()
 		expect(string.find(roll, "data.sinceEpic = counters.sinceEpic", 1, true) ~= nil).toBeTrue()
+		expect(string.find(roll, "Schema.pityBucket", 1, true)).toBeNil()
+		expect(string.find(roll, "bucket.rollsSinceLegendary", 1, true)).toBeNil()
+	end)
+
+	it("never prints 0.0% for Legendary, Mythic, or Secret, and matches the reel", function()
+		local function assertSheet(poolId: string, luck: any)
+			local pool = Pools.get(poolId)
+			assert(pool ~= nil, poolId)
+			local multiplier = RarityConfig.luckFromProfile(if type(luck) == "table" then luck else { shardLuck = luck })
+			local disclosed = RarityConfig.disclose(pool, multiplier)
+			local lines = RollBoard.oddsLines(pool, luck, 0, 0)
+			expect(#lines).toEqual(#disclosed.rarities)
+			local sum = 0
+			local seen = {}
+			for index, row in ipairs(disclosed.rarities) do
+				local text = lines[index]
+				expect(text).toEqual(RarityConfig.formatLine(row))
+				sum += row.chance
+				seen[row.rarity] = text
+				expect(string.find(text, "0.0%", 1, true)).toBeNil()
+			end
+			expect(math.abs(sum - 1) < 1e-9).toBeTrue()
+			for _, rarity in ipairs({ "Legendary", "Mythic", "Secret" }) do
+				local text = seen[rarity]
+				assert(text ~= nil, rarity)
+				expect(string.find(text, "(0.0%)", 1, true)).toBeNil()
+				expect(string.find(text, "(0.00%)", 1, true)).toBeNil()
+				expect(string.find(text, "(0.0000%)", 1, true)).toBeNil()
+				local shown = string.match(text, "%(([%d%.]+)%%%)")
+				local value = tonumber(shown)
+				assert(value ~= nil, text)
+				expect(value > 0).toBeTrue()
+			end
+		end
+		assertSheet("verdant_armory", 0)
+		assertSheet("verdant_pets", 0)
+		assertSheet("verdant_armory", {
+			shardLuck = 0,
+			luckBoost = 0,
+			shardRolls = 0,
+			vip = true,
+		})
+		local hub =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local reel =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RollReel.luau")
+		expect(string.find(hub, "RollBoard.oddsLines(infoPool, profile, 0, UiRouter.oddsSince(legendaryCount))", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'RollBoard.oddsLines(Pools.get(rollPoolId()), profile, 0, oddsSince)', 1, true) ~= nil).toBeTrue()
+		expect(string.find(reel, "label.Text = RarityConfig.formatLine(row)", 1, true) ~= nil).toBeTrue()
 	end)
 end)

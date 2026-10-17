@@ -23,7 +23,6 @@ local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
-local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
@@ -248,13 +247,8 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 		data.sinceLegendary = counters.sinceLegendary
 		data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
 		StarterGoalPay.grant(data, "rolls", nil)
-		local bucket = Schema.pityBucket(data, pool.id)
-		if Rarities.isLegendaryOrBetter(item.rarity) then
-			bucket.rollsSinceLegendary = 0
-		else
-			bucket.rollsSinceLegendary += 1
-		end
-		bucket.totalRolls += 1
+		-- The per-pool pity bucket is an old save field. The live counters
+		-- are sinceEpic and sinceLegendary. Do not increment the bucket.
 		captured = {
 			item = item,
 			pityTriggered = pityTriggered,

@@ -158,6 +158,10 @@ describe("RarityConfig", function()
 		expect(common).toEqual("Common")
 		expect(triggered).toEqual(false)
 
+		local dry =
+			RarityConfig.pick(pool, 1, { sinceEpic = 49, sinceLegendary = 49 }, scripted(0.5))
+		expect(dry).toEqual("Common")
+
 		local epic =
 			RarityConfig.pick(pool, 1, { sinceEpic = 99, sinceLegendary = 0 }, scripted(0.5))
 		expect(epic).toEqual("Epic")

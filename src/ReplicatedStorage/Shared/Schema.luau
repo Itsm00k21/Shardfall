@@ -1010,6 +1010,8 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	return Schema.reconcile(raw), nil
 end
 
+-- Old per-pool counter. The crack does not write it. sinceEpic and
+-- sinceLegendary are the live pity. Leave the field so old saves still load.
 function Schema.pityBucket(data: ProfileData, poolId: string): PityState
 	local pity = data.pity[poolId]
 	if type(pity) ~= "table" then

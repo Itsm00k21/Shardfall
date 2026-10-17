@@ -6,7 +6,7 @@ Read `Rarities.luau`, `RarityConfig.luau`, and `Drops.luau`, then the modules th
 
 ## Rolls
 
-The server draws a rarity with `RarityConfig.pick` (`RollService.luau:234`), then an item of that rarity by pool weight (`RarityConfig.chooseEntry`). `GetOdds` returns `RarityConfig.disclose` (`Remotes.luau:169`). The Roll tab's always-visible Odds lines paint `RollMath.odds` through `RollBoard.oddsLines` (`MenuHub.luau:2604-2613`, `RollBoard.luau:77-100`), formatted `%.1f%%`. Those lines read pool weights (`Pools.luau:8-9`, `RollMath.luau:281`). The Info toggle starts closed (`MenuHub.luau:296`) and, when opened, paints the same weights (`MenuHub.luau:2448`). `RollReel` uses `disclose` (`RollReel.luau:515`).
+The server draws a rarity with `RarityConfig.pick` (`RollService.luau:233`), then an item of that rarity by pool weight (`RarityConfig.chooseEntry`). `GetOdds` returns `RarityConfig.disclose` (`Remotes.luau:169`). The Roll tab's always-visible Odds list (`MenuHub.luau:2811-2823`) and the info toggle (`MenuHub.luau:2659-2662`) both paint `RollBoard.oddsLines` (`RollBoard.luau:85-112`). That function prints `RarityConfig.formatLine` (`RarityConfig.luau:446-452`), the same line as the reel (`RollReel.luau:527`): two decimals at 1% or more, four decimals under 1%. Those lines are the disclose sheet. They are not pool weights and they are not `RollMath.odds`. The info toggle starts closed (`MenuHub.luau:300`). `RollMath.odds` (`RollMath.luau:282`) is the weight table. The crack does not call it.
 
 `Rarities.ORDER` is Common, Uncommon, Rare, Epic, Legendary, Mythic, Secret (`Rarities.luau:15`). Secret stays on the sheet. A hidden outcome is called out in `RarityConfig.luau:9-11`.
 
@@ -22,15 +22,15 @@ Live 1-in-N at luck x1, full ladder, rarest first. The listed 1-in-N is the chec
 | Mythic | 25000 | 0.0040% | 0.18% |
 | Secret | 100000 | 0.0010% | 0.02% |
 
-The 1-in-N column is `RarityConfig` (`RarityConfig.luau:48-56`). The percent column is `disclose` at multiplier 1. That column is the sheet. The pool-weight column is Verdant armory and Verdant pets, whose rarity weights are the same 10,000: 6000, 2500, 1000, 400, 80, 18, 2 (`Pools.luau:98-147`). At 0 luck those weights are the `RollMath.odds` percents. The Roll tab line reads `Epic  4.0%`. Epic on the draw is 0.3998%.
+The 1-in-N column is `RarityConfig` (`RarityConfig.luau:47-55`). The percent column is `disclose` at multiplier 1. That column is the sheet. The Roll tab prints it with `formatLine`, so Epic is `Epic  1 in 250  (0.3998%)`, Legendary is `0.0400%`, Mythic is `0.0040%`, and Secret is `0.0010%`. None of those is `0.0%`. The pool-weight column is Verdant armory and Verdant pets, whose rarity weights are the same 10,000: 6000, 2500, 1000, 400, 80, 18, 2 (`Pools.luau:102-154`). At 0 luck those weights are what `RollMath.odds` would print. The Roll tab does not print them. Epic on the draw is 0.3998%, not 4.0%.
 
 | rule | live | suggested |
 |---|---|---|
 | Draw | `RarityConfig.pick`, rarest first | Keep |
-| Sheet the player reads | Roll tab uses `RollMath.odds`. `GetOdds` uses `RarityConfig.disclose` | Decided. The sheet is the 1-in-N draw (`RarityConfig.disclose`). Pool weights only split items inside the rarity. |
+| Sheet the player reads | Roll tab and `GetOdds` use `RarityConfig.disclose`, printed with `formatLine` | Decided. The sheet is the 1-in-N draw. Pool weights only split items inside the rarity. |
 | Epic pity | Guarantee Epic+ at 100 (`RarityConfig.luau:44`) | Keep. Pity stays off the percent |
 | Legendary pity | Guarantee Legendary+ at 1000 (`RarityConfig.luau:45`) | Keep |
-| Pool `pityLegendaryAt` | 50 on every pool (`Pools.luau:83`). The draw does not read it | Leave it off the sheet |
+| Pool `pityLegendaryAt` | `RarityConfig.LEGENDARY_PITY` (1000) on every pool (`Pools.luau:87`). The draw does not read the field. There is no Legendary guarantee at 50. The per-pool save bucket stays on schema 24 and the crack does not increment it (`RollService.luau:250-251`) | Leave it off the sheet |
 | Every 10th roll | x2 luck (`RarityConfig.luau:43`, `RarityConfig.luau:114`) | Keep |
 | Luck math on the draw | `oneIn / multiplier` (`RarityConfig.luau:138-147`) | Keep |
 | `Rarities.LUCK_EXPONENT` | Used by `RollMath.entryWeight` (`RollMath.luau:131`). Marked placeholder (`Rarities.luau:27`) | Leave it off the draw |

@@ -7,6 +7,7 @@ local expect = framework.expect
 
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
+local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
 local RollMath = require("../src/ReplicatedStorage/Shared/RollMath")
 local Traits = require("../src/ReplicatedStorage/Shared/Traits")
 
@@ -61,7 +62,8 @@ describe("RollMath odds", function()
 		expect(odds.placeholder).toBeTrue()
 		expect(string.find(odds.notice, "PLACEHOLDER", 1, true) ~= nil).toBeTrue()
 		expect(string.find(odds.notice, "pity", 1, true) ~= nil).toBeTrue()
-		expect(odds.pityLegendaryAt).toEqual(50)
+		expect(odds.pityLegendaryAt).toEqual(RarityConfig.LEGENDARY_PITY)
+		expect(odds.pityLegendaryAt).toEqual(1000)
 	end)
 
 	it("publishes chances that sum to 1 and match the weights at 0 luck", function()
@@ -304,23 +306,36 @@ describe("RollMath rolls", function()
 		expect(pity.totalRolls).toEqual(1)
 	end)
 
-	it("guarantees Legendary or better on the pity roll and then resets", function()
+	it("does not guarantee Legendary at 50, and does at the live 1000", function()
+		local pool = starter()
+		expect(pool.pityLegendaryAt).toEqual(1000)
+		expect(pool.pityLegendaryAt).toEqual(RarityConfig.LEGENDARY_PITY)
 		local pity = { rollsSinceLegendary = 0, totalRolls = 0 }
 		local rng = zeroRng()
 		for n = 1, 49 do
-			local result = RollMath.roll(starter(), pity, context("n" .. n, 0), rng)
+			local result = RollMath.roll(pool, pity, context("n" .. n, 0), rng)
 			expect(result.pityTriggered).toBeFalse()
 			expect(Rarities.isLegendaryOrBetter(result.item.rarity)).toBeFalse()
 		end
 		expect(pity.rollsSinceLegendary).toEqual(49)
+		local early = RollMath.odds(pool, 0, { rollsSinceLegendary = 49 })
+		expect(early.pityActive).toBeFalse()
+		for _, entry in ipairs(early.entries) do
+			if entry.rarity == "Common" then
+				expect(entry.chance > 0).toBeTrue()
+			end
+		end
 
-		local forced = RollMath.roll(starter(), pity, context("pity", 0), rng)
+		pity.rollsSinceLegendary = RarityConfig.LEGENDARY_PITY - 1
+		local due = RollMath.odds(pool, 0, { rollsSinceLegendary = pity.rollsSinceLegendary })
+		expect(due.pityActive).toBeTrue()
+		expect(due.pityLegendaryAt).toEqual(1000)
+		local forced = RollMath.roll(pool, pity, context("pity", 0), rng)
 		expect(forced.pityTriggered).toBeTrue()
 		expect(Rarities.isLegendaryOrBetter(forced.item.rarity)).toBeTrue()
 		-- zeroRng selects the first Legendary-or-better row.
 		expect(forced.item.templateId).toEqual("antlerbrand")
 		expect(pity.rollsSinceLegendary).toEqual(0)
-		expect(pity.totalRolls).toEqual(50)
 	end)
 
 	it("does not let one pool's pity advance another pool", function()
