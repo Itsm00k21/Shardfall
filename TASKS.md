@@ -51,7 +51,7 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 
 T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault and the wiring. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
 
-Next free id is T-055.
+Next free id is T-058.
 
 ## Claimed by HELPER
 
