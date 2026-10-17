@@ -104,4 +104,4 @@ GROK adds a row here when a task needs Kevin's call, and also asks it in the run
 | id | task | question | answer |
 |---|---|---|---|
 | Q-001 | G-074 | For `eight_seats`, should a clear count only for a party of exactly 1 tank, 1 healer, and 6 DPS, or for any 8 players in the wing? Live premade parties are 4 to 8 and include a flex slot. `Raids.roleOk` allows only Warden as tank and only Tidecaller as healer. | Any 8 players. Kevin, 2026-10-17. Role mix does not matter. A party shorter than 8 does not count. |
-| Q-002 | G-078 | Which Common first pet should the starter kit mint: Shardjaw (auto-collect), Thorn Lantern (key ping), or Glass Kestrel (dodge flash)? | |
+| Q-002 | G-078 | Which Common first pet should the starter kit mint: Shardjaw (auto-collect), Thorn Lantern (key ping), or Glass Kestrel (dodge flash)? | Shardjaw (`shardjaw`). Kevin, 2026-10-17. He may send a different pick. Do not mint until that hold lifts. |

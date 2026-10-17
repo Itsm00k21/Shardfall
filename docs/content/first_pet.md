@@ -1,6 +1,6 @@
 # First pet options
 
-G-078. Three Common starter pets for Kevin to pick. Cool and useful, not cute. Docs only. Do not mint one until he picks.
+G-078. Three Common starter pets for Kevin to pick. Cool and useful, not cute. Docs only. Kevin's pick on 2026-10-17 is Shardjaw (`shardjaw`). He may send a different pick. Do not mint one until that hold lifts.
 
 Kevin rejected cute on 2026-10-17. The starter kit must not mint `moss_hare` or `acorn_newt` (`ItemBases.luau:269-270`). Also leave the beta eight in `Pets.luau:18-75` alone. Paid and free get the same pet.
 
