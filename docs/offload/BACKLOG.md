@@ -14,7 +14,7 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 
 | id | size | area | title | target | status | PR |
 |---|---|---|---|---|---|---|
-| G-078 | S | content | Draft 3 first-pet options that are cool and useful, not cute. Kevin rejected cute on 2026-10-17. Each option needs a name, a look, rarity Common, one utility perk such as an auto-collect radius, a key-find bonus, or a dodge cue, a short reason it is fun in the first 5 minutes, and no stats beyond the Common budget. Read `Pets.luau` and `ItemBases.luau`. Do not reuse a cute species (`moss_hare`, `acorn_newt`). Docs only. Do not edit `src/`. | `docs/content/first_pet.md` | todo | — |
+| G-078 | S | content | Draft 3 first-pet options that are cool and useful, not cute. Kevin rejected cute on 2026-10-17. Each option needs a name, a look, rarity Common, one utility perk such as an auto-collect radius, a key-find bonus, or a dodge cue, a short reason it is fun in the first 5 minutes, and no stats beyond the Common budget. Read `Pets.luau` and `ItemBases.luau`. Do not reuse a cute species (`moss_hare`, `acorn_newt`). Docs only. Do not edit `src/`. | `docs/content/first_pet.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
 | G-001 | M | content | 30 weapons across all six rarities (swords, daggers, hammers, staffs, bows): name, type, rarity, flavor line of 12 words or fewer, visual note. Read `ItemBases.luau` first and do not reuse its names. | `docs/content/weapons_batch1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/64 |
 | G-002 | M | content | 30 more weapons, weighted to Epic and above, plus 6 Heartshard raid weapons tied to the Heartwood raid | `docs/content/weapons_batch2.md` | done | https://github.com/Itsm00k21/Shardfall/pull/64 |
 | G-003 | M | content | 20 pets across all rarities: name, rarity, small % passive idea (suggested), visual note. Read `Pets.luau` and `docs/design/shardfall_pets.md` first. | `docs/content/pets_batch1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/64 |
@@ -38,10 +38,10 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-021 | M | content | Codex lore entries for every Mythic item and pet named so far in `docs/content/` | `docs/content/lore_mythics.md` | done | https://github.com/Itsm00k21/Shardfall/pull/111 |
 | G-022 | M | content | 40 daily and weekly quest templates. Read `docs/design/shardfall_loops.md` and `Loops.luau`. | `docs/content/dailies.md` | done | https://github.com/Itsm00k21/Shardfall/pull/111 |
 | G-023 | M | content | 30 cosmetics (auras, trails, weapon dyes, name plates) with rarity and visual note | `docs/content/cosmetics.md` | done | https://github.com/Itsm00k21/Shardfall/pull/111 |
-| G-024 | S | content | 15 mount concepts with rarity and visual note (cosmetic speed only, no combat power) | `docs/content/mounts.md` | todo | — |
-| G-025 | S | content | Flavor names and descriptions for every material in `Materials.luau`, plus 10 suggested new ones | `docs/content/materials.md` | todo | — |
-| G-026 | M | content | UI microcopy pass: button labels, empty states, error and confirm text for Bag, Pets, Roll, Raids, Market, Pass and Settings. Read `MenuHub.luau`. | `docs/content/ui_copy.md` | todo | — |
-| G-027 | M | design | Economy audit: read `Economy.luau`, `Currencies.luau` and `docs/design/shardfall_economy.md`; list sources and sinks per currency, flag inflation risks, suggest numbers | `docs/design/economy_audit.md` | todo | — |
+| G-024 | S | content | 15 mount concepts with rarity and visual note (cosmetic speed only, no combat power) | `docs/content/mounts.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
+| G-025 | S | content | Flavor names and descriptions for every material in `Materials.luau`, plus 10 suggested new ones | `docs/content/materials.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
+| G-026 | M | content | UI microcopy pass: button labels, empty states, error and confirm text for Bag, Pets, Roll, Raids, Market, Pass and Settings. Read `MenuHub.luau`. | `docs/content/ui_copy.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
+| G-027 | M | design | Economy audit: read `Economy.luau`, `Currencies.luau` and `docs/design/shardfall_economy.md`; list sources and sinks per currency, flag inflation risks, suggest numbers | `docs/design/economy_audit.md` | done | https://github.com/Itsm00k21/Shardfall/pull/121 |
 | G-028 | M | design | Drop-rate proposal per source (mobs, chests, bosses, raids, rolls). Read `Rarities.luau`, `RarityConfig.luau` and `Drops.luau`. | `docs/design/drop_rates.md` | todo | — |
 | G-029 | M | design | XP curve for levels 1-100 with time-to-level targets. Read `Progression.luau`. | `docs/design/xp_curve.md` | todo | — |
 | G-030 | M | design | Pacing plan: minute-by-minute first 30 minutes, then day 1, day 3, day 7 goals | `docs/design/pacing.md` | todo | — |
@@ -104,3 +104,4 @@ GROK adds a row here when a task needs Kevin's call, and also asks it in the run
 | id | task | question | answer |
 |---|---|---|---|
 | Q-001 | G-074 | For `eight_seats`, should a clear count only for a party of exactly 1 tank, 1 healer, and 6 DPS, or for any 8 players in the wing? Live premade parties are 4 to 8 and include a flex slot. `Raids.roleOk` allows only Warden as tank and only Tidecaller as healer. | Any 8 players. Kevin, 2026-10-17. Role mix does not matter. A party shorter than 8 does not count. |
+| Q-002 | G-078 | Which Common first pet should the starter kit mint: Shardjaw (auto-collect), Thorn Lantern (key ping), or Glass Kestrel (dodge flash)? | |
