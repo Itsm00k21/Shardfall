@@ -187,8 +187,9 @@ describe("RaidReady wire", function()
 		expect(string.find(depart, "DungeonService.enter", 1, true)).toBeNil()
 		expect(string.find(depart, "DungeonService.leave", 1, true)).toBeNil()
 
-		expect(string.find(filter, "IsStudio", 1, true)).toBeNil()
 		expect(string.find(filter, "TextService:FilterStringAsync", 1, true) ~= nil).toBeTrue()
+		expect(string.find(filter, "RunService:IsStudio()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(filter, 'return nil, "Could not filter that title."', 1, true) ~= nil).toBeTrue()
 		expect(string.find(raid, "Schema", 1, true)).toBeNil()
 
 		local remotes = fs.readFile("src/ServerScriptService/ShardfallServer/Remotes.luau")

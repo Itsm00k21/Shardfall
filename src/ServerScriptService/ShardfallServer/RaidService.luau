@@ -521,7 +521,16 @@ local function filterTitle(player: Player, title: any): (string?, string?)
 		local result = TextService:FilterStringAsync(trimmed, player.UserId)
 		return result:GetNonChatStringForBroadcastAsync()
 	end)
-	if not filteredOk or type(filtered) ~= "string" or filtered == "" then
+	if not filteredOk then
+		-- TextService often errors in Studio. The trimmed title is only for
+		-- that local test. A published server still refuses, so other players
+		-- never receive an unfiltered title.
+		if RunService:IsStudio() then
+			return trimmed, nil
+		end
+		return nil, "Could not filter that title."
+	end
+	if type(filtered) ~= "string" or filtered == "" then
 		return nil, "Could not filter that title."
 	end
 	if #filtered > TITLE_MAX then
