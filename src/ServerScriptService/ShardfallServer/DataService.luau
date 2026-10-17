@@ -798,16 +798,10 @@ function DataService.releasePartyForTeleport(
 				for _, done in ipairs(released) do
 					local doneRecord = records[done]
 					if doneRecord ~= nil then
-						ProfileLoad.reclaim(
-							currentAdapter(),
-							doneRecord.key,
-							os.time(),
-							serverId,
-							placeId,
-							SessionLock.TIMEOUT_SECONDS,
-							doneRecord.data
-						)
-						settleRecord(doneRecord, false, true)
+						-- Same as a failed solo hop. A stolen reclaim must
+						-- not mark the profile loaded: mutate would take
+						-- loot, and the next autosave would see lost.
+						recoverFailedHop(done, doneRecord)
 					end
 				end
 				for _, waiting in ipairs(players) do
