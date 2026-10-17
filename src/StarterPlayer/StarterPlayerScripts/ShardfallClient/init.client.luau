@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 22ea583+ client` in Output.
+	still leaves `[Shardfall] build a2c5c1d+ client` in Output.
 ]]
 
-print("[Shardfall] build 22ea583+ client")
+print("[Shardfall] build a2c5c1d+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +33,7 @@ local ActionBar = require(script.ActionBar)
 local CaptureHud = require(script.CaptureHud)
 local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
+local CombatStage = require(script.CombatStage)
 local DebugHud = require(script.DebugHud)
 local DoorHud = require(script.DoorHud)
 local HavenClient = require(script.HavenClient)
@@ -92,7 +93,12 @@ if player.Character ~= nil then
 end
 player.CharacterAdded:Connect(function(character)
 	followCharacter(character)
+	CombatStage.bind(character)
 end)
+if player.Character ~= nil then
+	CombatStage.bind(player.Character)
+end
+CombatStage.watchCamera()
 
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -322,6 +328,13 @@ local function applyProfile(profile: any, saving: any)
 	)
 	musicController.setUiVolume(uiVolume * master)
 	CombatHud.setFeel(tier, profile.shake ~= false)
+	local vfx = 1
+	if type(settings) == "table" and type(settings.graphics) == "table" then
+		if type(settings.graphics.vfx) == "number" then
+			vfx = settings.graphics.vfx
+		end
+	end
+	CombatStage.setBudget(tier, vfx)
 	local camera = workspace.CurrentCamera
 	if camera ~= nil and type(settings) == "table" and type(settings.camera) == "table" then
 		if type(settings.camera.fov) == "number" then
@@ -534,6 +547,7 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onAttack = function()
+		CombatStage.swing()
 		CombatHud.swing()
 	end,
 	onAudio = function(music: number, sfx: number, commit: boolean)
@@ -1133,12 +1147,15 @@ hudShell = HudShell.start(playerGui, {
 		openHub("settings")
 	end,
 	onAttack = function()
+		CombatStage.swing()
 		CombatHud.swing()
 	end,
 	onDodge = function()
+		CombatStage.dodge()
 		CombatHud.dodge()
 	end,
 	onSkill = function(index: number)
+		CombatStage.skill()
 		task.spawn(function()
 			pcall(invoke, "UseSkill", index)
 		end)
@@ -1179,9 +1196,11 @@ actionBar = ActionBar.start(playerGui, {
 		end
 	end,
 	onAttack = function()
+		CombatStage.swing()
 		CombatHud.swing()
 	end,
 	onDodge = function()
+		CombatStage.dodge()
 		CombatHud.dodge()
 	end,
 	onSkills = function()
@@ -1291,6 +1310,9 @@ CombatHud.start(remotes :: Instance, {
 	end,
 	onHint = function(text)
 		ui.setStatus(text, "info")
+		if hudShell ~= nil and string.sub(text, 1, 1) == "+" then
+			hudShell.toast(text)
+		end
 	end,
 })
 setHubChrome(false)

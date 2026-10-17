@@ -70,7 +70,7 @@ function CombatHud.setWallet(gold: number, tokens: number, gems: number)
 	paintWallet(gold, tokens, gems)
 end
 
-local function floater(position: Vector3, text: string, color: Color3)
+local function floater(position: Vector3, text: string, color: Color3, textSize: number?)
 	local anchor = Instance.new("Part")
 	anchor.Name = "DamageNumber"
 	anchor.Anchored = true
@@ -92,7 +92,7 @@ local function floater(position: Vector3, text: string, color: Color3)
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
 	label.Font = Enum.Font.BuilderSansBold
-	label.TextSize = 22
+	label.TextSize = if textSize ~= nil then textSize else 22
 	label.TextColor3 = color
 	label.TextStrokeTransparency = 0.35
 	label.Text = text
@@ -287,6 +287,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 
 	local shakeUntil = 0
 	local flashUntil = 0
+	local hitstopUntil = 0
 	local downHold = false
 	local latchedHp = 100
 	local latchedMax = 100
@@ -515,6 +516,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				color = Color3.fromRGB(255, 196, 64)
 				text = text .. "!"
 			end
+			local numberSize = if payload.crit == true then 30 else 22
 			local combo = numberFrom(payload, "combo")
 			if combo ~= nil and combo > 1 then
 				comboLabel.Text = string.format("%d hit", combo)
@@ -524,6 +526,10 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			local shake = numberFrom(payload, "shake") or 0
 			if allowShake and shake > 0 then
 				shakeUntil = os.clock() + shake
+			end
+			local stop = numberFrom(payload, "hitstop") or 0
+			if stop > 0 and (payload.heavy == true or payload.weight == "kill") then
+				hitstopUntil = os.clock() + stop
 			end
 			local flashSeconds = numberFrom(payload, "flash") or 0
 			if flashSeconds > 0 then
@@ -535,7 +541,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			if payload.heavy == true then
 				text = text .. "!"
 			end
-			floater(Vector3.new(x, y, z), text, color)
+			floater(Vector3.new(x, y, z), text, color, numberSize)
 			playCue("hit")
 		elseif payload.kind == "telegraph" then
 			local verb = if type(payload.verb) == "string" then payload.verb else "dodge"
@@ -688,7 +694,9 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			then character:FindFirstChildOfClass("Humanoid")
 			else nil
 		if humanoid ~= nil then
-			if allowShake and now < shakeUntil then
+			if now < hitstopUntil then
+				humanoid.CameraOffset = Vector3.new(0.08, 0, 0)
+			elseif allowShake and now < shakeUntil then
 				humanoid.CameraOffset =
 					Vector3.new(math.noise(now * 40) * 0.4, math.noise(now * 28) * 0.25, 0)
 			else

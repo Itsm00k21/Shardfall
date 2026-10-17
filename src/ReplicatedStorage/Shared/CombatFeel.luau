@@ -30,6 +30,11 @@ CombatFeel.STAGGER_HEAVY = 18
 CombatFeel.NORMAL_STAGGER = 0.28
 CombatFeel.TELEGRAPH_NORMAL = 0.8
 CombatFeel.TELEGRAPH_MIN = 0.5
+CombatFeel.FLINCH_SECONDS = 0.12
+CombatFeel.DEATH_SECONDS = 0.45
+CombatFeel.MAGNET_RANGE = 14
+CombatFeel.PRESS = 0.94
+CombatFeel.CAMERA_MIN = 3
 
 CombatFeel.BUFFS = {
 	{ hits = 10, bonus = 0.05 },
@@ -186,6 +191,45 @@ function CombatFeel.particlesFor(tier: string, juice: Juice): number
 		return math.max(2, math.floor(juice.particles * 0.5))
 	end
 	return juice.particles
+end
+
+function CombatFeel.vfxBudget(tier: string, intensity: number, juice: Juice): number
+	local scale = intensity
+	if scale ~= scale or scale < 0 then
+		scale = 0
+	elseif scale > 1 then
+		scale = 1
+	end
+	return math.max(0, math.floor(CombatFeel.particlesFor(tier, juice) * scale + 0.5))
+end
+
+function CombatFeel.lootVelocity(index: number): (number, number, number)
+	local angle = index * 1.7
+	return math.cos(angle) * 8, 16, math.sin(angle) * 8
+end
+
+function CombatFeel.cooldownCover(elapsed: number, total: number): number
+	if total <= 0 then
+		return 0
+	end
+	return math.clamp(1 - elapsed / total, 0, 1)
+end
+
+function CombatFeel.attackAnim(index: number): string
+	if index == 2 then
+		return "attack2"
+	end
+	if index >= 3 then
+		return "attack3"
+	end
+	return "attack1"
+end
+
+function CombatFeel.cameraDistance(blocked: number, desired: number): number
+	if blocked <= 0 then
+		return desired
+	end
+	return math.max(CombatFeel.CAMERA_MIN, blocked - 1.25)
 end
 
 function CombatFeel.shakeAllowed(tier: string, enabled: boolean, juice: Juice): number

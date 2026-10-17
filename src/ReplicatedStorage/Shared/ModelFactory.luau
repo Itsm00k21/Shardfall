@@ -917,6 +917,10 @@ function ModelFactory.step(root: BasePart, time: number, moving: boolean)
 				local limb = child:GetAttribute("Limb")
 				local limbName = if type(limb) == "string" then limb else "body"
 				local pitch, bob = ModelFactory.motion(kindName, limbName, time, moving)
+				local flinchUntil = root:GetAttribute("ShardfallFlinchUntil")
+				if type(flinchUntil) == "number" and time < flinchUntil then
+					pitch += 18
+				end
 				local localCf = CFrame.new(ox, oy, oz)
 					* CFrame.Angles(
 						if type(rx) == "number" then rx else 0,
@@ -968,15 +972,37 @@ function ModelFactory.tintNamed(root: BasePart, name: string, color: Color3?)
 end
 
 function ModelFactory.dissolve(root: BasePart)
+	local fading = {}
 	for _, descendant in ipairs(root:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			descendant.Transparency = 1
+		if descendant:IsA("BasePart") and descendant ~= root then
 			descendant.CanCollide = false
+			table.insert(fading, descendant)
 		elseif descendant:IsA("ParticleEmitter") or descendant:IsA("PointLight") then
 			(descendant :: any).Enabled = false
 		elseif descendant:IsA("Motor6D") then
 			descendant.Transform = CFrame.new()
 		end
+	end
+	local puff = Instance.new("ParticleEmitter")
+	puff.Name = "Death"
+	puff.Rate = 12
+	puff.Lifetime = NumberRange.new(0.2, 0.45)
+	puff.Speed = NumberRange.new(2, 6)
+	puff.Parent = root
+	local steps = 5
+	for step = 1, steps do
+		local alpha = step / steps
+		task.delay(0.45 * alpha, function()
+			for _, part in ipairs(fading) do
+				if part.Parent ~= nil then
+					part.Transparency = alpha
+				end
+			end
+			if step == steps and puff.Parent ~= nil then
+				puff.Enabled = false
+				puff:Destroy()
+			end
+		end)
 	end
 	local host = root.Parent
 	local folder = if host ~= nil then host.Parent else nil
