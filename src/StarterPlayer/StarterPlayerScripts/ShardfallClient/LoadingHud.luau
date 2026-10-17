@@ -15,7 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 
-local LoadingTips = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LoadingTips"))
+local LoadingTips: any = nil
 
 local LoadingHud = {}
 
@@ -80,6 +80,19 @@ local function hide()
 end
 
 function LoadingHud.start(playerGui: PlayerGui)
+	-- The module body must not wait. A missing child used to stall every
+	-- client script that required this module. 15 seconds, then skip the gui.
+	local shared = ReplicatedStorage:WaitForChild("Shared", 15)
+	if shared == nil then
+		return
+	end
+	local tipsModule = shared:WaitForChild("LoadingTips", 15)
+	if tipsModule == nil then
+		return
+	end
+	-- Require Shared/LoadingTips only after both children are present.
+	LoadingTips = require(tipsModule :: ModuleScript)
+
 	local existing = playerGui:FindFirstChild("ShardfallLoading")
 	if existing ~= nil then
 		existing:Destroy()
