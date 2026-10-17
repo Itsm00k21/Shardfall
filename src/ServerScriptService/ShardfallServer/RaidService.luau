@@ -425,6 +425,19 @@ local function departUser(userId: number)
 	sweep(now)
 end
 
+local function recallLine(player: Player)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if remotes == nil then
+		return
+	end
+	local remote = remotes:FindFirstChild("CombatFx")
+	if remote ~= nil and remote:IsA("RemoteEvent") then
+		-- The kind is enough. The client paints the seated failure line.
+		-- This payload does not name a player.
+		remote:FireClient(player, { kind = "premadeRecall" })
+	end
+end
+
 local function sendHome(row: Arrival, except: Player?)
 	local home = row.bucket.homeJobId
 	if type(home) ~= "string" or home == "" then
@@ -1357,6 +1370,9 @@ function RaidService.receive(player: Player)
 			seat.hopping = nil
 			seat.pulling = false
 			seat.hopToken = nil
+			-- They left before the ready remote could show the failure.
+			-- The same seated line meets them when they land.
+			recallLine(player)
 		end
 		return
 	end

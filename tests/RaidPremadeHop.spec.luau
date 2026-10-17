@@ -242,6 +242,27 @@ describe("RaidPremadeHop wire", function()
 		local clearAt = string.find(disconnect, "hopHold[leaving.UserId] = nil", 1, true)
 		expect(departAt ~= nil and clearAt ~= nil and (departAt :: number) < (clearAt :: number)).toBeTrue()
 
+		local seatedLine = string.find(receive, "recallLine(player)", 1, true)
+		local tokenMatch = string.find(receive, "seat.hopToken == payload.token", 1, true)
+		expect(
+			tokenMatch ~= nil
+				and seatedLine ~= nil
+				and (tokenMatch :: number) < (seatedLine :: number)
+		).toBeTrue()
+		local hud =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RaidHud.luau")
+		expect(string.find(hud, "payload.kind == \"premadeRecall\"", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hud, "RaidPremadeHop.ERRORS.seated", 1, true) ~= nil).toBeTrue()
+		expect(RaidPremadeHop.ERRORS.seated).toEqual(
+			"The raid teleport failed. The party is still seated."
+		)
+		expect(string.find(hud, "payload.userId", 1, true)).toBeNil()
+		expect(string.find(hud, "payload.host", 1, true)).toBeNil()
+		expect(string.find(receive, "FireClient(player", 1, true)).toBeNil()
+		local recallFn = between(raid, "local function recallLine", "local function sendHome")
+		expect(string.find(recallFn, "kind = \"premadeRecall\"", 1, true) ~= nil).toBeTrue()
+		expect(string.find(recallFn, "userId", 1, true)).toBeNil()
+
 		local home = between(raid, "local function sendHome", "local function forgetArrival")
 		expect(string.find(home, "premadeRecall = true", 1, true) ~= nil).toBeTrue()
 		expect(string.find(home, "userId", 1, true)).toBeNil()
