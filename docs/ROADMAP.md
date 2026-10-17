@@ -67,6 +67,7 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #197 Grok research notes for the loop, policy, and the starter kit (`d02f3e6`). Docs only.
 - #198 A controller light-attacks on the right bumper while the menu is closed. That bumper still changes tabs while the menu is open. That is T-170 (`a0f9184`). 1261 tests.
 - #199 The phone Heavy chip, R, and ButtonX play the local heavy slash. That is T-171 (`05b6eb1`). 1267 tests.
+- #200 The board marks T-167, T-170, and T-171 done. Echo's next row is T-172. The next GHOST row is T-173. Next free id is T-176. Docs only.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
