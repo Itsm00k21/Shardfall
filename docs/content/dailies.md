@@ -10,10 +10,10 @@ Read against `docs/design/shardfall_loops.md` and `Loops.luau`. A template is a 
 | Weeklies | `Loops.WEEKLY` has 5 rows. `rollWeekly` keeps 5, so the table is the whole week. |
 | Track | `Loops.apply` finishes a row only when `quest.id` equals the id passed to `LoopService.progress`. |
 | Calls | `rooms` from a paying dungeon advance. `dodge` from `CombatService`. `hatch` and `pet` from `PetService`. `forge` from `CraftService.upgrade` only. |
-| Pay | One finish pays 40 gold, 1 Shard Key, and 100 Pass XP (`LoopService.luau` 51–54). All 3 dailies done that day also grant one Rare chest (lines 78–83). A weekly uses the same finish pay, because `apply` bumps both lists. |
+| Pay | One finish pays 40 gold, 1 Shard Key, and 100 Pass XP (`LoopService.luau` 51–54). All 3 dailies done that day also grant a Common chest and 2 Shard Keys (`ChestConfig` source `room`) plus one Rare chest (`LoopService.luau` 78–83). A weekly uses the same finish pay, because `apply` bumps both lists. |
 | Board | Line chests stay in `payLines`: 1 line an Epic chest, 2 lines 5 Gems and 3 Shard Keys, 3 lines a Legendary chest. This file does not add a quest chest. |
 | Paste | Replace the text and goal on the one live row with that track id. Do not add a second row with the same id. A repeated id is skipped. A new id never finishes. The pool still needs 3 unique daily ids or `rollDailies` cannot fill. |
-| Rooms counter | Not Rootvault-only. A paying non-endless clear adds 1 in `grant` (`DungeonService.luau` 1356). A paying advance adds 1 in `beginAdvance` (line 1471), and endless waves take that path (line 1738). Practice adds 0. |
+| Rooms counter | Not Rootvault-only. A paying non-endless clear adds 1 in `grant` (`DungeonService.luau` 1372). A paying advance adds 1 in `beginAdvance` (line 1487), and endless waves take that path (line 1754). Practice adds 0. |
 | First clear | `Loops.firstClear` still pays 3x XP and a Rare chest on the first Rootvault clear of the day. A rooms sentence does not replace it. |
 | Parked | Track is not one of the five calls. Leave these out of `POOL` and `WEEKLY`. |
 | Power | No stats, no luck, no drop odds, no Robux. No 1-in-20 lucky triple. |
