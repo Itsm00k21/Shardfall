@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local PetFlash = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetFlash"))
 local PetRoster = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetRoster"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
@@ -60,11 +61,13 @@ function PetAura.start(playerGui: PlayerGui, getProfile: () -> any)
 		return nil
 	end
 
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if processed or input.KeyCode ~= Enum.KeyCode.Q then
+	UserInputService.InputBegan:Connect(function(input, _processed)
+		if not PetFlash.should(input.KeyCode.Name, PetRoster.equippedEffect(profile())) then
 			return
 		end
-		if PetRoster.equippedEffect(profile()) ~= "flash" then
+		-- Chat and other text boxes are not a dodge. ActionBar sinks a real
+		-- dodge and does not focus a text box, so that press still flashes.
+		if UserInputService:GetFocusedTextBox() ~= nil then
 			return
 		end
 		flash.BackgroundTransparency = 0.45
