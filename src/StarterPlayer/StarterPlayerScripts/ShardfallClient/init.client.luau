@@ -41,6 +41,7 @@ local HavenClient = require(script.HavenClient)
 local HudShell = require(script.HudShell)
 local MenuHub = require(script.MenuHub)
 local InventoryHud = require(script.InventoryHud)
+local LoadingHud = require(script.LoadingHud)
 local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
@@ -181,6 +182,9 @@ playerGui.ChildAdded:Connect(function(child)
 		child:Destroy()
 	end
 end)
+-- After the sweep. An earlier mount is destroyed: an unowned name is legacy,
+-- and an owned name is cleared as a leftover copy.
+LoadingHud.start(playerGui)
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))

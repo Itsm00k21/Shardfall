@@ -23,6 +23,7 @@ local OWNED: { [string]: boolean } = {
 	ShardfallDoors = true,
 	ShardfallInventory = true,
 	ShardfallLoops = true,
+	ShardfallLoading = true,
 	ShardfallMarket = true,
 	ShardfallMenu = true,
 	ShardfallOnboard = true,
