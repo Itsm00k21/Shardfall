@@ -127,6 +127,9 @@ type Run = {
 	-- True from a Story wipe retry until every party member has streamed
 	-- back in. A hit in that window must not wipe or start another retry.
 	retrying: boolean?,
+	-- tuneRaid moved this member off a wing. No kill mark was written.
+	-- They do not hold the shared reset for the room they left.
+	echoJumped: boolean?,
 }
 
 type Restart = {
@@ -1105,6 +1108,18 @@ local function echoBossReady(fight: RaidEchoFight.Fight, killedRoom: number): bo
 		end
 		local rooms = if marked ~= nil then marked[userId] else nil
 		local didMark = rooms ~= nil and rooms[killedRoom] == true
+		-- tuneRaid moved this living member off the room and wrote no mark.
+		-- They must not hold the reset for the wing they left.
+		if
+			EchoBossClear.leftWing(
+				killedRoom,
+				memberRun.roomIndex,
+				didMark,
+				memberRun.echoJumped == true
+			)
+		then
+			continue
+		end
 		table.insert(seats, {
 			cleared = EchoBossClear.seatCleared(
 				killedRoom,
@@ -2437,6 +2452,11 @@ function DungeonService.tuneRaid(player: Player, options: any)
 		RaidEchoFight.setPractice(run.echoFight, run.practice)
 	end
 	local wing = PracticeLoot.wing(options.wing, #run.dungeon.rooms)
+	-- A wing change is not a clear. The seat flag is the only record.
+	-- The shared reset reads it and does not treat the old room as held.
+	if wing ~= run.roomIndex then
+		run.echoJumped = true
+	end
 	run.roomIndex = wing
 	run.placeIndex = wing
 	run.advanceAt = nil
@@ -2907,7 +2927,7 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build 3ddf279+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build a4b694d+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)

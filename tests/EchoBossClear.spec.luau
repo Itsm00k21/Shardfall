@@ -191,3 +191,65 @@ describe("Shared boss kill wire", function()
 		expect(string.find(echo, "function RaidEcho.reset", 1, true) ~= nil).toBeTrue()
 	end)
 end)
+
+describe("Wing jump does not hold the shared reset", function()
+	it("drops a jumped member from the room they left", function()
+		-- Still on the room. A jump flag does not clear the boss they are fighting.
+		expect(EchoBossClear.leftWing(2, 2, false, true)).toEqual(false)
+		-- Jumped ahead. No mark. They do not hold room 1.
+		expect(EchoBossClear.leftWing(1, 3, false, true)).toEqual(true)
+		-- Jumped back. The room they left is the higher index.
+		expect(EchoBossClear.leftWing(3, 1, false, true)).toEqual(true)
+		-- A kill mark still seats them. Advancing after a clear is not a hold.
+		expect(EchoBossClear.leftWing(1, 2, true, true)).toEqual(false)
+		-- Never jumped. An earlier wing still holds a later room.
+		expect(EchoBossClear.leftWing(2, 1, false, false)).toEqual(false)
+		expect(EchoBossClear.leftWing(1, 2, false, false)).toEqual(false)
+		-- Bad numbers do not count as a jump away.
+		expect(EchoBossClear.leftWing(0, 2, false, true)).toEqual(false)
+		expect(EchoBossClear.leftWing(1, 0 / 0, false, true)).toEqual(false)
+
+		-- The jump is still not a clear. seatCleared does not flip.
+		expect(EchoBossClear.seatCleared(1, 3, false, false, false)).toEqual(false)
+
+		-- With the jumper omitted, the member who dropped the boss can reset.
+		local killer = EchoBossClear.seatCleared(1, 1, true, true, false)
+		expect(EchoBossClear.ready({
+			{ cleared = killer, retrying = false },
+		})).toEqual(true)
+		-- Seating the unmarked jump, the old bug, keeps the stacks up.
+		expect(EchoBossClear.ready({
+			{ cleared = killer, retrying = false },
+			{ cleared = false, retrying = false },
+		})).toEqual(false)
+	end)
+
+	it("records the tuneRaid jump and skips that seat", function()
+		local dungeon = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		local tune =
+			between(dungeon, "function DungeonService.tuneRaid", "function DungeonService.advance")
+		local flagAt = at(tune, "run.echoJumped = true")
+		local assignAt = at(tune, "run.roomIndex = wing")
+		expect(flagAt < assignAt).toBeTrue()
+		expect(string.find(tune, "wing ~= run.roomIndex", 1, true) ~= nil).toBeTrue()
+		expect(string.find(tune, "noteEchoBoss", 1, true)).toBeNil()
+		expect(string.find(tune, "settleSharedBoss", 1, true)).toBeNil()
+		expect(string.find(tune, "RaidEchoFight.bossKill", 1, true)).toBeNil()
+		expect(string.find(tune, "grant(", 1, true)).toBeNil()
+		expect(string.find(tune, "RaidEcho.wipe", 1, true)).toBeNil()
+
+		local ready =
+			between(dungeon, "local function echoBossReady", "local function echoStanding")
+		local leftAt = at(ready, "EchoBossClear.leftWing(")
+		local insertAt = at(ready, "table.insert(seats")
+		expect(leftAt < insertAt).toBeTrue()
+		expect(string.find(ready, "memberRun.echoJumped == true", 1, true) ~= nil).toBeTrue()
+		local skip = string.sub(ready, leftAt, insertAt - 1)
+		expect(string.find(skip, "continue", 1, true) ~= nil).toBeTrue()
+		expect(string.find(skip, "noteEchoBoss", 1, true)).toBeNil()
+		expect(string.find(skip, "settleSharedBoss", 1, true)).toBeNil()
+		expect(string.find(skip, "RaidEchoFight.bossKill", 1, true)).toBeNil()
+		expect(string.find(skip, "grant(", 1, true)).toBeNil()
+		expect(string.find(skip, "CombatService.revive", 1, true)).toBeNil()
+	end)
+end)
