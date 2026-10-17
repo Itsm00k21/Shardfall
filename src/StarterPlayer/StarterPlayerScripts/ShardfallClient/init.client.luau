@@ -1355,15 +1355,16 @@ CombatHud.start(remotes :: Instance, {
 })
 setHubChrome(false)
 
-local profileEvent = (remotes :: Instance):WaitForChild("ProfileUpdated")
-if profileEvent:IsA("RemoteEvent") then
+-- A missing ProfileUpdated or PolicyUpdated skips that connect. GetProfile still runs.
+local profileEvent = (remotes :: Instance):WaitForChild("ProfileUpdated", REMOTE_WAIT_SECONDS)
+if profileEvent ~= nil and profileEvent:IsA("RemoteEvent") then
 	profileEvent.OnClientEvent:Connect(function(profile, saving)
 		applyProfile(profile, saving)
 	end)
 end
 
-local policyEvent = (remotes :: Instance):WaitForChild("PolicyUpdated")
-if policyEvent:IsA("RemoteEvent") then
+local policyEvent = (remotes :: Instance):WaitForChild("PolicyUpdated", REMOTE_WAIT_SECONDS)
+if policyEvent ~= nil and policyEvent:IsA("RemoteEvent") then
 	policyEvent.OnClientEvent:Connect(function(policy)
 		ui.setPolicy(policy)
 		if rollReel ~= nil then
