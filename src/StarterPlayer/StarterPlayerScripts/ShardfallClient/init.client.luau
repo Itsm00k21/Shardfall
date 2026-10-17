@@ -204,6 +204,7 @@ if remotes == nil then
 end
 
 local shownOddsKey: string? = nil
+local paintedStarterGoals: string? = nil
 local ui
 local rollReel
 local musicController = MusicController.start()
@@ -294,6 +295,59 @@ local function oddsKey(profile: any): string
 	)
 end
 
+local function flagBit(value: any): string
+	if value == true then
+		return "1"
+	end
+	return "0"
+end
+
+-- The snapshot field is the server show result. A bare goals array has
+-- no ok flag, so present would paint nothing. Skip a repeat whose
+-- progress and granted flags did not change.
+local function starterGoalKey(tracker: any): string
+	if type(tracker) ~= "table" or tracker.ok ~= true or type(tracker.goals) ~= "table" then
+		return "hidden"
+	end
+	local parts: { string } = {}
+	local goals = tracker.goals
+	for index = 1, 3 do
+		local row = goals[index]
+		if type(row) == "table" then
+			table.insert(
+				parts,
+				string.format("%s:%s/%s", tostring(row.text), tostring(row.progress), tostring(row.goal))
+			)
+		else
+			table.insert(parts, "-")
+		end
+	end
+	local grantedFlags: any = {}
+	local state = tracker.state
+	if type(state) == "table" and type(state.granted) == "table" then
+		grantedFlags = state.granted
+	end
+	local granted = flagBit(grantedFlags.forge)
+		.. flagBit(grantedFlags.rootvault)
+		.. flagBit(grantedFlags.rolls)
+		.. flagBit(grantedFlags.level)
+		.. flagBit(grantedFlags.guild)
+	return table.concat(parts, "|") .. "#" .. granted
+end
+
+local function presentStarterGoals(profile: any)
+	if hudShell == nil then
+		return
+	end
+	local tracker = if type(profile) == "table" then profile.starterGoalTracker else nil
+	local key = starterGoalKey(tracker)
+	if key == paintedStarterGoals then
+		return
+	end
+	paintedStarterGoals = key
+	StarterGoalHud.present(tracker)
+end
+
 local function applyProfile(profile: any, saving: any)
 	if type(profile) ~= "table" then
 		return
@@ -382,6 +436,7 @@ local function applyProfile(profile: any, saving: any)
 		shownOddsKey = key
 		refreshOdds()
 	end
+	presentStarterGoals(profile)
 end
 
 local function applyResult(result: any)
@@ -1204,6 +1259,7 @@ hudShell = HudShell.start(playerGui, {
 -- After the shell, so the rows can sit on ShardfallHud. The frame stays
 -- hidden until present. A new ScreenGui here would be removed on ChildAdded.
 StarterGoalHud.start(playerGui)
+presentStarterGoals(latestProfile)
 
 actionBar = ActionBar.start(playerGui, {
 	onMenu = function()
