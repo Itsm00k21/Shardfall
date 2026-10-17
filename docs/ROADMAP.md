@@ -61,6 +61,7 @@ Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABL
 The next week or two.
 
 - Echo's next row is T-163. The Story Echo chip stays off the HP bar on a phone, on `helper/echo-chip-9721`. Brief: `docs/hooks/T-163.md`. T-160 is done in #178 (`e510db4`).
+- T-164 is the hub rarity colors. Mythic is red and Secret is white with a rainbow. The hub currently paints Mythic in Legendary gold. Branch `cursor/hub-rarity-9721`.
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
 - T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first.
 - The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166 and #175. The hero viewport landed in #178. The menu load landed in #182.
