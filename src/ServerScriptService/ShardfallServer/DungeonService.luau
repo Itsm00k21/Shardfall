@@ -1066,6 +1066,12 @@ local function echoUp(fight: RaidEchoFight.Fight, member: Player, memberRun: Run
 	return true
 end
 
+-- True after this pull's one full revive. A later down stays at 0.
+local function reviveSpent(fight: RaidEchoFight.Fight, userId: string): boolean
+	local seen = echoRevived[fight]
+	return seen ~= nil and seen[userId] == true
+end
+
 local function echoBossReady(fight: RaidEchoFight.Fight, killedRoom: number): boolean
 	local marked = echoBossDown[fight]
 	local seats: { EchoBossClear.Seat } = {}
@@ -1074,13 +1080,23 @@ local function echoBossReady(fight: RaidEchoFight.Fight, killedRoom: number): bo
 			continue
 		end
 		-- A downed player on another wing does not block this boss. A downed
-		-- player whose copy of this boss is still up does, until they clear.
+		-- player whose copy is still up does, until they clear, so the one
+		-- revive can stand them up. After that revive is spent they stay at
+		-- 0 and cannot swing, so the copy must not hold the shared reset.
 		local up = echoUp(fight, member, memberRun)
 		local copyUp = memberRun.roomIndex == killedRoom and not roomBossDown(memberRun)
 		if not up and not copyUp then
 			continue
 		end
 		local userId = tostring(member.UserId)
+		if
+			not up
+			and copyUp
+			and CombatService.vitals(member) <= 0
+			and reviveSpent(fight, userId)
+		then
+			continue
+		end
 		local rooms = if marked ~= nil then marked[userId] else nil
 		local didMark = rooms ~= nil and rooms[killedRoom] == true
 		table.insert(seats, {
@@ -2797,6 +2813,20 @@ function DungeonService.onPlayerDown(player: Player)
 		return
 	end
 	if EchoRetry.hold(party, living, storyPull) then
+		-- Spent the one revive. This down stays at 0 and cannot swing. If
+		-- that copy was the last seat on the owed boss, release the shared
+		-- reset now. A wipe already returned. This does not heal.
+		if fight ~= nil then
+			local owed = echoBossOwed[fight]
+			if
+				owed ~= nil
+				and CombatService.vitals(player) <= 0
+				and reviveSpent(fight, tostring(player.UserId))
+				and echoBossReady(fight, owed)
+			then
+				settleSharedBoss(fight, nil)
+			end
+		end
 		pushRun(player, "Down. The pull continues.")
 		return
 	end
