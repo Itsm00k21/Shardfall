@@ -1041,16 +1041,18 @@ local function noteEchoBoss(fight: RaidEchoFight.Fight, userId: string, roomInde
 	rooms[roomIndex] = true
 end
 
--- A dead boss rig, or a room already marked clear. An empty room that
--- has not cleared is still spawning, and that is not a kill.
+-- A dead boss with no living adds, or a room already marked clear.
+-- A living add keeps the Story Echo seat open, so the shared reset
+-- waits for the pull. An empty room that has not cleared is still
+-- spawning, and that is not a kill.
 local function roomBossDown(run: Run): boolean
 	local saw = false
 	for _, foe in pairs(run.enemies) do
+		if foe.hp > 0 then
+			return false
+		end
 		if foe.boss then
 			saw = true
-			if foe.hp > 0 then
-				return false
-			end
 		end
 	end
 	if saw then
@@ -1787,6 +1789,15 @@ function DungeonService.damageEnemy(
 			bar:Destroy()
 		end
 		if aliveCount(run) == 0 then
+			-- The boss died while an add was still up, so the seat stayed
+			-- open. The room is empty now. Ask again, then clear it.
+			if not enemy.boss and run.echoFight ~= nil then
+				local fight = run.echoFight
+				local owed = echoBossOwed[fight]
+				if owed == run.roomIndex and echoBossReady(fight, owed) then
+					settleSharedBoss(fight, player)
+				end
+			end
 			if run.dungeon.endless == true then
 				grant(player, run, Dungeons.waveReward(run.wave), nil)
 				beginAdvance(
@@ -2927,7 +2938,7 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build a4b694d+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build 48224f6+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
