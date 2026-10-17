@@ -133,7 +133,7 @@ describe("MenuHub hero avatar", function()
 		local parentBranch =
 			between(avatar, 'if action == "parent" then', 'elseif action == "destroy"')
 		local destroyBranch = between(avatar, 'elseif action == "destroy" then', "end")
-		local beginRoll = between(hub, "beginRoll = function()", "local function pointerDown")
+		local beginRoll = between(hub, "beginRoll = function()", "function hubFn.pointerDown")
 
 		local rigAt = string.find(avatar, "HeroView.rig(humanoid.RigType.Name)", 1, true)
 		local createAt = string.find(avatar, "CreateHumanoidModelFromDescription", 1, true)

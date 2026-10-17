@@ -139,5 +139,6 @@ require("./RootvaultSpawn.spec")
 require("./Stars.spec")
 require("./Trading.spec")
 require("./AuditExploit.spec")
+require("./LocalLimit.spec")
 
 process.exit(framework.run())
