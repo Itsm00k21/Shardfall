@@ -37,6 +37,7 @@ export type Callbacks = {
 	invoke: (string, ...any) -> any,
 	menuOpen: () -> boolean,
 	onDodge: () -> (),
+	onDodgeChip: (() -> ())?,
 	onSkill: () -> (),
 	onToast: (string) -> (),
 	onResult: (any) -> (),
@@ -569,7 +570,14 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		publish({ locked = not bar.locked, slots = slots })
 	end)
-	dodge.Activated:Connect(callbacks.onDodge)
+	-- Shift calls onDodge only. The on-screen chip also notes the flash.
+	dodge.Activated:Connect(function()
+		callbacks.onDodge()
+		local note = callbacks.onDodgeChip
+		if note ~= nil then
+			note()
+		end
+	end)
 
 	local function place()
 		local size = screen.AbsoluteSize

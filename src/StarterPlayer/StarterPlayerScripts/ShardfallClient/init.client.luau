@@ -1253,6 +1253,9 @@ actionBar = ActionBar.start(playerGui, {
 		CombatStage.dodge()
 		CombatHud.dodge()
 	end,
+	onDodgeChip = function()
+		PetAura.note("Dodge")
+	end,
 	onSkill = function()
 		CombatStage.skill()
 	end,
