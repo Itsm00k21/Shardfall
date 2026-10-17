@@ -10,7 +10,8 @@
 
 	The concept art is the plan: crystal and Boss Plaza in the middle,
 	Forge and Market to the west, Guild Hall and Pet Garden to the east,
-	Observatory to the south-east, realm arches along the south edge.
+	Observatory to the south-east. The six dungeon gates stand on a
+	crescent south of spawn. The old realm shelf is gone.
 ]]
 
 local Haven = {}
@@ -36,6 +37,7 @@ export type Place = {
 	open: boolean?,
 	dungeonId: string?,
 	color: { number }?,
+	bearing: number?,
 }
 
 Haven.CRYSTAL = {
@@ -44,21 +46,54 @@ Haven.CRYSTAL = {
 	height = 36,
 }
 
--- Spawn stands on the plaza, south of the crystal, looking north at it.
+-- Spawn stands on the plaza, south of the crystal, looking south at Rootvault.
 Haven.SPAWN = {
 	x = 0,
 	y = 124,
 	z = 30,
 	lookX = 0,
-	lookZ = 0,
+	lookZ = 108,
 }
+
+-- Crescent of gates centered on the spawn pad. Bearings run from +Z toward +X.
+Haven.GATE_RADIUS = 78
+Haven.GATE_STEP = 12
+Haven.COURT_RIM = 96
+-- Vendor ring, same center. The Market island stays where it is.
+Haven.VENDOR_RADIUS = 76
+-- Prompt reach. The chord is 16.3, so 18 would light two mouths.
+Haven.GATE_REACH = 8
 
 Haven.ARMORY = {
 	id = "armory",
 	name = "Armory",
-	x = -26,
-	z = 18,
+	x = -38,
+	z = -35.8,
 	station = "armory",
+}
+
+Haven.SHOP = {
+	id = "shop",
+	name = "Shop",
+	x = -70.5,
+	z = 1.5,
+	radius = 12,
+	station = "market",
+}
+
+Haven.SHRINE = {
+	id = "shrine",
+	name = "Shrine",
+	x = 28.5,
+	z = -40.5,
+	station = "soon",
+	message = "The shrine wakes inside a run.",
+}
+
+-- Five class stones for T-005. Grey, no prompt, not a gate.
+Haven.NOVICE = {
+	x = -40,
+	z = { 18, 10, 2, -6, -14 },
 }
 
 Haven.DISTRICTS = {
@@ -107,52 +142,69 @@ Haven.DISTRICTS = {
 	},
 } :: { Place }
 
--- South edge, west to east. Only Verdant Wilds enters the Rootvault.
+-- Left to right from the pad: Rootvault, then each later gate to the right.
+-- Rootvault and Heartwood are live. The other four stay sealed.
 Haven.PORTALS = {
 	{
-		id = "void",
-		name = "Void Rift",
-		x = -160,
-		z = 252,
-		open = false,
-		color = { 150, 70, 220 },
-		message = "Void Rift is coming soon.",
-	},
-	{
-		id = "sunken",
-		name = "Sunken Reach",
-		x = -80,
-		z = 252,
-		open = false,
-		color = { 50, 150, 255 },
-		message = "Sunken Reach is coming soon.",
-	},
-	{
-		id = "verdant",
-		name = "Verdant Wilds",
+		id = "rootvault",
+		name = "Rootvault",
 		x = 0,
-		z = 252,
+		z = 108,
+		bearing = 0,
 		open = true,
 		dungeonId = "rootvault",
 		color = { 64, 196, 96 },
 	},
 	{
+		id = "heartwood",
+		name = "Heartwood",
+		x = 16.2,
+		z = 106.3,
+		bearing = 12,
+		open = true,
+		dungeonId = "heartwood",
+		color = { 214, 140, 64 },
+	},
+	{
+		id = "tidecrypt",
+		name = "Tidecrypt",
+		x = 31.7,
+		z = 101.3,
+		bearing = 24,
+		open = false,
+		dungeonId = "tidecrypt",
+		color = { 36, 96, 140 },
+		message = "Sunken Reach is sealed.",
+	},
+	{
 		id = "ember",
 		name = "Emberforge",
-		x = 80,
-		z = 252,
+		x = 45.8,
+		z = 93.1,
+		bearing = 36,
 		open = false,
-		color = { 255, 150, 40 },
-		message = "Emberforge is coming soon.",
+		color = { 255, 120, 40 },
+		message = "Emberforge is sealed.",
 	},
 	{
 		id = "frost",
 		name = "Frostveil",
-		x = 160,
-		z = 252,
+		x = 58,
+		z = 82.2,
+		bearing = 48,
 		open = false,
 		color = { 186, 228, 255 },
-		message = "Frostveil is coming soon.",
+		message = "Frostveil is sealed.",
+	},
+	{
+		id = "void",
+		name = "Void Rift",
+		x = 67.5,
+		z = 69,
+		bearing = 60,
+		open = false,
+		color = { 120, 60, 180 },
+		message = "Void Rift is sealed.",
 	},
 } :: { Place }
 
@@ -171,6 +223,8 @@ function Haven.places(): { Place }
 		table.insert(list, portal)
 	end
 	table.insert(list, Haven.ARMORY)
+	table.insert(list, Haven.SHOP)
+	table.insert(list, Haven.SHRINE)
 	return list
 end
 
@@ -190,6 +244,18 @@ function Haven.portal(id: string): Place?
 		end
 	end
 	return nil
+end
+
+-- Point on the court rim (a circle around spawn) toward a district.
+function Haven.courtRim(x: number, z: number): (number, number)
+	local dx = x - Haven.SPAWN.x
+	local dz = z - Haven.SPAWN.z
+	local distance = math.sqrt(dx * dx + dz * dz)
+	if distance < 1 then
+		return Haven.SPAWN.x, Haven.SPAWN.z + Haven.COURT_RIM
+	end
+	local scale = Haven.COURT_RIM / distance
+	return Haven.SPAWN.x + dx * scale, Haven.SPAWN.z + dz * scale
 end
 
 -- Longest straight line between two stations. That is the walk across Haven.

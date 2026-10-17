@@ -96,7 +96,6 @@ Travel.DESTINATIONS = {
 		market.x + 16,
 		market.z + 12
 	),
-	spot("portals", "Dungeon Portals", 0, 244, 0, 252, 18, 244),
 } :: { Destination }
 
 local BY_ID: { [string]: Destination } = {}

@@ -32,6 +32,13 @@ local function dispatch(callbacks: Callbacks, action: any, objectText: any, mess
 	if name == "" or name == "rootvault" then
 		return
 	end
+	-- The server owns the Story queue. The echo carries the note or the refusal.
+	if name == "heartwood" then
+		if type(message) == "string" and message ~= "" then
+			callbacks.onSoon(message)
+		end
+		return
+	end
 	if name == "armory" or name == "pets" then
 		callbacks.onPanel("shards", name)
 	elseif name == "craft" then
@@ -64,15 +71,19 @@ function HavenClient.start(callbacks: Callbacks)
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt)
 		local action = prompt:GetAttribute("HavenAction")
 		print("[Shardfall] Client prompt triggered:", action)
+		-- Heartwood queues on the server. Consuming the key here would drop the note.
+		if action == "heartwood" then
+			return
+		end
 		open(action, prompt.ObjectText, prompt:GetAttribute("HavenMessage"))
 	end)
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local remote = remotes:WaitForChild("HavenPrompt")
 	if remote:IsA("RemoteEvent") then
-		remote.OnClientEvent:Connect(function(action)
+		remote.OnClientEvent:Connect(function(action, message)
 			print("[Shardfall] Server asked the client to open:", action)
-			open(action, nil, nil)
+			open(action, nil, message)
 		end)
 	end
 end

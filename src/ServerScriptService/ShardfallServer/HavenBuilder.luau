@@ -5,8 +5,8 @@
 
 	Simple parts, themed colors, and a low count. The crystal's shards orbit
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
-	the existing panel, and the Verdant arch is also an EnterPad for the
-	Rootvault.
+	the existing panel. The Rootvault arch is an EnterPad. The Heartwood arch
+	starts the Story raid queue and is not an EnterPad.
 
 	StreamingEnabled cannot be set from a script. It lives on Workspace in
 	default.project.json. The hub model is Persistent so the islands stay
@@ -34,6 +34,8 @@ local HavenBuilder = {}
 
 local orbitConnection: RBXScriptConnection? = nil
 local lifeConnection: RBXScriptConnection? = nil
+-- One Story queue per second. The dungeon enter debounce lives in DungeonService.
+local heartwoodReadyAt: { [number]: number } = {}
 
 local function rgb(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
@@ -231,15 +233,16 @@ local function promptOn(
 	objectText: string,
 	action: string,
 	message: string?,
-	district: string?
+	district: string?,
+	reach: number?
 )
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = actionText
 	prompt.ObjectText = objectText
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 18
+	prompt.MaxActivationDistance = reach or 18
 	prompt.RequiresLineOfSight = false
-	prompt.MaxIndicatorDistance = 24
+	prompt.MaxIndicatorDistance = if reach ~= nil then reach + 2 else 24
 	prompt:SetAttribute("HavenAction", action)
 	if message ~= nil then
 		prompt:SetAttribute("HavenMessage", message)
@@ -255,8 +258,9 @@ local SEAM = 0.08
 local BRIDGE_WIDTH = 14
 local BRIDGE_THICKNESS = 4
 local FLOOR_TOP = 0
-local SHELF_DEPTH = 24
 local TONGUE = 6
+-- Square the rim bridge treats as its near floor. The court slab is larger.
+local RIM_HALF = 8
 
 -- Top stays put. The bottom sinks SEAM into the floor so the contact faces
 -- are not coplanar.
@@ -669,7 +673,11 @@ local function buildPlaza(parent: Instance)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
 	spawn.Size = Vector3.new(12, 1 + SEAM, 12)
-	spawn.CFrame = CFrame.new(Haven.SPAWN.x, Haven.FLOOR_Y + 1 - (1 + SEAM) / 2, Haven.SPAWN.z)
+	local spawnY = Haven.FLOOR_Y + 1 - (1 + SEAM) / 2
+	spawn.CFrame = CFrame.lookAt(
+		Vector3.new(Haven.SPAWN.x, spawnY, Haven.SPAWN.z),
+		Vector3.new(Haven.SPAWN.lookX, spawnY, Haven.SPAWN.lookZ)
+	)
 	spawn.Anchored = true
 	spawn.CanCollide = true
 	spawn.Transparency = 0
@@ -868,8 +876,8 @@ local function buildMarket(parent: Instance)
 			false
 		)
 	end
-	local shop = stationPad(model, place.x, place.z, Color3.fromRGB(255, 196, 80))
-	promptOn(shop, "Market Board", "Browse and trade", "market", nil)
+	-- The Market Board prompt lives on the rim shop. These stalls stay scenery.
+	stationPad(model, place.x, place.z, Color3.fromRGB(255, 196, 80))
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Market")
 end
 
@@ -990,53 +998,143 @@ local function buildObservatory(parent: Instance)
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Observatory")
 end
 
--- Center x, center z, and width of the realm shelf. Bridges use the same span.
-local function shelfLayout(): (number, number, number)
-	local minX = math.huge
-	local maxX = -math.huge
-	local shelfZ = Haven.PORTALS[1].z
+-- Court floor abuts the plaza on an edge, so the tops can share a height.
+-- A face overlap would flicker. South holds the crescent. East holds the
+-- garden walk, which leaves the plaza on its east edge.
+local function buildCourt(parent: Instance)
+	local court = Instance.new("Model")
+	court.Name = "GateCourt"
+	court.Parent = parent
+	-- South edge sits on the plaza's south edge (z = 52). A shared edge is not an overlap.
+	slab(
+		court,
+		"Ground",
+		50,
+		FLOOR_TOP,
+		101,
+		144,
+		98,
+		8,
+		STONE,
+		Enum.Material.Cobblestone,
+		true
+	)
+	slab(
+		court,
+		"Ground",
+		100,
+		FLOOR_TOP,
+		34,
+		96,
+		36,
+		8,
+		STONE,
+		Enum.Material.Cobblestone,
+		true
+	)
 	for _, portal in ipairs(Haven.PORTALS) do
-		minX = math.min(minX, portal.x)
-		maxX = math.max(maxX, portal.x)
-		shelfZ = portal.z
+		local bearing = math.rad(portal.bearing or 0)
+		local color = if portal.open == true
+			then rgb(portal.color :: { number })
+			else Color3.fromRGB(90, 90, 96)
+		-- Axis-aligned squares. 1.1 stays clear of the next stone; 1.4 would share a top.
+		disc(
+			court,
+			"Inlay",
+			Haven.SPAWN.x + math.sin(bearing) * 8,
+			Haven.LAYER,
+			Haven.SPAWN.z + math.cos(bearing) * 8,
+			1.1,
+			0.2,
+			color,
+			Enum.Material.Neon,
+			false
+		)
 	end
-	return 0, shelfZ, (maxX - minX) + 48
+
+	-- West slab shares the plaza's west edge. A bridge from the origin would
+	-- cross the forge deck, so the shop stands on this floor instead.
+	local shop = Haven.SHOP
+	local stall = Instance.new("Model")
+	stall.Name = "RimShop"
+	stall.Parent = parent
+	slab(
+		stall,
+		"Ground",
+		-71,
+		FLOOR_TOP,
+		0,
+		38,
+		40,
+		8,
+		Color3.fromRGB(92, 78, 64),
+		Enum.Material.WoodPlanks,
+		true
+	)
+	local board = stationPad(stall, shop.x, shop.z, Color3.fromRGB(255, 196, 80))
+	promptOn(board, "Market Board", "Browse and trade", "market", nil)
+	sign(stall, CFrame.new(shop.x, 12, shop.z), "Shop")
+
+	local shrine = Haven.SHRINE
+	local plinthHeight, plinthCenter = sunk(4, 4)
+	local plinth = part(
+		parent,
+		"Shrine",
+		Vector3.new(6, plinthHeight, 6),
+		CFrame.new(shrine.x, plinthCenter, shrine.z),
+		Color3.fromRGB(126, 122, 116),
+		Enum.Material.Slate,
+		true
+	)
+	promptOn(plinth, "Shrine", shrine.message or "Shrine", "soon", shrine.message)
+	sign(parent, CFrame.new(shrine.x, 10, shrine.z), "Shrine")
+
+	local stoneHeight, stoneCenter = sunk(5, 5)
+	for _, stoneZ in ipairs(Haven.NOVICE.z) do
+		part(
+			parent,
+			"NoviceStone",
+			Vector3.new(4, stoneHeight, 4),
+			CFrame.new(Haven.NOVICE.x, stoneCenter, stoneZ),
+			Color3.fromRGB(120, 120, 124),
+			Enum.Material.Slate,
+			true
+		)
+	end
 end
+
+local GATE_LIGHT: { [string]: { brightness: number, range: number } } = {
+	rootvault = { brightness = 0.45, range = 16 },
+	heartwood = { brightness = 0.35, range = 14 },
+	tidecrypt = { brightness = 0.4, range = 14 },
+	ember = { brightness = 0.3, range = 12 },
+	frost = { brightness = 0.4, range = 16 },
+	void = { brightness = 0.2, range = 10 },
+}
 
 local function buildPortals(parent: Instance)
 	local shelf = Instance.new("Model")
 	shelf.Name = "RealmArches"
 	shelf.Parent = parent
-	local shelfX, shelfZ, width = shelfLayout()
-	part(
-		shelf,
-		"Ground",
-		Vector3.new(width, 4, SHELF_DEPTH),
-		CFrame.new(shelfX, -2, shelfZ),
-		GRASS,
-		Enum.Material.Grass,
-		true
-	)
-	part(
-		shelf,
-		"Rock",
-		Vector3.new(width + 16, 10, SHELF_DEPTH + 16),
-		CFrame.new(shelfX, -9 - SEAM, shelfZ),
-		Color3.fromRGB(92, 86, 78),
-		Enum.Material.Rock,
-		true
-	)
 	local pillarHeight, pillarCenter = sunk(18, 18)
 	for _, portal in ipairs(Haven.PORTALS) do
 		local color = rgb(portal.color :: { number })
 		local arch = Instance.new("Model")
 		arch.Name = portal.id
 		arch.Parent = shelf
+		if type(portal.dungeonId) == "string" then
+			arch:SetAttribute("DungeonId", portal.dungeonId)
+		end
+		-- Mouth faces the pad. Local X is the pier line, local -Z is the walk.
+		local facing = CFrame.lookAt(
+			Vector3.new(portal.x, 0, portal.z),
+			Vector3.new(Haven.SPAWN.x, 0, Haven.SPAWN.z)
+		)
 		part(
 			arch,
 			"PillarL",
-			Vector3.new(3.5, pillarHeight, 3.5),
-			CFrame.new(portal.x - 7, pillarCenter, portal.z),
+			Vector3.new(2.5, pillarHeight, 2.5),
+			facing * CFrame.new(-5.25, pillarCenter, 0),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -1044,8 +1142,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"PillarR",
-			Vector3.new(3.5, pillarHeight, 3.5),
-			CFrame.new(portal.x + 7, pillarCenter, portal.z),
+			Vector3.new(2.5, pillarHeight, 2.5),
+			facing * CFrame.new(5.25, pillarCenter, 0),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -1053,8 +1151,8 @@ local function buildPortals(parent: Instance)
 		part(
 			arch,
 			"Lintel",
-			Vector3.new(18, 3, 4),
-			CFrame.new(portal.x, 19.5 + SEAM, portal.z),
+			Vector3.new(13, 2.5, 3),
+			facing * CFrame.new(0, 19.25 + SEAM, 0),
 			STONE,
 			Enum.Material.Slate,
 			true
@@ -1062,36 +1160,50 @@ local function buildPortals(parent: Instance)
 		local fill = part(
 			arch,
 			"Glow",
-			Vector3.new(10, 14, 0.8),
-			CFrame.new(portal.x, 9, portal.z),
+			Vector3.new(8, 14, 0.6),
+			facing * CFrame.new(0, 9, 0),
 			color,
-			Enum.Material.Glass,
+			Enum.Material.Neon,
 			false
 		)
-		fill.Transparency = 0.4
-		fill.CanTouch = portal.open == true
+		local open = portal.open == true
+		fill.Transparency = if open then 0.35 else 0.75
+		fill.CanTouch = false
+		local spec = GATE_LIGHT[portal.id]
+		local brightness = 0.12
+		local lightRange = 12
+		if spec ~= nil then
+			lightRange = spec.range
+			if open then
+				brightness = spec.brightness
+			end
+		end
 		local portalLight = Instance.new("PointLight")
 		portalLight.Name = "PointLight"
 		portalLight.Color = color
-		portalLight.Brightness = 0.25
-		portalLight.Range = 8
+		portalLight.Brightness = brightness
+		portalLight.Range = lightRange
 		portalLight.Shadows = false
 		portalLight.Parent = fill
-		if portal.open == true then
+		local reach = Haven.GATE_REACH
+		if portal.id == "rootvault" then
 			fill.Name = "EnterPad"
+			fill.CanTouch = true
 			fill:SetAttribute("EnterDungeon", portal.dungeonId or Dungeons.ROOTVAULT_ID)
-			promptOn(fill, "Enter", portal.name, "rootvault", nil)
+			promptOn(fill, "Enter", portal.name, "rootvault", nil, nil, reach)
+		elseif portal.id == "heartwood" then
+			promptOn(fill, "Queue", portal.name, "heartwood", nil, nil, reach)
 		else
 			part(
 				arch,
 				"Seal",
-				Vector3.new(10 - SEAM * 2, 1.4, 1.4),
-				CFrame.new(portal.x, 9, portal.z),
+				Vector3.new(8, 1.4, 1.4),
+				facing * CFrame.new(0, 9, 0),
 				Color3.fromRGB(36, 34, 40),
 				Enum.Material.Metal,
 				true
 			)
-			promptOn(fill, "Coming Soon", portal.name, "soon", portal.message)
+			promptOn(fill, "Sealed", portal.message or portal.name, "soon", portal.message, nil, reach)
 		end
 		sign(arch, CFrame.new(portal.x, 24, portal.z), portal.name)
 	end
@@ -1112,25 +1224,36 @@ local function buildBridges(parent: Instance)
 	bridges.Name = "Bridges"
 	bridges.Parent = parent
 	local plaza = Haven.PLAZA_RADIUS
-	local shelfX, shelfZ, shelfWidth = shelfLayout()
 	-- Squares: the walkable face is the full half-extent, not the inscribed circle.
 	bridge(bridges, 0, 0, plaza, plaza, forge.x, forge.z, forge.radius, forge.radius, 1)
 	bridge(bridges, 0, 0, plaza, plaza, market.x, market.z, market.radius, market.radius, 2)
 	bridge(bridges, 0, 0, plaza, plaza, guild.x, guild.z, guild.radius, guild.radius, 3)
-	bridge(bridges, 0, 0, plaza, plaza, garden.x, garden.z, garden.radius, garden.radius, 4)
+	local gardenX, gardenZ = Haven.courtRim(garden.x, garden.z)
 	bridge(
 		bridges,
-		0,
-		0,
-		plaza,
-		plaza,
+		gardenX,
+		gardenZ,
+		RIM_HALF,
+		RIM_HALF,
+		garden.x,
+		garden.z,
+		garden.radius,
+		garden.radius,
+		4
+	)
+	local watchX, watchZ = Haven.courtRim(observatory.x, observatory.z)
+	bridge(
+		bridges,
+		watchX,
+		watchZ,
+		RIM_HALF,
+		RIM_HALF,
 		observatory.x,
 		observatory.z,
 		observatory.radius,
 		observatory.radius,
 		5
 	)
-	bridge(bridges, 0, 0, plaza, plaza, shelfX, shelfZ, shelfWidth / 2, SHELF_DEPTH / 2, 6)
 end
 
 local function buildRocks(parent: Instance)
@@ -1639,6 +1762,7 @@ function HavenBuilder.build(parent: Instance): number
 	buildGuild(parent)
 	buildGarden(parent)
 	buildObservatory(parent)
+	buildCourt(parent)
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)
@@ -1677,6 +1801,33 @@ function HavenBuilder.build(parent: Instance): number
 				if type(action) ~= "string" then
 					return
 				end
+				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+				local remote = if remotes ~= nil then remotes:FindFirstChild("HavenPrompt") else nil
+				if action == "heartwood" then
+					local now = os.clock()
+					if now < (heartwoodReadyAt[player.UserId] or 0) then
+						return
+					end
+					heartwoodReadyAt[player.UserId] = now + 1
+					local queued, result = pcall(function()
+						local RaidService = require(script.Parent.RaidService)
+						return RaidService.queue(player, "story", "flex")
+					end)
+					local message = "The Heartwood queue did not start."
+					if queued and type(result) == "table" then
+						if result.ok == true and type(result.note) == "string" then
+							message = result.note
+						elseif result.ok == true then
+							message = "Joined the Heartwood queue."
+						elseif type(result.error) == "string" then
+							message = result.error
+						end
+					end
+					if remote ~= nil and remote:IsA("RemoteEvent") then
+						remote:FireClient(player, action, message)
+					end
+					return
+				end
 				if descendant:GetAttribute("HavenDistrict") == "guild" then
 					local DataService = require(script.Parent.DataService)
 					local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
@@ -1685,8 +1836,6 @@ function HavenBuilder.build(parent: Instance): number
 						return nil
 					end)
 				end
-				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-				local remote = if remotes ~= nil then remotes:FindFirstChild("HavenPrompt") else nil
 				if remote ~= nil and remote:IsA("RemoteEvent") then
 					remote:FireClient(player, action)
 				end

@@ -17,8 +17,8 @@ local function profile()
 end
 
 describe("Travel", function()
-	it("lists the six stands and leaves spawn open", function()
-		expect(#Travel.DESTINATIONS).toEqual(6)
+	it("lists the five stands and leaves spawn open", function()
+		expect(#Travel.DESTINATIONS).toEqual(5)
 		local names = {}
 		for _, dest in ipairs(Travel.DESTINATIONS) do
 			table.insert(names, dest.name)
@@ -29,12 +29,12 @@ describe("Travel", function()
 			"Armory Rolls",
 			"Pet Rolls",
 			"Market",
-			"Dungeon Portals",
 		})
 		local data = profile()
 		expect(Travel.isUnlocked(data, "spawn")).toBeTrue()
 		expect(Travel.isUnlocked(data, "forge")).toBeTrue()
-		expect(Travel.isUnlocked(nil, "portals")).toBeTrue()
+		expect(Travel.isUnlocked(nil, "market")).toBeTrue()
+		expect(Travel.isUnlocked(nil, "portals")).toBeFalse()
 		expect(Travel.isUnlocked(data, "missing")).toBeFalse()
 		local binds = 0
 		for _, dest in ipairs(Travel.DESTINATIONS) do
@@ -42,7 +42,7 @@ describe("Travel", function()
 			expect(Travel.shouldBind("WaystoneCrystal", dest.id)).toBeFalse()
 			binds += 1
 		end
-		expect(binds).toEqual(6)
+		expect(binds).toEqual(5)
 		local x, y, z = Travel.arrival("spawn")
 		expect(x).toEqual(Haven.SPAWN.x)
 		expect(y).toEqual(Haven.SPAWN.y)
@@ -84,7 +84,7 @@ describe("Travel", function()
 		data.travelPass = true
 		expect(Travel.passSkipsCooldown(data)).toBeTrue()
 		expect(Travel.remaining(data, 51)).toEqual(0)
-		expect(Travel.attempt(data, "portals", 51)).toBeNil()
+		expect(Travel.attempt(data, "armory", 51)).toBeNil()
 		expect(data.lastTravel).toEqual(51)
 		expect(Travel.PASS_PITCH ~= "").toBeTrue()
 		expect(Travel.attempt(nil, "spawn", 10)).toEqual("Profile is still loading.")
