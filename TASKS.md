@@ -2040,6 +2040,123 @@ Questions for Ghost:
 13. Returned boards keep `entries` only. Other keys on the table you pass are dropped. A bare array is refused. `nil` starts an empty board. Is that the shape you want to store?
 14. This module does not rank Fracture level, class combo, or guild progression. Beta is fastest clear only. Confirm those stay out.
 
+### T-057 hooks for GHOST
+
+HELPER did not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `Schema.luau`, `CombatMath.luau`, `RaidRecap.luau`, or any other T-012 file. `RaidEcho` is pure and ready to call. It does not require `Raids`, `RaidService`, `CombatMath`, or `RaidRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidEcho` yet, so this branch does not change a live run. No build stamp. No remote. No DataStore. No MemoryStore. No RNG. Nothing here costs Robux. The T-057 row stays `claimed`. Wiring is yours.
+
+Call `wipe` once for each whole-party death after a boss pull has started. Call `reset` when that boss dies, and again when the run ends. Do not call either from the per-player boss mutate in `DungeonService.damageEnemy`. One call per death, with the shared run state. A second `wipe` on the same table before you store `state` counts a second stack. Practice Grove stays on `practice = true` and adds nothing. The live fight is in `DungeonService`, which this row does not list. `RaidService` has no wipe call today.
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidEcho = require(ReplicatedStorage.Shared.RaidEcho)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `fresh()` | the run is created | `{ stacks = 0 }`. A new table every call. |
+| `wipe(state, ctx)` | the party might have wiped | `ok == true` is the only signal to store `state`. `counted == true` means this was a Story wipe. `added == true` means `stacks` grew by one. |
+| `bonus(state, difficulty)` | you want the party fraction | `bonus` is a fraction from 0 to 0.25. `active == true` means Story and the fraction is above 0. |
+| `apply(stat, state, difficulty)` | you scale one player stat | `value` is `base * multiplier`. `multiplier` is `1 + bonus` (1 to 1.25). |
+| `reset(state, ctx)` | the boss dies, or the run ends | `ok == true` stores `{ stacks = 0 }`. `reason` is `"kill"` or `"end"`. |
+
+`nil` starts at 0 stacks. `{}` does too. A non-table is `ERRORS.state`. Store `result.state` only when `result.ok == true`. A skip (`counted == false`) is still `ok == true`: the copy has the same `stacks`. If the saved record itself does not parse, `ok == false` and `state` is `{ stacks = 0 }`. Keep the previous save.
+
+`wipe` reads `difficulty`, `practice` or `practiceGrove`, `pullStarted` or `pulled`, and the party. The party is `wholeParty` or `partyDead`, or `alive` / `living` together with `party` / `partySize`. Anything else on `ctx` is ignored, including `now`, `bossId`, and `userId`. `bonus` and `apply` take the difficulty as their own argument. The state does not remember it.
+
+Checks on `wipe` run in this order: the record, the context type, the difficulty, the practice flags, the pull flags, the party flags. The first failure is the error you get. After that, a real event can still be skipped. Skip order is practice, then a pull that has not started, then a partial death, then a difficulty that never gets Echo.
+
+**Stacks.** One number for the whole party. There is no per-player map. Returned states keep `stacks` only. A `userId` or `bossId` on the table you pass is dropped. `bonus` reads that count. Story pays `CONFIG.perWipe` (0.05) times the count, and `CONFIG.cap` (0.25) stops the fraction. Five counted wipes reach 0.25. The sixth stays `counted` with `added == false` and `capped == true`. A stored count above 5 still pays 0.25 and does not grow. Normal, Hard, Shardbreaker, and Fracture are known, return `bonus == 0`, and a qualifying death there is `reason == "difficulty"`. `" Story "` is story. Strings are trimmed and lowercased.
+
+**What counts.** A counted wipe is Story, the boss pull has started, the whole party is dead, and the run is not Practice Grove.
+
+| ctx | result |
+|---|---|
+| `pullStarted == true`, `wholeParty == true`, `practice` omitted or false, difficulty story | one stack, until the cap |
+| `alive == 0` and `party >= 1` (or `living` / `partySize`) | same as `wholeParty == true` |
+| `practice == true` or `practiceGrove == true` | `reason == "practice"`, stacks unchanged |
+| `pullStarted` missing or false | `reason == "pull"`, stacks unchanged |
+| `wholeParty == false`, or `alive >= 1` | `reason == "partial"`, stacks unchanged |
+| normal, hard, shardbreaker, fracture, after a real wipe shape | `reason == "difficulty"`, stacks unchanged |
+| `guided`, `fracture1`, a blank difficulty | `ERRORS.difficulty` |
+
+A missing pull flag means the pull has not started. A missing practice flag means this is not Practice Grove. A missing party signal is `ERRORS.party`: pass the boolean or both counts. `party == 0`, a fractional count, or `alive > party` is an error. Two aliases that disagree (`practice` true and `practiceGrove` false, or `wholeParty` false while `alive == 0`) are `ERRORS.disagree`. `"guided"` is not a difficulty. An exact `"fracture"` is known and pays nothing.
+
+**Apply.** Pass the unbuffed number. `apply` multiplies whatever you give it, so a second call on the buffed result compounds. Keep the base damage, the base heal, and the base max HP on the combat record, and pass those bases after every wipe and every reset.
+
+| kind | canonical | accepted text |
+|---|---|---|
+| damage | `damage` | `"damage"` |
+| healing | `healing` | `"healing"`, `"heal"` |
+| max HP | `maxHp` | `"maxHp"`, `"max HP"`, `"max_hp"`, `"max_health"` |
+
+`kind`, `stat`, and `name` are the same field. `value`, `amount`, and `base` are the same number. Two of them that disagree are `ERRORS.disagree`. `"health"`, `"hp"`, `"currentHp"`, `"bossDamage"`, and `"defense"` are `ERRORS.kind`, and `value` comes back unchanged. A negative, NaN, or infinite number is `ERRORS.value`. Zero stays zero. This module does not round max HP and does not read current HP.
+
+**Reset.** `"kill"`, `"boss"`, and `"boss kill"` are a boss kill. `"end"`, `"run"`, and `"run end"` are the run ending. Both store `{ stacks = 0 }`. `"wipe"` and `"reset"` are `ERRORS.reason`, and the stacks stay. Pass a string or `{ reason = "kill" }` or `{ kind = "end" }`. `cleared == true` means the previous count was above 0. A changed `bossId` on `wipe` does not clear stacks. Call `reset` yourself between bosses if each boss starts at 0.
+
+```lua
+run.echo = RaidEcho.fresh()
+
+local wiped = RaidEcho.wipe(run.echo, {
+	difficulty = run.difficulty,
+	practice = run.practice == true,
+	pullStarted = run.pullStarted == true,
+	alive = aliveCount,
+	party = #roster,
+})
+if wiped.ok == true then
+	run.echo = wiped.state
+	-- One party readout. Hidden while wiped.bonus is 0.
+	-- Recompute damage, healing, and max HP from the unbuffed bases.
+end
+
+local killed = RaidEcho.reset(run.echo, "kill")
+if killed.ok == true then
+	run.echo = killed.state
+	-- Restore max HP from the unbuffed base. The fraction is 0.
+end
+```
+
+On a hit, a heal, or a max-HP publish:
+
+```lua
+local dealt = RaidEcho.apply({
+	kind = "damage",
+	value = baseDamage,
+}, run.echo, run.difficulty)
+if dealt.ok == true then
+	damage = dealt.value
+end
+```
+
+Use `"healing"` for a player heal and `"maxHp"` for max HP. The same `run.echo` is the whole party, including a backfill who joins on a later pull. There is no RNG. The same input returns the same state. Thresholds live in `RaidEcho.CONFIG`. Do not hardcode 0.05 or 0.25 beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The state is the plain `{ stacks }` table on the in-memory run. It does not have to live on a profile. Version 21 is current. T-049's row already plans `raidLuck` on version 22, so do not take 22 for this. An in-memory table on one server dies on restart.
+
+`tests/run.luau` requires `./RaidEcho.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. Stacks stay until `reset`. The recommended wire calls `reset(..., "kill")` on each boss kill and `reset(..., "end")` when the run ends, so the next boss starts at 0. A changed `bossId` does not clear stacks. Call `reset` only on run end if the buff should last the whole run. Which one is the Story Echo?
+2. The state is one party `stacks` count, with no per-player map. A backfill, including an SOS flare join, reads that same table and inherits the current buff. Confirm a backfill inherits the stacks.
+3. Echo stays off the T-050 private panel and off the public kudos view. Show one party readout during the fight (`bonus` 0, 0.05, 0.10, 0.15, 0.20, 0.25). Confirm the RaidRecap panel does not list it.
+4. The catch-up rule (a new raid gives the old one a permanent Echo) is not in this module. Beta is the wipe stack only. Confirm the permanent Echo stays out.
+5. Difficulty `"story"` receives Echo. `"guided"` is not a difficulty and returns `ERRORS.difficulty`. A `guided` field on the wipe context is ignored. Confirm a Guided Story run still gets Echo.
+6. Only the exact token `"fracture"` is known, and it pays nothing. `"fracture1"` is `ERRORS.difficulty`. Confirm one token covers every Fracture level.
+7. The fifth counted wipe is `added == true` and `capped == true` (fraction 0.25). A later counted wipe stays `counted` with `added == false`. A stored count above 5 still pays 0.25 and does not grow. Confirm the cap stops the count there.
+8. A counted wipe is the whole party dead after `pullStarted`. Practice Grove, a death before the pull, and a reset while someone is still alive do not count. Confirm a deliberate boss reset with someone alive is not a wipe.
+9. When several skip rules match, the reason is practice, then pull, then partial, then difficulty. A Practice Grove wipe on Normal reports `practice`. A Normal partial after the pull reports `partial`. A real Normal wipe reports `difficulty`. Confirm that order.
+10. Player damage, healing, and max HP share `1 + bonus`. `"health"`, `"hp"`, and `"currentHp"` are refused so current HP is not scaled. Boss damage and defense are refused. Max HP is not rounded here. `apply` multiplies the number you pass, so pass the unbuffed base. Confirm those three stats, that you floor max HP at the call site, and whether a full bar refills when Echo raises max HP. `CombatMath.luau` was not edited.
+11. Difficulty is an argument on every call and is not stored. A Normal call returns 0 even when `stacks` is 5. Confirm the caller passes the run difficulty each time.
+12. Each `wipe` call can add one stack. There is no pull id, so two calls for the same death add two stacks. The caller dedupes. Confirm.
+13. No profile field. `{ stacks }` lives on the in-memory run and dies on restart. No clock is read. A `now` field is ignored. Confirm that home for the beta state.
+14. A phase change does not call `reset`. Only a boss-kill or run-end reason clears stacks. `"wipe"` and `"reset"` are refused as reset reasons. Confirm phases leave the stacks in place.
+15. `"heal"` is healing. `"max HP"`, `"max_hp"`, `"max_health"`, and `"maxHp"` are max HP. `"health"` is refused. Confirm those aliases.
+
 ## Open
 
 No unassigned tasks.
