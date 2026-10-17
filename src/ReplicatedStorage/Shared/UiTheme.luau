@@ -122,4 +122,22 @@ function UiTheme.lift(red: number, green: number, blue: number): (number, number
 	return channel(rf), channel(gf), channel(bf)
 end
 
+local function linear(channel: number): number
+	local value = channel / 255
+	if value <= 0.04045 then
+		return value / 12.92
+	end
+	return ((value + 0.055) / 1.055) ^ 2.4
+end
+
+-- WCAG contrast of two RGB rows. HUD text should clear 4.5 on its panel.
+function UiTheme.contrast(foreground: { number }, background: { number }): number
+	local function luma(row: { number }): number
+		return 0.2126 * linear(row[1]) + 0.7152 * linear(row[2]) + 0.0722 * linear(row[3])
+	end
+	local lighter = math.max(luma(foreground), luma(background))
+	local darker = math.min(luma(foreground), luma(background))
+	return (lighter + 0.05) / (darker + 0.05)
+end
+
 return UiTheme

@@ -5,6 +5,8 @@
 	so CoreUISafeInsets are already applied by the ScreenGui.
 ]]
 
+local UiTheme = require("./UiTheme")
+
 local HudLayout = {}
 
 export type Rect = { x: number, y: number, w: number, h: number }
@@ -23,8 +25,32 @@ function HudLayout.health(margin: number): Rect
 end
 
 function HudLayout.pills(viewportX: number, margin: number): Rect
-	local width = 196
+	-- Gold, Mastery, and Shards. 108px each, plus the 8px gaps.
+	local width = 340
+	local room = viewportX - margin * 2
+	if width > room then
+		width = math.max(44, math.floor(room))
+	end
 	return rect(math.max(margin, viewportX - margin - width), margin + 36, width, 36)
+end
+
+function HudLayout.counters(gold: number, mastery: number, shards: number): { string }
+	local function whole(value: number): number
+		if
+			type(value) ~= "number"
+			or value ~= value
+			or value == math.huge
+			or value == -math.huge
+		then
+			return 0
+		end
+		return math.floor(value)
+	end
+	return {
+		string.format("Gold %d", whole(gold)),
+		string.format("Mastery %d", whole(mastery)),
+		string.format("Shards %d", whole(shards)),
+	}
 end
 
 function HudLayout.rail(viewportY: number, margin: number, count: number, button: number): Rect
@@ -104,7 +130,7 @@ end
 function HudLayout.hubBody(panelW: number, panelH: number): Rect
 	local tabs = HudLayout.tabColumn(panelW, panelH)
 	local gap = 12
-	local header = 48
+	local header = UiTheme.HEADER + UiTheme.PAD
 	local x = tabs.x + tabs.w + gap
 	local y = header
 	local w = math.max(44, panelW - x - 8)

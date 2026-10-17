@@ -193,7 +193,7 @@ local function sign(parent: Instance, cframe: CFrame, text: string)
 	anchor.Transparency = 1
 	anchor:SetAttribute("HavenLabel", text)
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromScale(ShellLayout.ZONE_WIDTH_STUDS, ShellLayout.ZONE_HEIGHT_STUDS)
+	gui.Size = UDim2.fromOffset(160, 36)
 	gui.StudsOffset = Vector3.new(0, 4, 0)
 	gui.AlwaysOnTop = false
 	gui.MaxDistance = ShellLayout.ZONE_MAX_DISTANCE
@@ -201,12 +201,14 @@ local function sign(parent: Instance, cframe: CFrame, text: string)
 	gui.DistanceUpperLimit = ShellLayout.ZONE_MAX_DISTANCE
 	gui.Parent = anchor
 	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
+	label.BackgroundColor3 = Color3.fromRGB(18, 16, 28)
+	label.BackgroundTransparency = 0.15
 	label.Size = UDim2.fromScale(1, 1)
 	label.Font = Enum.Font.BuilderSansBold
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(236, 226, 190)
-	label.TextStrokeTransparency = 0.4
+	label.TextSize = 18
+	label.TextColor3 = Color3.fromRGB(244, 240, 252)
+	label.TextStrokeColor3 = Color3.fromRGB(24, 18, 12)
+	label.TextStrokeTransparency = 0
 	label.Text = text
 	label.Parent = gui
 end
@@ -1522,7 +1524,7 @@ local function stampLife(parent: Instance)
 			-- A new Sky with no face ids replaces the default skybox.
 			local sky = target:FindFirstChildOfClass("Sky")
 			if sky ~= nil then
-				sky.SunAngularSize = 21
+				sky.SunAngularSize = 10
 				sky.StarCount = 3000
 				sky.MoonAngularSize = 11
 			end

@@ -669,7 +669,7 @@ function HavenLife.mood(
 		}
 	end
 	return {
-		brightness = 2.15,
+		brightness = 1.25,
 		ambient = { 96, 112, 84 },
 		outdoor = { 128, 146, 112 },
 	}
@@ -701,12 +701,12 @@ function HavenLife.exposure(clockTime: number): {
 	end
 	local glare = math.max(band(6.2), band(18.2))
 	return {
-		bloomIntensity = 0.12 - glare * 0.08,
-		bloomSize = 10 - glare * 4,
-		bloomThreshold = 1.6 + glare * 0.2,
-		sunIntensity = 0.14 - glare * 0.11,
-		sunSpread = 0.35 - glare * 0.18,
-		brightness = 2.15 - glare * 1.0,
+		bloomIntensity = 0.045 - glare * 0.03,
+		bloomSize = 8 - glare * 3,
+		bloomThreshold = 2.05 + glare * 0.15,
+		sunIntensity = 0.05 - glare * 0.04,
+		sunSpread = 0.22 - glare * 0.08,
+		brightness = 1.25 - glare * 0.6,
 	}
 end
 

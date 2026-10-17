@@ -37,6 +37,31 @@ describe("Classes", function()
 		expect(Classes.validTalent("warden", "eternal_grove")).toEqual(false)
 	end)
 
+	it("prints ultimates as Ult and keeps fractional cooldowns", function()
+		local tide = Classes.get("tidecaller")
+		assert(tide ~= nil)
+		expect(tide.passiveNote ~= "").toEqual(true)
+		expect(Classes.skillLine(tide.ultimate)).toEqual("Monsoon  Ult  Rain heals the party.")
+		expect(string.find(Classes.skillLine(tide.ultimate), "0s", 1, true)).toBeNil()
+		local frost = Classes.get("frostblade")
+		assert(frost ~= nil)
+		expect(Classes.cooldownText(frost.skills[1])).toEqual("2.5s")
+		local voidcaster = Classes.get("voidcaster")
+		assert(voidcaster ~= nil)
+		expect(Classes.cooldownText(voidcaster.skills[1])).toEqual("2.5s")
+		for _, row in ipairs(Classes.all()) do
+			expect(row.passiveNote ~= "").toEqual(true)
+			for _, skill in ipairs(row.skills) do
+				local line = Classes.skillLine(skill)
+				expect(string.find(line, "  0s", 1, true)).toBeNil()
+				expect(string.find(line, "  1s", 1, true)).toBeNil()
+			end
+			local ult = Classes.skillLine(row.ultimate)
+			expect(string.find(ult, "Ult", 1, true) ~= nil).toBeTrue()
+			expect(string.find(ult, "0s", 1, true)).toBeNil()
+		end
+	end)
+
 	it("tunes the level 5 talent and the core passive", function()
 		local warden = Classes.get("warden")
 		local roots = Classes.tune(warden.skills[2], "overgrowth")

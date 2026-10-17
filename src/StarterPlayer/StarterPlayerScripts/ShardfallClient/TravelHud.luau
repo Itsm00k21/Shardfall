@@ -135,7 +135,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local closeButton = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
+		Position = UDim2.new(1, -8, 0, 8),
 		Size = UDim2.fromOffset(Quality.MIN_TAP, Quality.MIN_TAP),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.BuilderSansBold,

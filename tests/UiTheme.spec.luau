@@ -36,6 +36,12 @@ describe("UiTheme", function()
 		expect(UiTheme.compareTone(0)).toEqual("same")
 		expect(UiTheme.labelWidth("Vault") >= 64).toBeTrue()
 		expect(UiTheme.labelWidth("Materials") > UiTheme.labelWidth("Gold")).toBeTrue()
+		for _, background in ipairs({ "body", "panel", "header" }) do
+			expect(UiTheme.contrast(UiTheme.RGB.text, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+			expect(UiTheme.contrast(UiTheme.RGB.muted, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+			expect(UiTheme.contrast(UiTheme.RGB.gold, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+		end
+		expect(UiTheme.MIN_TEXT >= 14).toBeTrue()
 	end)
 
 	it("lifts a dark red so it can sit on the odds panel", function()
