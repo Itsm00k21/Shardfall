@@ -28,6 +28,7 @@ local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
+local BannerFit = require(Shared:WaitForChild("BannerFit"))
 local Areas = require(Shared:WaitForChild("Areas"))
 local Audio = require(Shared:WaitForChild("Audio"))
 local Crafting = require(Shared:WaitForChild("Crafting"))
@@ -205,15 +206,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local bannerGui = new("ScreenGui", {
 		Name = "ShardfallBanner",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
+		IgnoreGuiInset = false,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 		DisplayOrder = 100,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}, playerGui) :: ScreenGui
 	local banner = new("TextLabel", {
 		Name = "Banner",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 8),
-		Size = UDim2.new(0.92, 0, 0, 56),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.fromOffset(200, 32),
 		BackgroundColor3 = COLORS.gold,
 		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
@@ -234,6 +236,26 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, banner)
 	corner(banner, 8)
 	local bannerToken = 0
+	-- Nil until setProfile reads uiSettings.access.textScale. BannerFit treats that as 16px.
+	local bannerScale: any = nil
+	local function applyBannerFit()
+		local size = bannerGui.AbsoluteSize
+		local vx = size.X
+		local vy = size.Y
+		if vx < 200 or vy < 200 then
+			vx, vy = MobileShell.view(screen)
+		end
+		local box = BannerFit.fit(vx, vy, bannerScale)
+		banner.Position = UDim2.fromOffset(box.x, box.y)
+		banner.Size = UDim2.fromOffset(box.w, box.h)
+		banner.TextSize = box.textSize
+	end
+	applyBannerFit()
+	bannerGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyBannerFit)
+	local bannerCamera = workspace.CurrentCamera
+	if bannerCamera ~= nil then
+		bannerCamera:GetPropertyChangedSignal("ViewportSize"):Connect(applyBannerFit)
+	end
 	local function showBanner(text: string, kind: string, hold: boolean?)
 		bannerToken += 1
 		local token = bannerToken
@@ -250,6 +272,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		banner.BackgroundColor3 = background
 		banner.TextColor3 = ink
+		applyBannerFit()
 		if text == "" or hold == true then
 			if text ~= "" and changed then
 				print("[Toast] shown " .. text)
@@ -2111,6 +2134,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		sfxValue = Audio.clampVolume(profile.sfxVolume)
 		paintMusic(musicValue)
 		paintSfx(sfxValue)
+		local nextScale: any = nil
+		local settings = profile.uiSettings
+		if type(settings) == "table" and type(settings.access) == "table" then
+			nextScale = settings.access.textScale
+		end
+		bannerScale = nextScale
+		applyBannerFit()
 	end
 
 	function controller.setPolicy(policy: any)
