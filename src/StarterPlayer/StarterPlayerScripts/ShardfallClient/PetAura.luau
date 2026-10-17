@@ -19,6 +19,15 @@ local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("U
 
 local PetAura = {}
 
+local noteChip: (string) -> () = function(_control: string) end
+
+function PetAura.note(control: any)
+	if type(control) ~= "string" then
+		return
+	end
+	noteChip(control)
+end
+
 function PetAura.start(playerGui: PlayerGui, getProfile: () -> any)
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallPetAura"
@@ -83,6 +92,22 @@ function PetAura.start(playerGui: PlayerGui, getProfile: () -> any)
 			flash.BackgroundTransparency = 1
 		end)
 	end)
+
+	local function paintChip(control: string)
+		if not PetFlash.chip(control, PetRoster.equippedEffect(profile())) then
+			return
+		end
+		generation = PetFlash.bump(generation)
+		local token = generation
+		flash.BackgroundTransparency = 0.45
+		task.delay(0.12, function()
+			if not PetFlash.holds(generation, token) then
+				return
+			end
+			flash.BackgroundTransparency = 1
+		end)
+	end
+	noteChip = paintChip
 
 	RunService.Heartbeat:Connect(function()
 		local data = profile()

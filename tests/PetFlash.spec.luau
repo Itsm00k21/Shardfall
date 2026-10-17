@@ -161,6 +161,39 @@ describe("PetFlash", function()
 		expect(token.paid).toEqual(true)
 	end)
 
+	it("flashes the on-screen Dodge chip when the effect is flash", function()
+		expect(PetFlash.chip("Dodge", "flash")).toBeTrue()
+	end)
+
+	it("does not chip a key, another control, or another effect", function()
+		expect(PetFlash.chip("LeftShift", "flash")).toBeFalse()
+		expect(PetFlash.chip("RightShift", "flash")).toBeFalse()
+		expect(PetFlash.chip("Q", "flash")).toBeFalse()
+		expect(PetFlash.chip("ButtonX", "flash")).toBeFalse()
+		expect(PetFlash.chip("Interact", "flash")).toBeFalse()
+		expect(PetFlash.chip("dodge", "flash")).toBeFalse()
+		expect(PetFlash.chip("Dodge", "collect")).toBeFalse()
+		expect(PetFlash.chip("Dodge", "ping")).toBeFalse()
+		expect(PetFlash.chip("Dodge", nil)).toBeFalse()
+		expect(PetFlash.chip("Dodge", "")).toBeFalse()
+		expect(PetFlash.chip(nil, "flash")).toBeFalse()
+	end)
+
+	it("ignores a third argument on the chip, including paid", function()
+		local paid = { paid = true, productId = 0, robux = 0, cost = 0, skip = true }
+		table.freeze(paid)
+		expect(PetFlash.chip("Dodge", "flash", paid)).toBeTrue()
+		expect(PetFlash.chip("Dodge", "flash", true)).toBeTrue()
+		expect(PetFlash.chip("ButtonX", "flash", paid)).toBeFalse()
+		expect(PetFlash.chip("Q", "flash", { paid = true })).toBeFalse()
+		expect(PetFlash.chip("Dodge", "collect", paid)).toBeFalse()
+		expect(paid.paid).toEqual(true)
+		expect(paid.productId).toEqual(0)
+		expect(paid.robux).toEqual(0)
+		expect(paid.cost).toEqual(0)
+		expect(paid.skip).toEqual(true)
+	end)
+
 	it("does not use a clock, rng, or services", function()
 		local source = fs.readFile("src/ReplicatedStorage/Shared/PetFlash.luau")
 		expect(string.find(source, "RightShift", 1, true) ~= nil).toBeTrue()
@@ -268,5 +301,59 @@ describe("PetAura dodge flash", function()
 		expect((shouldAt :: number) < (focusAt :: number)).toBeTrue()
 		local beforeShould = string.sub(listener, 1, (shouldAt :: number) - 1)
 		expect(string.find(beforeShould, "return", 1, true)).toBeNil()
+	end)
+
+	it("notes the on-screen Dodge chip without treating a key as a chip", function()
+		local source = fs.readFile(AURA)
+		local bar =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/ActionBar.luau")
+		local client =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau")
+		local keyListener = between(
+			source,
+			"UserInputService.InputBegan:Connect(function(",
+			"local function paintChip"
+		)
+		expect(string.find(keyListener, "PetFlash.chip", 1, true)).toBeNil()
+		expect(string.find(keyListener, "PetFlash.should", 1, true) ~= nil).toBeTrue()
+		local chipAt = string.find(source, "local function paintChip", 1, true)
+		local heartbeatAt = string.find(source, "RunService.Heartbeat:Connect", 1, true)
+		expect(
+			chipAt ~= nil and heartbeatAt ~= nil and (chipAt :: number) < (heartbeatAt :: number)
+		).toBeTrue()
+		local chipBody = string.sub(source, chipAt :: number, (heartbeatAt :: number) - 1)
+		expect(
+			string.find(
+				chipBody,
+				"PetFlash.chip(control, PetRoster.equippedEffect(profile()))",
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
+		expect(string.find(chipBody, "generation = PetFlash.bump(generation)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(chipBody, "PetFlash.holds(generation, token)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(chipBody, "BackgroundTransparency = 0.45", 1, true) ~= nil).toBeTrue()
+		expect(string.find(chipBody, "task.delay(0.12", 1, true) ~= nil).toBeTrue()
+		expect(string.find(chipBody, "noteChip = paintChip", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "function PetAura.note", 1, true) ~= nil).toBeTrue()
+
+		local buttonAt = string.find(bar, "dodge.Activated:Connect(function()", 1, true)
+		local shiftAt = string.find(bar, "ShardfallDodge", 1, true)
+		expect(buttonAt ~= nil and shiftAt ~= nil and (buttonAt :: number) < (shiftAt :: number)).toBeTrue()
+		local buttonBody = string.sub(bar, buttonAt :: number, (shiftAt :: number) - 1)
+		expect(string.find(buttonBody, "callbacks.onDodge()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(buttonBody, "callbacks.onDodgeChip", 1, true) ~= nil).toBeTrue()
+		local shiftEnd = string.find(bar, "ShardfallActionBarPad", shiftAt :: number, true)
+		expect(shiftEnd ~= nil).toBeTrue()
+		local shiftBody = string.sub(bar, shiftAt :: number, (shiftEnd :: number) - 1)
+		expect(string.find(shiftBody, "callbacks.onDodge()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(shiftBody, "onDodgeChip", 1, true)).toBeNil()
+
+		local chipCall = string.find(client, "onDodgeChip = function()", 1, true)
+		expect(chipCall ~= nil).toBeTrue()
+		local wired = string.sub(client, chipCall :: number, (chipCall :: number) + 80)
+		expect(string.find(wired, 'PetAura.note("Dodge")', 1, true) ~= nil).toBeTrue()
+		local keyDodge = between(client, "onDodge = function()", "onDodgeChip = function()")
+		expect(string.find(keyDodge, "PetAura.note", 1, true)).toBeNil()
 	end)
 end)
