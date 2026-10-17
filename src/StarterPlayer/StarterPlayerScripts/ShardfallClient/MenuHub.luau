@@ -45,6 +45,7 @@ local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
+local RollSpot = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSpot"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
@@ -2391,6 +2392,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 
 
+	function hubFn.rollRowWidth(): number
+		local pageW = 0
+		if hubState.roll ~= nil then
+			pageW = hubState.roll.AbsoluteSize.X
+		end
+		if pageW < 80 then
+			local vx, vy = hubFn.view()
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local inner = HudLayout.hubBody(box.w, box.h)
+			pageW = inner.w
+		end
+		return math.max(44, pageW - UiTheme.PAD * 2)
+	end
+
 	function hubFn.paintRoll()
 		hubFn.clear(hubState.roll)
 		for _, tween in ipairs(hubState.pityTweens) do
@@ -2412,57 +2427,71 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.walletGold.Text = string.format("Gold  %d", goldHeld)
 		hubState.rollButton.Text = if hubState.rollKind == "pets" then "Crack Pet" else "Crack"
 
+		local band = RollSpot.place(hubFn.rollRowWidth())
 		local kindRow = Instance.new("Frame")
 		kindRow.Name = "ShardKind"
 		kindRow.BackgroundTransparency = 1
-		kindRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		kindRow.Size = UDim2.fromOffset(band.w, band.h)
 		kindRow.LayoutOrder = 1
 		kindRow.Parent = hubState.roll
-		local kindLayout = Instance.new("UIListLayout")
-		kindLayout.FillDirection = Enum.FillDirection.Horizontal
-		kindLayout.Padding = UDim.new(0, UiTheme.PAD)
-		kindLayout.Parent = kindRow
-		local function kindButton(name: string, text: string, on: boolean, fn: () -> ())
+		local function kindOn(id: string): boolean
+			if id == "PetShards" then
+				return hubState.rollKind == "pets"
+			end
+			if id == "TimesTen" then
+				return hubState.pendingCount > 1 or hubState.batching
+			end
+			return hubState.rollKind == "gear"
+		end
+		local function kindPress(id: string)
+			if id == "PetShards" then
+				hubState.rollKind = "pets"
+				hubState.summaryItems = {}
+				hubFn.paintRoll()
+				hubFn.show("roll")
+				return
+			end
+			if id == "TimesTen" then
+				if hubState.rollBusy then
+					return
+				end
+				hubState.pendingCount = 10
+				hubState.summaryItems = {}
+				hubState.batchLeft = {}
+				hubState.loop = RollLoop.press(hubState.loop)
+				hubFn.beginRoll()
+				return
+			end
+			hubState.rollKind = "gear"
+			hubState.summaryItems = {}
+			hubFn.paintRoll()
+			hubFn.show("roll")
+		end
+		for _, spot in ipairs(band.buttons) do
 			local button = Instance.new("TextButton")
-			button.Name = name
-			button.Size = UDim2.new(0.33, -6, 1, 0)
-			button.BackgroundColor3 = if on then rgb("button") else rgb("header")
+			local chosen = kindOn(spot.id)
+			button.Name = spot.id
+			button.Position = UDim2.fromOffset(spot.x, spot.y)
+			button.Size = UDim2.fromOffset(spot.w, spot.h)
+			button.BackgroundColor3 = if chosen then rgb("button") else rgb("header")
 			button.BackgroundTransparency = 0
 			button.Font = headerFont()
 			button.TextSize = UiTheme.MIN_TEXT
 			button.TextColor3 = rgb("text")
-			button.Text = text
+			button.Text = spot.label
+			button.TextTruncate = Enum.TextTruncate.AtEnd
 			button.AutoButtonColor = false
 			button.Parent = kindRow
 			local corner = Instance.new("UICorner")
 			corner.CornerRadius = UDim.new(0, 8)
 			corner.Parent = button
-			hubFn.setRest(button, if on then rgb("button") else rgb("header"))
+			hubFn.setRest(button, if chosen then rgb("button") else rgb("header"))
 			hubFn.motion(button)
-			button.Activated:Connect(fn)
+			local spotId = spot.id
+			button.Activated:Connect(function()
+				kindPress(spotId)
+			end)
 		end
-		kindButton("GearShards", "Gear Shards", hubState.rollKind == "gear", function()
-			hubState.rollKind = "gear"
-			hubState.summaryItems = {}
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
-		kindButton("PetShards", "Pet Shards", hubState.rollKind == "pets", function()
-			hubState.rollKind = "pets"
-			hubState.summaryItems = {}
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
-		kindButton("TimesTen", "x10", hubState.pendingCount > 1 or hubState.batching, function()
-			if hubState.rollBusy then
-				return
-			end
-			hubState.pendingCount = 10
-			hubState.summaryItems = {}
-			hubState.batchLeft = {}
-			hubState.loop = RollLoop.press(hubState.loop)
-			hubFn.beginRoll()
-		end)
 
 		local toggles = Instance.new("Frame")
 		toggles.Name = "Toggles"
