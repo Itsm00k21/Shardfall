@@ -46,13 +46,13 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-029 | M | design | XP curve for levels 1-100 with time-to-level targets. Read `Progression.luau`. | `docs/design/xp_curve.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
 | G-030 | M | design | Pacing plan: minute-by-minute first 30 minutes, then day 1, day 3, day 7 goals | `docs/design/pacing.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
 | G-031 | L | design | Fair monetization catalog: game passes, dev products, Shard Pass pricing in Robux. Cosmetics and convenience only, never paid power. Read `PaidRollPolicy.luau` and `StoreAdapter.luau`. | `docs/design/monetization_catalog.md` | done | https://github.com/Itsm00k21/Shardfall/pull/145 |
-| G-032 | S | design | Store copy for every item in G-031 (title under 30 characters, two-line description) | `docs/design/store_copy.md` | todo | — |
+| G-032 | S | design | Store copy for every item in G-031 (title under 30 characters, two-line description) | `docs/design/store_copy.md` | done | https://github.com/Itsm00k21/Shardfall/pull/156 |
 | G-033 | M | design | Launch checklist: Roblox settings, age rating questionnaire, thumbnails, icon, badges, analytics, DataStore safety, soft launch steps | `docs/design/launch_checklist.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
 | G-034 | S | design | Update-notes template and draft v0.1 beta notes from the merged features in `TASKS.md` | `docs/design/update_notes.md` | done | https://github.com/Itsm00k21/Shardfall/pull/136 |
-| G-035 | M | design | 30-minute playtest script with steps, what to watch, and a feedback form | `docs/design/playtest_script.md` | todo | — |
-| G-036 | M | design | Retention review: daily login, streaks, comeback rewards, weekly goals; what we have versus gaps | `docs/design/retention.md` | todo | — |
-| G-037 | M | design | Social plan: parties, friends bonus, guild concept, trading etiquette. Read `Trading.luau`. | `docs/design/social.md` | todo | — |
-| G-038 | M | design | Pity and anti-frustration review of `RollMath.luau`, `RollBoard.luau` and `RollLoop.luau`, with player-facing explanations | `docs/design/pity_review.md` | todo | — |
+| G-035 | M | design | 30-minute playtest script with steps, what to watch, and a feedback form | `docs/design/playtest_script.md` | done | https://github.com/Itsm00k21/Shardfall/pull/156 |
+| G-036 | M | design | Retention review: daily login, streaks, comeback rewards, weekly goals; what we have versus gaps | `docs/design/retention.md` | done | https://github.com/Itsm00k21/Shardfall/pull/156 |
+| G-037 | M | design | Social plan: parties, friends bonus, guild concept, trading etiquette. Read `Trading.luau`. | `docs/design/social.md` | done | https://github.com/Itsm00k21/Shardfall/pull/156 |
+| G-038 | M | design | Pity and anti-frustration review of `RollMath.luau`, `RollBoard.luau` and `RollLoop.luau`, with player-facing explanations | `docs/design/pity_review.md` | done | https://github.com/Itsm00k21/Shardfall/pull/156 |
 | G-039 | S | design | Discovery plan: game title options, description, tags, thumbnail and icon concepts | `docs/design/discovery.md` | todo | — |
 | G-040 | M | art | 3D shot list: every model the game needs, grouped (weapons, pets, armor, enemies, bosses, props, Haven), with priority | `docs/art/shot_list.md` | todo | — |
 | G-041 | M | art | Per-asset model prompts for every weapon in G-001 (style, silhouette, colors, poly budget, rarity glow) | `docs/art/model_prompts_weapons.md` | todo | — |
