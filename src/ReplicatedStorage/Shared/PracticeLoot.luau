@@ -27,6 +27,7 @@ export type KillContext = {
 	now: number,
 	rng: any,
 	roll: number,
+	claim: string?,
 }
 
 function PracticeLoot.pays(practice: boolean): boolean
@@ -98,7 +99,7 @@ function PracticeLoot.applyKill(data: any, ctx: KillContext): ({ [string]: numbe
 	end
 	if ctx.boss and ctx.dungeonId == Dungeons.HEARTWOOD_ID then
 		local paid, dropped =
-			Raids.applyClear(data, ctx.roomId, ctx.difficulty, ctx.now, ctx.roll)
+			Raids.applyClear(data, ctx.roomId, ctx.difficulty, ctx.now, ctx.roll, ctx.claim)
 		table.insert(chestBits, string.format("%d Raid Marks", paid))
 		if dropped then
 			table.insert(chestBits, "raid gear")

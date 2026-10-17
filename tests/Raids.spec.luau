@@ -26,17 +26,22 @@ describe("Raids", function()
 			raidMarksEarned = 0,
 			raidMarkWeek = -1,
 		}
-		local paid, dropped, locked = Raids.applyClear(data, "twins", "story", 0, 0.99)
+		local paid, dropped, locked =
+			Raids.applyClear(data, "twins", "story", 0, 0.99, "run-a:twins")
 		expect(paid).toEqual(25)
 		expect(dropped).toEqual(false)
 		expect(locked).toEqual(false)
 		expect(data.raidPity.twins_story or data.raidPity["twins:story"]).toEqual(1)
-		local again, droppedAgain, lockedAgain = Raids.applyClear(data, "twins", "story", 10, 0)
-		expect(again).toEqual(25)
+		local again, droppedAgain, lockedAgain =
+			Raids.applyClear(data, "twins", "story", 10, 0, "run-a:twins")
+		expect(again).toEqual(0)
 		expect(droppedAgain).toEqual(false)
 		expect(lockedAgain).toEqual(true)
 		expect(data.raidPity["twins:story"]).toEqual(1)
-		local _, hit = Raids.applyClear(data, "sapwell", "story", 10, 0)
+		local reclear = Raids.applyClear(data, "twins", "story", 10, 0, "run-b:twins")
+		expect(reclear).toEqual(25)
+		expect(data.raidMarks).toEqual(50)
+		local _, hit = Raids.applyClear(data, "sapwell", "story", 10, 0, "run-a:sapwell")
 		expect(hit).toEqual(true)
 		expect(data.chests.Rare).toEqual(1)
 		expect(data.raidStory).toEqual(true)
