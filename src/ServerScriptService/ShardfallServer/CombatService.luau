@@ -376,6 +376,23 @@ function CombatService.revive(player: Player)
 	publish(player, state)
 end
 
+-- A max shrink is not a hit. refresh keeps a 0 and does not call
+-- onPlayerDown. Putting them on the down path after a boss reset would
+-- fail the run, because pullStarted is already false. 1 HP leaves them
+-- standing. A real hit can still down them. Already above 0 is unchanged.
+function CombatService.spare(player: Player)
+	local state = ensure(player)
+	if state.hp > 0 then
+		return
+	end
+	local _, maxHp = CombatMath.clampVitals(1, state.maxHp)
+	state.maxHp = maxHp
+	state.hp = 1
+	state.hurt = true
+	state.ready = true
+	publish(player, state)
+end
+
 function CombatService.vitals(player: Player): (number, number)
 	local state = ensure(player)
 	return state.hp, state.maxHp

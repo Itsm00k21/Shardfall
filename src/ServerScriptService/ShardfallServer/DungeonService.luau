@@ -41,6 +41,7 @@ local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local Progression = require(ReplicatedStorage.Shared.Progression)
 local RaidEchoFight = require(ReplicatedStorage.Shared.RaidEchoFight)
 local Raids = require(ReplicatedStorage.Shared.Raids)
+local EchoBossClear = require(script.Parent.EchoBossClear)
 local EchoRetry = require(script.Parent.EchoRetry)
 local RunTick = require(script.Parent.RunTick)
 local LoopService = require(script.Parent.LoopService)
@@ -133,6 +134,11 @@ local runs: { [Player]: Run } = {}
 -- echoHost skips that player so the next arrival cannot join the temporary fight.
 local echoJoinHold: { [Player]: boolean } = {}
 local releasingFight: { [RaidEchoFight.Fight]: boolean } = {}
+-- userId -> room indexes whose boss copy that player has already dropped.
+-- A later room does not count as an earlier clear unless this mark is set.
+local echoBossDown: { [RaidEchoFight.Fight]: { [string]: { [number]: boolean } } } = {}
+-- Room waiting on the rest of the party. Nil once everyone still in has cleared.
+local echoBossOwed: { [RaidEchoFight.Fight]: number } = {}
 local touchAt: { [Player]: number } = {}
 local fallAt: { [Player]: number } = {}
 local farmOn: { [Player]: boolean } = {}
@@ -995,6 +1001,133 @@ local function reviveHeld(fight: RaidEchoFight.Fight, pending: { Player })
 	end
 end
 
+-- This player's boss copy is down. The mark outlives the room, so a
+-- member who already advanced still counts when the next copy dies.
+local function noteEchoBoss(fight: RaidEchoFight.Fight, userId: string, roomIndex: number)
+	local byUser = echoBossDown[fight]
+	if byUser == nil then
+		byUser = {}
+		echoBossDown[fight] = byUser
+	end
+	local rooms = byUser[userId]
+	if rooms == nil then
+		rooms = {}
+		byUser[userId] = rooms
+	end
+	rooms[roomIndex] = true
+end
+
+-- A dead boss rig, or a room already marked clear. An empty room that
+-- has not cleared is still spawning, and that is not a kill.
+local function roomBossDown(run: Run): boolean
+	local saw = false
+	for _, foe in pairs(run.enemies) do
+		if foe.boss then
+			saw = true
+			if foe.hp > 0 then
+				return false
+			end
+		end
+	end
+	if saw then
+		return true
+	end
+	return run.cleared == true
+end
+
+-- Still able to swing. Downed, roster-dead, and resolving members are
+-- out. They cannot clear a boss, and waiting on them would never reset.
+local function echoUp(fight: RaidEchoFight.Fight, member: Player, memberRun: Run): boolean
+	if memberRun.resolving == true then
+		return false
+	end
+	if CombatService.vitals(member) <= 0 then
+		return false
+	end
+	local row = fight.members[tostring(member.UserId)]
+	if row ~= nil and row.alive == false then
+		return false
+	end
+	return true
+end
+
+local function echoBossReady(fight: RaidEchoFight.Fight, killedRoom: number): boolean
+	local marked = echoBossDown[fight]
+	local seats: { EchoBossClear.Seat } = {}
+	for member, memberRun in pairs(runs) do
+		if memberRun.echoFight ~= fight or memberRun.resolving == true then
+			continue
+		end
+		-- A downed player on another wing does not block this boss. A downed
+		-- player whose copy of this boss is still up does, until they clear.
+		local up = echoUp(fight, member, memberRun)
+		local copyUp = memberRun.roomIndex == killedRoom and not roomBossDown(memberRun)
+		if not up and not copyUp then
+			continue
+		end
+		local userId = tostring(member.UserId)
+		local rooms = if marked ~= nil then marked[userId] else nil
+		local didMark = rooms ~= nil and rooms[killedRoom] == true
+		table.insert(seats, {
+			cleared = EchoBossClear.seatCleared(
+				killedRoom,
+				memberRun.roomIndex,
+				roomBossDown(memberRun),
+				didMark,
+				memberRun.retrying == true
+			),
+			retrying = memberRun.retrying == true,
+		})
+	end
+	return EchoBossClear.ready(seats)
+end
+
+local function echoStanding(fight: RaidEchoFight.Fight): { Player }
+	local standing = {}
+	for member, memberRun in pairs(runs) do
+		if memberRun.echoFight == fight and echoUp(fight, member, memberRun) then
+			table.insert(standing, member)
+		end
+	end
+	return standing
+end
+
+-- Only the players who were above 0 before the refresh. A held member
+-- stays at 0 until reviveHeld. Landing on 0 here is the max shrink.
+local function spareEchoFloor(fight: RaidEchoFight.Fight, standing: { Player })
+	for _, member in ipairs(standing) do
+		local memberRun = runs[member]
+		if
+			memberRun ~= nil
+			and memberRun.echoFight == fight
+			and memberRun.resolving ~= true
+			and CombatService.vitals(member) <= 0
+		then
+			CombatService.spare(member)
+		end
+	end
+end
+
+-- One reset for the whole pull. Held members come back. Standing
+-- members the refresh zeroed stay at 1 HP instead of taking the down
+-- path: bossKill has already cleared pullStarted, so onPlayerDown
+-- would fail the run they just cleared.
+local function settleSharedBoss(fight: RaidEchoFight.Fight, actor: Player?)
+	echoBossOwed[fight] = nil
+	local downed = heldNow(fight)
+	local standing = echoStanding(fight)
+	RaidEchoFight.bossKill(fight)
+	if actor ~= nil then
+		local actorRun = runs[actor]
+		if actorRun ~= nil and actorRun.echoFight == fight then
+			rememberMax(actor, actorRun)
+		end
+	end
+	bindEcho(fight)
+	spareEchoFloor(fight, standing)
+	reviveHeld(fight, downed)
+end
+
 local destroyRun: (Player, Run) -> ()
 
 -- The living players are gone and this was not a wipe retry. Send held
@@ -1058,7 +1191,27 @@ destroyRun = function(player: Player, run: Run)
 	runs[player] = nil
 	echoJoinHold[player] = nil
 	if fight ~= nil then
-		RaidEchoFight.depart(fight, tostring(player.UserId))
+		local userId = tostring(player.UserId)
+		RaidEchoFight.depart(fight, userId)
+		local marked = echoBossDown[fight]
+		if marked ~= nil then
+			marked[userId] = nil
+		end
+		-- The last member who had not cleared just left. Everyone still
+		-- here has already dropped that boss, so the buff ends now.
+		local owed = echoBossOwed[fight]
+		if owed ~= nil and releasingFight[fight] ~= true then
+			local shared = false
+			for _, other in pairs(runs) do
+				if other.echoFight == fight and other.resolving ~= true then
+					shared = true
+					break
+				end
+			end
+			if shared and echoBossReady(fight, owed) then
+				settleSharedBoss(fight, nil)
+			end
+		end
 		if releasingFight[fight] ~= true then
 			local living = false
 			local retrying = false
@@ -1086,6 +1239,8 @@ destroyRun = function(player: Player, run: Run)
 		end
 		if not sharing then
 			RaidEchoFight.runEnd(fight)
+			echoBossDown[fight] = nil
+			echoBossOwed[fight] = nil
 		end
 	end
 	CombatService.clearShots(player)
@@ -1479,16 +1634,26 @@ function DungeonService.damageEnemy(
 	end
 	if enemy.hp <= 0 then
 		if enemy.boss and run.echoFight ~= nil then
-			-- Snapshot before the refresh. bindEcho can zero a hurt player
-			-- who was still standing. They are not a held member.
-			local downed = heldNow(run.echoFight)
-			-- Once, outside the per-player loot mutate. The next boss starts at 0.
-			RaidEchoFight.bossKill(run.echoFight)
-			rememberMax(player, run)
-			bindEcho(run.echoFight)
-			-- Held members are in their own rooms. This kill must not ask
-			-- them to clear, and it must not wipe again.
-			reviveHeld(run.echoFight, downed)
+			local fight = run.echoFight
+			-- This copy is down. Stacks stay until every member still
+			-- able to swing has cleared the same room.
+			noteEchoBoss(fight, tostring(player.UserId), run.roomIndex)
+			if echoBossReady(fight, run.roomIndex) then
+				-- Once, outside the per-player loot mutate. The next boss starts at 0.
+				settleSharedBoss(fight, player)
+			else
+				echoBossOwed[fight] = run.roomIndex
+				-- Only held members on this boss. A downed player on another
+				-- wing stays down until the pull actually settles.
+				local here = {}
+				for _, member in ipairs(heldNow(fight)) do
+					local memberRun = runs[member]
+					if memberRun ~= nil and memberRun.roomIndex == run.roomIndex then
+						table.insert(here, member)
+					end
+				end
+				reviveHeld(fight, here)
+			end
 		end
 		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
 		-- Practice returns before any of that: no materials, chests, marks, or XP.
