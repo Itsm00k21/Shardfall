@@ -32,7 +32,7 @@ The bed plays at `HAVEN_VOLUME` 0.35. The Music slider multiplies it. Zone chang
 | `toast` | same ping | a toast | a light bell |
 | `stinger` | same ping | an Epic-or-better crack | the rising arpeggio |
 
-`playUi` asks for `press`, `toast`, `tab`, `stinger`, `confirm`, `click`, `open`, and `close` (`MenuHub.luau:503-517`).
+`playUi` plays the action it is given (`MenuHub.luau:504-518`). Call sites ask for `press`, `toast`, `tab`, `stinger`, `confirm`, `click`, `open`, and `close`.
 
 ## Live combat and rarity cues
 

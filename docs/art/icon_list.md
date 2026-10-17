@@ -4,7 +4,7 @@ G-044. One icon for every key in `src/ReplicatedStorage/Shared/UiIcons.luau`. Th
 
 Shared style: flat dark-fantasy glyph, one shape, transparent background, no words, no gore, no other game's symbol. Export 64×64 (`UiTheme.TAP` is 64). Keep the glyph inside the center 48 so it still reads at 20px. Source art is a light shape. `ImageColor3` multiplies it by the tint. Kevin can ignore the tint once the baked art is in (`UiIcons.luau:34`).
 
-Live sizes: the HUD rail draws 20×20 inside a 44px button (`HudShell.luau:284-295`, `UiTheme.TOUCH`). Hub tabs draw 22×22 (`MenuHub.luau:4013`). Bag and pet cards draw 36×36. Empty states draw 36×36. The class roster draws 28×28. The hero class card draws 32×32.
+Live sizes: the HUD rail draws 20×20 inside a 44px button (`HudShell.luau:284-295`, `UiTheme.TOUCH`). Hub tabs draw 22×22 (`MenuHub.luau:4018`). Bag and pet cards draw 36×36. Empty states draw 36×36. The class roster draws 28×28. The hero class card draws 32×32.
 
 Seven keys are reserved. Nothing calls `iconOn` with them yet. The action bar still prints words. Draw them anyway so a later slot can take the key.
 

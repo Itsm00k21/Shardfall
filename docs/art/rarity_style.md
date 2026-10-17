@@ -2,7 +2,9 @@
 
 G-045. Color, border, particle, and sound for each rarity. Live numbers stay in code. New looks are suggested. Do not change `UiTheme.luau`, `Rarities.luau`, or `RarityConfig.luau`.
 
-Choice until Kevin answers Q-004: paint each surface with the palette that surface already uses. Do not recolor the bag to match the loot beam, or the loot beam to match the bag.
+Q-004 is answered. Ghost, 2026-10-17. The art pass uses the `Rarities` ladder. Every tier has its own color. Mythic is red `#E6404E`. Secret is white `#FFFFFF` with the rainbow treatment. The hub `UiTheme` palette reuses Legendary gold for Mythic, and that palette is the one to change. A later code task aligns `UiTheme.RARITY` and `UiTheme.rarityColor` to `Rarities`. This pass does not edit code. Kevin can override the call after playtesting.
+
+The tables below record what the build paints today. Art does not copy the hub gold.
 
 ## Two palettes
 
@@ -24,14 +26,17 @@ Choice until Kevin answers Q-004: paint each surface with the palette that surfa
 
 | surface | call | Mythic shows | Secret shows |
 |---|---|---|---|
-| Bag and pet card stroke | `UiTheme.rarityColor` (`MenuHub.luau:1607`) | gold | Common |
-| Item detail line | `UiTheme.rarityColor` (`MenuHub.luau:1512`) | gold | Common |
-| Roll history chip fill | `UiTheme.rarityColor` (`MenuHub.luau:2876`) | gold | Common |
-| Action-slot border | `UiTheme.RARITY`, then `UiTheme.lift` (`ActionSlots.luau:531-534`, `ActionBar.luau:412`) | lifted gold | lifted Common |
-| Roll reveal, flash, cracked list | `Rarities.COLOR` (`MenuHub.luau:1029-1036`) | red | white |
+| Bag and pet card stroke | `UiTheme.rarityColor` (`MenuHub.luau:1608`) | gold | Common |
+| Item detail line | `UiTheme.rarityColor` (`MenuHub.luau:1513`) | gold | Common |
+| Roll history chip fill | `UiTheme.rarityColor` (`MenuHub.luau:2881`) | gold | Common |
+| Action-slot border | `ActionSlots.border` reads `UiTheme.RARITY` and maps Mythic to Legendary (`ActionSlots.luau:520-535`). `ActionBar` paints that row with no lift (`ActionBar.luau:463-464`) | gold | Common |
+| Action-slot glyph | `ActionSlots.glyph`, then `UiTheme.lift` (`ActionBar.luau:457-461`). An item glyph is always `#DCD6F0` | not a rarity color | not a rarity color |
+| Roll reveal, flash, cracked list | `Rarities.COLOR` (`MenuHub.luau:1030-1037`) | red | white |
 | RollReel shard and card | `RarityConfig.color`, then `lift` (`RollReel.luau:50-53`) | lifted red `#F3A1A7` | white |
-| Inventory HUD and the old roll popup | `Rarities.rgb` | red | white, and the popup adds the rainbow gradient |
-| Loot orb and `RarityBeam` | `Rarities.rgb` (`DungeonService.luau:612-637`) | red | white |
+| Inventory HUD stroke and detail name | `Rarities.rgb`, plus a rainbow gradient on Mythic and Secret (`InventoryHud.luau:93-111`, `InventoryHud.luau:778-787`) | red, with the rainbow on the stroke and the name | white, with the same rainbow |
+| Old roll popup | `paintRarity` (`Ui.luau:122-136`, called at `Ui.luau:2246`) | red | white, plus the rainbow gradient |
+| Odds rows in that popup | solid `Rarities.rgb` (`Ui.luau:2197-2199`) | red | white. The moving rainbow was taken off these rows because it read as blank |
+| Loot orb and `RarityBeam` | `Rarities.rgb` (`DungeonService.luau:669-694`) | red | white |
 
 `UiTheme.lift` brightens a color whose simple luma is under 0.62 until it aims at 0.7 (`UiTheme.luau:108-122`). It is not the WCAG contrast helper lower in the same file. RollReel lifts. Bag cards do not.
 
@@ -47,7 +52,7 @@ Choice until Kevin answers Q-004: paint each surface with the palette that surfa
 
 ## Border
 
-Live strokes: `UiTheme.STROKE` is 1 and `UiTheme.STROKE_BOLD` is 2. Bag cards use the bold stroke. The hub reel uses thickness 2 plus glow times 5 on the burst, 5 while the tension beat holds, and 2 plus glow times 3 otherwise (`MenuHub.luau:3472-3484`).
+Live strokes: `UiTheme.STROKE` is 1 and `UiTheme.STROKE_BOLD` is 2. Bag cards use the bold stroke. The hub reel uses thickness 2 plus glow times 5 on the burst, 5 while the tension beat holds, and 2 plus glow times 3 otherwise (`MenuHub.luau:3477-3489`).
 
 Suggested frame, only where a new border is still open:
 
@@ -58,7 +63,7 @@ Suggested frame, only where a new border is still open:
 | Rare | 2px | steady core |
 | Epic | 2px | bright, reads at 20 studs |
 | Legendary | 2px | strong, plus a short trail |
-| Mythic | 2px | prism if the surface is gold, red core if the surface is the ladder |
+| Mythic | 2px | red core `#E6404E`. Hub gold is the live mismatch, not a second art color |
 | Secret | 2px white | the rainbow moves. No extra room light (`docs/art/shot_list.md`). |
 
 ## Particles
@@ -82,12 +87,12 @@ Suggested particle shape. Counts stay the live cap.
 | Rare | a steady ring |
 | Epic | a rising column |
 | Legendary | a short trail plus the ring |
-| Mythic | room-wide sparks in that surface's Mythic color |
+| Mythic | room-wide red sparks `#E6404E` |
 | Secret | a slow rainbow drift, fewer motes than Mythic |
 
 ## Sound
 
-Live `Audio.CUES` for every rarity is `""`, so `Audio.cue` returns nothing (`Audio.luau:88-95`). The design ladder is the target. It is suggested. Cue words are in `docs/art/audio_cues.md`.
+Live `Audio.CUES` for Common through Mythic is `""`, so `Audio.cue` returns nothing (`Audio.luau:88-95`). Secret is not a `CUES` key. The design ladder is the target. It is suggested. Cue words are in `docs/art/audio_cues.md`.
 
 | rarity | suggested sound |
 |---|---|
@@ -101,4 +106,4 @@ Live `Audio.CUES` for every rarity is `""`, so `Audio.cue` returns nothing (`Aud
 
 The old popup rainbow, in order: `#FF5A5A`, `#FFC450`, `#FFFF82`, `#5ADC96`, `#5AA0FF`, `#D26EFF` (`Ui.luau:129-134`).
 
-Flags: Mythic gold and Mythic red are both live. Do not pick one in art until Q-004. No other game's rarity names or signature shine.
+Flags: art uses the `Rarities` ladder. Hub gold for Mythic is live and waiting on the code task. The inventory rainbow on a Mythic stroke is the same kind of mismatch: the rainbow stays on Secret. No other game's rarity names or signature shine.
