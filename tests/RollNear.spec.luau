@@ -91,6 +91,12 @@ local function requiresNear(source: string): boolean
 	if string.find(source, "WaitForChild('RollNear')", 1, true) ~= nil then
 		return true
 	end
+	if string.find(source, 'require("./RollNear")', 1, true) ~= nil then
+		return true
+	end
+	if string.find(source, "require('./RollNear')", 1, true) ~= nil then
+		return true
+	end
 	return false
 end
 
@@ -504,7 +510,7 @@ describe("RollNear inputs", function()
 end)
 
 describe("RollNear isolation", function()
-	it("is required by nothing in src and does not roll, wait, or read the clock", function()
+	it("is required only by the roll route and does not roll, wait, or read the clock", function()
 		local source = fs.readFile("src/ReplicatedStorage/Shared/RollNear.luau")
 		local requires = {}
 		for path in string.gmatch(source, 'require%("([^"]+)"%)') do
@@ -527,6 +533,8 @@ describe("RollNear isolation", function()
 				table.insert(callers, path)
 			end
 		end
-		expect(callers).toEqual({})
+		expect(callers).toEqual({
+			"src/ReplicatedStorage/Shared/UiRouter.luau",
+		})
 	end)
 end)

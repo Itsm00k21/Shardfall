@@ -10,8 +10,8 @@
 	use an empty state. A missing class opens the class cards.
 
 	The roll tab presents the server result. RollHype tracks the session,
-	the legendary pity bar, and the full-animation build-up. The client
-	does not decide the roll.
+	the legendary pity bar, and the full-animation build-up. A close call
+	is one beat beside the card. The client does not decide the roll.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -336,6 +336,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		nil
 	local paintReelIdle: (string) -> () = function(_caption: string) end
 	local showMilestone: (string) -> () = function(_text: string) end
+	local hideCloseBeat: () -> () = function() end
+	local showCloseBeat: (string) -> () = function(_rarity: string) end
 	local tabDots: { [string]: Frame } = {}
 	local restColor: { [GuiButton]: Color3 } = {}
 	local tabButtons: { [string]: TextButton } = {}
@@ -671,6 +673,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		loop = RollLoop.idle()
 		rollBusy = false
 		setPulse(true)
+		hideCloseBeat()
 		paintReelIdle("Roll")
 	end
 
@@ -790,6 +793,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	flashCover.ZIndex = 12
 	flashCover.Parent = rollPage
 
+	local closeBeat = Instance.new("TextLabel")
+	closeBeat.Name = "CloseCall"
+	closeBeat.AnchorPoint = Vector2.new(1, 1)
+	closeBeat.Position = UDim2.fromOffset(0, 0)
+	closeBeat.Size = UDim2.fromOffset(108, 28)
+	closeBeat.BackgroundColor3 = rgb("header")
+	closeBeat.Font = headerFont()
+	closeBeat.TextSize = UiTheme.MIN_TEXT
+	closeBeat.TextColor3 = rgb("text")
+	closeBeat.Text = UiRouter.CLOSE_BEAT
+	closeBeat.Visible = false
+	closeBeat.Active = false
+	closeBeat.ZIndex = 10
+	closeBeat.Parent = rollPage
+	local beatCorner = Instance.new("UICorner")
+	beatCorner.CornerRadius = UDim.new(0, 8)
+	beatCorner.Parent = closeBeat
+	local beatStroke = Instance.new("UIStroke")
+	beatStroke.Thickness = UiTheme.STROKE
+	beatStroke.Color = rgb("accent")
+	beatStroke.Parent = closeBeat
+	local closeScale = Instance.new("UIScale")
+	closeScale.Name = "Beat"
+	closeScale.Parent = closeBeat
+	local closeToken = 0
+	local closeTween: Tween? = nil
+
 	local reelHost = Instance.new("Frame")
 	reelHost.Name = "Reel"
 	reelHost.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD)
@@ -864,6 +894,50 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return Color3.fromRGB(red, green, blue)
 		end
 		return Color3.fromRGB(row[1], row[2], row[3])
+	end
+
+	hideCloseBeat = function()
+		closeToken += 1
+		if closeTween ~= nil then
+			closeTween:Cancel()
+			closeTween = nil
+		end
+		closeBeat.Visible = false
+		closeScale.Scale = 1
+	end
+
+	showCloseBeat = function(rarity: string)
+		closeToken += 1
+		local token = closeToken
+		if closeTween ~= nil then
+			closeTween:Cancel()
+			closeTween = nil
+		end
+		local color = rarityColor3(rarity)
+		closeBeat.Text = UiRouter.CLOSE_BEAT
+		closeBeat.TextColor3 = color
+		beatStroke.Color = color
+		closeBeat.Visible = true
+		if UiMotion.reduced(draft) then
+			closeScale.Scale = 1
+		else
+			closeScale.Scale = 0.84
+			local tween = TweenService:Create(
+				closeScale,
+				TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{ Scale = 1 }
+			)
+			closeTween = tween
+			tween:Play()
+		end
+		playUi("press")
+		task.delay(1.15, function()
+			if token ~= closeToken then
+				return
+			end
+			closeBeat.Visible = false
+			closeScale.Scale = 1
+		end)
 	end
 
 	local function paintWindow(label: TextLabel, slotName: string, rarity: string, focus: boolean)
@@ -962,6 +1036,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		roll.Size = UDim2.new(1, 0, 1, -(listTop + chrome.button + UiTheme.PAD))
 		revealCard.Size = UDim2.new(1, -24, 0, chrome.card)
 		revealCard.Position = UDim2.new(0.5, 0, 1, -(chrome.button + UiTheme.PAD + 4))
+		local aboveCard = chrome.button + UiTheme.PAD + 4 + chrome.card + 6
+		closeBeat.Position = UDim2.new(1, -12, 1, -aboveCard)
 		if chrome.card < 88 then
 			revealFly.Visible = false
 			revealEquip.Size = UDim2.fromOffset(88, 36)
@@ -2631,8 +2707,28 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			rollBusy = false
 			local record = if ok then RollReveal.capture(result) else nil
+			local paid = type(result) == "table"
+				and (result.currency == "prism" or result.paid == true)
+			local function closeFor(rarity: string?, landed: boolean): UiRouter.CloseCall
+				return UiRouter.closeCall({
+					stopAt = stopAt,
+					rarity = rarity,
+					landed = landed,
+					paid = paid,
+					profile = profile,
+					result = result,
+				})
+			end
+			local function applyClose(call: UiRouter.CloseCall)
+				if call.nearMiss == true and type(call.rarity) == "string" then
+					showCloseBeat(call.rarity)
+				else
+					hideCloseBeat()
+				end
+			end
 			if record == nil or type(result) ~= "table" or type(result.item) ~= "table" then
 				local missed = RollHype.note(hype, { landed = false })
+				local close = closeFor(nil, false)
 				if missed.ok == true then
 					hype = missed.state
 				end
@@ -2642,23 +2738,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				revealBest.Visible = false
 				reelMilestone.Visible = false
 				setPulse(true)
+				applyClose(close)
 				paintReelIdle("Miss")
 				paintRoll()
 				return
 			end
 			lastCrack = os.clock()
-			local paid = result.currency == "prism" or result.paid == true
 			local noted = RollHype.note(hype, {
 				rarity = record.rarity,
 				landed = true,
 				paid = paid,
 			})
+			local close = closeFor(record.rarity, true)
 			if noted.ok ~= true or noted.rarity == nil then
 				loop = RollLoop.idle()
 				activeReveal = nil
 				revealCard.Visible = false
 				revealBest.Visible = false
 				setPulse(true)
+				hideCloseBeat()
 				paintReelIdle("Roll")
 				paintRoll()
 				return
@@ -2673,6 +2771,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				activeReveal = nil
 				revealCard.Visible = false
 				setPulse(true)
+				hideCloseBeat()
 				paintReelIdle("Roll")
 				paintRoll()
 				return
@@ -2715,6 +2814,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				activeReveal = nil
 				revealCard.Visible = false
 				setPulse(true)
+				hideCloseBeat()
 				paintReelIdle("Roll")
 				paintRoll()
 				return
@@ -2741,6 +2841,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				reelMilestone.Visible = false
 			end
 			paintRoll()
+			applyClose(close)
 			local color = rarityColor3(card.rarity)
 			local pop = UiRouter.rollPop(pace.tier, reduced)
 			if duration <= 0 then
