@@ -150,8 +150,8 @@ describe("RollBoard", function()
 
 		local hub =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
-		local paintAt = string.find(hub, "local function paintRoll()", 1, true)
-		local rollAt = string.find(hub, "local activeItem", paintAt or 1, true)
+		local paintAt = string.find(hub, "function hubFn.paintRoll()", 1, true)
+		local rollAt = string.find(hub, "hubState.activeItem", paintAt or 1, true)
 		expect(paintAt ~= nil and rollAt ~= nil).toBeTrue()
 		local paint = string.sub(hub, paintAt or 1, (rollAt or 1) - 1)
 		expect(
@@ -169,7 +169,7 @@ describe("RollBoard", function()
 		expect(
 			string.find(
 				paint,
-				'RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)',
+				'RollBoard.oddsLines(Pools.get("verdant_armory"), hubState.profile, 0, oddsSince)',
 				1,
 				true
 			) ~= nil
@@ -242,7 +242,7 @@ describe("RollBoard", function()
 		expect(
 			string.find(
 				hub,
-				"RollBoard.oddsLines(infoPool, profile, 0, UiRouter.oddsSince(legendaryCount))",
+				"RollBoard.oddsLines(infoPool, hubState.profile, 0, UiRouter.oddsSince(legendaryCount))",
 				1,
 				true
 			) ~= nil
@@ -250,7 +250,7 @@ describe("RollBoard", function()
 		expect(
 			string.find(
 				hub,
-				'RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)',
+				'RollBoard.oddsLines(Pools.get("verdant_armory"), hubState.profile, 0, oddsSince)',
 				1,
 				true
 			) ~= nil
@@ -258,7 +258,7 @@ describe("RollBoard", function()
 		expect(
 			string.find(
 				hub,
-				"RollBoard.oddsLines(Pools.get(rollPoolId()), profile, 0, oddsSince)",
+				"RollBoard.oddsLines(Pools.get(hubFn.rollPoolId()), hubState.profile, 0, oddsSince)",
 				1,
 				true
 			) ~= nil

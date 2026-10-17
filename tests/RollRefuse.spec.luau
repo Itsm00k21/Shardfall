@@ -120,7 +120,7 @@ end)
 describe("MenuHub refused roll", function()
 	it("does not note a miss on the refuse branch", function()
 		local hub = fs.readFile(HUB)
-		local beginRoll = between(hub, "beginRoll = function()", "local function pointerDown")
+		local beginRoll = between(hub, "beginRoll = function()", "function hubFn.pointerDown")
 		local earlyFrom = 'if kind ~= "land" or record == nil then'
 		local early = between(beginRoll, earlyFrom, "lastCrack = os.clock()")
 		local refuse = between(early, 'if kind == "refuse" then', 'elseif kind == "miss" then')
