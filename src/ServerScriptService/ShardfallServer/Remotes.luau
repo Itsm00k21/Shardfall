@@ -17,6 +17,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Audio = require(ReplicatedStorage.Shared.Audio)
+local ActionBarService = require(script.Parent.ActionBarService)
 local ChestService = require(script.Parent.ChestService)
 local ClassService = require(script.Parent.ClassService)
 local CombatService = require(script.Parent.CombatService)
@@ -495,7 +496,19 @@ function Remotes.bind()
 
 	functionRemote("UseTonic").OnServerInvoke = function(player)
 		return guard(player, "UseTonic", function()
-			return CombatService.useTonic(player)
+			return ActionBarService.drink(player)
+		end)
+	end
+
+	functionRemote("SetActionBar").OnServerInvoke = function(player, classId, slots, locked)
+		return guard(player, "SetActionBar", function()
+			return ActionBarService.set(player, classId, slots, locked)
+		end)
+	end
+
+	functionRemote("UseActionSlot").OnServerInvoke = function(player, index)
+		return guard(player, "UseActionSlot", function()
+			return ActionBarService.use(player, index)
 		end)
 	end
 

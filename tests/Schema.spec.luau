@@ -411,4 +411,59 @@ describe("Schema", function()
 		expect(quiet.sfxVolume).toEqual(1)
 		expect(quiet.gold).toEqual(3)
 	end)
+
+	it("fills per-class action bars when a version 23 save is migrated", function()
+		local profile = Schema.migrate({
+			schemaVersion = 23,
+			classId = "tidecaller",
+			gold = 5,
+		})
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(24)
+		expect(profile.gold).toEqual(5)
+		local bar = profile.actionBars.tidecaller
+		expect(bar.locked).toEqual(false)
+		expect(#bar.slots).toEqual(8)
+		expect(bar.slots[1]).toEqual({ kind = "skill", id = "tidal_bolt" })
+		expect(bar.slots[2]).toEqual({ kind = "skill", id = "healing_pool" })
+		expect(bar.slots[3]).toEqual({ kind = "skill", id = "bubble_ward" })
+		expect(bar.slots[4]).toEqual({ kind = "skill", id = "undertow" })
+		expect(bar.slots[5]).toEqual({ kind = "skill", id = "monsoon" })
+		expect(bar.slots[6]).toEqual({ kind = "consumable", id = "healing_tonic" })
+		expect(bar.slots[7]).toEqual({ kind = "empty", id = "" })
+		expect(bar.slots[8]).toEqual({ kind = "empty", id = "" })
+		local fresh = Schema.template()
+		expect(fresh.schemaVersion).toEqual(Schema.VERSION)
+		expect(fresh.actionBars.tidecaller.slots[1].id).toEqual("tidal_bolt")
+		expect(fresh.actionBars.warden.slots[1].id).toEqual("thorn_bash")
+		expect(fresh.actionBars.warden.slots[6].id).toEqual("healing_tonic")
+
+		local slots = {}
+		for index = 1, 8 do
+			slots[index] = { kind = "empty", id = "" }
+		end
+		slots[1] = { kind = "skill", id = "healing_pool" }
+		slots[2] = { kind = "skill", id = "thorn_bash" }
+		slots[8] = { kind = "skill", id = "tidal_bolt" }
+		local kept = Schema.migrate({
+			schemaVersion = 24,
+			classId = "tidecaller",
+			gold = 1,
+			actionBars = {
+				tidecaller = { locked = true, slots = slots },
+			},
+		})
+		assert(kept ~= nil)
+		expect(kept.schemaVersion).toEqual(24)
+		expect(kept.gold).toEqual(1)
+		expect(kept.actionBars.tidecaller.locked).toEqual(true)
+		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+		expect(kept.actionBars.tidecaller.slots[2].kind).toEqual("empty")
+		expect(kept.actionBars.tidecaller.slots[8].id).toEqual("tidal_bolt")
+		expect(kept.actionBars.warden.slots[1].id).toEqual("thorn_bash")
+		local copy = Schema.snapshot(kept)
+		expect(copy.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+		copy.actionBars.tidecaller.slots[1].id = "changed"
+		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+	end)
 end)

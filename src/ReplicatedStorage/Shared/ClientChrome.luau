@@ -44,7 +44,7 @@ end
 -- Join draws the shell only. Combat still exists for the overhead bar and
 -- hit flash, with its old corner frames hidden. The hub stays closed.
 function ClientChrome.visibleAtJoin(name: string): boolean
-	return name == "ShardfallHud"
+	return name == "ShardfallHud" or name == "ShardfallActions"
 end
 
 -- Hub tabs. The letter is the PC hotkey. Settings is the gear, not a letter.

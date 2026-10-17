@@ -15,6 +15,8 @@ local UserInputService = game:GetService("UserInputService")
 local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
+local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
@@ -701,6 +703,18 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			card.MouseButton1Click:Connect(function()
 				selectedId = picked
 				render()
+			end)
+			card.InputBegan:Connect(function(input)
+				if
+					input.UserInputType ~= Enum.UserInputType.MouseButton1
+					and input.UserInputType ~= Enum.UserInputType.Touch
+				then
+					return
+				end
+				local payload = ActionSlots.fromRow(row)
+				if payload ~= nil then
+					ActionDrag.begin(payload)
+				end
 			end)
 		end
 		if not still then

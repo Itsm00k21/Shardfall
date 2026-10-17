@@ -17,13 +17,16 @@ describe("Keybinds", function()
 		local gameplay = Keybinds.gameplay(fresh)
 		expect(gameplay.heavy).toEqual("R")
 		expect(gameplay.roll).toEqual("T")
-		expect(gameplay.attack).toEqual("E")
-		expect(gameplay.dodge).toEqual("Q")
-		expect(gameplay.skill1).toEqual("One")
-		expect(Keybinds.display(gameplay.skill1)).toEqual("1")
-		expect(gameplay.skill2).toEqual("Two")
-		expect(Keybinds.display(gameplay.skill2)).toEqual("2")
-		expect(gameplay.ult).toEqual("F")
+		expect(gameplay.dodge).toEqual("LeftShift")
+		expect(Keybinds.display(gameplay.dodge)).toEqual("Shift")
+		expect(gameplay.interact).toEqual("F")
+		expect(gameplay.slot1).toEqual("One")
+		expect(Keybinds.display(gameplay.slot1)).toEqual("1")
+		expect(gameplay.slot2).toEqual("Two")
+		expect(Keybinds.display(gameplay.slot2)).toEqual("2")
+		expect(gameplay.slot8).toEqual("Eight")
+		expect(Keybinds.display(gameplay.slot8)).toEqual("8")
+		expect(gameplay.attack).toBeNil()
 		expect(gameplay.hero).toEqual("C")
 		expect(gameplay.bag).toEqual("B")
 		expect(gameplay.pets).toEqual("P")
@@ -62,23 +65,24 @@ describe("Keybinds", function()
 		expect(swapped.bag).toEqual("T")
 		expect(#Keybinds.conflicts(Keybinds.gameplay(swapped))).toEqual(0)
 		local kept, warning = Keybinds.assign(Keybinds.copyMenu(nil), "roll", "E")
-		expect(warning).toEqual("E is already attack")
-		expect(kept.roll).toEqual("T")
+		expect(warning).toBeNil()
+		expect(kept.roll).toEqual("E")
 		local shift, shiftWarning = Keybinds.assign(Keybinds.copyMenu(nil), "hero", "Q")
-		expect(shiftWarning).toEqual("Q is already dodge")
-		expect(shift.hero).toEqual("C")
+		expect(shiftWarning).toBeNil()
+		expect(shift.hero).toEqual("Q")
 	end)
 
 	it("refuses a tab on a combat key, Shift, or a skill key", function()
 		local fresh = Keybinds.copyMenu(nil)
 		local cases = {
-			{ "F", "F is already ult" },
+			{ "F", "F is already interact" },
 			{ "R", "R is already heavy" },
-			{ "Shift", "Shift is already sprint" },
-			{ "LeftShift", "Shift is already sprint" },
-			{ "1", "1 is already skill1" },
-			{ "2", "2 is already skill2" },
-			{ "One", "1 is already skill1" },
+			{ "Shift", "Shift is already dodge" },
+			{ "LeftShift", "Shift is already dodge" },
+			{ "1", "1 is already slot1" },
+			{ "2", "2 is already slot2" },
+			{ "8", "8 is already slot8" },
+			{ "One", "1 is already slot1" },
 			{ "ButtonX", "ButtonX is already heavy" },
 		}
 		for _, pair in ipairs(cases) do
@@ -101,8 +105,8 @@ describe("Keybinds", function()
 			raids = "1",
 			market = "Shift",
 		})
-		expect(clean.hero).toEqual("C")
-		expect(clean.bag).toEqual("B")
+		expect(clean.hero).toEqual("Q")
+		expect(clean.bag).toEqual("E")
 		expect(clean.pets).toEqual("P")
 		expect(clean.roll).toEqual("T")
 		expect(clean.raids).toEqual("I")
@@ -137,19 +141,23 @@ describe("Keybinds", function()
 		local root = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
 		local combat = fs.readFile(root .. "CombatHud.luau")
 		local shell = fs.readFile(root .. "HudShell.luau")
+		local bar = fs.readFile(root .. "ActionBar.luau")
 		local hub = fs.readFile(root .. "MenuHub.luau")
 		local inventory = fs.readFile(root .. "InventoryHud.luau")
 		expect(string.find(combat, "Keybinds.COMBAT.heavy", 1, true) ~= nil).toBeTrue()
 		expect(string.find(combat, "KeyCode.R", 1, true)).toBeNil()
 		expect(string.find(combat, "KeyCode.Q", 1, true)).toBeNil()
-		expect(string.find(shell, "Keybinds.COMBAT.attack", 1, true) ~= nil).toBeTrue()
+		expect(string.find(shell, "Keybinds.COMBAT.attack", 1, true)).toBeNil()
 		expect(string.find(shell, "Keybinds.MENU", 1, true) ~= nil).toBeTrue()
 		expect(string.find(shell, "KeyCode.E", 1, true)).toBeNil()
 		expect(string.find(shell, "KeyCode.F", 1, true)).toBeNil()
 		expect(string.find(shell, "KeyCode.Two", 1, true)).toBeNil()
 		expect(string.find(shell, "KeyCode.One", 1, true)).toBeNil()
 		expect(string.find(shell, "Keybinds.ALIAS", 1, true)).toBeNil()
-		expect(string.find(shell, "Keybinds.display(Keybinds.COMBAT.skill1)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(shell, "Keybinds.display(Keybinds.COMBAT.skill1)", 1, true)).toBeNil()
+		expect(string.find(bar, "ContextActionService", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "ActionSlots.KEYS", 1, true) ~= nil).toBeTrue()
+		expect(string.find(combat, "Keybinds.COMBAT.dodge", 1, true) ~= nil).toBeTrue()
 		expect(string.find(combat, "Keybinds.GAMEPAD.heavy", 1, true) ~= nil).toBeTrue()
 		expect(string.find(combat, "KeyCode.ButtonX", 1, true)).toBeNil()
 		expect(string.find(hub, "Keybinds.sinkNames", 1, true) ~= nil).toBeTrue()
@@ -162,11 +170,13 @@ describe("Keybinds", function()
 			seen[name] = true
 		end
 		expect(seen.R).toEqual(true)
-		expect(seen.E).toEqual(true)
-		expect(seen.Q).toEqual(true)
+		expect(seen.E).toBeNil()
+		expect(seen.Q).toBeNil()
 		expect(seen.F).toEqual(true)
 		expect(seen.One).toEqual(true)
 		expect(seen.Two).toEqual(true)
+		expect(seen.Three).toEqual(true)
+		expect(seen.Eight).toEqual(true)
 		expect(seen.LeftShift).toEqual(true)
 		expect(seen.RightShift).toEqual(true)
 		expect(seen.ButtonX).toEqual(true)

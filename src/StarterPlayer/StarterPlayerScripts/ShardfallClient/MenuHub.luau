@@ -22,6 +22,8 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local ActionDrag = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ActionDrag"))
+local ActionSlots = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ActionSlots"))
 local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagBoard"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
@@ -61,6 +63,7 @@ export type Hooks = {
 	onTab: ((string) -> ())?,
 	onBadges: (({ [string]: NotifyBadges.Badge }) -> ())?,
 	getPoolId: (() -> string)?,
+	onClassSheet: (() -> ())?,
 }
 
 local function rgb(name: string): Color3
@@ -1687,6 +1690,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		card.MouseLeave:Connect(function()
 			tip.Visible = selectedUid ~= nil and selectedUid == item.uid
 		end)
+		card.InputBegan:Connect(function(input)
+			if
+				input.UserInputType ~= Enum.UserInputType.MouseButton1
+				and input.UserInputType ~= Enum.UserInputType.Touch
+			then
+				return
+			end
+			local payload = ActionSlots.fromRow(item)
+			if payload ~= nil then
+				ActionDrag.begin(payload)
+			end
+		end)
 		local uid = item.uid
 		if type(uid) == "string" then
 			local itemUid = uid
@@ -2106,16 +2121,39 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 		line(hero, "Skills", 3, rgb("gold"))
 		divider(hero, 4)
+		line(hero, "Drag a skill onto the bar.", 5, rgb("muted"))
 		if classDef ~= nil then
 			for index, skill in ipairs(classDef.skills) do
-				line(hero, Classes.skillLine(skill), 10 + index, rgb("text"))
+				local skillId = skill.id
+				local button = row(hero, Classes.skillLine(skill), 10 + index, nil)
+				button.InputBegan:Connect(function(input)
+					if
+						input.UserInputType == Enum.UserInputType.MouseButton1
+						or input.UserInputType == Enum.UserInputType.Touch
+					then
+						ActionDrag.begin({ kind = "skill", id = skillId })
+					end
+				end)
 			end
-			line(hero, Classes.skillLine(classDef.ultimate), 20, rgb("gold"))
+			local ultId = classDef.ultimate.id
+			local ultButton = row(hero, Classes.skillLine(classDef.ultimate), 20, nil)
+			ultButton.InputBegan:Connect(function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					ActionDrag.begin({ kind = "skill", id = ultId })
+				end
+			end)
 		else
 			line(hero, "No skills until a class is chosen.", 10, rgb("muted"))
 		end
 		row(hero, "Change class", 30, function()
-			showClassPrompt(true)
+			if classMissing() or hooks.onClassSheet == nil then
+				showClassPrompt(true)
+			else
+				hooks.onClassSheet()
+			end
 		end)
 	end
 

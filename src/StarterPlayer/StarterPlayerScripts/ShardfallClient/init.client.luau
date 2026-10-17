@@ -191,7 +191,6 @@ local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))
 local Quality = require(shared:WaitForChild("Quality"))
-local Settings = require(shared:WaitForChild("Settings"))
 local areaList = Areas.all()
 local firstArea = areaList[1]
 local firstPools = if firstArea ~= nil then Areas.pools(firstArea.id) else {}
@@ -360,6 +359,9 @@ local function applyProfile(profile: any, saving: any)
 	if hudShell ~= nil then
 		hudShell.setProfile(profile)
 		hudShell.noteDevice(deviceIsTouch())
+	end
+	if actionBar ~= nil then
+		actionBar.setProfile(profile)
 	end
 	if menuHub ~= nil then
 		menuHub.setProfile(profile)
@@ -1200,6 +1202,15 @@ menuHub = MenuHub.start(playerGui, {
 			hudShell.setBadges(badges)
 		end
 	end,
+	onClassSheet = function()
+		local opening = not ClassHud.isVisible()
+		if opening then
+			closePanels("skills")
+			ClassHud.setVisible(true)
+		else
+			ClassHud.dismiss()
+		end
+	end,
 })
 PetAura.start(playerGui, function()
 	return latestProfile
@@ -1227,38 +1238,6 @@ hudShell = HudShell.start(playerGui, {
 	onSettings = function()
 		openHub("settings")
 	end,
-	onAttack = function()
-		CombatStage.swing()
-		CombatHud.swing()
-	end,
-	onDodge = function()
-		CombatStage.dodge()
-		CombatHud.dodge()
-	end,
-	onSkill = function(index: number)
-		CombatStage.skill()
-		task.spawn(function()
-			pcall(invoke, "UseSkill", index)
-		end)
-	end,
-	onUlt = function()
-		task.spawn(function()
-			pcall(invoke, "UseSkill", "ult")
-		end)
-	end,
-	onHeavy = function()
-		CombatHud.swing(true)
-	end,
-	onLayout = function(name: string, x: number, y: number)
-		if type(latestProfile) ~= "table" then
-			return
-		end
-		local nextSettings = Settings.normalize(latestProfile.uiSettings)
-		nextSettings.controls.layout[name] = { math.floor(x), math.floor(y) }
-		task.spawn(function()
-			pcall(invoke, "SetSettings", nextSettings)
-		end)
-	end,
 })
 -- After the shell, so the rows can sit on ShardfallHud. The frame stays
 -- hidden until present. A new ScreenGui here would be removed on ChildAdded.
@@ -1266,59 +1245,31 @@ StarterGoalHud.start(playerGui)
 presentStarterGoals(latestProfile)
 
 actionBar = ActionBar.start(playerGui, {
-	onMenu = function()
-		openHub("hero")
-	end,
-	onInventory = function()
-		local opening = not inventory.isOpen()
-		closePanels(if opening then "inventory" else nil)
-		if opening then
-			inventory.open()
-		end
-	end,
-	onTravel = function()
-		local opening = not travel.isOpen()
-		closePanels(if opening then "travel" else nil)
-		if opening then
-			travel.open()
-		end
-	end,
-	onAttack = function()
-		CombatStage.swing()
-		CombatHud.swing()
+	invoke = invoke,
+	menuOpen = function()
+		return menuHub ~= nil and menuHub.isOpen()
 	end,
 	onDodge = function()
 		CombatStage.dodge()
 		CombatHud.dodge()
 	end,
-	onSkills = function()
-		local opening = not ClassHud.isVisible()
-		if opening then
-			closePanels("skills")
-			ClassHud.setVisible(true)
-		else
-			ClassHud.dismiss()
+	onSkill = function()
+		CombatStage.skill()
+	end,
+	onToast = function(message: string)
+		if hudShell ~= nil then
+			hudShell.toast(message)
 		end
+		ui.setStatus(message, "error")
 	end,
-	onTonic = function()
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("UseTonic")
-			end)
-			local message = remoteError(ok, result, "Could not drink that.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			local healed = if type(result) == "table" then result.healed else nil
-			ui.setStatus(
-				string.format("Healing Tonic restored %s HP.", tostring(healed or "some")),
-				"ok"
-			)
-		end)
+	onResult = function(result: any)
+		applyResult(result)
 	end,
+	mobile = deviceIsTouch,
 })
+if latestProfile ~= nil then
+	actionBar.setProfile(latestProfile)
+end
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)
@@ -1373,7 +1324,6 @@ local function retireChrome(name: string)
 		gui.Enabled = false
 	end
 end
-retireChrome("ShardfallActions")
 retireChrome("ShardfallDebug")
 retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)

@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 23.
+	The player profile shape, version 24.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -14,6 +14,7 @@
 	what DataStores can save and what a RemoteEvent can send.
 ]]
 
+local ActionSlots = require("./ActionSlots")
 local Audio = require("./Audio")
 local Classes = require("./Classes")
 local CraftingLevel = require("./CraftingLevel")
@@ -32,7 +33,7 @@ local function firstSessionKit()
 	return require("./FirstSessionKit")
 end
 
-Schema.VERSION = 23
+Schema.VERSION = 24
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -184,6 +185,7 @@ export type ProfileData = {
 	uiSettings: Settings.Data,
 	starterGoals: any,
 	firstSession: any,
+	actionBars: { [string]: any },
 }
 
 function Schema.template(): ProfileData
@@ -293,6 +295,7 @@ function Schema.template(): ProfileData
 		uiSettings = Settings.default(),
 		starterGoals = StarterGoalPay.blank(),
 		firstSession = firstSessionKit().blank(false),
+		actionBars = ActionSlots.fresh(),
 	}
 end
 
@@ -483,6 +486,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.tradeHandoff = data.tradeHandoff == true
 	data.starterGoals = StarterGoalPay.normalize(data.starterGoals)
 	data.firstSession = firstSessionKit().normalize(data.firstSession)
+	data.actionBars = ActionSlots.reconcile(data.actionBars, data)
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -992,6 +996,15 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	if version < 23 then
 		raw.firstSession = firstSessionKit().blank(raw.onboardDone == true)
 		raw.schemaVersion = 23
+		version = 23
+	end
+
+	-- Per-class action bars. A save with none gets the class defaults.
+	-- Do not copy another profile's layout.
+	if version < 24 then
+		raw.actionBars = ActionSlots.fresh()
+		raw.schemaVersion = 24
+		version = 24
 	end
 
 	return Schema.reconcile(raw), nil
@@ -1222,6 +1235,7 @@ function Schema.snapshot(data: ProfileData)
 		tradeHandoff = data.tradeHandoff,
 		uiSettings = Settings.normalize(data.uiSettings),
 		starterGoalTracker = StarterGoalPay.tracker(data),
+		actionBars = Schema.deepCopy(data.actionBars),
 	}
 end
 

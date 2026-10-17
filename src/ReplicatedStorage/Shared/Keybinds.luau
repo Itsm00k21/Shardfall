@@ -3,22 +3,29 @@
 --[[
 	One table for every hotkey.
 
-	Gameplay is what fires while the menu is closed: attacks, skills, and
-	the letters that open a tab. Menu is what fires while the hub is open.
-	Two actions in one of those sets must not share a key. R is the heavy
-	attack, so the Roll tab is T. Skill 1 is 1. Shift stays sprint, because
-	the default control script sinks Left Shift before a skill listener runs.
+	Gameplay is what fires while the menu is closed: the action bar, dodge,
+	heavy, interact, and the letters that open a tab. Menu is what fires
+	while the hub is open. Two actions in one of those sets must not share
+	a key. R is the heavy attack, so the Roll tab is T. Slots are 1 through
+	8. Shift is dodge. The bar binds it above the control script, which
+	would otherwise sink Left Shift as sprint. F is interact, and only while
+	a prompt is showing.
 ]]
 
 local Keybinds = {}
 
 Keybinds.COMBAT = {
-	attack = "E",
-	dodge = "Q",
+	dodge = "LeftShift",
 	heavy = "R",
-	skill1 = "One",
-	skill2 = "Two",
-	ult = "F",
+	interact = "F",
+	slot1 = "One",
+	slot2 = "Two",
+	slot3 = "Three",
+	slot4 = "Four",
+	slot5 = "Five",
+	slot6 = "Six",
+	slot7 = "Seven",
+	slot8 = "Eight",
 }
 
 -- Sprint is not a skill. A tab still cannot take it.
@@ -51,6 +58,24 @@ function Keybinds.display(key: string): string
 	end
 	if key == "Two" then
 		return "2"
+	end
+	if key == "Three" then
+		return "3"
+	end
+	if key == "Four" then
+		return "4"
+	end
+	if key == "Five" then
+		return "5"
+	end
+	if key == "Six" then
+		return "6"
+	end
+	if key == "Seven" then
+		return "7"
+	end
+	if key == "Eight" then
+		return "8"
 	end
 	return key
 end

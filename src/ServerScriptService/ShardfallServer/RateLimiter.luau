@@ -55,6 +55,8 @@ local RULES: { [string]: Rule } = {
 	SetClass = { capacity = 4, perSecond = 1 },
 	PickTalent = { capacity = 4, perSecond = 1 },
 	UseSkill = { capacity = 6, perSecond = 3 },
+	UseActionSlot = { capacity = 6, perSecond = 3 },
+	SetActionBar = { capacity = 4, perSecond = 2 },
 	Onboard = { capacity = 4, perSecond = 1 },
 	UpgradeGear = { capacity = 4, perSecond = 1 },
 	HatchPet = { capacity = 4, perSecond = 1 },
