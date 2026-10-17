@@ -14,13 +14,22 @@
 
 local DataService = require(script.Parent.DataService)
 local Economy = require(game:GetService("ReplicatedStorage").Shared.Economy)
+local Loops = require(game:GetService("ReplicatedStorage").Shared.Loops)
 
 local ReceiptService = {}
 
-function ReceiptService.grant(player: Player, receiptId: string, _productId: number)
+function ReceiptService.grant(player: Player, receiptId: string, productId: number)
 	local duplicate = false
 	local saved = DataService.mutate(player, function(data)
-		duplicate = Economy.receipt(data, receiptId)
+		-- The sku grant runs first. A refusal returns before the id is stored.
+		local granted, already, reason = Loops.grantPremium(data, receiptId, productId)
+		if granted ~= true then
+			return reason
+		end
+		duplicate = already == true
+		if type(data.receipts) ~= "table" or data.receipts[receiptId] ~= true then
+			duplicate = Economy.receipt(data, receiptId)
+		end
 		return nil
 	end)
 	if not saved then

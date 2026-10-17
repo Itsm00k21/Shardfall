@@ -390,13 +390,12 @@ function Loops.grantPremium(data: any, receiptId: any, productId: any): (boolean
 	if type(receiptId) ~= "string" or receiptId == "" then
 		return false, false, "Missing receipt."
 	end
+	if type(data.receipts) == "table" and data.receipts[receiptId] == true then
+		return true, true, ""
+	end
 	if type(data.receipts) ~= "table" then
 		data.receipts = {}
 	end
-	if data.receipts[receiptId] == true then
-		return true, true, ""
-	end
-	data.receipts[receiptId] = true
 	data.passPremium = true
 	if type(data.passPremiumClaimed) ~= "number" then
 		data.passPremiumClaimed = 0
@@ -404,6 +403,7 @@ function Loops.grantPremium(data: any, receiptId: any, productId: any): (boolean
 	if type(data.passCosmetics) ~= "table" then
 		data.passCosmetics = {}
 	end
+	data.receipts[receiptId] = true
 	return true, false, ""
 end
 

@@ -419,4 +419,125 @@ describe("Loops", function()
 			error(err, 2)
 		end
 	end)
+
+	it("does not record a receipt when the premium track is off", function()
+		expect(Loops.PREMIUM_ENABLED).toEqual(false)
+		local savedPass = Loops.PASS_PRODUCT_ID
+		local savedArchive = Loops.ARCHIVE_PRODUCT_ID
+		Loops.PASS_PRODUCT_ID = 101
+		Loops.ARCHIVE_PRODUCT_ID = 102
+		local data = {
+			receipts = {},
+			passPremium = false,
+			gems = 4,
+		}
+		local ok, err = pcall(function()
+			local granted, duplicate, reason = Loops.grantPremium(data, "receipt-off", 101)
+			expect(granted).toEqual(false)
+			expect(duplicate).toEqual(false)
+			expect(reason).toEqual("The premium track is not for sale yet.")
+			expect(data.receipts["receipt-off"]).toEqual(nil)
+			expect(data.passPremium).toEqual(false)
+			expect(data.gems).toEqual(4)
+			expect(next(data.receipts)).toEqual(nil)
+		end)
+		Loops.PREMIUM_ENABLED = false
+		Loops.PASS_PRODUCT_ID = savedPass
+		Loops.ARCHIVE_PRODUCT_ID = savedArchive
+		if not ok then
+			error(err, 2)
+		end
+	end)
+
+	it("leaves an unknown product receipt unset when premium is on", function()
+		expect(Loops.PREMIUM_ENABLED).toEqual(false)
+		local savedPass = Loops.PASS_PRODUCT_ID
+		local savedArchive = Loops.ARCHIVE_PRODUCT_ID
+		Loops.PREMIUM_ENABLED = true
+		Loops.PASS_PRODUCT_ID = 101
+		Loops.ARCHIVE_PRODUCT_ID = 102
+		local data = {
+			receipts = {},
+			passPremium = false,
+			gems = 7,
+		}
+		local ok, err = pcall(function()
+			local granted, duplicate, reason = Loops.grantPremium(data, "receipt-unknown", 999)
+			expect(granted).toEqual(false)
+			expect(duplicate).toEqual(false)
+			expect(reason).toEqual("That product is not the Shard Pass.")
+			expect(data.receipts["receipt-unknown"]).toEqual(nil)
+			expect(data.passPremium).toEqual(false)
+			expect(data.gems).toEqual(7)
+			expect(next(data.receipts)).toEqual(nil)
+		end)
+		Loops.PREMIUM_ENABLED = false
+		Loops.PASS_PRODUCT_ID = savedPass
+		Loops.ARCHIVE_PRODUCT_ID = savedArchive
+		if not ok then
+			error(err, 2)
+		end
+	end)
+
+	it("sets passPremium before recording the receipt id", function()
+		expect(Loops.PREMIUM_ENABLED).toEqual(false)
+		local savedPass = Loops.PASS_PRODUCT_ID
+		local savedArchive = Loops.ARCHIVE_PRODUCT_ID
+		Loops.PREMIUM_ENABLED = true
+		Loops.PASS_PRODUCT_ID = 101
+		Loops.ARCHIVE_PRODUCT_ID = 102
+		local steps = {}
+		local receipts = setmetatable({}, {
+			__newindex = function(self, key, value)
+				table.insert(steps, "receipt")
+				rawset(self, key, value)
+			end,
+		})
+		local data = setmetatable({
+			receipts = receipts,
+			gems = 0,
+		}, {
+			__newindex = function(self, key, value)
+				if key == "passPremium" then
+					table.insert(steps, "pass")
+				end
+				rawset(self, key, value)
+			end,
+		})
+		local ok, err = pcall(function()
+			local granted, duplicate, reason = Loops.grantPremium(data, "receipt-known", 101)
+			expect(granted).toEqual(true)
+			expect(duplicate).toEqual(false)
+			expect(reason).toEqual("")
+			expect(data.passPremium).toEqual(true)
+			expect(data.receipts["receipt-known"]).toEqual(true)
+			expect(steps[1]).toEqual("pass")
+			local sawReceipt = false
+			local passBefore = false
+			for _, step in ipairs(steps) do
+				if step == "pass" and sawReceipt == false then
+					passBefore = true
+				end
+				if step == "receipt" then
+					sawReceipt = true
+					expect(passBefore).toEqual(true)
+				end
+			end
+			expect(sawReceipt).toEqual(true)
+			local written = #steps
+			local again, againDup = Loops.grantPremium(data, "receipt-known", 101)
+			expect(again).toEqual(true)
+			expect(againDup).toEqual(true)
+			expect(#steps).toEqual(written)
+			expect(data.gems).toEqual(0)
+			expect(data.passPremium).toEqual(true)
+			expect(data.receipts["receipt-known"]).toEqual(true)
+		end)
+		Loops.PREMIUM_ENABLED = false
+		Loops.PASS_PRODUCT_ID = savedPass
+		Loops.ARCHIVE_PRODUCT_ID = savedArchive
+		if not ok then
+			error(err, 2)
+		end
+	end)
 end)
