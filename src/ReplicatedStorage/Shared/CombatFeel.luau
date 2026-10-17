@@ -146,6 +146,30 @@ function CombatFeel.scorePerfect(window: Telegraph?, now: number, _clientStamp: 
 	return true
 end
 
+-- One dodge scores at most one telegraph. Each window still pays only once.
+function CombatFeel.scoreAny(windows: { Telegraph }?, now: number, clientStamp: any): boolean
+	if windows == nil then
+		return false
+	end
+	for _, window in ipairs(windows) do
+		if CombatFeel.scorePerfect(window, now, clientStamp) then
+			return true
+		end
+	end
+	return false
+end
+
+function CombatFeel.pruneTelegraphs(windows: { Telegraph }, now: number): { Telegraph }
+	local kept = {}
+	local limit = CombatFeel.DODGE_LATENCY
+	for _, window in ipairs(windows) do
+		if type(window.endsAt) == "number" and now <= window.endsAt + limit then
+			table.insert(kept, window)
+		end
+	end
+	return kept
+end
+
 function CombatFeel.notePerfect(state: DodgeState, now: number)
 	state.slowUntil = now + CombatFeel.SLOWMO_SECONDS
 end

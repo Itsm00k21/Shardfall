@@ -100,7 +100,7 @@ local hooks: Hooks = {
 }
 
 local vitals: { [Player]: State } = {}
-local telegraphs: { [Player]: CombatFeel.Telegraph } = {}
+local telegraphs: { [Player]: { CombatFeel.Telegraph } } = {}
 local autoOn: { [Player]: boolean } = {}
 local steerUntil: { [Player]: number } = {}
 local shots: { Shot } = {}
@@ -391,10 +391,25 @@ end
 -- Returns true when this hit dropped the player. The dungeon ends the run.
 function CombatService.noteTelegraph(player: Player, endsAt: number)
 	if type(endsAt) ~= "number" or endsAt ~= endsAt then
-		telegraphs[player] = nil
 		return
 	end
-	telegraphs[player] = CombatFeel.openTelegraph(endsAt)
+	local now = os.clock()
+	local list = CombatFeel.pruneTelegraphs(telegraphs[player] or {}, now)
+	table.insert(list, CombatFeel.openTelegraph(endsAt))
+	telegraphs[player] = list
+end
+
+local function awardedRecently(player: Player, now: number): boolean
+	local list = telegraphs[player]
+	if list == nil then
+		return false
+	end
+	for _, window in ipairs(list) do
+		if window.awarded == true and now <= window.endsAt + CombatFeel.DODGE_LATENCY then
+			return true
+		end
+	end
+	return false
 end
 
 local function grantsProgress(player: Player): boolean
@@ -419,8 +434,7 @@ function CombatService.damagePlayer(
 	if CombatFeel.iframe(state.dodge, now) then
 		-- Ult was already decided when the dodge arrived. A hit during
 		-- i-frames does not score a second perfect off a client time.
-		local window = telegraphs[player]
-		local perfect = window ~= nil and window.awarded == true
+		local perfect = awardedRecently(player, now)
 		fx(player, {
 			kind = "dodge",
 			perfect = perfect,
@@ -767,7 +781,7 @@ function CombatService.dodge(player: Player)
 		return
 	end
 	-- The remote may still carry an old client clock. It is not an argument.
-	local perfect = CombatFeel.scorePerfect(telegraphs[player], now, nil)
+	local perfect = CombatFeel.scoreAny(telegraphs[player], now, nil)
 	if perfect then
 		CombatFeel.notePerfect(state.dodge, now)
 		state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
