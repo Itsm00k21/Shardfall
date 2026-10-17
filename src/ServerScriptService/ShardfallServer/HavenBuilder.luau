@@ -6,7 +6,8 @@
 	Simple parts, themed colors, and a low count. The crystal's shards orbit
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
 	the existing panel. The Rootvault arch is an EnterPad. The Heartwood arch
-	starts the Story raid queue and is not an EnterPad.
+	starts the Story raid queue and is not an EnterPad. Milestone 2 dresses
+	each arch and its name plate. Lights stay as the blockout left them.
 
 	StreamingEnabled cannot be set from a script. It lives on Workspace in
 	default.project.json. The hub model is Persistent so the islands stay
@@ -36,6 +37,8 @@ local orbitConnection: RBXScriptConnection? = nil
 local lifeConnection: RBXScriptConnection? = nil
 -- One Story queue per second. The dungeon enter debounce lives in DungeonService.
 local heartwoodReadyAt: { [number]: number } = {}
+local wavesReadyAt: { [number]: number } = {}
+local practiceReadyAt: { [number]: number } = {}
 
 local function rgb(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
@@ -213,6 +216,62 @@ local function sign(parent: Instance, cframe: CFrame, text: string)
 	label.TextStrokeTransparency = 0
 	label.Text = text
 	label.Parent = gui
+end
+
+-- Two-line gate name. Bold ink on a dark plate, readable from the spawn pad.
+-- District signs stay on `sign` and die at the zone distance.
+local PLATE_INK = Color3.fromRGB(248, 244, 230)
+local PLATE_INK_STROKE = Color3.fromRGB(8, 6, 4)
+local PLATE_BACK = Color3.fromRGB(10, 8, 12)
+
+local function gatePlate(parent: Instance, cframe: CFrame, title: string, subline: string)
+	local anchor = part(
+		parent,
+		"Sign",
+		Vector3.new(0.4, 0.4, 0.4),
+		cframe,
+		PLATE_BACK,
+		Enum.Material.SmoothPlastic,
+		false
+	)
+	anchor.Transparency = 1
+	anchor:SetAttribute("HavenLabel", title)
+	anchor:SetAttribute("HavenSubline", subline)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Nameplate"
+	gui.Size = UDim2.fromOffset(300, 84)
+	gui.StudsOffset = Vector3.new(0, 1.4, 0)
+	gui.AlwaysOnTop = false
+	gui.LightInfluence = 0
+	gui.MaxDistance = Haven.NAMEPLATE_DISTANCE
+	gui.DistanceLowerLimit = 0
+	gui.DistanceUpperLimit = Haven.NAMEPLATE_DISTANCE
+	gui.Parent = anchor
+	local plate = Instance.new("Frame")
+	plate.Name = "Plate"
+	plate.Size = UDim2.fromScale(1, 1)
+	plate.BackgroundColor3 = PLATE_BACK
+	plate.BackgroundTransparency = 0.05
+	plate.BorderSizePixel = 0
+	plate.Parent = gui
+	local function line(name: string, text: string, y: number, height: number, textSize: number)
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, height)
+		label.Position = UDim2.fromScale(0, y)
+		label.Font = Enum.Font.BuilderSansBold
+		label.TextSize = textSize
+		label.TextColor3 = PLATE_INK
+		label.TextStrokeColor3 = PLATE_INK_STROKE
+		label.TextStrokeTransparency = 0
+		label.TextXAlignment = Enum.TextXAlignment.Center
+		label.TextYAlignment = Enum.TextYAlignment.Center
+		label.Text = text
+		label.Parent = plate
+	end
+	line("Title", title, 0.04, 0.56, 28)
+	line("Subline", subline, 0.56, 0.38, 18)
 end
 
 -- Far side of an island, past the center, so the label is not on the bridge.
@@ -1034,11 +1093,12 @@ local function buildCourt(parent: Instance)
 	)
 	for _, portal in ipairs(Haven.PORTALS) do
 		local bearing = math.rad(portal.bearing or 0)
-		local color = if portal.open == true
+		local lit = Haven.gateLit(portal)
+		local color = if lit
 			then rgb(portal.color :: { number })
 			else Color3.fromRGB(90, 90, 96)
 		-- Axis-aligned squares. 1.1 stays clear of the next stone; 1.4 would share a top.
-		disc(
+		local stone = disc(
 			court,
 			"Inlay",
 			Haven.SPAWN.x + math.sin(bearing) * 8,
@@ -1050,6 +1110,8 @@ local function buildCourt(parent: Instance)
 			Enum.Material.Neon,
 			false
 		)
+		stone:SetAttribute("GateId", portal.id)
+		stone:SetAttribute("GateLit", lit)
 	end
 
 	-- West slab shares the plaza's west edge. A bridge from the origin would
@@ -1112,62 +1174,105 @@ local GATE_LIGHT: { [string]: { brightness: number, range: number } } = {
 	void = { brightness = 0.2, range = 10 },
 }
 
+local DRESS_MATERIAL: { [string]: Enum.Material } = {
+	roots = Enum.Material.Wood,
+	bark = Enum.Material.Wood,
+	coral = Enum.Material.SmoothPlastic,
+	basalt = Enum.Material.Basalt,
+	ice = Enum.Material.Ice,
+	obsidian = Enum.Material.SmoothPlastic,
+}
+
+-- Pivot on the floor so a lean does not lift the base off the court.
+local function pierCf(facing: CFrame, x: number, height: number, pitch: number, roll: number): (CFrame, number)
+	local sizeY = height + SEAM
+	local cf = facing
+		* CFrame.new(x, -SEAM, 0)
+		* CFrame.Angles(pitch, 0, roll)
+		* CFrame.new(0, sizeY / 2, 0)
+	return cf, sizeY
+end
+
+local function accent(
+	arch: Instance,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3,
+	material: Enum.Material,
+	dress: string
+): Part
+	local piece = part(arch, name, size, cf, color, material, false)
+	piece:SetAttribute("GateDress", dress)
+	return piece
+end
+
 local function buildPortals(parent: Instance)
 	local shelf = Instance.new("Model")
 	shelf.Name = "RealmArches"
 	shelf.Parent = parent
-	local pillarHeight, pillarCenter = sunk(18, 18)
 	for _, portal in ipairs(Haven.PORTALS) do
 		local color = rgb(portal.color :: { number })
+		local dress = if type(portal.dress) == "string" then portal.dress else "roots"
+		local body = if portal.body ~= nil then rgb(portal.body) else STONE
+		local edge = if portal.edge ~= nil then rgb(portal.edge) else body
+		local mouth = if portal.glow ~= nil then rgb(portal.glow) else color
+		local material = DRESS_MATERIAL[dress] or Enum.Material.Slate
+		local leftH = if type(portal.height) == "number" then portal.height else 18
+		local rightH = if dress == "ice" then 10 else leftH
+		local pitch = if dress == "roots" or dress == "bark" then math.rad(12) else 0
+		local roll = if dress == "coral" then math.rad(8) else 0
 		local arch = Instance.new("Model")
 		arch.Name = portal.id
 		arch.Parent = shelf
+		arch:SetAttribute("GateDress", dress)
+		arch:SetAttribute("GateSealed", portal.sealed == true)
 		if type(portal.dungeonId) == "string" then
 			arch:SetAttribute("DungeonId", portal.dungeonId)
 		end
 		-- Mouth faces the pad. Local X is the pier line, local -Z is the walk.
+		-- Dressing sits on the piers or behind them, off the lane and the chord.
 		local facing = CFrame.lookAt(
 			Vector3.new(portal.x, 0, portal.z),
 			Vector3.new(Haven.SPAWN.x, 0, Haven.SPAWN.z)
 		)
-		part(
-			arch,
-			"PillarL",
-			Vector3.new(2.5, pillarHeight, 2.5),
-			facing * CFrame.new(-5.25, pillarCenter, 0),
-			STONE,
-			Enum.Material.Slate,
-			true
-		)
-		part(
-			arch,
-			"PillarR",
-			Vector3.new(2.5, pillarHeight, 2.5),
-			facing * CFrame.new(5.25, pillarCenter, 0),
-			STONE,
-			Enum.Material.Slate,
-			true
-		)
-		part(
-			arch,
-			"Lintel",
-			Vector3.new(13, 2.5, 3),
-			facing * CFrame.new(0, 19.25 + SEAM, 0),
-			STONE,
-			Enum.Material.Slate,
-			true
-		)
+		local function at(x: number, y: number, z: number): CFrame
+			return facing * CFrame.new(x, y, z)
+		end
+		local leftCf, leftSize = pierCf(facing, -5.25, leftH, pitch, -roll)
+		local rightCf, rightSize = pierCf(facing, 5.25, rightH, pitch, roll)
+		-- PillarL is the player's right as they face the mouth. The next gate is that way.
+		local leftPier = part(arch, "PillarL", Vector3.new(2.5, leftSize, 2.5), leftCf, body, material, true)
+		local rightColor = body
+		local rightMaterial = material
+		if dress == "ice" then
+			leftPier.Transparency = 0.12
+			rightColor = Color3.fromRGB(110, 124, 136)
+			rightMaterial = Enum.Material.Slate
+		end
+		part(arch, "PillarR", Vector3.new(2.5, rightSize, 2.5), rightCf, rightColor, rightMaterial, true)
+		local lintelSize = Vector3.new(13, 2.5, 3)
+		if dress == "coral" or dress == "ice" then
+			lintelSize = Vector3.new(13, 1.2, 2.6)
+		elseif dress == "roots" then
+			lintelSize = Vector3.new(13, 2.0, 3)
+		end
+		local lintelY = leftH + lintelSize.Y / 2 + SEAM
+		part(arch, "Lintel", lintelSize, at(0, lintelY, 0), body, material, true)
+		local glowH = leftH - 4
+		local glowY = glowH / 2 + 2
 		local fill = part(
 			arch,
 			"Glow",
-			Vector3.new(8, 14, 0.6),
-			facing * CFrame.new(0, 9, 0),
-			color,
+			Vector3.new(8, glowH, 0.6),
+			at(0, glowY, 0),
+			mouth,
 			Enum.Material.Neon,
 			false
 		)
 		local open = portal.open == true
-		fill.Transparency = if open then 0.35 else 0.75
+		local sealed = portal.sealed == true
+		fill.Transparency = if sealed then 0.75 else 0.35
 		fill.CanTouch = false
 		local spec = GATE_LIGHT[portal.id]
 		local brightness = 0.12
@@ -1191,21 +1296,113 @@ local function buildPortals(parent: Instance)
 			fill.CanTouch = true
 			fill:SetAttribute("EnterDungeon", portal.dungeonId or Dungeons.ROOTVAULT_ID)
 			promptOn(fill, "Enter", portal.name, "rootvault", nil, nil, reach)
+			promptOn(leftPier, "Waves", "Solo", "waves", nil, nil, Haven.PIER_REACH)
 		elseif portal.id == "heartwood" then
-			promptOn(fill, "Queue", portal.name, "heartwood", nil, nil, reach)
+			promptOn(fill, "Finder", portal.message or portal.name, "heartwood", portal.message, nil, reach)
+			promptOn(
+				leftPier,
+				"Practice",
+				"Solo",
+				"practice",
+				"Practice Grove is the solo path.",
+				nil,
+				Haven.PIER_REACH
+			)
 		else
+			promptOn(fill, "Sealed", portal.message or portal.name, "soon", portal.message, nil, reach)
+		end
+		if sealed then
 			part(
 				arch,
 				"Seal",
 				Vector3.new(8, 1.4, 1.4),
-				facing * CFrame.new(0, 9, 0),
+				at(0, glowY, 0),
 				Color3.fromRGB(36, 34, 40),
 				Enum.Material.Metal,
 				true
 			)
-			promptOn(fill, "Sealed", portal.message or portal.name, "soon", portal.message, nil, reach)
 		end
-		sign(arch, CFrame.new(portal.x, 24, portal.z), portal.name)
+		if dress == "roots" then
+			accent(arch, "Root", Vector3.new(1.1, 1.4, 2.8), at(-5.4, 0.7, 2.4), body, material, dress)
+			accent(arch, "Root", Vector3.new(1.1, 1.4, 2.8), at(5.4, 0.7, 2.4), body, material, dress)
+			accent(arch, "Thorn", Vector3.new(0.45, 1.3, 0.45), at(-3.1, leftH - 0.5, 0.15), edge, material, dress)
+			accent(arch, "Thorn", Vector3.new(0.45, 1.3, 0.45), at(3.1, leftH - 0.5, 0.15), edge, material, dress)
+		elseif dress == "bark" then
+			local char = Color3.fromRGB(36, 28, 22)
+			accent(arch, "Bark", Vector3.new(0.35, 8, 1.1), at(-6.15, 8, 1.15), char, material, dress)
+			accent(arch, "Bark", Vector3.new(0.35, 8, 1.1), at(6.15, 8, 1.15), char, material, dress)
+			accent(
+				arch,
+				"Crack",
+				Vector3.new(7, 0.35, 2.2),
+				at(0, lintelY, -0.15),
+				edge,
+				Enum.Material.Neon,
+				dress
+			)
+		elseif dress == "coral" then
+			accent(arch, "Coral", Vector3.new(1.3, 1.1, 1.3), at(-5.2, 7, 1.7), edge, material, dress)
+			accent(arch, "Coral", Vector3.new(1.3, 1.1, 1.3), at(5.2, 12, 1.7), body, material, dress)
+		elseif dress == "basalt" then
+			accent(
+				arch,
+				"Seam",
+				Vector3.new(0.28, 1.5, 0.2),
+				at(-2.2, lintelY, -1.55),
+				edge,
+				Enum.Material.Neon,
+				dress
+			)
+			accent(
+				arch,
+				"Seam",
+				Vector3.new(0.28, 1.5, 0.2),
+				at(1.5, lintelY, -1.55),
+				edge,
+				Enum.Material.Neon,
+				dress
+			)
+		elseif dress == "ice" then
+			accent(
+				arch,
+				"Rubble",
+				Vector3.new(2.1, 1.0, 1.4),
+				at(5.25, 10.6, 0.7) * CFrame.Angles(0, 0.4, 0.35),
+				body,
+				Enum.Material.Ice,
+				dress
+			)
+			accent(
+				arch,
+				"Shard",
+				Vector3.new(0.22, leftH - 2, 0.4),
+				at(-3.95, leftH / 2, 0),
+				edge,
+				Enum.Material.Neon,
+				dress
+			)
+		elseif dress == "obsidian" then
+			accent(
+				arch,
+				"Edge",
+				Vector3.new(0.2, leftH - 3, 0.45),
+				at(-3.95, leftH / 2, 0),
+				edge,
+				Enum.Material.Neon,
+				dress
+			)
+			accent(
+				arch,
+				"Edge",
+				Vector3.new(0.2, leftH - 3, 0.45),
+				at(3.95, leftH / 2, 0),
+				edge,
+				Enum.Material.Neon,
+				dress
+			)
+			accent(arch, "Edge", Vector3.new(7.2, 0.2, 0.45), at(0, leftH + 0.25, 0), edge, Enum.Material.Neon, dress)
+		end
+		gatePlate(arch, at(0, leftH + lintelSize.Y + 2.6, 0), portal.name, portal.subline or portal.name)
 	end
 end
 
@@ -1819,6 +2016,52 @@ function HavenBuilder.build(parent: Instance): number
 							message = result.note
 						elseif result.ok == true then
 							message = "Joined the Heartwood queue."
+						elseif type(result.error) == "string" then
+							message = result.error
+						end
+					end
+					if remote ~= nil and remote:IsA("RemoteEvent") then
+						remote:FireClient(player, action, message)
+					end
+					return
+				end
+				if action == "waves" then
+					local now = os.clock()
+					if now < (wavesReadyAt[player.UserId] or 0) then
+						return
+					end
+					wavesReadyAt[player.UserId] = now + 1
+					local entered, result = pcall(function()
+						local DungeonService = require(script.Parent.DungeonService)
+						return DungeonService.enter(player, Dungeons.WAVES_ID)
+					end)
+					if not entered or type(result) ~= "table" or result.ok ~= true then
+						local message = "Rootvault Waves did not start."
+						if entered and type(result) == "table" and type(result.error) == "string" then
+							message = result.error
+						end
+						if remote ~= nil and remote:IsA("RemoteEvent") then
+							remote:FireClient(player, action, message)
+						end
+					end
+					return
+				end
+				if action == "practice" then
+					local now = os.clock()
+					if now < (practiceReadyAt[player.UserId] or 0) then
+						return
+					end
+					practiceReadyAt[player.UserId] = now + 1
+					local started, result = pcall(function()
+						local RaidService = require(script.Parent.RaidService)
+						return RaidService.practice(player, 1, 1)
+					end)
+					local message = "Practice Grove did not start."
+					if started and type(result) == "table" then
+						if result.ok == true and type(result.note) == "string" then
+							message = result.note
+						elseif result.ok == true then
+							message = "Practice Grove. No loot."
 						elseif type(result.error) == "string" then
 							message = result.error
 						end
