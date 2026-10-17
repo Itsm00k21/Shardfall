@@ -34,6 +34,7 @@ Rootvault.DOORS = {
 }
 
 Rootvault.SHRINES = { "might", "ward", "haste" }
+Rootvault.TREASURE_GOLD = 200
 Rootvault.ELITE_HP = 1.6
 Rootvault.ELITE_DAMAGE = 1.35
 Rootvault.PHASE2 = 0.6

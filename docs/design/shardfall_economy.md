@@ -21,7 +21,7 @@ Removed/merged: no separate "money" vs gold; no paid-only power currency.
 ## Gold flow per hour (beta targets, Lv ~10)
 - Earn: ~8-12k gold/h (dungeon ~60%, quests ~25%, salvage/sell ~15%).
 - Spend: upgrades/crafting should eat ~70-85% of income, leaving savings for bigger goals.
-- Upgrade cost curve: +1 = 500, roughly x1.6 each level; +8 to +10 also need boss mats (time-gated sink).
+- Upgrade cost curve: +1 = 150, +2 = 300, then `floor(500 * 1.6 ^ level + 0.5)` from +3; +8 to +10 each spend one Gnarl's Seed.
 
 ## Key sinks (inflation control)
 - Forge upgrades (scaling cost), crafting fees, chest merging fees.
