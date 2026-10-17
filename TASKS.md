@@ -51,11 +51,12 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 | T-055 | Toasts, motion, hero viewport, and responsive layout | GHOST | `cursor/toast-hero-404b` | new `src/ReplicatedStorage/Shared/ToastQueue.luau`, new `src/ReplicatedStorage/Shared/UiSfx.luau`, new `src/ReplicatedStorage/Shared/UiMotion.luau`, new `src/ReplicatedStorage/Shared/HeroBoard.luau`, `src/ReplicatedStorage/Shared/UiTheme.luau` (`MOTION.panel` only), `src/ReplicatedStorage/Shared/HudLayout.luau` (stamp inset and breakpoints), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau` (toast stack, prompt, stamp inset), `MenuHub.luau` (motion, sfx, hero viewport and bars). Tests: `tests/ToastQueue.spec.luau`, `tests/UiSfx.spec.luau`, `tests/HeroBoard.spec.luau`, `tests/HudLayout.spec.luau`, `tests/UiTheme.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Stacks on T-054. | done | https://github.com/Itsm00k21/Shardfall/pull/57 |
 | T-056 | In-panel roll loop | GHOST | `cursor/roll-loop-404b` | new `src/ReplicatedStorage/Shared/RollLoop.luau`, `src/ReplicatedStorage/Shared/Settings.luau` (`rolls.autoJunk` and `rolls.junkBelow` only), `src/ReplicatedStorage/Shared/UiSfx.luau` (click and stinger), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau` (roll tab stays open), `init.client.luau` (hub roll does not close the menu). Tests: `tests/RollLoop.spec.luau`, `tests/Settings.spec.luau`, `tests/UiSfx.spec.luau`, `tests/UiRouter.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Do not bump Schema. Stacks on T-055. | done | https://github.com/Itsm00k21/Shardfall/pull/59 |
 | T-058 | Roll hotkey off the heavy attack | GHOST | `cursor/roll-key-404b` | new `src/ReplicatedStorage/Shared/Keybinds.luau`, `Settings.luau` (menu defaults and a saved Roll = R), `ClientChrome.luau` (tab letters), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau` (heavy stays R), `HudShell.luau` (skill labels and rail key), `MenuHub.luau` (tab label, sink, rebind swap or warning), `InventoryHud.luau` (drop the I toggle that fought Raids). Tests: `tests/Keybinds.spec.luau`, `tests/Settings.spec.luau`, `tests/UiRouter.spec.luau`, `tests/ClientChrome.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, RaidLeaderboard, MarketBoard, or RaidEcho. Do not implement T-020, T-022, or T-026. Do not bump Schema. Do not edit `docs/offload/`. | done | https://github.com/Itsm00k21/Shardfall/pull/62 |
-| AUDIT-A | AUDIT-A (server exploits) | GHOST | `cursor/audit-a-server-exploits-d913` | Practice kill loot, the level 15 gate, and client phase/HP (`DungeonService.luau`, `RaidService.luau`, `init.server.luau` class XP hook, new `PracticeLoot.luau`). Server perfect dodge (`CombatService.luau`, `CombatFeel.luau`, `Remotes.luau`, `RateLimiter.luau`, `CombatHud.luau` dodge payload only). Salvage, remove, and feed of a market or trade hold (`Crafting.luau`, `InventoryView.luau`, `Trading.luau`, `InventoryService.luau`). Tests: `tests/AuditExploit.spec.luau`, `tests/run.luau`. Stamp lines in `Build.luau`, `init.server.luau`, `init.client.luau`, `DungeonService.luau`. Do not bump Schema. Do not edit `docs/offload/`. | done | https://github.com/Itsm00k21/Shardfall/pull/65 |
+| T-059 | Wire T-057 RaidEcho into the live raid fight | GHOST | `cursor/raid-echo-wire-9721` | `src/ServerScriptService/ShardfallServer/DungeonService.luau` and/or `RaidService.luau` (wherever a whole-party death after a boss pull is detected; `DungeonService.aliveCount` counts living enemies, not players, and `RaidService` has no wipe call today), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RaidHud.luau` (the party buff chip), and tests for the wire. Follow the T-057 hooks section. Decisions, answering the T-057 open questions: stacks are per boss, so reset on that boss's kill and on run end. A backfill who joins mid-fight inherits the party's current stacks because the buff is party-wide. While stacks are above 0 the raid HUD shows an "Echo +X%" chip. A RaidRecap line is optional, not required. Pass the unbuffed damage, healing, and max HP bases to `apply` every time so the bonus does not compound. One `wipe` per death. Practice Grove stays `practice = true` and adds nothing. Do not edit `RaidEcho.luau`. | open | — |
+| T-062 | AUDIT-A (server exploits) | GHOST | `cursor/audit-a-server-exploits-d913` | Practice kill loot, the level 15 gate, and client phase/HP (`DungeonService.luau`, `RaidService.luau`, `init.server.luau` class XP hook, new `PracticeLoot.luau`). Server perfect dodge (`CombatService.luau`, `CombatFeel.luau`, `Remotes.luau`, `RateLimiter.luau`, `CombatHud.luau` dodge payload only). Salvage, remove, and feed of a market or trade hold (`Crafting.luau`, `InventoryView.luau`, `Trading.luau`, `InventoryService.luau`). Tests: `tests/AuditExploit.spec.luau`, `tests/run.luau`. Stamp lines in `Build.luau`, `init.server.luau`, `init.client.luau`, `DungeonService.luau`. Do not bump Schema. Do not edit `docs/offload/`. | done | https://github.com/Itsm00k21/Shardfall/pull/65 |
 
 T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault and the wiring. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
 
-Next free id is T-059.
+Next free id is T-063. T-061 is AUDIT-B on #66.
 
 ## Claimed by HELPER
 
@@ -75,7 +76,8 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-045 | Raid bad-luck protection rules | HELPER | `helper/raid-luck-9721` | new `src/ReplicatedStorage/Shared/RaidLuck.luau`, new `tests/RaidLuck.spec.luau`, one require line in `tests/run.luau`, and a 'T-045 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md`: each lockout clear with no gear drop adds +10% to the next drop chance, and the bonus resets when something drops. Do not edit raid code, Schema, or remotes. | done | [#53](https://github.com/Itsm00k21/Shardfall/pull/53) |
 | T-050 | Raid post-run recap rules (pure, no wiring) | HELPER | `helper/raid-recap-9721` | new `src/ReplicatedStorage/Shared/RaidRecap.luau`, new `tests/RaidRecap.spec.luau`, one require line in `tests/run.luau`, and a 'T-050 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md` Anti-toxicity and fairness: each player gets a private panel built from caller-supplied per-player stats (damage, healing, deaths, mechanics handled by type such as soaks, interrupts, stacks, add kills, for example "You soaked 6 times") plus 1 to 2 tips picked from that player's mechanic failures using a placeholder tip table keyed by boss and mechanic in a frozen CONFIG. The public view shows only party kudos and mechanic MVP awards and never a damage or healing ranking or anyone else's numbers. Each player may give one kudos per run to another party member (not themselves, only members of that run). One MVP per mechanic type goes to the player who handled the most, with a deterministic tiebreak and no award when nobody handled any. An AFK-removed player (T-027 RaidConduct) gets their own private panel but is excluded from kudos and MVP. Inputs are plain tables. No services, remotes, DataStores, or TextService. Do not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, Schema, `CombatHud.luau`, the existing T-016 dungeon recap code, or any T-012 file. No build stamp, nothing premium. | done | [#55](https://github.com/Itsm00k21/Shardfall/pull/55) |
 | T-053 | Raid leaderboard rules: fastest clear (pure, no wiring) | HELPER | `helper/raid-leaderboard-9721` | new `src/ReplicatedStorage/Shared/RaidLeaderboard.luau`, new `tests/RaidLeaderboard.spec.luau`, one require line in `tests/run.luau`, and a 'T-053 hooks for GHOST' section in this file. Pure rules for the beta 'basic leaderboard (fastest Normal clear)' in `docs/design/shardfall_raids.md` (Firsts and races, Scope). Boards are keyed by difficulty and party size; a frozen CONFIG lists which boards are live (beta: normal only, story off), a top-N size, and a sanity floor on clear time. `submit(board, record)` takes a plain clear record (runId, difficulty, size, start and end times or duration, roster userIds, practice flag, removals) and returns a new board without writing the input: reject practice runs, unknown or disabled difficulties, bad times, and clears under the floor; credit only roster members who were not AFK-removed or vote-kicked; the same runId twice is a no-op; sort by duration with a deterministic tiebreak (earlier clear, then lower runId) and trim to top N. Also `personalBest(board, userId)` and a `rankOf` helper. Inputs are plain tables. No OrderedDataStore, MemoryStore, remotes, Schema, or TextService. Do not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, Schema, or any T-012 file. No build stamp, nothing premium. | done | [#58](https://github.com/Itsm00k21/Shardfall/pull/58) |
-| T-057 | Raid Story Echo buff rules (pure, no wiring) | HELPER | `helper/raid-echo-9721` | new `src/ReplicatedStorage/Shared/RaidEcho.luau`, new `tests/RaidEcho.spec.luau`, one require line in `tests/run.luau`, and a 'T-057 hooks for GHOST' section in this file. Pure, server-authoritative rules for the Story-tier Echo buff in `docs/design/shardfall_raids.md` (Difficulty ladder: 'An Echo buff (+5% per wipe, max +25%) stacks after wipes'). Frozen CONFIG: 5% per wipe, cap 25%, Story only (Normal live but never gets Echo; Hard/Shardbreaker/Fracture never). A wipe is a whole-party death after a boss pull started; partial deaths, Practice Grove pulls, and resets before the pull do not count. Expose: a fresh per-run state, `wipe(state, ctx)` returning a new state (no input writes), `bonus(state, difficulty)` as a fraction 0 to 0.25, `apply(stat, state, difficulty)` for player damage, healing, and max HP multipliers, and a reset on boss kill or run end. The buff is party-wide and shown to the party, not per player. Time and difficulty are passed in. No services, remotes, DataStores, RNG, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, or T-012. Nothing requires it until GHOST wires it, so gameplay is unchanged. Open questions (per-boss vs whole-run stacking, whether a backfill inherits the stacks, whether it shows on the RaidRecap panel) go in the hooks section. | claimed | — |
+| T-057 | Raid Story Echo buff rules (pure, no wiring) | HELPER | `helper/raid-echo-9721` | new `src/ReplicatedStorage/Shared/RaidEcho.luau`, new `tests/RaidEcho.spec.luau`, one require line in `tests/run.luau`, and a 'T-057 hooks for GHOST' section in this file. Pure, server-authoritative rules for the Story-tier Echo buff in `docs/design/shardfall_raids.md` (Difficulty ladder: 'An Echo buff (+5% per wipe, max +25%) stacks after wipes'). Frozen CONFIG: 5% per wipe, cap 25%, Story only (Normal live but never gets Echo; Hard/Shardbreaker/Fracture never). A wipe is a whole-party death after a boss pull started; partial deaths, Practice Grove pulls, and resets before the pull do not count. Expose: a fresh per-run state, `wipe(state, ctx)` returning a new state (no input writes), `bonus(state, difficulty)` as a fraction 0 to 0.25, `apply(stat, state, difficulty)` for player damage, healing, and max HP multipliers, and a reset on boss kill or run end. The buff is party-wide and shown to the party, not per player. Time and difficulty are passed in. No services, remotes, DataStores, RNG, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, or T-012. Nothing requires it until GHOST wires it, so gameplay is unchanged. Open questions (per-boss vs whole-run stacking, whether a backfill inherits the stacks, whether it shows on the RaidRecap panel) go in the hooks section. | done | [#61](https://github.com/Itsm00k21/Shardfall/pull/61) (f1f79e41bff4b8b5b86756cd1e5eeb85390959f7) |
+| T-060 | Practice Grove rules (pure, no wiring) | HELPER | `helper/raid-practice-9721` | new `src/ReplicatedStorage/Shared/RaidPractice.luau`, new `tests/RaidPractice.spec.luau`, one require line in `tests/run.luau`, and a 'T-060 hooks for GHOST' section in this file. Pure, server-authoritative rules for Practice Grove in `docs/design/shardfall_raids.md` (Guild raid prep, and the beta Scope line): a free, lootless sandbox for each unlocked boss, with practice dummies, a jump to any phase, time slowed to 0.75x, individual mechanics turned on or off, and a record of damage, deaths, and mechanic hits. Frozen CONFIG: `slowScale` 0.75, `phases` 3, `shardbreakerPhases` 4 (every boss has 3 phases, 4 on Shardbreaker). Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. Difficulties are story, normal, hard, and shardbreaker. Fracture and guided are not difficulties in this module. Cost is 0. `rewards` is always empty: no gear, Marks, dust, materials, pets, titles, or cosmetics. API, each call returns a new table and does not write the input: `fresh(ctx)` starts `{ bossId, difficulty, phase = 1, slow = false, dummies = true, mechanics = {}, damage = 0, deaths = 0, hits = {} }` and requires `ctx.unlocked == true` (unknown boss or difficulty is an error); `jump(state, phase)` moves to an integer phase from 1 through 3, or 1 through 4 on shardbreaker; `setSlow(state, on)` selects 0.75 when on and 1 when off, and no other scale exists; `scale(state)` returns that number; `toggle(state, mechanicId, enabled)` stores an override for a non-empty mechanic id, with a missing id meaning the mechanic is on (there is no frozen mechanic catalog; T-007 owns Hard mechanic design); `note(state, event)` adds a non-negative finite `damage` amount, adds 1 `death`, or increments `hits[mechanicId]`; `rewards(state)` stays empty even after notes. Store `state` only when `ok == true`. A failure returns a copy and the caller keeps the previous save. Phase jump and slow do not reset the record. Dummies are a flag, default true, and are not a second boss. A practice session is not a clear, a lockout, a Marks payout, or a leaderboard row. Do not require `Raids`, `RaidService`, `DungeonService`, `RaidEcho`, `RaidMarks`, `RaidLuck`, `RaidLeaderboard`, or `RaidRecap`. `RaidService.practice` already launches a lootless Story run. Do not edit that function. Nothing in `src` requires this module, so the live launch stays as it is. No services, remotes, DataStores, MemoryStore, RNG, clock, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, `RaidEcho.luau`, `Remotes.luau`, any T-012 file, or `docs/offload/`. Open questions go in the hooks section: the guild perk "cheaper Practice Grove" has no price and the sandbox stays free, whether live practice stays Story-only while this module accepts Normal, Hard, and Shardbreaker, whether mechanic ids stay caller-supplied, whether 0.75x should scale an enrage timer (no enrage number lives here), and whether the record stays on the in-memory session. | assigned | — |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -2041,6 +2043,125 @@ Questions for Ghost:
 12. No profile field. The board is the plain `{ entries }` table the caller keeps. There is no OrderedDataStore in this module. An in-memory table dies on restart. Where should the beta board live?
 13. Returned boards keep `entries` only. Other keys on the table you pass are dropped. A bare array is refused. `nil` starts an empty board. Is that the shape you want to store?
 14. This module does not rank Fracture level, class combo, or guild progression. Beta is fastest clear only. Confirm those stay out.
+
+### T-057 hooks for GHOST
+
+HELPER did not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `Schema.luau`, `CombatMath.luau`, `RaidRecap.luau`, or any other T-012 file. `RaidEcho` is pure and ready to call. It does not require `Raids`, `RaidService`, `CombatMath`, or `RaidRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidEcho` yet, so this branch does not change a live run. No build stamp. No remote. No DataStore. No MemoryStore. No RNG. Nothing here costs Robux. The T-057 row stays `claimed`. Wiring is yours.
+
+Call `wipe` once for each whole-party death after a boss pull has started. Call `reset` when that boss dies, and again when the run ends. Do not call either from the per-player boss mutate in `DungeonService.damageEnemy`. One call per death, with the shared run state. A second `wipe` on the same table before you store `state` counts a second stack. Practice Grove stays on `practice = true` and adds nothing. The live fight is in `DungeonService`, which this row does not list. `RaidService` has no wipe call today.
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidEcho = require(ReplicatedStorage.Shared.RaidEcho)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `fresh()` | the run is created | `{ stacks = 0 }`. A new table every call. |
+| `wipe(state, ctx)` | the party might have wiped | `ok == true` is the only signal to store `state`. `counted == true` means this was a Story wipe. `added == true` means `stacks` grew by one. |
+| `bonus(state, difficulty)` | you want the party fraction | `bonus` is a fraction from 0 to 0.25. `active == true` means Story and the fraction is above 0. |
+| `apply(stat, state, difficulty)` | you scale one player stat | `value` is `base * multiplier`. `multiplier` is `1 + bonus` (1 to 1.25). |
+| `reset(state, ctx)` | the boss dies, or the run ends | `ok == true` stores `{ stacks = 0 }`. `reason` is `"kill"` or `"end"`. |
+
+`nil` starts at 0 stacks. `{}` does too. A non-table is `ERRORS.state`. Store `result.state` only when `result.ok == true`. A skip (`counted == false`) is still `ok == true`: the copy has the same `stacks`. If the saved record itself does not parse, `ok == false` and `state` is `{ stacks = 0 }`. Keep the previous save.
+
+`wipe` reads `difficulty`, `practice` or `practiceGrove`, `pullStarted` or `pulled`, and the party. The party is `wholeParty` or `partyDead`, or `alive` / `living` together with `party` / `partySize`. Anything else on `ctx` is ignored, including `now`, `bossId`, and `userId`. `bonus` and `apply` take the difficulty as their own argument. The state does not remember it.
+
+Checks on `wipe` run in this order: the record, the context type, the difficulty, the practice flags, the pull flags, the party flags. The first failure is the error you get. After that, a real event can still be skipped. Skip order is practice, then a pull that has not started, then a partial death, then a difficulty that never gets Echo.
+
+**Stacks.** One number for the whole party. There is no per-player map. Returned states keep `stacks` only. A `userId` or `bossId` on the table you pass is dropped. `bonus` reads that count. Story pays `CONFIG.perWipe` (0.05) times the count, and `CONFIG.cap` (0.25) stops the fraction. Five counted wipes reach 0.25. The sixth stays `counted` with `added == false` and `capped == true`. A stored count above 5 still pays 0.25 and does not grow. Normal, Hard, Shardbreaker, and Fracture are known, return `bonus == 0`, and a qualifying death there is `reason == "difficulty"`. `" Story "` is story. Strings are trimmed and lowercased.
+
+**What counts.** A counted wipe is Story, the boss pull has started, the whole party is dead, and the run is not Practice Grove.
+
+| ctx | result |
+|---|---|
+| `pullStarted == true`, `wholeParty == true`, `practice` omitted or false, difficulty story | one stack, until the cap |
+| `alive == 0` and `party >= 1` (or `living` / `partySize`) | same as `wholeParty == true` |
+| `practice == true` or `practiceGrove == true` | `reason == "practice"`, stacks unchanged |
+| `pullStarted` missing or false | `reason == "pull"`, stacks unchanged |
+| `wholeParty == false`, or `alive >= 1` | `reason == "partial"`, stacks unchanged |
+| normal, hard, shardbreaker, fracture, after a real wipe shape | `reason == "difficulty"`, stacks unchanged |
+| `guided`, `fracture1`, a blank difficulty | `ERRORS.difficulty` |
+
+A missing pull flag means the pull has not started. A missing practice flag means this is not Practice Grove. A missing party signal is `ERRORS.party`: pass the boolean or both counts. `party == 0`, a fractional count, or `alive > party` is an error. Two aliases that disagree (`practice` true and `practiceGrove` false, or `wholeParty` false while `alive == 0`) are `ERRORS.disagree`. `"guided"` is not a difficulty. An exact `"fracture"` is known and pays nothing.
+
+**Apply.** Pass the unbuffed number. `apply` multiplies whatever you give it, so a second call on the buffed result compounds. Keep the base damage, the base heal, and the base max HP on the combat record, and pass those bases after every wipe and every reset.
+
+| kind | canonical | accepted text |
+|---|---|---|
+| damage | `damage` | `"damage"` |
+| healing | `healing` | `"healing"`, `"heal"` |
+| max HP | `maxHp` | `"maxHp"`, `"max HP"`, `"max_hp"`, `"max_health"` |
+
+`kind`, `stat`, and `name` are the same field. `value`, `amount`, and `base` are the same number. Two of them that disagree are `ERRORS.disagree`. `"health"`, `"hp"`, `"currentHp"`, `"bossDamage"`, and `"defense"` are `ERRORS.kind`, and `value` comes back unchanged. A negative, NaN, or infinite number is `ERRORS.value`. Zero stays zero. This module does not round max HP and does not read current HP.
+
+**Reset.** `"kill"`, `"boss"`, and `"boss kill"` are a boss kill. `"end"`, `"run"`, and `"run end"` are the run ending. Both store `{ stacks = 0 }`. `"wipe"` and `"reset"` are `ERRORS.reason`, and the stacks stay. Pass a string or `{ reason = "kill" }` or `{ kind = "end" }`. `cleared == true` means the previous count was above 0. A changed `bossId` on `wipe` does not clear stacks. Call `reset` yourself between bosses if each boss starts at 0.
+
+```lua
+run.echo = RaidEcho.fresh()
+
+local wiped = RaidEcho.wipe(run.echo, {
+	difficulty = run.difficulty,
+	practice = run.practice == true,
+	pullStarted = run.pullStarted == true,
+	alive = aliveCount,
+	party = #roster,
+})
+if wiped.ok == true then
+	run.echo = wiped.state
+	-- One party readout. Hidden while wiped.bonus is 0.
+	-- Recompute damage, healing, and max HP from the unbuffed bases.
+end
+
+local killed = RaidEcho.reset(run.echo, "kill")
+if killed.ok == true then
+	run.echo = killed.state
+	-- Restore max HP from the unbuffed base. The fraction is 0.
+end
+```
+
+On a hit, a heal, or a max-HP publish:
+
+```lua
+local dealt = RaidEcho.apply({
+	kind = "damage",
+	value = baseDamage,
+}, run.echo, run.difficulty)
+if dealt.ok == true then
+	damage = dealt.value
+end
+```
+
+Use `"healing"` for a player heal and `"maxHp"` for max HP. The same `run.echo` is the whole party, including a backfill who joins on a later pull. There is no RNG. The same input returns the same state. Thresholds live in `RaidEcho.CONFIG`. Do not hardcode 0.05 or 0.25 beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The state is the plain `{ stacks }` table on the in-memory run. It does not have to live on a profile. Version 21 is current. T-049's row already plans `raidLuck` on version 22, so do not take 22 for this. An in-memory table on one server dies on restart.
+
+`tests/run.luau` requires `./RaidEcho.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. Stacks stay until `reset`. The recommended wire calls `reset(..., "kill")` on each boss kill and `reset(..., "end")` when the run ends, so the next boss starts at 0. A changed `bossId` does not clear stacks. Call `reset` only on run end if the buff should last the whole run. Which one is the Story Echo?
+2. The state is one party `stacks` count, with no per-player map. A backfill, including an SOS flare join, reads that same table and inherits the current buff. Confirm a backfill inherits the stacks.
+3. Echo stays off the T-050 private panel and off the public kudos view. Show one party readout during the fight (`bonus` 0, 0.05, 0.10, 0.15, 0.20, 0.25). Confirm the RaidRecap panel does not list it.
+4. The catch-up rule (a new raid gives the old one a permanent Echo) is not in this module. Beta is the wipe stack only. Confirm the permanent Echo stays out.
+5. Difficulty `"story"` receives Echo. `"guided"` is not a difficulty and returns `ERRORS.difficulty`. A `guided` field on the wipe context is ignored. Confirm a Guided Story run still gets Echo.
+6. Only the exact token `"fracture"` is known, and it pays nothing. `"fracture1"` is `ERRORS.difficulty`. Confirm one token covers every Fracture level.
+7. The fifth counted wipe is `added == true` and `capped == true` (fraction 0.25). A later counted wipe stays `counted` with `added == false`. A stored count above 5 still pays 0.25 and does not grow. Confirm the cap stops the count there.
+8. A counted wipe is the whole party dead after `pullStarted`. Practice Grove, a death before the pull, and a reset while someone is still alive do not count. Confirm a deliberate boss reset with someone alive is not a wipe.
+9. When several skip rules match, the reason is practice, then pull, then partial, then difficulty. A Practice Grove wipe on Normal reports `practice`. A Normal partial after the pull reports `partial`. A real Normal wipe reports `difficulty`. Confirm that order.
+10. Player damage, healing, and max HP share `1 + bonus`. `"health"`, `"hp"`, and `"currentHp"` are refused so current HP is not scaled. Boss damage and defense are refused. Max HP is not rounded here. `apply` multiplies the number you pass, so pass the unbuffed base. Confirm those three stats, that you floor max HP at the call site, and whether a full bar refills when Echo raises max HP. `CombatMath.luau` was not edited.
+11. Difficulty is an argument on every call and is not stored. A Normal call returns 0 even when `stacks` is 5. Confirm the caller passes the run difficulty each time.
+12. Each `wipe` call can add one stack. There is no pull id, so two calls for the same death add two stacks. The caller dedupes. Confirm.
+13. No profile field. `{ stacks }` lives on the in-memory run and dies on restart. No clock is read. A `now` field is ignored. Confirm that home for the beta state.
+14. A phase change does not call `reset`. Only a boss-kill or run-end reason clears stacks. `"wipe"` and `"reset"` are refused as reset reasons. Confirm phases leave the stacks in place.
+15. `"heal"` is healing. `"max HP"`, `"max_hp"`, `"max_health"`, and `"maxHp"` are max HP. `"health"` is refused. Confirm those aliases.
+
+Ghost's answers for the wire are on T-059. Stacks are per boss: reset on that boss's kill and again when the run ends. A backfill inherits the party's current stacks. While stacks are above 0, RaidHud shows one "Echo +X%" chip. A RaidRecap line is optional and not required. Pass unbuffed bases to `apply` every time. Do not edit `RaidEcho.luau`.
 
 ## Open
 
