@@ -2956,6 +2956,136 @@ Issue #15 rejected this note (`addComment` is not available to this token). The 
 14. Confirmed. The host is a guild id, not a player. The run can still finish if that guild still fills half after the original leader is AFK-removed.
 15. Confirmed. There is no paid skip. A third argument on `finish` is refused. Nothing here costs Robux. That stays true at wiring. `Loops.PREMIUM_ENABLED` stays false.
 
+### T-075 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `RaidGuided.luau`, `RaidMarks.luau`, `Schema.luau`, `MenuHub.luau`, `UiRouter.luau`, `RollHype.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidContest` is pure and ready to call. It does not require `RaidGuided`, `RaidMarks`, or `Raids`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. There is no paid skip of the cap, the window, or the first clear. T-075 is done. Wiring is still yours. T-072 owns `MenuHub.luau`. T-073 owns `DungeonService.luau`. Do not edit either for this.
+
+Where the row and `docs/design/shardfall_raids.md` disagree, the row won:
+
+- The Contest Mode research line says the first 24–48 hours, with Power capped and some gear disabled. The row says exactly 48 hours (`durationSeconds` 172800) and an item-level cap (placeholder 200). This module does not disable gear pieces and does not read a Power stat. Twenty-four hours after open is still inside the window, so 201 is still over the cap. The row won.
+- The design says everyone who clears during contest gets an exclusive emblem, and the first server-wide clear also gets a Haven statue and a global announcement. The row says the first counted clear sets `statue` and `announce` once, and later clears set `emblem` for roster members not already credited. This module gives the first roster the emblem too, so "everyone" includes them. Those ids are then already credited. A later clear does not emblem them again and does not set the statue again.
+- The design does not mention practice, `guided` as a difficulty, or a half-open end. The row does. `practice = true` is refused. `guided` is not a difficulty. The second at `openedAt + durationSeconds` is outside the window.
+
+`RaidMarks.CONFIG.doubleMarks` stays false. This module does not read it and does not pay Marks. A contest clear is not a Marks payout.
+
+Thresholds are `RaidContest.CONFIG`. `durationSeconds` is 172800. `itemLevelCap` is 200, a placeholder, because there is no item-level field in the repo. The caller passes a whole number. `maxIdLength` is 64, the same placeholder cap used for other raid ids. Do not hardcode those numbers beside the module. `DIFFICULTIES` is `shardbreaker` only. `REFUSED` is `story`, `normal`, `hard`, `fracture`, `practice`, and `guided`. Guided is a mode, not a difficulty. `Raids.DIFFICULTIES` is still Story and Normal. Do not gate this on `Raids.difficulty("shardbreaker")`. Pass the string.
+
+`RaidService.luau`, next to the other raid requires, when you wire this:
+
+```lua
+local RaidContest = require(ReplicatedStorage.Shared.RaidContest)
+```
+
+**Return shape.** `open`, `gear`, and `clear` each return one new table. They do not write the input. A bad arg does not throw. nil, a non-table, a blank id, and a wrong type take the failure path. Store the contest when `persist == true`. `gear.persist` is always false. An `ok == false` result with `persist == false` is a bad record or a refused call. Writing the blank record from a state error would wipe a real contest. The contest is one server-wide record per raid. It is not a player profile.
+
+| call | when | on success |
+|---|---|---|
+| `open(ctx)` | a raid's contest starts | `{ raidId, openedAt, statue = false, announce = false, firstRoster = {}, credited = {}, runs = {} }` |
+| `gear(state, itemLevel, now)` | a Shardbreaker entry asks the cap | `allowed` and `inside`. `persist` is false. Do not save it. |
+| `clear(state, record, now)` | a real Shardbreaker clear, including Guided | the first counted clear sets `statue`, `announce`, and `emblem`. Later clears set `emblem` only for new ids. |
+
+**Open.** `ctx` is `{ raidId, openedAt }`. `raidId` is trimmed and not lowercased. `" Heartwood "` is `Heartwood`. `"Heartwood"` and `"heartwood"` are different contests. A blank id, a non-string, and an id longer than `maxIdLength` are `ERRORS.raid`. `openedAt` is a whole number of unix seconds `>= 0`. A fraction, a negative, NaN, inf, or a string is `ERRORS.time`. A second argument is `ERRORS.skip`. A `skip`, `waive`, `waiveCap`, `paid`, `robux`, `premium`, `price`, or `forceFirst` field is `ERRORS.skip` and does not open. A preloaded `statue`, `announce`, `credited`, `runs`, `firstRoster`, `durationSeconds`, `itemLevelCap`, `practice`, or `guided` is ignored. The contest starts empty. One `open` does not award anything.
+
+**Gear.** `itemLevel` is a whole number `>= 0`. There is no item-level field to read. `0` and `200` are allowed inside the window. `201` is `ERRORS.gear` inside the window. Outside the window every finite whole level is allowed, including `0` and levels over the cap. Negatives, fractions, NaN, inf, and non-numbers are `ERRORS.level` on both sides of the window. `now` is a whole number of unix seconds `>= 0`. A fraction is `ERRORS.time`, not "inside" and not "outside".
+
+The window is `[openedAt, openedAt + durationSeconds)`. `now == openedAt` is inside. `now == openedAt + durationSeconds - 1` is inside. `now == openedAt + durationSeconds` is outside. `now < openedAt` is outside. `inside` on the result is that test. `allowed` is the cap decision. `cap` is `CONFIG.itemLevelCap`. `persist` is false. A fourth argument is `ERRORS.skip`, including `{ guided = true }` and `{ waiveCap = true }`. A `waiveCap` field left on the saved record does not lift the cap. Guided does not waive it. This function does not take a difficulty. Call it for Shardbreaker entry only.
+
+**Clear.** `record` is `{ runId, difficulty, practice, roster }`. `guided` may also be a boolean. A list, a non-table, or a record with a non-string key is `ERRORS.record`. The checks, in order, are: skip argument, skip field, `runId`, stored run, practice, guided flag, difficulty, roster, `now`, window.
+
+`runId` is a positive whole number or a trimmed string. It is not lowercased. `1` and `"1"` are different runs. A missing `runId`, a blank string, `0`, a negative, a fraction, or a string longer than `maxIdLength` is `ERRORS.runId`. A stored run id is a no-op: `ok == true`, `persist == false`, `counted == false`, `reason == "duplicate"`, empty `emblem`. That holds even when the retry changes the roster, sets `practice = true`, uses another difficulty, or passes a `now` outside the window. The first stored roster stays credited.
+
+`practice = true` is `ERRORS.practice` and awards nothing. That is checked before difficulty, so a practice Story clear is the practice error. `practice` nil and false mean a live clear. Any other type is `ERRORS.practiceFlag`. `guided` nil, true, and false are accepted. Any other type is `ERRORS.guided`. The flag is not stored. It does not change the award and it does not waive the cap.
+
+`difficulty` is trimmed and lowercased. `" Shardbreaker "` and `"SHARDBREAKER"` count. Story, Normal, Hard, Fracture, Practice, and `guided` are `ERRORS.difficulty`. A Fracture id with a level (`"Fracture 3"`, `"fracture-1"`) is refused too. Hard is refused even when `guided = true`. An unknown id is refused. Do not call `Raids.difficulty`.
+
+`roster` is a dense list of unique positive whole user ids, in the order you send. A member table, a string id, an empty list, a hole, or a duplicate is refused. There is no 4-to-8 party check in this module. A one-player roster can take the statue. Order is kept. The list is not sorted.
+
+A valid Shardbreaker clear outside the window counts nothing: `ok == true`, `persist == false`, `counted == false`, `reason == "window"`, empty `emblem`. The run id is not stored. A later in-window call with that same run id can still be the first clear. A practice clear or a non-Shardbreaker clear outside the window is still an error, not a window no-op. A bad `now` is `ERRORS.time`.
+
+The first counted clear sets `result.statue` and `result.announce` true and sets `result.emblem` to that whole roster. `state.statue` and `state.announce` stay true. `state.firstRunId` is that run. `state.firstRoster` is that roster. `state.credited` starts as that roster. `state.runs` starts as that run. Later in-window clears leave `result.statue` and `result.announce` false. They append the run id and set `result.emblem` to roster members not already in `credited`, in roster order. A later clear whose roster is already credited still counts: `counted == true`, `persist == true`, `emblem` empty. Save it so the run id is a no-op next time. Grant nothing when `emblem` is empty.
+
+```lua
+local function saveContest(contest, result)
+	if result.persist ~= true then
+		return contest
+	end
+	return result.state
+end
+```
+
+Nil `state` on `gear` or `clear` is `ERRORS.state`. It does not throw. The blank state has `raidId = ""`. Do not write that blank over the contest.
+
+**Call sites, still yours.** Keep one contest record for the raid. Do not keep a per-server copy, or two servers can each award a statue. Do not fold these rules into `Raids` or `RaidGuided`. Pass `practice = true` only if you must refuse it. A Story, Normal, Hard, Fracture, or Practice run does not call this module. A Guided Shardbreaker run does, and it still calls `gear`.
+
+```lua
+function RaidService.openContest(raidId, openedAt)
+	return RaidContest.open({
+		raidId = raidId,
+		openedAt = openedAt,
+	})
+end
+
+function RaidService.contestGear(contest, itemLevel, now)
+	return RaidContest.gear(contest, itemLevel, now)
+end
+
+function RaidService.contestClear(contest, record, now)
+	local result = RaidContest.clear(contest, record, now)
+	if result.counted == true and result.statue == true then
+		-- Place one Haven statue for result.state.firstRoster.
+		-- The season length is not in this module. state.statue stays true.
+	end
+	if result.counted == true and result.announce == true then
+		-- Global announcement once. Do not repeat it from state.announce.
+	end
+	if result.counted == true then
+		-- Grant the emblem to result.emblem only. An empty list grants nobody.
+	end
+	return saveContest(contest, result), result
+end
+```
+
+Call `contestGear` at Shardbreaker entry. `clear` does not re-check item level. A player who never passed `gear` is not caught here. Call `contestClear` only after a real clear, never on a wipe. `gear` never persists.
+
+If you save the state and the announcement send then fails, a retry of that run id is a duplicate and `result.announce` is false. `state.announce` is already true. Send from the result before you drop it. This module has no separate "announcement delivered" flag.
+
+**Schema.** HELPER does not edit `Schema.luau`. Do not add this to the player profile. A per-player copy would diverge, and two profiles could each think they took the statue. Version 21 is current. Do not assume 22 is free. There is no contest record in this repo. When you add one, add it on the server-wide record, not on the player. Do not assume its store or its version.
+
+```lua
+raidContest = {
+	raidId = "heartwood", -- trimmed, not lowercased. Confirm the canonical id.
+	openedAt = 0, -- unix seconds, whole, >= 0.
+	statue = false, -- sticky. True after the first counted clear. Not "grant it again".
+	announce = false, -- sticky. True after the first counted clear. Not "send it again".
+	-- firstRunId is absent until the first counted clear, then a number or a string.
+	firstRoster = {}, -- user ids on the statue clear, in roster order.
+	credited = {}, -- user ids who already received the emblem. The statue roster is the prefix.
+	runs = {}, -- counted in-window run ids, in order. runs[1] is firstRunId once the statue is set.
+}
+```
+
+`statue`, `announce`, `firstRunId`, `firstRoster`, `credited`, and `runs` are contest fields. They are not player-schema fields. Grant the emblem from `result.emblem` when `counted == true`. The cosmetic id is not in this module. `doubleMarks` stays false. This clear does not multiply Marks.
+
+`tests/run.luau` requires `./RaidContest.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Questions for Ghost:
+
+1. Item level is a whole number `>= 0` passed by the caller. There is no item-level field in the repo. `0` and `200` are allowed inside the window. `201` is over the cap. Negatives, fractions, NaN, and inf are refused inside and outside. Confirm `0`, and confirm the wire will pass a whole number once gear has a level.
+2. The window is `[openedAt, openedAt + 172800)`. The end second is outside: the cap is off and a clear counts nothing. Before `openedAt` is outside too. `now` must be a whole number of unix seconds `>= 0`. A fractional `now` is refused, not treated as inside. Confirm.
+3. The research line says 24–48 hours, Power capped, and some gear disabled. The row says exactly 48 hours and item-level cap 200. This module does not disable gear and does not read Power. A clear 24 hours after open is still inside the window. Confirm the row won.
+4. Shardbreaker only. Story, Normal, Hard, Fracture (any id that starts with `"fracture"`), Practice, and `guided` as a difficulty are refused. `" Shardbreaker "` counts. Hard is refused even when `guided = true`. `guided = true` on Shardbreaker counts and is not stored. It does not waive the cap. `gear` has no guided argument. Confirm Guided Shardbreaker still calls `gear` before entry.
+5. `practice = true` is refused, including inside the window, and it is checked before difficulty. A practice Story clear returns the practice error. `practice` nil and false count. Any other type is refused. A difficulty of `"practice"` with the flag unset is the difficulty error. Confirm.
+6. The first counted clear sets `result.statue`, `result.announce`, and `result.emblem` for that whole roster. Later clears set `emblem` only for user ids not already credited, and their `result.statue` and `result.announce` are false. `state.statue` and `state.announce` stay true. Grant and send from the result, not from the sticky state. If you save and the send then fails, a retry is a duplicate and will not say `announce` again. Confirm the first roster gets the emblem too, and say if you want a separate delivered flag in this module.
+7. An out-of-window clear counts nothing and does not store the run id. A later in-window call with that same run id can still be the first clear. A practice or non-Shardbreaker clear outside the window is still an error. Confirm, or should the out-of-window attempt burn the run id?
+8. A stored run id is a no-op even if the retry changes the roster, the difficulty, or sets `practice`. The first roster stays credited. `1` and `"1"` are different. String run ids are trimmed and not lowercased. `CONFIG.maxIdLength` is 64. Confirm the wire's run id and the cap.
+9. Raid ids are trimmed and not lowercased. `"Heartwood"` and `"heartwood"` differ. `Raids.luau` has no raid id. Preloaded awards, duration, and cap on `open` are ignored. Confirm the canonical raid id.
+10. The roster is a dense list of unique positive whole user ids. Member tables and string ids are refused. Empty is refused. There is no 4-to-8 check. A one-player clear can take the statue. Order is the order you send. Confirm, or should a contest clear require 4 to 8?
+11. A later in-window clear whose roster is already credited still stores the run id. `counted` is true, `emblem` is empty, `persist` is true. Save whenever `persist == true`. Grant nobody when `emblem` is empty. Confirm.
+12. The contest fields above are not player-schema fields. One server-wide record per raid, or two servers can each award a statue. Schema stays 21. Do not assume 22. Do not copy the record onto each profile. The season length is not here, and `state.statue` stays true. The emblem cosmetic id is not here. Confirm where the record lives, and whether a profile flag is still needed later so the emblem can render.
+13. Nothing here costs Robux. An extra argument, or a skip / waive / paid / robux / premium / price field, is refused. It does not open, lift the cap, or force the first clear. `RaidMarks.CONFIG.doubleMarks` stays false. This module does not pay Marks. `gear` never persists. `clear` does not re-check item level. A broken record returns `persist == false` and a blank state that must not replace the live record. Confirm that stays true at wiring, and that `RaidService` owns `openContest`, `contestGear`, and `contestClear`.
+
 ## Open
 
 No unassigned tasks.
