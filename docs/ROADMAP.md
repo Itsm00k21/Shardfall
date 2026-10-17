@@ -20,12 +20,12 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #143 Eight action slots on keys 1 through 8, saved per class. Schema is 24. On a phone they stack 2 by 4.
 - #146 The gold banner has a lane clear of the portrait, the HP bar, and the top menu button. That is T-143.
 - #147 Each Gate Plaza arch has its shape, its name, and its lock. That is T-144.
+- #148 The Gate Plaza mouths have quiet lights. That is T-145.
 
 ## Next up
 
 The next week or two.
 
-- T-145 adds the quiet lights on the Gate Plaza. T-141 in #142 is the blockout. T-144 in #147 dressed each arch.
 - Pre-launch hardening. T-149 turns the paid switches off. T-150 grants a receipt before recording it. T-151 requires a verified granted receipt and a sane trade cap. T-152 takes paid luck off vip and caps Patron. Nothing is for sale.
 - T-146 and T-147 polish the action bar. A controller d-pad and the bumpers still do nothing. Then a short playtest: drag a skill on, drag it off, and check the phone 2 by 4 grid.
 - T-132 is one Raid Marks payout when a Heartwood clear pays. Raids stay paused, so this stays low on the list. A clear pays marks once.
