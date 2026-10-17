@@ -12,6 +12,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 
 local LoadingTips = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LoadingTips"))
@@ -56,6 +57,17 @@ local function present()
 			return
 		end
 		gui.Enabled = false
+	end)
+end
+
+-- The departing hop shows this gui during the blackout. Studio stays
+-- on the local raid and does not teleport, so it does not arm the gui.
+local function arm(gui: ScreenGui)
+	if RunService:IsStudio() then
+		return
+	end
+	pcall(function()
+		TeleportService:SetTeleportGui(gui)
 	end)
 end
 
@@ -119,6 +131,7 @@ function LoadingHud.start(playerGui: PlayerGui)
 	label.Text = ""
 	label.Parent = frame
 	tipLabel = label
+	arm(screen)
 
 	-- Join, and a teleport that has already landed, both start here.
 	present()
