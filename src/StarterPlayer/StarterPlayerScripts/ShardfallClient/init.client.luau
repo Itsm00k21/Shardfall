@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 6beeacb+ client` in Output.
+	still leaves `[Shardfall] build 710d9a3+ client` in Output.
 ]]
 
-print("[Shardfall] build 6beeacb+ client")
+print("[Shardfall] build 710d9a3+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1126,6 +1126,11 @@ menuHub = MenuHub.start(playerGui, {
 	onTab = function(id: string)
 		if hudShell ~= nil then
 			hudShell.setRail(id)
+		end
+	end,
+	onBadges = function(badges)
+		if hudShell ~= nil then
+			hudShell.setBadges(badges)
 		end
 	end,
 })

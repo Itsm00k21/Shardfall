@@ -17,14 +17,17 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagBoard"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
+local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NotifyBadges"))
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
+local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
 local RollMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollMath"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
@@ -42,6 +45,7 @@ export type Hooks = {
 	onMarket: () -> (),
 	onDim: (boolean) -> (),
 	onTab: ((string) -> ())?,
+	onBadges: (({ [string]: NotifyBadges.Badge }) -> ())?,
 }
 
 local function rgb(name: string): Color3
@@ -271,6 +275,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local autoOn = false
 	local quickOn = false
 	local infoOpen = false
+	local bagFilter = BagBoard.defaultFilter()
+	local seen = NotifyBadges.blank()
+	local salvageRarity = "Rare"
+	local salvageArmed = false
+	local stopAt = "Off"
+	local autoArmed = false
+	local autoToken = 0
+	local lastAutoStamp = -1
+	local tabDots: { [string]: Frame } = {}
 	local restColor: { [GuiButton]: Color3 } = {}
 	local tabButtons: { [string]: TextButton } = {}
 	local tabAccents: { [string]: Frame } = {}
@@ -603,6 +616,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
+	local noteView: (string) -> ()
+
 	local function show(id: string)
 		for pageId, frame in pairs(pages) do
 			frame.Visible = pageId == id
@@ -625,6 +640,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if hooks.onTab ~= nil then
 			hooks.onTab(if id == "sets" then "bag" else id)
 		end
+		noteView(id)
+	end
+
+	local function publishBadges()
+		seen = NotifyBadges.prepare(seen, profile)
+		local badges = NotifyBadges.evaluate(profile, seen)
+		for id, dot in pairs(tabDots) do
+			local badge = badges[id]
+			dot.Visible = badge ~= nil and badge.on == true
+		end
+		if hooks.onBadges ~= nil then
+			hooks.onBadges(badges)
+		end
+	end
+
+	function noteView(id: string)
+		seen = NotifyBadges.view(seen, id, profile)
+		publishBadges()
 	end
 
 	local function classMissing(): boolean
@@ -797,13 +830,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local mine = statMap(item)
 		local theirs = if other ~= nil and not same then statMap(other) else {}
 		local ids = {}
-		local seen: { [string]: boolean } = {}
+		local marked: { [string]: boolean } = {}
 		for id in pairs(mine) do
-			seen[id] = true
+			marked[id] = true
 			table.insert(ids, id)
 		end
 		for id in pairs(theirs) do
-			if seen[id] ~= true then
+			if marked[id] ~= true then
 				table.insert(ids, id)
 			end
 		end
@@ -920,6 +953,44 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		name.TextColor3 = rgb("text")
 		name.Text = tostring(item.name or "Item")
 		name.Parent = card
+		if BagBoard.isNew(item, seen.bagAt) then
+			local badge = Instance.new("TextLabel")
+			badge.Name = "New"
+			badge.AnchorPoint = Vector2.new(1, 0)
+			badge.Position = UDim2.new(1, -8, 0, 8)
+			badge.Size = UDim2.fromOffset(44, 22)
+			badge.BackgroundColor3 = rgb("accent")
+			badge.Font = headerFont()
+			badge.TextSize = UiTheme.MIN_TEXT
+			badge.TextColor3 = rgb("ink")
+			badge.Text = "NEW"
+			badge.ZIndex = 7
+			badge.Parent = card
+			local badgeCorner = Instance.new("UICorner")
+			badgeCorner.CornerRadius = UDim.new(0, 6)
+			badgeCorner.Parent = badge
+		end
+		local tip = Instance.new("TextLabel")
+		tip.Name = "Tip"
+		tip.BackgroundColor3 = rgb("header")
+		tip.BackgroundTransparency = 0.05
+		tip.Position = UDim2.fromOffset(8, 86)
+		tip.Size = UDim2.new(1, -16, 0, 32)
+		tip.Font = bodyFont()
+		tip.TextSize = UiTheme.MIN_TEXT
+		tip.TextWrapped = true
+		tip.TextXAlignment = Enum.TextXAlignment.Left
+		tip.TextColor3 = rgb("text")
+		tip.Text = BagBoard.summary(profile, item)
+		tip.Visible = selectedUid ~= nil and selectedUid == item.uid
+		tip.ZIndex = 7
+		tip.Parent = card
+		card.MouseEnter:Connect(function()
+			tip.Visible = true
+		end)
+		card.MouseLeave:Connect(function()
+			tip.Visible = selectedUid ~= nil and selectedUid == item.uid
+		end)
 		local uid = item.uid
 		if type(uid) == "string" then
 			local itemUid = uid
@@ -946,6 +1017,30 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			motion(equip)
 			equip.Activated:Connect(function()
 				equipUid(itemUid)
+			end)
+			local lock = Instance.new("TextButton")
+			lock.Name = "Lock"
+			lock.AnchorPoint = Vector2.new(1, 1)
+			lock.Position = UDim2.new(1, -8, 1, -56)
+			lock.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
+			lock.BackgroundColor3 = rgb("header")
+			lock.Font = headerFont()
+			lock.TextSize = UiTheme.MIN_TEXT
+			lock.TextColor3 = rgb("text")
+			lock.Text = if item.locked == true then "Locked" else "Lock"
+			lock.AutoButtonColor = false
+			lock.ZIndex = 7
+			lock.Parent = card
+			local lockCorner = Instance.new("UICorner")
+			lockCorner.CornerRadius = UDim.new(0, 8)
+			lockCorner.Parent = lock
+			setRest(lock, rgb("header"))
+			motion(lock)
+			local locked = item.locked == true
+			lock.Activated:Connect(function()
+				task.spawn(function()
+					pcall(hooks.invoke, "SetItemLock", itemUid, not locked)
+				end)
 			end)
 		end
 		return card
@@ -1308,22 +1403,106 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return host
 	end
 
+	local function nextSalvage(current: string): string
+		local following = BagBoard.nextRarity(current)
+		if following == "All" then
+			return "Common"
+		end
+		return following
+	end
+
 	local function paintBag()
 		clear(bag)
 		local items = bagItems()
-		row(bag, "Sets", 1, function()
+		local shown = BagBoard.rows(items, bagFilter, seen.bagAt)
+		local bar = Instance.new("Frame")
+		bar.Name = "Filters"
+		bar.BackgroundTransparency = 1
+		bar.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		bar.LayoutOrder = 1
+		bar.Parent = bag
+		local barLayout = Instance.new("UIListLayout")
+		barLayout.FillDirection = Enum.FillDirection.Horizontal
+		barLayout.Padding = UDim.new(0, UiTheme.PAD)
+		barLayout.Parent = bar
+		local function chip(label: string, fn: () -> ())
+			local button = Instance.new("TextButton")
+			button.Size = UDim2.new(0.25, -6, 1, 0)
+			button.BackgroundColor3 = rgb("header")
+			button.Font = headerFont()
+			button.TextSize = UiTheme.MIN_TEXT
+			button.TextColor3 = rgb("text")
+			button.Text = label
+			button.AutoButtonColor = false
+			button.Parent = bar
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = button
+			setRest(button, rgb("header"))
+			motion(button)
+			button.Activated:Connect(fn)
+		end
+		local function refreshBag()
+			paintBag()
+			show("bag")
+		end
+		chip("Rarity  " .. bagFilter.rarity, function()
+			bagFilter.rarity = BagBoard.nextRarity(bagFilter.rarity)
+			refreshBag()
+		end)
+		chip("Type  " .. bagFilter.kind, function()
+			bagFilter.kind = BagBoard.nextKind(bagFilter.kind, BagBoard.kinds(items))
+			refreshBag()
+		end)
+		chip(if bagFilter.onlyNew then "New  On" else "New", function()
+			bagFilter.onlyNew = not bagFilter.onlyNew
+			refreshBag()
+		end)
+		chip("Sort  " .. bagFilter.sort, function()
+			bagFilter.sort = BagBoard.nextSort(bagFilter.sort)
+			refreshBag()
+		end)
+		row(bag, "Sets", 2, function()
 			apply(UiRouter.push(route, "sets"))
 		end)
-		row(bag, "Open full bag", 2, function()
+		row(bag, "Open full bag", 3, function()
 			hooks.onBag()
 		end)
-		if #items == 0 then
+		if salvageArmed then
+			line(bag, BagBoard.confirm(salvageRarity), 4, rgb("loss"))
+			row(bag, "Confirm salvage", 5, function()
+				local rarity = salvageRarity
+				salvageArmed = false
+				task.spawn(function()
+					pcall(hooks.invoke, "BulkSalvage", rarity)
+				end)
+				refreshBag()
+			end)
+			row(bag, "Cancel", 6, function()
+				salvageArmed = false
+				refreshBag()
+			end)
+			row(bag, "Use  " .. nextSalvage(salvageRarity), 7, function()
+				salvageRarity = nextSalvage(salvageRarity)
+				refreshBag()
+			end)
+		else
+			row(bag, "Salvage  " .. salvageRarity, 4, function()
+				salvageArmed = true
+				refreshBag()
+			end)
+		end
+		if #shown == 0 then
 			emptyState(bag, "bag", "The bag is empty.", "Open full bag", function()
 				hooks.onBag()
 			end)
+			local empty = bag:FindFirstChild("Empty")
+			if empty ~= nil and empty:IsA("GuiObject") then
+				empty.LayoutOrder = 9
+			end
 		else
-			local host = cardHost(bag, bag, #items, 3)
-			for index, item in ipairs(items) do
+			local host = cardHost(bag, bag, #shown, 8)
+			for index, item in ipairs(shown) do
 				itemCard(host, item, index, "item")
 			end
 		end
@@ -1394,6 +1573,40 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
+	local function scheduleAuto()
+		autoToken += 1
+		local token = autoToken
+		task.delay(2, function()
+			if token ~= autoToken or not autoArmed or not autoOn then
+				return
+			end
+			local recent = RollBoard.history(bagItems(), 1)
+			local newest = recent[1]
+			local at = if newest ~= nil and type(newest.obtainedAt) == "number"
+				then newest.obtainedAt
+				else 0
+			if at == lastAutoStamp then
+				autoArmed = false
+				return
+			end
+			local rarity = if newest ~= nil and type(newest.rarity) == "string"
+				then newest.rarity
+				else ""
+			local tokens = if type(profile) == "table"
+					and type(profile.shardTokens) == "number"
+				then profile.shardTokens
+				else 0
+			if newest == nil or not RollBoard.shouldRollAgain(true, stopAt, rarity, tokens) then
+				autoArmed = false
+				lastAutoStamp = at
+				return
+			end
+			lastAutoStamp = at
+			hooks.onRoll()
+			scheduleAuto()
+		end)
+	end
+
 	local function paintRoll()
 		clear(roll)
 		local rollButton = Instance.new("TextButton")
@@ -1416,7 +1629,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		rollStroke.Parent = rollButton
 		setRest(rollButton, rgb("button"))
 		motion(rollButton)
-		rollButton.Activated:Connect(hooks.onRoll)
+		rollButton.Activated:Connect(function()
+			if autoOn then
+				autoArmed = true
+				scheduleAuto()
+			end
+			hooks.onRoll()
+		end)
 
 		local toggles = Instance.new("Frame")
 		toggles.Name = "Toggles"
@@ -1431,7 +1650,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local function toggle(name: string, text: string, on: boolean, fn: () -> ())
 			local button = Instance.new("TextButton")
 			button.Name = name
-			button.Size = UDim2.new(0.32, -4, 1, 0)
+			button.Size = UDim2.new(0.25, -6, 1, 0)
 			button.BackgroundColor3 = if on then rgb("button") else rgb("header")
 			button.Font = headerFont()
 			button.TextSize = UiTheme.MIN_TEXT
@@ -1449,10 +1668,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		toggle("Auto", if autoOn then "Auto On" else "Auto", autoOn, function()
 			autoOn = not autoOn
 			draft.rolls.autoConfirm = autoOn
+			if not autoOn then
+				autoArmed = false
+				autoToken += 1
+			end
 			save()
 			paintRoll()
 			show("roll")
 		end)
+		toggle(
+			"Stop",
+			if stopAt == "Off" then "Stop  Off" else "Stop at  " .. stopAt,
+			stopAt ~= "Off",
+			function()
+				stopAt = RollBoard.nextStop(stopAt)
+				paintRoll()
+				show("roll")
+			end
+		)
 		toggle("Quick", if quickOn then "Quick On" else "Quick", quickOn, function()
 			quickOn = not quickOn
 			paintRoll()
@@ -1526,28 +1759,112 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 
-		line(roll, "Last results", 4, rgb("gold"))
-		divider(roll, 5)
-		local recent = bagItems()
-		table.sort(recent, function(a, b)
-			local left = if type(a.obtainedAt) == "number" then a.obtainedAt else 0
-			local right = if type(b.obtainedAt) == "number" then b.obtainedAt else 0
-			return left > right
-		end)
-		if #recent == 0 then
-			line(roll, "No rolls yet.", 6, rgb("muted"))
+		local bars = RollBoard.bars(profile)
+		local function meter(name: string, caption: string, fill: number, order: number)
+			local host = Instance.new("Frame")
+			host.Name = name
+			host.BackgroundColor3 = rgb("header")
+			host.Size = UDim2.new(1, 0, 0, 28)
+			host.BorderSizePixel = 0
+			host.LayoutOrder = order
+			host.Parent = roll
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 6)
+			corner.Parent = host
+			local bar = Instance.new("Frame")
+			bar.Name = "Fill"
+			bar.Size = UDim2.fromScale(fill, 1)
+			bar.BackgroundColor3 = rgb("accent")
+			bar.BorderSizePixel = 0
+			bar.Parent = host
+			local barCorner = Instance.new("UICorner")
+			barCorner.CornerRadius = UDim.new(0, 6)
+			barCorner.Parent = bar
+			local label = Instance.new("TextLabel")
+			label.BackgroundTransparency = 1
+			label.Size = UDim2.fromScale(1, 1)
+			label.Font = bodyFont()
+			label.TextSize = UiTheme.MIN_TEXT
+			label.TextColor3 = rgb("text")
+			label.Text = caption
+			label.ZIndex = 2
+			label.Parent = host
+		end
+		meter(
+			"EpicPity",
+			string.format("Epic pity  %d%%", math.floor(bars.epic * 100 + 0.5)),
+			bars.epic,
+			4
+		)
+		meter(
+			"LegendaryPity",
+			string.format("Legendary pity  %d%%", math.floor(bars.legendary * 100 + 0.5)),
+			bars.legendary,
+			5
+		)
+		local luck = if type(profile) == "table" then profile.shardLuck or 0 else 0
+		local boost = if type(profile) == "table" then profile.luckBoost or 0 else 0
+		local sinceLegendary = if type(profile) == "table" then profile.sinceLegendary or 0 else 0
+		line(roll, "Odds", 6, rgb("gold"))
+		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, sinceLegendary)
+		if #odds == 0 then
+			line(roll, "Odds are unavailable.", 7, rgb("muted"))
 		else
-			local shown = math.min(4, #recent)
-			for index = 1, shown do
-				local item = recent[index]
+			for index, text in ipairs(odds) do
+				line(roll, text, 7 + index, rgb("text"))
+			end
+		end
+
+		local recent = RollBoard.history(bagItems(), RollBoard.HISTORY)
+		local celebrate = recent[1]
+		if type(celebrate) == "table" then
+			local rarity = if type(celebrate.rarity) == "string" then celebrate.rarity else "Common"
+			local banner = Instance.new("TextLabel")
+			banner.Name = "Celebration"
+			banner.BackgroundTransparency = 1
+			banner.Size = UDim2.new(1, 0, 0, 36)
+			banner.Font = headerFont()
+			banner.TextSize = 20
+			banner.TextColor3 = rgb("accent")
+			banner.Text = tostring(celebrate.name or "Item") .. "  " .. rarity
+			banner.LayoutOrder = 30
+			banner.Parent = roll
+			local scale = Instance.new("UIScale")
+			scale.Scale = RollBoard.celebrationScale(rarity)
+			scale.Parent = banner
+		end
+		line(roll, "Last 10", 31, rgb("gold"))
+		divider(roll, 32)
+		if #recent == 0 then
+			line(roll, "No rolls yet.", 33, rgb("muted"))
+		else
+			local strip = Instance.new("Frame")
+			strip.Name = "History"
+			strip.BackgroundTransparency = 1
+			strip.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+			strip.LayoutOrder = 33
+			strip.Parent = roll
+			local stripLayout = Instance.new("UIListLayout")
+			stripLayout.FillDirection = Enum.FillDirection.Horizontal
+			stripLayout.Padding = UDim.new(0, 4)
+			stripLayout.Parent = strip
+			for index, item in ipairs(recent) do
 				local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
 				local red, green, blue = UiTheme.rarityColor(rarity)
-				line(
-					roll,
-					tostring(item.name or "Item") .. "  " .. rarity,
-					6 + index,
-					Color3.fromRGB(red, green, blue)
-				)
+				local chip = Instance.new("TextLabel")
+				chip.Name = "Result"
+				chip.Size = UDim2.fromOffset(72, UiTheme.TOUCH)
+				chip.BackgroundColor3 = Color3.fromRGB(red, green, blue)
+				chip.Font = bodyFont()
+				chip.TextSize = UiTheme.MIN_TEXT
+				chip.TextColor3 = rgb("ink")
+				chip.Text = tostring(item.name or rarity)
+				chip.TextTruncate = Enum.TextTruncate.AtEnd
+				chip.LayoutOrder = index
+				chip.Parent = strip
+				local chipCorner = Instance.new("UICorner")
+				chipCorner.CornerRadius = UDim.new(0, 8)
+				chipCorner.Parent = chip
 			end
 		end
 	end
@@ -1949,9 +2266,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			paint()
 			follow(UiRouter.switch(route, tabId))
 		end)
+		local dot = Instance.new("Frame")
+		dot.Name = "Dot"
+		dot.AnchorPoint = Vector2.new(1, 0)
+		dot.Position = UDim2.new(1, -8, 0, 8)
+		dot.Size = UDim2.fromOffset(10, 10)
+		dot.BackgroundColor3 = rgb("accent")
+		dot.BorderSizePixel = 0
+		dot.Visible = false
+		dot.ZIndex = 7
+		dot.Parent = button
+		local dotCorner = Instance.new("UICorner")
+		dotCorner.CornerRadius = UDim.new(1, 0)
+		dotCorner.Parent = dot
 		tabButtons[tab.id] = button
 		tabAccents[tab.id] = accent
 		tabCaptions[tab.id] = caption
+		tabDots[tab.id] = dot
 	end
 	paintHints()
 
@@ -2048,6 +2379,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if route.open then
 				paint()
 				show(pageFor(route))
+			else
+				publishBadges()
 			end
 			showClassPrompt(false)
 		end,

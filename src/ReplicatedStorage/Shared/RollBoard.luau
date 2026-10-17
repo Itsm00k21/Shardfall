@@ -1,0 +1,142 @@
+--!strict
+
+--[[
+	Roll-tab numbers.
+
+	Pity fill, the odds lines, whether auto-roll should fire again, the
+	last results, and how big the celebration is. The reel still plays
+	the spin. This module does not roll.
+]]
+
+local Rarities = require("./Rarities")
+local RarityConfig = require("./RarityConfig")
+local RollMath = require("./RollMath")
+
+local RollBoard = {}
+
+RollBoard.HISTORY = 10
+RollBoard.STOPS = { "Off", "Uncommon", "Rare", "Epic", "Legendary" }
+
+export type Bars = {
+	epic: number,
+	legendary: number,
+}
+
+function RollBoard.fill(since: any, cap: number): number
+	local value = if type(since) == "number" then since else 0
+	if value ~= value or value < 0 then
+		value = 0
+	end
+	if cap <= 0 then
+		return 0
+	end
+	return math.clamp(value / cap, 0, 1)
+end
+
+function RollBoard.bars(profile: any): Bars
+	local epic = 0
+	local legendary = 0
+	if type(profile) == "table" then
+		epic = profile.sinceEpic or 0
+		legendary = profile.sinceLegendary or 0
+	end
+	return {
+		epic = RollBoard.fill(epic, RarityConfig.EPIC_PITY),
+		legendary = RollBoard.fill(legendary, RarityConfig.LEGENDARY_PITY),
+	}
+end
+
+function RollBoard.oddsLines(
+	pool: any,
+	luck: number,
+	boost: number,
+	sinceLegendary: number
+): { string }
+	local lines = {}
+	if type(pool) ~= "table" then
+		return lines
+	end
+	local ok, odds = pcall(RollMath.odds, pool, luck, {
+		luckBoost = boost,
+		rollsSinceLegendary = sinceLegendary,
+	})
+	if not ok or type(odds) ~= "table" or type(odds.rarities) ~= "table" then
+		return lines
+	end
+	for _, row in ipairs(odds.rarities) do
+		if
+			type(row) == "table"
+			and type(row.rarity) == "string"
+			and type(row.chance) == "number"
+		then
+			table.insert(lines, string.format("%s  %.1f%%", row.rarity, row.chance * 100))
+		end
+	end
+	return lines
+end
+
+function RollBoard.shouldRollAgain(
+	auto: boolean,
+	stopAt: string,
+	lastRarity: string,
+	tokens: number
+): boolean
+	if not auto or tokens < 1 then
+		return false
+	end
+	if stopAt == "" or stopAt == "Off" then
+		return true
+	end
+	local stopRank = Rarities.INDEX[stopAt]
+	if type(stopRank) ~= "number" then
+		return true
+	end
+	local got = Rarities.INDEX[lastRarity]
+	if type(got) ~= "number" then
+		return true
+	end
+	return got < stopRank
+end
+
+function RollBoard.history(items: { any }, limit: number): { any }
+	local copy = {}
+	for _, item in ipairs(items) do
+		if type(item) == "table" then
+			table.insert(copy, item)
+		end
+	end
+	table.sort(copy, function(a, b)
+		local left = if type(a.obtainedAt) == "number" then a.obtainedAt else 0
+		local right = if type(b.obtainedAt) == "number" then b.obtainedAt else 0
+		if left ~= right then
+			return left > right
+		end
+		return tostring(a.uid or "") < tostring(b.uid or "")
+	end)
+	local shown = {}
+	local count = if limit > 0 then limit else 0
+	for index = 1, math.min(count, #copy) do
+		shown[index] = copy[index]
+	end
+	return shown
+end
+
+function RollBoard.celebrationScale(rarity: string): number
+	local value = Rarities.INDEX[rarity]
+	if type(value) ~= "number" then
+		return 1
+	end
+	return 1 + (value - 1) * 0.08
+end
+
+function RollBoard.nextStop(current: string): string
+	local index = 1
+	for cursor, name in ipairs(RollBoard.STOPS) do
+		if name == current then
+			index = cursor
+		end
+	end
+	return RollBoard.STOPS[(index % #RollBoard.STOPS) + 1]
+end
+
+return RollBoard
