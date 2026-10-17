@@ -6,10 +6,11 @@
 	Gameplay is what fires while the menu is closed: the action bar, dodge,
 	heavy, interact, and the letters that open a tab. Menu is what fires
 	while the hub is open. Two actions in one of those sets must not share
-	a key. R is the heavy attack, so the Roll tab is T. Slots are 1 through
+	a key. R is the heavy attack, so the Roll tab is T. 	Slots are 1 through
 	8. Shift is dodge. The bar binds it above the control script, which
 	would otherwise sink Left Shift as sprint. F is interact, and only while
-	a prompt is showing.
+	a prompt is showing. On a gamepad the D-pad fires slots 1-4, and holding
+	LB fires 5-8. Jump, the camera, ButtonX, and Shift stay off that map.
 ]]
 
 local Keybinds = {}
@@ -35,6 +36,61 @@ Keybinds.SPRINT = { "LeftShift", "RightShift" }
 Keybinds.GAMEPAD = {
 	heavy = "ButtonX",
 }
+
+-- Direct fire for the eight slots. The four directions are slots 1-4,
+-- clockwise from up. Holding the modifier adds 4, so the same press
+-- reaches slots 5-8. ButtonL1 is free while the menu is closed. ButtonR1
+-- still changes tabs while the menu is open, so it is not the modifier.
+local padButtons: { [string]: number } = {
+	DPadUp = 1,
+	DPadRight = 2,
+	DPadDown = 3,
+	DPadLeft = 4,
+}
+
+local PAD_ARROW: { [string]: string } = {
+	DPadUp = "\u{2191}",
+	DPadRight = "\u{2192}",
+	DPadDown = "\u{2193}",
+	DPadLeft = "\u{2190}",
+}
+
+Keybinds.PAD = {
+	modifier = "ButtonL1",
+	buttons = padButtons,
+}
+
+local padGlyphs: { [number]: string } = {}
+for button, slot in pairs(padButtons) do
+	local arrow = PAD_ARROW[button]
+	if type(arrow) == "string" then
+		padGlyphs[slot] = arrow
+		padGlyphs[slot + 4] = "LB" .. arrow
+	end
+end
+Keybinds.PAD_GLYPH = padGlyphs
+
+-- Already owned. The slot map must not use these.
+-- ButtonA jumps. ButtonX is heavy and the proximity prompt (F on a keyboard).
+-- ButtonL2 and ButtonR2 zoom the camera. Thumbstick2 looks. Shift dodges.
+-- ButtonB closes the menu. ButtonR1 moves between tabs while it is open.
+local padReserved: { [string]: string } = {
+	ButtonA = "jump",
+	ButtonX = "interact",
+	ButtonL2 = "camera",
+	ButtonR2 = "camera",
+	ButtonL3 = "camera",
+	ButtonR3 = "camera",
+	Thumbstick1 = "move",
+	Thumbstick2 = "camera",
+	ButtonB = "menu",
+	ButtonR1 = "menu",
+	LeftShift = "dodge",
+	RightShift = "dodge",
+	Space = "jump",
+	F = "interact",
+}
+Keybinds.PAD_RESERVED = padReserved
 
 Keybinds.MENU_ORDER = { "hero", "bag", "pets", "roll", "raids", "market" }
 
@@ -297,6 +353,118 @@ function Keybinds.sinkNames(): { string }
 		add(key)
 	end
 	return names
+end
+
+local SLOT_KEYS = {
+	Keybinds.COMBAT.slot1,
+	Keybinds.COMBAT.slot2,
+	Keybinds.COMBAT.slot3,
+	Keybinds.COMBAT.slot4,
+	Keybinds.COMBAT.slot5,
+	Keybinds.COMBAT.slot6,
+	Keybinds.COMBAT.slot7,
+	Keybinds.COMBAT.slot8,
+}
+
+function Keybinds.usesGamepad(inputTypeName: string): boolean
+	return type(inputTypeName) == "string" and string.match(inputTypeName, "^Gamepad[1-8]$") ~= nil
+end
+
+-- Key label, or the controller glyph when a gamepad was the last input.
+function Keybinds.slotFace(index: number, inputTypeName: string): string
+	if Keybinds.usesGamepad(inputTypeName) then
+		local glyph = Keybinds.PAD_GLYPH[index]
+		if type(glyph) == "string" then
+			return glyph
+		end
+		return ""
+	end
+	local key = SLOT_KEYS[index]
+	if type(key) ~= "string" then
+		return ""
+	end
+	return Keybinds.display(key)
+end
+
+function Keybinds.padSlot(button: string, modified: boolean): number?
+	if type(button) ~= "string" then
+		return nil
+	end
+	local base = Keybinds.PAD.buttons[button]
+	if type(base) ~= "number" then
+		return nil
+	end
+	if modified then
+		return base + 4
+	end
+	return base
+end
+
+local function clashes(button: string, problems: { string })
+	local why = padReserved[button]
+	if why ~= nil then
+		table.insert(problems, button .. " is " .. why)
+	end
+	for id, key in pairs(Keybinds.GAMEPAD) do
+		if key == button then
+			table.insert(problems, button .. " clashes with " .. id)
+		end
+	end
+	for id, key in pairs(Keybinds.COMBAT) do
+		if key == button then
+			table.insert(problems, button .. " clashes with " .. id)
+		end
+	end
+	for _, key in ipairs(Keybinds.SPRINT) do
+		if key == button then
+			table.insert(problems, button .. " clashes with sprint")
+		end
+	end
+end
+
+-- Empty when every slot is reachable and no pad key is already owned.
+function Keybinds.padCollisions(): { string }
+	local problems = {}
+	local seenSlot: { [number]: boolean } = {}
+	local covered: { [number]: boolean } = {}
+	local seenGlyph: { [string]: boolean } = {}
+	for button, slot in pairs(Keybinds.PAD.buttons) do
+		if type(slot) ~= "number" or slot < 1 or slot > 4 or slot ~= math.floor(slot) then
+			table.insert(problems, button .. " is not a base slot")
+		else
+			if seenSlot[slot] == true then
+				table.insert(problems, "slot " .. tostring(slot) .. " is duplicated")
+			end
+			seenSlot[slot] = true
+			covered[slot] = true
+			covered[slot + 4] = true
+		end
+		clashes(button, problems)
+		if button == Keybinds.PAD.modifier then
+			table.insert(problems, "modifier clashes with " .. button)
+		end
+	end
+	local modifier = Keybinds.PAD.modifier
+	if type(modifier) ~= "string" or modifier == "" then
+		table.insert(problems, "modifier is missing")
+	else
+		clashes(modifier, problems)
+	end
+	for index = 1, 8 do
+		if covered[index] ~= true then
+			table.insert(problems, "slot " .. tostring(index) .. " is unreachable")
+		end
+		local glyph = Keybinds.PAD_GLYPH[index]
+		if type(glyph) ~= "string" or glyph == "" then
+			table.insert(problems, "slot " .. tostring(index) .. " has no glyph")
+		elseif seenGlyph[glyph] == true then
+			table.insert(problems, "glyph duplicated for slot " .. tostring(index))
+		else
+			seenGlyph[glyph] = true
+		end
+	end
+	table.sort(problems)
+	return problems
 end
 
 return Keybinds

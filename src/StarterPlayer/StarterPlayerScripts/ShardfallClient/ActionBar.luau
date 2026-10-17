@@ -5,7 +5,9 @@
 
 	A click, a tap, or the key asks the server to use that slot. Shift
 	dodges. F is the interact prompt and only shows while a prompt is up.
-	Gamepad paging is not bound.
+	On a gamepad the D-pad uses slots 1-4, and holding LB uses slots 5-8.
+	The corner shows that glyph while a gamepad was the last input, and
+	the key number otherwise. Both paths call useSlot.
 
 	The old cluster used the settings gear, the help-tab question mark, and
 	an empty icon, and it dropped the key when the engine had already
@@ -21,6 +23,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
+local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 
 local ActionBar = {}
@@ -156,6 +159,24 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		bindStroke.Thickness = 1
 		bindStroke.Color = Color3.fromRGB(12, 8, 20)
 		bindStroke.Parent = bind
+		local pad = Instance.new("TextLabel")
+		pad.Name = "PadGlyph"
+		pad.AnchorPoint = Vector2.new(1, 1)
+		pad.Position = UDim2.new(1, -2, 1, -1)
+		pad.Size = UDim2.fromOffset(40, 14)
+		pad.BackgroundTransparency = 1
+		pad.Font = Enum.Font.BuilderSansBold
+		pad.TextSize = 11
+		pad.TextXAlignment = Enum.TextXAlignment.Right
+		pad.TextColor3 = Color3.fromRGB(255, 248, 230)
+		pad.Text = ""
+		pad.Visible = false
+		pad.ZIndex = 7
+		pad.Parent = button
+		local padStroke = Instance.new("UIStroke")
+		padStroke.Thickness = 1
+		padStroke.Color = Color3.fromRGB(12, 8, 20)
+		padStroke.Parent = pad
 		local stacks = Instance.new("TextLabel")
 		stacks.Name = "Stacks"
 		stacks.AnchorPoint = Vector2.new(0, 1)
@@ -630,6 +651,31 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		task.delay(1.2, hideTip)
 	end)
 
+	local function applyFaces(inputTypeName: string)
+		local gamepad = Keybinds.usesGamepad(inputTypeName)
+		for index, button in ipairs(buttons) do
+			local bind = button:FindFirstChild("Bind")
+			local glyph = button:FindFirstChild("PadGlyph")
+			local face = Keybinds.slotFace(index, inputTypeName)
+			if bind ~= nil and bind:IsA("TextLabel") then
+				bind.Visible = not gamepad
+				if not gamepad then
+					bind.Text = face
+				end
+			end
+			if glyph ~= nil and glyph:IsA("TextLabel") then
+				glyph.Visible = gamepad
+				if gamepad then
+					glyph.Text = face
+				end
+			end
+		end
+	end
+	applyFaces(UserInputService:GetLastInputType().Name)
+	UserInputService.LastInputTypeChanged:Connect(function(inputType)
+		applyFaces(inputType.Name)
+	end)
+
 	local codes = {}
 	for index = 1, ActionSlots.COUNT do
 		local key = ActionSlots.KEYS[index]
@@ -674,6 +720,39 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Enum.ContextActionPriority.High.Value,
 		Enum.KeyCode.LeftShift,
 		Enum.KeyCode.RightShift
+	)
+
+	local padCodes = {}
+	for button in pairs(Keybinds.PAD.buttons) do
+		local code = (Enum.KeyCode :: any)[button]
+		if code ~= nil then
+			table.insert(padCodes, code)
+		end
+	end
+	local modifierCode = (Enum.KeyCode :: any)[Keybinds.PAD.modifier]
+	ContextActionService:BindActionAtPriority(
+		"ShardfallActionBarPad",
+		function(_name, state, input)
+			if callbacks.menuOpen() then
+				return Enum.ContextActionResult.Pass
+			end
+			local modified = false
+			if modifierCode ~= nil and UserInputService:IsKeyDown(modifierCode) then
+				modified = true
+			end
+			local index = Keybinds.padSlot(input.KeyCode.Name, modified)
+			if index == nil then
+				return Enum.ContextActionResult.Pass
+			end
+			if state ~= Enum.UserInputState.Begin then
+				return Enum.ContextActionResult.Sink
+			end
+			useSlot(index)
+			return Enum.ContextActionResult.Sink
+		end,
+		false,
+		Enum.ContextActionPriority.High.Value,
+		table.unpack(padCodes)
 	)
 
 	ProximityPromptService.PromptShown:Connect(function(prompt)
