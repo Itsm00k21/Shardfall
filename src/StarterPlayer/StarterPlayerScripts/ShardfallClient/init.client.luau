@@ -1128,6 +1128,11 @@ menuHub = MenuHub.start(playerGui, {
 			hudShell.setRail(id)
 		end
 	end,
+	onBadges = function(badges)
+		if hudShell ~= nil then
+			hudShell.setBadges(badges)
+		end
+	end,
 })
 
 hudShell = HudShell.start(playerGui, {

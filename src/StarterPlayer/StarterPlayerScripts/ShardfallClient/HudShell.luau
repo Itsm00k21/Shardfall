@@ -813,6 +813,25 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				accent.Visible = name == shown
 			end
 		end,
+		setBadges = function(badges: { [string]: { on: boolean, tip: string } })
+			local names = { hero = "Hero", bag = "Bag", pass = "Pass" }
+			for id, railName in pairs(names) do
+				local badge = badges[id]
+				if badge ~= nil then
+					local dot = dots[railName]
+					if dot ~= nil then
+						dot.Visible = badge.on
+					end
+					local button = rail:FindFirstChild(railName)
+					if button ~= nil then
+						local tip = button:FindFirstChild("Tip")
+						if tip ~= nil and tip:IsA("TextLabel") and badge.tip ~= "" then
+							tip.Text = badge.tip
+						end
+					end
+				end
+			end
+		end,
 		noteDevice = function(touch: boolean)
 			touchDevice = touch
 			place()
