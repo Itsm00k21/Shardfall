@@ -1,5 +1,7 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -126,6 +128,14 @@ describe("Trading", function()
 		expect(Trading.dailyCap(actor(1, 39, 30))).toEqual(150000)
 		expect(Trading.dailyCap(actor(1, 55, 30))).toEqual(2000000)
 		expect(Trading.dailyCap(actor(1, 40, 14))).toEqual(2000000)
+		expect(Trading.dailyCap(actor(1, 10, 20, { spender = true }))).toEqual(150000)
+		expect(Trading.tradeCap(actor(1, 10, 20, { spender = true }))).toEqual(150000)
+		expect(Trading.dailyCap(actor(1, 10, 3, { spender = true }))).toEqual(2000)
+		expect(Trading.dailyCap(actor(1, 40, 14, { spender = true }))).toEqual(2000000)
+		expect(Trading.dailyCap(actor(1, 12, 80, { clean = 60, spender = true }))).toEqual(2000000)
+		expect(Trading.CAPS.Receipt).toEqual(150000)
+		expect(Trading.CAPS.Receipt).toEqual(Trading.CAPS.StandardMax)
+		expect(Trading.CAPS.Trusted).toEqual(2000000)
 		expect(Trading.dailyCap(actor(1, 4, 1, { patron = true }))).toEqual(math.huge)
 		expect(Trading.ROBUX_ITEM_TRADING_ENABLED).toEqual(false)
 	end)
@@ -722,6 +732,146 @@ describe("Trading", function()
 		expect(done.ok).toEqual(true)
 		expect(left.tradeDay).toEqual(day)
 		expect(left.tradeValueToday).toEqual(90)
+	end)
+
+	spec("a forged or ungranted receipt does not lift the trade cap", function()
+		expect(Schema.VERSION).toEqual(24)
+		local saved = Schema.migrate({
+			schemaVersion = 24,
+			gold = 12,
+			receipts = { legacy = true },
+			verifiedSpender = true,
+		})
+		assert(saved ~= nil)
+		expect(saved.schemaVersion).toEqual(24)
+		expect(saved.gold).toEqual(12)
+		expect(saved.receipts.legacy).toEqual(true)
+		expect(Trading.verifiedFromReceipts(saved)).toEqual(false)
+		expect(Trading.receiptCounts(true)).toEqual(false)
+		expect(Trading.receiptCounts({ verified = true })).toEqual(false)
+		expect(Trading.receiptCounts({ verified = true, granted = false })).toEqual(false)
+		expect(Trading.receiptCounts({ granted = true })).toEqual(false)
+		expect(Trading.receiptCounts({ verified = true, granted = true, cosmetic = true })).toEqual(
+			false
+		)
+		expect(Trading.receiptCounts({ verified = true, granted = true })).toEqual(true)
+		expect(Trading.receiptCounts({ verified = true, granted = true, cosmetic = false })).toEqual(
+			true
+		)
+
+		local function fromSave(receipts: any, level: number, age: number): Trading.Actor
+			local data = {
+				receipts = receipts,
+				verifiedSpender = true,
+			}
+			return actor(1, level, age, { spender = Trading.verifiedFromReceipts(data) })
+		end
+
+		expect(Trading.verifiedFromReceipts({ verifiedSpender = true })).toEqual(false)
+		expect(Trading.verifiedFromReceipts({
+			verifiedSpender = true,
+			receipts = { forged = true, note = "paid", count = 1 },
+		})).toEqual(false)
+
+		local forged = fromSave({ forged = true }, 10, 20)
+		expect(forged.verifiedSpender).toEqual(false)
+		expect(Trading.tier(forged)).toEqual("New")
+		expect(Trading.dailyCap(forged)).toEqual(2000)
+
+		local ungranted = fromSave({
+			id = { verified = true, granted = false },
+		}, 30, 40)
+		expect(ungranted.verifiedSpender).toEqual(false)
+		expect(Trading.tier(ungranted)).toEqual("Standard")
+		expect(Trading.dailyCap(ungranted)).toEqual(50000 + (30 - 15) * 5000)
+
+		local cosmetic = fromSave({
+			look = { verified = true, granted = true, cosmetic = true },
+		}, 10, 20)
+		expect(cosmetic.verifiedSpender).toEqual(false)
+		expect(Trading.dailyCap(cosmetic)).toEqual(2000)
+
+		local granted = fromSave({
+			legacy = true,
+			look = { verified = true, granted = true, cosmetic = true },
+			pockets = { verified = true, granted = true, cosmetic = false },
+		}, 10, 20)
+		expect(granted.verifiedSpender).toEqual(true)
+		expect(Trading.tier(granted)).toEqual("Trusted")
+		expect(Trading.dailyCap(granted)).toEqual(150000)
+		expect(Trading.tradeCap(granted)).toEqual(150000)
+		expect(Trading.CAPS.Trusted).toEqual(2000000)
+
+		local young = fromSave({
+			pockets = { verified = true, granted = true },
+		}, 40, 13)
+		expect(young.verifiedSpender).toEqual(true)
+		expect(Trading.tier(young)).toEqual("New")
+		expect(Trading.dailyCap(young)).toEqual(2000)
+
+		local now = 90_000
+		local ctx = context()
+		local other = actor(2, 40, 80)
+		local serial = 0
+		local function goldTrade(who: Trading.Actor, gold: number): (Trading.Result, any)
+			serial += 1
+			local left = profile(gold + 1000)
+			local right = profile(0)
+			local session = Trading.open("receipt-cap-" .. tostring(serial), who.userId, 2, now)
+			assert(session ~= nil)
+			expect(Trading.setOffer(session, who.userId, { gold = gold }, now)).toEqual(true)
+			local ready = now + Trading.LOCK_SECONDS
+			expect(Trading.confirm(session, who.userId, ready)).toEqual(true)
+			expect(Trading.confirm(session, 2, ready)).toEqual(true)
+			local result =
+				Trading.finish(session, who.userId, left, right, who, other, ctx, ready, true)
+			return result, left
+		end
+
+		local over, overBag = goldTrade(granted, 150001)
+		expect(over.ok).toEqual(false)
+		expect(over.error).toEqual("That trade is over today's limit.")
+		expect(overBag.gold).toEqual(151001)
+
+		local oldCap, oldBag = goldTrade(granted, 2000000)
+		expect(oldCap.ok).toEqual(false)
+		expect(oldCap.error).toEqual("That trade is over today's limit.")
+		expect(oldBag.gold).toEqual(2001000)
+
+		local held, heldBag = goldTrade(granted, 150000)
+		expect(held.ok).toEqual(true)
+		expect(held.pending).toEqual(true)
+		expect(heldBag.gold).toEqual(151000)
+
+		local earned = actor(3, 40, 14)
+		local big, bigBag = goldTrade(earned, 150001)
+		expect(big.ok).toEqual(true)
+		expect(big.pending).toEqual(true)
+		expect(bigBag.gold).toEqual(151001)
+
+		local mule, muleBag = goldTrade(forged, 150000)
+		expect(mule.ok).toEqual(false)
+		expect(mule.error).toEqual("That trade is over today's limit.")
+		expect(muleBag.gold).toEqual(151000)
+
+		local tooYoung, youngBag = goldTrade(young, 2001)
+		expect(tooYoung.ok).toEqual(false)
+		expect(tooYoung.error).toEqual("That trade is over today's limit.")
+		expect(youngBag.gold).toEqual(3001)
+
+		local market = fs.readFile("src/ServerScriptService/ShardfallServer/MarketService.luau")
+		local trade = fs.readFile("src/ServerScriptService/ShardfallServer/TradeService.luau")
+		local receipts = fs.readFile("src/ServerScriptService/ShardfallServer/ReceiptService.luau")
+		expect(string.find(market, "Trading.verifiedFromReceipts", 1, true) ~= nil).toBeTrue()
+		expect(string.find(trade, "Trading.verifiedFromReceipts", 1, true) ~= nil).toBeTrue()
+		expect(string.find(market, "data.verifiedSpender == true", 1, true)).toBeNil()
+		expect(string.find(trade, "data.verifiedSpender == true", 1, true)).toBeNil()
+		expect(string.find(market, "value == true", 1, true)).toBeNil()
+		expect(string.find(trade, "value == true", 1, true)).toBeNil()
+		expect(
+			string.find(receipts, "duplicate = Economy.receipt(data, receiptId)", 1, true) ~= nil
+		).toBeTrue()
+		expect(string.find(receipts, "NotProcessedYet", 1, true) ~= nil).toBeTrue()
 	end)
 end)
 
