@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local Stars = require(ReplicatedStorage.Shared.Stars)
+local Trading = require(ReplicatedStorage.Shared.Trading)
 local DataService = require(script.Parent.DataService)
 
 local InventoryService = {}
@@ -38,6 +39,10 @@ function InventoryService.remove(player: Player, uid: string): (boolean, string?
 		if item == nil or bag == nil then
 			return "You do not have that item."
 		end
+		local held = Trading.consumeBlock(uid)
+		if held ~= nil then
+			return held
+		end
 		if item.locked == true then
 			return "That item is locked."
 		end
@@ -56,6 +61,10 @@ function InventoryService.feed(player: Player, keptUid: string, feederUid: strin
 		local feeder, feederBag = Schema.findItem(data, feederUid)
 		if kept == nil or feeder == nil or keptBag == nil or feederBag == nil then
 			return "You do not have that item."
+		end
+		local held = Trading.consumeBlock(feederUid) or Trading.consumeBlock(keptUid)
+		if held ~= nil then
+			return held
 		end
 		if feeder.locked == true then
 			return "That item is locked."

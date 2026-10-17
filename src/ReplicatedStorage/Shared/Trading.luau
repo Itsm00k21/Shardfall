@@ -213,6 +213,7 @@ type Hold = {
 }
 
 local holds: { [string]: Hold } = {}
+local tradeItems: { [string]: string } = {}
 local busy: { [number]: boolean } = {}
 local nextSerial = 0
 local sharedLog: { AuditEntry } = {}
@@ -227,6 +228,7 @@ end
 
 function Trading.reset()
 	table.clear(holds)
+	table.clear(tradeItems)
 	table.clear(busy)
 	nextSerial = 0
 end
@@ -387,6 +389,37 @@ function Trading.itemHold(uid: string): string?
 		end
 	end
 	return nil
+end
+
+-- Salvage, sell, and feed all refuse this. A market listing and an open
+-- trade offer are the same kind of hold: the item is still in the bag.
+function Trading.consumeBlock(uid: string): string?
+	if type(uid) ~= "string" or uid == "" then
+		return nil
+	end
+	if Trading.itemHold(uid) ~= nil then
+		return "That item is listed on the Market Board."
+	end
+	if tradeItems[uid] ~= nil then
+		return "That item is in a trade."
+	end
+	return nil
+end
+
+local function dropTradeOffer(sessionId: string, offer: Offer)
+	for _, uid in ipairs(offer.items) do
+		if tradeItems[uid] == sessionId then
+			tradeItems[uid] = nil
+		end
+	end
+end
+
+local function keepTradeOffer(sessionId: string, offer: Offer)
+	for _, uid in ipairs(offer.items) do
+		if type(uid) == "string" and uid ~= "" then
+			tradeItems[uid] = sessionId
+		end
+	end
 end
 
 function Trading.heldCount(userId: number, kind: string, id: string, exceptListing: string?): number
@@ -729,7 +762,9 @@ function Trading.setOffer(
 	if offer == nil then
 		return false, err
 	end
+	dropTradeOffer(session.id, side.offer)
 	side.offer = offer
+	keepTradeOffer(session.id, offer)
 	session.revision += 1
 	session.changedAt = now
 	clearReady(session)
@@ -775,6 +810,8 @@ function Trading.cancel(session: Session, userId: number): (boolean, string?)
 	if Trading.side(session, userId) == nil then
 		return false, "You are not in this trade."
 	end
+	dropTradeOffer(session.id, session.left.offer)
+	dropTradeOffer(session.id, session.right.offer)
 	session.status = "cancelled"
 	return true, nil
 end
@@ -1993,6 +2030,8 @@ function Trading.finish(
 	end
 	session.status = "committed"
 	session.auditId = entryId
+	dropTradeOffer(session.id, session.left.offer)
+	dropTradeOffer(session.id, session.right.offer)
 	return {
 		ok = true,
 		auditId = entryId,

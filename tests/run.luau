@@ -84,5 +84,6 @@ require("./VerdantVisuals.spec")
 require("./RootvaultSpawn.spec")
 require("./Stars.spec")
 require("./Trading.spec")
+require("./AuditExploit.spec")
 
 process.exit(framework.run())

@@ -15,10 +15,10 @@
 	subscribe cannot sit in front of the profile load.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build e163aa8+ server` in Output.
+	still leaves `[Shardfall] build c9add29+ server` in Output.
 ]]
 
-print("[Shardfall] build e163aa8+ server")
+print("[Shardfall] build c9add29+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
@@ -109,13 +109,18 @@ begin("CombatHooks", function()
 		end,
 		onEnemyHit = function(player, enemyId, amount, crit, heavy)
 			local killed = DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
-			ClassService.grantXp(player, if killed then 24 else 4)
+			if not DungeonService.isPractice(player) then
+				ClassService.grantXp(player, if killed then 24 else 4)
+			end
 		end,
 		onPlayerDown = function(player)
 			DungeonService.onPlayerDown(player)
 		end,
 		inRun = function(player)
 			return DungeonService.isInRun(player)
+		end,
+		paysProgress = function(player)
+			return not DungeonService.isPractice(player)
 		end,
 	})
 end)

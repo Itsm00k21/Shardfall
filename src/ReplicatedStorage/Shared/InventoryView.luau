@@ -15,6 +15,7 @@ local Pools = require("./Pools")
 local Rarities = require("./Rarities")
 local Schema = require("./Schema")
 local Stats = require("./Stats")
+local Trading = require("./Trading")
 
 local InventoryView = {}
 
@@ -235,6 +236,12 @@ function InventoryView.salvageBlock(profile: any, item: any): string?
 		and Schema.isEquipped(profile, item.uid)
 	then
 		return "Unequip it before salvaging."
+	end
+	if type(item.uid) == "string" then
+		local held = Trading.consumeBlock(item.uid)
+		if held ~= nil then
+			return held
+		end
 	end
 	return nil
 end

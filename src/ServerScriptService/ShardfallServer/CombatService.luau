@@ -46,6 +46,7 @@ type Hooks = {
 	onEnemyHit: (Player, string, number, boolean, boolean) -> (),
 	onPlayerDown: (Player) -> (),
 	inRun: (Player) -> boolean,
+	paysProgress: ((Player) -> boolean)?,
 }
 
 type State = {
@@ -99,6 +100,7 @@ local hooks: Hooks = {
 }
 
 local vitals: { [Player]: State } = {}
+local telegraphs: { [Player]: { CombatFeel.Telegraph } } = {}
 local autoOn: { [Player]: boolean } = {}
 local steerUntil: { [Player]: number } = {}
 local shots: { Shot } = {}
@@ -387,13 +389,42 @@ local function heal(player: Player, amount: number, x: number, y: number, z: num
 end
 
 -- Returns true when this hit dropped the player. The dungeon ends the run.
+function CombatService.noteTelegraph(player: Player, endsAt: number)
+	if type(endsAt) ~= "number" or endsAt ~= endsAt then
+		return
+	end
+	local now = os.clock()
+	local list = CombatFeel.pruneTelegraphs(telegraphs[player] or {}, now)
+	table.insert(list, CombatFeel.openTelegraph(endsAt))
+	telegraphs[player] = list
+end
+
+local function awardedRecently(player: Player, now: number): boolean
+	local list = telegraphs[player]
+	if list == nil then
+		return false
+	end
+	for _, window in ipairs(list) do
+		if window.awarded == true and now <= window.endsAt + CombatFeel.DODGE_LATENCY then
+			return true
+		end
+	end
+	return false
+end
+
+local function grantsProgress(player: Player): boolean
+	if hooks.paysProgress == nil then
+		return true
+	end
+	return hooks.paysProgress(player)
+end
+
 function CombatService.damagePlayer(
 	player: Player,
 	rawDamage: number,
 	x: number,
 	y: number,
-	z: number,
-	telegraphEndsAt: number?
+	z: number
 ): boolean
 	local state = ensure(player)
 	if state.hp <= 0 then
@@ -401,11 +432,9 @@ function CombatService.damagePlayer(
 	end
 	local now = os.clock()
 	if CombatFeel.iframe(state.dodge, now) then
-		local perfect = telegraphEndsAt ~= nil and CombatFeel.perfect(telegraphEndsAt, now)
-		if perfect then
-			CombatFeel.notePerfect(state.dodge, now)
-			state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
-		end
+		-- Ult was already decided when the dodge arrived. A hit during
+		-- i-frames does not score a second perfect off a client time.
+		local perfect = awardedRecently(player, now)
 		fx(player, {
 			kind = "dodge",
 			perfect = perfect,
@@ -740,7 +769,7 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	OnboardingService.note(player, "swing")
 end
 
-function CombatService.dodge(player: Player, telegraphEndsAt: any)
+function CombatService.dodge(player: Player)
 	if not hooks.inRun(player) then
 		return
 	end
@@ -751,13 +780,15 @@ function CombatService.dodge(player: Player, telegraphEndsAt: any)
 		fx(player, { kind = "dodge", perfect = false, charges = 0, ult = state.ult })
 		return
 	end
-	local ends = if type(telegraphEndsAt) == "number" then telegraphEndsAt else nil
-	local perfect = ends ~= nil and CombatFeel.perfect(ends, now)
+	-- The remote may still carry an old client clock. It is not an argument.
+	local perfect = CombatFeel.scoreAny(telegraphs[player], now, nil)
 	if perfect then
 		CombatFeel.notePerfect(state.dodge, now)
 		state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
 	end
-	LoopService.progress(player, "dodge", 1)
+	if grantsProgress(player) then
+		LoopService.progress(player, "dodge", 1)
+	end
 	local hrp = rootPart(player)
 	fx(player, {
 		kind = "dodge",
@@ -1027,6 +1058,7 @@ function CombatService.start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		vitals[player] = nil
+		telegraphs[player] = nil
 		autoOn[player] = nil
 		steerUntil[player] = nil
 		lastHint[player] = nil

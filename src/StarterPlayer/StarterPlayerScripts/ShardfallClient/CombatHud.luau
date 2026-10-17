@@ -53,7 +53,6 @@ local player = Players.LocalPlayer
 local attackRemote: RemoteEvent? = nil
 local dodgeRemote: RemoteEvent? = nil
 local allowShake = true
-local telegraphEndsAt = 0
 local walletLabel: TextLabel? = nil
 local pendingWallet: { number }? = nil
 
@@ -143,7 +142,7 @@ function CombatHud.dodge()
 	if remote == nil then
 		return
 	end
-	remote:FireServer(telegraphEndsAt)
+	remote:FireServer()
 end
 
 function CombatHud.setFeel(tier: string, shake: boolean)
@@ -547,7 +546,6 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		elseif payload.kind == "telegraph" then
 			local verb = if type(payload.verb) == "string" then payload.verb else "dodge"
 			local colorName = if type(payload.color) == "string" then payload.color else "red"
-			telegraphEndsAt = numberFrom(payload, "endsAt") or 0
 			cueLabel.Text = string.upper(colorName) .. "  " .. verb
 			cueLabel.Visible = true
 			playCue(colorName)

@@ -108,6 +108,68 @@ function CombatFeel.perfect(telegraphEndsAt: number, now: number): boolean
 	return now <= telegraphEndsAt and now >= telegraphEndsAt - CombatFeel.PERFECT_WINDOW
 end
 
+export type Telegraph = {
+	endsAt: number,
+	awarded: boolean,
+}
+
+-- A dodge packet arrives after the press. This is the only extra time past
+-- the telegraph end. It does not open the window any earlier.
+CombatFeel.DODGE_LATENCY = 0.1
+
+function CombatFeel.openTelegraph(endsAt: number): Telegraph
+	return {
+		endsAt = endsAt,
+		awarded = false,
+	}
+end
+
+-- `clientStamp` is never read. Perfect is the server receive time against
+-- the server window, and one telegraph pays ult once.
+function CombatFeel.scorePerfect(window: Telegraph?, now: number, _clientStamp: any): boolean
+	if window == nil or window.awarded == true then
+		return false
+	end
+	local endsAt = window.endsAt
+	if type(endsAt) ~= "number" or endsAt ~= endsAt then
+		return false
+	end
+	if type(now) ~= "number" or now ~= now then
+		return false
+	end
+	local early = endsAt - CombatFeel.PERFECT_WINDOW
+	local late = endsAt + CombatFeel.DODGE_LATENCY
+	if now < early or now > late then
+		return false
+	end
+	window.awarded = true
+	return true
+end
+
+-- One dodge scores at most one telegraph. Each window still pays only once.
+function CombatFeel.scoreAny(windows: { Telegraph }?, now: number, clientStamp: any): boolean
+	if windows == nil then
+		return false
+	end
+	for _, window in ipairs(windows) do
+		if CombatFeel.scorePerfect(window, now, clientStamp) then
+			return true
+		end
+	end
+	return false
+end
+
+function CombatFeel.pruneTelegraphs(windows: { Telegraph }, now: number): { Telegraph }
+	local kept = {}
+	local limit = CombatFeel.DODGE_LATENCY
+	for _, window in ipairs(windows) do
+		if type(window.endsAt) == "number" and now <= window.endsAt + limit then
+			table.insert(kept, window)
+		end
+	end
+	return kept
+end
+
 function CombatFeel.notePerfect(state: DodgeState, now: number)
 	state.slowUntil = now + CombatFeel.SLOWMO_SECONDS
 end
