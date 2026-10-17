@@ -20,9 +20,9 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-004 | M | content | 8 pet evolution lines (3 stages each), matching the rules in `PetEvolution.luau` | `docs/content/pet_evolutions.md` | done | https://github.com/Itsm00k21/Shardfall/pull/69 |
 | G-005 | M | content | 24 armor pieces (helm, chest, legs, boots) across rarities, grouped into 6 themed looks | `docs/content/armor_batch1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/69 |
 | G-006 | S | content | 20 accessories (rings, amulets, charms) with a suggested stat line | `docs/content/accessories.md` | done | https://github.com/Itsm00k21/Shardfall/pull/69 |
-| G-007 | M | content | 8 armor set bonuses (2-piece and 4-piece, suggested numbers). Read `docs/design/relic_sets.md` and `RelicSets.luau`; do not duplicate Relic Sets. | `docs/content/set_bonuses.md` | todo | — |
-| G-008 | L | content | 6 skill concepts for each of the five classes (name, role, cooldown suggestion, VFX note). Read `docs/design/shardfall_classes.md` and `Classes.luau`. | `docs/content/class_skills.md` | todo | — |
-| G-009 | S | content | One ultimate per class: name, fantasy, animation beats, VFX and SFX note | `docs/content/class_ultimates.md` | todo | — |
+| G-007 | M | content | 8 armor set bonuses (2-piece and 4-piece, suggested numbers). Read `docs/design/relic_sets.md` and `RelicSets.luau`; do not duplicate Relic Sets. | `docs/content/set_bonuses.md` | done | https://github.com/Itsm00k21/Shardfall/pull/75 |
+| G-008 | L | content | 6 skill concepts for each of the five classes (name, role, cooldown suggestion, VFX note). Read `docs/design/shardfall_classes.md` and `Classes.luau`. | `docs/content/class_skills.md` | done | https://github.com/Itsm00k21/Shardfall/pull/75 |
+| G-009 | S | content | One ultimate per class: name, fantasy, animation beats, VFX and SFX note | `docs/content/class_ultimates.md` | done | https://github.com/Itsm00k21/Shardfall/pull/75 |
 | G-010 | M | content | 8 world bosses: name, zone, 3 phases, signature mechanic, loot theme, visual note | `docs/content/bosses.md` | todo | — |
 | G-011 | M | content | 6 zones after Haven and Heartwood: name, level band, mood, landmarks, enemy theme, music mood | `docs/content/zones.md` | todo | — |
 | G-012 | M | content | 30 regular enemies across the zones in G-011: name, role (melee, ranged, caster, swarm), one move, visual note | `docs/content/enemies.md` | todo | — |
