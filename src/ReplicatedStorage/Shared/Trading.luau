@@ -338,22 +338,24 @@ function Trading.tier(actor: Actor): string
 	return "New"
 end
 
+-- Patron is a name, not a limit. The number is the one level, clean days,
+-- account age, and a verified receipt already earned. Vip does not raise
+-- it. A patron who has not earned Level 40 or 60 clean days stays at or
+-- under the verified-spender cap. Nobody, paid or not, passes the
+-- non-paid Level-40 / 60-clean tier, and the result is never uncapped.
 function Trading.dailyCap(actor: Actor): number
-	local tier = Trading.tier(actor)
-	if tier == "Patron" then
-		return math.huge
+	local level = whole(actor.level, 0)
+	local age = whole(actor.accountAgeDays, 0)
+	local clean = whole(actor.cleanHistoryDays, 0)
+	local newAccount = age < Trading.NEW_ACCOUNT_DAYS
+	if not newAccount and (level >= Trading.TRUSTED_LEVEL or clean >= Trading.CLEAN_DAYS) then
+		return Trading.CAPS.Trusted
 	end
-	if tier == "Trusted" then
-		local level = whole(actor.level, 0)
-		local clean = whole(actor.cleanHistoryDays, 0)
-		if level >= Trading.TRUSTED_LEVEL or clean >= Trading.CLEAN_DAYS then
-			return Trading.CAPS.Trusted
-		end
+	if not newAccount and actor.verifiedSpender == true then
 		return Trading.CAPS.Receipt
 	end
-	if tier == "Standard" then
-		local extra = math.max(0, whole(actor.level, 0) - Trading.STANDARD_LEVEL)
-			* Trading.CAPS.StandardPerLevel
+	if not newAccount and level >= Trading.STANDARD_LEVEL then
+		local extra = math.max(0, level - Trading.STANDARD_LEVEL) * Trading.CAPS.StandardPerLevel
 		return math.min(Trading.CAPS.StandardMax, Trading.CAPS.StandardBase + extra)
 	end
 	return Trading.CAPS.New

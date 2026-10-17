@@ -77,21 +77,21 @@ end
 -- sinceLegendary stays in the signature so a pity counter cannot change
 -- these lines until the server guarantee is actually the next roll.
 -- The last printed percent absorbs rounding so the shown column is 100%.
-function RollBoard.oddsLines(
-	pool: any,
-	luck: number,
-	boost: number,
-	_sinceLegendary: number
-): { string }
+-- luck is a profile, or a shardLuck number with boost beside it. Either
+-- way the multiplier is luckFromProfile, the same call the server draw,
+-- GetOdds, and the reel use. A stored boost and vip follow that path.
+function RollBoard.oddsLines(pool: any, luck: any, boost: any, _sinceLegendary: any): { string }
 	local lines = {}
 	if type(pool) ~= "table" then
 		return lines
 	end
-	local multiplier = RarityConfig.luckMultiplier({
-		shardLuck = luck,
-		luckBoost = boost,
-		paidLuck = true,
-	})
+	local profile = if type(luck) == "table"
+		then luck
+		else {
+			shardLuck = luck,
+			luckBoost = boost,
+		}
+	local multiplier = RarityConfig.luckFromProfile(profile)
 	local ok, odds = pcall(RarityConfig.disclose, pool, multiplier)
 	if not ok or type(odds) ~= "table" or type(odds.rarities) ~= "table" then
 		return lines

@@ -73,10 +73,10 @@ describe("RollBoard", function()
 
 	it("shows disclose odds that add up to 100 and match the draw", function()
 		local pool = Pools.get("verdant_armory")
-		local luck = RarityConfig.luckMultiplier({
+		local luck = RarityConfig.luckFromProfile({
 			shardLuck = 0,
 			luckBoost = 0,
-			paidLuck = true,
+			vip = true,
 		})
 		local disclosed = RarityConfig.disclose(pool, luck)
 		local lines = RollBoard.oddsLines(pool, 0, 0, 0)
@@ -94,6 +94,62 @@ describe("RollBoard", function()
 			end
 		end
 		expect(math.abs(sum - 100) <= 0.1).toBeTrue()
+	end)
+
+	it("matches the server odds for a stored luck boost and vip", function()
+		local pool = Pools.get("verdant_armory")
+		local profile = {
+			shardLuck = 50,
+			luckBoost = 25,
+			shardRolls = 9,
+			vip = true,
+		}
+		local function sheet(odds: any): { string }
+			local rows = odds.rarities
+			local expected = {}
+			local used = 0
+			for index, row in ipairs(rows) do
+				local percent = row.chance * 100
+				if index < #rows then
+					percent = math.floor(percent * 10 + 0.5) / 10
+					used += percent
+				else
+					percent = math.floor((100 - used) * 10 + 0.5) / 10
+				end
+				table.insert(expected, string.format("%s  %.1f%%", row.rarity, percent))
+			end
+			return expected
+		end
+		local serverLuck = RarityConfig.luckFromProfile(profile)
+		expect(serverLuck).toEqual((1 + 0.5) * 2)
+		local lines = RollBoard.oddsLines(pool, profile, 999, 99)
+		expect(lines).toEqual(sheet(RarityConfig.disclose(pool, serverLuck)))
+		local plain = {
+			shardLuck = 50,
+			luckBoost = 0,
+			shardRolls = 9,
+			vip = false,
+		}
+		expect(lines).toEqual(RollBoard.oddsLines(pool, plain, 0, 0))
+		expect(serverLuck).toEqual(RarityConfig.luckFromProfile(plain))
+		local paidLuck = RarityConfig.luckMultiplier({
+			shardLuck = 50,
+			luckBoost = 25,
+			shardRolls = 9,
+			vip = true,
+			paidLuck = true,
+		})
+		expect(paidLuck).toEqual((1 + 0.5) * 2 + 0.25)
+		local paidLines = sheet(RarityConfig.disclose(pool, paidLuck))
+		local same = #paidLines == #lines
+		if same then
+			for index, line in ipairs(lines) do
+				if line ~= paidLines[index] then
+					same = false
+				end
+			end
+		end
+		expect(same).toEqual(false)
 	end)
 
 	it("shows both server pity bars and leaves the odds sheet alone", function()
@@ -123,7 +179,7 @@ describe("RollBoard", function()
 		expect(
 			string.find(
 				paint,
-				'RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, oddsSince)',
+				'RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)',
 				1,
 				true
 			) ~= nil
