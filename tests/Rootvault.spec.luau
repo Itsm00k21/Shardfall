@@ -49,6 +49,17 @@ describe("Rootvault", function()
 		expect(Rootvault.ROLES.charger.kind).toEqual("thorn_sprite")
 		expect(Rootvault.ROLES.mender.kind).toEqual("moss_crawler")
 		expect(Rootvault.shrine(2)).toEqual("ward")
+		local shrine = Rootvault.doorSignature({
+			{ id = "shrine", name = "Shrine" },
+			{ id = "shop", name = "Shop" },
+		})
+		local treasure = Rootvault.doorSignature({
+			{ id = "shop", name = "Shop" },
+			{ id = "treasure", name = "Treasure" },
+		})
+		expect(shrine ~= treasure).toEqual(true)
+		expect(Rootvault.doorSignature(doors)).toEqual(Rootvault.doorSignature(doors))
+		expect(Rootvault.DOOR_FADE > 0 and Rootvault.DOOR_FADE < 0.5).toBeTrue()
 	end)
 
 	it("pays 200 gold for the treasure door", function()

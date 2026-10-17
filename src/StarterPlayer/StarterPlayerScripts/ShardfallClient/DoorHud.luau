@@ -8,7 +8,9 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
+local Rootvault = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rootvault"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
@@ -16,6 +18,8 @@ local DoorHud = {}
 local player = Players.LocalPlayer
 local invoke: ((string, ...any) -> any)? = nil
 local row: Frame? = nil
+local fadeHost: CanvasGroup? = nil
+local shownKey = ""
 local suppressed = false
 local lastRun: any = nil
 
@@ -64,32 +68,47 @@ function DoorHud.start(callRemote: (string, ...any) -> any)
 	pad.PaddingLeft = UDim.new(0, 8)
 	pad.PaddingRight = UDim.new(0, 8)
 	pad.Parent = frame
+	local host = Instance.new("CanvasGroup")
+	host.Name = "Fade"
+	host.BackgroundTransparency = 1
+	host.Size = UDim2.fromScale(1, 1)
+	host.GroupTransparency = 1
+	host.Parent = frame
 	local list = Instance.new("UIListLayout")
 	list.FillDirection = Enum.FillDirection.Horizontal
 	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	list.VerticalAlignment = Enum.VerticalAlignment.Center
 	list.Padding = UDim.new(0, 12)
-	list.Parent = frame
+	list.Parent = host
+	fadeHost = host
 	row = frame
 end
 
 function DoorHud.setRun(run: any)
 	lastRun = run
 	local frame = row
-	if frame == nil then
+	local host = fadeHost
+	if frame == nil or host == nil then
 		return
-	end
-	for _, child in ipairs(frame:GetChildren()) do
-		if child:IsA("TextButton") then
-			child:Destroy()
-		end
 	end
 	local doors = if type(run) == "table" then run.doors else nil
 	if type(doors) ~= "table" or #doors == 0 then
 		frame.Visible = false
+		shownKey = ""
 		return
 	end
+	local key = Rootvault.doorSignature(doors)
 	frame.Visible = not suppressed
+	if key == shownKey then
+		return
+	end
+	shownKey = key
+	for _, child in ipairs(host:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	host.GroupTransparency = 1
 	for _, door in ipairs(doors) do
 		if type(door) == "table" and type(door.id) == "string" then
 			local button = Instance.new("TextButton")
@@ -100,7 +119,7 @@ function DoorHud.setRun(run: any)
 			button.TextSize = 16
 			button.TextColor3 = Color3.fromRGB(16, 14, 24)
 			button.Text = if type(door.name) == "string" then door.name else door.id
-			button.Parent = frame
+			button.Parent = host
 			local corner = Instance.new("UICorner")
 			corner.CornerRadius = UDim.new(0, 12)
 			corner.Parent = button
@@ -115,6 +134,11 @@ function DoorHud.setRun(run: any)
 			end)
 		end
 	end
+	TweenService:Create(
+		host,
+		TweenInfo.new(Rootvault.DOOR_FADE, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ GroupTransparency = 0 }
+	):Play()
 end
 
 return DoorHud

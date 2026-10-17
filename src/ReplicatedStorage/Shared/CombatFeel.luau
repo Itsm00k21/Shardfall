@@ -30,6 +30,15 @@ CombatFeel.STAGGER_HEAVY = 18
 CombatFeel.NORMAL_STAGGER = 0.28
 CombatFeel.TELEGRAPH_NORMAL = 0.8
 CombatFeel.TELEGRAPH_MIN = 0.5
+-- First boss (Grandmother Gnarl) windup. Long enough to walk out of the
+-- 8-stud red square. Trash telegraphs stay on TELEGRAPH_NORMAL.
+CombatFeel.TELEGRAPH_BOSS = 1.8
+-- Half-extent of the red square marker (Vector3.new(8, 0.2, 8)).
+CombatFeel.MARKER_HALF = 4
+-- "RED dodge" is a lesson, not a permanent label.
+CombatFeel.CUE_LESSONS = 3
+CombatFeel.SWING_SECONDS = 0.28
+CombatFeel.SWING_PITCH = 80
 CombatFeel.FLINCH_SECONDS = 0.12
 CombatFeel.DEATH_SECONDS = 0.45
 CombatFeel.MAGNET_RANGE = 14
@@ -313,7 +322,7 @@ function CombatFeel.applyStagger(bar: number, heavy: boolean, boss: boolean): (n
 	return nextBar, false
 end
 
-function CombatFeel.telegraph(color: string, difficulty: string?)
+function CombatFeel.telegraph(color: string, difficulty: string?, role: string?)
 	local row = CombatFeel.TELEGRAPHS[color]
 	if row == nil then
 		row = CombatFeel.TELEGRAPHS.red
@@ -323,12 +332,84 @@ function CombatFeel.telegraph(color: string, difficulty: string?)
 	if difficulty == nil or difficulty == "normal" or difficulty == "story" then
 		seconds = CombatFeel.TELEGRAPH_NORMAL
 	end
+	if role == "boss" then
+		seconds = CombatFeel.TELEGRAPH_BOSS
+	end
 	return {
 		color = color,
 		verb = row.verb,
 		seconds = seconds,
 		rgb = row.rgb,
 	}
+end
+
+-- Room and wave lines stay on the banner. Combat hints and loot lines do
+-- not: those used to sit on the top-center toast stack.
+function CombatFeel.hintOnBanner(text: string): boolean
+	if type(text) ~= "string" then
+		return false
+	end
+	local trimmed = string.match(text, "^%s*(.-)%s*$")
+	if trimmed == nil or trimmed == "" then
+		return false
+	end
+	if trimmed == "No target in range." then
+		return false
+	end
+	if string.sub(trimmed, 1, 1) == "+" then
+		return false
+	end
+	if string.sub(trimmed, 1, 10) == "Picked up " then
+		return false
+	end
+	return true
+end
+
+function CombatFeel.teachCue(seen: number): boolean
+	if type(seen) ~= "number" or seen ~= seen then
+		return false
+	end
+	return seen < CombatFeel.CUE_LESSONS
+end
+
+-- 0 at the start and end of a swing, 1 at the middle.
+function CombatFeel.swingAlpha(age: number, duration: number): number
+	local span = duration
+	if type(span) ~= "number" or span ~= span or span <= 0 then
+		span = CombatFeel.SWING_SECONDS
+	end
+	local t = age
+	if type(t) ~= "number" or t ~= t then
+		t = 0
+	end
+	t = math.clamp(t / span, 0, 1)
+	return math.sin(t * math.pi)
+end
+
+function CombatFeel.insideMarker(
+	px: number,
+	pz: number,
+	mx: number,
+	mz: number,
+	half: number
+): boolean
+	if
+		type(px) ~= "number"
+		or type(pz) ~= "number"
+		or type(mx) ~= "number"
+		or type(mz) ~= "number"
+		or px ~= px
+		or pz ~= pz
+		or mx ~= mx
+		or mz ~= mz
+	then
+		return false
+	end
+	local reach = half
+	if type(reach) ~= "number" or reach ~= reach or reach < 0 then
+		reach = CombatFeel.MARKER_HALF
+	end
+	return math.abs(px - mx) <= reach and math.abs(pz - mz) <= reach
 end
 
 return CombatFeel
