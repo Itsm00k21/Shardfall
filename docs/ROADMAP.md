@@ -64,6 +64,10 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #194 A narrow Roll row gives Pet Shards its own line. That is T-168 (`0d6f9ab`).
 - #195 The crack card stays off the shard and the pet row. That is T-169 (`ebe4149`).
 - #196 The board marks T-168 and T-169 done. Next free id is T-170. Docs only.
+- #197 Grok research notes for the loop, policy, and the starter kit (`d02f3e6`). Docs only.
+- #198 A controller light-attacks on the right bumper while the menu is closed. That bumper still changes tabs while the menu is open. That is T-170 (`a0f9184`). 1261 tests.
+- #199 The phone Heavy chip, R, and ButtonX play the local heavy slash. That is T-171 (`05b6eb1`). 1267 tests.
+- #200 The board marks T-167, T-170, and T-171 done. Echo's next row is T-172. The next GHOST row is T-173. Next free id is T-176. Docs only.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
@@ -71,12 +75,14 @@ Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABL
 
 The next week or two.
 
-- Echo's next row is T-167. The bag follows the text-size slider, on `helper/bag-text-scale-9721`. Brief: `docs/hooks/T-167.md`. T-163 is done in #189 (`7dd700e`).
-- T-168 landed in #194 (`0d6f9ab`). A narrow Roll row gives Pet Shards its own line. T-169 landed in #195 (`ebe4149`). The crack card stays below the kind row, and the name sits inside the card.
+- T-173 is the next GHOST row, and it is unblocked. Roll-tab auto stops when the window loses focus, and focusing the window does not turn auto back on. That comes before the lighting pass and the door nameplates.
+- T-174 audits the Roll tab Info control. The button already says Info and opens the odds lines. Confirm that, and list any odds control that is only an icon.
+- Echo's next row is T-172. The legacy panel follows the text-size slider, on `helper/legacy-text-scale-9721`. Brief: `docs/hooks/T-172.md`. T-167 is done in #193 (`a364c03`).
+- T-170 landed in #198 (`a0f9184`). ButtonR1 light-attacks while the menu is closed. T-171 landed in #199 (`05b6eb1`). The phone Heavy chip plays the slash.
 - T-165 landed in #190 (`52a5717`). The on-screen Dodge button flashes Glass Kestrel. T-166 landed in #191 (`961bf5e`). ButtonY dodges and ButtonX stays heavy.
 - T-164 landed in #187 (`90a4818`). Mythic is red `#E6404E` and Secret is white. Only Secret inventory strokes keep the rainbow.
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
-- T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first.
+- T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first. T-175, the Prism buy-button percents and rounding disclaimer, waits until a Prism sale. Nothing is for sale.
 - The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166 and #175. The on-screen Dodge flash landed in #190. Gamepad dodge landed in #191. The hero viewport landed in #178. The menu load landed in #182. The Story Echo chip landed in #189.
 
 ## Later
@@ -89,7 +95,7 @@ Kevin asked to hold the lighting pass. The older queue stays behind the plaza an
 - T-107 is done. Loading tips show, including during a hop.
 - T-108 is decided. The Training Grove hands in one ribbon and 15 gold. The ribbon is a collectible and is not worn yet.
 - T-109 landed in #174. The grove record saves on schema 26. T-110 landed in #176. The dummy stands on the plaza.
-- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-163 landed in #189 (`7dd700e`). T-164 landed in #187 (`90a4818`). T-165 landed in #190 (`52a5717`). T-166 landed in #191 (`961bf5e`). T-168 landed in #194 (`0d6f9ab`). T-169 landed in #195 (`ebe4149`). T-162, the door nameplates, stays with the lighting pass.
+- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-163 landed in #189 (`7dd700e`). T-164 landed in #187 (`90a4818`). T-165 landed in #190 (`52a5717`). T-166 landed in #191 (`961bf5e`). T-168 landed in #194 (`0d6f9ab`). T-169 landed in #195 (`ebe4149`). T-162, the door nameplates, stays with the lighting pass. T-170 landed in #198 (`a0f9184`). T-171 landed in #199 (`05b6eb1`). T-167 landed in #193 (`a364c03`). T-173 is the next gameplay row. T-174 is the Roll tab Info audit. T-175 stays deferred until a Prism sale.
 - T-082 wires the raid contest once gear has a whole-number item level. The statue is one server-wide record.
 - T-084 wires the weekly loot lock. A reclear pays marks, dust, and materials.
 - T-036 wires the raid-leaver rules and four save fields: leaves today, the finder cooldown, and the rejoin window.
