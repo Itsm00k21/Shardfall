@@ -3,10 +3,10 @@
 --[[
 	Glass Kestrel flashes on a dodge. Pure.
 
-	should(keyName, effect) is true only when the key is LeftShift or
-	RightShift and the equipped effect is "flash". Q does not flash.
-	ButtonX does not flash. "collect", "ping", nil, and any other
-	effect do not flash.
+	should(keyName, effect) is true only when the key is LeftShift,
+	RightShift, or ButtonY and the equipped effect is "flash". Q does
+	not flash. ButtonX is heavy, so it does not flash. "collect",
+	"ping", nil, and any other effect do not flash.
 
 	chip(control, effect) is true only when the control is the on-screen
 	"Dodge" button and the equipped effect is "flash". A key name is not
@@ -37,6 +37,7 @@ local PetFlash = {}
 
 local LEFT_DODGE = "LeftShift"
 local RIGHT_DODGE = "RightShift"
+local PAD_DODGE = "ButtonY"
 local CHIP = "Dodge"
 local FLASH = "flash"
 
@@ -51,7 +52,7 @@ local function finite(value: any): number?
 end
 
 function PetFlash.should(keyName: any, effect: any, _extra: any?): boolean
-	local dodge = keyName == LEFT_DODGE or keyName == RIGHT_DODGE
+	local dodge = keyName == LEFT_DODGE or keyName == RIGHT_DODGE or keyName == PAD_DODGE
 	if not dodge then
 		return false
 	end

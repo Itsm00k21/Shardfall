@@ -4,7 +4,9 @@
 	Bottom action bar. Eight square slots on keys 1-8.
 
 	A click, a tap, or the key asks the server to use that slot. Shift
-	dodges. F is the interact prompt and only shows while a prompt is up.
+	dodges, and ButtonY dodges on a gamepad. F is the interact prompt
+	and only shows while a prompt is up. The Dodge chip shows Y while a
+	gamepad was the last input.
 	On a gamepad the D-pad uses slots 1-4, and holding LB uses slots 5-8.
 	The corner shows that glyph while a gamepad was the last input, and
 	the key number otherwise. Both paths call useSlot.
@@ -579,6 +581,17 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 	end)
 
+	local lastInputName = UserInputService:GetLastInputType().Name
+	local function dodgeFace(mobile: boolean): string
+		if Keybinds.usesGamepad(lastInputName) then
+			return "Y"
+		end
+		if mobile then
+			return "Dodge"
+		end
+		return "Shift"
+	end
+
 	local function place()
 		local size = screen.AbsoluteSize
 		local mobile = callbacks.mobile() or size.X < 700
@@ -599,7 +612,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		dodgeHint.Visible = dodgeCue
 		local bind = dodge:FindFirstChild("Bind")
 		if bind ~= nil and bind:IsA("TextLabel") then
-			bind.Text = if mobile then "Dodge" else "Shift"
+			bind.Text = dodgeFace(mobile)
 		end
 	end
 	place()
@@ -714,6 +727,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end)
 
 	local function applyFaces(inputTypeName: string)
+		lastInputName = inputTypeName
 		local gamepad = Keybinds.usesGamepad(inputTypeName)
 		for index, button in ipairs(buttons) do
 			local bind = button:FindFirstChild("Bind")
@@ -731,6 +745,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 					glyph.Text = face
 				end
 			end
+		end
+		local dodgeBind = dodge:FindFirstChild("Bind")
+		if dodgeBind ~= nil and dodgeBind:IsA("TextLabel") then
+			local size = screen.AbsoluteSize
+			dodgeBind.Text = dodgeFace(callbacks.mobile() or size.X < 700)
 		end
 	end
 	applyFaces(UserInputService:GetLastInputType().Name)
@@ -766,6 +785,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Enum.ContextActionPriority.High.Value,
 		table.unpack(codes)
 	)
+	local dodgeCodes = { Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift }
+	local padDodge = (Enum.KeyCode :: any)[Keybinds.GAMEPAD.dodge]
+	if padDodge ~= nil then
+		table.insert(dodgeCodes, padDodge)
+	end
 	ContextActionService:BindActionAtPriority(
 		"ShardfallDodge",
 		function(_name, state)
@@ -780,8 +804,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end,
 		false,
 		Enum.ContextActionPriority.High.Value,
-		Enum.KeyCode.LeftShift,
-		Enum.KeyCode.RightShift
+		table.unpack(dodgeCodes)
 	)
 
 	local padCodes = {}

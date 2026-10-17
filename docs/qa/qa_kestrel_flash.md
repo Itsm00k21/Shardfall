@@ -14,7 +14,7 @@ A focused text box does. After `should` returns true, the listener returns when 
 
 The on-screen Dodge button calls `onDodge` from `ActionBar` (`ActionBar.luau:346`, `ActionBar.luau:522`). That button does not flash in T-158. T-106 owns `ActionBar.luau`. Treat the chip as a follow-up, not a pass.
 
-`ButtonX` stays false (`PetFlash.luau:27-32`). Gamepad dodge stays the open note in `docs/qa/AUDIT_FOLLOWUPS.md`. Do not close it here.
+`ButtonX` stays false. T-166 closed gamepad dodge on ButtonY. `PetFlash.should("ButtonY", "flash")` is true. ButtonX stays heavy and still does not flash.
 
 ## Risks
 
@@ -42,7 +42,7 @@ Equip means `PetRoster.equippedEffect` is the effect below. Pass means the pane 
 | KF-6 | `shardjaw` / `collect` | LeftShift | false | fail (stays `1`) |
 | KF-7 | `thorn_lantern` / `ping` | RightShift | false | fail (stays `1`) |
 | KF-8 | no pet | LeftShift | false | fail (stays `1`) |
-| KF-9 | `glass_kestrel` / `flash` | `ButtonX` | false | fail (stays `1`). Gamepad dodge stays open in `docs/qa/AUDIT_FOLLOWUPS.md` |
+| KF-9 | `glass_kestrel` / `flash` | `ButtonX` | false | fail (stays `1`). ButtonX is heavy. ButtonY is the dodge (T-166) |
 | KF-10 | `glass_kestrel` / `flash` | LeftShift while a text box is focused | true | fail (stays `1`). `PetAura.luau:70-72` returns after `should` |
 
 KF-6 still sets the character attribute `ShardfallCollect` from the heartbeat (`PetAura.luau:84-86`). KF-7 still shows `KeyPing` when `shardKeys` is above 0 (`PetAura.luau:91`). The flash change must not stop those two.

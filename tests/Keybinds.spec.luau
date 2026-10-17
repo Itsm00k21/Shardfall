@@ -180,6 +180,7 @@ describe("Keybinds", function()
 		expect(seen.LeftShift).toEqual(true)
 		expect(seen.RightShift).toEqual(true)
 		expect(seen.ButtonX).toEqual(true)
+		expect(seen.ButtonY).toEqual(true)
 		expect(seen.W).toEqual(true)
 		expect(seen.A).toEqual(true)
 		expect(seen.S).toEqual(true)
@@ -197,6 +198,10 @@ describe("Keybinds", function()
 		expect(Keybinds.padCollisions()).toEqual({})
 		expect(Keybinds.PAD.modifier).toEqual("ButtonL1")
 		expect(Keybinds.GAMEPAD.heavy).toEqual("ButtonX")
+		expect(Keybinds.GAMEPAD.dodge).toEqual("ButtonY")
+		expect(Keybinds.PAD_RESERVED.ButtonY).toEqual("dodge")
+		expect(Keybinds.owner("Y")).toBeNil()
+		expect(Keybinds.owner("ButtonY")).toEqual("dodge")
 		expect(Keybinds.COMBAT.dodge).toEqual("LeftShift")
 		expect(Keybinds.COMBAT.interact).toEqual("F")
 		expect(Keybinds.COMBAT.slot1).toEqual("One")
@@ -230,6 +235,7 @@ describe("Keybinds", function()
 		local blocked = {
 			"ButtonA",
 			"ButtonX",
+			"ButtonY",
 			"ButtonB",
 			"ButtonR1",
 			"ButtonL2",
@@ -295,6 +301,7 @@ describe("Keybinds", function()
 		local blocked = {
 			"ButtonA",
 			"ButtonX",
+			"ButtonY",
 			"ButtonL1",
 			"ButtonL2",
 			"ButtonR2",

@@ -8,7 +8,7 @@ Left over from the 2026-10-16 debug audit after PR #65. The two P0s in that repo
 
 | Pri | Where | What is left | Suggested fix |
 | --- | --- | --- | --- |
-| P1 | `CombatHud.luau` input, `HudShell.luau` skill keys | Gamepad heavy is ButtonX. Dodge, light attack, skills, and ultimate still have no gamepad button. Touch and mouse button 1 still send a light swing. | Add the remaining gamepad buttons next to the keyboard cases, and a heavy control on the touch cluster. Keep `processed` so a Gui tap does not also swing. |
+| P1 | `CombatHud.luau` input, `HudShell.luau` skill keys | Gamepad heavy is ButtonX. Light attack, skills, and ultimate still have no gamepad button. Touch and mouse button 1 still send a light swing. Dodge is ButtonY. | Add the remaining gamepad buttons next to the keyboard cases, and a heavy control on the touch cluster. Keep `processed` so a Gui tap does not also swing. ButtonX stays heavy. |
 | P1 | `InventoryHud.luau`, the legacy panel, `Ui.luau` gold banner | MenuHub follows the text-size slider. InventoryHud, the legacy panel, and the gold banner do not. The banner uses `IgnoreGuiInset` at DisplayOrder 100. | Apply `textScale` on those surfaces when settings change. Give the banner the same insets as the hub. |
 | P1 | `DataService.luau` `release` and `BindToClose`, `SessionLock.luau`, `RaidService.luau` `queue` | See the session-lock note below. The part that is worth fixing is the teleport race and the 25 second shutdown cutoff. | Save and clear the lock before `TeleportAsync` returns. In `BindToClose`, wait out the writes up to the engine's shutdown budget. Leave the 60 second autosave and the 20 minute crash lock as they are. |
 | P2 | `Schema.luau` version 21 block (around the `if version < 21` step) | That block sets `raw.schemaVersion = 21` and does not assign the local `version`. Every earlier step assigns both. A future version 22 step in the same `migrate` call would also run for a profile that just took the 21 step. Nothing follows 21 today, so no save is wrong yet. | When 22 is added, set `version = 21` in that block the same way 20 does. Do not bump the schema for this alone. |
@@ -21,6 +21,7 @@ Left over from the 2026-10-16 debug audit after PR #65. The two P0s in that repo
 
 | Pri | Where | What the 2026-10-16 report said | Where it stands |
 | --- | --- | --- | --- |
+| P1 | `ActionBar.luau` `ShardfallDodge`, `Keybinds.GAMEPAD.dodge` | Dodge had no gamepad button. | T-166 binds ButtonY. ButtonX stays heavy. The Dodge chip shows Y after a gamepad press. Glass Kestrel flashes on ButtonY. |
 | P1 | `InventoryHud.luau` I listener, `Keybinds.luau` raids | I opened the old bag and the Raids tab. | T-058 (#62) removed the InventoryHud I listener. Raids stays on I in `Keybinds.MENU`. No second I listener is in the client scripts. No further change. |
 | P1 | `HudShell.luau` skill handler | Skill 1 was Left Shift, which sprint sinks. | T-061 (#66) binds skill 1 to 1. Shift stays sprint. |
 | P1 | `MenuHub.luau` `ShardfallMenuSink` | Tab letters stopped working while the hub was open. | T-061 handles C, B, P, T, I, and M inside the open menu. Movement, Shift, and the combat keys stay sunk. |
