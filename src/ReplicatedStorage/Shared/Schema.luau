@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 24.
+	The player profile shape, version 26.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -33,7 +33,140 @@ local function firstSessionKit()
 	return require("./FirstSessionKit")
 end
 
-Schema.VERSION = 24
+-- Frozen Codex ids. A true flag sticks. Only boolean true counts.
+local CODEX_IDS = {
+	"attack",
+	"dodge",
+	"perfect",
+	"skills",
+	"telegraphs",
+	"shards",
+	"doors",
+	"pets",
+	"crafting",
+	"rarity",
+}
+
+local function readCodexFlags(value: any): { [string]: boolean }
+	local source = nil
+	if type(value) == "table" and type(value.unlocked) == "table" then
+		source = value.unlocked
+	end
+	local unlocked = {}
+	for _, id in ipairs(CODEX_IDS) do
+		unlocked[id] = source ~= nil and source[id] == true
+	end
+	return unlocked
+end
+
+local function blankCodex(): { unlocked: { [string]: boolean } }
+	return { unlocked = readCodexFlags(nil) }
+end
+
+local function callRefused(value: any): boolean
+	if type(value) ~= "table" then
+		return false
+	end
+	if value.productId ~= nil or value.robux ~= nil or value.cost ~= nil or value.skip ~= nil then
+		return true
+	end
+	if
+		value.userId ~= nil
+		or value.UserId ~= nil
+		or value.playerId ~= nil
+		or value.PlayerId ~= nil
+	then
+		return true
+	end
+	if value.guildId ~= nil or value.GuildId ~= nil then
+		return true
+	end
+	return false
+end
+
+-- A failed unlock keeps the previous flags. A success stores that state.
+-- A product id, Robux, cost, skip, user id, or guild id is a failure.
+-- Neither call writes the arguments. Nothing here grants keys or gold.
+function Schema.applyCodex(saved: any, result: any): { unlocked: { [string]: boolean } }
+	local accepted = type(result) == "table"
+		and result.ok == true
+		and type(result.state) == "table"
+		and not callRefused(result)
+		and not callRefused(result.state)
+	if accepted then
+		return { unlocked = readCodexFlags(result.state) }
+	end
+	return { unlocked = readCodexFlags(saved) }
+end
+
+local function wholeGrove(value: any): number
+	if type(value) ~= "number" or value ~= value or value >= math.huge or value <= -math.huge then
+		return 0
+	end
+	local floored = math.floor(value)
+	if floored < 0 then
+		return 0
+	end
+	return floored
+end
+
+local function blankGrove()
+	return {
+		hits = 0,
+		damage = 0,
+		healing = 0,
+		up = true,
+		dummy = false,
+		dodge = false,
+		colors = {
+			red = false,
+			yellow = false,
+			purple = false,
+			blue = false,
+		},
+		room = false,
+		cosmetic = false,
+	}
+end
+
+local function readGrove(value: any)
+	if type(value) ~= "table" then
+		return blankGrove()
+	end
+	local colors = if type(value.colors) == "table" then value.colors else nil
+	return {
+		hits = wholeGrove(value.hits),
+		damage = wholeGrove(value.damage),
+		healing = wholeGrove(value.healing),
+		up = value.up ~= false,
+		dummy = value.dummy == true,
+		dodge = value.dodge == true,
+		colors = {
+			red = colors ~= nil and colors.red == true,
+			yellow = colors ~= nil and colors.yellow == true,
+			purple = colors ~= nil and colors.purple == true,
+			blue = colors ~= nil and colors.blue == true,
+		},
+		room = value.room == true,
+		cosmetic = value.cosmetic == true,
+	}
+end
+
+-- A failed grove call keeps the previous record. Keys and gold are not stored.
+-- A product id, Robux, cost, skip, user id, or guild id is a failure.
+function Schema.applyGrove(saved: any, result: any)
+	local accepted = type(result) == "table"
+		and result.ok == true
+		and type(result.state) == "table"
+		and not callRefused(result)
+		and not callRefused(result.state)
+	if accepted then
+		return readGrove(result.state)
+	end
+	return readGrove(saved)
+end
+
+Schema.VERSION = 26
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -186,6 +319,8 @@ export type ProfileData = {
 	starterGoals: any,
 	firstSession: any,
 	actionBars: { [string]: any },
+	codex: { unlocked: { [string]: boolean } },
+	trainingGrove: { [string]: any },
 }
 
 function Schema.template(): ProfileData
@@ -296,6 +431,8 @@ function Schema.template(): ProfileData
 		starterGoals = StarterGoalPay.blank(),
 		firstSession = firstSessionKit().blank(false),
 		actionBars = ActionSlots.fresh(),
+		codex = blankCodex(),
+		trainingGrove = blankGrove(),
 	}
 end
 
@@ -487,6 +624,8 @@ function Schema.reconcile(data: any): ProfileData
 	data.starterGoals = StarterGoalPay.normalize(data.starterGoals)
 	data.firstSession = firstSessionKit().normalize(data.firstSession)
 	data.actionBars = ActionSlots.reconcile(data.actionBars, data)
+	data.codex = { unlocked = readCodexFlags(data.codex) }
+	data.trainingGrove = readGrove(data.trainingGrove)
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -1007,6 +1146,21 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 24
 	end
 
+	-- Codex seen flags. A save from 24 starts locked. Do not copy another profile.
+	if version < 25 then
+		raw.codex = blankCodex()
+		raw.schemaVersion = 25
+		version = 25
+	end
+
+	-- Training Grove. A save from 25 starts empty. Do not copy another profile.
+	-- Do not fold this into codex. Keys and gold are not stored.
+	if version < 26 then
+		raw.trainingGrove = blankGrove()
+		raw.schemaVersion = 26
+		version = 26
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -1238,6 +1392,8 @@ function Schema.snapshot(data: ProfileData)
 		uiSettings = Settings.normalize(data.uiSettings),
 		starterGoalTracker = StarterGoalPay.tracker(data),
 		actionBars = Schema.deepCopy(data.actionBars),
+		codex = { unlocked = readCodexFlags(data.codex) },
+		trainingGrove = readGrove(data.trainingGrove),
 	}
 end
 

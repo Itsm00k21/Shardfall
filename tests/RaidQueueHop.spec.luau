@@ -80,7 +80,7 @@ describe("Reserved-server queue hop", function()
 		expect(string.find(receive, "TeleportAsync", 1, true)).toBeNil()
 		expect(string.find(receive, "ReserveServer(", 1, true)).toBeNil()
 
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(26)
 		expect(Loops.PREMIUM_ENABLED).toEqual(false)
 		expect(Loops.PASS_PRODUCT_ID).toEqual(0)
 		expect(Loops.ARCHIVE_PRODUCT_ID).toEqual(0)

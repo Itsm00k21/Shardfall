@@ -126,7 +126,7 @@ describe("FirstSessionKit", function()
 				gold = 11,
 			})
 			assert(old ~= nil)
-			expect(old.schemaVersion).toEqual(24)
+			expect(old.schemaVersion).toEqual(26)
 			expect(old.gold).toEqual(11)
 			expect(old.firstSession.returning).toEqual(true)
 			old.companions = {

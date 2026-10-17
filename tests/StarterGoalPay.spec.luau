@@ -99,7 +99,7 @@ describe("StarterGoalPay", function()
 			onboardDone = true,
 		})
 		assert(old ~= nil)
-		expect(old.schemaVersion).toEqual(24)
+		expect(old.schemaVersion).toEqual(26)
 		expect(old.gold).toEqual(9)
 		expect(old.shardKeys).toEqual(3)
 		expect(old.onboardDone).toEqual(true)
@@ -189,56 +189,93 @@ describe("StarterGoalPay", function()
 		expect(tracker.goals[1].progress).toEqual(0)
 		expect(tracker.payout).toBeNil()
 		local goals = fs.readFile("src/ReplicatedStorage/Shared/StarterGoals.luau")
-		expect(string.find(goals, "function StarterGoals.show(state: any, progress: any)", 1, true) ~= nil).toBeTrue()
-		expect(string.find(goals, "function StarterGoals.grant(state: any, goalId: any, progress: any)", 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(goals, "function StarterGoals.show(state: any, progress: any)", 1, true)
+				~= nil
+		).toBeTrue()
+		expect(
+			string.find(
+				goals,
+				"function StarterGoals.grant(state: any, goalId: any, progress: any)",
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
 		expect(string.find(goals, "Economy", 1, true)).toBeNil()
 	end)
 end)
 
 describe("StarterGoalPay wires", function()
-	it("counts a craft that is not a reroll, a normal rootvault clear, a roll, and a level 10 guild browse", function()
-		local craft = fs.readFile("src/ServerScriptService/ShardfallServer/CraftService.luau")
-		local craftBody = string.sub(
-			craft,
-			string.find(craft, "function CraftService.craft", 1, true) :: number,
-			(string.find(craft, "function CraftService.salvage", 1, true) :: number) - 1
-		)
-		expect(string.find(craftBody, 'StarterGoalPay.grant(data, "forge", { craft = true })', 1, true) ~= nil).toBeTrue()
-		expect(string.find(craftBody, "summary.rerolled ~= true", 1, true) ~= nil).toBeTrue()
-		local salvage = string.sub(
-			craft,
-			string.find(craft, "function CraftService.salvage", 1, true) :: number,
-			(string.find(craft, "function CraftService.upgrade", 1, true) :: number) - 1
-		)
-		expect(string.find(salvage, "StarterGoalPay", 1, true)).toBeNil()
+	it(
+		"counts a craft that is not a reroll, a normal rootvault clear, a roll, and a level 10 guild browse",
+		function()
+			local craft = fs.readFile("src/ServerScriptService/ShardfallServer/CraftService.luau")
+			local craftBody = string.sub(
+				craft,
+				string.find(craft, "function CraftService.craft", 1, true) :: number,
+				(string.find(craft, "function CraftService.salvage", 1, true) :: number) - 1
+			)
+			expect(
+				string.find(
+					craftBody,
+					'StarterGoalPay.grant(data, "forge", { craft = true })',
+					1,
+					true
+				) ~= nil
+			).toBeTrue()
+			expect(string.find(craftBody, "summary.rerolled ~= true", 1, true) ~= nil).toBeTrue()
+			local salvage = string.sub(
+				craft,
+				string.find(craft, "function CraftService.salvage", 1, true) :: number,
+				(string.find(craft, "function CraftService.upgrade", 1, true) :: number) - 1
+			)
+			expect(string.find(salvage, "StarterGoalPay", 1, true)).toBeNil()
 
-		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
-		local rollAt = string.find(roll, "data.shardRolls = math.min", 1, true)
-		local grantAt = string.find(roll, 'StarterGoalPay.grant(data, "rolls", nil)', 1, true)
-		expect(rollAt ~= nil and grantAt ~= nil and (rollAt :: number) < (grantAt :: number)).toBeTrue()
+			local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
+			local rollAt = string.find(roll, "data.shardRolls = math.min", 1, true)
+			local grantAt = string.find(roll, 'StarterGoalPay.grant(data, "rolls", nil)', 1, true)
+			expect(rollAt ~= nil and grantAt ~= nil and (rollAt :: number) < (grantAt :: number)).toBeTrue()
 
-		local dungeon = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
-		local blockAt = string.find(dungeon, 'StarterGoalPay.grant(data, "rootvault", { rootvault = true })', 1, true)
-		expect(blockAt ~= nil).toBeTrue()
-		local block = string.sub(dungeon, (blockAt :: number) - 280, blockAt :: number)
-		expect(string.find(block, "Dungeons.ROOTVAULT_ID", 1, true) ~= nil).toBeTrue()
-		expect(string.find(block, 'run.dungeon.endless ~= true', 1, true) ~= nil).toBeTrue()
-		expect(string.find(block, "run.practice ~= true", 1, true) ~= nil).toBeTrue()
-		expect(string.find(block, 'run.difficulty == "normal"', 1, true) ~= nil).toBeTrue()
-		expect(string.find(dungeon, 'StarterGoalPay.grant(data, "level", nil)', 1, true) ~= nil).toBeTrue()
+			local dungeon =
+				fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+			local blockAt = string.find(
+				dungeon,
+				'StarterGoalPay.grant(data, "rootvault", { rootvault = true })',
+				1,
+				true
+			)
+			expect(blockAt ~= nil).toBeTrue()
+			local block = string.sub(dungeon, (blockAt :: number) - 280, blockAt :: number)
+			expect(string.find(block, "Dungeons.ROOTVAULT_ID", 1, true) ~= nil).toBeTrue()
+			expect(string.find(block, "run.dungeon.endless ~= true", 1, true) ~= nil).toBeTrue()
+			expect(string.find(block, "run.practice ~= true", 1, true) ~= nil).toBeTrue()
+			expect(string.find(block, 'run.difficulty == "normal"', 1, true) ~= nil).toBeTrue()
+			expect(string.find(dungeon, 'StarterGoalPay.grant(data, "level", nil)', 1, true) ~= nil).toBeTrue()
 
-		local haven = fs.readFile("src/ServerScriptService/ShardfallServer/HavenBuilder.luau")
-		expect(
-			string.find(haven, 'promptOn(closed, "Coming Soon", "Guild Hall", "soon", place.message, "guild")', 1, true)
-				~= nil
-		).toBeTrue()
-		expect(string.find(haven, 'GetAttribute("HavenDistrict") == "guild"', 1, true) ~= nil).toBeTrue()
-		expect(string.find(haven, 'StarterGoalPay.grant(data, "guild", { browse = true })', 1, true) ~= nil).toBeTrue()
-		expect(string.find(haven, "guildId", 1, true)).toBeNil()
-		expect(string.find(haven, "userId", 1, true)).toBeNil()
-		local pay = fs.readFile("src/ReplicatedStorage/Shared/StarterGoalPay.luau")
-		expect(string.find(pay, "Marketplace", 1, true)).toBeNil()
-		expect(string.find(pay, "ProcessReceipt", 1, true)).toBeNil()
-		expect(string.find(pay, "account flag", 1, true) ~= nil).toBeTrue()
-	end)
+			local haven = fs.readFile("src/ServerScriptService/ShardfallServer/HavenBuilder.luau")
+			expect(
+				string.find(
+					haven,
+					'promptOn(closed, "Coming Soon", "Guild Hall", "soon", place.message, "guild")',
+					1,
+					true
+				) ~= nil
+			).toBeTrue()
+			expect(string.find(haven, 'GetAttribute("HavenDistrict") == "guild"', 1, true) ~= nil).toBeTrue()
+			expect(
+				string.find(
+					haven,
+					'StarterGoalPay.grant(data, "guild", { browse = true })',
+					1,
+					true
+				) ~= nil
+			).toBeTrue()
+			expect(string.find(haven, "guildId", 1, true)).toBeNil()
+			expect(string.find(haven, "userId", 1, true)).toBeNil()
+			local pay = fs.readFile("src/ReplicatedStorage/Shared/StarterGoalPay.luau")
+			expect(string.find(pay, "Marketplace", 1, true)).toBeNil()
+			expect(string.find(pay, "ProcessReceipt", 1, true)).toBeNil()
+			expect(string.find(pay, "account flag", 1, true) ~= nil).toBeTrue()
+		end
+	)
 end)

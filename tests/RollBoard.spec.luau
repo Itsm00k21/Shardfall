@@ -154,7 +154,9 @@ describe("RollBoard", function()
 		local rollAt = string.find(hub, "local activeItem", paintAt or 1, true)
 		expect(paintAt ~= nil and rollAt ~= nil).toBeTrue()
 		local paint = string.sub(hub, paintAt or 1, (rollAt or 1) - 1)
-		expect(string.find(paint, "RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)", 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(paint, "RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)", 1, true) ~= nil
+		).toBeTrue()
 		expect(string.find(paint, "RollHype.pity(sinceLegendary, pityGoal)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(paint, 'paintPity("EpicPity"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(paint, '"LegendaryPity"', 1, true) ~= nil).toBeTrue()
@@ -177,13 +179,14 @@ describe("RollBoard", function()
 
 		local bodyAt = string.find(hub, "beginRoll = function()", 1, true)
 		local invokeAt = string.find(hub, 'hooks.invoke, "RollShard"', bodyAt or 1, true)
-		local refusedAt = string.find(hub, "paintReelIdle(RollReveal.reelCaption(result))", invokeAt or 1, true)
+		local refusedAt =
+			string.find(hub, "paintReelIdle(RollReveal.reelCaption(result))", invokeAt or 1, true)
 		local refused = string.sub(hub, invokeAt or 1, refusedAt or 1)
 		expect(string.find(refused, "EpicPity", 1, true)).toBeNil()
 		expect(string.find(refused, "sinceEpic", 1, true)).toBeNil()
 
 		local schema = fs.readFile("src/ReplicatedStorage/Shared/Schema.luau")
-		expect(string.find(schema, "Schema.VERSION = 24", 1, true) ~= nil).toBeTrue()
+		expect(string.find(schema, "Schema.VERSION = 26", 1, true) ~= nil).toBeTrue()
 		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
 		expect(string.find(roll, "sinceEpic = data.sinceEpic", 1, true) ~= nil).toBeTrue()
 		expect(string.find(roll, "RarityConfig.pick", 1, true) ~= nil).toBeTrue()
@@ -196,7 +199,9 @@ describe("RollBoard", function()
 		local function assertSheet(poolId: string, luck: any)
 			local pool = Pools.get(poolId)
 			assert(pool ~= nil, poolId)
-			local multiplier = RarityConfig.luckFromProfile(if type(luck) == "table" then luck else { shardLuck = luck })
+			local multiplier = RarityConfig.luckFromProfile(
+				if type(luck) == "table" then luck else { shardLuck = luck }
+			)
 			local disclosed = RarityConfig.disclose(pool, multiplier)
 			local lines = RollBoard.oddsLines(pool, luck, 0, 0)
 			expect(#lines).toEqual(#disclosed.rarities)
@@ -234,9 +239,30 @@ describe("RollBoard", function()
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		local reel =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RollReel.luau")
-		expect(string.find(hub, "RollBoard.oddsLines(infoPool, profile, 0, UiRouter.oddsSince(legendaryCount))", 1, true) ~= nil).toBeTrue()
-		expect(string.find(hub, 'RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)', 1, true) ~= nil).toBeTrue()
-		expect(string.find(hub, 'RollBoard.oddsLines(Pools.get(rollPoolId()), profile, 0, oddsSince)', 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(
+				hub,
+				"RollBoard.oddsLines(infoPool, profile, 0, UiRouter.oddsSince(legendaryCount))",
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
+		expect(
+			string.find(
+				hub,
+				'RollBoard.oddsLines(Pools.get("verdant_armory"), profile, 0, oddsSince)',
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
+		expect(
+			string.find(
+				hub,
+				"RollBoard.oddsLines(Pools.get(rollPoolId()), profile, 0, oddsSince)",
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
 		expect(string.find(reel, "label.Text = RarityConfig.formatLine(row)", 1, true) ~= nil).toBeTrue()
 	end)
 end)
