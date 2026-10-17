@@ -3,9 +3,10 @@
 --[[
 	One stack for "Received X" and one slot for Equip / Keep.
 
-	Toasts show up to three at a time. Prompts show one. The next prompt
-	waits until the current one is answered, so auto-roll cannot pile
-	cards on top of each other.
+	Toasts show up to three at a time. Prompts show one. The queue holds
+	at most ToastQueue.MAX cards. A newer drop drops the oldest card.
+	The newest card always stays. If it is waiting behind the card on
+	screen, its text is also a toast, so that drop is not silent.
 ]]
 
 local ToastQueue = {}
@@ -22,6 +23,7 @@ export type Prompt = {
 	text: string,
 	yes: string,
 	no: string,
+	uid: string?,
 }
 
 export type State = {
@@ -50,6 +52,7 @@ local function copy(state: State): State
 			text = prompt.text,
 			yes = prompt.yes,
 			no = prompt.no,
+			uid = prompt.uid,
 		}
 	end
 	return {
@@ -83,15 +86,34 @@ function ToastQueue.dropToast(state: State, id: number): State
 	return nextState
 end
 
-function ToastQueue.pushPrompt(state: State, text: string, yes: string, no: string): State
+function ToastQueue.pushPrompt(
+	state: State,
+	text: string,
+	yes: string,
+	no: string,
+	uid: string?
+): State
 	local nextState = copy(state)
-	table.insert(nextState.prompts, {
+	local prompt: Prompt = {
 		id = nextState.nextId,
 		text = text,
 		yes = if yes ~= "" then yes else "Equip",
 		no = if no ~= "" then no else "Keep",
-	})
+	}
+	if type(uid) == "string" and uid ~= "" then
+		prompt.uid = uid
+	end
+	table.insert(nextState.prompts, prompt)
 	nextState.nextId += 1
+	-- Drop the oldest card. Never drop the newest, even if MAX is lowered.
+	while #nextState.prompts > ToastQueue.MAX and #nextState.prompts > 1 do
+		table.remove(nextState.prompts, 1)
+	end
+	local newest = nextState.prompts[#nextState.prompts]
+	local shown = nextState.prompts[1]
+	if newest ~= nil and shown ~= nil and newest.id ~= shown.id and newest.text ~= "" then
+		nextState = ToastQueue.pushToast(nextState, newest.text)
+	end
 	return nextState
 end
 
