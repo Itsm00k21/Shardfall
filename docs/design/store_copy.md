@@ -27,7 +27,7 @@ Permanent. One purchase. Check the game-pass API. Do not write the pass into `da
 
 ## Developer products
 
-`ProcessReceipt` grants these once a product id exists. A second receipt for a one-grant look records the id and does not add a second copy.
+Nothing is sold. `ProcessReceipt` returns NotProcessedYet for every receipt (`ReceiptService.luau:52-54`). `ReceiptService.grant` calls `Loops.grantPremium` only, and that refuses while `PREMIUM_ENABLED` is false (`LoopService.luau:11-12`). A look is not granted on this path. Suggested, once a product map exists: a second receipt for a one-grant look records the id and does not add a second copy.
 
 ### Convenience and the pass
 
@@ -72,7 +72,7 @@ No card. They stay at their live numbers and stay unsold.
 |---|---|---|
 | Prism pack | 100 Robux for 10 Prism Tokens | A Prism crack grants gear. Paid random item |
 | Luck Boost | +25 Shard Luck | Sells drop odds |
-| VIP | 1.2x luck, and the Patron trade name | Sells drop odds. No sku may set `vip` |
+| VIP | Cosmetic flag. Patron is a trade name, not a luck multiplier and not a higher cap | No sku may set `vip`. It does not sell drop odds |
 | Forge Boost | 2x Crafting XP for 60 minutes | Crafting pace is power pace |
 | Chest bundle | 1 Rare chest and 1 Epic chest | Paid gear |
 

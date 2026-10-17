@@ -36,7 +36,7 @@ Write the build you joined, the device, and the viewport. On a phone, also note 
 | 9 | Claim the login chest once. Claim it again. | First claim pays. Second says "Daily login is already claimed." Streak shows 1 | The second claim pays again |
 | 10–12 | At the Forge, upgrade one piece from +0. | Gold falls by 150 and stays at 0 or more | The price is not 150, or gold goes negative |
 | 13 | Open Pets. | An empty slot is fine | A pet was minted for you |
-| 14–16 | On the Roll tab, crack 3 Shard Tokens. Open the odds info. | Tokens go from 25 to 22. Each crack gives an item. Epic on the info line is about 0.4, not 4.0 | A refusal paints a Miss streak. Epic prints as 4.0 |
+| 14–16 | On the Roll tab, crack 3 Shard Tokens. Read the Odds list, then open the odds info. | Tokens go from 25 to 22. Each crack gives an item. Epic on both lines is about 0.4, not 4.0 | A refusal paints a Miss streak. Epic prints as 4.0. Legendary, Mythic, or Secret prints as 0.0 |
 | 17 | Open Pass, Market, Raids, and Settings. | Premium says the track is not for sale. No price button takes Robux | A product id prompts a purchase |
 | 18 | Read the Rootvault gate and enter Normal. | Normal starts at level 1 | Hard or Nightmare starts instead |
 | 19–27 | Clear the four rooms. Take any door you understand. | You can name the room you are in | A door is blank, or you cannot leave a room |
@@ -55,7 +55,7 @@ Heartwood is out of this half hour. Level 15 and a party of 4 are the later bar.
 | Red marks | Damage lands with no time to step out | `Rootvault.luau:21` |
 | Gnarl's rest | A new red square opens on top of the last slam | `Dungeons.luau:263-266` |
 | Refused roll | Tokens stay, and the streak still breaks or the card says Miss | `MenuHub.luau:3205-3206` |
-| Odds honesty | Info line prints Legendary, Mythic, or Secret as 0.0, or Epic as 4.0 | `RollBoard.luau:112-120` |
+| Odds honesty | The Odds list or the info line prints Legendary, Mythic, or Secret as 0.0, or Epic as 4.0 | `RollBoard.luau:112-120`, `MenuHub.luau:2811-2823`, `MenuHub.luau:2656-2662` |
 | Login once | A second claim on the same day pays another chest | `ChestConfig.luau:435-436` |
 | Daily Gnarl | After this clear, Start Daily Boss still starts a fight | `DungeonService.luau:2498-2499` |
 | Phone top | The gold banner covers the portrait or the HP bar | banner lane, viewports 390×844 and 844×390 |

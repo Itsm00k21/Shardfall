@@ -81,7 +81,7 @@ Numbers in that last column of extras are suggested.
 
 | | count |
 |---|---|
-| Live hooks in the first table | 17 |
+| Live hooks in the first table | 18 |
 | Gaps with a suggested change | 6 |
 | Gaps left as they are | 5 |
 | Paid retention items | 0 |

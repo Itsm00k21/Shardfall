@@ -14,17 +14,17 @@ Choice: a friend in your party is a look and a Second Chance point. It is not da
 | Premade size | 4 to 8. Story, Normal, Hard, Shardbreaker. One listing per host. Expires at 1800 seconds | `RaidPremade.luau:15-20`, `RaidPremade.luau:29-31` |
 | Full wing | 1 tank, 1 healer, 6 DPS at size 8. Flex fills tank, then healer, then DPS | `RaidFinder.luau:32`, `RaidFinder.luau:13` |
 | Role check | Warden tanks. Tidecaller heals. Any class can take DPS. Flex is always allowed | `Raids.luau:51-64` |
-| Under 4 | Finder and premade refuse. Solo play is Practice Grove, and it pays no loot | `PracticeLoot.luau:4-5` |
+| Under 4 | Finder and premade refuse. Rootvault Normal is a solo crawl and pays loot. Practice Grove is the solo door that pays nothing | `RaidFinder.luau:36`, `PracticeLoot.luau:4-5`, `DungeonService.luau:1300-1302` |
 | Heartwood queue | Story and Normal at account level 15 | `Raids.luau:20-21` |
 | Boss HP | Scales with party size. Size 8 is full HP. Size 4 is half | `RaidFinder.luau:47-53` |
 | No healer | After 180 seconds the group may start. Boss damage flag 0.85 and a Healing Spring | `RaidFinder.luau:15-16`, `RaidFinder.luau:38-41` |
-| Ready hop | A ready Story or Normal party shares one reserved server | premade hop path |
+| Ready hop | A ready Story or Normal party shares one reserved server. Hard and Shardbreaker do not hop | `RaidPremadeHop.luau:4-8` |
 
 A shorter party is not a weaker player. The HP scale is the only party-size number, and it is on the boss.
 
 ## Friends
 
-Settings stores three switches. The server does not read them. The only writers are `Settings.luau:245-248` and the Settings cycles in `MenuHub.luau:3780-3801`.
+Settings stores three switches. `SetSettings` saves the whole blob (`Remotes.luau:396-398`). No trade, raid, or chat path reads them. The client writers are the default at `Settings.luau:111`, the normalize at `Settings.luau:245-248`, and the Settings cycles in `MenuHub.luau:3780-3801`.
 
 | switch | saved values | server gate found |
 |---|---|---|
@@ -70,7 +70,7 @@ Player lines, from the live rules. Say these in the trade window. Do not soften 
 | moment | say | cite |
 |---|---|---|
 | Offer changes | "The trade changed. Wait 3 seconds, then confirm." | `Trading.luau:28`, `Trading.luau:52` |
-| Gold leaves the offer | The sender pays `floor(gold * 0.10)` extra. The other side receives the offer | `Trading.luau:27`, `Trading.luau:371-375` |
+| Gold leaves the offer | "You pay the gold you offered. They receive it minus a 10% tax, rounded down." | `Trading.luau:27`, `Trading.luau:1517-1522` |
 | Your side is 95% or more of the value | "You're giving ~N% of the value. Continue?" | `Trading.luau:36`, `Trading.luau:572-576`, `Trading.luau:1181-1188` |
 | Value is at least 10× the other side, and you are not connected | The audit flags `lopsided`. The warning above still shows either way | `Trading.luau:35`, `Trading.luau:1253-1258` |
 | New account, under 14 days | Daily cap 2,000. Trade cap 2,000. Above Rare stays bound. Cosmetics can move | `Trading.luau:31`, `Trading.luau:55-56`, `Trading.luau:66`, `Trading.luau:391-397` |
