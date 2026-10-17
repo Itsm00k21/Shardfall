@@ -29,6 +29,8 @@ export type Data = {
 		animation: string,
 		skipAt: string,
 		autoConfirm: boolean,
+		autoJunk: string,
+		junkBelow: string,
 	},
 	camera: {
 		shake: boolean,
@@ -70,6 +72,8 @@ export type Data = {
 local QUALITY = { auto = true, low = true, med = true, high = true }
 local ANIM = { full = true, short = true, instant = true }
 local SKIP = { off = true, rare = true, epic = true, legendary = true, mythic = true }
+local JUNK = { ask = true, keep = true, salvage = true }
+local BELOW = { Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true }
 local FLASH = { normal = true, reduced = true }
 local TRADES = { everyone = true, friends = true, off = true }
 local FILTER = { default = true, strict = true, off = true }
@@ -80,7 +84,13 @@ local HOTKEY_FIELDS = { "hero", "bag", "pets", "roll", "raids", "market" }
 function Settings.default(): Data
 	return {
 		graphics = { quality = "auto", vfx = 1, shadows = true, fpsCap = 60 },
-		rolls = { animation = "full", skipAt = "legendary", autoConfirm = false },
+		rolls = {
+			animation = "full",
+			skipAt = "legendary",
+			autoConfirm = false,
+			autoJunk = "ask",
+			junkBelow = "Rare",
+		},
 		camera = { shake = true, flash = "normal", sensitivity = 1, fov = 70 },
 		audio = { master = 1, music = 0.7, sfx = 1, ui = 1 },
 		hud = {
@@ -121,6 +131,24 @@ local function pick(value: any, allowed: { [string]: boolean }, fallback: string
 		return string.lower(value)
 	end
 	return fallback
+end
+
+local function junkMode(value: any): string
+	if type(value) == "string" and JUNK[string.lower(value)] == true then
+		return string.lower(value)
+	end
+	return "ask"
+end
+
+local function junkBelow(value: any): string
+	if type(value) ~= "string" or value == "" then
+		return "Rare"
+	end
+	local titled = string.upper(string.sub(value, 1, 1)) .. string.lower(string.sub(value, 2))
+	if BELOW[titled] == true then
+		return titled
+	end
+	return "Rare"
 end
 
 local function hotkey(value: any, fallback: string): string
@@ -190,6 +218,8 @@ function Settings.normalize(raw: any): Data
 			animation = pick(rolls.animation, ANIM, "full"),
 			skipAt = pick(rolls.skipAt, SKIP, "legendary"),
 			autoConfirm = rolls.autoConfirm == true,
+			autoJunk = junkMode(rolls.autoJunk),
+			junkBelow = junkBelow(rolls.junkBelow),
 		},
 		camera = {
 			shake = camera.shake ~= false,

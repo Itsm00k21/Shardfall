@@ -29,7 +29,9 @@ local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
+local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
 local RollMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollMath"))
+local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
@@ -43,12 +45,13 @@ local MenuHub = {}
 
 export type Hooks = {
 	invoke: (string, ...any) -> any,
-	onRoll: () -> (),
+	onRoll: (() -> ())?,
 	onBag: () -> (),
 	onMarket: () -> (),
 	onDim: (boolean) -> (),
 	onTab: ((string) -> ())?,
 	onBadges: (({ [string]: NotifyBadges.Badge }) -> ())?,
+	getPoolId: (() -> string)?,
 }
 
 local function rgb(name: string): Color3
@@ -287,9 +290,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local salvageRarity = "Rare"
 	local salvageArmed = false
 	local stopAt = "Off"
-	local autoArmed = false
-	local autoToken = 0
-	local lastAutoStamp = -1
+	local loop = RollLoop.idle()
+	local holdingRoll = false
+	local rollBusy = false
+	local streak = 0
+	local bestPull: any = nil
+	local slideHistory = false
+	local revealToken = 0
+	local lastCrack = 0
+	local pityTween: Tween? = nil
+	local pityNow: { epic: number, legendary: number }? = nil
+	local sessionRolls: { any } = {}
+	local sessionTemplates: { string } = {}
+	local activeReveal: {
+		started: number,
+		duration: number,
+		rarity: string,
+		flashed: boolean,
+		nextTick: number,
+	}? =
+		nil
 	local tabDots: { [string]: Frame } = {}
 	local restColor: { [GuiButton]: Color3 } = {}
 	local tabButtons: { [string]: TextButton } = {}
@@ -569,7 +589,156 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local bag = scroll(page("bag"))
 	local sets = scroll(page("sets"))
 	local pets = scroll(page("pets"))
-	local roll = scroll(page("roll"))
+	local rollPage = page("roll")
+	local roll = scroll(rollPage)
+	roll.Size = UDim2.new(1, 0, 1, -88)
+
+	local rollButton = Instance.new("TextButton")
+	rollButton.Name = "Roll"
+	rollButton.AnchorPoint = Vector2.new(0, 1)
+	rollButton.Position = UDim2.new(0, UiTheme.PAD, 1, -UiTheme.PAD)
+	rollButton.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, 72)
+	rollButton.BackgroundColor3 = rgb("button")
+	rollButton.Font = headerFont()
+	rollButton.TextSize = 28
+	rollButton.TextColor3 = rgb("text")
+	rollButton.Text = "Roll"
+	rollButton.AutoButtonColor = false
+	rollButton.ZIndex = 6
+	rollButton.Parent = rollPage
+	local rollCorner = Instance.new("UICorner")
+	rollCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	rollCorner.Parent = rollButton
+	local rollStroke = Instance.new("UIStroke")
+	rollStroke.Thickness = UiTheme.STROKE_BOLD
+	rollStroke.Color = rgb("accent")
+	rollStroke.Parent = rollButton
+	local pulseScale = Instance.new("UIScale")
+	pulseScale.Name = "Pulse"
+	pulseScale.Parent = rollButton
+	local pressScale = Instance.new("UIScale")
+	pressScale.Name = "Press"
+	pressScale.Parent = rollButton
+	local pulseTween: Tween? = nil
+
+	local function setPulse(on: boolean)
+		if pulseTween ~= nil then
+			pulseTween:Cancel()
+			pulseTween = nil
+		end
+		if not on or UiMotion.reduced(draft) then
+			pulseScale.Scale = 1
+			return
+		end
+		pulseScale.Scale = 1
+		local tween = TweenService:Create(
+			pulseScale,
+			TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+			{ Scale = 1.06 }
+		)
+		pulseTween = tween
+		tween:Play()
+	end
+
+	local revealCard = Instance.new("Frame")
+	revealCard.Name = "Reveal"
+	revealCard.AnchorPoint = Vector2.new(0.5, 1)
+	revealCard.Position = UDim2.new(0.5, 0, 1, -96)
+	revealCard.Size = UDim2.new(1, -24, 0, 112)
+	revealCard.BackgroundColor3 = rgb("header")
+	revealCard.BorderSizePixel = 0
+	revealCard.Visible = false
+	revealCard.ZIndex = 8
+	revealCard.Parent = rollPage
+	local revealCorner = Instance.new("UICorner")
+	revealCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	revealCorner.Parent = revealCard
+	local revealStroke = Instance.new("UIStroke")
+	revealStroke.Thickness = UiTheme.STROKE
+	revealStroke.Color = rgb("accent")
+	revealStroke.Parent = revealCard
+	local revealScale = Instance.new("UIScale")
+	revealScale.Name = "Card"
+	revealScale.Parent = revealCard
+	local revealTitle = Instance.new("TextLabel")
+	revealTitle.Name = "Name"
+	revealTitle.BackgroundTransparency = 1
+	revealTitle.Position = UDim2.fromOffset(12, 8)
+	revealTitle.Size = UDim2.new(1, -120, 0, 32)
+	revealTitle.Font = headerFont()
+	revealTitle.TextSize = 22
+	revealTitle.TextXAlignment = Enum.TextXAlignment.Left
+	revealTitle.TextColor3 = rgb("text")
+	revealTitle.Text = ""
+	revealTitle.ZIndex = 9
+	revealTitle.Parent = revealCard
+	local revealRarity = Instance.new("TextLabel")
+	revealRarity.Name = "Rarity"
+	revealRarity.BackgroundTransparency = 1
+	revealRarity.Position = UDim2.fromOffset(12, 40)
+	revealRarity.Size = UDim2.new(1, -120, 0, 24)
+	revealRarity.Font = bodyFont()
+	revealRarity.TextSize = UiTheme.MIN_TEXT
+	revealRarity.TextXAlignment = Enum.TextXAlignment.Left
+	revealRarity.TextColor3 = rgb("text")
+	revealRarity.Text = ""
+	revealRarity.ZIndex = 9
+	revealRarity.Parent = revealCard
+	local revealNew = Instance.new("TextLabel")
+	revealNew.Name = "New"
+	revealNew.AnchorPoint = Vector2.new(1, 0)
+	revealNew.Position = UDim2.new(1, -8, 0, 8)
+	revealNew.Size = UDim2.fromOffset(72, 28)
+	revealNew.BackgroundColor3 = rgb("accent")
+	revealNew.Font = headerFont()
+	revealNew.TextSize = UiTheme.MIN_TEXT
+	revealNew.TextColor3 = rgb("ink")
+	revealNew.Text = "NEW!"
+	revealNew.Visible = false
+	revealNew.ZIndex = 9
+	revealNew.Parent = revealCard
+	local newCorner = Instance.new("UICorner")
+	newCorner.CornerRadius = UDim.new(0, 8)
+	newCorner.Parent = revealNew
+	local revealFly = Instance.new("TextLabel")
+	revealFly.Name = "Drip"
+	revealFly.BackgroundTransparency = 1
+	revealFly.Position = UDim2.fromOffset(12, 72)
+	revealFly.Size = UDim2.fromOffset(80, 28)
+	revealFly.Font = headerFont()
+	revealFly.TextSize = 20
+	revealFly.TextXAlignment = Enum.TextXAlignment.Left
+	revealFly.TextColor3 = rgb("ok")
+	revealFly.Text = "+1"
+	revealFly.ZIndex = 9
+	revealFly.Parent = revealCard
+	local revealEquip = Instance.new("TextButton")
+	revealEquip.Name = "Equip"
+	revealEquip.AnchorPoint = Vector2.new(1, 1)
+	revealEquip.Position = UDim2.new(1, -8, 1, -8)
+	revealEquip.Size = UDim2.fromOffset(120, UiTheme.TOUCH)
+	revealEquip.BackgroundColor3 = rgb("ok")
+	revealEquip.Font = headerFont()
+	revealEquip.TextSize = UiTheme.MIN_TEXT
+	revealEquip.TextColor3 = rgb("ink")
+	revealEquip.Text = "▲ Equip"
+	revealEquip.AutoButtonColor = false
+	revealEquip.Visible = false
+	revealEquip.ZIndex = 9
+	revealEquip.Parent = revealCard
+	local revealEquipCorner = Instance.new("UICorner")
+	revealEquipCorner.CornerRadius = UDim.new(0, 8)
+	revealEquipCorner.Parent = revealEquip
+	local flashCover = Instance.new("Frame")
+	flashCover.Name = "Flash"
+	flashCover.Size = UDim2.fromScale(1, 1)
+	flashCover.BackgroundColor3 = Color3.new(1, 1, 1)
+	flashCover.BackgroundTransparency = 1
+	flashCover.BorderSizePixel = 0
+	flashCover.Active = false
+	flashCover.ZIndex = 12
+	flashCover.Parent = rollPage
+	setPulse(true)
 	local raids = scroll(page("raids"))
 	local market = scroll(page("market"))
 	local pass = scroll(page("pass"))
@@ -663,6 +832,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		paintTabs(if id == "sets" then "bag" else id)
 		if id ~= "bag" then
 			detailOpen = false
+		end
+		if id ~= "roll" then
+			streak = 0
+			holdingRoll = false
 		end
 		detail.Visible = id == "bag" and detailOpen
 		if hooks.onTab ~= nil then
@@ -1682,69 +1855,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
-	local function scheduleAuto()
-		autoToken += 1
-		local token = autoToken
-		task.delay(2, function()
-			if token ~= autoToken or not autoArmed or not autoOn then
-				return
-			end
-			local recent = RollBoard.history(bagItems(), 1)
-			local newest = recent[1]
-			local at = if newest ~= nil and type(newest.obtainedAt) == "number"
-				then newest.obtainedAt
-				else 0
-			if at == lastAutoStamp then
-				autoArmed = false
-				return
-			end
-			local rarity = if newest ~= nil and type(newest.rarity) == "string"
-				then newest.rarity
-				else ""
-			local tokens = if type(profile) == "table"
-					and type(profile.shardTokens) == "number"
-				then profile.shardTokens
-				else 0
-			if newest == nil or not RollBoard.shouldRollAgain(true, stopAt, rarity, tokens) then
-				autoArmed = false
-				lastAutoStamp = at
-				return
-			end
-			lastAutoStamp = at
-			hooks.onRoll()
-			scheduleAuto()
-		end)
-	end
+	local beginRoll: () -> ()
+	local finishReveal: () -> ()
 
 	local function paintRoll()
 		clear(roll)
-		local rollButton = Instance.new("TextButton")
-		rollButton.Name = "Roll"
-		rollButton.Size = UDim2.new(1, 0, 0, UiTheme.TAP)
-		rollButton.BackgroundColor3 = rgb("button")
-		rollButton.Font = headerFont()
-		rollButton.TextSize = 22
-		rollButton.TextColor3 = rgb("text")
-		rollButton.Text = "Roll"
-		rollButton.AutoButtonColor = false
-		rollButton.LayoutOrder = 1
-		rollButton.Parent = roll
-		local rollCorner = Instance.new("UICorner")
-		rollCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
-		rollCorner.Parent = rollButton
-		local rollStroke = Instance.new("UIStroke")
-		rollStroke.Thickness = UiTheme.STROKE_BOLD
-		rollStroke.Color = rgb("accent")
-		rollStroke.Parent = rollButton
-		setRest(rollButton, rgb("button"))
-		motion(rollButton)
-		rollButton.Activated:Connect(function()
-			if autoOn then
-				autoArmed = true
-				scheduleAuto()
-			end
-			hooks.onRoll()
-		end)
+		if pityTween ~= nil then
+			pityTween:Cancel()
+			pityTween = nil
+		end
+		setPulse(loop.phase == "idle" and not rollBusy)
 
 		local toggles = Instance.new("Frame")
 		toggles.Name = "Toggles"
@@ -1777,11 +1897,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		toggle("Auto", if autoOn then "Auto On" else "Auto", autoOn, function()
 			autoOn = not autoOn
 			draft.rolls.autoConfirm = autoOn
-			if not autoOn then
-				autoArmed = false
-				autoToken += 1
-			end
 			save()
+			if autoOn and loop.phase == "idle" and not rollBusy then
+				loop = RollLoop.press(loop)
+				beginRoll()
+			end
 			paintRoll()
 			show("roll")
 		end)
@@ -1806,17 +1926,97 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			show("roll")
 		end)
 
+		local junkRow = Instance.new("Frame")
+		junkRow.Name = "Junk"
+		junkRow.BackgroundTransparency = 1
+		junkRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		junkRow.LayoutOrder = 3
+		junkRow.Parent = roll
+		local junkLayout = Instance.new("UIListLayout")
+		junkLayout.FillDirection = Enum.FillDirection.Horizontal
+		junkLayout.Padding = UDim.new(0, UiTheme.PAD)
+		junkLayout.Parent = junkRow
+		local function junkButton(name: string, text: string, fn: () -> ())
+			local button = Instance.new("TextButton")
+			button.Name = name
+			button.Size = UDim2.new(0.5, -4, 1, 0)
+			button.BackgroundColor3 = rgb("header")
+			button.Font = headerFont()
+			button.TextSize = UiTheme.MIN_TEXT
+			button.TextColor3 = rgb("text")
+			button.Text = text
+			button.AutoButtonColor = false
+			button.Parent = junkRow
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = button
+			setRest(button, rgb("header"))
+			motion(button)
+			button.Activated:Connect(fn)
+		end
+		junkButton("JunkMode", "Junk  " .. draft.rolls.autoJunk, function()
+			local order = { "ask", "keep", "salvage" }
+			local nextId = order[1]
+			for index, id in ipairs(order) do
+				if id == draft.rolls.autoJunk then
+					nextId = order[(index % #order) + 1]
+				end
+			end
+			draft.rolls.autoJunk = nextId
+			save()
+			paintRoll()
+			show("roll")
+		end)
+		junkButton("JunkBelow", "Below  " .. draft.rolls.junkBelow, function()
+			local order = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
+			local nextId = order[1]
+			for index, id in ipairs(order) do
+				if id == draft.rolls.junkBelow then
+					nextId = order[(index % #order) + 1]
+				end
+			end
+			draft.rolls.junkBelow = nextId
+			save()
+			paintRoll()
+			show("roll")
+		end)
+
+		local sinceEpic = if pityNow ~= nil
+			then pityNow.epic
+			elseif type(profile) == "table" then profile.sinceEpic or 0
+			else 0
+		local sinceLegendary = if pityNow ~= nil
+			then pityNow.legendary
+			elseif type(profile) == "table" then profile.sinceLegendary or 0
+			else 0
+		line(roll, string.format("Streak  %d", streak), 4, rgb("gold"))
+		line(roll, string.format("Next Epic in %d", RollLoop.nextEpic(sinceEpic)), 5, rgb("text"))
+		local bestText = "Best pull  —"
+		if type(bestPull) == "table" then
+			bestText = string.format(
+				"Best pull  %s  %s",
+				tostring(bestPull.name or "Item"),
+				tostring(bestPull.rarity or "")
+			)
+		end
+		line(roll, bestText, 6, rgb("accent"))
+		line(
+			roll,
+			RollLoop.indexText(
+				RollLoop.discoveries(profile, sessionTemplates),
+				RollLoop.indexTotal()
+			),
+			7,
+			rgb("text")
+		)
+
 		if infoOpen then
 			local luck = 0
 			local boost = 0
-			local sinceEpic = 0
-			local sinceLegendary = 0
 			local rolls = 0
 			if type(profile) == "table" then
 				luck = profile.shardLuck or 0
 				boost = profile.luckBoost or 0
-				sinceEpic = profile.sinceEpic or 0
-				sinceLegendary = profile.sinceLegendary or 0
 				rolls = profile.shardRolls or 0
 			end
 			local info = Instance.new("Frame")
@@ -1826,7 +2026,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			info.Size = UDim2.fromScale(1, 0)
 			info.AutomaticSize = Enum.AutomaticSize.Y
 			info.BorderSizePixel = 0
-			info.LayoutOrder = 3
+			info.LayoutOrder = 8
 			info.Parent = roll
 			local infoCorner = Instance.new("UICorner")
 			infoCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
@@ -1868,8 +2068,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 
-		local bars = RollBoard.bars(profile)
-		local function meter(name: string, caption: string, fill: number, order: number)
+		local bars = RollBoard.bars({
+			sinceEpic = sinceEpic,
+			sinceLegendary = sinceLegendary,
+		})
+		local function meter(
+			name: string,
+			caption: string,
+			fill: number,
+			order: number,
+			flash: boolean
+		)
 			local host = Instance.new("Frame")
 			host.Name = name
 			host.BackgroundColor3 = rgb("header")
@@ -1883,12 +2092,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local bar = Instance.new("Frame")
 			bar.Name = "Fill"
 			bar.Size = UDim2.fromScale(fill, 1)
-			bar.BackgroundColor3 = rgb("accent")
+			bar.BackgroundColor3 = if flash then rgb("gold") else rgb("accent")
 			bar.BorderSizePixel = 0
 			bar.Parent = host
 			local barCorner = Instance.new("UICorner")
 			barCorner.CornerRadius = UDim.new(0, 6)
 			barCorner.Parent = bar
+			if flash and not UiMotion.reduced(draft) then
+				local tween = TweenService:Create(
+					bar,
+					TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+					{ BackgroundTransparency = 0.45 }
+				)
+				pityTween = tween
+				tween:Play()
+			end
 			local label = Instance.new("TextLabel")
 			label.BackgroundTransparency = 1
 			label.Size = UDim2.fromScale(1, 1)
@@ -1903,28 +2121,31 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			"EpicPity",
 			string.format("Epic pity  %d%%", math.floor(bars.epic * 100 + 0.5)),
 			bars.epic,
-			4
+			9,
+			RollLoop.nearGuarantee(sinceEpic)
 		)
 		meter(
 			"LegendaryPity",
 			string.format("Legendary pity  %d%%", math.floor(bars.legendary * 100 + 0.5)),
 			bars.legendary,
-			5
+			10,
+			false
 		)
 		local luck = if type(profile) == "table" then profile.shardLuck or 0 else 0
 		local boost = if type(profile) == "table" then profile.luckBoost or 0 else 0
-		local sinceLegendary = if type(profile) == "table" then profile.sinceLegendary or 0 else 0
-		line(roll, "Odds", 6, rgb("gold"))
+		line(roll, "Odds", 11, rgb("gold"))
 		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, sinceLegendary)
 		if #odds == 0 then
-			line(roll, "Odds are unavailable.", 7, rgb("muted"))
+			line(roll, "Odds are unavailable.", 12, rgb("muted"))
 		else
 			for index, text in ipairs(odds) do
-				line(roll, text, 7 + index, rgb("text"))
+				line(roll, text, 12 + index, rgb("text"))
 			end
 		end
 
-		local recent = RollBoard.history(bagItems(), RollBoard.HISTORY)
+		local recent = if #sessionRolls > 0
+			then sessionRolls
+			else RollBoard.history(bagItems(), RollBoard.HISTORY)
 		local celebrate = recent[1]
 		if type(celebrate) == "table" then
 			local rarity = if type(celebrate.rarity) == "string" then celebrate.rarity else "Common"
@@ -1974,9 +2195,377 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				local chipCorner = Instance.new("UICorner")
 				chipCorner.CornerRadius = UDim.new(0, 8)
 				chipCorner.Parent = chip
+				if index == 1 and slideHistory then
+					local chipScale = Instance.new("UIScale")
+					chipScale.Parent = chip
+					if UiMotion.reduced(draft) then
+						chipScale.Scale = 1
+					else
+						chipScale.Scale = 0.6
+						TweenService:Create(
+							chipScale,
+							TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+							{ Scale = 1 }
+						):Play()
+					end
+				end
 			end
 		end
+		slideHistory = false
 	end
+
+	local activeItem: any = nil
+	local activeNew = false
+	local activeUpgrade = false
+
+	local function tokenCount(): number
+		if type(profile) == "table" and type(profile.shardTokens) == "number" then
+			return profile.shardTokens
+		end
+		return 0
+	end
+
+	local function hapticTick()
+		pcall(function()
+			local haptic = game:GetService("HapticService")
+			haptic:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.Small, 0.2)
+			task.delay(0.05, function()
+				haptic:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.Small, 0)
+			end)
+		end)
+	end
+
+	local function cameraTick()
+		if draft.camera.shake ~= true or UiMotion.reduced(draft) then
+			return
+		end
+		local localPlayer = Players.LocalPlayer
+		local character = if localPlayer ~= nil then localPlayer.Character else nil
+		if character == nil then
+			return
+		end
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid == nil then
+			return
+		end
+		local before = humanoid.CameraOffset
+		humanoid.CameraOffset = before + Vector3.new(0.12, 0, 0)
+		task.delay(0.05, function()
+			if humanoid.Parent ~= nil then
+				humanoid.CameraOffset = before
+			end
+		end)
+	end
+
+	local function squash()
+		local length = UiMotion.press(UiMotion.reduced(draft))
+		if length <= 0 then
+			pressScale.Scale = 0.92
+			task.delay(0.05, function()
+				pressScale.Scale = 1
+			end)
+			return
+		end
+		local down = TweenService:Create(
+			pressScale,
+			TweenInfo.new(length * 0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Scale = 0.92 }
+		)
+		down.Completed:Connect(function()
+			TweenService:Create(
+				pressScale,
+				TweenInfo.new(length, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{ Scale = 1 }
+			):Play()
+		end)
+		down:Play()
+	end
+
+	local function paintResult(
+		item: any,
+		record: RollReveal.Record,
+		isNew: boolean,
+		upgrade: boolean
+	)
+		revealCard.Visible = true
+		revealTitle.Text = record.name
+		revealRarity.Text = record.rarity
+		local red, green, blue = UiTheme.rarityColor(record.rarity)
+		local color = Color3.fromRGB(red, green, blue)
+		revealRarity.TextColor3 = color
+		revealStroke.Color = color
+		revealNew.Visible = isNew
+		local drip = RollLoop.drip()
+		revealFly.Text = drip.text
+		revealFly.TextTransparency = 0
+		revealFly.Position = UDim2.fromOffset(12, 72)
+		if not UiMotion.reduced(draft) then
+			TweenService:Create(
+				revealFly,
+				TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{
+					Position = UDim2.fromOffset(12, 36),
+					TextTransparency = 1,
+				}
+			):Play()
+		end
+		local junk =
+			RollLoop.resolve(record.rarity, draft.rolls.junkBelow, draft.rolls.autoJunk, upgrade)
+		revealEquip.Visible = junk == "equip"
+		if type(item.uid) == "string" then
+			revealEquip:SetAttribute("Uid", item.uid)
+		end
+		if junk == "salvage" and type(item.uid) == "string" then
+			task.spawn(function()
+				pcall(hooks.invoke, "Salvage", item.uid)
+			end)
+		end
+	end
+
+	local function chainAllowed(queued: boolean): boolean
+		local pending = if type(activeItem) == "table" then activeItem.uid else nil
+		local full = RollLoop.bagFull(profile, pending)
+		local tokens = tokenCount()
+		if RollLoop.blocked(tokens, full) ~= nil then
+			return false
+		end
+		if shownId ~= "roll" then
+			return false
+		end
+		if queued then
+			return true
+		end
+		if not (autoOn or holdingRoll) then
+			return false
+		end
+		local rarity = "Common"
+		if type(activeItem) == "table" and type(activeItem.rarity) == "string" then
+			rarity = activeItem.rarity
+		end
+		return RollLoop.stopReason({
+			auto = true,
+			tokens = tokens,
+			bagFull = full,
+			rarity = rarity,
+			stopAt = stopAt,
+			isNew = activeNew,
+			isUpgrade = activeUpgrade,
+		}) == nil
+	end
+
+	finishReveal = function()
+		activeReveal = nil
+		local finished = RollLoop.finish(loop)
+		if chainAllowed(finished.phase == "revealing") then
+			loop = { phase = "revealing", queued = false }
+			beginRoll()
+			return
+		end
+		loop = RollLoop.idle()
+		setPulse(true)
+	end
+
+	beginRoll = function()
+		if rollBusy then
+			return
+		end
+		rollBusy = true
+		setPulse(false)
+		revealToken += 1
+		local generation = revealToken
+		task.spawn(function()
+			local waitFor = RarityConfig.COOLDOWN - (os.clock() - lastCrack)
+			if lastCrack > 0 and waitFor > 0 then
+				task.wait(waitFor)
+			end
+			if generation ~= revealToken then
+				rollBusy = false
+				return
+			end
+			local poolId = "verdant_armory"
+			if hooks.getPoolId ~= nil then
+				local picked = hooks.getPoolId()
+				if type(picked) == "string" and picked ~= "" then
+					poolId = picked
+				end
+			end
+			local ok, result = pcall(hooks.invoke, "RollShard", poolId, false)
+			if generation ~= revealToken then
+				rollBusy = false
+				return
+			end
+			rollBusy = false
+			local record = if ok then RollReveal.capture(result) else nil
+			if record == nil or type(result) ~= "table" or type(result.item) ~= "table" then
+				streak = RollLoop.streak(streak, false)
+				loop = RollLoop.idle()
+				activeReveal = nil
+				setPulse(true)
+				paintRoll()
+				return
+			end
+			lastCrack = os.clock()
+			streak = RollLoop.streak(streak, true)
+			local item = result.item
+			local owned = RollLoop.ownedTemplates(
+				profile,
+				if type(item.uid) == "string" then item.uid else nil
+			)
+			activeNew = RollLoop.isNew(item.templateId, owned)
+			activeUpgrade = RollLoop.isUpgrade(profile, item)
+			activeItem = item
+			bestPull = RollLoop.best(bestPull, item)
+			if type(item.templateId) == "string" then
+				table.insert(sessionTemplates, item.templateId)
+			end
+			table.insert(sessionRolls, 1, item)
+			while #sessionRolls > RollBoard.HISTORY do
+				table.remove(sessionRolls)
+			end
+			slideHistory = true
+			if type(result.pity) == "table" then
+				pityNow = {
+					epic = if type(result.pity.sinceEpic) == "number"
+						then result.pity.sinceEpic
+						else 0,
+					legendary = if type(result.pity.sinceLegendary) == "number"
+						then result.pity.sinceLegendary
+						else 0,
+				}
+			end
+			local reduced = UiMotion.reduced(draft)
+			local quick = result.quick == true or quickOn
+			local duration = RollLoop.seconds(draft, record.rarity, quick, reduced)
+			paintResult(item, record, activeNew, activeUpgrade)
+			paintRoll()
+			local red, green, blue = UiTheme.rarityColor(record.rarity)
+			if duration <= 0 then
+				revealCard.BackgroundColor3 = Color3.fromRGB(red, green, blue)
+				if RollLoop.flash(record.rarity, reduced, draft.camera.flash == "reduced") then
+					flashCover.BackgroundTransparency = 0.45
+					TweenService
+						:Create(flashCover, TweenInfo.new(0.08), { BackgroundTransparency = 1 })
+						:Play()
+				end
+				if RollLoop.stinger(record.rarity, reduced) then
+					playUi("stinger")
+				end
+				finishReveal()
+				return
+			end
+			revealCard.BackgroundColor3 = rgb("header")
+			activeReveal = {
+				started = os.clock(),
+				duration = duration,
+				rarity = record.rarity,
+				flashed = false,
+				nextTick = os.clock(),
+			}
+		end)
+	end
+
+	local function pointerDown(input: InputObject): boolean
+		return input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+			or input.KeyCode == Enum.KeyCode.ButtonA
+	end
+
+	local function pressRoll()
+		playUi("click")
+		squash()
+		hapticTick()
+		cameraTick()
+		local previous = loop.phase
+		loop = RollLoop.press(loop)
+		if previous ~= "revealing" then
+			beginRoll()
+		end
+	end
+
+	rollButton.MouseEnter:Connect(function()
+		rollButton.BackgroundColor3 = rgb("hover")
+	end)
+	rollButton.MouseLeave:Connect(function()
+		rollButton.BackgroundColor3 = rgb("button")
+	end)
+	rollButton.InputBegan:Connect(function(input)
+		if pointerDown(input) then
+			holdingRoll = true
+			rollButton.BackgroundColor3 = rgb("press")
+			pressRoll()
+		end
+	end)
+	rollButton.InputEnded:Connect(function(input)
+		if pointerDown(input) then
+			holdingRoll = false
+			rollButton.BackgroundColor3 = rgb("button")
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if pointerDown(input) then
+			holdingRoll = false
+		end
+	end)
+	revealEquip.Activated:Connect(function()
+		local uid = revealEquip:GetAttribute("Uid")
+		if type(uid) ~= "string" or uid == "" then
+			return
+		end
+		task.spawn(function()
+			pcall(hooks.invoke, "EquipItem", uid)
+		end)
+	end)
+	RunService.Heartbeat:Connect(function()
+		local active = activeReveal
+		if active == nil then
+			return
+		end
+		local elapsed = os.clock() - active.started
+		local reduced = UiMotion.reduced(draft)
+		local tint = RollLoop.tint(elapsed, active.duration, active.rarity)
+		local red, green, blue = UiTheme.rarityColor(active.rarity)
+		if tint ~= nil or elapsed >= active.duration then
+			revealCard.BackgroundColor3 = Color3.fromRGB(red, green, blue)
+			revealStroke.Color = Color3.fromRGB(red, green, blue)
+			revealStroke.Thickness = if tint ~= nil then 3 else UiTheme.STROKE
+		else
+			revealCard.BackgroundColor3 = rgb("header")
+			revealStroke.Thickness = UiTheme.STROKE
+		end
+		if RollLoop.slowmo(elapsed, active.duration, active.rarity, reduced) then
+			revealScale.Scale = 1.08
+		else
+			revealScale.Scale = 1
+		end
+		if
+			RollLoop.anticipates(active.rarity, reduced)
+			and tint ~= nil
+			and os.clock() >= active.nextTick
+		then
+			playUi("click")
+			local progress = RollReveal.spinProgress(elapsed, active.duration)
+			active.nextTick = os.clock() + math.clamp(0.05 + (1 - progress) * 0.18, 0.05, 0.22)
+		end
+		if
+			not active.flashed
+			and RollLoop.slowmo(elapsed, active.duration, active.rarity, reduced)
+			and RollLoop.flash(active.rarity, reduced, draft.camera.flash == "reduced")
+		then
+			active.flashed = true
+			flashCover.BackgroundTransparency = 0.45
+			TweenService:Create(
+				flashCover,
+				TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ BackgroundTransparency = 1 }
+			):Play()
+			if RollLoop.stinger(active.rarity, reduced) then
+				playUi("stinger")
+			end
+		end
+		if elapsed >= active.duration then
+			finishReveal()
+		end
+	end)
 
 	local function paint()
 		paintHints()
@@ -2062,6 +2651,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				autoOn = draft.rolls.autoConfirm
 			end
 		)
+		cycle("Junk  " .. draft.rolls.autoJunk, 13, function()
+			local order = { "ask", "keep", "salvage" }
+			local nextId = order[1]
+			for index, id in ipairs(order) do
+				if id == draft.rolls.autoJunk then
+					nextId = order[(index % #order) + 1]
+				end
+			end
+			draft.rolls.autoJunk = nextId
+		end)
+		cycle("Below  " .. draft.rolls.junkBelow, 14, function()
+			local order = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
+			local nextId = order[1]
+			for index, id in ipairs(order) do
+				if id == draft.rolls.junkBelow then
+					nextId = order[(index % #order) + 1]
+				end
+			end
+			draft.rolls.junkBelow = nextId
+		end)
 		cycle("Camera shake  " .. (if draft.camera.shake then "On" else "Off"), 20, function()
 			draft.camera.shake = not draft.camera.shake
 		end)
@@ -2488,6 +3097,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end,
 		setProfile = function(nextProfile: any)
 			profile = nextProfile
+			pityNow = nil
 			if type(nextProfile) == "table" and type(nextProfile.uiSettings) == "table" then
 				draft = Settings.normalize(nextProfile.uiSettings)
 				uiScale.Scale = draft.hud.scale

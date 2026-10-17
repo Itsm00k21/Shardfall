@@ -12,6 +12,8 @@ UiSfx.ids = {
 	close = "rbxasset://sounds/switch.wav",
 	tab = "rbxasset://sounds/switch.wav",
 	press = "rbxasset://sounds/electronicpingshort.wav",
+	click = "rbxasset://sounds/switch.wav",
+	stinger = "rbxasset://sounds/electronicpingshort.wav",
 	confirm = "rbxasset://sounds/electronicpingshort.wav",
 	toast = "rbxasset://sounds/electronicpingshort.wav",
 }

@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 6c2696a+ client` in Output.
+	still leaves `[Shardfall] build f0af554+ client` in Output.
 ]]
 
-print("[Shardfall] build 6c2696a+ client")
+print("[Shardfall] build f0af554+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1096,13 +1096,8 @@ end
 
 menuHub = MenuHub.start(playerGui, {
 	invoke = invoke,
-	onRoll = function()
-		if rollReel ~= nil then
-			rollReel.request(false)
-		end
-		if menuHub ~= nil then
-			menuHub.handoffRoll()
-		end
+	getPoolId = function()
+		return selectedPoolId
 	end,
 	onBag = function()
 		closePanels("inventory")

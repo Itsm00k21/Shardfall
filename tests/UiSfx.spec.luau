@@ -11,7 +11,7 @@ local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 describe("UiSfx", function()
 	it("gives every action a sound and follows the UI volume", function()
-		local actions = { "open", "close", "tab", "press", "confirm", "toast" }
+		local actions = { "open", "close", "tab", "press", "click", "stinger", "confirm", "toast" }
 		for _, action in ipairs(actions) do
 			local id = UiSfx.clip(action)
 			expect(string.sub(id, 1, 11)).toEqual("rbxasset://")
