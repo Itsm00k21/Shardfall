@@ -947,7 +947,7 @@ describe("TrainingGrove inputs", function()
 end)
 
 describe("TrainingGrove isolation", function()
-	it("is required by nothing in src and does not roll, wait, or read the clock", function()
+	it("is required only by the plaza grove service and does not roll, wait, or read the clock", function()
 		local source = fs.readFile("src/ReplicatedStorage/Shared/TrainingGrove.luau")
 		expect(string.find(source, "require(", 1, true)).toBeNil()
 		expect(string.find(source, "CombatFeel", 1, true)).toBeNil()
@@ -970,6 +970,6 @@ describe("TrainingGrove isolation", function()
 				table.insert(callers, path)
 			end
 		end
-		expect(callers).toEqual({})
+		expect(callers).toEqual({ "src/ServerScriptService/ShardfallServer/GroveService.luau" })
 	end)
 end)

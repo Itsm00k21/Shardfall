@@ -2481,6 +2481,66 @@ local function stampLife(parent: Instance)
 	end)
 end
 
+-- One straw dummy on the plaza's south rim. The post is the only collider.
+-- The sign uses the gate plate so it stays readable at noon. No light, no
+-- particles, no face, and no board in the lane.
+local function buildGrove(parent: Instance)
+	local grove = Haven.GROVE
+	local model = Instance.new("Model")
+	model.Name = "GroveDummy"
+	model.Parent = parent
+	model:SetAttribute("GroveId", grove.id)
+
+	local pine = Color3.fromRGB(92, 64, 36)
+	local straw = Color3.fromRGB(222, 196, 120)
+	local moss = Color3.fromRGB(30, 150, 64)
+	local backing = Color3.fromRGB(20, 16, 12)
+	local x = grove.x
+	local z = grove.z
+
+	local postHeight, postCenter = sunk(5, 5)
+	local post = part(
+		model,
+		"Post",
+		Vector3.new(1.1, postHeight, 1.1),
+		CFrame.new(x, postCenter, z),
+		pine,
+		Enum.Material.Wood,
+		true
+	)
+	part(
+		model,
+		"Straw",
+		Vector3.new(2, 2.2, 1),
+		CFrame.new(x, 3.5, z),
+		straw,
+		Enum.Material.Fabric,
+		false
+	)
+	ball(model, "Head", x, 4.9, z, 1.2, straw, Enum.Material.Fabric)
+	-- North face, toward spawn. The dark plate is what makes the moss read.
+	part(
+		model,
+		"TargetBack",
+		Vector3.new(1.7, 1.7, 0.16),
+		CFrame.new(x, 3.5, z - 0.58),
+		backing,
+		Enum.Material.SmoothPlastic,
+		false
+	)
+	part(
+		model,
+		"Target",
+		Vector3.new(1.15, 1.15, 0.12),
+		CFrame.new(x, 3.5, z - 0.74),
+		moss,
+		Enum.Material.SmoothPlastic,
+		false
+	)
+	gatePlate(model, CFrame.new(x, 6.2, z), "Training Grove", "Hit the dummy")
+	promptOn(post, "Train", "Training Grove", "grove", "Hit the dummy.", nil, 8)
+end
+
 function HavenBuilder.build(parent: Instance): number
 	-- Persistent before parenting, and a direct Workspace child. Kevin's
 	-- Explorer showed Camera, Terrain, and Baseplate, with no Haven.
@@ -2498,6 +2558,7 @@ function HavenBuilder.build(parent: Instance): number
 	buildGarden(parent)
 	buildObservatory(parent)
 	buildCourt(parent)
+	buildGrove(parent)
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)

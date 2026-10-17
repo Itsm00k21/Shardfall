@@ -2184,4 +2184,74 @@ describe("HavenBuilder", function()
 			end
 		end
 	end)
+
+	it("stands a readable training dummy off the gate lanes", function()
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+
+		local dummies = findAll(hub, "GroveDummy")
+		expect(#dummies).toEqual(1)
+		local dummy = dummies[1]
+		expect(dummy:GetAttribute("GroveId")).toEqual("grove")
+
+		local post = dummy:FindFirstChild("Post")
+		local straw = dummy:FindFirstChild("Straw")
+		local head = dummy:FindFirstChild("Head")
+		local target = dummy:FindFirstChild("Target")
+		local backing = dummy:FindFirstChild("TargetBack")
+		expect(post ~= nil).toBeTrue()
+		expect(straw ~= nil).toBeTrue()
+		expect(head ~= nil).toBeTrue()
+		expect(target ~= nil).toBeTrue()
+		expect(backing ~= nil).toBeTrue()
+		expect(post.CanCollide).toEqual(true)
+		expect(straw.CanCollide).toEqual(false)
+		expect(head.CanCollide).toEqual(false)
+		expect(target.CanCollide).toEqual(false)
+		expect(post.Size.X <= 1.2 and post.Size.Z <= 1.2).toBeTrue()
+		expect(math.abs(post.CFrame.Position.X - Haven.GROVE.x) < 0.05).toBeTrue()
+		expect(math.abs(post.CFrame.Position.Z - Haven.GROVE.z) < 0.05).toBeTrue()
+		expect(target.CFrame.Position.Z < post.CFrame.Position.Z).toBeTrue()
+		expect(target.Material.__enum ~= "Enum.Material.Neon").toBeTrue()
+		expect(backing.Material.__enum ~= "Enum.Material.Neon").toBeTrue()
+		local contrast = math.abs(target.Color.R - straw.Color.R)
+			+ math.abs(target.Color.G - straw.Color.G)
+			+ math.abs(target.Color.B - straw.Color.B)
+		expect(contrast >= 180).toBeTrue()
+		expect(target.Color.G > target.Color.R).toBeTrue()
+
+		local prompts = 0
+		local title = nil
+		local subline = nil
+		local plate = nil
+		for _, child in ipairs(dummy:GetDescendants()) do
+			if child:IsA("ProximityPrompt") then
+				prompts += 1
+				expect(child:GetAttribute("HavenAction")).toEqual("grove")
+				expect(child.ActionText).toEqual("Train")
+				expect(child.ObjectText).toEqual("Training Grove")
+				expect(child.MaxActivationDistance).toEqual(8)
+			elseif child:IsA("PointLight") or child:IsA("ParticleEmitter") or child:IsA("Decal") or child:IsA("SurfaceGui") then
+				error("grove dummy has " .. child.ClassName, 2)
+			elseif child:IsA("TextLabel") and child.Name == "Title" then
+				title = child
+			elseif child:IsA("TextLabel") and child.Name == "Subline" then
+				subline = child
+			elseif child:IsA("Frame") and child.Name == "Plate" then
+				plate = child
+			elseif child:IsA("BillboardGui") then
+				expect(child.AlwaysOnTop).toEqual(false)
+				expect(child.LightInfluence).toEqual(0)
+				expect(child.MaxDistance >= 90).toBeTrue()
+			end
+		end
+		expect(prompts).toEqual(1)
+		expect(title.Text).toEqual("Training Grove")
+		expect(subline.Text).toEqual("Hit the dummy")
+		expect(title.TextStrokeTransparency).toEqual(0)
+		expect(title.TextColor3.R + title.TextColor3.G + title.TextColor3.B >= 700).toBeTrue()
+		expect(plate.BackgroundTransparency < 0.2).toBeTrue()
+	end)
 end)
