@@ -269,6 +269,7 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 	return {
 		ok = true,
 		item = captured.item,
+		rollId = captured.item.uid,
 		shardId = captured.item.templateId,
 		rarity = captured.rarity,
 		rollIndex = captured.rollIndex,

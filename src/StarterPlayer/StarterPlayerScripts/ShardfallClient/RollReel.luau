@@ -28,6 +28,8 @@ local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
+local RollReveal = require(Shared:WaitForChild("RollReveal"))
+local Settings = require(Shared:WaitForChild("Settings"))
 
 local RollReel = {}
 
@@ -104,6 +106,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	local busy = false
 	local cooling = false
 	local generation = 0
+	local activeRollId = ""
 
 	local flash = Instance.new("Frame")
 	flash.Name = "Flash"
@@ -188,6 +191,11 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	reel.Visible = false
 	reel.Parent = gui
 	corner(reel, 8)
+	local reelStroke = Instance.new("UIStroke")
+	reelStroke.Name = "Glow"
+	reelStroke.Thickness = UiTheme.STROKE
+	reelStroke.Color = Color3.fromRGB(244, 240, 252)
+	reelStroke.Parent = reel
 
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "Names"
@@ -296,6 +304,10 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	card.Visible = false
 	card.ZIndex = 6
 	card.Parent = gui
+	local cardScale = Instance.new("UIScale")
+	cardScale.Name = "CardScale"
+	cardScale.Scale = 1
+	cardScale.Parent = card
 	corner(card, 12)
 	local cardStroke = Instance.new("UIStroke")
 	cardStroke.Thickness = 2
@@ -687,75 +699,152 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
-	local function play(result: any)
-		local item = result.item
-		local rarity = if type(item) == "table"
-			then tostring(item.rarity)
-			else tostring(result.rarity)
-		local name = if type(item) == "table" then tostring(item.name) else "a shard"
-		local quick = result.quick == true
-		local plan = RarityConfig.reveal(rarity, quick)
-		print(string.format("[Roll] landed %s %s", rarity, name))
+	local function placeCard()
+		local size = gui.AbsoluteSize
+		local vx = if size.X >= 200 then size.X else 1280
+		local vy = if size.Y >= 200 then size.Y else 800
+		local margin = UiTheme.safeMargin()
+		local name = RollReveal.nameRect(vx, vy, margin)
+		local healthBottom = name.y
+		card.AnchorPoint = Vector2.new(0.5, 0)
+		card.Position = UDim2.fromOffset(math.floor(vx / 2), math.max(8, healthBottom - 40))
+		card.Size = UDim2.fromOffset(math.min(320, name.w), 210)
+	end
+
+	local function showResolved(record: RollReveal.Record)
+		if activeRollId ~= record.id then
+			return
+		end
+		showCard({
+			item = {
+				name = record.name,
+				rarity = record.rarity,
+				uid = record.id,
+			},
+		}, auto)
+		cardScale.Scale = 1
+	end
+
+	local function play(result: any, paid: boolean)
+		local record = RollReveal.capture(result)
+		if record == nil then
+			return
+		end
+		local shown = RollReveal.present(record)
+		local settings =
+			Settings.normalize(if type(profile) == "table" then profile.uiSettings else nil)
+		local seconds = RollReveal.duration(settings, shown.rarity, paid == true)
+		print(string.format("[Roll] landed %s %s id=%s", shown.rarity, shown.name, shown.id))
+		activeRollId = shown.id
+		card.Visible = false
 		skipToken = { skipped = false }
-		skipButton.Visible = false
 		chestFrame.Visible = false
 		manyFrame.Visible = false
 		choice.Visible = false
 		generation += 1
-		local token = generation
-		if plan.bounce > 0 then
-			playSound("rbxasset://sounds/switch.wav", 0.35)
-		end
-		if plan.toastOnly then
-			hooks.setStatus(string.format("%s (%s)", name, rarity), "ok")
+		placeCard()
+		playSound("rbxasset://sounds/switch.wav", 0.35)
+		if seconds <= 0 then
+			reel.Visible = false
+			skipButton.Visible = false
+			flash.BackgroundTransparency = 1
+			showResolved(shown)
+			hooks.setStatus(string.format("Received %s.", shown.name), "ok")
 			return
 		end
-		if plan.skipAfter > 0 then
-			showSkipAfter(plan.skipAfter, token)
-		end
+		skipButton.Visible = true
 		local pool = Pools.get(hooks.getPoolId())
-		if plan.reel and pool ~= nil then
-			local names = RarityConfig.reel(
-				tonumber(result.fillerSeed) or 1,
-				pool,
-				tonumber(result.luck) or 1,
-				name,
-				rarity
-			)
-			spinReel(names, plan.reelSeconds)
-		elseif plan.stall and pool ~= nil then
-			local names = RarityConfig.reel(
-				tonumber(result.fillerSeed) or 1,
-				pool,
-				tonumber(result.luck) or 1,
-				name,
-				rarity
-			)
-			spinReel(names, 0.8)
-			local stalled = os.clock()
-			while os.clock() - stalled < 0.7 and not skipToken.skipped do
-				RunService.RenderStepped:Wait()
+		local names = if pool ~= nil
+			then RollReveal.strip(tonumber(result.fillerSeed) or 1, pool, shown)
+			else { shown }
+		for index, slot in ipairs(slots) do
+			local row = names[index]
+			if row == nil then
+				slot.Text = ""
+			else
+				slot.Text = row.name
+				slot.TextColor3 = color3(row.rarity)
 			end
 		end
-		local ladder = Audio.cue(rarity)
-		if ladder ~= nil then
-			playSound(ladder, 0.6)
-		elseif rarity == "Rare" or rarity == "Epic" or rarity == "Legendary" then
-			playSound("rbxasset://sounds/electronicpingshort.wav", 0.5)
+		reel.Visible = true
+		reel.BackgroundTransparency = 0
+		local goal = math.max(0, #names - 1) * ROW
+		local started = os.clock()
+		local sparked = false
+		local spark: BasePart? = nil
+		local heard = false
+		while activeRollId == shown.id and not skipToken.skipped do
+			local elapsed = os.clock() - started
+			if elapsed >= seconds then
+				break
+			end
+			local progress = RollReveal.spinProgress(elapsed, seconds)
+			scroll.CanvasPosition = Vector2.new(0, progress * goal)
+			flash.BackgroundColor3 = Color3.new(0, 0, 0)
+			flash.BackgroundTransparency = 1 - RollReveal.dim(elapsed, seconds) * UiTheme.BACKDROP
+			if RollReveal.glow(elapsed, seconds, shown.rarity) then
+				reelStroke.Color = color3(shown.rarity)
+				reelStroke.Thickness = 2
+			else
+				reelStroke.Color = Color3.fromRGB(244, 240, 252)
+				reelStroke.Thickness = UiTheme.STROKE
+			end
+			if RollReveal.flashOn(elapsed, seconds, shown.rarity) then
+				flash.BackgroundColor3 = color3(shown.rarity)
+				flash.BackgroundTransparency = 0.55
+			end
+			local morph = RollReveal.morph(elapsed, seconds)
+			if morph ~= nil then
+				if not card.Visible then
+					cardRarity.Text = string.upper(shown.rarity)
+					cardRarity.TextColor3 = color3(shown.rarity)
+					cardName.Text = shown.name
+					cardStroke.Color = color3(shown.rarity)
+					equipButton:SetAttribute("Uid", shown.id)
+					card.Visible = true
+				end
+				cardScale.Scale = RollReveal.morphScale(morph)
+				reel.BackgroundTransparency = morph
+			end
+			if progress >= 1 and not heard then
+				heard = true
+				local ladder = Audio.cue(shown.rarity)
+				if ladder ~= nil then
+					playSound(ladder, 0.6)
+				elseif
+					shown.rarity == "Rare"
+					or shown.rarity == "Epic"
+					or shown.rarity == "Legendary"
+				then
+					playSound("rbxasset://sounds/electronicpingshort.wav", 0.5)
+				end
+			end
+			if RollReveal.particles(elapsed, seconds, shown.rarity) then
+				if not sparked then
+					sparked = true
+					local camera = workspace.CurrentCamera
+					if camera ~= nil then
+						spark = revealPart(shown.rarity, camera.CFrame * CFrame.new(0, 0, -6))
+					end
+				end
+			elseif spark ~= nil then
+				spark:Destroy()
+				spark = nil
+			end
+			RunService.RenderStepped:Wait()
 		end
-		flashColor(rarity, plan.landSeconds)
-		if plan.shake > 0 then
-			shake(plan.shake)
+		if spark ~= nil then
+			spark:Destroy()
 		end
-		if plan.cutscene > 0 then
-			spinShard(rarity, plan.cutscene, plan.stall == true)
-		elseif plan.quickPop then
-			task.wait(RarityConfig.QUICK_POP)
+		if activeRollId ~= shown.id then
+			return
 		end
 		reel.Visible = false
+		reel.BackgroundTransparency = 0
 		skipButton.Visible = false
-		showCard(result, auto)
-		hooks.setStatus("Received " .. name .. ".", "ok")
+		flash.BackgroundTransparency = 1
+		showResolved(shown)
+		hooks.setStatus(string.format("Received %s.", shown.name), "ok")
 	end
 
 	local function request(paid: boolean)
@@ -787,7 +876,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 				return
 			end
 			hooks.applyResult(result)
-			local played, playErr = pcall(play, result)
+			local played, playErr = pcall(play, result, paid)
 			if not played then
 				warn("[Roll] " .. tostring(playErr))
 			end
