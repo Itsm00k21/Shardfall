@@ -240,6 +240,7 @@ local function startQueue(
 					difficulty = row.id,
 					role = role,
 				})
+				-- ShardfallLoading is already the teleport gui. Studio does not hop.
 				TeleportService:TeleportAsync(game.PlaceId, { player }, options)
 			end)
 			if hopped == "teleported" then
@@ -936,6 +937,7 @@ local function hopPremade(
 	options:SetTeleportData(packed)
 	local TeleportService = game:GetService("TeleportService")
 	local callOk, status, away = pcall(DataService.releasePartyForTeleport, seated, function()
+		-- ShardfallLoading is already the teleport gui. Studio does not hop.
 		TeleportService:TeleportAsync(game.PlaceId, seated, options)
 	end)
 	if not callOk or status ~= "teleported" then
