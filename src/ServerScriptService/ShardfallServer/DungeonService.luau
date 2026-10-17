@@ -129,6 +129,10 @@ type Restart = {
 }
 
 local runs: { [Player]: Run } = {}
+-- Set while a reserved arrival still owns the fresh fight it is about to leave.
+-- echoHost skips that player so the next arrival cannot join the temporary fight.
+local echoJoinHold: { [Player]: boolean } = {}
+local releasingFight: { [RaidEchoFight.Fight]: boolean } = {}
 local touchAt: { [Player]: number } = {}
 local fallAt: { [Player]: number } = {}
 local farmOn: { [Player]: boolean } = {}
@@ -943,15 +947,136 @@ local function spawnWave(player: Player, run: Run)
 	pushRun(player, text)
 end
 
-local function destroyRun(player: Player, run: Run)
+local function storyEcho(run: Run, fight: RaidEchoFight.Fight): boolean
+	return run.dungeon.id == Dungeons.HEARTWOOD_ID
+		and run.difficulty == "story"
+		and run.practice ~= true
+		and fight.practice ~= true
+end
+
+-- Down before bindEcho. A stack reset can drop a hurt player to 0 HP.
+-- That player was not held, and this list must not turn the refresh into a full heal.
+local function heldNow(fight: RaidEchoFight.Fight): { Player }
+	local pending = {}
+	for member, memberRun in pairs(runs) do
+		if memberRun.echoFight ~= fight or not storyEcho(memberRun, fight) then
+			continue
+		end
+		if memberRun.resolving == true or memberRun.retrying == true then
+			continue
+		end
+		local hp = CombatService.vitals(member)
+		local userId = tostring(member.UserId)
+		local row = fight.members[userId]
+		if hp <= 0 or (row ~= nil and row.alive ~= true) then
+			table.insert(pending, member)
+		end
+	end
+	return pending
+end
+
+-- Bringing a held member back does not call wipe, so it cannot add a stack.
+local function reviveHeld(fight: RaidEchoFight.Fight, pending: { Player })
+	for _, member in ipairs(pending) do
+		local memberRun = runs[member]
+		if
+			memberRun == nil
+			or memberRun.echoFight ~= fight
+			or not storyEcho(memberRun, fight)
+			or memberRun.resolving == true
+			or memberRun.retrying == true
+		then
+			continue
+		end
+		CombatService.revive(member)
+		if runs[member] == memberRun and memberRun.echoFight == fight then
+			RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
+		end
+	end
+end
+
+local destroyRun: (Player, Run) -> ()
+
+-- The living players are gone and this was not a wipe retry. Send held
+-- members to the hub. depart does not add a stack. Do not grant the clear.
+local function sendHeldHome(fight: RaidEchoFight.Fight)
+	if releasingFight[fight] == true then
+		return
+	end
+	local pending = {}
+	for member, memberRun in pairs(runs) do
+		if
+			memberRun.echoFight == fight
+			and storyEcho(memberRun, fight)
+			and memberRun.resolving ~= true
+			and memberRun.retrying ~= true
+			and CombatService.vitals(member) <= 0
+		then
+			table.insert(pending, member)
+		end
+	end
+	if #pending == 0 then
+		return
+	end
+	releasingFight[fight] = true
+	for _, member in ipairs(pending) do
+		local memberRun = runs[member]
+		if
+			memberRun ~= nil
+			and memberRun.echoFight == fight
+			and memberRun.resolving ~= true
+			and CombatService.vitals(member) <= 0
+		then
+			memberRun.resolving = true
+			restartAt[member] = nil
+			pcall(CombatService.revive, member)
+			pcall(teleport, member, hubCFrame())
+			local dropped, dropErr = pcall(destroyRun, member, memberRun)
+			if not dropped then
+				runs[member] = nil
+				echoJoinHold[member] = nil
+				pcall(CombatService.clearShots, member)
+				warn(
+					"[Shardfall] "
+						.. member.Name
+						.. " could not leave the ended pull: "
+						.. tostring(dropErr)
+				)
+			end
+			pushRun(member, "The pull ended.")
+		end
+	end
+	releasingFight[fight] = nil
+end
+
+destroyRun = function(player: Player, run: Run)
 	clearEnemies(run)
 	run.folder:Destroy()
 	local fight = run.echoFight
 	run.echoFight = nil
 	run.echo = nil
 	runs[player] = nil
+	echoJoinHold[player] = nil
 	if fight ~= nil then
 		RaidEchoFight.depart(fight, tostring(player.UserId))
+		if releasingFight[fight] ~= true then
+			local living = false
+			local retrying = false
+			for member, other in pairs(runs) do
+				if other.echoFight == fight and other.resolving ~= true then
+					if other.retrying == true then
+						retrying = true
+					elseif CombatService.vitals(member) > 0 then
+						living = true
+					end
+				end
+			end
+			-- A wipe retry still owns the party. Anyone left standing keeps
+			-- the pull. Held members go home only when the fight is over.
+			if not living and not retrying then
+				sendHeldHome(fight)
+			end
+		end
 		local sharing = false
 		for _, other in pairs(runs) do
 			if other.echoFight == fight then
@@ -1279,8 +1404,8 @@ function DungeonService.damageEnemy(
 	if run == nil or run.resolving then
 		return
 	end
-	-- A held party member stays at 0 until the wipe retry. Their swings
-	-- must not clear the room or reset the shared stacks.
+	-- A held party member stays at 0 until a boss kill, the run ending, or
+	-- the wipe retry. Their swings must not clear the room or add a stack.
 	local hp = CombatService.vitals(player)
 	if hp <= 0 then
 		return false
@@ -1354,10 +1479,16 @@ function DungeonService.damageEnemy(
 	end
 	if enemy.hp <= 0 then
 		if enemy.boss and run.echoFight ~= nil then
+			-- Snapshot before the refresh. bindEcho can zero a hurt player
+			-- who was still standing. They are not a held member.
+			local downed = heldNow(run.echoFight)
 			-- Once, outside the per-player loot mutate. The next boss starts at 0.
 			RaidEchoFight.bossKill(run.echoFight)
 			rememberMax(player, run)
 			bindEcho(run.echoFight)
+			-- Held members are in their own rooms. This kill must not ask
+			-- them to clear, and it must not wipe again.
+			reviveHeld(run.echoFight, downed)
 		end
 		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
 		-- Practice returns before any of that: no materials, chests, marks, or XP.
@@ -1481,7 +1612,19 @@ function DungeonService.isInRun(player: Player): boolean
 	return run ~= nil and not run.resolving
 end
 
+function DungeonService.holdEchoJoin(player: Player, held: boolean)
+	if held then
+		echoJoinHold[player] = true
+	else
+		echoJoinHold[player] = nil
+	end
+end
+
 function DungeonService.echoParty(player: Player): { difficulty: string, practice: boolean }?
+	-- A held arrival still has a fresh fight until backfill. It is not a host.
+	if echoJoinHold[player] == true then
+		return nil
+	end
 	local run = runs[player]
 	if run == nil or run.resolving or run.echoFight == nil then
 		return nil
@@ -1493,6 +1636,46 @@ function DungeonService.echoParty(player: Player): { difficulty: string, practic
 		difficulty = run.difficulty,
 		practice = run.practice == true,
 	}
+end
+
+-- Largest matching Heartwood pull already on this server. Tie-break is the
+-- lowest user id. Practice never matches. The id is a Player in `runs`,
+-- never a value from teleport data.
+function DungeonService.echoHost(player: Player, difficulty: string): Player?
+	if type(difficulty) ~= "string" or difficulty == "" then
+		return nil
+	end
+	local best: Player? = nil
+	local bestSize = -1
+	for other, otherRun in pairs(runs) do
+		if other ~= player and echoJoinHold[other] ~= true and otherRun.resolving ~= true then
+			local fight = otherRun.echoFight
+			if
+				fight ~= nil
+				and otherRun.dungeon.id == Dungeons.HEARTWOOD_ID
+				and otherRun.practice ~= true
+				and fight.practice ~= true
+				and otherRun.difficulty == difficulty
+			then
+				local _, size = RaidEchoFight.counts(fight)
+				local chosen = best
+				local replace = chosen == nil or size > bestSize
+				if
+					not replace
+					and chosen ~= nil
+					and size == bestSize
+					and other.UserId < chosen.UserId
+				then
+					replace = true
+				end
+				if replace then
+					best = other
+					bestSize = size
+				end
+			end
+		end
+	end
+	return best
 end
 
 function DungeonService.isPractice(player: Player): boolean
@@ -2202,8 +2385,10 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 	elseif picked.id == "elite" then
 		run.eliteNext = true
 	elseif picked.id == "spring" then
-		local _hp, maxHp = CombatService.vitals(player)
-		CombatService.healAmount(player, math.max(1, math.floor(maxHp * 0.3)))
+		-- Same rule as a skill percent: unbuffed loadout max, then one heal hook.
+		local _, vitality = CombatMath.loadout(DataService.get(player))
+		local baseMax = vitality.maxHealth
+		CombatService.healAmount(player, math.max(1, math.floor(baseMax * 0.3)))
 	elseif picked.id == "shrine" then
 		run.shrine = Rootvault.shrine(math.random(1, 3))
 	elseif picked.id == "shop" then
@@ -2393,6 +2578,11 @@ function DungeonService.onPlayerDown(player: Player)
 	if run == nil or run.resolving or EchoRetry.blocked(run.retrying == true) then
 		return
 	end
+	-- damagePlayer defers this. A boss kill in that window revives first.
+	-- Treating the old down as current would mark a living player dead.
+	if CombatService.vitals(player) > 0 then
+		return
+	end
 	local fight = run.echoFight
 	if fight ~= nil then
 		-- Player life. The enemy counter is a different function and must not decide this.
@@ -2570,6 +2760,7 @@ function DungeonService.start()
 		if run ~= nil then
 			destroyRun(player, run)
 		end
+		echoJoinHold[player] = nil
 		touchAt[player] = nil
 		fallAt[player] = nil
 		farmOn[player] = nil

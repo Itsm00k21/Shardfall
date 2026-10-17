@@ -196,7 +196,10 @@ function ClassService.cast(player: Player, slot: any): { [string]: any }
 		state.chill = math.min(5, state.chill + math.max(1, tuned.resource))
 	end
 	state.readyAt[key] = now + tuned.cooldown
-	local offense = CombatMath.loadout(profile)
+	-- vitality.maxHealth is the unbuffed loadout. Percent heals use that
+	-- number, then healAmount scales it once. The published max is already
+	-- echoed, so a percent of vitals would apply Story Echo twice.
+	local offense, vitality = CombatMath.loadout(profile)
 	local hits = 0
 	if tuned.damage > 0 then
 		local views = DungeonService.enemyViews(player)
@@ -216,17 +219,17 @@ function ClassService.cast(player: Player, slot: any): { [string]: any }
 		end
 	end
 	local healed = 0
+	local baseMax = vitality.maxHealth
 	if tuned.heal > 0 then
-		local _hp, maxHp = CombatService.vitals(player)
-		healed = math.max(1, math.floor(maxHp * tuned.heal))
+		healed = math.max(1, math.floor(baseMax * tuned.heal))
 		CombatService.healAmount(player, healed)
 		if classDef.id == "tidecaller" then
+			-- Flat share of this heal, not another percent of max.
 			CombatService.healAmount(player, math.floor(healed * 0.15))
 		end
 	end
 	if tuned.shield > 0 then
-		local _hp, maxHp = CombatService.vitals(player)
-		CombatService.healAmount(player, math.floor(maxHp * tuned.shield))
+		CombatService.healAmount(player, math.floor(baseMax * tuned.shield))
 	end
 	if slot == "ult" then
 		CombatService.spendUlt(player)
