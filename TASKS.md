@@ -78,7 +78,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-050 | Raid post-run recap rules (pure, no wiring) | HELPER | `helper/raid-recap-9721` | new `src/ReplicatedStorage/Shared/RaidRecap.luau`, new `tests/RaidRecap.spec.luau`, one require line in `tests/run.luau`, and a 'T-050 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md` Anti-toxicity and fairness: each player gets a private panel built from caller-supplied per-player stats (damage, healing, deaths, mechanics handled by type such as soaks, interrupts, stacks, add kills, for example "You soaked 6 times") plus 1 to 2 tips picked from that player's mechanic failures using a placeholder tip table keyed by boss and mechanic in a frozen CONFIG. The public view shows only party kudos and mechanic MVP awards and never a damage or healing ranking or anyone else's numbers. Each player may give one kudos per run to another party member (not themselves, only members of that run). One MVP per mechanic type goes to the player who handled the most, with a deterministic tiebreak and no award when nobody handled any. An AFK-removed player (T-027 RaidConduct) gets their own private panel but is excluded from kudos and MVP. Inputs are plain tables. No services, remotes, DataStores, or TextService. Do not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, Schema, `CombatHud.luau`, the existing T-016 dungeon recap code, or any T-012 file. No build stamp, nothing premium. | done | [#55](https://github.com/Itsm00k21/Shardfall/pull/55) |
 | T-053 | Raid leaderboard rules: fastest clear (pure, no wiring) | HELPER | `helper/raid-leaderboard-9721` | new `src/ReplicatedStorage/Shared/RaidLeaderboard.luau`, new `tests/RaidLeaderboard.spec.luau`, one require line in `tests/run.luau`, and a 'T-053 hooks for GHOST' section in this file. Pure rules for the beta 'basic leaderboard (fastest Normal clear)' in `docs/design/shardfall_raids.md` (Firsts and races, Scope). Boards are keyed by difficulty and party size; a frozen CONFIG lists which boards are live (beta: normal only, story off), a top-N size, and a sanity floor on clear time. `submit(board, record)` takes a plain clear record (runId, difficulty, size, start and end times or duration, roster userIds, practice flag, removals) and returns a new board without writing the input: reject practice runs, unknown or disabled difficulties, bad times, and clears under the floor; credit only roster members who were not AFK-removed or vote-kicked; the same runId twice is a no-op; sort by duration with a deterministic tiebreak (earlier clear, then lower runId) and trim to top N. Also `personalBest(board, userId)` and a `rankOf` helper. Inputs are plain tables. No OrderedDataStore, MemoryStore, remotes, Schema, or TextService. Do not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, Schema, or any T-012 file. No build stamp, nothing premium. | done | [#58](https://github.com/Itsm00k21/Shardfall/pull/58) |
 | T-057 | Raid Story Echo buff rules (pure, no wiring) | HELPER | `helper/raid-echo-9721` | new `src/ReplicatedStorage/Shared/RaidEcho.luau`, new `tests/RaidEcho.spec.luau`, one require line in `tests/run.luau`, and a 'T-057 hooks for GHOST' section in this file. Pure, server-authoritative rules for the Story-tier Echo buff in `docs/design/shardfall_raids.md` (Difficulty ladder: 'An Echo buff (+5% per wipe, max +25%) stacks after wipes'). Frozen CONFIG: 5% per wipe, cap 25%, Story only (Normal live but never gets Echo; Hard/Shardbreaker/Fracture never). A wipe is a whole-party death after a boss pull started; partial deaths, Practice Grove pulls, and resets before the pull do not count. Expose: a fresh per-run state, `wipe(state, ctx)` returning a new state (no input writes), `bonus(state, difficulty)` as a fraction 0 to 0.25, `apply(stat, state, difficulty)` for player damage, healing, and max HP multipliers, and a reset on boss kill or run end. The buff is party-wide and shown to the party, not per player. Time and difficulty are passed in. No services, remotes, DataStores, RNG, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, or T-012. Nothing requires it until GHOST wires it, so gameplay is unchanged. Open questions (per-boss vs whole-run stacking, whether a backfill inherits the stacks, whether it shows on the RaidRecap panel) go in the hooks section. | done | [#61](https://github.com/Itsm00k21/Shardfall/pull/61) (f1f79e41bff4b8b5b86756cd1e5eeb85390959f7) |
-| T-060 | Practice Grove rules (pure, no wiring) | HELPER | `helper/raid-practice-9721` | new `src/ReplicatedStorage/Shared/RaidPractice.luau`, new `tests/RaidPractice.spec.luau`, one require line in `tests/run.luau`, and a 'T-060 hooks for GHOST' section in this file. Pure, server-authoritative rules for Practice Grove in `docs/design/shardfall_raids.md` (Guild raid prep, and the beta Scope line): a free, lootless sandbox for each unlocked boss, with practice dummies, a jump to any phase, time slowed to 0.75x, individual mechanics turned on or off, and a record of damage, deaths, and mechanic hits. Frozen CONFIG: `slowScale` 0.75, `phases` 3, `shardbreakerPhases` 4 (every boss has 3 phases, 4 on Shardbreaker). Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. Difficulties are story, normal, hard, and shardbreaker. Fracture and guided are not difficulties in this module. Cost is 0. `rewards` is always empty: no gear, Marks, dust, materials, pets, titles, or cosmetics. API, each call returns a new table and does not write the input: `fresh(ctx)` starts `{ bossId, difficulty, phase = 1, slow = false, dummies = true, mechanics = {}, damage = 0, deaths = 0, hits = {} }` and requires `ctx.unlocked == true` (unknown boss or difficulty is an error); `jump(state, phase)` moves to an integer phase from 1 through 3, or 1 through 4 on shardbreaker; `setSlow(state, on)` selects 0.75 when on and 1 when off, and no other scale exists; `scale(state)` returns that number; `toggle(state, mechanicId, enabled)` stores an override for a non-empty mechanic id, with a missing id meaning the mechanic is on (there is no frozen mechanic catalog; T-007 owns Hard mechanic design); `note(state, event)` adds a non-negative finite `damage` amount, adds 1 `death`, or increments `hits[mechanicId]`; `rewards(state)` stays empty even after notes. Store `state` only when `ok == true`. A failure returns a copy and the caller keeps the previous save. Phase jump and slow do not reset the record. Dummies are a flag, default true, and are not a second boss. A practice session is not a clear, a lockout, a Marks payout, or a leaderboard row. Do not require `Raids`, `RaidService`, `DungeonService`, `RaidEcho`, `RaidMarks`, `RaidLuck`, `RaidLeaderboard`, or `RaidRecap`. `RaidService.practice` already launches a lootless Story run. Do not edit that function. Nothing in `src` requires this module, so the live launch stays as it is. No services, remotes, DataStores, MemoryStore, RNG, clock, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, `RaidEcho.luau`, `Remotes.luau`, any T-012 file, or `docs/offload/`. Open questions go in the hooks section: the guild perk "cheaper Practice Grove" has no price and the sandbox stays free, whether live practice stays Story-only while this module accepts Normal, Hard, and Shardbreaker, whether mechanic ids stay caller-supplied, whether 0.75x should scale an enrage timer (no enrage number lives here), and whether the record stays on the in-memory session. | assigned | — |
+| T-060 | Practice Grove rules (pure, no wiring) | HELPER | `helper/raid-practice-9721` | new `src/ReplicatedStorage/Shared/RaidPractice.luau`, new `tests/RaidPractice.spec.luau`, one require line in `tests/run.luau`, and a 'T-060 hooks for GHOST' section in this file. Pure, server-authoritative rules for Practice Grove in `docs/design/shardfall_raids.md` (Guild raid prep, and the beta Scope line): a free, lootless sandbox for each unlocked boss, with practice dummies, a jump to any phase, time slowed to 0.75x, individual mechanics turned on or off, and a record of damage, deaths, and mechanic hits. Frozen CONFIG: `slowScale` 0.75, `phases` 3, `shardbreakerPhases` 4 (every boss has 3 phases, 4 on Shardbreaker). Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. Difficulties are story, normal, hard, and shardbreaker. Fracture and guided are not difficulties in this module. Cost is 0. `rewards` is always empty: no gear, Marks, dust, materials, pets, titles, or cosmetics. API, each call returns a new table and does not write the input: `fresh(ctx)` starts `{ bossId, difficulty, phase = 1, slow = false, dummies = true, mechanics = {}, damage = 0, deaths = 0, hits = {} }` and requires `ctx.unlocked == true` (unknown boss or difficulty is an error); `jump(state, phase)` moves to an integer phase from 1 through 3, or 1 through 4 on shardbreaker; `setSlow(state, on)` selects 0.75 when on and 1 when off, and no other scale exists; `scale(state)` returns that number; `toggle(state, mechanicId, enabled)` stores an override for a non-empty mechanic id, with a missing id meaning the mechanic is on (there is no frozen mechanic catalog; T-007 owns Hard mechanic design); `note(state, event)` adds a non-negative finite `damage` amount, adds 1 `death`, or increments `hits[mechanicId]`; `rewards(state)` stays empty even after notes. Store `state` only when `ok == true`. A failure returns a copy and the caller keeps the previous save. Phase jump and slow do not reset the record. Dummies are a flag, default true, and are not a second boss. A practice session is not a clear, a lockout, a Marks payout, or a leaderboard row. Do not require `Raids`, `RaidService`, `DungeonService`, `RaidEcho`, `RaidMarks`, `RaidLuck`, `RaidLeaderboard`, or `RaidRecap`. `RaidService.practice` already launches a lootless Story run. Do not edit that function. Nothing in `src` requires this module, so the live launch stays as it is. No services, remotes, DataStores, MemoryStore, RNG, clock, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, `RaidEcho.luau`, `Remotes.luau`, any T-012 file, or `docs/offload/`. Open questions go in the hooks section: the guild perk "cheaper Practice Grove" has no price and the sandbox stays free, whether live practice stays Story-only while this module accepts Normal, Hard, and Shardbreaker, whether mechanic ids stay caller-supplied, whether 0.75x should scale an enrage timer (no enrage number lives here), and whether the record stays on the in-memory session. | done | [#67](https://github.com/Itsm00k21/Shardfall/pull/67) |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -2163,6 +2163,144 @@ Questions for Ghost:
 15. `"heal"` is healing. `"max HP"`, `"max_hp"`, `"max_health"`, and `"maxHp"` are max HP. `"health"` is refused. Confirm those aliases.
 
 Ghost's answers for the wire are on T-059. Stacks are per boss: reset on that boss's kill and again when the run ends. A backfill inherits the party's current stacks. While stacks are above 0, RaidHud shows one "Echo +X%" chip. A RaidRecap line is optional and not required. Pass unbuffed bases to `apply` every time. Do not edit `RaidEcho.luau`.
+
+### T-060 hooks for GHOST
+
+HELPER did not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `Schema.luau`, `CombatMath.luau`, `RaidEcho.luau`, `Remotes.luau`, or any other T-012 file. `RaidPractice` is pure and ready to call. It does not require `Raids`, `RaidService`, `DungeonService`, `RaidEcho`, `RaidMarks`, `RaidLuck`, `RaidLeaderboard`, or `RaidRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidPractice` yet, so this branch does not change a live run. `RaidService.practice` still launches a lootless Story run. The `RaidPractice` remote still calls that function with a wing and a phase. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. Cost is 0. The T-060 row stays `claimed`. Wiring is yours.
+
+Call `fresh` when a Practice Grove session starts. Call `jump` for a phase the player picks. Call `setSlow` when they turn slow time on or off, and multiply your own timers by `scale`. Call `toggle` when they switch one mechanic. Call `note` for damage, a death, or a mechanic hit. Call `rewards` at the end and grant nothing. Do not call `Raids.applyClear`, `RaidMarks.earn`, or `RaidLeaderboard.submit` for this session. Do not call `RaidEcho.wipe` for it either. Practice Grove is not a clear, a lockout, a Marks payout, or a leaderboard row.
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidPractice = require(ReplicatedStorage.Shared.RaidPractice)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `fresh(ctx)` | the sandbox starts | `ok == true` is the only signal to store `state`. `cost` is 0. |
+| `jump(state, phase)` | the player jumps | `ok == true` stores `state`. `phase` is the integer you asked for. |
+| `setSlow(state, on)` | slow time is switched | `ok == true` stores `state`. `scale` is 0.75 or 1. |
+| `scale(state)` | you need the multiplier | the number 0.75 or 1. This call returns a number, not a table. |
+| `toggle(state, mechanicId, enabled)` | one mechanic is switched | `ok == true` stores `state`. The id is the trimmed text you passed. |
+| `note(state, event)` | damage, a death, or a hit | `ok == true` stores `state`. Exactly one of those three. |
+| `rewards(state)` | the session ends | loot lists stay empty. `marks`, `dust`, and `cost` are 0. |
+
+`fresh` starts `{ bossId, difficulty, phase = 1, slow = false, dummies = true, mechanics = {}, damage = 0, deaths = 0, hits = {} }`. It requires `ctx.unlocked == true`. Store `result.state` only when `result.ok == true`. A failure does not write the input. When the record you passed is readable, the failure `state` is a normalized copy and the phase, the record, and the switches stay as they were. When the record itself does not parse, `state` is a blank shell (`bossId == ""`). Keep the previous save either way.
+
+`fresh` checks run in this order: the context type, the boss, the difficulty, the unlock flag, the dummy flag. The first failure is the error you get. `ctx.phase`, `ctx.slow`, `ctx.damage`, `ctx.deaths`, `ctx.now`, and `ctx.userId` are ignored. The session always starts at phase 1 with slow off and an empty record.
+
+| ctx | result |
+|---|---|
+| `bossId` or `boss` is twins, sapwell, galecrown, or awakened, difficulty is story, normal, hard, or shardbreaker, `unlocked == true` | a new session, `cost == 0` |
+| `" Twins "` or `" Awakened "` | that boss id, trimmed and lowercased |
+| `bossId` and `boss` name two different bosses | `ERRORS.disagree` |
+| missing boss, `"grandmother"`, `"dummy"`, `"heartwood"` | `ERRORS.boss` |
+| `"fracture"`, `"guided"`, `"fracture1"`, `"shard-breaker"`, a blank difficulty | `ERRORS.difficulty` |
+| `unlocked == false` | `ERRORS.unlocked`, and `state.bossId == ""` |
+| `unlocked` missing or not a boolean | `ERRORS.unlock` |
+| `dummies` omitted | `dummies == true` |
+| `dummies == false` | the flag starts false and stays until a new `fresh` |
+| `dummies` is any other value | `ERRORS.dummies` |
+| `ctx` is not a table | `ERRORS.ctx` |
+
+Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. Difficulties are story, normal, hard, and shardbreaker. Fracture and guided are not difficulties. `" Story "` is story. Strings are trimmed and lowercased. Dummies are the `dummies` flag, not a boss.
+
+**Phases.** `jump(state, phase)` moves to an integer from 1 through `CONFIG.phases` (3). On shardbreaker the top is `CONFIG.shardbreakerPhases` (4). Phase 4 on story, normal, or hard is `ERRORS.phase`, and the copy stays on the old phase. `0`, a fraction, a string, and a missing phase are the same error. Jumping to the current phase is `ok == true` and returns a new table. A stored phase the difficulty cannot hold is `ERRORS.state`, not `ERRORS.phase`, and the shell is blank. The jump does not reset damage, deaths, hits, mechanic overrides, slow, or dummies.
+
+**Slow.** `setSlow(state, true)` selects `CONFIG.slowScale` (0.75). `setSlow(state, false)` selects 1. No other scale exists. `0.5`, `1`, and `"true"` are `ERRORS.slow`, and the copy keeps the previous flag. `scale(state)` returns that same number: 0.75 when the stored `slow` flag is true, and 1 otherwise. A record that does not parse returns 1. Call `scale` on a state you stored. Slow does not reset the record. The session does not start slowed.
+
+**Mechanics.** There is no frozen catalog. T-007 owns Hard mechanic design. `toggle` stores an override for a non-empty id. The id is trimmed and otherwise kept as the caller spelled it, so `"Gust"` and `"gust"` are different keys. A missing key means the mechanic is on. `mechanics[id] == true` is also on. Only `false` is off. Treat `session.mechanics[id] ~= false` as on. An empty id is `ERRORS.mechanic`. `enabled` must be a boolean. `"false"` and `nil` are `ERRORS.enabled`. A toggle does not reset the record.
+
+**Notes.** One event does one thing. Damage adds a non-negative finite amount, and 0 is allowed. A death adds 1. A hit adds 1 to `hits[mechanicId]`. A `deaths` or `hits` count on the event is not a batch. `now` and `userId` are ignored.
+
+| kind | canonical | accepted text |
+|---|---|---|
+| damage | `damage` | `"damage"`, or `damage` / `amount` with no kind |
+| death | `death` | `"death"`, `"dead"`, or `death = true` |
+| hit | `hit` | `"hit"`, `"hits"`, `"mechanic"`, or `mechanicId` / `mechanic` / `hit` |
+
+`kind` and `note` are the same field. `damage` and `amount` are the same number. `mechanicId`, `mechanic`, and `hit` are the same id. Two of them that disagree are `ERRORS.disagree`. A negative, NaN, or infinite amount is `ERRORS.damage`. A hit still records when that mechanic is toggled off. This module does not spawn the mechanic. The note does not change phase, slow, dummies, or the override map, except to add the hit count.
+
+**Rewards.** `rewards(state)` stays empty after every note. `gear`, `materials`, `pets`, `titles`, and `cosmetics` are new empty tables each call. `marks` is 0. `dust` is 0. `cost` is 0. `clear`, `lockout`, and `leaderboard` are false. A record that does not parse is `ok == false` and the lists are still empty. Do not grant from this table.
+
+```lua
+local started = RaidPractice.fresh({
+	bossId = bossId,
+	difficulty = "story",
+	unlocked = unlocked == true,
+})
+if started.ok == true then
+	session = started.state
+end
+
+local jumped = RaidPractice.jump(session, phase)
+if jumped.ok == true then
+	session = jumped.state
+end
+
+local slowed = RaidPractice.setSlow(session, true)
+if slowed.ok == true then
+	session = slowed.state
+	-- Multiply your cast and telegraph times by slowed.scale (0.75).
+	-- RaidPractice.scale(session) is the same number. Off is 1.
+end
+
+local switched = RaidPractice.toggle(session, mechanicId, false)
+if switched.ok == true then
+	session = switched.state
+end
+-- Run the mechanic when session.mechanics[mechanicId] ~= false.
+
+local noted = RaidPractice.note(session, { damage = dealt })
+if noted.ok == true then
+	session = noted.state
+end
+-- { death = true } adds one death. { mechanicId = id } adds one hit.
+
+local loot = RaidPractice.rewards(session)
+-- loot.cost == 0, loot.marks == 0, loot.clear == false, loot.leaderboard == false.
+```
+
+The live button sends `RaidPractice` with wing 1 and phase 1. `RaidService.practice` floors a non-number to 1 and launches Story with `practice = true`. Leave that function as it is until the wire. `Raids.WINGS` is 1 `twins`, 2 `sapwell`, 3 `galecrown`, 4 `awakened`. Pass the boss id into `fresh`, then `jump` to the phase. A Story phase 4 fails closed here. The live floor does not.
+
+`DungeonService.grant` already returns before loot when `run.practice == true`. The Heartwood boss mutate skips `Raids.applyClear` on that flag. Keep both guards. There is no RNG. The same input returns the same state. Thresholds live in `RaidPractice.CONFIG`. Do not hardcode 0.75, 3, or 4 beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The state is the plain session table. It does not have to live on a profile. An in-memory table on one server dies on restart. Version 21 is current. Do not take a schema version for this record.
+
+`tests/run.luau` requires `./RaidPractice.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The guild perk "cheaper Practice Grove" has no price in this module. Cost is 0 on `fresh` and on `rewards`. There is no discount field and no Robux product. The sandbox stays free. Confirm a later perk does not add a gold or Robux price here.
+2. `RaidService.practice` still launches a lootless Story run. This module also accepts normal, hard, and shardbreaker. Confirm live practice stays Story-only until you wire the other difficulties.
+3. Mechanic ids stay caller-supplied. There is no frozen catalog. T-007 owns Hard mechanic design. A missing id means the mechanic is on, and a stored `false` turns it off. Confirm ids stay caller-supplied.
+4. `scale` returns 0.75 or 1. No enrage number lives here. Confirm whether 0.75x should scale an enrage timer at the call site, or only cast time and telegraphs.
+5. The record is the plain state table. No profile field. Confirm it stays on the in-memory session and dies on restart.
+6. The live `RaidPractice` remote passes a wing number and a phase number into `RaidService.practice`. This module takes a boss id. `Raids.WINGS` is 1 `twins`, 2 `sapwell`, 3 `galecrown`, 4 `awakened`. Confirm that map when you wire it. `Remotes.luau` was not edited.
+7. `fresh` requires `unlocked == true`. This module does not know which bosses the player has cleared. Confirm the wire passes that flag, and a locked boss never starts a session.
+8. Fracture and guided are not difficulties. `"fracture"`, `"guided"`, `"fracture1"`, and `"shard-breaker"` return `ERRORS.difficulty`. Confirm they stay out.
+9. Dummies default to true. `fresh` accepts `dummies = false`. There is no setter after the session starts. `"dummy"` is not a boss id. Confirm the flag can start false, and that a later toggle is not required for beta.
+10. A phase jump keeps damage, deaths, hits, mechanic overrides, the slow flag, and dummies. Slow does not reset the record. Confirm a jump should not turn mechanics back on.
+11. Phase 4 is legal only on shardbreaker. Story, normal, and hard stop at `CONFIG.phases` (3). The live `practice` function floors any number and does not reject phase 4. Confirm the wire uses `jump` so a Story phase 4 is refused.
+12. `note` adds one death per call and one hit per call. A `deaths` or `hits` count on the event is not a batch. Damage adds the non-negative finite amount, including 0. Confirm.
+13. A hit still records when that mechanic is toggled off. This module does not spawn mechanics. Confirm the caller skips a mechanic whose override is false, and may still `note` a hit if one lands.
+14. Mechanic ids are trimmed and then stored as the caller spelled them. `"Gust"` and `"gust"` are different keys. Confirm they stay case-sensitive.
+15. `rewards` is empty after every note: no gear, Marks, dust, materials, pets, titles, or cosmetics. `clear`, `lockout`, and `leaderboard` stay false. Cost stays 0. Confirm the wire does not call `Raids.applyClear`, `RaidMarks.earn`, or `RaidLeaderboard.submit` for a practice session.
+16. `RaidEcho` already skips `practice = true`. This module does not call it. Confirm a Practice Grove wipe does not call `RaidEcho.wipe`.
+17. Slow starts off. `scale` is 1 until `setSlow(state, true)`, which selects 0.75. A number such as 0.5 or 1 is `ERRORS.slow`. Confirm the sandbox does not start slowed, and that no other scale should exist.
+18. One session is one boss and one difficulty. `jump` does not change them. `fresh` ignores `ctx.phase`, `ctx.slow`, `ctx.damage`, and `ctx.deaths` and always starts at phase 1 with slow off and an empty record. A different boss is a new `fresh`. Confirm.
+19. Store `state` only when `ok == true`. A failure of a readable record returns a copy and does not write the input. A record that does not parse returns a blank shell (`bossId == ""`) instead of that bad table. Confirm the wire keeps the previous save when `ok ~= true`.
+20. The record has one damage total, one death total, and one hit map. There is no per-player split. The live practice launch is one player. Confirm the beta record stays a single total.
+21. `scale` on a record that does not parse returns 1. Confirm you only call it with a stored state, and that 1 means full speed rather than an error.
+22. There is no clock and no duration on the record. A `now` field is ignored. Confirm practice time is not a leaderboard time and not an enrage timestamp.
+23. Boss ids are `twins`, `sapwell`, `galecrown`, and `awakened`. `"grandmother"`, `"dummy"`, and `"heartwood"` are `ERRORS.boss`. Confirm those four ids, with wing 4 as `awakened`.
+24. An explicit `mechanics[id] == true` and a missing id both mean on. Only `false` means off. Confirm the caller treats `~= false` as on.
+25. In `DungeonService.damageEnemy`, a Heartwood boss kill skips `Raids.applyClear` when `run.practice == true`, and still calls `Drops.apply`, `ChestConfig.enemyDrop`, and `ChestConfig.bossKill` inside the same mutate. `grant` already returns before loot when practice is true. This row does not list `DungeonService.luau`. Confirm those other writes should stay off a Practice Grove kill.
 
 ## Open
 
