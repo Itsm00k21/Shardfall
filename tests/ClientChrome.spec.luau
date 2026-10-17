@@ -21,6 +21,8 @@ describe("Client chrome", function()
 		expect(ClientChrome.legacyReadout("Pity 0/80")).toEqual(true)
 		expect(ClientChrome.legacyReadout("Pity 0 / 80 toward Legendary")).toEqual(true)
 		expect(ClientChrome.legacyReadout("Pity 0 / 50 toward Legendary")).toEqual(false)
+		expect(ClientChrome.legacyReadout("Inv 3, Shop 0, Pets P, Roll R, Guilds Y")).toEqual(true)
+		expect(ClientChrome.legacyReadout("Hero C, Bag B, Raids T, Market M")).toEqual(false)
 	end)
 
 	it("does not ship the old Pity 0/80 readout", function()

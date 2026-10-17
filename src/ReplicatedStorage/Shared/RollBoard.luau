@@ -11,7 +11,6 @@
 
 local Rarities = require("./Rarities")
 local RarityConfig = require("./RarityConfig")
-local RollMath = require("./RollMath")
 
 local RollBoard = {}
 
@@ -74,31 +73,51 @@ function RollBoard.bars(profile: any): Bars
 	}
 end
 
+-- The draw is RarityConfig.pick / disclose, not the pool-weight table.
+-- sinceLegendary stays in the signature so a pity counter cannot change
+-- these lines until the server guarantee is actually the next roll.
+-- The last printed percent absorbs rounding so the shown column is 100%.
 function RollBoard.oddsLines(
 	pool: any,
 	luck: number,
 	boost: number,
-	sinceLegendary: number
+	_sinceLegendary: number
 ): { string }
 	local lines = {}
 	if type(pool) ~= "table" then
 		return lines
 	end
-	local ok, odds = pcall(RollMath.odds, pool, luck, {
+	local multiplier = RarityConfig.luckMultiplier({
+		shardLuck = luck,
 		luckBoost = boost,
-		rollsSinceLegendary = sinceLegendary,
+		paidLuck = true,
 	})
+	local ok, odds = pcall(RarityConfig.disclose, pool, multiplier)
 	if not ok or type(odds) ~= "table" or type(odds.rarities) ~= "table" then
 		return lines
 	end
+	local rows = {}
 	for _, row in ipairs(odds.rarities) do
 		if
 			type(row) == "table"
 			and type(row.rarity) == "string"
 			and type(row.chance) == "number"
 		then
-			table.insert(lines, string.format("%s  %.1f%%", row.rarity, row.chance * 100))
+			table.insert(rows, row)
 		end
+	end
+	local shown = {}
+	local used = 0
+	for index, row in ipairs(rows) do
+		local percent = row.chance * 100
+		if index < #rows then
+			percent = math.floor(percent * 10 + 0.5) / 10
+			used += percent
+		else
+			percent = math.floor((100 - used) * 10 + 0.5) / 10
+		end
+		shown[index] = percent
+		table.insert(lines, string.format("%s  %.1f%%", row.rarity, percent))
 	end
 	return lines
 end

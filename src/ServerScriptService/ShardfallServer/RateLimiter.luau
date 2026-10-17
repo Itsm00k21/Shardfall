@@ -28,6 +28,7 @@ local RULES: { [string]: Rule } = {
 	-- The shard reel's real gate is RollService's 0.6s / 1.0s clock.
 	-- This bucket only stops a burst from outrunning that clock.
 	RollShard = { capacity = 4, perSecond = 2 },
+	RollShards = { capacity = 2, perSecond = 0.4 },
 	RollPaid = { capacity = 2, perSecond = 0.5 },
 	OpenChest = { capacity = 4, perSecond = 2 },
 	ChooseChest = { capacity = 4, perSecond = 1 },

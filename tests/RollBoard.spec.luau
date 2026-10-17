@@ -71,6 +71,31 @@ describe("RollBoard", function()
 		expect(RollBoard.payoff(0, "Epic", "Godly")).toEqual(false)
 	end)
 
+	it("shows disclose odds that add up to 100 and match the draw", function()
+		local pool = Pools.get("verdant_armory")
+		local luck = RarityConfig.luckMultiplier({
+			shardLuck = 0,
+			luckBoost = 0,
+			paidLuck = true,
+		})
+		local disclosed = RarityConfig.disclose(pool, luck)
+		local lines = RollBoard.oddsLines(pool, 0, 0, 0)
+		expect(#lines).toEqual(#disclosed.rarities)
+		local sum = 0
+		for index, text in ipairs(lines) do
+			local rarity, percent = string.match(text, "^(%a+)  (%d+%.%d)%%$")
+			expect(rarity).toEqual(disclosed.rarities[index].rarity)
+			local shown = tonumber(percent)
+			assert(shown ~= nil)
+			sum += shown
+			local raw = disclosed.rarities[index].chance * 100
+			if index < #lines then
+				expect(math.abs(shown - raw) <= 0.1).toBeTrue()
+			end
+		end
+		expect(math.abs(sum - 100) <= 0.1).toBeTrue()
+	end)
+
 	it("shows both server pity bars and leaves the odds sheet alone", function()
 		local pool = Pools.get("verdant_armory")
 		local base = RollBoard.oddsLines(pool, 0, 0, 0)
