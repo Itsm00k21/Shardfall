@@ -116,6 +116,8 @@ type Run = {
 	eliteNext: boolean,
 	shrine: string,
 	startedAt: number,
+	-- Server-minted. Marks for a boss in this run use this id once.
+	runId: string,
 	practice: boolean,
 	raidPlayers: number,
 	healerPresent: boolean,
@@ -1727,6 +1729,7 @@ function DungeonService.damageEnemy(
 					now = os.time(),
 					rng = RollMath.defaultRng(),
 					roll = math.random(),
+					claim = run.runId .. ":" .. bossId,
 				})
 				return nil
 			end)
@@ -2360,11 +2363,9 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		return reject("The dungeon world is still loading.")
 	end
 
+	local runId = HttpService:GenerateGUID(false)
 	local folder = Instance.new("Folder")
-	folder.Name = "Run_"
-		.. tostring(player.UserId)
-		.. "_"
-		.. HttpService:GenerateGUID(false):sub(1, 8)
+	folder.Name = "Run_" .. tostring(player.UserId) .. "_" .. runId:sub(1, 8)
 	folder.Parent = activeFolder
 	local endless = dungeon.endless == true
 	local echoFight: RaidEchoFight.Fight? = nil
@@ -2392,6 +2393,7 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		eliteNext = false,
 		shrine = "",
 		startedAt = os.clock(),
+		runId = runId,
 		practice = practice == true,
 		raidPlayers = 1,
 		healerPresent = false,
