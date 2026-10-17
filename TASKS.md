@@ -1771,6 +1771,147 @@ Questions for Ghost:
 
 Ghost's answers are on T-049. Short form: the bonus stays per difficulty, not per boss. The cap stays on the bonus (`maxBonus` 0.6) and the sum clamps to 1. A gear drop resets only that difficulty. Dust, marks, materials, pets, and cosmetics are a dry clear. Fracture tracks no bonus. `eligible = false` is the Practice Grove switch. `raidLuck` is added on schema version 22, and template plus migrate start at `{}` with nothing copied from `raidPity`. Do not wire this until T-009 grants real raid gear, Heartshard weapons, and Relic pieces; until then `raidPity` stays live. Several gear rolls in one clear read `chance` once and `settle` once. A vote-kicked or AFK-removed player gets no gear roll and `settle` is not called for them, which overrides the snippet above. A skip that pulls a stored value above the cap down to the cap is fine to persist.
 
+### T-050 hooks for GHOST
+
+HELPER did not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, `Schema.luau`, `CombatHud.luau`, `SessionRecap.luau`, `RaidConduct.luau`, `Remotes.luau`, `RateLimiter.luau`, or any other T-012 file. `RaidRecap` is pure and ready to call. It does not require `RaidConduct`, `Raids`, or `SessionRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidRecap` yet, so this branch does not change a live run. No build stamp. No remote. No DataStore. No TextService. Nothing here costs Robux. The T-050 row stays `claimed`. Wiring is yours.
+
+The live Heartwood grant is still the per-player boss mutate in `DungeonService.damageEnemy`. That file has no shared roster and no mechanic counter, and it is not on this row. `RaidService` has no end-of-run call. Keep the tallies on the in-memory raid run and call `recap` once when the run ends. Do not append these lines to `SessionRecap.line` or `CombatHud.victoryBody`. That card stays the T-016 session line (level, epics, set percent).
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidRecap = require(ReplicatedStorage.Shared.RaidRecap)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `panel(member)` | you want one player's private panel | `ok == true` and that player's lines, tips, and own numbers. |
+| `give(members, kudos, fromUserId, toUserId)` | a player clicks kudos | `ok == true` is the only signal to store `kudos`. The input list is not written. |
+| `publicView(members, kudos)` | you are about to broadcast the party view | `ok == true` and `public`. Kudos and MVP awards only. |
+| `recap(run)` | the run has ended | `panels[userId]` for each player, plus the same `public` view. |
+
+`run` fields that are read: `members`, `kudos`. Anything else is ignored, including `bossId` and `difficulty`. Boss ids live on each failure. `kudos` nil means nobody has given one.
+
+Send `panels[userId]` only to that player. Send `public` to the party, and only when `ok == true`. Do not put the whole `recap` result on one remote. `public` has no damage, no healing, no deaths, no mechanic counts, no tips, and no private lines.
+
+A roster error (`ok == false` and `panels` empty) means send nothing. A malformed kudos list still returns the private panels, with `ok == false` and an empty `public`. Send those panels. Do not broadcast `public` until the list is fixed.
+
+**Private panel.** `panel` reads `userId`, `damage`, `healing`, `deaths`, `mechanics`, `failures`, and `removal`. A missing damage, healing, or deaths value is 0. The three stat lines are always there. A mechanic line is there only when that count is at least 1. The lines have no period, matching the design example.
+
+| count | line |
+|---|---|
+| damage 1200 | `You dealt 1200 damage` |
+| healing 400 | `You healed 400` |
+| deaths 0, 1, 2 | `You died 0 times`, `You died 1 time`, `You died 2 times` |
+| soak 1, soak 6 | `You soaked 1 time`, `You soaked 6 times` |
+| interrupt 1 | `You interrupted 1 time` |
+| stack 2 | `You stacked 2 times` |
+| add 1, add 3 | `You killed 1 add`, `You killed 3 adds` |
+
+`mechanics` is a map, not an array. Keys are `soak`, `interrupt`, `stack`, and `add` from `RaidRecap.MECHANICS`. Strings are trimmed and lowercased, so `" Soak "` is soak. `"soaks"` is `ERRORS.mechanic`. A second key that normalizes to the same mechanic is also `ERRORS.mechanic`. A negative, fractional, or non-number count is `ERRORS.mechanics`. The returned `mechanics` map always has all four keys. Zeros stay on the map and stay off the lines.
+
+`failures` is a dense array of `{ bossId, mechanic, count? }`. A missing count means the failure happened. `count` 0 is skipped. A negative count is `ERRORS.failure`. Tips come from `CONFIG.tips[bossId][mechanic]`. Keys are trimmed and lowercased. Duplicates collapse. The list is sorted by boss id, then mechanic id, and cut to `CONFIG.tipLimit` (2). A boss with no row, including `grandmother_gnarl`, adds no tip and does not fail the panel. A clean run gets no tips. The placeholder bosses are the wing ids in `Raids.WINGS`: `twins`, `sapwell`, `galecrown`, `awakened`. Galecrown's gust tip is `Try using Blink on Galecrown's Gust.`
+
+**AFK.** This matches T-027. `RaidConduct.afk` returns `state == "remove"` for the 90s removal (`AFK_STATE`). Pass that result table as `removal`, or pass the string `"afk"` or `"remove"`. `" AFK "` and `" Remove "` are the same. `ok == false` on that table is `ERRORS.removal`, including when `state` is `"remove"`, so an invalid check is not treated as a removal. `state` `"ok"`, `"warning"`, and `"paused"` mean the player is still here (`PRESENT_STATES`). A passed vote-kick is the string `"kick"`. A tally table with `passed` and no `state` is refused. `"idle"`, `"leave"`, and `"vote"` are refused.
+
+An AFK player still gets a private panel, with `afk == true`, their own numbers, and their own tips. They are skipped for every MVP, and they cannot give or receive kudos. A warning, a paused cutscene, and a vote-kick stay in kudos and MVP. The public view does not list who was AFK.
+
+**MVP.** One award per mechanic type, in `MECHANICS` order. The winner handled the most. A tie goes to the lower `userId`, so roster order does not matter. A count of 0 is not a candidate. If every eligible count is 0, or only an AFK player handled that mechanic, that type has no award. The award is `{ mechanic, userId }`. The count is not on it. There is no damage award and no healing award.
+
+**Kudos.** One per player per run, to another member of that run. The stored row is `{ fromUserId, toUserId }`. Extra fields on the input, including a damage number, are not copied. `give` does not write the caller's list. Store `given.kudos` only when `given.ok == true`. A refused click returns a copy of the previous valid list so you can see it, and that copy is not the table you passed in.
+
+`give` checks, in order: the roster (stats included), the existing list in strict mode, the two user ids, the giver is in the run, the receiver is in the run, not yourself, the giver is not AFK, the receiver is not AFK, the giver has not already given. The messages are `absentSelf`, `absent`, `selfKudos`, `afkGive`, `afkReceive`, and `already`.
+
+`publicView` and `recap` are the display path. A malformed row or a sparse list fails the public view. A self kudos, an outsider, an AFK kudos, and a second kudos from the same player are omitted. The first legal row from each player is kept, in input order. That is why a kudos given before someone is marked AFK drops out of the party view at the end, and the private panels still build.
+
+```lua
+local removal = nil
+local afk = RaidConduct.afk({
+	now = now,
+	lastInputAt = member.lastInputAt,
+	inCutscene = member.inCutscene == true,
+})
+if afk.state == "remove" then
+	removal = afk
+elseif votePassed then
+	removal = "kick"
+end
+
+local view = RaidRecap.recap({
+	members = {
+		{
+			userId = player.UserId,
+			damage = tally.damage,
+			healing = tally.healing,
+			deaths = tally.deaths,
+			mechanics = {
+				soak = tally.soak,
+				interrupt = tally.interrupt,
+				stack = tally.stack,
+				add = tally.add,
+			},
+			failures = tally.failures,
+			removal = removal,
+		},
+	},
+	kudos = run.kudos,
+})
+local mine = view.panels[player.UserId]
+if mine ~= nil and mine.ok == true then
+	-- Send `mine` to this player only.
+end
+if view.ok == true then
+	-- Send `view.public` to the party.
+end
+```
+
+On a kudos click:
+
+```lua
+local given = RaidRecap.give(members, run.kudos, fromUserId, toUserId)
+if given.ok == true then
+	run.kudos = given.kudos
+	local party = RaidRecap.publicView(members, run.kudos)
+	if party.ok == true then
+		-- Send `party.public` to the party.
+	end
+end
+```
+
+There is no RNG. The same input returns the same panels, the same tips, and the same awards. Thresholds and the tip copy live in `RaidRecap.CONFIG`. `tipLimit` is 2. Do not hardcode that number beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The tallies and the kudos list live on the in-memory run for that reserved server. They do not have to survive a rejoin. Version 21 is current. T-049's row already plans `raidLuck` on version 22, so do not take 22 for this.
+
+If you want a lifetime received count, add it on whichever version is free after that:
+
+```lua
+raidKudosReceived: number, -- kudos received across runs. template 0. Missing is 0.
+```
+
+This module does not read or write that field. Increment it yourself when `give` returns `ok == true`, once per accepted kudos.
+
+`tests/run.luau` requires `./RaidRecap.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. A tie goes to the lower `userId`. I built it that way so a shuffled roster still picks the same player. Should a tie go to whoever joined first instead?
+2. MVP types are soak, interrupt, stack, and add, in that order. Gust, spread, pools, and the Lumen shield are tips only, and I did not give them an award. Should each named mechanic get its own MVP?
+3. Tips are sorted by boss id, then mechanic id, and cut to `tipLimit` (2). A failure with no CONFIG row adds nothing. A clean run gets no tips. I did not add a general tip. Should the order follow the wings (twins, sapwell, galecrown, awakened), and should a clean run still get one tip?
+4. Damage, healing, and deaths are always on the private panel, including 0. A mechanic line appears only at 1 or more. The soak line is `You soaked 6 times`, with no period. Should a 0 stat be left off?
+5. AFK is `"afk"`, `"remove"`, or a `RaidConduct.afk` result with `state == "remove"` and `ok ~= false`. A warning, a paused cutscene, and `"kick"` stay in kudos and MVP. A tally table with no `state` is refused. Should a passed vote-kick be left out as well?
+6. Kudos are `{ fromUserId, toUserId }` with no message, so this module never calls TextService. Should a kudos carry a short note, and would you filter that note beside the other TextService calls?
+7. A public award is `{ mechanic, userId }`. The count stays on that player's panel. There is no damage sort and no healing sort. Should the party line include the count?
+8. One call covers whatever stats you pass. `run.bossId` is ignored. Tip keys are the wing ids, not `grandmother_gnarl`. I would call it once at the end of the run. Should each wing get its own panel?
+9. No profile field. Stats and kudos live on the in-memory run. A lifetime count would be `raidKudosReceived` on the next free schema version after T-049's version 22. Version 21 is current. Do you want that counter?
+10. There is no practice switch. The same functions run if you pass Practice Grove stats. Should practice skip kudos and MVP?
+11. Mechanic keys are soak, interrupt, stack, and add. `" Soak "` works. `"soaks"` is refused. A bad tally fails the roster, including a `give` click. Should the plurals be accepted?
+12. `give` refuses a bad click. `publicView` drops a stored row that `give` would refuse and keeps the first legal row from that player. A malformed row fails `recap.ok`, empties `public`, and still returns the private panels. A kudos given before an AFK removal drops out of the party view. Should a rule-breaking stored row fail the recap instead of being dropped?
+13. Failures are the list you pass. A missing `count` means it happened, and 0 is ignored. I do not infer a missed soak from a low handled count. Should a tip be derived from the tally?
+
 ## Open
 
 No unassigned tasks.
