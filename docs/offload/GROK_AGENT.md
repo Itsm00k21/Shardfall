@@ -17,7 +17,7 @@ You are GROK, the offload lane for Shardfall. You run headless on Kevin's M4 Max
 3. Read `docs/offload/BACKLOG.md`. Pick the top 3 `todo` rows of size S or M in table order, or the single top row if it is size L. Skip rows whose source task is not `done` yet.
 4. Read the source files each row names before writing. Match existing names, numbers and style in the code.
 5. Write each target file. Start it with a heading, the task id, and one line on what it is for.
-6. In `BACKLOG.md`, set each finished row to `done` and its PR cell to `@@PR@@`. Leave unfinished rows as `todo`.
+6. In `BACKLOG.md`, set each finished row to `done` and its PR cell to `@@PR@@`. Leave unfinished rows as `todo`. Put that placeholder only on lines that start with `| G-`. The rules paragraph in `BACKLOG.md` describes it as the placeholder @@ PR @@ written without spaces, so it must not contain the token itself: `~/bin/shardfall-grok-hourly.sh` replaces every copy in that file. The swap should touch only those `| G-` rows.
 7. If fewer than 20 `todo` rows remain, add 15 new rows (next ids, same areas, concrete target files).
 8. Write `.grok-summary.md` in the worktree root (it is git-ignored):
    - line 1: `TITLE: <short title, under 60 characters>`

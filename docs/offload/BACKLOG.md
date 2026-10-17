@@ -4,7 +4,7 @@ Owner: GROK (Grok Build on Kevin's M4 Max, run hourly by launchd). Rules: `docs/
 
 GROK writes only under `docs/content/`, `docs/design/` (new files only), `docs/art/`, `docs/research/`, `docs/qa/`, `docs/data/`, and the status and PR cells of this file. Never `src/`, `tests/`, `TASKS.md`, `default.project.json`, `docs/COORDINATION.md`, `docs/handoffs/`, or any HELPER file.
 
-Status values: `todo`, `doing` (picked by an open GROK PR), `done`. Size: S (about 15 min), M (about 30 min), L (a whole run). When you finish a task in a run, set its status to `done` and its PR cell to `@@PR@@`. The runner swaps that token for the real PR link.
+Status values: `todo`, `doing` (picked by an open GROK PR), `done`. Size: S (about 15 min), M (about 30 min), L (a whole run). When you finish a task in a run, set its status to `done` and its PR cell to the placeholder @@ PR @@ written without spaces. The runner swaps that token for the real PR link.
 
 GHOST may add, reorder or edit rows. New ids continue from the last row. Keep at least 20 `todo` rows: when fewer remain, the run's last task is to add 15 new rows in the same areas (an S task).
 
@@ -14,9 +14,9 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 
 | id | size | area | title | target | status | PR |
 |---|---|---|---|---|---|---|
-| G-001 | M | content | 30 weapons across all six rarities (swords, daggers, hammers, staffs, bows): name, type, rarity, flavor line of 12 words or fewer, visual note. Read `ItemBases.luau` first and do not reuse its names. | `docs/content/weapons_batch1.md` | todo | — |
-| G-002 | M | content | 30 more weapons, weighted to Epic and above, plus 6 Heartshard raid weapons tied to the Heartwood raid | `docs/content/weapons_batch2.md` | todo | — |
-| G-003 | M | content | 20 pets across all rarities: name, rarity, small % passive idea (suggested), visual note. Read `Pets.luau` and `docs/design/shardfall_pets.md` first. | `docs/content/pets_batch1.md` | todo | — |
+| G-001 | M | content | 30 weapons across all six rarities (swords, daggers, hammers, staffs, bows): name, type, rarity, flavor line of 12 words or fewer, visual note. Read `ItemBases.luau` first and do not reuse its names. | `docs/content/weapons_batch1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/64 |
+| G-002 | M | content | 30 more weapons, weighted to Epic and above, plus 6 Heartshard raid weapons tied to the Heartwood raid | `docs/content/weapons_batch2.md` | done | https://github.com/Itsm00k21/Shardfall/pull/64 |
+| G-003 | M | content | 20 pets across all rarities: name, rarity, small % passive idea (suggested), visual note. Read `Pets.luau` and `docs/design/shardfall_pets.md` first. | `docs/content/pets_batch1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/64 |
 | G-004 | M | content | 8 pet evolution lines (3 stages each), matching the rules in `PetEvolution.luau` | `docs/content/pet_evolutions.md` | todo | — |
 | G-005 | M | content | 24 armor pieces (helm, chest, legs, boots) across rarities, grouped into 6 themed looks | `docs/content/armor_batch1.md` | todo | — |
 | G-006 | S | content | 20 accessories (rings, amulets, charms) with a suggested stat line | `docs/content/accessories.md` | todo | — |
