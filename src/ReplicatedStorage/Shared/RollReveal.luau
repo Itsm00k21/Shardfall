@@ -5,7 +5,9 @@
 
 	The server mints the item and a roll id before the client animates.
 	The spin lands on that id and the card reads the same record, so a
-	later roll cannot paint the previous name over this one.
+	later roll cannot paint the previous name over this one. A miss has
+	no record. Its card is hidden and blank, so the previous name cannot
+	stay on screen, and it does not invent a near-miss.
 
 	Full playback is 1.65s. Short is 0.7s. Instant and the skip threshold
 	are 0. A paid roll never runs longer than the free roll with the same
@@ -21,6 +23,12 @@ local RollReveal = {}
 
 export type Record = {
 	id: string,
+	name: string,
+	rarity: string,
+}
+
+export type Face = {
+	visible: boolean,
 	name: string,
 	rarity: string,
 }
@@ -88,6 +96,24 @@ end
 function RollReveal.present(record: Record): Record
 	return {
 		id = record.id,
+		name = record.name,
+		rarity = record.rarity,
+	}
+end
+
+-- The card for this result. A miss is hidden and blank so the previous
+-- name cannot stay up. A land shows that record only. No near-miss, no
+-- odds, and paid is not a separate face.
+function RollReveal.face(record: Record?): Face
+	if record == nil then
+		return {
+			visible = false,
+			name = "",
+			rarity = "",
+		}
+	end
+	return {
+		visible = true,
 		name = record.name,
 		rarity = record.rarity,
 	}

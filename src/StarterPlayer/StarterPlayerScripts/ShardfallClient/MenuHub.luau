@@ -332,8 +332,28 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		flashed: boolean,
 		nextTick: number,
 		slots: { UiRouter.ReelSlot }?,
+		generation: number,
 	}? =
 		nil
+	-- A newer roll bumps this and cancels the previous card tweens so a
+	-- late spin cannot paint the older name over the newer result.
+	local cardGeneration = 0
+	local cardTweens: { Tween } = {}
+
+	local function bumpCardGeneration()
+		cardGeneration += 1
+		local pending = cardTweens
+		cardTweens = {}
+		for _, tween in ipairs(pending) do
+			tween:Cancel()
+		end
+		activeReveal = nil
+	end
+
+	local function playCardTween(tween: Tween)
+		table.insert(cardTweens, tween)
+		tween:Play()
+	end
 	local paintReelIdle: (string) -> () = function(_caption: string) end
 	local showMilestone: (string) -> () = function(_text: string) end
 	local hideCloseBeat: () -> () = function() end
@@ -999,11 +1019,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		flashCover.BackgroundTransparency = 0.45
-		TweenService:Create(
-			flashCover,
-			TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ BackgroundTransparency = 1 }
-		):Play()
+		playCardTween(
+			TweenService:Create(
+				flashCover,
+				TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ BackgroundTransparency = 1 }
+			)
+		)
 	end
 
 	fitRoll = function()
@@ -2620,14 +2642,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		revealFly.TextTransparency = 0
 		revealFly.Position = UDim2.fromOffset(12, 72)
 		if not UiMotion.reduced(draft) then
-			TweenService:Create(
-				revealFly,
-				TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{
-					Position = UDim2.fromOffset(12, 36),
-					TextTransparency = 1,
-				}
-			):Play()
+			playCardTween(
+				TweenService:Create(
+					revealFly,
+					TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{
+						Position = UDim2.fromOffset(12, 36),
+						TextTransparency = 1,
+					}
+				)
+			)
 		end
 		local junk =
 			RollLoop.resolve(record.rarity, draft.rolls.junkBelow, draft.rolls.autoJunk, upgrade)
@@ -2683,6 +2707,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		rollBusy = true
 		setPulse(false)
 		revealToken += 1
+		bumpCardGeneration()
+		-- Cancel leaves a flash or drip where it was. Snap them off so the
+		-- previous roll cannot sit on top of this one.
+		flashCover.BackgroundTransparency = 1
+		revealScale.Scale = 1
+		revealFly.TextTransparency = 1
 		local generation = revealToken
 		task.spawn(function()
 			local waitFor = RarityConfig.COOLDOWN - (os.clock() - lastCrack)
@@ -2734,8 +2764,22 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 				lastMissed = true
 				loop = RollLoop.idle()
+				local face = RollReveal.face(nil)
+				bumpCardGeneration()
 				activeReveal = nil
+				revealCard.Visible = face.visible
+				revealTitle.Text = face.name
+				revealRarity.Text = face.rarity
+				revealNew.Visible = false
+				revealEquip.Visible = false
 				revealBest.Visible = false
+				revealEquip:SetAttribute("Uid", "")
+				revealFly.TextTransparency = 1
+				revealScale.Scale = 1
+				revealCard.BackgroundColor3 = rgb("header")
+				revealStroke.Color = rgb("accent")
+				revealStroke.Thickness = UiTheme.STROKE
+				flashCover.BackgroundTransparency = 1
 				reelMilestone.Visible = false
 				setPulse(true)
 				applyClose(close)
@@ -2849,18 +2893,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				revealCard.BackgroundColor3 = color
 				revealScale.Scale = if reduced then 1 else pop
 				if not reduced then
-					TweenService:Create(
-						revealScale,
-						TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-						{ Scale = 1 }
-					):Play()
+					playCardTween(
+						TweenService:Create(
+							revealScale,
+							TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+							{ Scale = 1 }
+						)
+					)
 				end
 				if RollLoop.flash(card.rarity, reduced, draft.camera.flash == "reduced") then
 					flashCover.BackgroundColor3 = color
 					flashCover.BackgroundTransparency = 0.45
-					TweenService
-						:Create(flashCover, TweenInfo.new(0.08), { BackgroundTransparency = 1 })
-						:Play()
+					playCardTween(
+						TweenService:Create(
+							flashCover,
+							TweenInfo.new(0.08),
+							{ BackgroundTransparency = 1 }
+						)
+					)
 				end
 				if RollLoop.stinger(card.rarity, reduced) then
 					playUi("stinger")
@@ -2880,6 +2930,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				flashed = false,
 				nextTick = os.clock(),
 				slots = slots,
+				generation = cardGeneration,
 			}
 		end)
 	end
@@ -2937,7 +2988,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 	RunService.Heartbeat:Connect(function()
 		local active = activeReveal
-		if active == nil then
+		if active == nil or active.generation ~= cardGeneration then
 			return
 		end
 		local elapsed = os.clock() - active.started
@@ -2982,11 +3033,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			active.flashed = true
 			flashCover.BackgroundColor3 = color
 			flashCover.BackgroundTransparency = 0.45
-			TweenService:Create(
-				flashCover,
-				TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{ BackgroundTransparency = 1 }
-			):Play()
+			playCardTween(
+				TweenService:Create(
+					flashCover,
+					TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{ BackgroundTransparency = 1 }
+				)
+			)
 			if RollLoop.stinger(active.rarity, reduced) then
 				playUi("stinger")
 			end

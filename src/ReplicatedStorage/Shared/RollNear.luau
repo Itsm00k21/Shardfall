@@ -22,8 +22,8 @@
 	write the input. Store state only when ok == true. No clock. No
 	RNG. Nothing here costs Robux.
 
-	It requires Rarities for the ladder and nothing else. Nothing in
-	src requires this module.
+	It requires Rarities for the ladder and nothing else. UiRouter
+	requires this module for the close-call flag.
 ]]
 
 local Rarities = require("./Rarities")
