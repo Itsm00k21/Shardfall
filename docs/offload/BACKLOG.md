@@ -27,9 +27,9 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-011 | M | content | 6 zones after Haven and Heartwood: name, level band, mood, landmarks, enemy theme, music mood | `docs/content/zones.md` | done | https://github.com/Itsm00k21/Shardfall/pull/83 |
 | G-012 | M | content | 30 regular enemies across the zones in G-011: name, role (melee, ranged, caster, swarm), one move, visual note | `docs/content/enemies.md` | done | https://github.com/Itsm00k21/Shardfall/pull/83 |
 | G-013 | L | content | Main story chapter 1: 10 quests with objectives, rewards (suggested) and short NPC lines | `docs/content/quests_ch1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/90 |
-| G-014 | M | content | 20 side quests for Haven and the first zone | `docs/content/quests_side.md` | done | @@PR@@ |
-| G-015 | M | content | Haven NPC dialogue: 8 NPCs with a greeting, 3 idle lines, a shop line and a quest hand-in line | `docs/content/npc_dialogue_haven.md` | done | @@PR@@ |
-| G-016 | M | content | 50 achievements (combat, rolls, pets, raids, social, collection) with a reward idea | `docs/content/achievements.md` | done | @@PR@@ |
+| G-014 | M | content | 20 side quests for Haven and the first zone | `docs/content/quests_side.md` | done | https://github.com/Itsm00k21/Shardfall/pull/95 |
+| G-015 | M | content | Haven NPC dialogue: 8 NPCs with a greeting, 3 idle lines, a shop line and a quest hand-in line | `docs/content/npc_dialogue_haven.md` | done | https://github.com/Itsm00k21/Shardfall/pull/95 |
+| G-016 | M | content | 50 achievements (combat, rolls, pets, raids, social, collection) with a reward idea | `docs/content/achievements.md` | done | https://github.com/Itsm00k21/Shardfall/pull/95 |
 | G-017 | S | content | 40 titles with unlock conditions and rarity tint | `docs/content/titles.md` | todo | — |
 | G-018 | L | content | Shard Pass season 1: 50 tiers, free and premium tracks, cosmetics and convenience only, a season theme and name | `docs/content/shard_pass_s1.md` | todo | — |
 | G-019 | M | content | Shard Pass season 2 theme and 50-tier outline (cosmetics and convenience only) | `docs/content/shard_pass_s2.md` | todo | — |
