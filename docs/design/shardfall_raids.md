@@ -231,7 +231,7 @@ Sources I actually read are linked. Anything marked [GK] is general genre knowle
 - **AFK detection:** no input for 60 seconds outside cutscenes brings a warning. At 90 seconds the player is auto-removed and loses their rewards, and a backfill is queued.
 - **Leaver penalty:** 3 leaves in a day causes a 15-minute Finder cooldown. Disconnecting gives a 3-minute rejoin window.
 - **Loot:** personal loot only. Raid gear is soulbound for 2 hours after it drops, and you can trade it to someone in the same run who was also eligible for that boss (a WoW-style personal loot trade).
-- **Market rules:** crafted Heartshard weapons are tradeable after the crafter has 1 clear. Relic Set pieces are bound. Cosmetics from raids are bound so they stay as proof of achievement.
+- **Market rules:** crafted Heartshard weapons are tradeable after the crafter has 1 clear. Relic Set pieces are raid-drop only and tradeable on the Market Board (per Kevin's decision, docs/design/relic_sets.md, T-031/T-034). Cosmetics from raids are bound so they stay as proof of achievement.
 - **Reporting:** a report button feeds the trade and behavior logs from the economy doc.
 
 ### Roblox tech notes
