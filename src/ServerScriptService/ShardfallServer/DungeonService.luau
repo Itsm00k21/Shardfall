@@ -39,6 +39,7 @@ local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 local Loops = require(ReplicatedStorage.Shared.Loops)
 local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local Progression = require(ReplicatedStorage.Shared.Progression)
+local RaidEchoFight = require(ReplicatedStorage.Shared.RaidEchoFight)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
@@ -112,7 +113,9 @@ type Run = {
 	practice: boolean,
 	raidPlayers: number,
 	healerPresent: boolean,
-	echo: number,
+	-- Party Echo. The state table is shared with a backfill. Nil outside Heartwood.
+	echoFight: RaidEchoFight.Fight?,
+	echo: { stacks: number }?,
 }
 
 type Restart = {
@@ -128,6 +131,46 @@ local farmSince: { [Player]: number } = {}
 local restartAt: { [Player]: Restart } = {}
 local idleNoted: { [Player]: boolean } = {}
 local nextEnemyId = 0
+local echoHeals = false
+
+local function bindEcho(fight: RaidEchoFight.Fight)
+	for _, partyRun in pairs(runs) do
+		if partyRun.echoFight == fight then
+			partyRun.echo = fight.state
+		end
+	end
+end
+
+local function rememberMax(player: Player, run: Run)
+	local fight = run.echoFight
+	if fight == nil then
+		return
+	end
+	local profile = DataService.get(player)
+	if profile == nil then
+		return
+	end
+	local _, vitality = CombatMath.loadout(profile)
+	RaidEchoFight.applyBase(fight, tostring(player.UserId), "maxHp", vitality.maxHealth)
+end
+
+local function installEchoHealing()
+	if echoHeals then
+		return
+	end
+	echoHeals = true
+	local healAmount = CombatService.healAmount
+	function CombatService.healAmount(player: Player, amount: number)
+		local run = runs[player]
+		local fight = if run ~= nil then run.echoFight else nil
+		if fight == nil then
+			healAmount(player, amount)
+			return
+		end
+		local healed = RaidEchoFight.applyBase(fight, tostring(player.UserId), "healing", amount)
+		healAmount(player, healed)
+	end
+end
 local worldFolder: Folder? = nil
 local activeFolder: Folder? = nil
 
@@ -508,6 +551,10 @@ local function publicRun(player: Player): { [string]: any }
 		difficulty = run.difficulty,
 		doors = run.offer,
 		shrine = run.shrine,
+		echoStacks = if run.echoFight ~= nil then run.echoFight.state.stacks else 0,
+		echoLabel = if run.echoFight ~= nil
+			then RaidEchoFight.chip(run.echoFight.state, run.echoFight.difficulty)
+			else nil,
 	}
 end
 
@@ -830,6 +877,11 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	}
 	paintEnemy(enemy)
 	run.enemies[id] = enemy
+	if enemy.boss and run.echoFight ~= nil then
+		local room = run.dungeon.rooms[run.roomIndex]
+		local bossId = if room ~= nil then room.id else enemy.kind
+		RaidEchoFight.notePull(run.echoFight, bossId)
+	end
 	if enemy.boss then
 		local beam = makePart(
 			"Sunbeam",
@@ -901,7 +953,23 @@ end
 local function destroyRun(player: Player, run: Run)
 	clearEnemies(run)
 	run.folder:Destroy()
+	local fight = run.echoFight
+	run.echoFight = nil
+	run.echo = nil
 	runs[player] = nil
+	if fight ~= nil then
+		RaidEchoFight.depart(fight, tostring(player.UserId))
+		local sharing = false
+		for _, other in pairs(runs) do
+			if other.echoFight == fight then
+				sharing = true
+				break
+			end
+		end
+		if not sharing then
+			RaidEchoFight.runEnd(fight)
+		end
+	end
 	CombatService.clearShots(player)
 end
 
@@ -1135,6 +1203,7 @@ local function beginAdvance(player: Player, run: Run, text: string)
 	pushRun(player, text)
 end
 
+-- Living enemies in this room. A party wipe counts players, not this.
 local function aliveCount(run: Run): number
 	local count = 0
 	for _, enemy in pairs(run.enemies) do
@@ -1228,8 +1297,10 @@ function DungeonService.damageEnemy(
 	if run.shrine == "might" then
 		amount = math.floor(amount * 1.15 + 0.5)
 	end
-	if run.echo > 0 then
-		amount = math.floor(amount * (1 + run.echo * 0.05) + 0.5)
+	if run.echoFight ~= nil then
+		-- The incoming amount is the unbuffed hit. applyBase stores that
+		-- base, so a later wipe does not multiply the already scaled number.
+		amount = RaidEchoFight.applyBase(run.echoFight, tostring(player.UserId), "damage", amount)
 	end
 	enemy.hp -= amount
 	if enemy.hp < 0 then
@@ -1283,6 +1354,12 @@ function DungeonService.damageEnemy(
 		end
 	end
 	if enemy.hp <= 0 then
+		if enemy.boss and run.echoFight ~= nil then
+			-- Once, outside the per-player loot mutate. The next boss starts at 0.
+			RaidEchoFight.bossKill(run.echoFight)
+			rememberMax(player, run)
+			bindEcho(run.echoFight)
+		end
 		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
 		-- Practice returns before any of that: no materials, chests, marks, or XP.
 		local landed = {}
@@ -1823,6 +1900,10 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		.. HttpService:GenerateGUID(false):sub(1, 8)
 	folder.Parent = activeFolder
 	local endless = dungeon.endless == true
+	local echoFight: RaidEchoFight.Fight? = nil
+	if raidMode ~= nil then
+		echoFight = RaidEchoFight.open(raidMode.id, practice == true, tostring(player.UserId))
+	end
 	local run: Run = {
 		dungeon = dungeon,
 		roomIndex = 1,
@@ -1847,10 +1928,14 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		practice = practice == true,
 		raidPlayers = 1,
 		healerPresent = false,
-		echo = if raidMode ~= nil and raidMode.id == "story" then profile.raidEcho or 0 else 0,
+		echoFight = echoFight,
+		echo = if echoFight ~= nil then echoFight.state else nil,
 	}
 	runs[player] = run
 	CombatService.refresh(player)
+	if echoFight ~= nil then
+		rememberMax(player, run)
+	end
 	-- Arrive before the rigs exist so nothing simulates at the room while the
 	-- character is still streaming in from the hub.
 	teleport(player, roomSpawn(run.placeIndex))
@@ -1877,8 +1962,9 @@ function DungeonService.tuneRaid(player: Player, options: any)
 	run.practice = options.practice == true
 	run.raidPlayers = if type(options.players) == "number" then options.players else 1
 	run.healerPresent = options.healer == true
-	if type(options.echo) == "number" then
-		run.echo = options.echo
+	if run.echoFight ~= nil then
+		-- Profile raidEcho is the old permanent stack. This fight starts from wipes.
+		RaidEchoFight.setPractice(run.echoFight, run.practice)
 	end
 	local wing = PracticeLoot.wing(options.wing, #run.dungeon.rooms)
 	run.roomIndex = wing
@@ -2160,24 +2246,104 @@ local function bindTouches()
 	end
 end
 
+local function retryPull(fight: RaidEchoFight.Fight)
+	local party = {}
+	for member, memberRun in pairs(runs) do
+		if memberRun.echoFight == fight and memberRun.resolving ~= true then
+			table.insert(party, member)
+		end
+	end
+	for _, member in ipairs(party) do
+		local memberRun = runs[member]
+		if memberRun ~= nil then
+			CombatService.revive(member)
+			RaidEchoFight.setAlive(fight, tostring(member.UserId), true)
+			rememberMax(member, memberRun)
+			teleport(member, roomSpawn(memberRun.placeIndex))
+			spawnRoom(member, memberRun)
+			local label = RaidEchoFight.chip(fight.state, fight.difficulty)
+			local text = if label ~= nil then "Wiped. " .. label .. "." else "Wiped."
+			pushRun(member, text)
+		end
+	end
+	bindEcho(fight)
+end
+
 function DungeonService.onPlayerDown(player: Player)
 	local run = runs[player]
-	if
-		run ~= nil
+	if run == nil or run.resolving then
+		return
+	end
+	local fight = run.echoFight
+	if fight ~= nil then
+		-- Player life. The enemy counter is a different function and must not decide this.
+		RaidEchoFight.setAlive(fight, tostring(player.UserId), false)
+		bindEcho(fight)
+	end
+	local living = 1
+	local party = 1
+	if fight ~= nil then
+		living, party = RaidEchoFight.counts(fight)
+	end
+	local storyRetry = fight ~= nil
 		and run.dungeon.id == Dungeons.HEARTWOOD_ID
 		and run.difficulty == "story"
 		and run.practice ~= true
-	then
-		DataService.mutate(player, function(data)
-			data.raidEcho = math.min(5, (data.raidEcho or 0) + 1)
-			return nil
-		end)
+		and fight.practice ~= true
+		and fight.pullStarted == true
+		and party >= 1
+		and living == 0
+	if storyRetry and fight ~= nil then
+		retryPull(fight)
+		return
 	end
 	finish(player, false)
 end
 
+function DungeonService.backfill(player: Player, host: Player)
+	local run = runs[player]
+	local hostRun = runs[host]
+	if run == nil or hostRun == nil or hostRun.echoFight == nil then
+		return reject("No raid party is up.")
+	end
+	if run.dungeon.id ~= Dungeons.HEARTWOOD_ID or hostRun.dungeon.id ~= Dungeons.HEARTWOOD_ID then
+		return reject("Echo is a Heartwood buff.")
+	end
+	if run.resolving or hostRun.resolving then
+		return reject("That fight is already over.")
+	end
+	if
+		run.difficulty ~= hostRun.difficulty
+		or (run.practice == true) ~= (hostRun.practice == true)
+	then
+		return reject("That party is on a different pull.")
+	end
+	local previous = run.echoFight
+	if previous ~= nil and previous ~= hostRun.echoFight then
+		RaidEchoFight.depart(previous, tostring(player.UserId))
+		local sharing = false
+		for _, other in pairs(runs) do
+			if other ~= run and other.echoFight == previous then
+				sharing = true
+				break
+			end
+		end
+		if not sharing then
+			RaidEchoFight.runEnd(previous)
+		end
+	end
+	run.echoFight = hostRun.echoFight
+	RaidEchoFight.backfill(run.echoFight, tostring(player.UserId))
+	run.echo = run.echoFight.state
+	rememberMax(player, run)
+	bindEcho(run.echoFight)
+	local label = RaidEchoFight.chip(run.echoFight.state, run.echoFight.difficulty)
+	pushRun(player, if label ~= nil then label else "Joined the pull.")
+	return { ok = true, run = publicRun(player) }
+end
+
 function DungeonService.start()
-	print("[Rootvault] build c9add29+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build 2743749+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
@@ -2285,5 +2451,7 @@ function DungeonService.start()
 
 	RunService.Heartbeat:Connect(onHeartbeat)
 end
+
+installEchoHealing()
 
 return DungeonService
