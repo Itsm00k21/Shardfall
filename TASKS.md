@@ -1526,6 +1526,131 @@ Questions for Ghost:
 9. Extra tanks and healers keep the role they queued. A short DPS count does not block `mayStart`. Only a missing tank on Normal, or a missing healer before 180s, holds the launch. Is that the start rule?
 10. `waitingSince` is the unix time this roster started waiting on a healer. Nil means the wait is 0. Should that stamp be the oldest ticket in the queue, or the moment this forming roster first had everyone except a healer?
 
+### T-043 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Trading.luau`, `MarketBoard.luau`, `Remotes.luau`, `RateLimiter.luau`, `RaidHud.luau`, or any other T-012 file. `RaidPremade` is pure and ready to call. It does not require `RaidFinder`, `RaidLeaver`, or `Raids`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidPremade` or `RaidFinder` yet, so this branch does not change a live run. No build stamp. No remote. No MemoryStore. No DataStore. Nothing here costs Robux. The T-043 row stays `claimed`.
+
+`RaidFinder.CONFIG.roleTargets[8]` is now 1 tank, 1 healer, and 6 DPS. Sizes 4 through 7 are unchanged. An 8-player Story group with no tank gets one Warden golem, not two. A group that already has 1 tank, 1 healer, and 6 DPS starts with `wardenCount` 0. The T-041 hooks paragraph above still says size 8 is 2 / 1 / 5. That sentence was not edited. See question 13.
+
+Thresholds are `RaidPremade.CONFIG`. Party size is `minParty` 4 through `maxParty` 8. A listing lasts `listingSeconds` 1800 (30 minutes, a placeholder). `minClears` is 0. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
+
+`RaidPremade.DIFFICULTIES` is story, normal, hard, and shardbreaker. `RaidPremade.REFUSED` is guided. `RaidPremade.GEAR_FREE` is story and normal. `RaidPremade.ROLES` is tank, healer, dps, and flex, the same four names as `RaidFinder.ROLES`. `RaidPremade.TAGS` is learning, farm, speedrun, and achievement, the same four labels as `Raids.TAGS` after trim and lowercase. Strings are trimmed and lowercased. `" Story "` is story. `" Learning "` is learning.
+
+`RaidService.luau`, next to the `Raids` require, when you wire the calls:
+
+```lua
+local RaidPremade = require(ReplicatedStorage.Shared.RaidPremade)
+```
+
+The live `listings` array, `RaidService.post`, `RaidService.join`, and `RaidService.board` stay the home for the plaza board. Replace the checks inside those functions. Do not send a premade join through `RaidService.queue`. `queue` still means Finder: it launches one player, and `Raids.difficulty` only accepts Story and Normal. A premade listing is Hard and Shardbreaker too, and it must not start on the first click.
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `validate(draft, now)` | you already built a listing and want the normalized copy | `ok == true` and a new `listing`. An expired shape still validates. |
+| `open(board, draft, now)` | a host posts | `ok == true` is the only signal to store it. Nil `board` is an empty board. |
+| `canJoin(listing, player, now)` | a player asks to take a seat | `allowed == true` means the seat is open. This does not write. |
+| `join(listing, player, now)` | `canJoin` would allow it and you want the next listing | a new `listing` with that player seated. The input is not written. |
+| `depart(listing, userId, now)` | a member leaves, or the host disconnects | `hostLeft == true` means the listing is closed. A new `listing` comes back. |
+| `status(listing, now)` | the plaza paints a row, or you sweep | `full`, `expired`, `closed`, `active`, and `openCount`. |
+
+`open` stores nothing. Keep the id and the filtered title on a wrapper in `RaidService`, and pass `row.listing` into later calls. This module drops fields it does not know, including `title` and `id`.
+
+```lua
+{
+	id = id, -- RaidService nextId. Not inside the module.
+	title = filtered, -- TextService result. Never passed into RaidPremade.
+	hostName = player.Name, -- display only. The rule keys hostUserId.
+	listing = normalized, -- the table open / join / depart return.
+}
+```
+
+`validate` reads `difficulty`, `tags`, `requiredClears`, `gearScore`, `partySize`, `slots`, `hostUserId`, `createdAt`, `closed`, `members`, and `guided`. It does not read `title`, `cooldownUntil`, `expiresAt`, or a gear score on the player. A missing `requiredClears` becomes 0. A missing `closed` becomes false. `createdAt` has to be a unix time no later than `now`. A later stamp returns `ERRORS.clock` ("Raid time moved backwards."). The returned `expiresAt` is `createdAt + listingSeconds`. A caller-supplied `expiresAt` is ignored. `validate` returns a new table and does not write the draft. Show `error` whenever `ok ~= true`.
+
+Tags are one or more of the four names. A single string is one tag, so today's `RaidPost` string still validates. An array keeps the host's order after lowercase. An empty list, a blank string, an unknown tag, and a duplicate are refused. Guided is refused two ways: difficulty `"guided"`, or `guided == true` on a Hard or Shardbreaker listing. A non-boolean `guided` is `ERRORS.guidedFlag`. Fracture and any other name are `ERRORS.difficulty`.
+
+Story and Normal refuse `gearScore`, including 0. A negative or fractional gear score is unusable on every difficulty. Hard and Shardbreaker may store a non-negative integer. `canJoin` does not compare it. A Hard listing that says 500 still accepts a player with no gear score. See question 5.
+
+The host has to be one of `members`, once. Build that list on the server. Do not trust a client member list. The host's role is the role they picked, after you decide whether `Raids.roleOk` still applies (question 14). Seats are assigned in member order. A tank, healer, or DPS takes the first open slot of that role, then the first open flex slot. A flex player takes the first open slot in the host's slot list, whatever role that slot is. Two tanks and only one tank slot, with no flex slot, return `ERRORS.fit`. A party of four DPS is valid. This module does not apply the Finder tank and healer minimums.
+
+`open` refuses a closed draft, a draft that is already expired, and a host who already has an active row on `board`. Active means not closed and not expired. A full listing is still active, so that host cannot post a second one. An expired or closed row for the same host does not block. A player who is only seated in someone else's listing can host their own. Pass the current normalized listings as a dense array. A bad row fails the whole `open`. The function does not append and does not write `board`.
+
+A listing is expired when `now >= createdAt + listingSeconds`. The deadline second is already expired. One second earlier it is still open. `status.active` is false when the row is expired or closed. `status.full` is `openCount == 0`. A full expired row reports both.
+
+`canJoin` and `join` read `userId`, `role`, and `clears` on the player. Nil `clears` is 0. The player needs `clears >= requiredClears`. The exact count may join. A negative or fractional count is unusable (`ok == false`). They do not read `cooldownUntil` or `gearScore`. A RaidLeaver Finder cooldown does not block the premade board. Do not pass `data.raidFinderCooldownUntil` in. Rule refusals return `ok == true` and `allowed == false`, in this order: closed, expired, already seated, not enough clears, full, no open slot for that role. Corrupt input returns `ok == false`. Store the new listing only when `join` returns `allowed == true`. Show `error` whenever `allowed ~= true`. `join` appends the player and reseats. It does not write the old listing. Replace the wrapper's `listing` with the returned one.
+
+`depart` closes the listing when `userId` is the host and leaves the other members on the record. A non-host leave removes that seat and reseats whoever remains. The listing stays open. A second host depart on an already closed listing returns `ok == true` and `hostLeft == true`. Anyone else on a closed listing gets `ERRORS.closed`. A user who is not seated gets `ERRORS.absent`. Replace the stored listing only when `ok == true`. Drop it from the plaza copy when `status.active ~= true`.
+
+`RaidService.post` today checks `Raids.tagOk` and `Raids.difficulty`, so Hard, Shardbreaker, and a second tag never land. Stop using those two as the board gate. Stamp the host and the clock yourself. Filter the title here, with `TextService`, before you store the wrapper. If the filter fails, refuse the post. Do not pass the title into `RaidPremade`.
+
+```lua
+local now = os.time()
+local draft = {
+	hostUserId = player.UserId,
+	difficulty = difficulty,
+	tags = tags,
+	requiredClears = requiredClears,
+	gearScore = gearScore,
+	partySize = partySize,
+	slots = slots,
+	createdAt = now,
+	members = {
+		{ userId = player.UserId, role = role },
+	},
+}
+local opened = RaidPremade.open(listings, draft, now)
+if opened.ok ~= true then
+	return { ok = false, error = opened.error }
+end
+```
+
+`listings` in that snippet is the array of normalized listings already stored. The old `while #listings > 20` drop is not in this module. Dropping the oldest row can remove a host's active listing without them leaving. See question 8.
+
+`RaidService.join` today finds the id and calls `queue`, which starts a raid immediately. Do not do that. Load `data.raidClears` (nil until T-038 adds it) and call `join`. Ignore `data.raidFinderCooldownUntil`.
+
+```lua
+local now = os.time()
+local gate = RaidPremade.join(found.listing, {
+	userId = player.UserId,
+	role = role,
+	clears = data.raidClears,
+}, now)
+if gate.allowed ~= true then
+	return { ok = false, error = gate.error }
+end
+found.listing = gate.listing
+```
+
+Launch only from a row whose `status` is `full == true`, `expired == false`, and `closed == false`, and not from this module. Story and Normal can use the existing launch once you have a real roster. Hard and Shardbreaker need a launch path that is not `Raids.difficulty`. Finder healer-timeout, boss-damage scale, and Warden golems are `RaidFinder.form`. Do not apply them to a premade.
+
+`RaidService.board` should skip a row whose `status.active ~= true`, and it can show `difficulty`, `tags`, `requiredClears`, `partySize`, `openCount`, `full`, the slots, and the filtered title. The client must not send `now`, `createdAt`, `hostUserId`, or `clears`.
+
+When a seated player leaves on purpose, call `depart` with their user id. There is no leave button yet. Closing the client is the same depart. `Players.PlayerRemoving` in `DungeonService` is the live hook, and that file is not on this row. One call from there into `RaidService` is enough. If the removed player is the host, `hostLeft` is true and the listing is closed. If they were only a member, the slot opens.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field. The join check reuses `raidClears` once T-038 adds it. Until that field exists, pass nil and the module treats it as 0, so a listing with `requiredClears` above 0 accepts nobody. Do not add `raidFinderCooldownUntil` to this path. The board is the in-memory `listings` array already on `RaidService`. It does not belong on the profile. A restart clears it. MemoryStore and DataStore are out of scope.
+
+`tests/run.luau` requires `./RaidPremade.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. `listingSeconds` is 1800. A listing expires when `now >= createdAt + 1800`, so the deadline second is already closed. Should that second still be open, the way a RaidLeaver cooldown still lets you queue at the exact `cooldownUntil`?
+2. A tank, healer, or DPS takes the first open slot of that role, then the first open flex slot. A flex player takes the first open slot in the host's list. Should flex prefer tank, then healer, then DPS, the way `RaidFinder.fillOrder` does?
+3. A dedicated role can sit in a flex slot once its own slots are full. Should a flex slot be only for players who signed as flex?
+4. Four DPS is a valid listing. Finder's 1 tank / 1 healer minimum is not applied. Should a premade still require those minimums before it can be posted or before it can launch?
+5. Hard and Shardbreaker may store a non-negative integer `gearScore`, including 0. Story and Normal refuse the field, including 0. `canJoin` does not compare gear on any difficulty, so a Hard listing that stores 500 still accepts everyone. Should join refuse a player under that score, and is a missing score 0?
+6. A missing `requiredClears` becomes 0. `1.5` is refused, not floored. The exact count may join. The host is not checked against their own number. Should the host have to meet it, and should a fraction floor instead?
+7. One active listing is per host. A player seated in someone else's listing can still host their own. Should any seat in an active listing block hosting?
+8. The board is the in-memory `listings` array. Expired and closed rows do not count as the host's active listing. `post` currently drops the oldest row at 20. This module has no cap. Should a full board refuse the new post instead of dropping someone else's listing? Nothing is persisted across a restart.
+9. A host leave sets `closed` and keeps the other members on the record. A non-host leave only frees that slot. Should the closed listing drop the other members, and should the plaza remove the row immediately?
+10. Title text is not read, stored, or filtered here. `RaidService.post` should filter it with `TextService` and keep the string on the wrapper. There is no length cap. Do you want one in `CONFIG`? `RaidPost` currently sends one tag and a difficulty. The new payload needs tags, party size, slots, the host role, optional clears, optional gear, and a title. That remote is T-012, so it was not edited. A single tag string still validates.
+11. Guided is refused as the difficulty `"guided"` and as `guided == true` on any listing. Fracture and any other name are refused as not a premade difficulty. Is the extra `guided` flag the right shape for "out of scope"?
+12. The clear count should be `raidClears` once T-038 adds it. No new profile field. This path does not read `raidFinderCooldownUntil`. Is the total clear count right, or do you want clears of this raid or this difficulty?
+13. `roleTargets[8]` is now 1 tank / 1 healer / 6 DPS. The T-041 hooks paragraph still says 2 / 1 / 5. That section was not edited. Should that sentence change when you wire T-042?
+14. `join` must not call `queue`. A full listing does not launch by itself. Hard and Shardbreaker cannot go through `Raids.difficulty`. Level 15, Story-before-Normal, and `Raids.roleOk` stay out of this module. Should a full premade launch immediately or wait for a ready check, and should post and join still call `roleOk`?
+
 ## Open
 
 No unassigned tasks.
