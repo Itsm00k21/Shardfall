@@ -1328,7 +1328,10 @@ describe("HavenBuilder", function()
 					end
 				end
 				if child:IsA("ProximityPrompt") then
-					prompt = child
+					local action = child:GetAttribute("HavenAction")
+					if action ~= "waves" and action ~= "practice" then
+						prompt = child
+					end
 				end
 				if child.Name == "EnterPad" then
 					enterPads += 1
@@ -1346,8 +1349,10 @@ describe("HavenBuilder", function()
 				expect(prompt.ActionText).toEqual("Enter")
 			elseif portal.id == "heartwood" then
 				expect(prompt:GetAttribute("HavenAction")).toEqual("heartwood")
-				expect(prompt.ActionText).toEqual("Queue")
+				expect(prompt.ActionText).toEqual("Finder")
+				expect(prompt.ObjectText).toEqual("Opens at level 15.")
 				expect(arch:FindFirstChild("EnterPad")).toBeNil()
+				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
 			else
 				expect(prompt:GetAttribute("HavenAction")).toEqual("soon")
 				expect(prompt:GetAttribute("HavenMessage")).toEqual(portal.message)
@@ -1514,6 +1519,319 @@ describe("HavenBuilder", function()
 			local _n0, _n1, _n2, _n3, flagTop = worldBox(flag)
 			if flagTop < Haven.FLOOR_Y + 16 then
 				error(string.format("townsfolk flag top is only %.1f", flagTop), 2)
+			end
+		end
+	end)
+
+	it("dresses each arch and keeps lanes and prompt radii clear", function()
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+
+		local liveCounts: { [string]: number } = {}
+		for _, dungeon in ipairs(Dungeons.all()) do
+			if dungeon.implemented == true and dungeon.endless ~= true then
+				liveCounts[dungeon.id] = 0
+			elseif dungeon.endless == true then
+				liveCounts[dungeon.id] = 0
+			end
+		end
+
+		local function inkSum(color: Mock): number
+			return color.R + color.G + color.B
+		end
+
+		local function closestDistance(part: Mock, point: Mock): number
+			local localPoint = part.CFrame:PointToObjectSpace(point)
+			local hx = part.Size.X / 2
+			local hy = part.Size.Y / 2
+			local hz = part.Size.Z / 2
+			local cx = math.clamp(localPoint.X, -hx, hx)
+			local cy = math.clamp(localPoint.Y, -hy, hy)
+			local cz = math.clamp(localPoint.Z, -hz, hz)
+			local dx = localPoint.X - cx
+			local dy = localPoint.Y - cy
+			local dz = localPoint.Z - cz
+			return math.sqrt(dx * dx + dy * dy + dz * dz)
+		end
+
+		local function owningArch(node: Mock): Mock?
+			local cursor = node
+			while cursor ~= nil do
+				if cursor.Parent ~= nil and cursor.Parent.Name == "RealmArches" then
+					return cursor
+				end
+				cursor = cursor.Parent
+			end
+			return nil
+		end
+
+		local function inLane(portal: Haven.Place, x: number, z: number): boolean
+			local bearing = math.rad(portal.bearing or 0)
+			local dirX = math.sin(bearing)
+			local dirZ = math.cos(bearing)
+			local sideX = math.cos(bearing)
+			local sideZ = -math.sin(bearing)
+			local dx = x - Haven.SPAWN.x
+			local dz = z - Haven.SPAWN.z
+			local radius = dx * dirX + dz * dirZ
+			local lateral = dx * sideX + dz * sideZ
+			return radius >= 8 and radius <= Haven.GATE_RADIUS - 6 and math.abs(lateral) <= 5
+		end
+
+		-- Above the pad and the inlay, under head height. Sky shards are not a lane.
+		local walkLow = Haven.FLOOR_Y + 1.25
+		local walkHigh = Haven.FLOOR_Y + 8
+		local function partBlocksLane(part: Mock, portal: Haven.Place): boolean
+			if part.Transparency ~= nil and part.Transparency >= 1 then
+				return false
+			end
+			local _x0, minY, _z0, _x1, maxY = worldBox(part)
+			if maxY <= walkLow or minY >= walkHigh then
+				return false
+			end
+			local size = part.Size
+			for _, sx in ipairs({ -1, 1 }) do
+				for _, sy in ipairs({ -1, 1 }) do
+					for _, sz in ipairs({ -1, 1 }) do
+						local point = part.CFrame:PointToWorldSpace(
+							vector3(sx * size.X / 2, sy * size.Y / 2, sz * size.Z / 2)
+						)
+						if point.Y > walkLow and point.Y < walkHigh and inLane(portal, point.X, point.Z) then
+							return true
+						end
+					end
+				end
+			end
+			local bearing = math.rad(portal.bearing or 0)
+			local dirX = math.sin(bearing)
+			local dirZ = math.cos(bearing)
+			local sideX = math.cos(bearing)
+			local sideZ = -math.sin(bearing)
+			for radius = 8, Haven.GATE_RADIUS - 6, 2 do
+				for _, side in ipairs({ -5, 0, 5 }) do
+					local x = Haven.SPAWN.x + dirX * radius + sideX * side
+					local z = Haven.SPAWN.z + dirZ * radius + sideZ * side
+					for y = walkLow + 0.5, walkHigh - 0.5, 2 do
+						local localPoint = part.CFrame:PointToObjectSpace(vector3(x, y, z))
+						if
+							math.abs(localPoint.X) <= part.Size.X / 2
+							and math.abs(localPoint.Y) <= part.Size.Y / 2
+							and math.abs(localPoint.Z) <= part.Size.Z / 2
+						then
+							return true
+						end
+					end
+				end
+			end
+			return false
+		end
+
+		local promptHosts = {}
+		for _, portal in ipairs(Haven.PORTALS) do
+			local arch = findNamed(hub, portal.id)
+			expect(arch:GetAttribute("GateDress")).toEqual(portal.dress)
+			local dressed = false
+			local parts = 0
+			local lights = 0
+			local emitters = 0
+			local plate = nil
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("BasePart") then
+					parts += 1
+				end
+				if child:IsA("PointLight") then
+					lights += 1
+				end
+				if child:IsA("ParticleEmitter") then
+					emitters += 1
+				end
+				if child:GetAttribute("GateDress") == portal.dress then
+					dressed = true
+				end
+				if child:IsA("BillboardGui") then
+					plate = child
+				end
+			end
+			expect(dressed).toBeTrue()
+			expect(lights).toEqual(1)
+			expect(emitters).toEqual(0)
+			if parts > 12 then
+				error(portal.id .. " has " .. tostring(parts) .. " parts", 2)
+			end
+			if plate == nil or plate.MaxDistance < 90 or plate.AlwaysOnTop ~= false then
+				error(portal.id .. " name plate is not readable from the pad", 2)
+			end
+			local title = nil
+			local subline = nil
+			local backing = plate:FindFirstChild("Plate")
+			if backing == nil or inkSum(backing.BackgroundColor3) > 80 or backing.BackgroundTransparency > 0.15 then
+				error(portal.id .. " name plate is not high contrast", 2)
+			end
+			for _, child in ipairs(plate:GetDescendants()) do
+				if child:IsA("TextLabel") and child.Name == "Title" then
+					title = child
+				elseif child:IsA("TextLabel") and child.Name == "Subline" then
+					subline = child
+				end
+			end
+			if title == nil or title.Text ~= portal.name or title.TextSize < 24 then
+				error(portal.id .. " title is missing", 2)
+			end
+			if title.Font.__enum ~= "Enum.Font.BuilderSansBold" or title.TextStrokeTransparency > 0.2 then
+				error(portal.id .. " title is not bold", 2)
+			end
+			if inkSum(title.TextColor3) < 680 then
+				error(portal.id .. " title ink is too dim", 2)
+			end
+			if subline == nil or subline.Text ~= portal.subline then
+				error(portal.id .. " subline is missing", 2)
+			end
+			if subline.Font.__enum ~= "Enum.Font.BuilderSansBold" then
+				error(portal.id .. " subline is not bold", 2)
+			end
+			local glow = arch:FindFirstChild("EnterPad") or arch:FindFirstChild("Glow")
+			if glow == nil then
+				error(portal.id .. " has no mouth", 2)
+			end
+			if portal.sealed == true then
+				expect(glow.Transparency).toEqual(0.75)
+				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
+			else
+				expect(glow.Transparency).toEqual(0.35)
+				expect(arch:FindFirstChild("Seal")).toBeNil()
+			end
+			local pillar = arch:FindFirstChild("PillarL")
+			if portal.dress == "roots" or portal.dress == "bark" then
+				expect(pillar.Material.__enum).toEqual("Enum.Material.Wood")
+			elseif portal.dress == "basalt" then
+				expect(pillar.Material.__enum).toEqual("Enum.Material.Basalt")
+			elseif portal.dress == "ice" then
+				expect(pillar.Material.__enum).toEqual("Enum.Material.Ice")
+				expect(arch:FindFirstChild("PillarR").Size.Y < pillar.Size.Y - 4).toBeTrue()
+			elseif portal.dress == "obsidian" then
+				expect(glow.Color.R <= 24 and glow.Color.G <= 24 and glow.Color.B <= 30).toBeTrue()
+			end
+			local dungeonId = arch:GetAttribute("DungeonId")
+			if type(dungeonId) == "string" and liveCounts[dungeonId] ~= nil then
+				liveCounts[dungeonId] += 1
+			end
+			table.insert(promptHosts, glow.CFrame.Position)
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("ProximityPrompt") then
+					local host = child.Parent
+					if host == nil or closestDistance(host, glow.CFrame.Position) > Haven.GATE_REACH + 6 then
+						error(portal.id .. " prompt sits off its arch", 2)
+					end
+				end
+			end
+		end
+		for id, count in pairs(liveCounts) do
+			local dungeon = Dungeons.get(id)
+			local expectCount = if dungeon.endless == true then 0 else 1
+			if count ~= expectCount then
+				error(id .. " has " .. tostring(count) .. " arches", 2)
+			end
+		end
+
+		local rootArch = findNamed(hub, "rootvault")
+		local heartArch = findNamed(hub, "heartwood")
+		expect(math.abs(heartArch.PillarL.Size.Y - rootArch.PillarL.Size.Y - 4) < 0.05).toBeTrue()
+		local waves = nil
+		local practice = nil
+		for _, child in ipairs(rootArch:GetDescendants()) do
+			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "waves" then
+				waves = child
+			end
+		end
+		for _, child in ipairs(heartArch:GetDescendants()) do
+			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "practice" then
+				practice = child
+			end
+		end
+		if waves == nil or waves.Parent.Name ~= "PillarL" or waves.ActionText ~= "Waves" then
+			error("Waves is not on the Rootvault pier", 2)
+		end
+		if practice == nil or practice.Parent.Name ~= "PillarL" or practice.ActionText ~= "Practice" then
+			error("Practice is not on the Heartwood pier", 2)
+		end
+		expect(waves.MaxActivationDistance).toEqual(Haven.PIER_REACH)
+		expect(practice.MaxActivationDistance).toEqual(Haven.PIER_REACH)
+
+		local inlays = findAll(hub, "Inlay")
+		expect(#inlays).toEqual(6)
+		table.sort(inlays, function(a, b)
+			local aa = math.atan2(a.CFrame.Position.X - Haven.SPAWN.x, a.CFrame.Position.Z - Haven.SPAWN.z)
+			local bb = math.atan2(b.CFrame.Position.X - Haven.SPAWN.x, b.CFrame.Position.Z - Haven.SPAWN.z)
+			return aa < bb
+		end)
+		expect(inlays[1]:GetAttribute("GateId")).toEqual("rootvault")
+		expect(inlays[1]:GetAttribute("GateLit")).toEqual(true)
+		for index = 2, #inlays do
+			expect(inlays[index]:GetAttribute("GateLit")).toEqual(false)
+		end
+
+		for i = 1, #promptHosts do
+			for j = i + 1, #promptHosts do
+				local left = promptHosts[i]
+				local right = promptHosts[j]
+				local dx = left.X - right.X
+				local dy = left.Y - right.Y
+				local dz = left.Z - right.Z
+				local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+				if distance <= Haven.GATE_REACH * 2 then
+					error("two gate prompts overlap", 2)
+				end
+			end
+		end
+
+		local inlayTop = Haven.FLOOR_Y + Haven.LAYER
+		for _, portal in ipairs(Haven.PORTALS) do
+			local arch = findNamed(hub, portal.id)
+			for _, part in ipairs(hub:GetDescendants()) do
+				if part:IsA("BasePart") and partBlocksLane(part, portal) then
+					local owner = if part.Parent ~= nil then part.Parent.Name else "?"
+					error(
+						string.format("%s lane hits %s.%s", portal.name, owner, part.Name),
+						2
+					)
+				end
+			end
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("ProximityPrompt") then
+					local host = child.Parent
+					local center = host.CFrame.Position
+					local radius = child.MaxActivationDistance
+					for _, part in ipairs(hub:GetDescendants()) do
+						if
+							part:IsA("BasePart")
+							and (part.Transparency == nil or part.Transparency < 1)
+							and owningArch(part) ~= arch
+						then
+							local top = part.CFrame.Position.Y + part.CFrame.YVector.Y * part.Size.Y / 2
+							local gap = closestDistance(part, center)
+							if top > inlayTop + 0.02 and gap <= radius then
+								local owner = if part.Parent ~= nil then part.Parent.Name else "?"
+								error(
+									string.format(
+										"%s %s prompt r=%.1f at (%.1f, %.1f, %.1f) hits %s.%s gap %.2f",
+										portal.name,
+										tostring(child:GetAttribute("HavenAction")),
+										radius,
+										center.X,
+										center.Y,
+										center.Z,
+										owner,
+										part.Name,
+										gap
+									),
+									2
+								)
+							end
+						end
+					end
+				end
 			end
 		end
 	end)

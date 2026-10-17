@@ -68,6 +68,37 @@ describe("Haven", function()
 		expect(Haven.portal("void").message).toEqual("Void Rift is sealed.")
 	end)
 
+	it("paints Rootvault open and seals the other gates with a level line", function()
+		local lit = {}
+		for _, portal in ipairs(Haven.PORTALS) do
+			expect(type(portal.subline) == "string").toBeTrue()
+			expect(type(portal.dress) == "string").toBeTrue()
+			expect(type(portal.level) == "number").toBeTrue()
+			expect(string.find(portal.subline :: string, tostring(portal.level), 1, true) ~= nil).toBeTrue()
+			if Haven.gateLit(portal) then
+				table.insert(lit, portal.id)
+			else
+				expect(type(portal.message) == "string").toBeTrue()
+			end
+		end
+		expect(lit).toEqual({ "rootvault" })
+		expect(Haven.NAMEPLATE_DISTANCE >= 90).toBeTrue()
+		expect(Haven.PIER_REACH < Haven.GATE_REACH).toBeTrue()
+		expect(Haven.portal("rootvault").dress).toEqual("roots")
+		expect(Haven.portal("rootvault").subline).toEqual("Lv 1 · Solo")
+		expect(Haven.portal("heartwood").open).toEqual(true)
+		expect(Haven.portal("heartwood").sealed).toEqual(true)
+		expect(Haven.portal("heartwood").dress).toEqual("bark")
+		expect(Haven.portal("heartwood").message).toEqual("Opens at level 15.")
+		expect(Haven.portal("heartwood").subline).toEqual("Lv 15 · 4–8")
+		expect(Haven.portal("heartwood").height).toEqual(22)
+		expect(Haven.portal("tidecrypt").dress).toEqual("coral")
+		expect(Haven.portal("ember").dress).toEqual("basalt")
+		expect(Haven.portal("frost").dress).toEqual("ice")
+		expect(Haven.portal("void").dress).toEqual("obsidian")
+		expect(Haven.portal("void").glow).toEqual({ 18, 16, 24 })
+	end)
+
 	it("gives every live dungeon exactly one arch", function()
 		local counts: { [string]: number } = {}
 		for _, portal in ipairs(Haven.PORTALS) do
