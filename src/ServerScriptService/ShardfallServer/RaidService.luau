@@ -225,7 +225,10 @@ local function startQueue(
 	if partyHealer ~= nil then
 		healer = partyHealer == true
 	end
-	if allowHop then
+	-- A reserved server (private id, owner 0) launches in place.
+	-- A queue click there must not reserve another server or teleport.
+	local canHop = ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+	if allowHop and canHop then
 		local code = reservedCode()
 		if code ~= nil then
 			-- Save and clear the lock before the hop. A failed save stays on this
@@ -659,7 +662,9 @@ function RaidService.queue(player: Player, difficulty: any, role: any)
 	if seatedRow(player.UserId, now) ~= nil then
 		return reject("Leave your premade listing before using Raid Finder.")
 	end
-	return startQueue(player, difficulty, role, true)
+	-- The plaza still hops. A reserved server passes false and launches here.
+	local allowHop = ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+	return startQueue(player, difficulty, role, allowHop)
 end
 
 function RaidService.board()
