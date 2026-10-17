@@ -30,6 +30,7 @@ UiTheme.BODY_FONT = "BuilderSans"
 UiTheme.BACKDROP = 0.5
 UiTheme.MOTION = {
 	open = 0.26,
+	panel = 0.15,
 	stagger = 0.1,
 	pop = 0.12,
 }

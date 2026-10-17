@@ -72,4 +72,28 @@ describe("Hud layout", function()
 			expect(HudLayout.stamp(vy, margin, true, true) ~= nil).toBeTrue()
 		end
 	end)
+
+	it("keeps the stamp off the rail at 1280x720 and 844x390", function()
+		expect(HudLayout.breakpoint(844, 390)).toEqual("phone")
+		expect(HudLayout.breakpoint(1024, 768)).toEqual("tablet")
+		expect(HudLayout.breakpoint(1280, 720)).toEqual("console")
+		expect(HudLayout.breakpoint(1920, 1080)).toEqual("pc")
+		local views = {
+			{ 1280, 720 },
+			{ 844, 390 },
+		}
+		for _, view in ipairs(views) do
+			local margin = 16
+			local rail = HudLayout.railFit(view[2], margin, 7, 64, 44)
+			expect(rail.button >= 44).toBeTrue()
+			local stamp = HudLayout.stamp(view[2], margin, false, false, rail.x + rail.w + 12)
+			expect(stamp ~= nil).toBeTrue()
+			if stamp ~= nil then
+				local railRect = { x = rail.x, y = rail.y, w = rail.w, h = rail.h }
+				expect(HudLayout.overlaps(railRect, stamp)).toEqual(false)
+				expect(stamp.x + stamp.w <= view[1]).toBeTrue()
+				expect(stamp.y + stamp.h <= view[2]).toBeTrue()
+			end
+		end
+	end)
 end)
