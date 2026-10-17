@@ -40,11 +40,12 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 | T-038 | Wire T-037 RaidLootTrade into trading and stamp raid loot | GHOST | `cursor/raid-loot-trade-9721` | `src/ReplicatedStorage/Shared/Trading.luau` (`rejection` optional context arg plus the preview/finish/inspect callers only), the personal-loot grant in `src/ServerScriptService/ShardfallServer/RaidService.luau` (stamp `droppedAt`/`runId`/`bossId`/`droppedFor`/`roster`/`eligible`/`traded`; depends on T-009), `src/ServerScriptService/ShardfallServer/CraftService.luau` (Heartshard stamp: `crafterClears` frozen at craft from profile `raidClears`), and `src/ReplicatedStorage/Shared/Schema.luau` (`raidClears` on the next free version). Follow the T-037 hooks section. Also stamp the Gnarlling pet, Rootstrider mount, raid dyes, and the raid aura with `raidCosmetic = true` at grant. Heartwood Vendor gear is stamped bound on purchase through the existing Trading bound check (not in RaidLootTrade). Kill switches unchanged. | open | — |
 | T-040 | Wire T-039 RaidMarks into raid clears and the Heartwood Vendor | GHOST | `cursor/raid-marks-9721` | `src/ReplicatedStorage/Shared/Raids.luau` (applyClear mark lines and lockout week key, buy), `src/ServerScriptService/ShardfallServer/RaidService.luau`, `src/ReplicatedStorage/Shared/Schema.luau` (new raidMarksBank field on the next free version, snapshot fields). Follow the T-039 hooks section. Replace the old applyClear mark lines (no double pay). Stop subtracting in Raids.buy when canSpend is wired (no double charge). Migrate passes raidMarkWeek = -1 once so the first settle stamps the Tuesday key and keeps raidMarksEarned. Switch the loot lockout key to RaidMarks.weekKey in the same change so loot lock and Marks share the Tuesday reset. freshCount excludes AFK-removed players. Practice Grove stays off the path. doubleMarks stays false. Do not edit `RaidMarks.luau` (HELPER owns it). | open | — |
 | T-042 | Wire T-041 RaidFinder into Raid Finder queue and launch | GHOST | `cursor/raid-finder-9721` | `src/ServerScriptService/ShardfallServer/RaidService.luau` (queue: canQueue after the existing level/Story-clear/roleOk gates, in-memory roster per difficulty sorted by priority, form + launch with form.hpScale and form.bossDamageScale so the healerless 15% cut happens once and only after the 180 s wait, Warden golems on Story, Healing Spring flag, freshCount to RaidMarks firstTimers), `src/ReplicatedStorage/Shared/Raids.luau` (combatScale skips its healer-false damage cut for Finder launches), `src/ReplicatedStorage/Shared/Schema.luau` (`raidQueuePriority`, `raidQueuePriorityDay`, `raidMentor` on the next free version), RaidConduct idle-kick priority drop. Follow the T-041 hooks section. Decisions: Fresh Shard means no Heartwood clear on any difficulty; golems do not count toward HP; class stays gated by `Raids.roleOk`; level and Story-before-Normal gates stay in RaidService. Do not edit `RaidFinder.luau`. | claimed | — |
-| T-044 | HUD shell, menu hub, settings, and legacy ScreenGui sweep | GHOST | `cursor/hud-shell-404b` | `src/ReplicatedStorage/Shared/LegacyChrome.luau`, `HudLayout.luau`, `Settings.luau`, `UiTheme.luau`, `ClientChrome.luau`, `Schema.luau` (version 21 `uiSettings` only), `src/ServerScriptService/ShardfallServer/Remotes.luau` (`SetSettings` only), `RateLimiter.luau` (one rule), `default.project.json` (one remote), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau`, `MenuHub.luau`, `init.client.luau` (sweep, shell, hub), `CombatHud.luau` (hide the old HP and wallet frames only). Tests: `LegacyChrome.spec.luau`, `HudLayout.spec.luau`, `Settings.spec.luau`, `UiTheme.spec.luau`, `ClientChrome.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, or MarketBoard. Do not implement T-020, T-022, or T-026. | done | https://github.com/Itsm00k21/Shardfall/pull/50 |
+| T-044 | Wire T-043 RaidPremade board rules into the raid server | GHOST | `cursor/premade-board-9721` | `src/ServerScriptService/ShardfallServer/RaidService.luau`. Follow the T-043 hooks section. Do not edit `RaidPremade.luau`. | claimed | — |
+| T-046 | HUD shell, menu hub, settings, and legacy ScreenGui sweep | GHOST | `cursor/hud-shell-404b` | `src/ReplicatedStorage/Shared/LegacyChrome.luau`, `HudLayout.luau`, `Settings.luau`, `UiTheme.luau`, `ClientChrome.luau`, `Schema.luau` (version 21 `uiSettings` only), `src/ServerScriptService/ShardfallServer/Remotes.luau` (`SetSettings` only), `RateLimiter.luau` (one rule), `default.project.json` (one remote), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau`, `MenuHub.luau`, `init.client.luau` (sweep, shell, hub), `CombatHud.luau` (hide the old HP and wallet frames only). Tests: `LegacyChrome.spec.luau`, `HudLayout.spec.luau`, `Settings.spec.luau`, `UiTheme.spec.luau`, `ClientChrome.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, or MarketBoard. Do not implement T-020, T-022, or T-026. Live-build took T-044 for the premade board and T-045 for raid luck, so this playtest is T-046. | done | https://github.com/Itsm00k21/Shardfall/pull/50 |
 
 T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault and the wiring. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
 
-Next free id is T-045.
+Next free id is T-047.
 
 ## Claimed by HELPER
 
@@ -60,7 +61,8 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-037 | Raid personal loot trade rules | HELPER | `helper/raid-loot-trade-9721` | Pure rules. Raid gear stays soulbound for 2 hours and can only go to eligible players from the same run. Crafted Heartshard weapons become tradeable after the crafter's first clear. Raid cosmetics stay bound. Relic set pieces are exempt and stay freely tradeable. Do not edit raid code, Schema, or remotes. | done | [#46](https://github.com/Itsm00k21/Shardfall/pull/46) |
 | T-039 | Raid Marks rules (pure, no wiring) | HELPER | `helper/raid-marks-9721` | new `src/ReplicatedStorage/Shared/RaidMarks.luau`, new `tests/RaidMarks.spec.luau`, one require line in `tests/run.luau`, and a 'T-039 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md`: Raid Marks are capped at 600 per week; the weekly reset is Tuesday at a fixed UTC time (give a pure week-key function taking unix seconds); an unused cap carries over and accumulates up to 3 weeks; reclears after lockout still pay Marks; each first-timer in the group adds +10% Marks for the group; a player kicked unfairly (a T-027 passed vote-kick that was not AFK) still gets their Marks, while an AFK removal forfeits; a double-Marks event multiplier exists but defaults OFF in a frozen CONFIG. Provide `earn(amount, state, now)` and `canSpend(cost, state)` style pure functions that return new values and never mutate. Payout amounts per difficulty are placeholders in CONFIG. Thresholds live in a frozen CONFIG, unix seconds come in (`os.time()`), and there are no services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, Schema, Trading, MarketBoard, the Heartwood Vendor catalog (T-010 owns it), or T-012 files. Suggest profile fields (marks balance, week key, earned this week, banked cap) in the hooks section. No build stamp, nothing premium, no Robux price. Rules live in `RaidMarks` and nothing calls them yet, so gameplay is unchanged. | done | [#47](https://github.com/Itsm00k21/Shardfall/pull/47) |
 | T-041 | Raid Finder role check and group-forming rules (pure, no wiring) | HELPER | `helper/raid-finder-9721` | new `src/ReplicatedStorage/Shared/RaidFinder.luau`, new `tests/RaidFinder.spec.luau`, one require line in `tests/run.luau`, and a 'T-041 hooks for GHOST' section in this file. Pure, server-authoritative rules from `docs/design/shardfall_raids.md` Matchmaking: Finder covers Story and Normal only (Hard/Shardbreaker refused; Guided Raids come later); role check with Tank, Healer, DPS, Flex where Flex fills any missing role; party size 4 to 8 with a boss HP scale for the player count; if no healer is found within 3 minutes (180 s, unix seconds passed in) the group may start with auto-scaling (-15% boss damage and a free Healing Spring totem flag); a missing Tank gets a Warden NPC golem on Story only; Fresh Shard flag for first-timers and a fresh count for RaidMarks; mentor eligibility (10+ clears and opted in); an idle vote-kick (T-027) drops queue priority; no gear-score or clear-count filter for Story/Normal; a player on a RaidLeaver (T-035) cooldown can't queue (take the cooldown-until value as input, do not require RaidLeaver). Role targets per party size and all thresholds are placeholders in a frozen CONFIG. No MemoryStore, services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, Schema, Trading, MarketBoard, or any T-012 file. Suggest profile fields (queue priority, mentor opt-in) in the hooks section. No build stamp, nothing premium. | done | [#48](https://github.com/Itsm00k21/Shardfall/pull/48) |
-| T-043 | Premade board listing rules (pure, no wiring) + RaidFinder 8-player tank target | HELPER | `helper/premade-board-9721` | new `src/ReplicatedStorage/Shared/RaidPremade.luau`, new `tests/RaidPremade.spec.luau`, one require line in `tests/run.luau`, a 'T-043 hooks for GHOST' section in this file, plus a one-line CONFIG change in `src/ReplicatedStorage/Shared/RaidFinder.luau` and its spec. Pure, server-authoritative rules from `docs/design/shardfall_raids.md` Matchmaking "Premade board in the Guild Plaza (Party Finder style)": a listing has a difficulty (Story, Normal, Hard, Shardbreaker; Guided mode is out of scope), one or more tags from Learning, Farm, Speedrun, Achievement, an optional required clear count (non-negative integer), a party size of 4 to 8, and role slots using RaidFinder's role names (tank, healer, dps, flex). No gear-score requirement or filter is allowed on Story or Normal (refuse one). Provide pure functions to validate a listing, check whether a player may join (open slot for their role, flex takes any open slot, meets the required clear count), and report when a listing is full or expired. One active listing per host; the listing closes when the host leaves; listings expire after a placeholder time in a frozen CONFIG. The premade board ignores the RaidLeaver Finder cooldown (T-035 decision: Finder only). Listing title text is filtered by the caller with TextService, not in this module. Time comes in as unix seconds (`os.time()`). No MemoryStore, services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, Schema, Trading, MarketBoard, or any T-012 file. RaidFinder change: set `roleTargets[8]` to 1 tank, 1 healer, 6 DPS (the design's 1–2 Wardens means the minimum is 1) and update the spec. No build stamp, nothing premium. | claimed | — |
+| T-043 | Premade board listing rules (pure, no wiring) + RaidFinder 8-player tank target | HELPER | `helper/premade-board-9721` | new `src/ReplicatedStorage/Shared/RaidPremade.luau`, new `tests/RaidPremade.spec.luau`, one require line in `tests/run.luau`, a 'T-043 hooks for GHOST' section in this file, plus a one-line CONFIG change in `src/ReplicatedStorage/Shared/RaidFinder.luau` and its spec. Pure, server-authoritative rules from `docs/design/shardfall_raids.md` Matchmaking "Premade board in the Guild Plaza (Party Finder style)": a listing has a difficulty (Story, Normal, Hard, Shardbreaker; Guided mode is out of scope), one or more tags from Learning, Farm, Speedrun, Achievement, an optional required clear count (non-negative integer), a party size of 4 to 8, and role slots using RaidFinder's role names (tank, healer, dps, flex). No gear-score requirement or filter is allowed on Story or Normal (refuse one). Provide pure functions to validate a listing, check whether a player may join (open slot for their role, flex takes any open slot, meets the required clear count), and report when a listing is full or expired. One active listing per host; the listing closes when the host leaves; listings expire after a placeholder time in a frozen CONFIG. The premade board ignores the RaidLeaver Finder cooldown (T-035 decision: Finder only). Listing title text is filtered by the caller with TextService, not in this module. Time comes in as unix seconds (`os.time()`). No MemoryStore, services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, Schema, Trading, MarketBoard, or any T-012 file. RaidFinder change: set `roleTargets[8]` to 1 tank, 1 healer, 6 DPS (the design's 1–2 Wardens means the minimum is 1) and update the spec. No build stamp, nothing premium. | done | [#49](https://github.com/Itsm00k21/Shardfall/pull/49) |
+| T-045 | Raid bad-luck protection rules | HELPER | `helper/raid-luck-9721` | new `src/ReplicatedStorage/Shared/RaidLuck.luau`, new `tests/RaidLuck.spec.luau`, one require line in `tests/run.luau`, and a 'T-045 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md`: each lockout clear with no gear drop adds +10% to the next drop chance, and the bonus resets when something drops. Do not edit raid code, Schema, or remotes. | claimed | — |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -1397,7 +1399,7 @@ Questions for Ghost:
 
 HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Trading.luau`, `MarketBoard.luau`, `Remotes.luau`, `RateLimiter.luau`, or any other T-012 file. `RaidFinder` is pure and ready to call. It does not require `RaidLeaver` or `RaidConduct`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged. No build stamp. No remote. No MemoryStore. Nothing here costs Robux. The T-041 row stays `claimed`.
 
-Thresholds are `RaidFinder.CONFIG`. Party size is `minParty` 4 through `maxParty` 8. Healer wait is `healerWaitSeconds` 180. Boss damage is `bossDamage` 1, and a healerless start uses `healerlessDamage` 0.85 (15% less). `healingSpring` is true, so that start also flags a free Healing Spring. Mentor eligibility is `mentorClears` 10. Queue priority starts at `defaultPriority` 0 and an idle kick stores `droppedPriority` -1. Higher sorts first. The UTC day is `daySeconds` 86400, `floor(now / 86400)`, same as `tradeDay`. Role targets are placeholders: 4 is 1 tank / 1 healer / 2 DPS, 5 is 1 / 1 / 3, 6 is 1 / 1 / 4, 7 is 1 / 1 / 5, and 8 is 2 / 1 / 5. HP scale placeholders are 0.5, 0.625, 0.75, 0.875, and 1 for sizes 4 through 8. `fillOrder` is tank, then healer, then DPS. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
+Thresholds are `RaidFinder.CONFIG`. Party size is `minParty` 4 through `maxParty` 8. Healer wait is `healerWaitSeconds` 180. Boss damage is `bossDamage` 1, and a healerless start uses `healerlessDamage` 0.85 (15% less). `healingSpring` is true, so that start also flags a free Healing Spring. Mentor eligibility is `mentorClears` 10. Queue priority starts at `defaultPriority` 0 and an idle kick stores `droppedPriority` -1. Higher sorts first. The UTC day is `daySeconds` 86400, `floor(now / 86400)`, same as `tradeDay`. Role targets are placeholders: 4 is 1 tank / 1 healer / 2 DPS, 5 is 1 / 1 / 3, 6 is 1 / 1 / 4, 7 is 1 / 1 / 5, and 8 is 1 tank / 1 healer / 6 DPS. HP scale placeholders are 0.5, 0.625, 0.75, 0.875, and 1 for sizes 4 through 8. `fillOrder` is tank, then healer, then DPS. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
 
 `RaidFinder.DIFFICULTIES` is story and normal. `RaidFinder.REFUSED` is hard and shardbreaker. `RaidFinder.ROLES` is tank, healer, dps, and flex. `RaidFinder.IDLE_REASONS` is `idle` and `afk`, the same two strings as `RaidConduct.IDLE_REASONS`. `RaidFinder.WARDEN_ID` is the placeholder `"warden_golem"`. Strings are trimmed and lowercased. `" Story "` is story. `" AFK "` is an idle kick.
 
@@ -1516,7 +1518,7 @@ Build stamp files are T-012. This branch does not change them. The module is not
 
 Questions for Ghost:
 
-1. Role targets are placeholders. Sizes 4 through 7 are 1 tank, 1 healer, and the rest DPS. Size 8 is 2 tanks, 1 healer, and 5 DPS. The design's 8-player line is 1–2 Wardens, 1–2 Tidecallers, and 4–5 DPS. Are these the minimums to start without a golem or a healer timeout?
+1. Role targets are placeholders. Sizes 4 through 7 are 1 tank, 1 healer, and the rest DPS. Size 8 is 1 tank / 1 healer / 6 DPS. The design's 8-player line is 1–2 Wardens, 1–2 Tidecallers, and 4–5 DPS. Are these the minimums to start without a golem or a healer timeout?
 2. Flex fills tank, then healer, then DPS, walking the party in order. One flex with both roles missing becomes the tank, so the healer timeout still applies. Should that flex become the healer instead?
 3. Story spawns one `warden_golem` per missing tank (two if an 8-player group has none). Normal never spawns one and cannot start while short a tank. HP scale is the player count only (0.5 at 4 through 1 at 8) and ignores golems. `Raids.combatScale` is `difficulty.hp * count/8` and also cuts damage 15% whenever `healer` is false, with no 180s wait. Should a Finder launch use this module's scales instead of that function, so the cut happens once and only after the wait? Should golems count toward HP?
 4. Fresh Shard is the `fresh` boolean you pass. `freshCount` is how many seats have it, for `RaidMarks.payout` `firstTimers`. It is not `clears == 0`. Is fresh "never cleared this raid", "never cleared this difficulty", or a new account? A seat can be fresh and a mentor together if you set both.
@@ -1526,6 +1528,131 @@ Questions for Ghost:
 8. Class is not checked. `Raids.roleOk` still requires Warden for tank and Tidecaller for healer, and it allows any class as DPS or Flex. Forgeborn off-tank is not a rule here. Should Finder refuse a tank who is not a Warden?
 9. Extra tanks and healers keep the role they queued. A short DPS count does not block `mayStart`. Only a missing tank on Normal, or a missing healer before 180s, holds the launch. Is that the start rule?
 10. `waitingSince` is the unix time this roster started waiting on a healer. Nil means the wait is 0. Should that stamp be the oldest ticket in the queue, or the moment this forming roster first had everyone except a healer?
+
+### T-043 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Trading.luau`, `MarketBoard.luau`, `Remotes.luau`, `RateLimiter.luau`, `RaidHud.luau`, or any other T-012 file. `RaidPremade` is pure and ready to call. It does not require `RaidFinder`, `RaidLeaver`, or `Raids`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidPremade` or `RaidFinder` yet, so this branch does not change a live run. No build stamp. No remote. No MemoryStore. No DataStore. Nothing here costs Robux. The T-043 row is `done` on #49.
+
+`RaidFinder.CONFIG.roleTargets[8]` is now 1 tank, 1 healer, and 6 DPS. Sizes 4 through 7 are unchanged. An 8-player Story group with no tank gets one Warden golem, not two. A group that already has 1 tank, 1 healer, and 6 DPS starts with `wardenCount` 0. The T-041 hooks paragraph says size 8 is 1 tank / 1 healer / 6 DPS.
+
+Thresholds are `RaidPremade.CONFIG`. Party size is `minParty` 4 through `maxParty` 8. A listing lasts `listingSeconds` 1800 (30 minutes, a placeholder). `minClears` is 0. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
+
+`RaidPremade.DIFFICULTIES` is story, normal, hard, and shardbreaker. `RaidPremade.REFUSED` is guided. `RaidPremade.GEAR_FREE` is story and normal. `RaidPremade.ROLES` is tank, healer, dps, and flex, the same four names as `RaidFinder.ROLES`. `RaidPremade.TAGS` is learning, farm, speedrun, and achievement, the same four labels as `Raids.TAGS` after trim and lowercase. Strings are trimmed and lowercased. `" Story "` is story. `" Learning "` is learning.
+
+`RaidService.luau`, next to the `Raids` require, when you wire the calls:
+
+```lua
+local RaidPremade = require(ReplicatedStorage.Shared.RaidPremade)
+```
+
+The live `listings` array, `RaidService.post`, `RaidService.join`, and `RaidService.board` stay the home for the plaza board. Replace the checks inside those functions. Do not send a premade join through `RaidService.queue`. `queue` still means Finder: it launches one player, and `Raids.difficulty` only accepts Story and Normal. A premade listing is Hard and Shardbreaker too, and it must not start on the first click.
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `validate(draft, now)` | you already built a listing and want the normalized copy | `ok == true` and a new `listing`. An expired shape still validates. |
+| `open(board, draft, now)` | a host posts | `ok == true` is the only signal to store it. Nil `board` is an empty board. |
+| `canJoin(listing, player, now)` | a player asks to take a seat | `allowed == true` means the seat is open. This does not write. |
+| `join(listing, player, now)` | `canJoin` would allow it and you want the next listing | a new `listing` with that player seated. The input is not written. |
+| `depart(listing, userId, now)` | a member leaves, or the host disconnects | `hostLeft == true` means the listing is closed. A new `listing` comes back. |
+| `status(listing, now)` | the plaza paints a row, or you sweep | `full`, `expired`, `closed`, `active`, and `openCount`. |
+
+`open` stores nothing. Keep the id and the filtered title on a wrapper in `RaidService`, and pass `row.listing` into later calls. This module drops fields it does not know, including `title` and `id`.
+
+```lua
+{
+	id = id, -- RaidService nextId. Not inside the module.
+	title = filtered, -- TextService result. Never passed into RaidPremade.
+	hostName = player.Name, -- display only. The rule keys hostUserId.
+	listing = normalized, -- the table open / join / depart return.
+}
+```
+
+`validate` reads `difficulty`, `tags`, `requiredClears`, `gearScore`, `partySize`, `slots`, `hostUserId`, `createdAt`, `closed`, `members`, and `guided`. It does not read `title`, `cooldownUntil`, `expiresAt`, or a gear score on the player. A missing `requiredClears` becomes 0. A missing `closed` becomes false. `createdAt` has to be a unix time no later than `now`. A later stamp returns `ERRORS.clock` ("Raid time moved backwards."). The returned `expiresAt` is `createdAt + listingSeconds`. A caller-supplied `expiresAt` is ignored. `validate` returns a new table and does not write the draft. Show `error` whenever `ok ~= true`.
+
+Tags are one or more of the four names. A single string is one tag, so today's `RaidPost` string still validates. An array keeps the host's order after lowercase. An empty list, a blank string, an unknown tag, and a duplicate are refused. Guided is refused two ways: difficulty `"guided"`, or `guided == true` on a Hard or Shardbreaker listing. A non-boolean `guided` is `ERRORS.guidedFlag`. Fracture and any other name are `ERRORS.difficulty`.
+
+Story and Normal refuse `gearScore`, including 0. A negative or fractional gear score is unusable on every difficulty. Hard and Shardbreaker may store a non-negative integer. `canJoin` does not compare it. A Hard listing that says 500 still accepts a player with no gear score. See question 5.
+
+The host has to be one of `members`, once. Build that list on the server. Do not trust a client member list. The host's role is the role they picked, after you decide whether `Raids.roleOk` still applies (question 14). Seats are assigned in member order. A tank, healer, or DPS takes the first open slot of that role, then the first open flex slot. A flex player takes the first open slot in the host's slot list, whatever role that slot is. Two tanks and only one tank slot, with no flex slot, return `ERRORS.fit`. A party of four DPS is valid. This module does not apply the Finder tank and healer minimums.
+
+`open` refuses a closed draft, a draft that is already expired, and a host who already has an active row on `board`. Active means not closed and not expired. A full listing is still active, so that host cannot post a second one. An expired or closed row for the same host does not block. A player who is only seated in someone else's listing can host their own. Pass the current normalized listings as a dense array. A bad row fails the whole `open`. The function does not append and does not write `board`.
+
+A listing is expired when `now >= createdAt + listingSeconds`. The deadline second is already expired. One second earlier it is still open. `status.active` is false when the row is expired or closed. `status.full` is `openCount == 0`. A full expired row reports both.
+
+`canJoin` and `join` read `userId`, `role`, and `clears` on the player. Nil `clears` is 0. The player needs `clears >= requiredClears`. The exact count may join. A negative or fractional count is unusable (`ok == false`). They do not read `cooldownUntil` or `gearScore`. A RaidLeaver Finder cooldown does not block the premade board. Do not pass `data.raidFinderCooldownUntil` in. Rule refusals return `ok == true` and `allowed == false`, in this order: closed, expired, already seated, not enough clears, full, no open slot for that role. Corrupt input returns `ok == false`. Store the new listing only when `join` returns `allowed == true`. Show `error` whenever `allowed ~= true`. `join` appends the player and reseats. It does not write the old listing. Replace the wrapper's `listing` with the returned one.
+
+`depart` closes the listing when `userId` is the host and leaves the other members on the record. A non-host leave removes that seat and reseats whoever remains. The listing stays open. A second host depart on an already closed listing returns `ok == true` and `hostLeft == true`. Anyone else on a closed listing gets `ERRORS.closed`. A user who is not seated gets `ERRORS.absent`. Replace the stored listing only when `ok == true`. Drop it from the plaza copy when `status.active ~= true`.
+
+`RaidService.post` today checks `Raids.tagOk` and `Raids.difficulty`, so Hard, Shardbreaker, and a second tag never land. Stop using those two as the board gate. Stamp the host and the clock yourself. Filter the title here, with `TextService`, before you store the wrapper. If the filter fails, refuse the post. Do not pass the title into `RaidPremade`.
+
+```lua
+local now = os.time()
+local draft = {
+	hostUserId = player.UserId,
+	difficulty = difficulty,
+	tags = tags,
+	requiredClears = requiredClears,
+	gearScore = gearScore,
+	partySize = partySize,
+	slots = slots,
+	createdAt = now,
+	members = {
+		{ userId = player.UserId, role = role },
+	},
+}
+local opened = RaidPremade.open(listings, draft, now)
+if opened.ok ~= true then
+	return { ok = false, error = opened.error }
+end
+```
+
+`listings` in that snippet is the array of normalized listings already stored. The old `while #listings > 20` drop is not in this module. Dropping the oldest row can remove a host's active listing without them leaving. See question 8.
+
+`RaidService.join` today finds the id and calls `queue`, which starts a raid immediately. Do not do that. Load `data.raidClears` (nil until T-038 adds it) and call `join`. Ignore `data.raidFinderCooldownUntil`.
+
+```lua
+local now = os.time()
+local gate = RaidPremade.join(found.listing, {
+	userId = player.UserId,
+	role = role,
+	clears = data.raidClears,
+}, now)
+if gate.allowed ~= true then
+	return { ok = false, error = gate.error }
+end
+found.listing = gate.listing
+```
+
+Launch only from a row whose `status` is `full == true`, `expired == false`, and `closed == false`, and not from this module. Story and Normal can use the existing launch once you have a real roster. Hard and Shardbreaker need a launch path that is not `Raids.difficulty`. Finder healer-timeout, boss-damage scale, and Warden golems are `RaidFinder.form`. Do not apply them to a premade.
+
+`RaidService.board` should skip a row whose `status.active ~= true`, and it can show `difficulty`, `tags`, `requiredClears`, `partySize`, `openCount`, `full`, the slots, and the filtered title. The client must not send `now`, `createdAt`, `hostUserId`, or `clears`.
+
+When a seated player leaves on purpose, call `depart` with their user id. There is no leave button yet. Closing the client is the same depart. `Players.PlayerRemoving` in `DungeonService` is the live hook, and that file is not on this row. One call from there into `RaidService` is enough. If the removed player is the host, `hostLeft` is true and the listing is closed. If they were only a member, the slot opens.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field. The join check reuses `raidClears` once T-038 adds it. Until that field exists, pass nil and the module treats it as 0, so a listing with `requiredClears` above 0 accepts nobody. Do not add `raidFinderCooldownUntil` to this path. The board is the in-memory `listings` array already on `RaidService`. It does not belong on the profile. A restart clears it. MemoryStore and DataStore are out of scope.
+
+`tests/run.luau` requires `./RaidPremade.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. `listingSeconds` is 1800. A listing expires when `now >= createdAt + 1800`, so the deadline second is already closed. Should that second still be open, the way a RaidLeaver cooldown still lets you queue at the exact `cooldownUntil`?
+2. A tank, healer, or DPS takes the first open slot of that role, then the first open flex slot. A flex player takes the first open slot in the host's list. Should flex prefer tank, then healer, then DPS, the way `RaidFinder.fillOrder` does?
+3. A dedicated role can sit in a flex slot once its own slots are full. Should a flex slot be only for players who signed as flex?
+4. Four DPS is a valid listing. Finder's 1 tank / 1 healer minimum is not applied. Should a premade still require those minimums before it can be posted or before it can launch?
+5. Hard and Shardbreaker may store a non-negative integer `gearScore`, including 0. Story and Normal refuse the field, including 0. `canJoin` does not compare gear on any difficulty, so a Hard listing that stores 500 still accepts everyone. Should join refuse a player under that score, and is a missing score 0?
+6. A missing `requiredClears` becomes 0. `1.5` is refused, not floored. The exact count may join. The host is not checked against their own number. Should the host have to meet it, and should a fraction floor instead?
+7. One active listing is per host. A player seated in someone else's listing can still host their own. Should any seat in an active listing block hosting?
+8. The board is the in-memory `listings` array. Expired and closed rows do not count as the host's active listing. `post` currently drops the oldest row at 20. This module has no cap. Should a full board refuse the new post instead of dropping someone else's listing? Nothing is persisted across a restart.
+9. A host leave sets `closed` and keeps the other members on the record. A non-host leave only frees that slot. Should the closed listing drop the other members, and should the plaza remove the row immediately?
+10. Title text is not read, stored, or filtered here. `RaidService.post` should filter it with `TextService` and keep the string on the wrapper. There is no length cap. Do you want one in `CONFIG`? `RaidPost` currently sends one tag and a difficulty. The new payload needs tags, party size, slots, the host role, optional clears, optional gear, and a title. That remote is T-012, so it was not edited. A single tag string still validates.
+11. Guided is refused as the difficulty `"guided"` and as `guided == true` on any listing. Fracture and any other name are refused as not a premade difficulty. Is the extra `guided` flag the right shape for "out of scope"?
+12. The clear count should be `raidClears` once T-038 adds it. No new profile field. This path does not read `raidFinderCooldownUntil`. Is the total clear count right, or do you want clears of this raid or this difficulty?
+13. `roleTargets[8]` is 1 tank / 1 healer / 6 DPS, including the T-041 hooks paragraph.
+14. `join` must not call `queue`. A full listing does not launch by itself. Hard and Shardbreaker cannot go through `Raids.difficulty`. Level 15, Story-before-Normal, and `Raids.roleOk` stay out of this module. Should a full premade launch immediately or wait for a ready check, and should post and join still call `roleOk`?
 
 ## Open
 
