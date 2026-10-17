@@ -135,4 +135,25 @@ describe("PetAura dodge flash", function()
 		expect(string.find(listener, "BackgroundTransparency = 1", 1, true) ~= nil).toBeTrue()
 		expect(string.find(source, "Color3.fromRGB(186, 230, 255)", 1, true) ~= nil).toBeTrue()
 	end)
+
+	it("skips the flash while a text box is focused", function()
+		local source = fs.readFile(AURA)
+		local listener = between(
+			source,
+			"UserInputService.InputBegan:Connect(function(",
+			"RunService.Heartbeat:Connect"
+		)
+		local callAt = string.find(listener, "PetFlash.should", 1, true)
+		local focus = "GetFocusedTextBox() ~= nil"
+		local focusAt = string.find(listener, focus, 1, true)
+		local writeAt = string.find(listener, "BackgroundTransparency = 0.45", 1, true)
+		expect(callAt ~= nil and focusAt ~= nil and writeAt ~= nil).toBeTrue()
+		expect((callAt :: number) < (focusAt :: number)).toBeTrue()
+		expect((focusAt :: number) < (writeAt :: number)).toBeTrue()
+		local guarded = string.sub(listener, focusAt :: number, (writeAt :: number) - 1)
+		expect(string.find(guarded, "return", 1, true) ~= nil).toBeTrue()
+		expect(string.find(listener, "if processed", 1, true)).toBeNil()
+		expect(string.find(listener, "processed or", 1, true)).toBeNil()
+		expect(string.find(listener, "processed then", 1, true)).toBeNil()
+	end)
 end)

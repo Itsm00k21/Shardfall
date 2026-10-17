@@ -65,6 +65,11 @@ function PetAura.start(playerGui: PlayerGui, getProfile: () -> any)
 		if not PetFlash.should(input.KeyCode.Name, PetRoster.equippedEffect(profile())) then
 			return
 		end
+		-- Chat and other text boxes are not a dodge. ActionBar sinks a real
+		-- dodge and does not focus a text box, so that press still flashes.
+		if UserInputService:GetFocusedTextBox() ~= nil then
+			return
+		end
 		flash.BackgroundTransparency = 0.45
 		task.delay(0.12, function()
 			flash.BackgroundTransparency = 1
