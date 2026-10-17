@@ -9,15 +9,21 @@
 	Arriving on a reserved server starts the raid here. Queueing again from
 	receive would reserve another server and hop in a loop. A second queue
 	while the first hop is still saving does not reserve or teleport.
+
+	The plaza board is the in-memory listings array. RaidPremade accepts or
+	refuses a row. A join takes a seat and does not start Raid Finder.
+	RaidPost and RaidJoin keep the rate limits already on those remotes.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
 
 local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
 local Raids = require(ReplicatedStorage.Shared.Raids)
+local RaidPremade = require(ReplicatedStorage.Shared.RaidPremade)
 local DataService = require(script.Parent.DataService)
 local EchoParty = require(script.Parent.EchoParty)
 
@@ -26,6 +32,11 @@ local RaidService = {}
 local listings: { any } = {}
 local ranks: { { name: string, seconds: number } } = {}
 local nextId = 0
+
+-- Active rows only. Expired and closed rows are removed, not evicted.
+local BOARD_CAP = 20
+-- RaidPremade has no title cap. The filtered string stays on the wrapper.
+local TITLE_MAX = 48
 
 local function reject(message: string)
 	return { ok = false, error = message }
@@ -208,97 +219,528 @@ local function startQueue(player: Player, difficulty: any, role: any, allowHop: 
 	return started
 end
 
+local function trim(text: string): string
+	local trimmed = string.gsub(text, "^%s+", "")
+	trimmed = string.gsub(trimmed, "%s+$", "")
+	return trimmed
+end
+
+local function wholeId(value: any): number?
+	if type(value) ~= "number" then
+		return nil
+	end
+	if value ~= value or value == math.huge or value <= 0 or value ~= math.floor(value) then
+		return nil
+	end
+	return value
+end
+
+-- Nil is 0 once T-038 adds raidClears. A corrupt stored count is unusable.
+local function usableClears(value: any): (number?, string?)
+	if value == nil then
+		return 0, nil
+	end
+	if
+		type(value) ~= "number"
+		or value ~= value
+		or value == math.huge
+		or value < RaidPremade.CONFIG.minClears
+		or value ~= math.floor(value)
+	then
+		return nil, RaidPremade.ERRORS.clears
+	end
+	return value, nil
+end
+
+local function normalizeRole(role: any): string?
+	if role == nil then
+		return "flex"
+	end
+	if type(role) ~= "string" then
+		return nil
+	end
+	local name = string.lower(trim(role))
+	if RaidPremade.ROLES[name] == true then
+		return name
+	end
+	return nil
+end
+
+local function acceptRole(profile: any, role: any): (string?, string?)
+	local name = normalizeRole(role)
+	if name == nil then
+		return nil, RaidPremade.ERRORS.role
+	end
+	local allowed, why = Raids.roleOk(profile.classId, name)
+	if not allowed then
+		return nil, why
+	end
+	return name, nil
+end
+
+local function premadeGate(profile: any, difficulty: any): string?
+	local story = Raids.DIFFICULTIES.story
+	local need = if story ~= nil then story.level else 15
+	local level = profile.level
+	if type(level) ~= "number" or level < need then
+		return string.format("Level %d opens The Heartwood.", need)
+	end
+	if difficulty == "story" or profile.raidStory == true then
+		return nil
+	end
+	if difficulty == "normal" then
+		return "Clear Story once before Normal."
+	end
+	return "Clear Story once before that difficulty."
+end
+
+local function boardBlock(player: Player): string?
+	local hold = DataService.teleportHold(player)
+	if hold ~= nil then
+		return hold
+	end
+	if dungeon().isInRun(player) then
+		return "Leave your current run before using the premade board."
+	end
+	return nil
+end
+
+local function listingActive(row: any, now: number): boolean
+	local state = RaidPremade.status(row.listing, now)
+	return state.ok == true and state.active == true
+end
+
+local function sweep(now: number)
+	local index = 1
+	while index <= #listings do
+		if listingActive(listings[index], now) then
+			index += 1
+		else
+			table.remove(listings, index)
+		end
+	end
+end
+
+local function normalizedBoard(): { any }
+	local rows = {}
+	for index, row in ipairs(listings) do
+		rows[index] = row.listing
+	end
+	return rows
+end
+
+local function seatedRow(userId: number, now: number): any?
+	for _, row in ipairs(listings) do
+		if listingActive(row, now) then
+			local members = row.listing.members
+			if type(members) == "table" then
+				for _, member in ipairs(members) do
+					if type(member) == "table" and member.userId == userId then
+						return row
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
+
+local function findListing(id: number): (any?, number?)
+	for index, row in ipairs(listings) do
+		if row.id == id then
+			return row, index
+		end
+	end
+	return nil, nil
+end
+
+local function departUser(userId: number)
+	local now = os.time()
+	local index = 1
+	while index <= #listings do
+		local row = listings[index]
+		local result = RaidPremade.depart(row.listing, userId, now)
+		if result.ok == true and result.listing ~= nil then
+			row.listing = result.listing
+		end
+		index += 1
+	end
+	sweep(now)
+end
+
+-- DungeonService.PlayerRemoving should call this. Disconnect calls it too.
+function RaidService.memberLeft(player: Player)
+	departUser(player.UserId)
+end
+
+Players.PlayerRemoving:Connect(function(leaving: Player)
+	departUser(leaving.UserId)
+end)
+
+local function clientPost(tag: any, difficulty: any): any
+	if type(tag) == "table" then
+		return tag
+	end
+	return {
+		tags = tag,
+		difficulty = difficulty,
+	}
+end
+
+local function partyShape(payload: any): (any, any)
+	local partySize = payload.partySize
+	local slots = payload.slots
+	if type(slots) == "table" then
+		local copied = {}
+		local limit = RaidPremade.CONFIG.maxParty + 1
+		for index, entry in ipairs(slots) do
+			if index > limit then
+				break
+			end
+			copied[index] = entry
+		end
+		if partySize == nil then
+			partySize = #copied
+		end
+		return partySize, copied
+	end
+	if slots ~= nil then
+		return partySize, slots
+	end
+	if partySize == nil then
+		partySize = RaidPremade.CONFIG.minParty
+	end
+	local size = partySize
+	local maxParty = RaidPremade.CONFIG.maxParty
+	if
+		type(size) == "number"
+		and size == size
+		and size ~= math.huge
+		and size == math.floor(size)
+		and size >= 1
+		and size <= maxParty
+	then
+		local filled = {}
+		for index = 1, size do
+			filled[index] = "flex"
+		end
+		return size, filled
+	end
+	return partySize, nil
+end
+
+-- Server stamps the host, the clock, and the only member. Client members are ignored.
+local function buildDraft(
+	player: Player,
+	payload: any,
+	role: string,
+	now: number
+): { [string]: any }
+	local partySize, slots = partyShape(payload)
+	local tags = payload.tags
+	if tags == nil then
+		tags = payload.tag
+	end
+	local draft: { [string]: any } = {
+		hostUserId = player.UserId,
+		difficulty = payload.difficulty,
+		tags = tags,
+		requiredClears = payload.requiredClears,
+		gearScore = payload.gearScore,
+		partySize = partySize,
+		slots = slots,
+		createdAt = now,
+		members = {
+			{ userId = player.UserId, role = role },
+		},
+	}
+	if payload.guided ~= nil then
+		draft.guided = payload.guided
+	end
+	return draft
+end
+
+local function filterTitle(player: Player, title: any): (string?, string?)
+	if title == nil then
+		return "", nil
+	end
+	if type(title) ~= "string" then
+		return nil, "That title is unusable."
+	end
+	if #title > TITLE_MAX then
+		return nil, "That title is too long."
+	end
+	local trimmed = trim(title)
+	if trimmed == "" then
+		return "", nil
+	end
+	if string.find(trimmed, "%c") ~= nil then
+		return nil, "That title is unusable."
+	end
+	local filteredOk, filtered = pcall(function()
+		local result = TextService:FilterStringAsync(trimmed, player.UserId)
+		return result:GetNonChatStringForBroadcastAsync()
+	end)
+	if not filteredOk or type(filtered) ~= "string" or filtered == "" then
+		return nil, "Could not filter that title."
+	end
+	if #filtered > TITLE_MAX then
+		return nil, "That title is too long."
+	end
+	return filtered, nil
+end
+
+local function copyStrings(source: any): { string }
+	local copy = {}
+	if type(source) ~= "table" then
+		return copy
+	end
+	for index, value in ipairs(source) do
+		if type(value) == "string" then
+			copy[index] = value
+		end
+	end
+	return copy
+end
+
 function RaidService.queue(player: Player, difficulty: any, role: any)
+	local now = os.time()
+	sweep(now)
+	if seatedRow(player.UserId, now) ~= nil then
+		return reject("Leave your premade listing before using Raid Finder.")
+	end
 	return startQueue(player, difficulty, role, true)
 end
 
 function RaidService.board()
+	local now = os.time()
+	sweep(now)
 	local copy = {}
 	for _, row in ipairs(listings) do
-		table.insert(copy, {
-			id = row.id,
-			host = row.host,
-			tag = row.tag,
-			difficulty = row.difficulty,
-		})
+		local state = RaidPremade.status(row.listing, now)
+		if state.ok == true and state.active == true then
+			local listing = row.listing
+			local tags = copyStrings(listing.tags)
+			table.insert(copy, {
+				id = row.id,
+				host = row.hostName,
+				title = row.title,
+				tag = tags[1],
+				tags = tags,
+				difficulty = listing.difficulty,
+				requiredClears = listing.requiredClears,
+				partySize = listing.partySize,
+				openCount = state.openCount,
+				full = state.full,
+				slots = copyStrings(listing.slots),
+			})
+		end
 	end
 	return copy
 end
 
 function RaidService.post(player: Player, tag: any, difficulty: any)
-	if not Raids.tagOk(tag) or Raids.difficulty(difficulty) == nil then
-		return reject("Pick a tag and Story or Normal.")
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
+	end
+	local blocked = boardBlock(player)
+	if blocked ~= nil then
+		return reject(blocked)
+	end
+	local role, roleError = acceptRole(profile, if type(tag) == "table" then tag.role else nil)
+	if role == nil then
+		return reject(roleError or RaidPremade.ERRORS.role)
+	end
+	local have, clearsError = usableClears((profile :: any).raidClears)
+	if have == nil then
+		return reject(clearsError or RaidPremade.ERRORS.clears)
+	end
+	local postedAt = os.time()
+	sweep(postedAt)
+	if seatedRow(player.UserId, postedAt) ~= nil then
+		return reject("Leave your listing before posting another.")
+	end
+	if #listings >= BOARD_CAP then
+		return reject("The premade board is full.")
+	end
+	local payload = clientPost(tag, difficulty)
+	local draft = buildDraft(player, payload, role, postedAt)
+	local opened = RaidPremade.open(normalizedBoard(), draft, postedAt)
+	if opened.ok ~= true or opened.listing == nil then
+		return reject(opened.error or RaidPremade.ERRORS.listing)
+	end
+	if have < opened.listing.requiredClears then
+		return reject(RaidPremade.ERRORS.short)
+	end
+	local gate = premadeGate(profile, opened.listing.difficulty)
+	if gate ~= nil then
+		return reject(gate)
+	end
+	local title, titleError = filterTitle(player, payload.title)
+	if title == nil then
+		return reject(titleError or "Could not filter that title.")
+	end
+	-- FilterStringAsync yields. A second post can land before this one stores.
+	local now = os.time()
+	if now < postedAt then
+		now = postedAt
+	end
+	sweep(now)
+	if seatedRow(player.UserId, now) ~= nil then
+		return reject("Leave your listing before posting another.")
+	end
+	if #listings >= BOARD_CAP then
+		return reject("The premade board is full.")
+	end
+	opened = RaidPremade.open(normalizedBoard(), draft, now)
+	if opened.ok ~= true or opened.listing == nil then
+		return reject(opened.error or RaidPremade.ERRORS.listing)
+	end
+	if have < opened.listing.requiredClears then
+		return reject(RaidPremade.ERRORS.short)
 	end
 	nextId += 1
 	local id = nextId
 	table.insert(listings, {
 		id = id,
-		host = player.Name,
-		userId = player.UserId,
-		tag = tag,
-		difficulty = difficulty,
+		title = title,
+		hostName = player.Name,
+		listing = opened.listing,
 	})
-	while #listings > 20 do
-		table.remove(listings, 1)
-	end
-	return { ok = true, id = id, board = RaidService.board() }
+	return {
+		ok = true,
+		id = id,
+		board = RaidService.board(),
+		note = "Listed on the premade board.",
+	}
 end
 
 function RaidService.join(player: Player, listingId: any)
-	local found = nil
-	for _, row in ipairs(listings) do
-		if row.id == listingId then
-			found = row
+	local rawId = listingId
+	local rawRole = nil
+	if type(listingId) == "table" then
+		rawId = listingId.id
+		if rawId == nil then
+			rawId = listingId.listingId
 		end
+		rawRole = listingId.role
 	end
-	if found == nil then
+	local id = wholeId(rawId)
+	if id == nil then
 		return reject("That listing is gone.")
 	end
-	local DungeonService = dungeon()
-	local host = nil
-	if type(found.userId) == "number" then
-		host = Players:GetPlayerByUserId(found.userId)
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
 	end
-	local hostParty = if host ~= nil then DungeonService.echoParty(host) else nil
-	local route = EchoParty.route(
-		host ~= nil and host ~= player,
-		hostParty ~= nil,
-		EchoParty.samePull(
-			if hostParty ~= nil then hostParty.difficulty else nil,
-			if hostParty ~= nil then hostParty.practice else false,
-			found.difficulty
+	local blocked = boardBlock(player)
+	if blocked ~= nil then
+		return reject(blocked)
+	end
+	local _, clearsError = usableClears((profile :: any).raidClears)
+	if clearsError ~= nil then
+		return reject(clearsError)
+	end
+	local role, roleError = acceptRole(profile, rawRole)
+	if role == nil then
+		return reject(roleError or RaidPremade.ERRORS.role)
+	end
+	local now = os.time()
+	local found, foundAt = findListing(id)
+	if found == nil or found.listing == nil then
+		return reject("That listing is gone.")
+	end
+	local seat = seatedRow(player.UserId, now)
+	if seat ~= nil then
+		if seat == found then
+			return reject(RaidPremade.ERRORS.duplicate)
+		end
+		return reject("Leave your listing before joining another.")
+	end
+	local gate = RaidPremade.join(found.listing, {
+		userId = player.UserId,
+		role = role,
+		clears = (profile :: any).raidClears,
+	}, now)
+	if gate.allowed ~= true or gate.listing == nil then
+		local state = RaidPremade.status(found.listing, now)
+		if foundAt ~= nil and (state.ok ~= true or state.active ~= true) then
+			table.remove(listings, foundAt)
+		end
+		return reject(gate.error or RaidPremade.ERRORS.listing)
+	end
+	local levelError = premadeGate(profile, gate.listing.difficulty)
+	if levelError ~= nil then
+		return reject(levelError)
+	end
+	found.listing = gate.listing
+	local state = RaidPremade.status(found.listing, now)
+	local full = state.ok == true
+		and state.full == true
+		and state.expired ~= true
+		and state.closed ~= true
+	local difficulty = found.listing.difficulty
+	if full and (difficulty == "story" or difficulty == "normal") then
+		local DungeonService = dungeon()
+		local host = nil
+		local hostUserId = found.listing.hostUserId
+		if type(hostUserId) == "number" then
+			host = Players:GetPlayerByUserId(hostUserId)
+		end
+		local hostParty = if host ~= nil then DungeonService.echoParty(host) else nil
+		local route = EchoParty.route(
+			host ~= nil and host ~= player,
+			hostParty ~= nil,
+			EchoParty.samePull(
+				if hostParty ~= nil then hostParty.difficulty else nil,
+				if hostParty ~= nil then hostParty.practice else false,
+				difficulty
+			)
 		)
-	)
-	if route == "backfill" and host ~= nil then
-		local created = false
-		if not DungeonService.isInRun(player) then
-			local entered = DungeonService.enter(player, "heartwood", found.difficulty, false)
-			if entered.ok ~= true then
-				return entered
+		if route == "backfill" and host ~= nil then
+			local created = false
+			if not DungeonService.isInRun(player) then
+				local entered = DungeonService.enter(player, "heartwood", difficulty, false)
+				if entered.ok ~= true then
+					return {
+						ok = true,
+						id = found.id,
+						board = RaidService.board(),
+						note = "Seated on the premade board.",
+					}
+				end
+				created = true
 			end
-			created = true
+			local filled = DungeonService.backfill(player, host)
+			if filled.ok == true then
+				filled.note = "Premade listing. Joined the pull."
+				return filled
+			end
+			if created then
+				DungeonService.leave(player)
+			end
 		end
-		local filled = DungeonService.backfill(player, host)
-		if filled.ok == true then
-			filled.note = string.format("%s listing. Joined the pull.", found.tag)
-			return filled
-		end
-		if created then
-			DungeonService.leave(player)
-		end
-		return filled
 	end
-	local started = RaidService.queue(player, found.difficulty, "flex")
-	if started.ok == true then
-		started.note = string.format("%s listing. %s", found.tag, started.note or "Joined.")
-	end
-	return started
+	return {
+		ok = true,
+		id = found.id,
+		board = RaidService.board(),
+		note = if full
+			then "Party is full. Ready check comes later."
+			else "Seated on the premade board.",
+	}
 end
 
 function RaidService.practice(player: Player, wing: any, phase: any)
 	local profile = DataService.get(player)
 	if profile == nil then
 		return reject("Profile is still loading.")
+	end
+	local now = os.time()
+	sweep(now)
+	if seatedRow(player.UserId, now) ~= nil then
+		return reject("Leave your premade listing before Practice Grove.")
 	end
 	local allowed, why = PracticeLoot.levelGate(profile.level)
 	if not allowed then
