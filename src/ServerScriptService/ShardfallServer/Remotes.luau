@@ -607,6 +607,11 @@ function Remotes.bind()
 			return RaidService.buy(player, itemId)
 		end)
 	end
+	functionRemote("RaidLeave").OnServerInvoke = function(player)
+		return guard(player, "RaidLeave", function()
+			return RaidService.leave(player)
+		end)
+	end
 
 	functionRemote("UpgradeGear").OnServerInvoke = function(player, uid)
 		return guard(player, "UpgradeGear", function()
