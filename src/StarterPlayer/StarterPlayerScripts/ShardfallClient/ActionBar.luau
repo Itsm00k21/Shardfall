@@ -4,7 +4,9 @@
 	Bottom action bar. Eight square slots on keys 1-8.
 
 	A click, a tap, or the key asks the server to use that slot. Shift
-	dodges, and ButtonY dodges on a gamepad. F is the interact prompt
+	dodges, and ButtonY dodges on a gamepad. ButtonR1 light-attacks
+	while the menu is closed and still changes tabs while it is open.
+	F is the interact prompt
 	and only shows while a prompt is up. The Dodge chip shows Y while a
 	gamepad was the last input.
 	On a gamepad the D-pad uses slots 1-4, and holding LB uses slots 5-8.
@@ -31,6 +33,7 @@ local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
+local PadLight = require(Shared:WaitForChild("PadLight"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 
 local ActionBar = {}
@@ -40,6 +43,7 @@ export type Callbacks = {
 	menuOpen: () -> boolean,
 	onDodge: () -> (),
 	onDodgeChip: (() -> ())?,
+	onLight: () -> (),
 	onSkill: () -> (),
 	onToast: (string) -> (),
 	onResult: (any) -> (),
@@ -145,7 +149,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		skillGlow.Name = "SkillGlow"
 		skillGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		skillGlow.Thickness = 3
-		skillGlow.Color = Color3.fromRGB(CodexCues.COLOR.skill[1], CodexCues.COLOR.skill[2], CodexCues.COLOR.skill[3])
+		skillGlow.Color = Color3.fromRGB(
+			CodexCues.COLOR.skill[1],
+			CodexCues.COLOR.skill[2],
+			CodexCues.COLOR.skill[3]
+		)
 		skillGlow.Transparency = 0.15
 		skillGlow.Enabled = false
 		skillGlow.Parent = button
@@ -381,7 +389,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	dodgeHint.BorderSizePixel = 0
 	dodgeHint.Font = Enum.Font.BuilderSansBold
 	dodgeHint.TextSize = UiTheme.MIN_TEXT
-	dodgeHint.TextColor3 = Color3.fromRGB(CodexCues.COLOR.dodge[1], CodexCues.COLOR.dodge[2], CodexCues.COLOR.dodge[3])
+	dodgeHint.TextColor3 =
+		Color3.fromRGB(CodexCues.COLOR.dodge[1], CodexCues.COLOR.dodge[2], CodexCues.COLOR.dodge[3])
 	dodgeHint.Text = ""
 	dodgeHint.Visible = false
 	dodgeHint.ZIndex = 8
@@ -551,7 +560,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				readyAt[index] = os.clock() + result.cooldown
 			end
 			if result.ok ~= true then
-				local message = if type(result.error) == "string" then result.error else "Could not use that."
+				local message = if type(result.error) == "string"
+					then result.error
+					else "Could not use that."
 				callbacks.onToast(message)
 				paint()
 				return
@@ -672,7 +683,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			callbacks.onToast(dropWhy or "Bar is locked.")
 			return
 		end
-		local checked, checkWhy = ActionSlots.accept(classId(), nextBar.slots, nextBar.locked, profile)
+		local checked, checkWhy =
+			ActionSlots.accept(classId(), nextBar.slots, nextBar.locked, profile)
 		if checked == nil then
 			callbacks.onToast(checkWhy or "That skill is not on this class.")
 			return
@@ -765,47 +777,51 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			table.insert(codes, code)
 		end
 	end
-	ContextActionService:BindActionAtPriority(
-		"ShardfallActionBar",
-		function(_name, state, input)
-			if state ~= Enum.UserInputState.Begin then
-				return Enum.ContextActionResult.Pass
-			end
-			if callbacks.menuOpen() then
-				return Enum.ContextActionResult.Pass
-			end
-			local index = ActionSlots.indexForKey(input.KeyCode.Name)
-			if index == nil then
-				return Enum.ContextActionResult.Pass
-			end
-			useSlot(index)
-			return Enum.ContextActionResult.Sink
-		end,
-		false,
-		Enum.ContextActionPriority.High.Value,
-		table.unpack(codes)
-	)
+	ContextActionService:BindActionAtPriority("ShardfallActionBar", function(_name, state, input)
+		if state ~= Enum.UserInputState.Begin then
+			return Enum.ContextActionResult.Pass
+		end
+		if callbacks.menuOpen() then
+			return Enum.ContextActionResult.Pass
+		end
+		local index = ActionSlots.indexForKey(input.KeyCode.Name)
+		if index == nil then
+			return Enum.ContextActionResult.Pass
+		end
+		useSlot(index)
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value, table.unpack(codes))
 	local dodgeCodes = { Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift }
 	local padDodge = (Enum.KeyCode :: any)[Keybinds.GAMEPAD.dodge]
 	if padDodge ~= nil then
 		table.insert(dodgeCodes, padDodge)
 	end
-	ContextActionService:BindActionAtPriority(
-		"ShardfallDodge",
-		function(_name, state)
+	ContextActionService:BindActionAtPriority("ShardfallDodge", function(_name, state)
+		if state ~= Enum.UserInputState.Begin then
+			return Enum.ContextActionResult.Pass
+		end
+		if callbacks.menuOpen() then
+			return Enum.ContextActionResult.Pass
+		end
+		callbacks.onDodge()
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value, table.unpack(dodgeCodes))
+	-- ButtonR1 changes hub tabs while the menu is open, so this bind
+	-- passes then. While the menu is closed it is the light attack.
+	-- ButtonX stays heavy. Do not add this key to the hub sink.
+	local lightCode = (Enum.KeyCode :: any)[PadLight.KEY]
+	if lightCode ~= nil then
+		ContextActionService:BindActionAtPriority("ShardfallLight", function(_name, state)
 			if state ~= Enum.UserInputState.Begin then
 				return Enum.ContextActionResult.Pass
 			end
-			if callbacks.menuOpen() then
+			if not PadLight.fire(PadLight.KEY, callbacks.menuOpen()) then
 				return Enum.ContextActionResult.Pass
 			end
-			callbacks.onDodge()
+			callbacks.onLight()
 			return Enum.ContextActionResult.Sink
-		end,
-		false,
-		Enum.ContextActionPriority.High.Value,
-		table.unpack(dodgeCodes)
-	)
+		end, false, Enum.ContextActionPriority.High.Value, lightCode)
+	end
 
 	local padCodes = {}
 	for button in pairs(Keybinds.PAD.buttons) do
@@ -815,35 +831,29 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 	end
 	local modifierCode = (Enum.KeyCode :: any)[Keybinds.PAD.modifier]
-	ContextActionService:BindActionAtPriority(
-		"ShardfallActionBarPad",
-		function(_name, state, input)
-			if callbacks.menuOpen() then
-				return Enum.ContextActionResult.Pass
-			end
-			-- ButtonL1 is a gamepad button. Read it on the pad that produced
-			-- this D-pad press. One call: slots 5-8 while LB is held, and
-			-- slots 1-4 when it is not. The chord does not also fire 1-4.
-			local inputType = input.UserInputType
-			local typeName = if inputType ~= nil then inputType.Name else ""
-			local modifierDown = false
-			if modifierCode ~= nil and inputType ~= nil and Keybinds.usesGamepad(typeName) then
-				modifierDown = UserInputService:IsGamepadButtonDown(inputType, modifierCode)
-			end
-			local index = Keybinds.padChordSlot(input.KeyCode.Name, typeName, modifierDown)
-			if index == nil then
-				return Enum.ContextActionResult.Pass
-			end
-			if state ~= Enum.UserInputState.Begin then
-				return Enum.ContextActionResult.Sink
-			end
-			useSlot(index)
+	ContextActionService:BindActionAtPriority("ShardfallActionBarPad", function(_name, state, input)
+		if callbacks.menuOpen() then
+			return Enum.ContextActionResult.Pass
+		end
+		-- ButtonL1 is a gamepad button. Read it on the pad that produced
+		-- this D-pad press. One call: slots 5-8 while LB is held, and
+		-- slots 1-4 when it is not. The chord does not also fire 1-4.
+		local inputType = input.UserInputType
+		local typeName = if inputType ~= nil then inputType.Name else ""
+		local modifierDown = false
+		if modifierCode ~= nil and inputType ~= nil and Keybinds.usesGamepad(typeName) then
+			modifierDown = UserInputService:IsGamepadButtonDown(inputType, modifierCode)
+		end
+		local index = Keybinds.padChordSlot(input.KeyCode.Name, typeName, modifierDown)
+		if index == nil then
+			return Enum.ContextActionResult.Pass
+		end
+		if state ~= Enum.UserInputState.Begin then
 			return Enum.ContextActionResult.Sink
-		end,
-		false,
-		Enum.ContextActionPriority.High.Value,
-		table.unpack(padCodes)
-	)
+		end
+		useSlot(index)
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value, table.unpack(padCodes))
 
 	ProximityPromptService.PromptShown:Connect(function(prompt)
 		promptsShown += 1
@@ -870,7 +880,12 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local cover = button:FindFirstChild("Radial")
 			local seconds = button:FindFirstChild("Seconds")
 			local flash = button:FindFirstChild("Flash")
-			if cover ~= nil and cover:IsA("Frame") and type(untilAt) == "number" and type(total) == "number" then
+			if
+				cover ~= nil
+				and cover:IsA("Frame")
+				and type(untilAt) == "number"
+				and type(total) == "number"
+			then
 				local left = ActionSlots.secondsLeft(untilAt, now)
 				local amount = ActionSlots.sweep(total - (untilAt - now), total)
 				local sweep = cover:FindFirstChild("Sweep")
@@ -885,7 +900,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			if flash ~= nil and flash:IsA("Frame") then
 				local untilFlash = flashUntil[index]
-				flash.BackgroundTransparency = if type(untilFlash) == "number" and now < untilFlash then 0.45 else 1
+				flash.BackgroundTransparency = if type(untilFlash) == "number"
+						and now < untilFlash
+					then 0.45
+					else 1
 			end
 			local skillGlow = button:FindFirstChild("SkillGlow")
 			if skillGlow ~= nil and skillGlow:IsA("UIStroke") and skillGlow.Enabled then
@@ -922,7 +940,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	return {
 		setProfile = function(nextProfile: any)
-			local id = if type(nextProfile) == "table" and type(nextProfile.classId) == "string"
+			local id = if type(nextProfile) == "table"
+					and type(nextProfile.classId) == "string"
 				then nextProfile.classId
 				else ""
 			if id ~= classSeen then
@@ -932,7 +951,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				override = nil
 			end
 			profile = nextProfile
-			if override ~= nil and type(nextProfile) == "table" and type(nextProfile.actionBars) == "table" then
+			if
+				override ~= nil
+				and type(nextProfile) == "table"
+				and type(nextProfile.actionBars) == "table"
+			then
 				override = nil
 			end
 			paint()
