@@ -8,16 +8,10 @@ local it = framework.it
 local expect = framework.expect
 
 local ClientChrome = require("../src/ReplicatedStorage/Shared/ClientChrome")
+local Keybinds = require("../src/ReplicatedStorage/Shared/Keybinds")
 local UiRouter = require("../src/ReplicatedStorage/Shared/UiRouter")
 
-local HOTKEYS = {
-	hero = "C",
-	bag = "B",
-	pets = "P",
-	roll = "R",
-	raids = "I",
-	market = "M",
-}
+local HOTKEYS = Keybinds.copyMenu(nil)
 
 describe("UiRouter", function()
 	it("matches the hub tab order", function()

@@ -7,6 +7,8 @@
 	tier resolver keeps working. "auto" stores an empty graphics tier.
 ]]
 
+local Keybinds = require("./Keybinds")
+
 local Settings = {}
 
 export type Hotkeys = {
@@ -79,7 +81,7 @@ local TRADES = { everyone = true, friends = true, off = true }
 local FILTER = { default = true, strict = true, off = true }
 local FPS = { [30] = true, [60] = true, [120] = true }
 
-local HOTKEY_FIELDS = { "hero", "bag", "pets", "roll", "raids", "market" }
+local HOTKEY_FIELDS = Keybinds.MENU_ORDER
 
 function Settings.default(): Data
 	return {
@@ -101,14 +103,7 @@ function Settings.default(): Data
 			nameplates = true,
 		},
 		controls = {
-			hotkeys = {
-				hero = "C",
-				bag = "B",
-				pets = "P",
-				roll = "R",
-				raids = "I",
-				market = "M",
-			},
+			hotkeys = Keybinds.copyMenu(nil),
 			mobileScale = 1,
 			layoutEdit = false,
 			layout = {},
@@ -180,6 +175,7 @@ function Settings.normalize(raw: any): Data
 	for _, field in ipairs(HOTKEY_FIELDS) do
 		hotkeys[field] = hotkey(keys[field], hotkeys[field])
 	end
+	hotkeys = Keybinds.sanitize(hotkeys)
 	local fpsNumber = tonumber(graphics.fpsCap)
 	local fps = 60
 	if

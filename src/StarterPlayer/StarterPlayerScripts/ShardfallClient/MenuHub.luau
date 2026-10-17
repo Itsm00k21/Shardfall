@@ -25,6 +25,7 @@ local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild(
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
+local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NotifyBadges"))
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
@@ -279,6 +280,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local apply: (UiRouter.State) -> ()
 	local pages: { [string]: Frame } = {}
 	local capturing: string? = nil
+	local bindNote: string? = nil
 	local classDismissed = false
 	local detailOpen = false
 	local selectedUid: string? = nil
@@ -354,36 +356,31 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	-- Modal on the backdrop stops the mouse from steering the camera.
 	-- The sink stops the character. Shoulder buttons stay free for tabs.
+	local function bindSinkKeys()
+		ContextActionService:UnbindAction("ShardfallMenuSink")
+		local codes = {}
+		for _, name in ipairs(Keybinds.sinkNames(draft.controls.hotkeys)) do
+			local code = (Enum.KeyCode :: any)[name]
+			if code ~= nil then
+				table.insert(codes, code)
+			end
+		end
+		ContextActionService:BindActionAtPriority(
+			"ShardfallMenuSink",
+			sink,
+			false,
+			Enum.ContextActionPriority.High.Value,
+			table.unpack(codes)
+		)
+	end
+
 	local function setWorldInput(blocked: boolean)
 		if blocked == worldBlocked then
 			return
 		end
 		worldBlocked = blocked
 		if blocked then
-			ContextActionService:BindActionAtPriority(
-				"ShardfallMenuSink",
-				sink,
-				false,
-				Enum.ContextActionPriority.High.Value,
-				Enum.KeyCode.W,
-				Enum.KeyCode.A,
-				Enum.KeyCode.S,
-				Enum.KeyCode.D,
-				Enum.KeyCode.Space,
-				Enum.KeyCode.LeftShift,
-				Enum.KeyCode.RightShift,
-				Enum.KeyCode.E,
-				Enum.KeyCode.Q,
-				Enum.KeyCode.R,
-				Enum.KeyCode.F,
-				Enum.KeyCode.Two,
-				Enum.KeyCode.C,
-				Enum.KeyCode.B,
-				Enum.KeyCode.P,
-				Enum.KeyCode.I,
-				Enum.KeyCode.M,
-				Enum.KeyCode.Thumbstick1
-			)
+			bindSinkKeys()
 			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		else
 			ContextActionService:UnbindAction("ShardfallMenuSink")
@@ -2740,12 +2737,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 		local keys = draft.controls.hotkeys
 		local keyOrder = 50
-		for _, field in ipairs({ "hero", "bag", "pets", "roll", "raids", "market" }) do
+		for _, field in ipairs(Keybinds.MENU_ORDER) do
 			local fieldName = field
-			cycle(string.format("Hotkey %s  %s", fieldName, keys[fieldName]), keyOrder, function()
+			local label = string.format("Hotkey %s  %s", fieldName, keys[fieldName])
+			if capturing == fieldName then
+				label = label .. "  press a key"
+			end
+			cycle(label, keyOrder, function()
 				capturing = fieldName
+				bindNote = nil
 			end)
 			keyOrder += 1
+		end
+		if bindNote ~= nil then
+			cycle(bindNote, keyOrder, function() end)
 		end
 		cycle(
 			string.format(
@@ -3033,9 +3038,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if string.match(key, "^%a$") ~= nil or #key == 1 then
 				local letter = string.upper(string.sub(key, 1, 1))
 				if string.match(letter, "^%a$") ~= nil then
-					draft.controls.hotkeys[capturing] = letter
+					local nextKeys, warning =
+						Keybinds.assign(draft.controls.hotkeys, capturing, letter)
+					if warning ~= nil then
+						bindNote = warning
+					else
+						draft.controls.hotkeys = nextKeys
+						bindNote = nil
+						if route.open then
+							bindSinkKeys()
+						end
+						save()
+					end
 					capturing = nil
-					save()
 					paint()
 					show("settings")
 				end

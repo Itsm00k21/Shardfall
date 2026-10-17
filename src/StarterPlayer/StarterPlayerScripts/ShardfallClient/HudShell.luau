@@ -19,6 +19,7 @@ local Build = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Bui
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
+local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
 local ToastQueue = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ToastQueue"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
@@ -60,11 +61,11 @@ local SKILL_ICON = {
 }
 
 local SKILL_BIND = {
-	Attack = "E",
-	Dodge = "Q",
-	Skill1 = "Shift",
-	Skill2 = "2",
-	Ult = "F",
+	Attack = Keybinds.display(Keybinds.COMBAT.attack),
+	Dodge = Keybinds.display(Keybinds.COMBAT.dodge),
+	Skill1 = Keybinds.display(Keybinds.COMBAT.skill1),
+	Skill2 = Keybinds.display(Keybinds.COMBAT.skill2),
+	Ult = Keybinds.display(Keybinds.COMBAT.ult),
 }
 
 local function rgb(name: string): Color3
@@ -272,6 +273,8 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		caption.Font = Enum.Font.BuilderSans
 		caption.TextSize = 11
 		caption.TextColor3 = rgb("muted")
+		local menuField = string.lower(entry.id)
+		local menuKey = Keybinds.MENU[menuField]
 		caption.Text = if entry.id == "Settings" then "Gear" else entry.id
 		caption.ZIndex = 3
 		caption:SetAttribute("SkipTextScale", true)
@@ -285,7 +288,25 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		tip.Font = Enum.Font.BuilderSans
 		tip.TextSize = UiTheme.MIN_TEXT
 		tip.TextColor3 = rgb("text")
-		tip.Text = entry.id
+		tip.Text = if type(menuKey) == "string"
+			then entry.id .. "  " .. Keybinds.display(menuKey)
+			else entry.id
+		if type(menuKey) == "string" then
+			local bind = Instance.new("TextLabel")
+			bind.Name = "Bind"
+			bind.AnchorPoint = Vector2.new(1, 0)
+			bind.Position = UDim2.new(1, -2, 0, 1)
+			bind.Size = UDim2.fromOffset(16, 12)
+			bind.BackgroundTransparency = 1
+			bind.Font = Enum.Font.BuilderSansBold
+			bind.TextSize = 11
+			bind.TextXAlignment = Enum.TextXAlignment.Right
+			bind.TextColor3 = rgb("muted")
+			bind.Text = Keybinds.display(menuKey)
+			bind.ZIndex = 5
+			bind:SetAttribute("SkipTextScale", true)
+			bind.Parent = button
+		end
 		tip.Visible = false
 		tip.ZIndex = 8
 		tip.Parent = button
@@ -555,15 +576,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		if processed or layoutEdit then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.E then
+		local keyName = input.KeyCode.Name
+		if keyName == Keybinds.COMBAT.attack then
 			callbacks.onAttack()
-		elseif
-			input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift
-		then
+		elseif keyName == Keybinds.COMBAT.skill1 or keyName == Keybinds.ALIAS.skill1 then
 			callbacks.onSkill(1)
-		elseif input.KeyCode == Enum.KeyCode.Two then
+		elseif keyName == Keybinds.COMBAT.skill2 then
 			callbacks.onSkill(2)
-		elseif input.KeyCode == Enum.KeyCode.F then
+		elseif keyName == Keybinds.COMBAT.ult then
 			callbacks.onUlt()
 		end
 	end)

@@ -20,6 +20,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
+local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
@@ -726,11 +727,11 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		if processed then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.Q then
+		if input.KeyCode.Name == Keybinds.COMBAT.dodge then
 			CombatHud.dodge()
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.R then
+		if input.KeyCode.Name == Keybinds.COMBAT.heavy then
 			CombatHud.swing(true)
 			return
 		end

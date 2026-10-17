@@ -14,6 +14,7 @@ describe("Settings", function()
 		expect(fresh.graphics.quality).toEqual("auto")
 		expect(fresh.rolls.animation).toEqual("full")
 		expect(fresh.controls.hotkeys.hero).toEqual("C")
+		expect(fresh.controls.hotkeys.roll).toEqual("T")
 		expect(fresh.controls.hotkeys.market).toEqual("M")
 		expect(fresh.hud.scale).toEqual(1)
 		local patched = Settings.normalize({
