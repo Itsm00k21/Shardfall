@@ -41,29 +41,41 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #169 A queue click inside a reserved raid server launches in place. That is T-101 (`e9daa41`).
 - #170 A follow-in with no teleport data joins the pull. That is T-102 (`be93c70`).
 - #171 The board marks T-102 done. Docs only.
+- #172 The board marks T-158 done and files T-159. Docs only.
+- #173 Codex seen flags save on schema 25. That is T-105 (`776db3c`).
+- #174 The Training Grove record saves on schema 26. That is T-109 (`05a4870`).
+- #175 A second Glass Kestrel flash inside 0.12s stays visible. That is T-159 (`13d317b`).
+- #176 The Training Grove dummy stands on the plaza. That is T-110 (`24e46fb`).
+- #177 The board marks T-159 done and files T-160. Docs only.
+- #178 A late hero avatar is destroyed, and an R6 rig still builds. That is T-160 (`e510db4`).
+- #179 Codex cues and the dodge pulse paint from the server-named moment. The hint stays Dodge!. That is T-106 (`cc789b8`).
+- #180 World prompts, icons, rarity, VFX, and audio notes. Docs only.
+- #181 The action-bar drag and phone 2×4 checklist is on the soft-launch list. That is T-147 (`441a1b6`). The same pass files the MenuHub hotfix row and the deferred door-nameplate restyle.
+- #182 The menu loads again. `MenuHub.start` stays under the 200-local cap (`f95c210`).
+- #183 The board records that hotfix on T-161. Docs only (`9069ddc`).
 
-Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale.
+Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
 ## Next up
 
 The next week or two.
 
-- Echo's next row is T-159. A second Glass Kestrel flash inside 0.12s stays visible, on `helper/kestrel-flash-hold-9721`. Brief: `docs/hooks/T-159.md`. T-158 is done in #166 (`1afc833`).
+- Echo's next row is T-163. The Story Echo chip stays off the HP bar on a phone, on `helper/echo-chip-9721`. Brief: `docs/hooks/T-163.md`. T-160 is done in #178 (`e510db4`).
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
-- T-147 is the action-bar drag and phone 2×4 checklist. Kevin checks it in Studio. The d-pad landed in #155. The LB chord landed in #161.
-- The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166. The open note on that flash is T-159.
-- Ghost's next row from the older queue is T-105, the Codex seen flags. T-106 stays until that save exists and the server names the moment. T-109 waits on T-105.
+- T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first.
+- The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166 and #175. The hero viewport landed in #178. The menu load landed in #182.
 
 ## Later
 
 Kevin asked to hold the lighting pass. The older queue stays behind the plaza and the banner.
 
 - T-148 is world lighting for Haven and the crawl. Backlog. The plaza lights landed in #148. This row still waits until Kevin asks.
-- T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. T-158 landed in #166. T-132 landed in #163. T-103 and T-104 are done: a miss clears the old roll card, and the RollNear header names its caller.
-- T-105 saves which Codex tips you have seen. T-106 paints the glows once the server says that moment is up.
+- T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. T-158 landed in #166. T-159 landed in #175. T-132 landed in #163. T-103 and T-104 are done: a miss clears the old roll card, and the RollNear header names its caller.
+- T-105 landed in #173. Codex seen flags save on schema 25. T-106 landed in #179. The server names the moment, and the hint stays Dodge!.
 - T-107 is done. Loading tips show, including during a hop.
 - T-108 is decided. The Training Grove hands in one ribbon and 15 gold. The ribbon is a collectible and is not worn yet.
-- T-109 saves the grove record after T-105. T-110 builds the grove dummy on the plaza after that.
+- T-109 landed in #174. The grove record saves on schema 26. T-110 landed in #176. The dummy stands on the plaza.
+- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-162, the door nameplates, stays with the lighting pass.
 - T-082 wires the raid contest once gear has a whole-number item level. The statue is one server-wide record.
 - T-084 wires the weekly loot lock. A reclear pays marks, dust, and materials.
 - T-036 wires the raid-leaver rules and four save fields: leaves today, the finder cooldown, and the rejoin window.
