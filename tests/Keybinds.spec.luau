@@ -251,6 +251,92 @@ describe("Keybinds", function()
 		expect(#Keybinds.conflicts(Keybinds.gameplay(nil))).toEqual(0)
 	end)
 
+	it("shifts d-pad slots only while that gamepad holds LB", function()
+		local directions = {
+			{ "DPadUp", 1, 5 },
+			{ "DPadRight", 2, 6 },
+			{ "DPadDown", 3, 7 },
+			{ "DPadLeft", 4, 8 },
+		}
+		expect(Keybinds.padModified("Gamepad1", false)).toEqual(false)
+		expect(Keybinds.padModified("Gamepad1", true)).toEqual(true)
+		expect(Keybinds.PAD.modifier).toEqual("ButtonL1")
+		for _, row in ipairs(directions) do
+			local button = row[1]
+			local plain = row[2]
+			local chord = row[3]
+			expect(Keybinds.padChordSlot(button, "Gamepad1", false)).toEqual(plain)
+			local shifted = Keybinds.padChordSlot(button, "Gamepad1", true)
+			expect(shifted).toEqual(chord)
+			expect(shifted ~= plain).toBeTrue()
+			expect(shifted ~= Keybinds.padSlot(button, false)).toBeTrue()
+			for pad = 2, 8 do
+				local name = "Gamepad" .. tostring(pad)
+				expect(Keybinds.padModified(name, true)).toEqual(true)
+				expect(Keybinds.padChordSlot(button, name, true)).toEqual(chord)
+				expect(Keybinds.padChordSlot(button, name, false)).toEqual(plain)
+			end
+			local ignored = {
+				"Keyboard",
+				"MouseButton1",
+				"MouseMovement",
+				"Touch",
+				"Gamepad",
+				"Gamepad0",
+				"Gamepad9",
+				"",
+			}
+			for _, name in ipairs(ignored) do
+				expect(Keybinds.padModified(name, true)).toEqual(false)
+				expect(Keybinds.padChordSlot(button, name, true)).toEqual(plain)
+				expect(Keybinds.padChordSlot(button, name, false)).toEqual(plain)
+			end
+		end
+		local blocked = {
+			"ButtonA",
+			"ButtonX",
+			"ButtonL1",
+			"ButtonL2",
+			"ButtonR2",
+			"ButtonR1",
+			"LeftShift",
+			"One",
+		}
+		for _, button in ipairs(blocked) do
+			expect(Keybinds.padChordSlot(button, "Gamepad1", true)).toBeNil()
+			expect(Keybinds.padChordSlot(button, "Gamepad1", false)).toBeNil()
+			expect(Keybinds.padChordSlot(button, "Keyboard", true)).toBeNil()
+		end
+
+		local bar = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/ActionBar.luau")
+		local padAt = string.find(bar, "ShardfallActionBarPad", 1, true)
+		local tailAt = string.find(bar, "ProximityPromptService.PromptShown", 1, true)
+		expect(padAt ~= nil).toBeTrue()
+		expect(tailAt ~= nil and (tailAt :: number) > (padAt :: number)).toBeTrue()
+		local padBody = string.sub(bar, padAt :: number, (tailAt :: number) - 1)
+		expect(string.find(padBody, "IsGamepadButtonDown", 1, true) ~= nil).toBeTrue()
+		expect(string.find(padBody, "input.UserInputType", 1, true) ~= nil).toBeTrue()
+		expect(string.find(padBody, "Keybinds.padChordSlot", 1, true) ~= nil).toBeTrue()
+		expect(string.find(padBody, "Keybinds.usesGamepad", 1, true) ~= nil).toBeTrue()
+		expect(string.find(padBody, "IsKeyDown", 1, true)).toBeNil()
+		expect(string.find(padBody, "Enum.UserInputType.Gamepad1", 1, true)).toBeNil()
+		local calls = 0
+		local from = 1
+		while true do
+			local found = string.find(padBody, "useSlot(", from, true)
+			if found == nil then
+				break
+			end
+			calls += 1
+			from = found + 1
+		end
+		expect(calls).toEqual(1)
+		expect(string.find(bar, "ShardfallDodge", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "Enum.KeyCode.LeftShift", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "LastInputTypeChanged", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "Keybinds.slotFace", 1, true) ~= nil).toBeTrue()
+	end)
+
 	it("switches the slot face from key labels to controller glyphs", function()
 		expect(Keybinds.usesGamepad("Keyboard")).toEqual(false)
 		expect(Keybinds.usesGamepad("MouseButton1")).toEqual(false)
@@ -281,13 +367,14 @@ describe("Keybinds", function()
 		expect(Keybinds.slotFace(9, "Keyboard")).toEqual("")
 		local bar = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/ActionBar.luau")
 		expect(string.find(bar, "Keybinds.slotFace", 1, true) ~= nil).toBeTrue()
-		expect(string.find(bar, "Keybinds.padSlot", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "Keybinds.padChordSlot", 1, true) ~= nil).toBeTrue()
 		expect(string.find(bar, "LastInputTypeChanged", 1, true) ~= nil).toBeTrue()
 		expect(string.find(bar, "PadGlyph", 1, true) ~= nil).toBeTrue()
 		expect(string.find(bar, "ShardfallActionBarPad", 1, true) ~= nil).toBeTrue()
 		expect(string.find(bar, "useSlot(index)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(bar, "UseActionSlot", 1, true) ~= nil).toBeTrue()
-		expect(string.find(bar, "IsKeyDown", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "IsGamepadButtonDown", 1, true) ~= nil).toBeTrue()
+		expect(string.find(bar, "IsKeyDown", 1, true)).toBeNil()
 		expect(string.find(bar, "ButtonA", 1, true)).toBeNil()
 		expect(string.find(bar, "ButtonR2", 1, true)).toBeNil()
 		expect(string.find(bar, "ButtonL2", 1, true)).toBeNil()

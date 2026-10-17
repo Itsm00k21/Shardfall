@@ -39,8 +39,11 @@ Keybinds.GAMEPAD = {
 
 -- Direct fire for the eight slots. The four directions are slots 1-4,
 -- clockwise from up. Holding the modifier adds 4, so the same press
--- reaches slots 5-8. ButtonL1 is free while the menu is closed. ButtonR1
--- still changes tabs while the menu is open, so it is not the modifier.
+-- reaches slots 5-8 and does not also return the base slot. ButtonL1 is
+-- a gamepad button, so the chord is read from that pad, not from a
+-- keyboard key query. ButtonL1 is free while the menu is closed.
+-- ButtonR1 still changes tabs while the menu is open, so it is not the
+-- modifier.
 local padButtons: { [string]: number } = {
 	DPadUp = 1,
 	DPadRight = 2,
@@ -398,6 +401,23 @@ function Keybinds.padSlot(button: string, modified: boolean): number?
 		return base + 4
 	end
 	return base
+end
+
+-- True only when this D-pad event came from a gamepad and that pad's LB
+-- is down. ButtonL1 is not a keyboard key, so a keyboard, mouse, or touch
+-- event stays unshifted even if the caller reports the modifier as down.
+function Keybinds.padModified(inputTypeName: string, modifierDown: boolean): boolean
+	return Keybinds.usesGamepad(inputTypeName) and modifierDown == true
+end
+
+-- One slot for a D-pad press. LB on that gamepad reaches 5-8. The same
+-- direction without LB stays on 1-4. The chord never returns both.
+function Keybinds.padChordSlot(
+	button: string,
+	inputTypeName: string,
+	modifierDown: boolean
+): number?
+	return Keybinds.padSlot(button, Keybinds.padModified(inputTypeName, modifierDown))
 end
 
 local function clashes(button: string, problems: { string })
