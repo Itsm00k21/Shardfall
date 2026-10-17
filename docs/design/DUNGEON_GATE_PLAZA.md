@@ -207,9 +207,11 @@ That is the intended read. The inlay at the feet is the whole row when the phone
 
 ## Milestones
 
-Three build rows. Provisional ids follow the tip on 2026-10-17, which says the next free id is T-138. Re-read that line before claiming. This doc does not edit `TASKS.md`. Any of the three can be filed as a G-row if it stays a design follow-up; the build itself is a T-row because it touches `Haven.luau` and `HavenBuilder.luau`.
+Three build rows. M1 is T-141 and landed in #142 (`4da2997`). M2 is T-144. M3 is T-145. This section first used T-138, T-139, and T-140 while those ids were still free. Those ids are other rows now: T-138 is the Verdant playtest, T-139 is the playtest HUD, and T-140 is the Roll crack reveal.
 
-### T-138 Blockout
+### T-141 Blockout
+
+Done in #142 (`4da2997`). The acceptance below is what landed.
 
 Owner GHOST. Files: `src/ReplicatedStorage/Shared/Haven.luau` (spawn look, gate and vendor coordinates), `src/ServerScriptService/ShardfallServer/HavenBuilder.luau` (court floor, six arches, empty lanes, vendor pads, five stones), `tests/Haven.spec.luau`, `tests/HavenBuild.spec.luau`. Leave `DungeonService` room pads alone. Leave NEXT where it is. No schema bump. No new remote.
 
@@ -224,7 +226,7 @@ Acceptance:
 - Five grey stones stand at `x = -40`, `z = 18, 10, 2, -6, -14`, with no prompt.
 - Rootvault's glow prompts Enter. Heartwood's glow prompts the existing raid queue. Locked gates prompt their one-line reason and do not teleport.
 
-### T-139 Gate visuals
+### T-144 Gate visuals
 
 Owner GHOST. Files: `HavenBuilder.luau` (arch dressing, seal, billboard), `Haven.luau` if the gate table grows a color and a lock string. No new HUD. No schema bump.
 
@@ -237,7 +239,7 @@ Acceptance:
 - From the spawn pad in a portrait frame, Rootvault's name is readable. Prompts at 8 studs do not offer two gates at once.
 - Waves stays on the Rootvault pier. Practice stays on the Heartwood pier. Treasure, the run Shrine, and the run Shop stay on `DoorHud`.
 
-### T-140 Polish and VFX
+### T-145 Polish and VFX
 
 Owner GHOST. Files: `HavenBuilder.luau` (lights and emitters), a short note in `tests/HavenBuild.spec.luau` that each gate has one light and a rate at or under 8. No new audio id. No schema bump.
 
