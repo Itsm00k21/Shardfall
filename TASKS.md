@@ -46,13 +46,14 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 | T-046 | HUD shell, menu hub, settings, and legacy ScreenGui sweep | GHOST | `cursor/hud-shell-404b` | `src/ReplicatedStorage/Shared/LegacyChrome.luau`, `HudLayout.luau`, `Settings.luau`, `UiTheme.luau`, `ClientChrome.luau`, `Schema.luau` (version 21 `uiSettings` only), `src/ServerScriptService/ShardfallServer/Remotes.luau` (`SetSettings` only), `RateLimiter.luau` (one rule), `default.project.json` (one remote), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau`, `MenuHub.luau`, `init.client.luau` (sweep, shell, hub), `CombatHud.luau` (hide the old HP and wallet frames only). Tests: `LegacyChrome.spec.luau`, `HudLayout.spec.luau`, `Settings.spec.luau`, `UiTheme.spec.luau`, `ClientChrome.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, or MarketBoard. Do not implement T-020, T-022, or T-026. Live-build took T-044 for the premade board and T-045 for raid luck, so this playtest is T-046. | done | https://github.com/Itsm00k21/Shardfall/pull/50 |
 | T-051 | HUD and menu visual polish | GHOST | `cursor/hud-polish-404b` | `src/ReplicatedStorage/Shared/UiTheme.luau`, new `src/ReplicatedStorage/Shared/UiIcons.luau`, new `src/ReplicatedStorage/Shared/UiRouter.luau`, `src/ReplicatedStorage/Shared/HudLayout.luau` (card and rail rects only), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau`, `HudShell.luau`, `init.client.luau` (class prompt, stamp label, and menu routing only). Tests: `tests/UiTheme.spec.luau`, `tests/HudLayout.spec.luau`, new `tests/UiIcons.spec.luau`, new `tests/UiRouter.spec.luau`, `tests/ClientChrome.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. | done | https://github.com/Itsm00k21/Shardfall/pull/54 |
 | T-049 | Wire T-045 RaidLuck into the Heartwood boss clear | GHOST | `cursor/raid-luck-9721` | `src/ServerScriptService/ShardfallServer/DungeonService.luau` (Heartwood boss mutate that calls `Raids.applyClear`), `src/ReplicatedStorage/Shared/Raids.luau` (remove the `raidPity` roll so only one bonus runs; keep the Marks lines until T-040), `src/ReplicatedStorage/Shared/Schema.luau` (new `raidLuck` map, difficulty to bonus fraction, on schema version 22; `template` and migrate start everyone at `{}`, do not copy from `raidPity`), `tests/Raids.spec.luau`, `tests/Schema.spec.luau`, `tests/ProfileLoad.spec.luau`. Follow the T-045 hooks section. Decisions: the bonus stays per difficulty, not per boss and not shared across difficulties. The cap stays on the bonus (`maxBonus` 0.6) and `chance` clamps the sum to 1. A gear drop (raid gear, a Heartshard weapon, or a Relic piece) resets only that difficulty. A clear that drops only dust, marks, materials, pets, mounts, titles, dyes, cosmetics, or auras counts as dry and adds `stepPct`. Fracture tracks no bonus. `eligible = false` is the Practice Grove switch; the live path already skips `applyClear` when `run.practice ~= true`, so leave that skip and do not roll. Several gear rolls in one clear read `chance` from the same record and `settle` once. A vote-kicked or AFK-removed player gets no gear roll and `settle` is not called for them (do not follow the hook snippet that still calls `settle` for those players). A lockout skip that normalizes a stored value above the cap down to the cap is fine to persist. In reconcile, a non-table `raidLuck` becomes `{}`; leave a bad entry in place. Starts only after T-009 grants real raid gear, Heartshard weapons, and Relic pieces. Passing today's chest stand-in would fail `settle`. Until T-009 lands, `raidPity` stays live. Do not implement before then. Do not edit `RaidLuck.luau`. | claimed | — |
-| T-052 | Bag filters, notification badges, and the roll board | GHOST | `cursor/bag-roll-404b` | new `src/ReplicatedStorage/Shared/BagBoard.luau`, new `src/ReplicatedStorage/Shared/NotifyBadges.luau`, new `src/ReplicatedStorage/Shared/RollBoard.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau` (bag bar, badges, roll board), `HudShell.luau` (rail badges only), `init.client.luau` (badge hook only). Tests: `tests/BagBoard.spec.luau`, `tests/NotifyBadges.spec.luau`, `tests/RollBoard.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Stacks on T-051. | done | https://github.com/Itsm00k21/Shardfall/pull/56 |
-| T-053 | Toasts, motion, hero viewport, and responsive layout | GHOST | `cursor/toast-hero-404b` | new `src/ReplicatedStorage/Shared/ToastQueue.luau`, new `src/ReplicatedStorage/Shared/UiSfx.luau`, new `src/ReplicatedStorage/Shared/UiMotion.luau`, new `src/ReplicatedStorage/Shared/HeroBoard.luau`, `src/ReplicatedStorage/Shared/UiTheme.luau` (`MOTION.panel` only), `src/ReplicatedStorage/Shared/HudLayout.luau` (stamp inset and breakpoints), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau` (toast stack, prompt, stamp inset), `MenuHub.luau` (motion, sfx, hero viewport and bars). Tests: `tests/ToastQueue.spec.luau`, `tests/UiSfx.spec.luau`, `tests/HeroBoard.spec.luau`, `tests/HudLayout.spec.luau`, `tests/UiTheme.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Stacks on T-052. | done | https://github.com/Itsm00k21/Shardfall/pull/57 |
-| T-054 | In-panel roll loop | GHOST | `cursor/roll-loop-404b` | new `src/ReplicatedStorage/Shared/RollLoop.luau`, `src/ReplicatedStorage/Shared/Settings.luau` (`rolls.autoJunk` and `rolls.junkBelow` only), `src/ReplicatedStorage/Shared/UiSfx.luau` (click and stinger), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau` (roll tab stays open), `init.client.luau` (hub roll does not close the menu). Tests: `tests/RollLoop.spec.luau`, `tests/Settings.spec.luau`, `tests/UiSfx.spec.luau`, `tests/UiRouter.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Do not bump Schema. Stacks on T-053. | done | https://github.com/Itsm00k21/Shardfall/pull/59 |
+| T-052 | Wire T-050 RaidRecap into the raid end of run | GHOST | `cursor/raid-recap-9721` | `src/ServerScriptService/ShardfallServer/RaidService.luau` (in-memory per-player tallies on the raid run: damage, healing, deaths, soak/interrupt/stack/add counts, failures list, kudos list; call `RaidRecap.recap` once when the run ends), `src/ServerScriptService/ShardfallServer/DungeonService.luau` (feed the tallies from the Heartwood path), `src/ServerScriptService/ShardfallServer/Remotes.luau` + `default.project.json` (private panel event, party view event, GiveKudos request), `RateLimiter.luau` (one kudos rule), a new client recap panel. Follow the T-050 hooks section. Decisions: tie goes to the lower userId; MVP types stay soak, interrupt, stack, add (named mechanics like gust/spread/pool/shield are tips only); tips keep the module's order and a clean run gets no tip; 0 stats stay on the private panel; build the roster from members still in the run at the end plus AFK removals, so a vote-kicked player is off the roster and gets no panel, kudos, or MVP; kudos carry no note and no TextService; the public award has no count; one recap per run, not per wing; no `raidKudosReceived` schema field for beta; Practice Grove gets private panels and tips but no public view and no kudos button; callers pass canonical mechanic keys (no plurals); the display path keeps dropping rule-breaking stored kudos rows; tips come only from the server's failure list, never inferred from tallies. Send `panels[userId]` only to that player and `public` only when `ok == true`. Do not append to the T-016 victory card. Do not edit `RaidRecap.luau`. Queued until the Heartwood raid run has a shared roster and an end-of-run call. | queued | — |
+| T-054 | Bag filters, notification badges, and the roll board | GHOST | `cursor/bag-roll-404b` | new `src/ReplicatedStorage/Shared/BagBoard.luau`, new `src/ReplicatedStorage/Shared/NotifyBadges.luau`, new `src/ReplicatedStorage/Shared/RollBoard.luau`, `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau` (bag bar, badges, roll board), `HudShell.luau` (rail badges only), `init.client.luau` (badge hook only). Tests: `tests/BagBoard.spec.luau`, `tests/NotifyBadges.spec.luau`, `tests/RollBoard.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Stacks on T-051. | done | https://github.com/Itsm00k21/Shardfall/pull/56 |
+| T-055 | Toasts, motion, hero viewport, and responsive layout | GHOST | `cursor/toast-hero-404b` | new `src/ReplicatedStorage/Shared/ToastQueue.luau`, new `src/ReplicatedStorage/Shared/UiSfx.luau`, new `src/ReplicatedStorage/Shared/UiMotion.luau`, new `src/ReplicatedStorage/Shared/HeroBoard.luau`, `src/ReplicatedStorage/Shared/UiTheme.luau` (`MOTION.panel` only), `src/ReplicatedStorage/Shared/HudLayout.luau` (stamp inset and breakpoints), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau` (toast stack, prompt, stamp inset), `MenuHub.luau` (motion, sfx, hero viewport and bars). Tests: `tests/ToastQueue.spec.luau`, `tests/UiSfx.spec.luau`, `tests/HeroBoard.spec.luau`, `tests/HudLayout.spec.luau`, `tests/UiTheme.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Stacks on T-054. | done | https://github.com/Itsm00k21/Shardfall/pull/57 |
+| T-056 | In-panel roll loop | GHOST | `cursor/roll-loop-404b` | new `src/ReplicatedStorage/Shared/RollLoop.luau`, `src/ReplicatedStorage/Shared/Settings.luau` (`rolls.autoJunk` and `rolls.junkBelow` only), `src/ReplicatedStorage/Shared/UiSfx.luau` (click and stinger), `src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau` (roll tab stays open), `init.client.luau` (hub roll does not close the menu). Tests: `tests/RollLoop.spec.luau`, `tests/Settings.spec.luau`, `tests/UiSfx.spec.luau`, `tests/UiRouter.spec.luau`, `tests/run.luau`. Do not edit RaidFinder, RaidMarks, RaidLootTrade, RaidLeaver, RaidLuck, RaidRecap, or MarketBoard. Do not implement T-020, T-022, or T-026. Do not bump Schema. Stacks on T-055. | done | https://github.com/Itsm00k21/Shardfall/pull/59 |
 
 T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault and the wiring. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
 
-Next free id is T-055.
+Next free id is T-058.
 
 ## Claimed by HELPER
 
@@ -70,7 +71,9 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-041 | Raid Finder role check and group-forming rules (pure, no wiring) | HELPER | `helper/raid-finder-9721` | new `src/ReplicatedStorage/Shared/RaidFinder.luau`, new `tests/RaidFinder.spec.luau`, one require line in `tests/run.luau`, and a 'T-041 hooks for GHOST' section in this file. Pure, server-authoritative rules from `docs/design/shardfall_raids.md` Matchmaking: Finder covers Story and Normal only (Hard/Shardbreaker refused; Guided Raids come later); role check with Tank, Healer, DPS, Flex where Flex fills any missing role; party size 4 to 8 with a boss HP scale for the player count; if no healer is found within 3 minutes (180 s, unix seconds passed in) the group may start with auto-scaling (-15% boss damage and a free Healing Spring totem flag); a missing Tank gets a Warden NPC golem on Story only; Fresh Shard flag for first-timers and a fresh count for RaidMarks; mentor eligibility (10+ clears and opted in); an idle vote-kick (T-027) drops queue priority; no gear-score or clear-count filter for Story/Normal; a player on a RaidLeaver (T-035) cooldown can't queue (take the cooldown-until value as input, do not require RaidLeaver). Role targets per party size and all thresholds are placeholders in a frozen CONFIG. No MemoryStore, services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, Schema, Trading, MarketBoard, or any T-012 file. Suggest profile fields (queue priority, mentor opt-in) in the hooks section. No build stamp, nothing premium. | done | [#48](https://github.com/Itsm00k21/Shardfall/pull/48) |
 | T-043 | Premade board listing rules (pure, no wiring) + RaidFinder 8-player tank target | HELPER | `helper/premade-board-9721` | new `src/ReplicatedStorage/Shared/RaidPremade.luau`, new `tests/RaidPremade.spec.luau`, one require line in `tests/run.luau`, a 'T-043 hooks for GHOST' section in this file, plus a one-line CONFIG change in `src/ReplicatedStorage/Shared/RaidFinder.luau` and its spec. Pure, server-authoritative rules from `docs/design/shardfall_raids.md` Matchmaking "Premade board in the Guild Plaza (Party Finder style)": a listing has a difficulty (Story, Normal, Hard, Shardbreaker; Guided mode is out of scope), one or more tags from Learning, Farm, Speedrun, Achievement, an optional required clear count (non-negative integer), a party size of 4 to 8, and role slots using RaidFinder's role names (tank, healer, dps, flex). No gear-score requirement or filter is allowed on Story or Normal (refuse one). Provide pure functions to validate a listing, check whether a player may join (open slot for their role, flex takes any open slot, meets the required clear count), and report when a listing is full or expired. One active listing per host; the listing closes when the host leaves; listings expire after a placeholder time in a frozen CONFIG. The premade board ignores the RaidLeaver Finder cooldown (T-035 decision: Finder only). Listing title text is filtered by the caller with TextService, not in this module. Time comes in as unix seconds (`os.time()`). No MemoryStore, services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, Schema, Trading, MarketBoard, or any T-012 file. RaidFinder change: set `roleTargets[8]` to 1 tank, 1 healer, 6 DPS (the design's 1–2 Wardens means the minimum is 1) and update the spec. No build stamp, nothing premium. | done | [#49](https://github.com/Itsm00k21/Shardfall/pull/49) |
 | T-045 | Raid bad-luck protection rules | HELPER | `helper/raid-luck-9721` | new `src/ReplicatedStorage/Shared/RaidLuck.luau`, new `tests/RaidLuck.spec.luau`, one require line in `tests/run.luau`, and a 'T-045 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md`: each lockout clear with no gear drop adds +10% to the next drop chance, and the bonus resets when something drops. Do not edit raid code, Schema, or remotes. | done | [#53](https://github.com/Itsm00k21/Shardfall/pull/53) |
-| T-050 | Raid post-run recap rules (pure, no wiring) | HELPER | `helper/raid-recap-9721` | new `src/ReplicatedStorage/Shared/RaidRecap.luau`, new `tests/RaidRecap.spec.luau`, one require line in `tests/run.luau`, and a 'T-050 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md` Anti-toxicity and fairness: each player gets a private panel built from caller-supplied per-player stats (damage, healing, deaths, mechanics handled by type such as soaks, interrupts, stacks, add kills, for example "You soaked 6 times") plus 1 to 2 tips picked from that player's mechanic failures using a placeholder tip table keyed by boss and mechanic in a frozen CONFIG. The public view shows only party kudos and mechanic MVP awards and never a damage or healing ranking or anyone else's numbers. Each player may give one kudos per run to another party member (not themselves, only members of that run). One MVP per mechanic type goes to the player who handled the most, with a deterministic tiebreak and no award when nobody handled any. An AFK-removed player (T-027 RaidConduct) gets their own private panel but is excluded from kudos and MVP. Inputs are plain tables. No services, remotes, DataStores, or TextService. Do not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, Schema, `CombatHud.luau`, the existing T-016 dungeon recap code, or any T-012 file. No build stamp, nothing premium. | claimed | — |
+| T-050 | Raid post-run recap rules (pure, no wiring) | HELPER | `helper/raid-recap-9721` | new `src/ReplicatedStorage/Shared/RaidRecap.luau`, new `tests/RaidRecap.spec.luau`, one require line in `tests/run.luau`, and a 'T-050 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md` Anti-toxicity and fairness: each player gets a private panel built from caller-supplied per-player stats (damage, healing, deaths, mechanics handled by type such as soaks, interrupts, stacks, add kills, for example "You soaked 6 times") plus 1 to 2 tips picked from that player's mechanic failures using a placeholder tip table keyed by boss and mechanic in a frozen CONFIG. The public view shows only party kudos and mechanic MVP awards and never a damage or healing ranking or anyone else's numbers. Each player may give one kudos per run to another party member (not themselves, only members of that run). One MVP per mechanic type goes to the player who handled the most, with a deterministic tiebreak and no award when nobody handled any. An AFK-removed player (T-027 RaidConduct) gets their own private panel but is excluded from kudos and MVP. Inputs are plain tables. No services, remotes, DataStores, or TextService. Do not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, Schema, `CombatHud.luau`, the existing T-016 dungeon recap code, or any T-012 file. No build stamp, nothing premium. | done | [#55](https://github.com/Itsm00k21/Shardfall/pull/55) |
+| T-053 | Raid leaderboard rules: fastest clear (pure, no wiring) | HELPER | `helper/raid-leaderboard-9721` | new `src/ReplicatedStorage/Shared/RaidLeaderboard.luau`, new `tests/RaidLeaderboard.spec.luau`, one require line in `tests/run.luau`, and a 'T-053 hooks for GHOST' section in this file. Pure rules for the beta 'basic leaderboard (fastest Normal clear)' in `docs/design/shardfall_raids.md` (Firsts and races, Scope). Boards are keyed by difficulty and party size; a frozen CONFIG lists which boards are live (beta: normal only, story off), a top-N size, and a sanity floor on clear time. `submit(board, record)` takes a plain clear record (runId, difficulty, size, start and end times or duration, roster userIds, practice flag, removals) and returns a new board without writing the input: reject practice runs, unknown or disabled difficulties, bad times, and clears under the floor; credit only roster members who were not AFK-removed or vote-kicked; the same runId twice is a no-op; sort by duration with a deterministic tiebreak (earlier clear, then lower runId) and trim to top N. Also `personalBest(board, userId)` and a `rankOf` helper. Inputs are plain tables. No OrderedDataStore, MemoryStore, remotes, Schema, or TextService. Do not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, Schema, or any T-012 file. No build stamp, nothing premium. | done | [#58](https://github.com/Itsm00k21/Shardfall/pull/58) |
+| T-057 | Raid Story Echo buff rules (pure, no wiring) | HELPER | `helper/raid-echo-9721` | new `src/ReplicatedStorage/Shared/RaidEcho.luau`, new `tests/RaidEcho.spec.luau`, one require line in `tests/run.luau`, and a 'T-057 hooks for GHOST' section in this file. Pure, server-authoritative rules for the Story-tier Echo buff in `docs/design/shardfall_raids.md` (Difficulty ladder: 'An Echo buff (+5% per wipe, max +25%) stacks after wipes'). Frozen CONFIG: 5% per wipe, cap 25%, Story only (Normal live but never gets Echo; Hard/Shardbreaker/Fracture never). A wipe is a whole-party death after a boss pull started; partial deaths, Practice Grove pulls, and resets before the pull do not count. Expose: a fresh per-run state, `wipe(state, ctx)` returning a new state (no input writes), `bonus(state, difficulty)` as a fraction 0 to 0.25, `apply(stat, state, difficulty)` for player damage, healing, and max HP multipliers, and a reset on boss kill or run end. The buff is party-wide and shown to the party, not per player. Time and difficulty are passed in. No services, remotes, DataStores, RNG, or build stamp. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `CombatMath.luau`, or T-012. Nothing requires it until GHOST wires it, so gameplay is unchanged. Open questions (per-boss vs whole-run stacking, whether a backfill inherits the stacks, whether it shows on the RaidRecap panel) go in the hooks section. | claimed | — |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -1774,6 +1777,268 @@ Questions for Ghost:
 12. A stored bonus above `maxBonus` comes back as the cap on any `ok == true` settle, including a lockout skip. Persisting that pulls 0.9 down to 0.6. `chance` already uses the cap. Should a skip leave the stored number alone?
 
 Ghost's answers are on T-049. Short form: the bonus stays per difficulty, not per boss. The cap stays on the bonus (`maxBonus` 0.6) and the sum clamps to 1. A gear drop resets only that difficulty. Dust, marks, materials, pets, and cosmetics are a dry clear. Fracture tracks no bonus. `eligible = false` is the Practice Grove switch. `raidLuck` is added on schema version 22, and template plus migrate start at `{}` with nothing copied from `raidPity`. Do not wire this until T-009 grants real raid gear, Heartshard weapons, and Relic pieces; until then `raidPity` stays live. Several gear rolls in one clear read `chance` once and `settle` once. A vote-kicked or AFK-removed player gets no gear roll and `settle` is not called for them, which overrides the snippet above. A skip that pulls a stored value above the cap down to the cap is fine to persist.
+
+### T-050 hooks for GHOST
+
+HELPER did not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, `Schema.luau`, `CombatHud.luau`, `SessionRecap.luau`, `RaidConduct.luau`, `Remotes.luau`, `RateLimiter.luau`, or any other T-012 file. `RaidRecap` is pure and ready to call. It does not require `RaidConduct`, `Raids`, or `SessionRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidRecap` yet, so this branch does not change a live run. No build stamp. No remote. No DataStore. No TextService. Nothing here costs Robux. The T-050 row stays `claimed`. Wiring is yours.
+
+The live Heartwood grant is still the per-player boss mutate in `DungeonService.damageEnemy`. That file has no shared roster and no mechanic counter, and it is not on this row. `RaidService` has no end-of-run call. Keep the tallies on the in-memory raid run and call `recap` once when the run ends. Do not append these lines to `SessionRecap.line` or `CombatHud.victoryBody`. That card stays the T-016 session line (level, epics, set percent).
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidRecap = require(ReplicatedStorage.Shared.RaidRecap)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `panel(member)` | you want one player's private panel | `ok == true` and that player's lines, tips, and own numbers. |
+| `give(members, kudos, fromUserId, toUserId)` | a player clicks kudos | `ok == true` is the only signal to store `kudos`. The input list is not written. |
+| `publicView(members, kudos)` | you are about to broadcast the party view | `ok == true` and `public`. Kudos and MVP awards only. |
+| `recap(run)` | the run has ended | `panels[userId]` for each player, plus the same `public` view. |
+
+`run` fields that are read: `members`, `kudos`. Anything else is ignored, including `bossId` and `difficulty`. Boss ids live on each failure. `kudos` nil means nobody has given one.
+
+Send `panels[userId]` only to that player. Send `public` to the party, and only when `ok == true`. Do not put the whole `recap` result on one remote. `public` has no damage, no healing, no deaths, no mechanic counts, no tips, and no private lines.
+
+A roster error (`ok == false` and `panels` empty) means send nothing. A malformed kudos list still returns the private panels, with `ok == false` and an empty `public`. Send those panels. Do not broadcast `public` until the list is fixed.
+
+**Private panel.** `panel` reads `userId`, `damage`, `healing`, `deaths`, `mechanics`, `failures`, and `removal`. A missing damage, healing, or deaths value is 0. The three stat lines are always there. A mechanic line is there only when that count is at least 1. The lines have no period, matching the design example.
+
+| count | line |
+|---|---|
+| damage 1200 | `You dealt 1200 damage` |
+| healing 400 | `You healed 400` |
+| deaths 0, 1, 2 | `You died 0 times`, `You died 1 time`, `You died 2 times` |
+| soak 1, soak 6 | `You soaked 1 time`, `You soaked 6 times` |
+| interrupt 1 | `You interrupted 1 time` |
+| stack 2 | `You stacked 2 times` |
+| add 1, add 3 | `You killed 1 add`, `You killed 3 adds` |
+
+`mechanics` is a map, not an array. Keys are `soak`, `interrupt`, `stack`, and `add` from `RaidRecap.MECHANICS`. Strings are trimmed and lowercased, so `" Soak "` is soak. `"soaks"` is `ERRORS.mechanic`. A second key that normalizes to the same mechanic is also `ERRORS.mechanic`. A negative, fractional, or non-number count is `ERRORS.mechanics`. The returned `mechanics` map always has all four keys. Zeros stay on the map and stay off the lines.
+
+`failures` is a dense array of `{ bossId, mechanic, count? }`. A missing count means the failure happened. `count` 0 is skipped. A negative count is `ERRORS.failure`. Tips come from `CONFIG.tips[bossId][mechanic]`. Keys are trimmed and lowercased. Duplicates collapse. The list is sorted by boss id, then mechanic id, and cut to `CONFIG.tipLimit` (2). A boss with no row, including `grandmother_gnarl`, adds no tip and does not fail the panel. A clean run gets no tips. The placeholder bosses are the wing ids in `Raids.WINGS`: `twins`, `sapwell`, `galecrown`, `awakened`. Galecrown's gust tip is `Try using Blink on Galecrown's Gust.`
+
+**AFK.** This matches T-027. `RaidConduct.afk` returns `state == "remove"` for the 90s removal (`AFK_STATE`). Pass that result table as `removal`, or pass the string `"afk"` or `"remove"`. `" AFK "` and `" Remove "` are the same. `ok == false` on that table is `ERRORS.removal`, including when `state` is `"remove"`, so an invalid check is not treated as a removal. `state` `"ok"`, `"warning"`, and `"paused"` mean the player is still here (`PRESENT_STATES`). A passed vote-kick is the string `"kick"`. A tally table with `passed` and no `state` is refused. `"idle"`, `"leave"`, and `"vote"` are refused.
+
+An AFK player still gets a private panel, with `afk == true`, their own numbers, and their own tips. They are skipped for every MVP, and they cannot give or receive kudos. A warning, a paused cutscene, and a vote-kick stay in kudos and MVP. The public view does not list who was AFK.
+
+**MVP.** One award per mechanic type, in `MECHANICS` order. The winner handled the most. A tie goes to the lower `userId`, so roster order does not matter. A count of 0 is not a candidate. If every eligible count is 0, or only an AFK player handled that mechanic, that type has no award. The award is `{ mechanic, userId }`. The count is not on it. There is no damage award and no healing award.
+
+**Kudos.** One per player per run, to another member of that run. The stored row is `{ fromUserId, toUserId }`. Extra fields on the input, including a damage number, are not copied. `give` does not write the caller's list. Store `given.kudos` only when `given.ok == true`. A refused click returns a copy of the previous valid list so you can see it, and that copy is not the table you passed in.
+
+`give` checks, in order: the roster (stats included), the existing list in strict mode, the two user ids, the giver is in the run, the receiver is in the run, not yourself, the giver is not AFK, the receiver is not AFK, the giver has not already given. The messages are `absentSelf`, `absent`, `selfKudos`, `afkGive`, `afkReceive`, and `already`.
+
+`publicView` and `recap` are the display path. A malformed row or a sparse list fails the public view. A self kudos, an outsider, an AFK kudos, and a second kudos from the same player are omitted. The first legal row from each player is kept, in input order. That is why a kudos given before someone is marked AFK drops out of the party view at the end, and the private panels still build.
+
+```lua
+local removal = nil
+local afk = RaidConduct.afk({
+	now = now,
+	lastInputAt = member.lastInputAt,
+	inCutscene = member.inCutscene == true,
+})
+if afk.state == "remove" then
+	removal = afk
+elseif votePassed then
+	removal = "kick"
+end
+
+local view = RaidRecap.recap({
+	members = {
+		{
+			userId = player.UserId,
+			damage = tally.damage,
+			healing = tally.healing,
+			deaths = tally.deaths,
+			mechanics = {
+				soak = tally.soak,
+				interrupt = tally.interrupt,
+				stack = tally.stack,
+				add = tally.add,
+			},
+			failures = tally.failures,
+			removal = removal,
+		},
+	},
+	kudos = run.kudos,
+})
+local mine = view.panels[player.UserId]
+if mine ~= nil and mine.ok == true then
+	-- Send `mine` to this player only.
+end
+if view.ok == true then
+	-- Send `view.public` to the party.
+end
+```
+
+On a kudos click:
+
+```lua
+local given = RaidRecap.give(members, run.kudos, fromUserId, toUserId)
+if given.ok == true then
+	run.kudos = given.kudos
+	local party = RaidRecap.publicView(members, run.kudos)
+	if party.ok == true then
+		-- Send `party.public` to the party.
+	end
+end
+```
+
+There is no RNG. The same input returns the same panels, the same tips, and the same awards. Thresholds and the tip copy live in `RaidRecap.CONFIG`. `tipLimit` is 2. Do not hardcode that number beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The tallies and the kudos list live on the in-memory run for that reserved server. They do not have to survive a rejoin. Version 21 is current. T-049's row already plans `raidLuck` on version 22, so do not take 22 for this.
+
+If you want a lifetime received count, add it on whichever version is free after that:
+
+```lua
+raidKudosReceived: number, -- kudos received across runs. template 0. Missing is 0.
+```
+
+This module does not read or write that field. Increment it yourself when `give` returns `ok == true`, once per accepted kudos.
+
+`tests/run.luau` requires `./RaidRecap.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. A tie goes to the lower `userId`. I built it that way so a shuffled roster still picks the same player. Should a tie go to whoever joined first instead?
+2. MVP types are soak, interrupt, stack, and add, in that order. Gust, spread, pools, and the Lumen shield are tips only, and I did not give them an award. Should each named mechanic get its own MVP?
+3. Tips are sorted by boss id, then mechanic id, and cut to `tipLimit` (2). A failure with no CONFIG row adds nothing. A clean run gets no tips. I did not add a general tip. Should the order follow the wings (twins, sapwell, galecrown, awakened), and should a clean run still get one tip?
+4. Damage, healing, and deaths are always on the private panel, including 0. A mechanic line appears only at 1 or more. The soak line is `You soaked 6 times`, with no period. Should a 0 stat be left off?
+5. AFK is `"afk"`, `"remove"`, or a `RaidConduct.afk` result with `state == "remove"` and `ok ~= false`. A warning, a paused cutscene, and `"kick"` stay in kudos and MVP. A tally table with no `state` is refused. Should a passed vote-kick be left out as well?
+6. Kudos are `{ fromUserId, toUserId }` with no message, so this module never calls TextService. Should a kudos carry a short note, and would you filter that note beside the other TextService calls?
+7. A public award is `{ mechanic, userId }`. The count stays on that player's panel. There is no damage sort and no healing sort. Should the party line include the count?
+8. One call covers whatever stats you pass. `run.bossId` is ignored. Tip keys are the wing ids, not `grandmother_gnarl`. I would call it once at the end of the run. Should each wing get its own panel?
+9. No profile field. Stats and kudos live on the in-memory run. A lifetime count would be `raidKudosReceived` on the next free schema version after T-049's version 22. Version 21 is current. Do you want that counter?
+10. There is no practice switch. The same functions run if you pass Practice Grove stats. Should practice skip kudos and MVP?
+11. Mechanic keys are soak, interrupt, stack, and add. `" Soak "` works. `"soaks"` is refused. A bad tally fails the roster, including a `give` click. Should the plurals be accepted?
+12. `give` refuses a bad click. `publicView` drops a stored row that `give` would refuse and keeps the first legal row from that player. A malformed row fails `recap.ok`, empties `public`, and still returns the private panels. A kudos given before an AFK removal drops out of the party view. Should a rule-breaking stored row fail the recap instead of being dropped?
+13. Failures are the list you pass. A missing `count` means it happened, and 0 is ignored. I do not infer a missed soak from a low handled count. Should a tip be derived from the tally?
+
+### T-053 hooks for GHOST
+
+HELPER did not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `Schema.luau`, `RaidConduct.luau`, `RaidRecap.luau`, or any other T-012 file. `RaidLeaderboard` is pure and ready to call. It does not require `RaidConduct`, `Raids`, or `RaidRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidLeaderboard` yet, so this branch does not change a live run. No build stamp. No remote. No OrderedDataStore. No MemoryStore. No TextService. Nothing here costs Robux. The T-053 row stays `claimed`. Wiring is yours.
+
+Call `submit` once when the raid run ends, with the whole roster. Do not call it from the per-player boss mutate in `DungeonService.damageEnemy`. A second call with the same `runId` is a no-op, so the first player's payload would stick and everyone else would be dropped. Do not append a leaderboard line to `SessionRecap.line` or `CombatHud.victoryBody`. That card stays the T-016 session line. T-052 owns the recap panel. This board is separate.
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidLeaderboard = require(ReplicatedStorage.Shared.RaidLeaderboard)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `submit(board, record)` | the run has cleared | `ok == true` is the only signal to store `board`. `accepted == true` means this clear took a row. |
+| `personalBest(board, userId)` | you want one player's fastest clear | `found == true` and `entry`. That entry may be on any live board. |
+| `rankOf(board, userId)` | you want the rank of that fastest clear | `rank` is that row's place on its own difficulty and size. |
+| `rankOf(board, userId, difficulty, size)` | you want one board | `rank` is their best row on that key. `" Normal "` is normal. |
+
+`nil` starts an empty board. `{}` does too. A bare array is `ERRORS.board`. Store `result.board` only when `result.ok == true`. A duplicate and a clear that misses the top N are still `ok == true` (the copy has the same rows). A bad record is `ok == false`. If the saved board itself does not parse, `ok == false` and `board` is `{ entries = {} }`. Do not write that over a save you could not read.
+
+`record` fields that are read: `runId`, `difficulty`, `size`, `start` or `startedAt`, `end` or `endedAt`, `duration`, `roster`, `practice`, `removals`. Anything else is ignored. A `removal` field on a roster entry is ignored. Put removals on `removals`.
+
+Checks run in this order: the board, the record type, `runId`, an already stored `runId` (no-op, the rest of the payload is not read), the practice flag, a practice run, difficulty, the clock, the floor, the roster, the size, removals, then an empty credited roster. The first failure is the error you get. A practice Story clear reports practice, not the disabled board.
+
+**Boards.** One table holds every key. A key is difficulty plus party size. Rows come back ordered by difficulty name, then size, then rank. Beta live set is `CONFIG.live`: normal only. Story, Hard, and Shardbreaker are known and return `ERRORS.disabled`. Fracture and Guided are not fastest-clear boards and return `ERRORS.difficulty`. Strings are trimmed and lowercased.
+
+Party size is 4 to 8 (`CONFIG.minParty`, `CONFIG.maxParty`). `size` must equal `#roster`. The roster includes players you then mark removed. A missing `size` uses the roster length. The stored row keeps that size and lists only the credited ids, sorted ascending, so a 5-player group with one kick still ranks on the size-5 board.
+
+**Clock.** Pass `start` and `end`, or the aliases `startedAt` and `endedAt`. Duration is `end - start`. If you also pass `duration`, it has to match that difference exactly. `end` plus `duration` without a start is allowed, and `end` is the clear time. Duration alone is allowed, and that row has no `clearedAt`. A start without an end is `ERRORS.time`. So is a zero, negative, or non-finite time, `end` before `start`, and two aliases that disagree. A positive duration under `CONFIG.floorSeconds` (300) is `ERRORS.floor`. 300 is ranked. The floor is not applied again when a saved row is read, so a later CONFIG change does not make an old row unreadable.
+
+**Credit.** An AFK removal or a passed vote-kick is left off the row. Anyone else on the roster is credited. This matches T-027's shapes and is stricter than T-050: T-050 keeps a vote-kick in kudos, and this board does not.
+
+| removal | credit |
+|---|---|
+| missing | credited |
+| `"afk"`, `"remove"`, `" AFK "` | not credited |
+| `RaidConduct.afk` with `state == "remove"` and `ok ~= false` | not credited |
+| `"kick"` | not credited |
+| a tally with `passed == true` | not credited |
+| `state` `"ok"`, `"warning"`, or `"paused"`, or `passed == false` | credited |
+| `ok == false`, `"leave"`, `"idle"`, `"vote"` | `ERRORS.removal` |
+
+`AFK_STATE` is `"remove"`. `ok` has to be a boolean when it is present. A warning is still a finisher. A removal whose user id is not on the roster is `ERRORS.absent`. The same user twice is `ERRORS.removalTwice`. A string key such as `"20"` is `ERRORS.userId`. If nobody is left, the error is `ERRORS.empty` and the `runId` is not consumed, so a later legal submit of that id can still rank.
+
+`removals` is either a map of user id to cause, or a dense list of `{ userId, removal }` (or `cause`). A dense list of cause strings is read as a map keyed by those indexes, so do not pass `{ "afk", "kick" }`. User id 1 with a conduct table is the map form. An empty table means nobody was removed.
+
+**Rank.** Sort is shortest duration, then earlier `clearedAt`, then lower `runId`. A row with no `clearedAt` loses a tie to a row that has one. Each difficulty and size keeps `CONFIG.topN` (10) rows. A clear that misses the cut returns `ok == true`, `accepted == false`, `trimmed == true`, and that `runId` is not remembered. The same `runId` already on any key is `duplicate == true` and does not replace a slower time. A positive integer and a string are different ids. `2` and `"2"` can both be on the board. On a tie, numbers rank before strings. `2` beats `10`. `"10"` beats `"2"`. Strings are trimmed and not lowercased. Two players on the same clear share that row's rank. `rank` is 1 for the fastest row.
+
+```lua
+local removals = {}
+for _, member in ipairs(roster) do
+	local afk = RaidConduct.afk({
+		now = now,
+		lastInputAt = member.lastInputAt,
+		inCutscene = member.inCutscene == true,
+	})
+	if afk.state == "remove" then
+		removals[member.userId] = afk
+	elseif member.vote ~= nil and member.vote.passed == true then
+		removals[member.userId] = member.vote
+	end
+end
+
+if run.practice ~= true then
+	local ranked = RaidLeaderboard.submit(board, {
+		runId = run.id,
+		difficulty = run.difficulty,
+		size = #roster,
+		start = run.startedAt,
+		["end"] = now,
+		roster = roster,
+		practice = false,
+		removals = removals,
+	})
+	if ranked.ok == true then
+		board = ranked.board
+	end
+end
+```
+
+On a lookup:
+
+```lua
+local best = RaidLeaderboard.personalBest(board, player.UserId)
+if best.found == true then
+	-- best.entry.duration, best.entry.difficulty, best.entry.size
+end
+local rank = RaidLeaderboard.rankOf(board, player.UserId, "normal", #roster)
+if rank.found == true then
+	-- rank.rank is 1 for the fastest credited row on that board
+end
+```
+
+There is no RNG. The same input returns the same board. Thresholds live in `RaidLeaderboard.CONFIG`. Do not hardcode 10 or 300 beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The board is the plain `{ entries }` table. It does not have to live on a profile. Version 21 is current. T-049's row already plans `raidLuck` on version 22, so do not take 22 for this. This module does not call OrderedDataStore or MemoryStore. An in-memory table on one server dies on restart.
+
+`tests/run.luau` requires `./RaidLeaderboard.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The sanity floor is 300 seconds. A full clear is designed at 20–30 minutes. Is 300 the right floor, or should it sit closer to a real wing?
+2. `topN` is 10 for each difficulty and party size. Is that the beta length?
+3. Party size is 4 to 8. `size` must equal the roster length, and that roster includes AFK-removed and vote-kicked players. A 5-player group with one kick still ranks on the size-5 board. The stored row lists only the players who finished. Should the key be the number who finished?
+4. A backfill is credited when you put them on the roster and leave them out of `removals`. The kicked player has to stay on that same roster to be excluded. Dropping the kicked player and also listing them in `removals` is `ERRORS.absent`. Is the ranked roster the group that pulled, or the group that finished, including a backfill?
+5. A clear with nobody left is rejected and does not consume the `runId`. Should that clear still take a row?
+6. A `runId` already on any board is a no-op, even when the new time is faster or the payload is practice. A clear that misses the top N is not remembered, so a later submit of that id can still place. Should a missed id stay seen, and should a faster retry replace the row?
+7. Times are `start`/`startedAt` plus `end`/`endedAt`, or `duration`. If start and end are both set, duration is `end - start`, and a `duration` field must match exactly. Duration alone is allowed and loses a tie to a row that has an end time. `end` plus `duration` without `start` uses `end` as the clear time. Should a duration-only clear be refused?
+8. `personalBest(board, userId)` is the single fastest credited row across every difficulty and size. A shorter 4-player clear beats a longer 8-player clear. `rankOf(board, userId)` is that row's rank on its own board. `rankOf(board, userId, difficulty, size)` is their best row on that key. Two players on the same clear share that row's rank. Should a personal best stay on one board, and should the shown rank be per player instead of per clear?
+9. Removals follow T-027. `"afk"`, `"remove"`, or a `RaidConduct.afk` result with `state == "remove"` and `ok ~= false` are AFK. `"kick"` or a tally with `passed == true` is a vote-kick. Both are left off the row. `"ok"`, `"warning"`, and `"paused"` stay on it. `ok == false` is an error. `"leave"` and `"idle"` are errors. A `removal` field on a roster entry is ignored. Should a warning be left off, and should the roster entry's own removal count?
+10. Story, Hard, and Shardbreaker are known and switched off in `CONFIG.live`. Fracture and Guided are unknown. Only Normal is live. Should Hard stay unknown until T-007 names it?
+11. A run id is a positive integer or a trimmed non-empty string. Numbers rank before strings. `2` beats `10`. `"10"` beats `"2"`. The number `2` and the string `"2"` are different runs. Should run ids be strings only?
+12. No profile field. The board is the plain `{ entries }` table the caller keeps. There is no OrderedDataStore in this module. An in-memory table dies on restart. Where should the beta board live?
+13. Returned boards keep `entries` only. Other keys on the table you pass are dropped. A bare array is refused. `nil` starts an empty board. Is that the shape you want to store?
+14. This module does not rank Fracture level, class combo, or guild progression. Beta is fastest clear only. Confirm those stay out.
 
 ## Open
 
