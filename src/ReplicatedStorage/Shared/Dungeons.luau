@@ -78,6 +78,7 @@ export type DungeonDef = {
 
 Dungeons.ROOTVAULT_ID = "rootvault"
 Dungeons.WAVES_ID = "rootvault_waves"
+Dungeons.HEARTWOOD_ID = "heartwood"
 
 -- After a room or wave is empty, the server waits this long, then moves on.
 Dungeons.ADVANCE_SECONDS = 3
@@ -105,9 +106,34 @@ Dungeons.WAVES_ROOM_INDEX = -1
 
 -- Haven occupies the origin. Room n sits REALM_OFFSET plus this many studs
 -- further along Z so the crawl does not overlap the islands. Players are
--- teleported; there is no corridor.
+-- teleported. The in-room path is the corridor.
 Dungeons.ROOM_SPACING = 140
 Dungeons.REALM_OFFSET = 4000
+-- 79 studs on a side is about 2x the old 56-stud floor, with space to kite.
+Dungeons.FLOOR_SIZE = 79
+Dungeons.WALL_HEIGHT = 16
+Dungeons.CORRIDOR_WIDTH = 16
+-- Player stands far enough from the north wall that a short camera stays inside.
+Dungeons.SPAWN_Z = -18
+Dungeons.PORTAL_Z = 28
+Dungeons.CAMERA_MAX_ZOOM = 18
+Dungeons.CAMERA_MIN_ZOOM = 4
+-- Fixed crawl light. Brighter than Haven night, and the client applies it
+-- only while the character is inside a room so the day cycle stays on the hub.
+Dungeons.CRAWL_LIGHT = {
+	ambient = { 124, 110, 90 },
+	outdoor = { 156, 138, 112 },
+	brightness = 1.7,
+	clockTime = 14.5,
+	fog = { 110, 104, 86 },
+}
+-- Warm fill plus a thin outline so a rig still reads when shadows are off.
+Dungeons.RIM = {
+	fill = { 255, 214, 160 },
+	fillTransparency = 0.88,
+	outline = { 255, 236, 200 },
+	outlineTransparency = 0.2,
+}
 
 Dungeons.ENEMIES = {
 	vine_crawler = {
@@ -229,9 +255,15 @@ Dungeons.ENEMIES = {
 		id = "grandmother_gnarl",
 		name = "Grandmother Gnarl",
 		maxHealth = 220,
-		damage = 18,
+		-- Level 2, starter bar (CombatMath.BASE_HEALTH 100, little defense).
+		-- Was 18: six failed slams deleted the bar. 10 is ten failed slams.
+		-- Walking out of the red square deals none of this.
+		damage = 10,
 		defense = 0,
-		attackSpeed = 0.25,
+		-- Cooldown after a slam lands is 1/attackSpeed. Was 0.25 (4.0s).
+		-- 0.20 is 5.0s, and the boss windup is CombatFeel.TELEGRAPH_BOSS
+		-- (1.8s), so the next red square does not open on top of the last.
+		attackSpeed = 0.2,
 		moveSpeed = 6,
 		range = 16,
 		style = "melee",
@@ -243,8 +275,10 @@ Dungeons.ENEMIES = {
 		phase2At = 0.5,
 		weakSeconds = 1.6,
 		armoredMultiplier = 0.45,
-		fogInterval = 4,
-		fogDamage = 14,
+		-- Was 4s / 14 damage, which stacked with the slam on a fresh bar.
+		-- 7s / 8, and Rootvault.sameBeat still keeps fog off a slam heartbeat.
+		fogInterval = 7,
+		fogDamage = 8,
 		safeRadius = 8,
 		color = { 36, 92, 58 },
 		size = { 8, 9, 7 },
@@ -258,7 +292,7 @@ local ROOTVAULT: DungeonDef = {
 	theme = "Nature, beasts, wood, vines",
 	ascension = 0,
 	implemented = true,
-	floorSize = 56,
+	floorSize = Dungeons.FLOOR_SIZE,
 	rooms = {
 		{
 			id = "thicket",
@@ -282,7 +316,7 @@ local ROOTVAULT: DungeonDef = {
 		},
 	},
 	rewards = {
-		gold = 45,
+		gold = 360,
 		shardTokens = 3,
 		xp = 40,
 		materials = { wood = 4, vine = 3, spore = 2, bark = 1 },
@@ -302,7 +336,7 @@ local WAVES: DungeonDef = {
 	ascension = 0,
 	implemented = true,
 	endless = true,
-	floorSize = 56,
+	floorSize = Dungeons.FLOOR_SIZE,
 	rooms = {
 		{
 			id = "wave_arena",
@@ -321,12 +355,36 @@ local TIDECRYPT: DungeonDef = {
 	theme = "Water and tide",
 	ascension = 1,
 	implemented = false,
-	floorSize = 56,
+	floorSize = Dungeons.FLOOR_SIZE,
 	rooms = {},
 	rewards = nil,
 }
 
-local LIST: { DungeonDef } = { ROOTVAULT, WAVES, TIDECRYPT }
+local HEARTWOOD: DungeonDef = {
+	id = Dungeons.HEARTWOOD_ID,
+	name = "The Heartwood",
+	realm = "Verdant Wilds",
+	theme = "Raid wings",
+	ascension = 0,
+	implemented = true,
+	floorSize = Dungeons.FLOOR_SIZE,
+	rooms = {
+		{ id = "twins", name = "Thornwarden Twins", enemies = { "grandmother_gnarl" } },
+		{ id = "sapwell", name = "Mother Sapwell", enemies = { "grandmother_gnarl" } },
+		{ id = "galecrown", name = "Galecrown", enemies = { "grandmother_gnarl" } },
+		{ id = "awakened", name = "Grandmother Gnarl Awakened", enemies = { "grandmother_gnarl" } },
+	},
+	rewards = {
+		gold = 480,
+		shardTokens = 4,
+		xp = 80,
+		materials = { wood = 4, vine = 3, spore = 2, bark = 2 },
+		heartwoodChance = 0.5,
+		voucherChance = 0.2,
+	},
+}
+
+local LIST: { DungeonDef } = { ROOTVAULT, WAVES, HEARTWOOD, TIDECRYPT }
 
 local byId: { [string]: DungeonDef } = {}
 for _, dungeon in ipairs(LIST) do
@@ -358,6 +416,64 @@ function Dungeons.enemy(kind: string): EnemyDef?
 	return Dungeons.ENEMIES[kind]
 end
 
+-- Defeat copy follows the realm. Rootvault and Heartwood are Verdant Wilds,
+-- so a forest clear does not say Rockdust or name the dungeon as if it
+-- were the hazard. Endless keeps the wave line.
+function Dungeons.defeatLine(dungeon: DungeonDef?): string
+	if dungeon ~= nil and dungeon.endless == true then
+		return "The waves stop when you fall. Rewards from cleared waves are still yours."
+	end
+	local realm = if dungeon ~= nil and type(dungeon.realm) == "string" then dungeon.realm else ""
+	if realm == "Verdant Wilds" then
+		return "The wilds push you out. Materials from earlier clears are still yours."
+	end
+	if realm ~= "" then
+		return realm .. " pushes you out. Materials from earlier clears are still yours."
+	end
+	return "You fall. Materials from earlier clears are still yours."
+end
+
+function Dungeons.lightLayout(
+	floorSize: number
+): { { kind: string, x: number, z: number, y: number } }
+	local size = floorSize
+	if type(size) ~= "number" or size ~= size or size < 16 then
+		size = Dungeons.FLOOR_SIZE
+	end
+	local edge = size / 2 - 3
+	return {
+		{ kind = "torch", x = -edge * 0.55, z = -edge, y = 6 },
+		{ kind = "torch", x = edge * 0.55, z = -edge, y = 6 },
+		{ kind = "torch", x = -edge, z = 0, y = 6 },
+		{ kind = "torch", x = edge, z = 0, y = 6 },
+		{ kind = "crystal", x = -edge * 0.45, z = edge, y = 6 },
+		{ kind = "crystal", x = edge * 0.45, z = edge, y = 6 },
+		{ kind = "floor", x = 0, z = -edge * 0.25, y = 3.2 },
+		{ kind = "floor", x = 0, z = edge * 0.25, y = 3.2 },
+	}
+end
+
+function Dungeons.inCrawl(x: number, z: number): boolean
+	if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then
+		return false
+	end
+	local half = Dungeons.FLOOR_SIZE / 2 + 6
+	local places = { Dungeons.WAVES_ROOM_INDEX }
+	local root = Dungeons.get(Dungeons.ROOTVAULT_ID)
+	if root ~= nil then
+		for index = 1, #root.rooms do
+			table.insert(places, index)
+		end
+	end
+	for _, index in ipairs(places) do
+		local originX, _, originZ = Dungeons.roomOrigin(index)
+		if math.abs(x - originX) <= half and math.abs(z - originZ) <= half then
+			return true
+		end
+	end
+	return false
+end
+
 function Dungeons.bossPhase(health: number, maxHealth: number, phase2At: number): number
 	if maxHealth <= 0 then
 		return 1
@@ -370,9 +486,21 @@ end
 
 -- Sunbeam pads in the boss room, offsets from the room center.
 Dungeons.SUNBEAM_OFFSETS = {
-	{ x = -14, z = 8 },
-	{ x = 14, z = -6 },
-	{ x = 0, z = 14 },
+	{ x = -22, z = 8 },
+	{ x = 22, z = -4 },
+	{ x = 0, z = 20 },
+}
+
+-- Eight pads, one per wave slot, spread across the open floor.
+Dungeons.ENEMY_SPAWNS = {
+	{ x = -26, z = 2 },
+	{ x = 26, z = 2 },
+	{ x = -14, z = 22 },
+	{ x = 14, z = 22 },
+	{ x = 0, z = 10 },
+	{ x = -26, z = 18 },
+	{ x = 26, z = 18 },
+	{ x = 0, z = 28 },
 }
 
 local function wholeWave(wave: number): number
@@ -461,7 +589,7 @@ function Dungeons.waveReward(wave: number): ClearReward
 		tokens = 1
 	end
 	return {
-		gold = math.floor(8 + n * 3),
+		gold = math.floor((8 + n * 3) * 8),
 		shardTokens = tokens,
 		xp = math.floor(6 + n * 2),
 		materials = materials,
@@ -525,6 +653,17 @@ table.freeze(Dungeons.SUNBEAM_OFFSETS)
 for _, offset in ipairs(Dungeons.SUNBEAM_OFFSETS) do
 	table.freeze(offset)
 end
+table.freeze(Dungeons.ENEMY_SPAWNS)
+for _, offset in ipairs(Dungeons.ENEMY_SPAWNS) do
+	table.freeze(offset)
+end
+table.freeze(Dungeons.CRAWL_LIGHT.ambient)
+table.freeze(Dungeons.CRAWL_LIGHT.outdoor)
+table.freeze(Dungeons.CRAWL_LIGHT.fog)
+table.freeze(Dungeons.CRAWL_LIGHT)
+table.freeze(Dungeons.RIM.fill)
+table.freeze(Dungeons.RIM.outline)
+table.freeze(Dungeons.RIM)
 table.freeze(ROOTVAULT.rooms)
 if ROOTVAULT.rewards ~= nil then
 	table.freeze(ROOTVAULT.rewards.materials)

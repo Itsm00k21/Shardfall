@@ -2,7 +2,7 @@
 
 --[[
 	Haven quick travel. The Travel button opens a compact map of the six
-	stands. Locked waystones stay grey until that player's save has them.
+	stands. Every stand is open from the start.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Quality = require(Shared:WaitForChild("Quality"))
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local Travel = require(Shared:WaitForChild("Travel"))
 local MobileShell = require(script.Parent.MobileShell)
 
@@ -18,6 +19,7 @@ local TravelHud = {}
 export type Callbacks = {
 	onTravel: (id: string) -> (),
 	onBuyPass: () -> (),
+	onVisible: ((open: boolean) -> ())?,
 }
 
 local COLORS = {
@@ -86,18 +88,34 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: TextButton
 	corner(openButton, 8)
 
-	local root = new("Frame", {
+	local root = new("ScrollingFrame", {
 		Name = "TravelMap",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 12, 1, -88),
-		Size = UDim2.fromOffset(320, 620),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(16, 140),
+		Size = UDim2.fromOffset(320, 400),
 		BackgroundColor3 = COLORS.background,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Visible = false,
-	}, screen) :: Frame
+		ClipsDescendants = true,
+		ScrollBarThickness = 4,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+	}, screen) :: ScrollingFrame
 	corner(root, 12)
-	MobileShell.aspect(root, 0.52)
-	MobileShell.limit(root, 400, 680)
+	local function place()
+		local vx, vy = MobileShell.view(screen)
+		local box = ShellLayout.travelRect(vx, vy)
+		root.Position = UDim2.fromOffset(box.x, box.y)
+		root.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	place()
+	local placeCamera = workspace.CurrentCamera
+	if placeCamera ~= nil then
+		placeCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
@@ -117,7 +135,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local closeButton = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
+		Position = UDim2.new(1, -8, 0, 8),
 		Size = UDim2.fromOffset(Quality.MIN_TAP, Quality.MIN_TAP),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.BuilderSansBold,
@@ -153,7 +171,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Position = UDim2.fromOffset(0, 516),
 		Size = UDim2.new(1, 0, 0, 18),
 		Font = Enum.Font.BuilderSans,
-		TextSize = 13,
+		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
 		Text = "",
@@ -166,7 +184,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		BackgroundColor3 = COLORS.locked,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 13,
+		TextSize = 14,
 		TextColor3 = COLORS.text,
 		Text = "Travel pass",
 		AutoButtonColor = true,
@@ -177,49 +195,14 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local dots: { [string]: TextButton } = {}
 
 	local function paintRow(id: string)
-		local unlocked = Travel.isUnlocked(profile, id)
 		local row = rows[id]
 		local dot = dots[id]
 		if row ~= nil then
-			row.BackgroundColor3 = if unlocked then COLORS.open else COLORS.locked
-			row.TextColor3 = if unlocked then COLORS.text else COLORS.muted
+			row.BackgroundColor3 = COLORS.open
+			row.TextColor3 = COLORS.text
 		end
 		if dot ~= nil then
-			dot.BackgroundColor3 = if unlocked then COLORS.gold else COLORS.locked
-		end
-	end
-
-	local function paintStones()
-		local haven = workspace:FindFirstChild("Haven")
-		if haven == nil then
-			return
-		end
-		for _, descendant in ipairs(haven:GetDescendants()) do
-			if
-				descendant:IsA("BasePart")
-				and type(descendant:GetAttribute("WaystoneId")) == "string"
-			then
-				local id = descendant:GetAttribute("WaystoneId") :: string
-				local unlocked = Travel.isUnlocked(profile, id)
-				local mark = descendant:FindFirstChild("WaystoneMark")
-				if mark == nil or not mark:IsA("Highlight") then
-					local created = Instance.new("Highlight")
-					created.Name = "WaystoneMark"
-					created.Adornee = descendant
-					created.FillTransparency = 0.45
-					created.OutlineTransparency = 0.1
-					created.Parent = descendant
-					mark = created
-				end
-				local highlight = mark :: Highlight
-				if unlocked then
-					highlight.FillColor = Color3.fromRGB(255, 196, 80)
-					highlight.OutlineColor = Color3.fromRGB(255, 230, 170)
-				else
-					highlight.FillColor = Color3.fromRGB(90, 90, 98)
-					highlight.OutlineColor = Color3.fromRGB(58, 58, 66)
-				end
-			end
+			dot.BackgroundColor3 = COLORS.gold
 		end
 	end
 
@@ -235,19 +218,18 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		else
 			cooldown.Text = "Waystones ready."
 		end
-		paintStones()
 	end
 
 	for index, dest in ipairs(Travel.DESTINATIONS) do
 		local row = new("TextButton", {
 			Name = dest.id,
-			BackgroundColor3 = COLORS.locked,
+			BackgroundColor3 = COLORS.open,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, Quality.MIN_TAP),
 			Font = Enum.Font.BuilderSansMedium,
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = COLORS.muted,
+			TextColor3 = COLORS.text,
 			Text = "  " .. dest.name,
 			AutoButtonColor = true,
 			LayoutOrder = index,
@@ -291,15 +273,25 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	title.Text = "Travel"
-	local function toggle()
-		root.Visible = not root.Visible
-		if root.Visible then
+	local function setOpen(open: boolean)
+		if root.Visible == open then
+			return
+		end
+		root.Visible = open
+		if open then
+			place()
 			refresh()
 		end
+		if callbacks.onVisible ~= nil then
+			callbacks.onVisible(open)
+		end
+	end
+	local function toggle()
+		setOpen(not root.Visible)
 	end
 	openButton.MouseButton1Click:Connect(toggle)
 	closeButton.MouseButton1Click:Connect(function()
-		root.Visible = false
+		setOpen(false)
 	end)
 	passButton.MouseButton1Click:Connect(function()
 		callbacks.onBuyPass()
@@ -324,6 +316,15 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			refresh()
 		end,
 		toggle = toggle,
+		open = function()
+			setOpen(true)
+		end,
+		close = function()
+			setOpen(false)
+		end,
+		isOpen = function(): boolean
+			return root.Visible
+		end,
 	}
 end
 

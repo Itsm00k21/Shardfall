@@ -37,7 +37,7 @@ local TIERS: { [string]: Tier } = {
 		partBudget = 120,
 		decorKeep = 0.34,
 		fogEnd = 480,
-		bloom = 0.08,
+		bloom = 0.04,
 		lodHideAt = 42,
 		lodFar = 80,
 		decorShadows = false,
@@ -50,7 +50,7 @@ local TIERS: { [string]: Tier } = {
 		partBudget = 200,
 		decorKeep = 0.67,
 		fogEnd = 320,
-		bloom = 0.28,
+		bloom = 0.08,
 		lodHideAt = 90,
 		lodFar = 160,
 		decorShadows = false,
@@ -63,7 +63,7 @@ local TIERS: { [string]: Tier } = {
 		partBudget = 320,
 		decorKeep = 1,
 		fogEnd = 240,
-		bloom = 0.45,
+		bloom = 0.14,
 		lodHideAt = 150,
 		lodFar = 260,
 		decorShadows = true,
@@ -157,6 +157,129 @@ end
 
 function Quality.ids(): { string }
 	return { "low", "med", "high" }
+end
+
+-- Landmarks stay on every tier, at any distance. Trim only drops cosmetic extras.
+local LANDMARKS = {
+	Waystone = true,
+	WaystoneCrystal = true,
+	Waterfall = true,
+	FallLip = true,
+	Anvil = true,
+	ForgeBasin = true,
+	ForgeFlame = true,
+	SkyShard = true,
+	LumenHeart = true,
+	CrystalShard = true,
+	OrbitShard = true,
+	LightBeam = true,
+}
+
+function Quality.alwaysVisible(name: string?, waystoneId: any, ancestors: { string }?): boolean
+	if type(waystoneId) == "string" and waystoneId ~= "" then
+		return true
+	end
+	if type(name) == "string" and LANDMARKS[name] == true then
+		return true
+	end
+	if type(ancestors) == "table" then
+		for _, ancestor in ipairs(ancestors) do
+			if ancestor == "Townsfolk" or ancestor == "LumenHeart" then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- hide, next trim index, next shown count. Landmarks never hide.
+function Quality.lodHide(
+	name: string?,
+	waystoneId: any,
+	ancestors: { string }?,
+	keep: boolean,
+	lod: any,
+	trimAttr: boolean,
+	distance: number,
+	tierId: string,
+	trimIndex: number,
+	shown: number
+): (boolean, number, number)
+	if keep == true or Quality.alwaysVisible(name, waystoneId, ancestors) then
+		return false, trimIndex, shown
+	end
+	local trim = trimAttr == true or lod == "small"
+	local tagged = type(lod) == "string" or trim
+	if not tagged then
+		return false, trimIndex, shown
+	end
+	local tier = Quality.get(tierId)
+	if trim then
+		local index = trimIndex + 1
+		local kept = Quality.keepDecor(index, tierId) and shown < tier.partBudget
+		if not kept then
+			return true, index, shown
+		end
+		local limit = if lod == "small" then tier.lodHideAt else tier.lodFar
+		return distance > limit, index, shown + 1
+	end
+	if lod == "large" then
+		return distance > tier.lodFar, trimIndex, shown
+	end
+	return false, trimIndex, shown
+end
+
+-- True only when the client will actually draw the part. A Transparency of 1,
+-- a LocalTransparencyModifier near 1, a part that is not under Workspace, or
+-- a part sitting off the hub (the void under the islands) does not count.
+function Quality.drawn(
+	transparency: number,
+	modifier: number,
+	inWorkspace: boolean,
+	y: number?,
+	longest: number?
+): boolean
+	if inWorkspace ~= true then
+		return false
+	end
+	if type(transparency) ~= "number" or transparency ~= transparency then
+		return false
+	end
+	if type(modifier) ~= "number" or modifier ~= modifier then
+		return false
+	end
+	if transparency < 0 or transparency >= 0.95 then
+		return false
+	end
+	if modifier < 0 or modifier >= 0.5 then
+		return false
+	end
+	if y ~= nil then
+		if type(y) ~= "number" or y ~= y or y < 90 or y > 280 then
+			return false
+		end
+	end
+	if longest ~= nil then
+		if type(longest) ~= "number" or longest ~= longest or longest < 1 then
+			return false
+		end
+	end
+	return true
+end
+
+-- An NPC counts only when a real body-sized part is drawn. A 1-stud limb
+-- with Transparency 0 is not a visible character.
+function Quality.modelShown(
+	transparency: number,
+	modifier: number,
+	inWorkspace: boolean,
+	y: number?,
+	longest: number
+): boolean
+	if not Quality.drawn(transparency, modifier, inWorkspace, y) then
+		return false
+	end
+	return type(longest) == "number" and longest == longest and longest >= 4
 end
 
 return Quality

@@ -265,6 +265,89 @@ function CombatMath.vitality(armor: { Gear }): Vitality
 	}
 end
 
+-- Bar text and fill both use this. 103 showed up when a refresh added a
+-- +3 health bonus onto a full bar (100 + 3) and a second label still had
+-- max 100. Death publishes 0; the number on screen has to be 0 as well.
+function CombatMath.clampVitals(hp: number, maxHp: number): (number, number)
+	local max = maxHp
+	if type(max) ~= "number" or max ~= max or max < 1 then
+		max = 1
+	end
+	max = math.floor(max + 0.5)
+	local current = hp
+	if type(current) ~= "number" or current ~= current then
+		current = 0
+	end
+	current = math.floor(current + 0.5)
+	if current < 0 then
+		current = 0
+	elseif current > max then
+		current = max
+	end
+	return current, max
+end
+
+-- HP after the max changes. Undamaged players stay full, so a leftover
+-- 103 cannot sit under a max of 130. A real hit keeps the missing points.
+-- Death stays at 0.
+function CombatMath.syncVitals(
+	hp: number,
+	previousMax: number,
+	nextMax: number,
+	hurt: boolean
+): (number, number)
+	local _, newMax = CombatMath.clampVitals(1, nextMax)
+	if hurt ~= true then
+		return newMax, newMax
+	end
+	local current, oldMax = CombatMath.clampVitals(hp, previousMax)
+	if current <= 0 then
+		return 0, newMax
+	end
+	if current >= oldMax then
+		return newMax, newMax
+	end
+	local missing = oldMax - current
+	local shifted = newMax - missing
+	if shifted < 0 then
+		shifted = 0
+	end
+	return CombatMath.clampVitals(shifted, newMax)
+end
+
+-- One incoming hit after defense and the class taken multiplier.
+-- Already at 0 deals nothing and is not a new kill, so a second orb in the
+-- same heartbeat cannot call the death hook again.
+function CombatMath.applyPlayerDamage(
+	hp: number,
+	maxHp: number,
+	rawDamage: number,
+	defense: number,
+	taken: number
+): (number, number, boolean)
+	local current, max = CombatMath.clampVitals(hp, maxHp)
+	if current <= 0 then
+		return 0, 0, false
+	end
+	local multiplier = taken
+	if type(multiplier) ~= "number" or multiplier ~= multiplier or multiplier < 0 then
+		multiplier = 1
+	end
+	local raw = rawDamage
+	if type(raw) ~= "number" or raw ~= raw or raw < 0 then
+		raw = 0
+	end
+	local hit = CombatMath.resolveHit(raw * multiplier, 0, 1, defense, 1, 0)
+	local nextHp = current - hit.amount
+	if nextHp <= 0 then
+		return 0, hit.amount, true
+	end
+	if nextHp > max then
+		nextHp = max
+	end
+	return nextHp, hit.amount, false
+end
+
 -- `roll` is the same 0..1 number Random:NextNumber returns. Below crit chance
 -- is a crit. Defense is applied after the crit multiplier.
 function CombatMath.resolveHit(

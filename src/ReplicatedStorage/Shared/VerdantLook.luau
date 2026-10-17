@@ -12,7 +12,7 @@ local VerdantLook = {}
 
 VerdantLook.PRESET = {
 	clockTime = 15.4,
-	brightness = 2.15,
+	brightness = 1.25,
 	ambient = { 96, 112, 84 },
 	outdoorAmbient = { 128, 146, 112 },
 	fogColor = { 156, 184, 142 },
@@ -23,7 +23,7 @@ VerdantLook.PRESET = {
 		offset = 0.18,
 		color = { 168, 196, 150 },
 		decay = { 196, 176, 120 },
-		glare = 0.18,
+		glare = 0.06,
 		haze = 1.35,
 	},
 	colorCorrection = {
@@ -33,13 +33,13 @@ VerdantLook.PRESET = {
 		tint = { 255, 244, 220 },
 	},
 	bloom = {
-		intensity = 0.45,
-		size = 22,
-		threshold = 0.85,
+		intensity = 0.045,
+		size = 8,
+		threshold = 2.05,
 	},
 	sunRays = {
-		intensity = 0.14,
-		spread = 0.35,
+		intensity = 0.05,
+		spread = 0.22,
 	},
 }
 
@@ -123,6 +123,15 @@ function VerdantLook.apply(lighting: Instance): boolean
 		local rays = effect(lighting, "SunRaysEffect", "VerdantSunRays") :: any
 		rays.Intensity = preset.sunRays.intensity
 		rays.Spread = preset.sunRays.spread
+	end)
+	assign("stacked bloom", function()
+		for _, child in ipairs(lighting:GetChildren()) do
+			local extraBloom = child:IsA("BloomEffect") and child.Name ~= "VerdantBloom"
+			local extraRays = child:IsA("SunRaysEffect") and child.Name ~= "VerdantSunRays"
+			if extraBloom or extraRays then
+				(child :: any).Enabled = false
+			end
+		end
 	end)
 	return ok
 end

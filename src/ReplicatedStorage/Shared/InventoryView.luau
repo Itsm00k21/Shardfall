@@ -8,12 +8,14 @@
 	how a selected piece lines up against the one already worn.
 ]]
 
+local ChestConfig = require("./ChestConfig")
 local ItemBases = require("./ItemBases")
 local Materials = require("./Materials")
 local Pools = require("./Pools")
 local Rarities = require("./Rarities")
 local Schema = require("./Schema")
 local Stats = require("./Stats")
+local Trading = require("./Trading")
 
 local InventoryView = {}
 
@@ -56,7 +58,7 @@ export type CompareLine = {
 	delta: string,
 }
 
-InventoryView.TABS = { "weapons", "armor", "accessories", "pets", "materials", "items" }
+InventoryView.TABS = { "weapons", "armor", "accessories", "pets", "materials", "items", "chests" }
 
 InventoryView.SORTS = { "power", "rarity", "newest", "name" }
 
@@ -95,6 +97,58 @@ function InventoryView.defaultQuery(): Query
 	}
 end
 
+export type FilterFlags = {
+	realm: boolean,
+	slot: boolean,
+	sockets: boolean,
+	worn: boolean,
+	locked: boolean,
+	rarity: boolean,
+	sort: boolean,
+}
+
+function InventoryView.activeFilters(tab: string): FilterFlags
+	local gear = tab == "weapons" or tab == "armor" or tab == "accessories"
+	local pet = tab == "pets"
+	return {
+		realm = gear or pet or tab == "materials",
+		slot = #InventoryView.slotChoices(tab) > 0,
+		sockets = gear,
+		worn = gear or pet,
+		locked = gear or pet,
+		rarity = tab ~= "chests",
+		sort = true,
+	}
+end
+
+local function openChoice(value: string?): boolean
+	return type(value) ~= "string" or value == "" or value == "Any" or value == "N/A"
+end
+
+function InventoryView.realmLabel(realm: string?): string
+	if openChoice(realm) or realm == nil then
+		return "All realms"
+	end
+	return "Realm: " .. realm
+end
+
+function InventoryView.slotLabel(slot: string?): string
+	if openChoice(slot) or slot == nil then
+		return "All types"
+	end
+	return "Type: " .. slot
+end
+
+function InventoryView.socketLabel(sockets: number?, atLeast: number?): string
+	if atLeast ~= nil then
+		return "Sockets: " .. tostring(atLeast) .. "+"
+	end
+	if sockets == nil then
+		return "All sockets"
+	end
+	return "Sockets: " .. tostring(sockets)
+end
+
 function InventoryView.slotChoices(tab: string): { string }
 	if tab == "weapons" then
 		return { "sword", "greatsword", "bow", "staff", "dagger", "hammer" }
@@ -123,6 +177,9 @@ function InventoryView.emptyText(tab: string): string
 	end
 	if tab == "materials" then
 		return "No materials yet."
+	end
+	if tab == "chests" then
+		return "No chests yet. Daily login, Rootvault, and Verdant enemies can drop one."
 	end
 	return "No consumables, scrolls, or boosts."
 end
@@ -179,6 +236,12 @@ function InventoryView.salvageBlock(profile: any, item: any): string?
 		and Schema.isEquipped(profile, item.uid)
 	then
 		return "Unequip it before salvaging."
+	end
+	if type(item.uid) == "string" then
+		local held = Trading.consumeBlock(item.uid)
+		if held ~= nil then
+			return held
+		end
 	end
 	return nil
 end
@@ -383,7 +446,42 @@ local function raritySelected(rarities: { [string]: boolean }): boolean
 	return false
 end
 
+local function chestRows(profile: any): { Row }
+	local rows = {}
+	local bag = if type(profile) == "table" then profile.chests else nil
+	for index, tier in ipairs(ChestConfig.TIERS) do
+		local count = 0
+		if type(bag) == "table" and type(bag[tier]) == "number" then
+			count = bag[tier]
+		end
+		table.insert(rows, {
+			id = "chest:" .. tier,
+			kind = "Chest",
+			name = tier .. " Chest",
+			rarity = tier,
+			realm = "",
+			slot = nil,
+			sockets = 0,
+			equipped = false,
+			locked = false,
+			favorite = false,
+			power = index,
+			obtainedAt = index,
+			count = count,
+			item = nil,
+		})
+	end
+	return rows
+end
+
 local function matches(row: Row, query: Query): boolean
+	if row.kind == "Chest" then
+		local needle = string.lower(query.search or "")
+		if needle ~= "" and string.find(string.lower(row.name), needle, 1, true) == nil then
+			return false
+		end
+		return true
+	end
 	if raritySelected(query.rarities) and query.rarities[row.rarity] ~= true then
 		return false
 	end
@@ -450,6 +548,8 @@ function InventoryView.query(profile: any, query: Query): { Row }
 		pool = materialRows(profile, false)
 	elseif query.tab == "items" then
 		pool = itemRows(profile, query.now or 0)
+	elseif query.tab == "chests" then
+		pool = chestRows(profile)
 	end
 
 	local rows = {}

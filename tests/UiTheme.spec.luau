@@ -1,0 +1,56 @@
+--!strict
+
+local framework = require("./framework")
+local describe = framework.describe
+local it = framework.it
+local expect = framework.expect
+
+local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
+
+describe("UiTheme", function()
+	it("keeps padding, type, and taps on one scale", function()
+		expect(UiTheme.PAD >= 8).toBeTrue()
+		expect(UiTheme.safeMargin() >= 8).toBeTrue()
+		expect(UiTheme.MIN_TEXT >= 14).toBeTrue()
+		expect(UiTheme.CORNER > 0).toBeTrue()
+		expect(UiTheme.TAP >= 64).toBeTrue()
+		expect(UiTheme.TOUCH >= 44).toBeTrue()
+		expect(UiTheme.MOTION.open).toEqual(0.26)
+		expect(UiTheme.MOTION.panel).toEqual(0.15)
+		expect(UiTheme.MOTION.stagger).toEqual(0.1)
+		expect(UiTheme.MOTION.pop).toEqual(0.12)
+		expect(UiTheme.BACKDROP).toEqual(0.5)
+		expect(#UiTheme.RARITY_ORDER).toEqual(5)
+		expect(UiTheme.STROKE >= 1).toBeTrue()
+		expect(UiTheme.STROKE_BOLD >= 1 and UiTheme.STROKE_BOLD <= 2).toBeTrue()
+		expect(UiTheme.PAD).toEqual(8)
+		expect(UiTheme.GAP).toEqual(12)
+		expect(UiTheme.EDGE).toEqual(16)
+		expect(UiTheme.HEADER_FONT).toEqual("BuilderSansBold")
+		expect(UiTheme.BODY_FONT).toEqual("BuilderSans")
+		expect(UiTheme.RGB.header ~= nil).toBeTrue()
+		expect(UiTheme.RGB.body ~= nil).toBeTrue()
+		expect(UiTheme.RGB.loss ~= nil).toBeTrue()
+		expect(UiTheme.compareTone(2)).toEqual("gain")
+		expect(UiTheme.compareTone(-1)).toEqual("loss")
+		expect(UiTheme.compareTone(0)).toEqual("same")
+		expect(UiTheme.labelWidth("Vault") >= 64).toBeTrue()
+		expect(UiTheme.labelWidth("Materials") > UiTheme.labelWidth("Gold")).toBeTrue()
+		for _, background in ipairs({ "body", "panel", "header" }) do
+			expect(UiTheme.contrast(UiTheme.RGB.text, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+			expect(UiTheme.contrast(UiTheme.RGB.muted, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+			expect(UiTheme.contrast(UiTheme.RGB.gold, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+		end
+		expect(UiTheme.MIN_TEXT >= 14).toBeTrue()
+	end)
+
+	it("lifts a dark red so it can sit on the odds panel", function()
+		local red, green, blue = UiTheme.lift(230, 64, 78)
+		local luma = 0.2126 * (red / 255) + 0.7152 * (green / 255) + 0.0722 * (blue / 255)
+		expect(luma >= 0.62).toBeTrue()
+		local keepR, keepG, keepB = UiTheme.lift(255, 196, 64)
+		expect(keepR).toEqual(255)
+		expect(keepG).toEqual(196)
+		expect(keepB).toEqual(64)
+	end)
+end)

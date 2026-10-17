@@ -15,10 +15,15 @@ local UserInputService = game:GetService("UserInputService")
 local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
+local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
+local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
+local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 local Schema = require(Shared:WaitForChild("Schema"))
 local Stars = require(Shared:WaitForChild("Stars"))
 
@@ -36,6 +41,15 @@ export type Callbacks = {
 	onFeed: (keptUid: string, feederUid: string) -> (),
 	onTonic: () -> (),
 	onStatus: (text: string, kind: string) -> (),
+	onVisible: ((open: boolean) -> ())?,
+	onOpenChest: ((tier: string, count: number) -> ())?,
+	onMergeChest: ((tier: string) -> ())?,
+	onBuyChest: ((tier: string) -> ())?,
+	onClaimLogin: (() -> ())?,
+	onBuyDust: ((templateId: string) -> ())?,
+	onBuyBundle: (() -> ())?,
+	onChestOptions: ((mode: string, salvage: string) -> ())?,
+	onResumeChest: ((pending: any) -> ())?,
 }
 
 local COLORS = {
@@ -107,16 +121,20 @@ local function clearGenerated(container: Instance)
 	end
 end
 
+local function chipWidth(text: string): number
+	return math.max(88, #text * 8 + 20)
+end
+
 local function chip(parent: Instance, text: string, order: number): TextButton
 	local button = new("TextButton", {
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(0, 44),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(chipWidth(text), 44),
 		Font = Enum.Font.BuilderSansMedium,
 		TextSize = 13,
 		TextColor3 = COLORS.text,
 		Text = text,
+		TextTruncate = Enum.TextTruncate.None,
 		AutoButtonColor = true,
 		LayoutOrder = order,
 	}, parent) :: TextButton
@@ -155,16 +173,32 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local root = new("Frame", {
 		Name = "Inventory",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.94, 0.9),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(16, 132),
+		Size = UDim2.fromOffset(480, 400),
 		BackgroundColor3 = COLORS.background,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Visible = false,
+		ClipsDescendants = true,
 	}, screen) :: Frame
 	corner(root, 12)
-	MobileShell.aspect(root, 0.62)
-	MobileShell.limit(root, 900, 1100)
+	local function phoneLayout(): boolean
+		return ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
+	end
+	local function fitRoot()
+		local vx, vy = MobileShell.view(screen)
+		local box = ShellLayout.inventory(vx, vy, phoneLayout())
+		local pet = ShellLayout.petRect()
+		root.Position = UDim2.fromOffset(16, pet.y + pet.h + 8)
+		root.Size = UDim2.fromOffset(box.w, box.h)
+	end
+	fitRoot()
+	local fitCamera = workspace.CurrentCamera
+	if fitCamera ~= nil then
+		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitRoot)
+	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitRoot)
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 12),
 		PaddingBottom = UDim.new(0, 12),
@@ -177,28 +211,29 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.new(1, 0, 0, 36),
 	}, root) :: Frame
 	local title = new("TextLabel", {
+		Name = "Title",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(0.5, 1),
+		Size = UDim2.new(1, -196, 1, 0),
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.None,
 		TextColor3 = COLORS.text,
 		Text = "Inventory",
 	}, header) :: TextLabel
 	local capacity = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.35, 0),
-		Size = UDim2.fromScale(0.35, 1),
+		Visible = false,
+		Size = UDim2.fromOffset(0, 0),
 		Font = Enum.Font.BuilderSans,
 		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = COLORS.muted,
 		Text = "",
 	}, header) :: TextLabel
 	local expand = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -88, 0.5, 0),
-		Size = UDim2.fromOffset(96, 44),
+		Position = UDim2.new(1, -92, 0.5, 0),
+		Size = UDim2.fromOffset(88, 44),
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -221,14 +256,16 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(close, 6)
 
 	local tabBar = new("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 42),
-		Size = UDim2.new(1, 0, 0, 44),
+		Position = UDim2.fromOffset(0, 48),
+		Size = UDim2.new(1, 0, 0, 48),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 6,
+		ScrollingEnabled = true,
+		CanvasSize = UDim2.fromOffset(720, 44),
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollingDirection = Enum.ScrollingDirection.X,
+		ClipsDescendants = true,
 	}, root) :: ScrollingFrame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -237,14 +274,16 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, tabBar)
 
 	local filterBar = new("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 80),
-		Size = UDim2.new(1, 0, 0, 64),
+		Position = UDim2.fromOffset(0, 100),
+		Size = UDim2.new(1, 0, 0, 56),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 6,
+		ScrollingEnabled = true,
+		CanvasSize = UDim2.fromOffset(1400, 44),
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollingDirection = Enum.ScrollingDirection.X,
+		ClipsDescendants = true,
 	}, root) :: ScrollingFrame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -270,8 +309,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(search, 6)
 
 	local body = new("Frame", {
-		Position = UDim2.fromOffset(0, 152),
-		Size = UDim2.new(1, 0, 1, -152),
+		Position = UDim2.fromOffset(0, 164),
+		Size = UDim2.new(1, 0, 1, -164),
 		BackgroundTransparency = 1,
 	}, root) :: Frame
 
@@ -380,16 +419,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local pendingFeed: { string }? = nil
 	local tabButtons: { [string]: TextButton } = {}
 
-	local function narrow(): boolean
-		local camera = workspace.CurrentCamera
-		if camera == nil then
-			return false
-		end
-		return camera.ViewportSize.X < 760
-	end
-
 	local function placePanes()
-		local phone = narrow()
+		local phone = phoneLayout()
 		local showDetail = selectedId ~= nil
 		if phone then
 			grid.Visible = not showDetail
@@ -432,10 +463,11 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		parent: Instance,
 		text: string,
 		order: number,
-		color: Color3
+		color: Color3,
+		height: number?
 	): TextButton
 		local button = new("TextButton", {
-			Size = UDim2.new(1, 0, 0, 44),
+			Size = UDim2.new(1, 0, 0, if height ~= nil then height else 44),
 			BackgroundColor3 = color,
 			BorderSizePixel = 0,
 			Font = Enum.Font.BuilderSansBold,
@@ -449,7 +481,127 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		return button
 	end
 
+	local function chestActions(startOrder: number): number
+		local profile = latest
+		if type(profile) ~= "table" then
+			return startOrder
+		end
+		local order = startOrder
+		local keys = if type(profile.shardKeys) == "number" then profile.shardKeys else 0
+		local dust = if type(profile.shardDust) == "number" then profile.shardDust else 0
+		label(detail, string.format("Shard Keys  %d", keys), order, COLORS.gold, 14)
+		order += 1
+		label(detail, string.format("Shard Dust  %d", dust), order, COLORS.gold, 14)
+		order += 1
+		label(detail, ChestConfig.pityLine(profile), order, COLORS.muted, 13)
+		order += 1
+		local streak = if type(profile.loginStreak) == "number" then profile.loginStreak else 0
+		label(detail, string.format("Login streak  %d", streak), order, COLORS.muted, 13)
+		order += 1
+		if type(profile.pendingChest) == "table" and callbacks.onResumeChest ~= nil then
+			local choose = actionButton(detail, "Choose Mythic card", order, COLORS.gold, 60)
+			order += 1
+			choose.TextColor3 = COLORS.ink
+			local pending = profile.pendingChest
+			choose.MouseButton1Click:Connect(function()
+				if callbacks.onResumeChest ~= nil then
+					callbacks.onResumeChest(pending)
+				end
+			end)
+		end
+		if callbacks.onClaimLogin ~= nil then
+			local login = actionButton(detail, "Daily login", order, COLORS.button, 60)
+			order += 1
+			login.MouseButton1Click:Connect(callbacks.onClaimLogin)
+		end
+		local mode = if profile.chestDuplicates == "star" then "star" else "dust"
+		local salvage = if type(profile.chestSalvageBelow) == "string"
+			then profile.chestSalvageBelow
+			else ""
+		if callbacks.onChestOptions ~= nil then
+			local modeButton = actionButton(
+				detail,
+				if mode == "star" then "Duplicates: +1 star" else "Duplicates: Shard Dust",
+				order,
+				COLORS.buttonDim,
+				60
+			)
+			order += 1
+			modeButton.MouseButton1Click:Connect(function()
+				if callbacks.onChestOptions == nil then
+					return
+				end
+				local nextMode = if mode == "star" then "dust" else "star"
+				callbacks.onChestOptions(nextMode, salvage)
+			end)
+			local salvageLabel = if salvage == ""
+				then "Auto-salvage: off"
+				else "Auto-salvage at " .. salvage
+			local salvageButton = actionButton(detail, salvageLabel, order, COLORS.buttonDim, 60)
+			order += 1
+			salvageButton.MouseButton1Click:Connect(function()
+				if callbacks.onChestOptions == nil then
+					return
+				end
+				local steps = { "", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }
+				local index = 1
+				for stepIndex, step in ipairs(steps) do
+					if step == salvage then
+						index = stepIndex
+					end
+				end
+				callbacks.onChestOptions(mode, steps[(index % #steps) + 1])
+			end)
+		end
+		label(detail, "Dust shop", order, COLORS.muted, 13)
+		order += 1
+		if callbacks.onBuyDust ~= nil then
+			for _, row in ipairs(ChestConfig.dustCatalog(profile)) do
+				local buy = actionButton(
+					detail,
+					string.format("%s  ·  %d dust", tostring(row.name), row.cost),
+					order,
+					COLORS.buttonDim,
+					60
+				)
+				order += 1
+				local templateId = row.templateId
+				buy.MouseButton1Click:Connect(function()
+					if callbacks.onBuyDust ~= nil and type(templateId) == "string" then
+						callbacks.onBuyDust(templateId)
+					end
+				end)
+			end
+		end
+		label(detail, "Paid bundle. Odds are listed before any purchase.", order, COLORS.muted, 13)
+		order += 1
+		label(
+			detail,
+			"1 Rare Chest and 1 Epic Chest. Legendary and Mythic chests are not sold.",
+			order,
+			COLORS.text,
+			13
+		)
+		order += 1
+		for _, tierName in ipairs({ "Rare", "Epic" }) do
+			label(detail, tierName .. " Chest", order, rarityColor(tierName), 13)
+			order += 1
+			for _, line in ipairs(ChestConfig.oddsLines(tierName, 1)) do
+				label(detail, line, order, COLORS.muted, 12)
+				order += 1
+			end
+		end
+		if callbacks.onBuyBundle ~= nil then
+			local bundle =
+				actionButton(detail, "Request Rare and Epic bundle", order, COLORS.buttonDim, 60)
+			order += 1
+			bundle.MouseButton1Click:Connect(callbacks.onBuyBundle)
+		end
+		return order
+	end
+
 	local render: () -> ()
+	local paintFilters: () -> ()
 
 	local function hideConfirm()
 		confirm.Visible = false
@@ -469,6 +621,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	render = function()
+		paintFilters()
 		placePanes()
 		local profile = latest
 		if type(profile) ~= "table" then
@@ -480,7 +633,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			then profile.inventoryCap
 			else Schema.inventoryCap(profile)
 		capacity.Text = string.format("%d / %d", used, cap)
-		title.Text = "Inventory"
+		title.Text = string.format("Inventory   %d / %d", used, cap)
 
 		for _, tab in ipairs(InventoryView.TABS) do
 			local button = tabButtons[tab]
@@ -551,20 +704,35 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				selectedId = picked
 				render()
 			end)
+			card.InputBegan:Connect(function(input)
+				if
+					input.UserInputType ~= Enum.UserInputType.MouseButton1
+					and input.UserInputType ~= Enum.UserInputType.Touch
+				then
+					return
+				end
+				local payload = ActionSlots.fromRow(row)
+				if payload ~= nil then
+					ActionDrag.begin(payload)
+				end
+			end)
 		end
 		if not still then
 			selectedId = nil
 			placePanes()
 		end
 		if #rows == 0 then
-			local empty = label(grid, InventoryView.emptyText(query.tab), 1, COLORS.muted, 14)
+			local empty = label(grid, "No items yet", 1, COLORS.text, 16)
 			empty.Name = "Notice"
-			empty.Size = UDim2.fromOffset(220, 40)
+			empty.Size = UDim2.fromOffset(240, 24)
+			local hint = label(grid, InventoryView.emptyText(query.tab), 2, COLORS.muted, 14)
+			hint.Name = "Hint"
+			hint.Size = UDim2.fromOffset(240, 48)
 		end
 
 		clearGenerated(detail)
 		local order = 1
-		if narrow() and selectedId ~= nil then
+		if phoneLayout() and selectedId ~= nil then
 			local back = actionButton(detail, "Back", order, COLORS.buttonDim)
 			order += 1
 			back.MouseButton1Click:Connect(function()
@@ -579,7 +747,12 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 		end
 		if selected == nil then
-			label(detail, "Select an item.", order, COLORS.muted, 14)
+			if query.tab == "chests" then
+				label(detail, "Select a chest.", order, COLORS.muted, 14)
+				chestActions(order + 1)
+			else
+				label(detail, "Select an item.", order, COLORS.muted, 14)
+			end
 			return
 		end
 		local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
@@ -755,6 +928,97 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 					confirm.Visible = true
 				end)
 			end
+		elseif selected.kind == "Chest" then
+			local tier = selected.rarity
+			label(detail, string.format("Owned  %d", selected.count), order, COLORS.text, 14)
+			order += 1
+			local floorName = ChestConfig.FLOOR[tier]
+			if type(floorName) == "string" then
+				label(detail, "Floor  " .. floorName .. "+", order, COLORS.muted, 13)
+				order += 1
+			end
+			local luck = RarityConfig.luckFromProfile(profile)
+			for _, line in ipairs(ChestConfig.oddsLines(tier, luck)) do
+				label(detail, line, order, COLORS.muted, 12)
+				order += 1
+			end
+			if callbacks.onOpenChest ~= nil and selected.count > 0 then
+				local open = actionButton(detail, "Open", order, COLORS.button, 60)
+				order += 1
+				open.MouseButton1Click:Connect(function()
+					if callbacks.onOpenChest ~= nil then
+						callbacks.onOpenChest(tier, 1)
+					end
+				end)
+			end
+			if callbacks.onOpenChest ~= nil and selected.count > 1 and tier ~= "Mythic" then
+				local manyCount = math.min(selected.count, ChestConfig.OPEN_MANY_MAX)
+				local openMany = actionButton(
+					detail,
+					string.format("Open %d", manyCount),
+					order,
+					COLORS.button,
+					60
+				)
+				order += 1
+				openMany.MouseButton1Click:Connect(function()
+					if callbacks.onOpenChest ~= nil then
+						callbacks.onOpenChest(tier, manyCount)
+					end
+				end)
+			end
+			local rule = ChestConfig.MERGE[tier]
+			if type(rule) == "table" and callbacks.onMergeChest ~= nil then
+				local owned = if type(profile.materials) == "table" then profile.materials else {}
+				local bits = {}
+				if type(rule.materials) == "table" then
+					for id, count in pairs(rule.materials) do
+						local have = if type(owned[id]) == "number" then owned[id] else 0
+						table.insert(
+							bits,
+							string.format("%d %s (have %d)", count, Materials.displayName(id), have)
+						)
+					end
+				end
+				label(
+					detail,
+					string.format(
+						"Merge %d into a %s Chest. %s",
+						ChestConfig.MERGE_COUNT,
+						tostring(rule.next),
+						table.concat(bits, ", ")
+					),
+					order,
+					COLORS.text,
+					13
+				)
+				order += 1
+				local merge = actionButton(detail, "Merge 5", order, COLORS.gold, 60)
+				order += 1
+				merge.TextColor3 = COLORS.ink
+				merge.MouseButton1Click:Connect(function()
+					if callbacks.onMergeChest ~= nil then
+						callbacks.onMergeChest(tier)
+					end
+				end)
+			end
+			local price = ChestConfig.KEY_SHOP[tier]
+			if type(price) == "number" and callbacks.onBuyChest ~= nil then
+				local buy = actionButton(
+					detail,
+					string.format("Buy with %d Shard Keys", price),
+					order,
+					COLORS.buttonDim,
+					60
+				)
+				order += 1
+				buy.MouseButton1Click:Connect(function()
+					if callbacks.onBuyChest ~= nil then
+						callbacks.onBuyChest(tier)
+					end
+				end)
+			end
+			chestActions(order)
 		elseif selected.kind == "Consumable" then
 			label(detail, string.format("Owned  %d", selected.count), order, COLORS.text, 14)
 			order += 1
@@ -813,23 +1077,46 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		return list[nextIndex]
 	end
 
-	local realmButton = chip(filterBar, "Realm: Any", 2)
-	local slotButton = chip(filterBar, "Type: Any", 3)
-	local socketButton = chip(filterBar, "Sockets: Any", 4)
+	local realmButton = chip(filterBar, "All realms", 2)
+	local slotButton = chip(filterBar, "All types", 3)
+	local socketButton = chip(filterBar, "All sockets", 4)
 	local equippedButton = chip(filterBar, "Worn: All", 5)
 	local lockedButton = chip(filterBar, "Lock: All", 6)
 	local sortButton = chip(filterBar, "Sort: Power", 7)
 
-	local function paintFilters()
-		realmButton.Text = "Realm: " .. (query.realm or "Any")
-		slotButton.Text = "Type: " .. (query.slot or "Any")
-		if query.socketsAtLeast ~= nil then
-			socketButton.Text = "Sockets: 3+"
-		elseif query.sockets ~= nil then
-			socketButton.Text = "Sockets: " .. tostring(query.sockets)
-		else
-			socketButton.Text = "Sockets: Any"
+	paintFilters = function()
+		local flags = InventoryView.activeFilters(query.tab)
+		if not flags.realm then
+			query.realm = nil
 		end
+		if not flags.slot then
+			query.slot = nil
+		end
+		if not flags.sockets then
+			query.sockets = nil
+			query.socketsAtLeast = nil
+		end
+		if not flags.worn then
+			query.equipped = "all"
+		end
+		if not flags.locked then
+			query.locked = "all"
+		end
+		if not flags.rarity then
+			table.clear(query.rarities)
+		end
+		realmButton.Visible = flags.realm
+		slotButton.Visible = flags.slot
+		socketButton.Visible = flags.sockets
+		equippedButton.Visible = flags.worn
+		lockedButton.Visible = flags.locked
+		sortButton.Visible = flags.sort
+		realmButton.Text = InventoryView.realmLabel(query.realm)
+		slotButton.Text = InventoryView.slotLabel(query.slot)
+		socketButton.Text = InventoryView.socketLabel(query.sockets, query.socketsAtLeast)
+		realmButton.Size = UDim2.fromOffset(chipWidth(realmButton.Text), 44)
+		slotButton.Size = UDim2.fromOffset(chipWidth(slotButton.Text), 44)
+		socketButton.Size = UDim2.fromOffset(chipWidth(socketButton.Text), 44)
 		equippedButton.Text = "Worn: "
 			.. string.upper(string.sub(query.equipped, 1, 1))
 			.. string.sub(query.equipped, 2)
@@ -842,6 +1129,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			elseif query.sort == "newest" then "Newest"
 			else "Name"
 		sortButton.Text = "Sort: " .. sortName
+		sortButton.Size = UDim2.fromOffset(chipWidth(sortButton.Text), 44)
+		equippedButton.Size = UDim2.fromOffset(chipWidth(equippedButton.Text), 44)
+		lockedButton.Size = UDim2.fromOffset(chipWidth(lockedButton.Text), 44)
 		local rarityOn = false
 		for _, rarity in ipairs(Rarities.ORDER) do
 			if query.rarities[rarity] == true then
@@ -851,6 +1141,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		for _, rarity in ipairs(Rarities.ORDER) do
 			local button = filterBar:FindFirstChild("Rarity_" .. rarity)
 			if button ~= nil and button:IsA("TextButton") then
+				button.Visible = flags.rarity
+				button.Size = UDim2.fromOffset(chipWidth(button.Text), 44)
 				local on = query.rarities[rarity] == true
 				button.BackgroundColor3 = if on then rarityColor(rarity) else COLORS.buttonDim
 				button.TextColor3 = if on
@@ -966,11 +1258,20 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	expand.MouseButton1Click:Connect(callbacks.onExpand)
 
 	local function setOpen(open: boolean)
+		if isOpen == open then
+			root.Visible = open
+			openButton.Visible = false
+			return
+		end
 		isOpen = open
 		root.Visible = open
 		openButton.Visible = false
+		fitRoot()
 		if open then
 			render()
+		end
+		if callbacks.onVisible ~= nil then
+			callbacks.onVisible(open)
 		end
 	end
 
@@ -980,15 +1281,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	close.MouseButton1Click:Connect(function()
 		setOpen(false)
 	end)
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then
-			return
-		end
-		if input.KeyCode == Enum.KeyCode.I then
-			setOpen(not isOpen)
-		end
-	end)
-
+	-- I opens the Raids tab. The old inventory panel does not take that key.
 	RunService.RenderStepped:Connect(function()
 		local rotation = (os.clock() * 48) % 360
 		for index = #gradients, 1, -1 do
@@ -1012,6 +1305,28 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.toggle()
 		setOpen(not isOpen)
+	end
+
+	function controller.open()
+		setOpen(true)
+	end
+
+	function controller.close()
+		setOpen(false)
+	end
+
+	function controller.isOpen(): boolean
+		return isOpen
+	end
+
+	function controller.openTab(tab: string)
+		query.tab = tab
+		paintFilters()
+		if isOpen then
+			render()
+			return
+		end
+		setOpen(true)
 	end
 
 	paintFilters()

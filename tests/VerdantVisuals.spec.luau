@@ -5,6 +5,7 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local ModelFactory = require("../src/ReplicatedStorage/Shared/ModelFactory")
 local VerdantLook = require("../src/ReplicatedStorage/Shared/VerdantLook")
 local VerdantScatter = require("../src/ReplicatedStorage/Shared/VerdantScatter")
@@ -84,9 +85,11 @@ describe("Verdant visuals", function()
 			seen[spot.kind] = true
 			expect(math.abs(spot.x) >= VerdantScatter.PATH_HALF).toBeTrue()
 			expect(spot.y >= VerdantScatter.FEET_Y).toBeTrue()
-			local spawn = spot.x * spot.x + (spot.z + 16) * (spot.z + 16)
+			local spawn = spot.x * spot.x
+				+ (spot.z - Dungeons.SPAWN_Z) * (spot.z - Dungeons.SPAWN_Z)
 			expect(spawn >= 64).toBeTrue()
-			local portal = spot.x * spot.x + (spot.z - 18) * (spot.z - 18)
+			local portal = spot.x * spot.x
+				+ (spot.z - Dungeons.PORTAL_Z) * (spot.z - Dungeons.PORTAL_Z)
 			expect(portal >= 64).toBeTrue()
 			for _, desc in
 				ipairs(
@@ -111,7 +114,8 @@ describe("Verdant visuals", function()
 				rings += 1
 			end
 			if spot.kind ~= "root_ring" then
-				expect(spot.x * spot.x + spot.z * spot.z >= 12 * 12).toBeTrue()
+				local clear = VerdantScatter.ARENA_CLEARING
+				expect(spot.x * spot.x + spot.z * spot.z >= clear * clear).toBeTrue()
 			end
 		end
 		expect(rings >= 4).toBeTrue()

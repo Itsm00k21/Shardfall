@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 9.
+	The player profile shape, version 24.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -14,15 +14,26 @@
 	what DataStores can save and what a RemoteEvent can send.
 ]]
 
+local ActionSlots = require("./ActionSlots")
+local Audio = require("./Audio")
+local Classes = require("./Classes")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
+local Loops = require("./Loops")
+local Progression = require("./Progression")
 local Quality = require("./Quality")
+local Settings = require("./Settings")
 local Stars = require("./Stars")
+local StarterGoalPay = require("./StarterGoalPay")
 local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 9
+local function firstSessionKit()
+	return require("./FirstSessionKit")
+end
+
+Schema.VERSION = 24
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -108,6 +119,73 @@ export type ProfileData = {
 	lastTravel: number,
 	travelPass: boolean,
 	graphicsQuality: string,
+	shardRolls: number,
+	sinceEpic: number,
+	sinceLegendary: number,
+	quickRoll: boolean,
+	quickRollUntil: number,
+	vip: boolean,
+	shake: boolean,
+	chests: { [string]: number },
+	shardKeys: number,
+	shardDust: number,
+	rareChestsSinceEpic: number,
+	epicChestsSinceLegendary: number,
+	lastLoginDay: number,
+	loginStreak: number,
+	lastDailyBossDay: number,
+	lastWeeklyBossWeek: number,
+	chestDuplicates: string,
+	chestSalvageBelow: string,
+	pendingChest: any,
+	musicVolume: number,
+	sfxVolume: number,
+	classId: string,
+	classXp: { [string]: number },
+	classTalent: { [string]: string },
+	onboardStep: string,
+	onboardDone: boolean,
+	restCharges: number,
+	welcomeCharges: number,
+	lastSeen: number,
+	milestoneTitle: string,
+	welcomeNote: string,
+	gems: number,
+	eventTokens: number,
+	ledger: { any },
+	receipts: { [string]: boolean },
+	eggs: number,
+	companions: { any },
+	dailies: { any },
+	weekly: { any },
+	weeklyWeek: number,
+	board: { any },
+	boardLines: number,
+	passXp: number,
+	passClaimed: number,
+	firstClearDay: number,
+	nightmareBest: number,
+	dailyBonusDay: number,
+	dailyRerollDay: number,
+	raidMarks: number,
+	raidMarksEarned: number,
+	raidMarkWeek: number,
+	raidLock: { [string]: number },
+	raidPity: { [string]: number },
+	raidStory: boolean,
+	raidEcho: number,
+	raidBest: number,
+	tradeDay: number,
+	tradeValueToday: number,
+	tradeLocked: boolean,
+	tradeFlagged: boolean,
+	verifiedTrader: boolean,
+	tradeCleanSince: number,
+	tradeHandoff: boolean,
+	uiSettings: Settings.Data,
+	starterGoals: any,
+	firstSession: any,
+	actionBars: { [string]: any },
 }
 
 function Schema.template(): ProfileData
@@ -144,6 +222,80 @@ function Schema.template(): ProfileData
 		lastTravel = 0,
 		travelPass = false,
 		graphicsQuality = "",
+		shardRolls = 0,
+		sinceEpic = 0,
+		sinceLegendary = 0,
+		quickRoll = false,
+		quickRollUntil = 0,
+		vip = false,
+		shake = true,
+		chests = {
+			Common = 0,
+			Uncommon = 0,
+			Rare = 0,
+			Epic = 0,
+			Legendary = 0,
+			Mythic = 0,
+		},
+		shardKeys = 0,
+		shardDust = 0,
+		rareChestsSinceEpic = 0,
+		epicChestsSinceLegendary = 0,
+		lastLoginDay = -1,
+		loginStreak = 0,
+		lastDailyBossDay = -1,
+		lastWeeklyBossWeek = -1,
+		chestDuplicates = "dust",
+		chestSalvageBelow = "",
+		pendingChest = nil,
+		musicVolume = Audio.DEFAULT_MUSIC,
+		sfxVolume = Audio.DEFAULT_SFX,
+		classId = "",
+		classXp = {},
+		classTalent = {},
+		onboardStep = "open",
+		onboardDone = false,
+		restCharges = 0,
+		welcomeCharges = 0,
+		lastSeen = 0,
+		milestoneTitle = "",
+		welcomeNote = "",
+		gems = 0,
+		eventTokens = 0,
+		ledger = {},
+		receipts = {},
+		eggs = 1,
+		companions = {},
+		dailies = {},
+		weekly = {},
+		weeklyWeek = -1,
+		board = {},
+		boardLines = 0,
+		passXp = 0,
+		passClaimed = 0,
+		firstClearDay = -1,
+		nightmareBest = 0,
+		dailyBonusDay = -1,
+		dailyRerollDay = -1,
+		raidMarks = 0,
+		raidMarksEarned = 0,
+		raidMarkWeek = -1,
+		raidLock = {},
+		raidPity = {},
+		raidStory = false,
+		raidEcho = 0,
+		raidBest = 0,
+		tradeDay = 0,
+		tradeValueToday = 0,
+		tradeLocked = false,
+		tradeFlagged = false,
+		verifiedTrader = false,
+		tradeCleanSince = 0,
+		tradeHandoff = false,
+		uiSettings = Settings.default(),
+		starterGoals = StarterGoalPay.blank(),
+		firstSession = firstSessionKit().blank(false),
+		actionBars = ActionSlots.fresh(),
 	}
 end
 
@@ -159,11 +311,7 @@ function Schema.deepCopy(value: any): any
 end
 
 function Schema.xpToNext(level: number): number
-	local whole = math.floor(level)
-	if whole < 1 then
-		whole = 1
-	end
-	return 100 * whole
+	return Progression.xpToNext(level)
 end
 
 local function wholeNumber(value: any, fallback: number, minimum: number): number
@@ -250,6 +398,143 @@ function Schema.reconcile(data: any): ProfileData
 	data.travelPass = data.travelPass == true
 	local quality = Quality.normalize(data.graphicsQuality)
 	data.graphicsQuality = if quality == nil then "" else quality
+	data.shardRolls = wholeNumber(data.shardRolls, 0, 0)
+	if data.shardRolls > 1000000000 then
+		data.shardRolls = 1000000000
+	end
+	data.sinceEpic = wholeNumber(data.sinceEpic, 0, 0)
+	data.sinceLegendary = wholeNumber(data.sinceLegendary, 0, 0)
+	data.quickRoll = data.quickRoll == true
+	data.quickRollUntil = wholeNumber(data.quickRollUntil, 0, 0)
+	data.vip = data.vip == true
+	data.shake = data.shake ~= false
+	data.musicVolume = Audio.clampVolume(data.musicVolume)
+	data.uiSettings = Settings.normalize(data.uiSettings)
+	if Classes.get(data.classId) == nil then
+		data.classId = ""
+	end
+	local classXp = {}
+	if type(data.classXp) == "table" then
+		for classId, amount in pairs(data.classXp) do
+			if Classes.get(classId) ~= nil then
+				classXp[classId] = wholeNumber(amount, 0, 0)
+			end
+		end
+	end
+	data.classXp = classXp
+	local classTalent = {}
+	if type(data.classTalent) == "table" then
+		for classId, talentId in pairs(data.classTalent) do
+			if type(talentId) == "string" and Classes.validTalent(classId, talentId) then
+				classTalent[classId] = talentId
+			end
+		end
+	end
+	data.classTalent = classTalent
+	if type(data.onboardStep) ~= "string" or data.onboardStep == "" then
+		data.onboardStep = "open"
+	end
+	data.onboardDone = data.onboardDone == true
+	data.restCharges = wholeNumber(data.restCharges, 0, 0)
+	data.welcomeCharges = wholeNumber(data.welcomeCharges, 0, 0)
+	data.lastSeen = wholeNumber(data.lastSeen, 0, 0)
+	if type(data.milestoneTitle) ~= "string" then
+		data.milestoneTitle = ""
+	end
+	if type(data.welcomeNote) ~= "string" then
+		data.welcomeNote = ""
+	end
+	data.gems = wholeNumber(data.gems, 0, 0)
+	data.eventTokens = wholeNumber(data.eventTokens, 0, 0)
+	if type(data.ledger) ~= "table" then
+		data.ledger = {}
+	end
+	if type(data.receipts) ~= "table" then
+		data.receipts = {}
+	end
+	data.eggs = wholeNumber(data.eggs, 0, 0)
+	if type(data.companions) ~= "table" then
+		data.companions = {}
+	end
+	if type(data.dailies) ~= "table" then
+		data.dailies = {}
+	end
+	if type(data.weekly) ~= "table" then
+		data.weekly = {}
+	end
+	if type(data.board) ~= "table" then
+		data.board = {}
+	end
+	data.passXp = wholeNumber(data.passXp, 0, 0)
+	data.passClaimed = wholeNumber(data.passClaimed, 0, 0)
+	data.boardLines = wholeNumber(data.boardLines, 0, 0)
+	data.nightmareBest = wholeNumber(data.nightmareBest, 0, 0)
+	data.raidMarks = wholeNumber(data.raidMarks, 0, 0)
+	data.raidMarksEarned = wholeNumber(data.raidMarksEarned, 0, 0)
+	data.raidEcho = wholeNumber(data.raidEcho, 0, 0)
+	if data.raidEcho > 5 then
+		data.raidEcho = 5
+	end
+	data.raidBest = wholeNumber(data.raidBest, 0, 0)
+	data.raidStory = data.raidStory == true
+	data.tradeDay = wholeNumber(data.tradeDay, 0, 0)
+	data.tradeValueToday = wholeNumber(data.tradeValueToday, 0, 0)
+	data.tradeCleanSince = wholeNumber(data.tradeCleanSince, 0, 0)
+	data.tradeLocked = data.tradeLocked == true
+	data.tradeFlagged = data.tradeFlagged == true
+	data.verifiedTrader = data.verifiedTrader == true
+	data.tradeHandoff = data.tradeHandoff == true
+	data.starterGoals = StarterGoalPay.normalize(data.starterGoals)
+	data.firstSession = firstSessionKit().normalize(data.firstSession)
+	data.actionBars = ActionSlots.reconcile(data.actionBars, data)
+	if type(data.raidLock) ~= "table" then
+		data.raidLock = {}
+	end
+	if type(data.raidPity) ~= "table" then
+		data.raidPity = {}
+	end
+	data.sfxVolume = Audio.clampVolume(data.sfxVolume)
+	if type(data.chests) ~= "table" then
+		data.chests = {}
+	end
+	for _, tier in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }) do
+		data.chests[tier] = wholeNumber(data.chests[tier], 0, 0)
+		if data.chests[tier] > 999 then
+			data.chests[tier] = 999
+		end
+	end
+	data.shardKeys = wholeNumber(data.shardKeys, 0, 0)
+	if data.shardKeys > 99999 then
+		data.shardKeys = 99999
+	end
+	data.shardDust = wholeNumber(data.shardDust, 0, 0)
+	if data.shardDust > 999999 then
+		data.shardDust = 999999
+	end
+	data.rareChestsSinceEpic = wholeNumber(data.rareChestsSinceEpic, 0, 0)
+	data.epicChestsSinceLegendary = wholeNumber(data.epicChestsSinceLegendary, 0, 0)
+	data.loginStreak = wholeNumber(data.loginStreak, 0, 0)
+	local function stamp(value: any): number
+		local numberValue = tonumber(value)
+		if numberValue == nil or numberValue ~= numberValue then
+			return -1
+		end
+		return math.floor(numberValue)
+	end
+	data.lastLoginDay = stamp(data.lastLoginDay)
+	data.lastDailyBossDay = stamp(data.lastDailyBossDay)
+	data.lastWeeklyBossWeek = stamp(data.lastWeeklyBossWeek)
+	data.firstClearDay = stamp(data.firstClearDay)
+	data.weeklyWeek = stamp(data.weeklyWeek)
+	data.dailyBonusDay = stamp(data.dailyBonusDay)
+	data.dailyRerollDay = stamp(data.dailyRerollDay)
+	data.raidMarkWeek = stamp(data.raidMarkWeek)
+	if data.chestDuplicates ~= "star" then
+		data.chestDuplicates = "dust"
+	end
+	if type(data.chestSalvageBelow) ~= "string" then
+		data.chestSalvageBelow = ""
+	end
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -317,6 +602,11 @@ function Schema.reconcile(data: any): ProfileData
 			sockets = 6
 		end
 		item.sockets = sockets
+		local upgrade = wholeNumber(item.upgrade, 0, 0)
+		if upgrade > 10 then
+			upgrade = 10
+		end
+		item.upgrade = upgrade
 		Stars.applyStats(item)
 	end
 	for _, item in pairs(data.inventory) do
@@ -514,6 +804,209 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		version = 9
 	end
 
+	if version < 10 then
+		-- Global shard pity, the Quick Roll unlock, VIP, and the shake toggle.
+		-- Older per-pool pity stays where it is; these counters start fresh.
+		if type(raw.shardRolls) ~= "number" then
+			raw.shardRolls = 0
+		end
+		if type(raw.sinceEpic) ~= "number" then
+			raw.sinceEpic = 0
+		end
+		if type(raw.sinceLegendary) ~= "number" then
+			raw.sinceLegendary = 0
+		end
+		if raw.quickRoll ~= true then
+			raw.quickRoll = false
+		end
+		if type(raw.quickRollUntil) ~= "number" then
+			raw.quickRollUntil = 0
+		end
+		if raw.vip ~= true then
+			raw.vip = false
+		end
+		if raw.shake ~= false then
+			raw.shake = true
+		end
+		raw.schemaVersion = 10
+		version = 10
+	end
+
+	if version < 11 then
+		-- Chests, Shard Keys, and Shard Dust. Login and boss clocks stay
+		-- at -1 so the first claim of a week still pays.
+		if type(raw.chests) ~= "table" then
+			raw.chests = {}
+		end
+		if type(raw.shardKeys) ~= "number" then
+			raw.shardKeys = 0
+		end
+		if type(raw.shardDust) ~= "number" then
+			raw.shardDust = 0
+		end
+		if type(raw.rareChestsSinceEpic) ~= "number" then
+			raw.rareChestsSinceEpic = 0
+		end
+		if type(raw.epicChestsSinceLegendary) ~= "number" then
+			raw.epicChestsSinceLegendary = 0
+		end
+		if type(raw.lastLoginDay) ~= "number" then
+			raw.lastLoginDay = -1
+		end
+		if type(raw.loginStreak) ~= "number" then
+			raw.loginStreak = 0
+		end
+		if type(raw.lastDailyBossDay) ~= "number" then
+			raw.lastDailyBossDay = -1
+		end
+		if type(raw.lastWeeklyBossWeek) ~= "number" then
+			raw.lastWeeklyBossWeek = -1
+		end
+		if raw.chestDuplicates ~= "star" then
+			raw.chestDuplicates = "dust"
+		end
+		if type(raw.chestSalvageBelow) ~= "string" then
+			raw.chestSalvageBelow = ""
+		end
+		raw.schemaVersion = 11
+		version = 11
+	end
+
+	if version < 12 then
+		-- Music and SFX sliders. 1 is full. The Haven track still starts at
+		-- its own bed volume and the slider multiplies that.
+		if tonumber(raw.musicVolume) == nil then
+			raw.musicVolume = Audio.DEFAULT_MUSIC
+		end
+		if tonumber(raw.sfxVolume) == nil then
+			raw.sfxVolume = Audio.DEFAULT_SFX
+		end
+		raw.schemaVersion = 12
+		version = 12
+	end
+
+	if version < 13 then
+		if type(raw.classId) ~= "string" then
+			raw.classId = ""
+		end
+		if type(raw.classXp) ~= "table" then
+			raw.classXp = {}
+		end
+		if type(raw.classTalent) ~= "table" then
+			raw.classTalent = {}
+		end
+		raw.schemaVersion = 13
+		version = 13
+	end
+
+	if version < 14 then
+		if type(raw.onboardStep) ~= "string" then
+			raw.onboardStep = "haven"
+		end
+		if raw.onboardDone ~= true then
+			raw.onboardDone = true
+		end
+		raw.schemaVersion = 14
+		version = 14
+	end
+
+	if version < 15 then
+		raw.restCharges = 0
+		raw.welcomeCharges = 0
+		raw.lastSeen = os.time()
+		raw.milestoneTitle = ""
+		raw.welcomeNote = ""
+		raw.schemaVersion = 15
+		version = 15
+	end
+
+	if version < 16 then
+		raw.gems = 0
+		raw.eventTokens = 0
+		raw.ledger = {}
+		raw.receipts = {}
+		raw.schemaVersion = 16
+		version = 16
+	end
+
+	if version < 17 then
+		raw.eggs = 1
+		raw.companions = {}
+		raw.schemaVersion = 17
+		version = 17
+	end
+
+	if version < 18 then
+		raw.dailies = {}
+		raw.weekly = {}
+		raw.weeklyWeek = -1
+		raw.board = {}
+		raw.boardLines = 0
+		raw.passXp = 0
+		raw.passClaimed = 0
+		raw.firstClearDay = -1
+		raw.nightmareBest = 0
+		raw.dailyBonusDay = -1
+		raw.dailyRerollDay = -1
+		raw.schemaVersion = 18
+		version = 18
+	end
+
+	if version < 19 then
+		raw.raidMarks = 0
+		raw.raidMarksEarned = 0
+		raw.raidMarkWeek = -1
+		raw.raidLock = {}
+		raw.raidPity = {}
+		raw.raidStory = false
+		raw.raidEcho = 0
+		raw.raidBest = 0
+		raw.schemaVersion = 19
+		version = 19
+	end
+
+	if version < 20 then
+		raw.tradeDay = 0
+		raw.tradeValueToday = 0
+		raw.tradeLocked = false
+		raw.tradeFlagged = false
+		raw.verifiedTrader = false
+		raw.tradeCleanSince = 0
+		raw.tradeHandoff = false
+		raw.schemaVersion = 20
+		version = 20
+	end
+
+	if version < 21 then
+		raw.uiSettings = Settings.default()
+		raw.schemaVersion = 21
+		version = 21
+	end
+
+	-- T-049 named 22 for raidLuck and never shipped. This is the free version.
+	-- A save from 21 starts unpaid. Do not copy onboardDone or another profile.
+	if version < 22 then
+		raw.starterGoals = StarterGoalPay.blank()
+		raw.schemaVersion = 22
+		version = 22
+	end
+
+	-- A save that already finished onboarding does not get this kit.
+	-- A new profile stays returning false. Do not copy another account.
+	if version < 23 then
+		raw.firstSession = firstSessionKit().blank(raw.onboardDone == true)
+		raw.schemaVersion = 23
+		version = 23
+	end
+
+	-- Per-class action bars. A save with none gets the class defaults.
+	-- Do not copy another profile's layout.
+	if version < 24 then
+		raw.actionBars = ActionSlots.fresh()
+		raw.schemaVersion = 24
+		version = 24
+	end
+
 	return Schema.reconcile(raw), nil
 end
 
@@ -687,6 +1180,62 @@ function Schema.snapshot(data: ProfileData)
 		lastTravel = data.lastTravel,
 		travelPass = data.travelPass,
 		graphicsQuality = data.graphicsQuality,
+		shardRolls = data.shardRolls,
+		sinceEpic = data.sinceEpic,
+		sinceLegendary = data.sinceLegendary,
+		quickRoll = data.quickRoll,
+		quickRollUntil = data.quickRollUntil,
+		vip = data.vip,
+		shake = data.shake,
+		chests = Schema.deepCopy(data.chests),
+		shardKeys = data.shardKeys,
+		shardDust = data.shardDust,
+		rareChestsSinceEpic = data.rareChestsSinceEpic,
+		epicChestsSinceLegendary = data.epicChestsSinceLegendary,
+		lastLoginDay = data.lastLoginDay,
+		loginStreak = data.loginStreak,
+		lastDailyBossDay = data.lastDailyBossDay,
+		lastWeeklyBossWeek = data.lastWeeklyBossWeek,
+		chestDuplicates = data.chestDuplicates,
+		chestSalvageBelow = data.chestSalvageBelow,
+		pendingChest = Schema.deepCopy(data.pendingChest),
+		musicVolume = data.musicVolume,
+		sfxVolume = data.sfxVolume,
+		classId = data.classId,
+		classXp = Schema.deepCopy(data.classXp),
+		classTalent = Schema.deepCopy(data.classTalent),
+		classLevel = Classes.progress(data.classXp[data.classId] or 0),
+		onboardStep = data.onboardStep,
+		onboardDone = data.onboardDone,
+		restCharges = data.restCharges,
+		welcomeCharges = data.welcomeCharges,
+		lastSeen = data.lastSeen,
+		milestoneTitle = data.milestoneTitle,
+		welcomeNote = data.welcomeNote,
+		gems = data.gems,
+		eventTokens = data.eventTokens,
+		eggs = data.eggs,
+		companions = Schema.deepCopy(data.companions),
+		dailies = Schema.deepCopy(data.dailies),
+		weekly = Schema.deepCopy(data.weekly),
+		board = Schema.deepCopy(data.board),
+		boardLines = data.boardLines,
+		passXp = data.passXp,
+		passTier = select(2, Loops.passXp(data.passXp, 0)),
+		passClaimed = data.passClaimed,
+		nightmareBest = data.nightmareBest,
+		dailyBossReady = data.lastDailyBossDay ~= Loops.dayNumber(os.time()),
+		raidMarks = data.raidMarks,
+		raidStory = data.raidStory,
+		raidEcho = data.raidEcho,
+		raidBest = data.raidBest,
+		tradeLocked = data.tradeLocked,
+		tradeFlagged = data.tradeFlagged,
+		verifiedTrader = data.verifiedTrader,
+		tradeHandoff = data.tradeHandoff,
+		uiSettings = Settings.normalize(data.uiSettings),
+		starterGoalTracker = StarterGoalPay.tracker(data),
+		actionBars = Schema.deepCopy(data.actionBars),
 	}
 end
 

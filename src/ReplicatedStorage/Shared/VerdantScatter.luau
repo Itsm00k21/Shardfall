@@ -7,6 +7,7 @@
 	spawn, and the exit pad, and the part total stops at the budget.
 ]]
 
+local Dungeons = require("./Dungeons")
 local ModelFactory = require("./ModelFactory")
 
 local VerdantScatter = {}
@@ -23,10 +24,12 @@ export type Spot = {
 VerdantScatter.ROOM_BUDGET = 150
 VerdantScatter.HAVEN_BUDGET = 80
 VerdantScatter.FEET_Y = 0.5
-VerdantScatter.PATH_HALF = 5.4
+-- Half the 16-stud corridor, plus a stud so dressing stays off the path.
+VerdantScatter.PATH_HALF = Dungeons.CORRIDOR_WIDTH / 2 + 1
+VerdantScatter.ARENA_CLEARING = 18
 
-local SPAWN_Z = -16
-local PORTAL_Z = 18
+local SPAWN_Z = Dungeons.SPAWN_Z
+local PORTAL_Z = Dungeons.PORTAL_Z
 local PAD_RADIUS = 8
 local MARGIN = 3.5
 local ATTEMPTS = 80
@@ -108,7 +111,7 @@ end
 
 function VerdantScatter.room(seed: number, half: number, mode: string): { Spot }
 	local budget = if mode == "waves" then 110 else VerdantScatter.ROOM_BUDGET
-	local clearing = if mode == "arena" then 12 else 0
+	local clearing = if mode == "arena" then VerdantScatter.ARENA_CLEARING else 0
 	local spots: { Spot } = {}
 	local spent = 0
 	local state = math.floor(math.abs(seed)) % 2147483647
@@ -221,8 +224,8 @@ local function lantern(parts: { ModelFactory.Desc }, x: number, z: number)
 		rx = 0,
 		ry = 0,
 		rz = 0,
-		color = { 255, 196, 96 },
-		material = "Neon",
+		color = { 214, 168, 96 },
+		material = "SmoothPlastic",
 		shape = "Ball",
 		lod = "small",
 		particle = "fireflies",

@@ -1,0 +1,258 @@
+--!strict
+
+--[[
+	Zone bed and the four sound groups.
+
+	Music, SFX, UI, and Ambience live under SoundService. Haven, Rootvault
+	rooms, and the Grandmother Gnarl fight each have a TRACKS entry. A zone
+	change crossfades over FADE_SECONDS. The boss entry restarts even when
+	it shares an asset with the room bed. An empty id stays silent.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Audio = require(Shared:WaitForChild("Audio"))
+local Dungeons = require(Shared:WaitForChild("Dungeons"))
+
+local MusicController = {}
+
+local function ensureGroup(name: string): SoundGroup
+	local found = SoundService:FindFirstChild(name)
+	if found ~= nil and found:IsA("SoundGroup") then
+		return found
+	end
+	local group = Instance.new("SoundGroup")
+	group.Name = name
+	group.Volume = 1
+	group.Parent = SoundService
+	return group
+end
+
+local function inCrawl(): boolean
+	local player = Players.LocalPlayer
+	if player == nil then
+		return false
+	end
+	local character = player.Character
+	if character == nil then
+		return false
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root == nil or not root:IsA("BasePart") then
+		return false
+	end
+	return Dungeons.inCrawl(root.Position.X, root.Position.Z)
+end
+
+function MusicController.start()
+	local groups = {}
+	for _, name in ipairs(Audio.GROUPS) do
+		groups[name] = ensureGroup(name)
+	end
+	local musicGroup = groups.Music
+	local sfxGroup = groups.SFX
+	local uiGroup = groups.UI
+	local ambienceGroup = groups.Ambience
+
+	local bed = Instance.new("Sound")
+	bed.Name = "ZoneBed"
+	bed.Looped = true
+	bed.Volume = 0
+	bed.SoundGroup = musicGroup
+	bed.Parent = SoundService
+
+	local armed = false
+	local heardZone = false
+	local currentZone = ""
+	local derivedZone = ""
+	local overrideZone: string? = nil
+	local overrideAnchor = ""
+	-- Boss pin stays up through the teleport into the room. It drops once
+	-- the character has been in the crawl and then leaves, or when the
+	-- fight ends and syncRun clears it.
+	local pinnedZone: string? = nil
+	local pinSawCrawl = false
+	local activeTween: Tween? = nil
+	local fadeToken = 0
+
+	local function assignAmbience(sound: Instance)
+		if sound:IsA("Sound") and string.find(sound.Name, "Ambience", 1, true) ~= nil then
+			sound.SoundGroup = ambienceGroup
+		end
+	end
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		assignAmbience(descendant)
+	end
+	workspace.DescendantAdded:Connect(assignAmbience)
+
+	local function fadeTo(goal: number, done: (() -> ())?)
+		if activeTween ~= nil then
+			activeTween:Cancel()
+			activeTween = nil
+		end
+		fadeToken += 1
+		local token = fadeToken
+		local tween = TweenService:Create(
+			bed,
+			TweenInfo.new(Audio.FADE_SECONDS, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Volume = goal }
+		)
+		activeTween = tween
+		tween.Completed:Connect(function(state)
+			if token ~= fadeToken then
+				return
+			end
+			activeTween = nil
+			if state == Enum.PlaybackState.Completed and done ~= nil then
+				done()
+			end
+		end)
+		tween:Play()
+	end
+
+	local function playBed(zoneId: string, fadeIn: boolean)
+		local id = Audio.trackFor(zoneId)
+		if id == nil then
+			if bed.IsPlaying and bed.Volume > 0 then
+				fadeTo(0, function()
+					bed:Stop()
+				end)
+			else
+				bed.Volume = 0
+				bed:Stop()
+			end
+			return
+		end
+		local function rise()
+			bed.SoundId = id
+			bed.TimePosition = 0
+			if fadeIn then
+				bed.Volume = 0
+				if not bed.IsPlaying then
+					bed:Play()
+				end
+				fadeTo(Audio.HAVEN_VOLUME, nil)
+			else
+				if activeTween ~= nil then
+					activeTween:Cancel()
+					activeTween = nil
+				end
+				fadeToken += 1
+				bed.Volume = Audio.HAVEN_VOLUME
+				if not bed.IsPlaying then
+					bed:Play()
+				end
+			end
+		end
+		-- Same asset still crossfades. Boss start restarts at the top.
+		if bed.IsPlaying and bed.Volume > 0.01 then
+			fadeTo(0, rise)
+			return
+		end
+		rise()
+	end
+
+	local function applyZone(zoneId: string, fadeIn: boolean)
+		if zoneId == currentZone then
+			return
+		end
+		currentZone = zoneId
+		print("[Music] zone " .. zoneId)
+		playBed(zoneId, fadeIn)
+	end
+
+	local function watch()
+		local crawling = inCrawl()
+		local positionZone = Audio.zoneFor(crawling)
+		if pinnedZone == Audio.GNARL_ZONE then
+			if crawling then
+				pinSawCrawl = true
+			elseif pinSawCrawl then
+				pinnedZone = nil
+				pinSawCrawl = false
+			end
+		end
+		if overrideZone ~= nil and positionZone ~= overrideAnchor then
+			overrideZone = nil
+		end
+		local zone = positionZone
+		if pinnedZone ~= nil then
+			zone = pinnedZone
+		elseif overrideZone ~= nil then
+			zone = overrideZone
+		end
+		if not armed then
+			return
+		end
+		if zone == derivedZone and heardZone then
+			return
+		end
+		derivedZone = zone
+		applyZone(zone, heardZone)
+		heardZone = true
+	end
+
+	RunService.Heartbeat:Connect(watch)
+
+	print(
+		string.format("[Music] groups ready haven=%s", tostring(Audio.trackFor(Audio.HAVEN_ZONE)))
+	)
+
+	return {
+		setVolumes = function(music: number, sfx: number)
+			local musicVolume = Audio.clampVolume(music)
+			local sfxVolume = Audio.clampVolume(sfx)
+			musicGroup.Volume = musicVolume
+			sfxGroup.Volume = sfxVolume
+			uiGroup.Volume = sfxVolume
+			ambienceGroup.Volume = sfxVolume
+			if not armed then
+				armed = true
+				watch()
+			end
+		end,
+		setUiVolume = function(ui: number)
+			uiGroup.Volume = Audio.clampVolume(ui)
+		end,
+		-- Later zones call this. The position watch takes over again when
+		-- the character actually changes between Haven and a crawl.
+		setZone = function(zoneId: string)
+			if type(zoneId) ~= "string" or zoneId == "" then
+				return
+			end
+			overrideZone = zoneId
+			overrideAnchor = Audio.zoneFor(inCrawl())
+			derivedZone = ""
+			if armed then
+				watch()
+			end
+		end,
+		-- Living Grandmother Gnarl pins the boss bed. Any other run state
+		-- drops the pin and the room or the hub plays again.
+		syncRun = function(run: any)
+			local active = type(run) == "table" and run.active == true
+			local boss = type(run) == "table" and run.boss == true
+			local dungeonId = if type(run) == "table" then run.dungeonId else nil
+			local zone = Audio.zoneForRun(active, boss, dungeonId)
+			if zone == Audio.GNARL_ZONE then
+				if pinnedZone ~= Audio.GNARL_ZONE then
+					pinSawCrawl = inCrawl()
+					pinnedZone = Audio.GNARL_ZONE
+				end
+			else
+				pinnedZone = nil
+				pinSawCrawl = false
+			end
+			if armed then
+				watch()
+			end
+		end,
+	}
+end
+
+return MusicController

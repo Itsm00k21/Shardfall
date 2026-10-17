@@ -1,8 +1,9 @@
 --!strict
 
 --[[
-	Side panel for shards, the forge, and the dungeon. The bag itself lives
-	on the Inventory screen (the HUD button and the I key).
+	Menu sheet for shards, the forge, and the dungeon. It stays closed until
+	Menu, a Haven stall, or a chest shortcut opens it. The bag itself lives
+	on the Inventory screen (the action bar and the I key).
 
 	The panel stays short on purpose: stats, a pity line that counts up, and
 	one Shard Token crack. Odds is a labeled button above the Prism Token
@@ -26,7 +27,10 @@ local UserInputService = game:GetService("UserInputService")
 local MobileShell = require(script.Parent.MobileShell)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
+local BannerFit = require(Shared:WaitForChild("BannerFit"))
 local Areas = require(Shared:WaitForChild("Areas"))
+local Audio = require(Shared:WaitForChild("Audio"))
 local Crafting = require(Shared:WaitForChild("Crafting"))
 local CraftingLevel = require(Shared:WaitForChild("CraftingLevel"))
 local Currencies = require(Shared:WaitForChild("Currencies"))
@@ -35,6 +39,7 @@ local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
+local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 local Recipes = require(Shared:WaitForChild("Recipes"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
 local Stats = require(Shared:WaitForChild("Stats"))
@@ -57,6 +62,9 @@ export type Callbacks = {
 	onAttack: () -> (),
 	onAutoAttack: (enabled: boolean) -> (),
 	onAutoFarm: (enabled: boolean) -> (),
+	onAudio: (music: number, sfx: number, commit: boolean) -> (),
+	onChests: (() -> ())?,
+	onGraphics: (() -> ())?,
 }
 
 local COLORS = {
@@ -173,17 +181,133 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Shardfall",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 10,
+		DisplayOrder = 18,
 	}, playerGui) :: ScreenGui
 	MobileShell.mount(screen)
 
+	local toast = new("TextLabel", {
+		Name = "Toast",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.32, 0, 0, 12),
+		Size = UDim2.new(0.46, 0, 0, 44),
+		BackgroundColor3 = COLORS.panel,
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextWrapped = true,
+		TextColor3 = COLORS.text,
+		Text = "",
+		Visible = false,
+		ZIndex = 30,
+	}, screen) :: TextLabel
+	corner(toast, 8)
+
+	local bannerGui = new("ScreenGui", {
+		Name = "ShardfallBanner",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = false,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		DisplayOrder = 100,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	}, playerGui) :: ScreenGui
+	local banner = new("TextLabel", {
+		Name = "Banner",
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.fromOffset(200, 32),
+		BackgroundColor3 = COLORS.gold,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextScaled = false,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextColor3 = COLORS.ink,
+		Text = "",
+		Visible = false,
+		Active = false,
+		ZIndex = 20,
+	}, bannerGui) :: TextLabel
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, 8),
+		PaddingBottom = UDim.new(0, 8),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, banner)
+	corner(banner, 8)
+	local bannerToken = 0
+	-- Nil until setProfile reads uiSettings.access.textScale. BannerFit treats that as 16px.
+	local bannerScale: any = nil
+	local function applyBannerFit()
+		local size = bannerGui.AbsoluteSize
+		local vx = size.X
+		local vy = size.Y
+		if vx < 200 or vy < 200 then
+			vx, vy = MobileShell.view(screen)
+		end
+		local box = BannerFit.fit(vx, vy, bannerScale)
+		banner.Position = UDim2.fromOffset(box.x, box.y)
+		banner.Size = UDim2.fromOffset(box.w, box.h)
+		banner.TextSize = box.textSize
+	end
+	applyBannerFit()
+	bannerGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyBannerFit)
+	local bannerCamera = workspace.CurrentCamera
+	if bannerCamera ~= nil then
+		bannerCamera:GetPropertyChangedSignal("ViewportSize"):Connect(applyBannerFit)
+	end
+	local function showBanner(text: string, kind: string, hold: boolean?)
+		bannerToken += 1
+		local token = bannerToken
+		local shown = if type(text) == "string"
+			then string.match(text, "^%s*(.-)%s*$") or ""
+			else ""
+		local changed = banner.Text ~= shown or banner.Visible ~= (shown ~= "")
+		banner.Text = shown
+		banner.Visible = shown ~= ""
+		if shown == "" then
+			return
+		end
+		local background = COLORS.gold
+		local ink = COLORS.ink
+		if kind == "error" then
+			background = COLORS.danger
+			ink = COLORS.text
+		elseif kind == "ok" then
+			background = COLORS.ok
+		end
+		banner.BackgroundColor3 = background
+		banner.TextColor3 = ink
+		applyBannerFit()
+		if hold == true then
+			if changed then
+				print("[Toast] shown " .. shown)
+			end
+			return
+		end
+		if changed then
+			print("[Toast] shown " .. shown)
+		end
+		task.delay(ShellLayout.BANNER_SECONDS, function()
+			if token ~= bannerToken then
+				return
+			end
+			banner.Visible = false
+			banner.Text = ""
+		end)
+	end
+
 	local panel = new("ScrollingFrame", {
 		Name = "Panel",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.new(0.92, 0, 1, -168),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(16, 140),
+		Size = UDim2.fromOffset(320, 480),
 		BackgroundColor3 = COLORS.background,
 		BorderSizePixel = 0,
+		Visible = false,
 		ScrollBarThickness = 4,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -192,11 +316,18 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, screen) :: ScrollingFrame
 	corner(panel, 12)
 	padding(panel, 12)
-	MobileShell.aspect(panel, 0.62)
-	MobileShell.limit(panel, 420, 1200)
-	if UserInputService.TouchEnabled then
-		panel.Visible = false
+	local function fitPanel()
+		local vx, vy = MobileShell.view(screen)
+		local box = ShellLayout.menuRect(vx, vy)
+		panel.Position = UDim2.fromOffset(box.x, box.y)
+		panel.Size = UDim2.fromOffset(box.w, box.h)
 	end
+	fitPanel()
+	local fitCamera = workspace.CurrentCamera
+	if fitCamera ~= nil then
+		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitPanel)
+	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPanel)
 	list(panel, 8)
 	new("UIStroke", {
 		Color = COLORS.stroke,
@@ -207,23 +338,69 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local header = new("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.new(1, 0, 0, ShellLayout.TITLE_ROW + ShellLayout.HIDE_ROW),
 		LayoutOrder = 1,
 	}, panel) :: Frame
 	new("TextLabel", {
+		Name = "Title",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -84, 1, 0),
+		Size = UDim2.new(1, 0, 0, ShellLayout.TITLE_ROW),
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.None,
 		TextColor3 = COLORS.gold,
 		Text = "SHARDFALL",
 	}, header)
+	local minimize = new("TextButton", {
+		Name = "Minimize",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.fromOffset(72, 40),
+		BackgroundColor3 = COLORS.buttonDim,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextColor3 = COLORS.text,
+		Text = "Hide",
+		AutoButtonColor = true,
+	}, header) :: TextButton
+	corner(minimize, 8)
+	local restore = new("TextButton", {
+		Name = "ShowPanel",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(120, 44),
+		BackgroundColor3 = COLORS.button,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 16,
+		TextColor3 = COLORS.text,
+		Text = "SHARDFALL",
+		AutoButtonColor = true,
+		Visible = false,
+	}, screen) :: TextButton
+	corner(restore, 8)
+	local userOpen = false
+	local covered = false
+	local function applyChrome()
+		panel.Visible = userOpen and not covered
+		restore.Visible = false
+	end
+	applyChrome()
+	minimize.MouseButton1Click:Connect(function()
+		userOpen = false
+		applyChrome()
+	end)
+	restore.MouseButton1Click:Connect(function()
+		userOpen = true
+		applyChrome()
+	end)
 
 	local saveBadge = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(96, 44),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1),
+		Size = UDim2.fromOffset(120, 40),
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -332,6 +509,22 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	wavesButton.Position = UDim2.fromOffset(0, 82)
 	wavesButton.Size = UDim2.new(1, 0, 0, 44)
 	wavesButton.TextSize = 13
+	local waveAt = 0
+	local function pressWaves()
+		local now = os.clock()
+		if now - waveAt < 0.4 then
+			return
+		end
+		waveAt = now
+		if runState.active == true then
+			showBanner("Leave this run before starting Rootvault Waves.", "error")
+			return
+		end
+		showBanner("Entering Rootvault Waves…", "info")
+		callbacks.onDungeon("enter", "rootvault_waves")
+	end
+	wavesButton.MouseButton1Click:Connect(pressWaves)
+	wavesButton.Activated:Connect(pressWaves)
 
 	local function paintDungeon()
 		local note = if type(runState.note) == "string"
@@ -408,12 +601,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		callbacks.onDungeon("enter", "rootvault")
 	end)
-	wavesButton.MouseButton1Click:Connect(function()
-		if runState.active == true then
-			return
-		end
-		callbacks.onDungeon("enter", "rootvault_waves")
-	end)
 	leaveButton.MouseButton1Click:Connect(function()
 		callbacks.onDungeon("leave")
 	end)
@@ -465,7 +652,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = COLORS.text,
-		Text = "Loading profile...",
+		Text = "",
 		TextWrapped = true,
 		LayoutOrder = 4,
 	}, panel) :: TextLabel
@@ -477,7 +664,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
-		Text = RollMath.pityText(0, 50),
+		Text = RarityConfig.pityLine(0, 0),
 		LayoutOrder = 5,
 	}, panel) :: TextLabel
 
@@ -731,6 +918,136 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	corner(loadout, 8)
 	padding(loadout, 8)
 
+	local musicValue = Audio.DEFAULT_MUSIC
+	local sfxValue = Audio.DEFAULT_SFX
+	local audioBlock = new("Frame", {
+		Name = "Audio",
+		BackgroundColor3 = COLORS.panel,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 18,
+	}, panel) :: Frame
+	corner(audioBlock, 8)
+	padding(audioBlock, 8)
+	list(audioBlock, 6)
+	local audioTitle = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.gold,
+		Text = "Audio",
+		LayoutOrder = 1,
+	}, audioBlock) :: TextLabel
+	audioTitle.Name = "AudioTitle"
+
+	local function volumeRow(
+		title: string,
+		order: number,
+		current: () -> number,
+		apply: (number, boolean) -> ()
+	): (number) -> ()
+		local row = new("Frame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 64),
+			LayoutOrder = order,
+		}, audioBlock) :: Frame
+		local caption = new("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Enum.Font.BuilderSansMedium,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = COLORS.text,
+			Text = title,
+		}, row) :: TextLabel
+		local track = new("TextButton", {
+			Position = UDim2.fromOffset(0, 20),
+			Size = UDim2.new(1, 0, 0, 44),
+			BackgroundColor3 = COLORS.buttonDim,
+			BorderSizePixel = 0,
+			Text = "",
+			AutoButtonColor = false,
+		}, row) :: TextButton
+		corner(track, 8)
+		local fill = new("Frame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = COLORS.gold,
+			BorderSizePixel = 0,
+		}, track) :: Frame
+		corner(fill, 8)
+		local dragging = false
+		local function paint(volume: number)
+			local shown = Audio.clampVolume(volume)
+			fill.Size = UDim2.fromScale(shown, 1)
+			caption.Text = string.format("%s  %d%%", title, math.floor(shown * 100 + 0.5))
+		end
+		local function readInput(input: InputObject): number
+			local width = track.AbsoluteSize.X
+			if width < 1 then
+				return current()
+			end
+			return Audio.clampVolume((input.Position.X - track.AbsolutePosition.X) / width)
+		end
+		local function push(input: InputObject, commit: boolean)
+			local volume = readInput(input)
+			paint(volume)
+			apply(volume, commit)
+		end
+		track.InputBegan:Connect(function(input)
+			local kind = input.UserInputType
+			if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+				return
+			end
+			dragging = true
+			push(input, false)
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if not dragging then
+				return
+			end
+			local kind = input.UserInputType
+			if kind ~= Enum.UserInputType.MouseMovement and kind ~= Enum.UserInputType.Touch then
+				return
+			end
+			push(input, false)
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if not dragging then
+				return
+			end
+			local kind = input.UserInputType
+			if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+				return
+			end
+			dragging = false
+			push(input, true)
+		end)
+		paint(current())
+		return function(volume: number)
+			if dragging then
+				return
+			end
+			paint(volume)
+		end
+	end
+
+	local paintMusic = volumeRow("Music", 2, function()
+		return musicValue
+	end, function(volume: number, commit: boolean)
+		musicValue = volume
+		callbacks.onAudio(musicValue, sfxValue, commit)
+	end)
+	local paintSfx = volumeRow("SFX", 3, function()
+		return sfxValue
+	end, function(volume: number, commit: boolean)
+		sfxValue = volume
+		callbacks.onAudio(musicValue, sfxValue, commit)
+	end)
+
 	local inventoryNote = new("TextLabel", {
 		Name = "InventoryNote",
 		BackgroundTransparency = 1,
@@ -741,9 +1058,24 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = COLORS.muted,
-		Text = "Bag, materials, and tonics are on Inventory, or press I.",
+		Text = "Bag, materials, and tonics are on Items, or press I.",
 		LayoutOrder = 17,
 	}, panel)
+	local graphicsButton: TextButton? = nil
+	if callbacks.onChests ~= nil then
+		local chests = makeButton(panel, "Chests", COLORS.button, 21, 44)
+		local openChests = callbacks.onChests
+		chests.MouseButton1Click:Connect(function()
+			openChests()
+		end)
+	end
+	if callbacks.onGraphics ~= nil then
+		graphicsButton = makeButton(panel, "Graphics", COLORS.buttonDim, 22, 44)
+		local cycle = callbacks.onGraphics
+		graphicsButton.MouseButton1Click:Connect(function()
+			cycle()
+		end)
+	end
 
 	local devToggle: TextButton? = nil
 	local devBody: Frame? = nil
@@ -783,6 +1115,11 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			callbacks.onDev("ascension")
 		end)
 		local grantMaterials = makeButton(devBody, "+ craft materials", COLORS.buttonDim, 4, 30)
+		local grantChests = makeButton(devBody, "Grant chests", COLORS.buttonDim, 10, 30)
+		grantChests.TextSize = 14
+		grantChests.MouseButton1Click:Connect(function()
+			callbacks.onDev("chests")
+		end)
 		local grantForge = makeButton(devBody, "Forge Boost 1h", COLORS.buttonDim, 9, 30)
 		grantForge.TextSize = 14
 		grantForge.MouseButton1Click:Connect(function()
@@ -833,9 +1170,20 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.fromScale(1, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Visible = false,
-		LayoutOrder = 30,
+		LayoutOrder = 3,
 	}, panel) :: Frame
 	list(craftPage, 8)
+	new("TextLabel", {
+		Name = "ForgeTitle",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 28),
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.gold,
+		Text = "FORGE",
+		LayoutOrder = 0,
+	}, craftPage)
 	local craftHint = new("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 18),
@@ -1047,6 +1395,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		loadout.Visible = shards
 		inventoryNote.Visible = shards
 		craftPage.Visible = not shards
+		dungeonBar.Visible = shards
+		if not shards then
+			panel.CanvasPosition = Vector2.zero
+		end
 		tokenHint.Visible = shards and profileLoaded and tokens < 1 and not busy
 	end
 
@@ -1060,12 +1412,15 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end)
 
 	local function paintPaid()
-		local showPaid = policyState.paidRolls == true
+		local showPaid = RarityConfig.PAID_LUCK_ENABLED and policyState.paidRolls == true
 		regionLabel.Visible = not showPaid
-		regionLabel.Text = if type(policyState.message) == "string"
-				and policyState.message ~= ""
-			then policyState.message
-			else "Paid random items are unavailable in your region."
+		local regionText = RarityConfig.REGION_MESSAGE
+		if not RarityConfig.PAID_LUCK_ENABLED then
+			regionText = RarityConfig.PAID_OFF_MESSAGE
+		elseif policyState.ready ~= true and type(policyState.message) == "string" then
+			regionText = policyState.message
+		end
+		regionLabel.Text = regionText
 		prismButton.Visible = showPaid
 		buyPrism.Visible = showPaid
 		boostLabel.Visible = showPaid
@@ -1123,18 +1478,20 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local function renderPity(profile: any)
-		local goal = 50
-		local current = 0
-		if selectedPool ~= nil then
-			goal = selectedPool.pityLegendaryAt or 50
-			if type(profile.pity) == "table" and type(profile.pity[selectedPool.id]) == "table" then
-				current = profile.pity[selectedPool.id].rollsSinceLegendary or 0
+		local epic = 0
+		local legendary = 0
+		if type(profile) == "table" then
+			if type(profile.sinceEpic) == "number" then
+				epic = profile.sinceEpic
+			end
+			if type(profile.sinceLegendary) == "number" then
+				legendary = profile.sinceLegendary
 			end
 		end
-		pityLabel.Text = RollMath.pityText(current, goal)
+		pityLabel.Text = RarityConfig.pityLine(epic, legendary)
 		local ratio = 0
-		if goal > 0 then
-			ratio = math.clamp(current / goal, 0, 1)
+		if RarityConfig.LEGENDARY_PITY > 0 then
+			ratio = math.clamp(legendary / RarityConfig.LEGENDARY_PITY, 0, 1)
 		end
 		pityFill.Size = UDim2.fromScale(ratio, 1)
 	end
@@ -1266,15 +1623,44 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		paintFarm()
 	end
 
+	function controller.setGraphics(label: string)
+		if graphicsButton ~= nil then
+			graphicsButton.Text = "Graphics " .. label
+		end
+	end
+
 	function controller.toggleMenu()
-		panel.Visible = not panel.Visible
+		userOpen = not userOpen
+		applyChrome()
+	end
+
+	function controller.open()
+		userOpen = true
+		applyChrome()
+	end
+
+	function controller.close()
+		userOpen = false
+		applyChrome()
+	end
+
+	function controller.isOpen(): boolean
+		return userOpen and not covered
+	end
+
+	function controller.setCovered(open: boolean)
+		covered = open
+		applyChrome()
 	end
 
 	function controller.openPanel(kind: string, areaId: string?)
-		panel.Visible = true
+		userOpen = true
+		applyChrome()
 		if kind == "craft" then
 			page = "craft"
 			applyPage()
+			panel.CanvasPosition = Vector2.zero
+			print("[ForgeUI] opened")
 			return
 		end
 		page = "shards"
@@ -1293,16 +1679,48 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		applyPage()
 	end
 
-	function controller.setStatus(text: string, kind: string)
+	local statusToken = 0
+	function controller.clearStatus()
+		statusToken += 1
+		bannerToken += 1
+		status.Visible = false
+		status.Text = ""
+		toast.Visible = false
+		toast.Text = ""
+		banner.Visible = false
+		banner.Text = ""
+	end
+
+	function controller.setStatus(text: string, kind: string, hold: boolean?)
+		statusToken += 1
+		local token = statusToken
 		status.Text = text
 		status.Visible = text ~= ""
+		-- One status line. The banner is centered; the old toast sat beside
+		-- it and the two wraps read as one garbled line.
+		toast.Text = ""
+		toast.Visible = false
+		showBanner(text, kind, hold)
+		local color = COLORS.muted
 		if kind == "error" then
-			status.TextColor3 = COLORS.danger
+			color = COLORS.danger
 		elseif kind == "ok" then
-			status.TextColor3 = COLORS.ok
-		else
-			status.TextColor3 = COLORS.muted
+			color = COLORS.ok
 		end
+		status.TextColor3 = color
+		toast.TextColor3 = color
+		if text == "" or hold == true then
+			return
+		end
+		task.delay(ShellLayout.BANNER_SECONDS, function()
+			if token ~= statusToken then
+				return
+			end
+			status.Visible = false
+			status.Text = ""
+			toast.Visible = false
+			toast.Text = ""
+		end)
 	end
 
 	local function tonicCount(profile: any): number
@@ -1674,7 +2092,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.setProfile(profile: any, saving: boolean)
 		if type(profile) ~= "table" then
-			stats.Text = "Loading profile..."
+			stats.Text = ""
 			return
 		end
 		latestProfile = profile
@@ -1721,6 +2139,17 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			gear.bonus
 		)
 		paintRealms()
+		musicValue = Audio.clampVolume(profile.musicVolume)
+		sfxValue = Audio.clampVolume(profile.sfxVolume)
+		paintMusic(musicValue)
+		paintSfx(sfxValue)
+		local nextScale: any = nil
+		local settings = profile.uiSettings
+		if type(settings) == "table" and type(settings.access) == "table" then
+			nextScale = settings.access.textScale
+		end
+		bannerScale = nextScale
+		applyBannerFit()
 	end
 
 	function controller.setPolicy(policy: any)
@@ -1773,14 +2202,16 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		heading(areaName .. "  ·  totals")
 		if type(odds.rarities) == "table" then
 			for _, rarityRow in ipairs(odds.rarities) do
-				row(
-					string.format(
-						"%s    %s",
+				local chanceText = RollMath.formatChance(rarityRow.chance)
+				local text = if type(rarityRow.oneIn) == "number"
+					then string.format(
+						"%s    1 in %d    %s",
 						rarityRow.rarity,
-						RollMath.formatChance(rarityRow.chance)
-					),
-					rarityRow.rarity
-				)
+						rarityRow.oneIn,
+						chanceText
+					)
+					else string.format("%s    %s", rarityRow.rarity, chanceText)
+				row(text, rarityRow.rarity)
 			end
 		end
 		heading("Each drop")

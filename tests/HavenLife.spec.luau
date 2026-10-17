@@ -49,7 +49,37 @@ describe("HavenLife", function()
 				expect((piece.drift or 0) >= 70).toBeTrue()
 			end
 			if piece.name == "Waterfall" then
-				expect(math.abs(piece.rx) >= 60).toBeTrue()
+				-- Local Z is the long axis. A steep pitch hangs that axis
+				-- down, so the sheet is a curtain and not a flat deck.
+				expect(piece.size[3] > piece.size[1] and piece.size[3] > piece.size[2]).toBeTrue()
+				expect(piece.material).toEqual("Glass")
+				expect(piece.transparency < 0.5).toBeTrue()
+				local tilt = math.rad(piece.rx)
+				expect(math.abs(math.sin(tilt)) >= 0.9).toBeTrue()
+				local top = piece.y + math.abs(math.sin(tilt)) * (piece.size[3] / 2)
+				expect(top >= 8).toBeTrue()
+				local islands = {
+					{ x = 0, z = 0, radius = Haven.PLAZA_RADIUS },
+				}
+				for _, district in ipairs(Haven.DISTRICTS) do
+					table.insert(islands, {
+						x = district.x,
+						z = district.z,
+						radius = district.radius or 30,
+					})
+				end
+				local nearest = islands[1]
+				local nearestReach = math.huge
+				for _, island in ipairs(islands) do
+					local reach = math.sqrt((piece.x - island.x) ^ 2 + (piece.z - island.z) ^ 2)
+					if reach < nearestReach then
+						nearest = island
+						nearestReach = reach
+					end
+				end
+				expect(nearestReach > nearest.radius + 8).toBeTrue()
+				local hang = math.abs(math.cos(tilt)) * (piece.size[3] / 2) + piece.size[2] / 2
+				expect(nearestReach - hang > nearest.radius + 8).toBeTrue()
 			end
 		end
 		expect(orbitNamed).toEqual(0)
@@ -114,5 +144,20 @@ describe("HavenLife", function()
 				end
 			end
 		end
+	end)
+
+	it("clamps sunset bloom and sun rays below the midday values", function()
+		local day = HavenLife.exposure(12)
+		local sunset = HavenLife.exposure(18.2)
+		expect(day.bloomIntensity).toEqual(0.045)
+		expect(day.bloomSize).toEqual(8)
+		expect(day.brightness).toEqual(1.25)
+		expect(sunset.bloomIntensity < day.bloomIntensity).toBeTrue()
+		expect(sunset.bloomIntensity <= 0.12).toBeTrue()
+		expect(sunset.bloomSize <= 12).toBeTrue()
+		expect(sunset.sunIntensity < day.sunIntensity).toBeTrue()
+		expect(sunset.sunIntensity <= 0.05).toBeTrue()
+		expect(sunset.sunSpread < day.sunSpread).toBeTrue()
+		expect(sunset.brightness < day.brightness).toBeTrue()
 	end)
 end)

@@ -11,23 +11,68 @@
 	this script tells the server so Auto-Farm stops issuing MoveTo.
 ]]
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
+local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
+local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
+local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
+local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local CombatHud = {}
 
+local function playCue(name: string)
+	local id = Audio.cue(name)
+	if id == nil then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = id
+	sound.Volume = 0.6
+	local group = SoundService:FindFirstChild("SFX")
+	if group ~= nil and group:IsA("SoundGroup") then
+		sound.SoundGroup = group
+	end
+	sound.Parent = SoundService
+	sound:Play()
+	Debris:AddItem(sound, 4)
+end
+
 export type Callbacks = {
 	onRun: (any) -> (),
 	onHint: (string) -> (),
+	onDodgeCharges: ((number) -> ())?,
 }
 
 local player = Players.LocalPlayer
 local attackRemote: RemoteEvent? = nil
+local dodgeRemote: RemoteEvent? = nil
+local allowShake = true
+local walletLabel: TextLabel? = nil
+local pendingWallet: { number }? = nil
 
-local function floater(position: Vector3, text: string, color: Color3)
+local function paintWallet(gold: number, tokens: number, gems: number)
+	local label = walletLabel
+	if label == nil then
+		pendingWallet = { gold, tokens, gems }
+		return
+	end
+	label.Text =
+		string.format("%dg  %dt  %dgm", math.floor(gold), math.floor(tokens), math.floor(gems))
+end
+
+function CombatHud.setWallet(gold: number, tokens: number, gems: number)
+	paintWallet(gold, tokens, gems)
+end
+
+local function floater(position: Vector3, text: string, color: Color3, textSize: number?)
 	local anchor = Instance.new("Part")
 	anchor.Name = "DamageNumber"
 	anchor.Anchored = true
@@ -49,7 +94,7 @@ local function floater(position: Vector3, text: string, color: Color3)
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
 	label.Font = Enum.Font.BuilderSansBold
-	label.TextSize = 22
+	label.TextSize = if textSize ~= nil then textSize else 22
 	label.TextColor3 = color
 	label.TextStrokeTransparency = 0.35
 	label.Text = text
@@ -80,22 +125,55 @@ local function numberFrom(payload: any, key: string): number?
 	return value
 end
 
-function CombatHud.swing()
+local function lookVector(): Vector3
+	local camera = workspace.CurrentCamera
+	return if camera ~= nil then camera.CFrame.LookVector else Vector3.new(0, 0, -1)
+end
+
+function CombatHud.swing(charged: boolean?)
 	local remote = attackRemote
 	if remote == nil then
 		return
 	end
-	local camera = workspace.CurrentCamera
-	local look = if camera ~= nil then camera.CFrame.LookVector else Vector3.new(0, 0, -1)
-	remote:FireServer(look.X, look.Y, look.Z)
+	local look = lookVector()
+	remote:FireServer(look.X, look.Y, look.Z, charged == true)
 end
 
+function CombatHud.dodge()
+	local remote = dodgeRemote
+	if remote == nil then
+		return
+	end
+	remote:FireServer()
+end
+
+function CombatHud.setFeel(tier: string, shake: boolean)
+	allowShake = shake ~= false and tier ~= "low"
+end
+
+-- Same bound as the client's other remote lookups. A missing Attack,
+-- Dodge, or CombatFx used to yield start forever and skip the rest of
+-- the client script. Leave the combat remotes unset and return.
+local REMOTE_WAIT_SECONDS = 15
+
 function CombatHud.start(remotes: Instance, callbacks: Callbacks)
-	local attack = remotes:WaitForChild("Attack")
-	local fx = remotes:WaitForChild("CombatFx")
-	assert(attack:IsA("RemoteEvent"), "Attack remote missing")
-	assert(fx:IsA("RemoteEvent"), "CombatFx remote missing")
+	local attack = remotes:WaitForChild("Attack", REMOTE_WAIT_SECONDS)
+	if attack == nil or not attack:IsA("RemoteEvent") then
+		warn("[Shardfall] Attack remote is not available")
+		return
+	end
+	local dodge = remotes:WaitForChild("Dodge", REMOTE_WAIT_SECONDS)
+	if dodge == nil or not dodge:IsA("RemoteEvent") then
+		warn("[Shardfall] Dodge remote is not available")
+		return
+	end
+	local fx = remotes:WaitForChild("CombatFx", REMOTE_WAIT_SECONDS)
+	if fx == nil or not fx:IsA("RemoteEvent") then
+		warn("[Shardfall] CombatFx remote is not available")
+		return
+	end
 	attackRemote = attack
+	dodgeRemote = dodge
 
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallCombat"
@@ -111,6 +189,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	hpFrame.Size = UDim2.fromOffset(220, 36)
 	hpFrame.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	hpFrame.BorderSizePixel = 0
+	hpFrame.Visible = false
 	hpFrame.Parent = screen
 	local hpCorner = Instance.new("UICorner")
 	hpCorner.CornerRadius = UDim.new(0, 8)
@@ -121,11 +200,36 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	hpText.Position = UDim2.fromOffset(10, 2)
 	hpText.Size = UDim2.new(1, -20, 0, 16)
 	hpText.Font = Enum.Font.BuilderSansBold
-	hpText.TextSize = 13
+	hpText.TextSize = 14
 	hpText.TextXAlignment = Enum.TextXAlignment.Left
 	hpText.TextColor3 = Color3.fromRGB(240, 236, 248)
-	hpText.Text = "HP 100 / 100"
+	hpText.Text = "HP"
 	hpText.Parent = hpFrame
+
+	local wallet = Instance.new("TextLabel")
+	wallet.Name = "Wallet"
+	wallet.BackgroundTransparency = 1
+	wallet.Position = UDim2.fromOffset(16, 54)
+	wallet.Size = UDim2.fromOffset(220, 16)
+	wallet.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	wallet.BackgroundTransparency = 0
+	wallet.Font = Enum.Font.BuilderSans
+	wallet.TextSize = 14
+	wallet.TextXAlignment = Enum.TextXAlignment.Left
+	wallet.TextColor3 = Color3.fromRGB(255, 220, 150)
+	wallet.TextTruncate = Enum.TextTruncate.AtEnd
+	wallet.Text = ""
+	wallet.Visible = false
+	wallet.Parent = screen
+	local walletStroke = Instance.new("UIStroke")
+	walletStroke.Thickness = 1
+	walletStroke.Color = Color3.fromRGB(16, 14, 24)
+	walletStroke.Parent = wallet
+	walletLabel = wallet
+	if pendingWallet ~= nil then
+		paintWallet(pendingWallet[1], pendingWallet[2], pendingWallet[3])
+		pendingWallet = nil
+	end
 
 	local hpBack = Instance.new("Frame")
 	hpBack.Position = UDim2.fromOffset(10, 22)
@@ -138,7 +242,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	backCorner.Parent = hpBack
 
 	local hpFill = Instance.new("Frame")
-	hpFill.Size = UDim2.fromScale(1, 1)
+	hpFill.Size = UDim2.fromScale(0, 1)
 	hpFill.BackgroundColor3 = Color3.fromRGB(110, 210, 140)
 	hpFill.BorderSizePixel = 0
 	hpFill.Parent = hpBack
@@ -146,14 +250,205 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	fillCorner.CornerRadius = UDim.new(0, 4)
 	fillCorner.Parent = hpFill
 
-	local function setHp(hp: number, maxHp: number)
-		local safeMax = if maxHp > 0 then maxHp else 1
-		hpText.Text = string.format("HP  %d / %d", math.floor(hp + 0.5), math.floor(safeMax + 0.5))
-		hpFill.Size = UDim2.fromScale(math.clamp(hp / safeMax, 0, 1), 1)
-		hpFill.BackgroundColor3 = if hp / safeMax < 0.3
+	local comboLabel = Instance.new("TextLabel")
+	comboLabel.Name = "Combo"
+	comboLabel.BackgroundTransparency = 1
+	comboLabel.Position = UDim2.fromOffset(16, 56)
+	comboLabel.Size = UDim2.fromOffset(220, 24)
+	comboLabel.Font = Enum.Font.BuilderSansBold
+	comboLabel.TextSize = 16
+	comboLabel.TextXAlignment = Enum.TextXAlignment.Left
+	comboLabel.TextColor3 = Color3.fromRGB(255, 214, 120)
+	comboLabel.Text = ""
+	comboLabel.Parent = screen
+
+	local cueLabel = Instance.new("TextLabel")
+	cueLabel.Name = "Telegraph"
+	cueLabel.AnchorPoint = Vector2.new(0, 0)
+	cueLabel.Position = UDim2.fromOffset(16, 72)
+	cueLabel.Size = UDim2.fromOffset(280, 36)
+	cueLabel.BackgroundTransparency = 1
+	cueLabel.Text = ""
+	cueLabel.Visible = false
+	cueLabel.Parent = screen
+
+	local cueEdge = Instance.new("Frame")
+	cueEdge.Name = "CueEdge"
+	cueEdge.Size = UDim2.fromScale(1, 1)
+	cueEdge.BackgroundTransparency = 1
+	cueEdge.BorderSizePixel = 0
+	cueEdge.Active = false
+	cueEdge.Visible = false
+	cueEdge.ZIndex = 2
+	cueEdge.Parent = screen
+	local cueStroke = Instance.new("UIStroke")
+	cueStroke.Name = "Pulse"
+	cueStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	cueStroke.Thickness = 5
+	cueStroke.Color = Color3.fromRGB(220, 64, 56)
+	cueStroke.Transparency = 0.35
+	cueStroke.Parent = cueEdge
+
+	local combatHint = Instance.new("TextLabel")
+	combatHint.Name = "CombatHint"
+	combatHint.AnchorPoint = Vector2.new(0, 1)
+	combatHint.Position = UDim2.new(0, 16, 1, -120)
+	combatHint.Size = UDim2.fromOffset(280, 36)
+	combatHint.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	combatHint.BackgroundTransparency = 0.15
+	combatHint.BorderSizePixel = 0
+	combatHint.Font = Enum.Font.BuilderSansBold
+	combatHint.TextSize = 16
+	combatHint.TextColor3 = Color3.fromRGB(110, 210, 140)
+	combatHint.TextXAlignment = Enum.TextXAlignment.Left
+	combatHint.Text = ""
+	combatHint.Visible = false
+	combatHint.ZIndex = 4
+	combatHint.Parent = screen
+	local hintCorner = Instance.new("UICorner")
+	hintCorner.CornerRadius = UDim.new(0, 8)
+	hintCorner.Parent = combatHint
+	local hintPad = Instance.new("UIPadding")
+	hintPad.PaddingLeft = UDim.new(0, 10)
+	hintPad.PaddingRight = UDim.new(0, 10)
+	hintPad.Parent = combatHint
+
+	local flash = Instance.new("Frame")
+	flash.Name = "HitFlash"
+	flash.Size = UDim2.fromScale(1, 1)
+	flash.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	flash.BackgroundTransparency = 1
+	flash.BorderSizePixel = 0
+	flash.Active = false
+	flash.Parent = screen
+
+	local function placeChrome()
+		local vx, vy = MobileShell.view(screen)
+		local combo = ShellLayout.comboRect()
+		comboLabel.Position = UDim2.fromOffset(combo.x, combo.y)
+		comboLabel.Size = UDim2.fromOffset(combo.w, combo.h)
+		local cue = ShellLayout.cueRect(vx, vy)
+		cueLabel.Position = UDim2.fromOffset(cue.x, cue.y)
+		cueLabel.Size = UDim2.fromOffset(cue.w, cue.h)
+		local bar = ShellLayout.actionBar(vx, vy)
+		combatHint.Position = UDim2.fromOffset(16, math.max(96, bar.y - 12))
+		combatHint.Size = UDim2.fromOffset(math.min(320, math.max(160, vx - 32)), 36)
+	end
+	placeChrome()
+	local chromeCamera = workspace.CurrentCamera
+	if chromeCamera ~= nil then
+		chromeCamera:GetPropertyChangedSignal("ViewportSize"):Connect(placeChrome)
+	end
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeChrome)
+
+	local shakeUntil = 0
+	local flashUntil = 0
+	local cuesSeen = 0
+	local cueUntil = 0
+	local hintToken = 0
+	local function showCombatHint(text: string)
+		hintToken += 1
+		local token = hintToken
+		local shown = if type(text) == "string" then text else ""
+		combatHint.Text = shown
+		combatHint.TextTransparency = 0
+		combatHint.BackgroundTransparency = 0.15
+		combatHint.Visible = shown ~= ""
+		if shown == "" then
+			return
+		end
+		local fade = TweenService:Create(
+			combatHint,
+			TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 1.6),
+			{ TextTransparency = 1, BackgroundTransparency = 1 }
+		)
+		fade.Completed:Connect(function()
+			if token ~= hintToken then
+				return
+			end
+			combatHint.Visible = false
+			combatHint.Text = ""
+		end)
+		fade:Play()
+	end
+	local hitstopUntil = 0
+	local downHold = false
+	local latchedHp = 100
+	local latchedMax = 100
+	local function paintOverhead(hp: number, maxHp: number)
+		local character = player.Character
+		if character == nil then
+			return
+		end
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if hrp == nil then
+			return
+		end
+		local bar = hrp:FindFirstChild("ShardfallBar")
+		if bar == nil then
+			return
+		end
+		-- The shell already shows this player's HP. Other clients still
+		-- see the server bar for party members and enemies.
+		if bar:IsA("BillboardGui") then
+			bar.Enabled = false
+		end
+		local label = bar:FindFirstChild("Vitals")
+		if label == nil then
+			label = bar:FindFirstChild("Name")
+		end
+		if label ~= nil and label:IsA("TextLabel") then
+			label.Text = string.format("HP  %d / %d", hp, maxHp)
+		end
+	end
+	local function drawHp()
+		local drawn = if downHold then 0 else latchedHp
+		hpText.Text = string.format("HP  %d / %d", drawn, latchedMax)
+		paintOverhead(drawn, latchedMax)
+		local ratio = if latchedMax > 0 then drawn / latchedMax else 0
+		hpFill.Size = UDim2.fromScale(ratio, 1)
+		hpFill.BackgroundColor3 = if drawn <= 0 or ratio < 0.3
 			then Color3.fromRGB(230, 80, 96)
 			else Color3.fromRGB(110, 210, 140)
 	end
+	local function setHp(hp: number, maxHp: number)
+		latchedHp, latchedMax = CombatMath.clampVitals(hp, maxHp)
+		drawHp()
+	end
+
+	local function pullVitals(root: BasePart)
+		local hp = root:GetAttribute("ShardfallHp")
+		local maxHp = root:GetAttribute("ShardfallMax")
+		if type(hp) == "number" and type(maxHp) == "number" then
+			setHp(hp, maxHp)
+		end
+	end
+
+	local function watchCharacter(character: Model)
+		task.spawn(function()
+			local root = character:WaitForChild("HumanoidRootPart", 8)
+			if root == nil or not root:IsA("BasePart") or character.Parent == nil then
+				return
+			end
+			pullVitals(root)
+			root:GetAttributeChangedSignal("ShardfallHp"):Connect(function()
+				pullVitals(root)
+			end)
+			root:GetAttributeChangedSignal("ShardfallMax"):Connect(function()
+				pullVitals(root)
+			end)
+			root.ChildAdded:Connect(function(child)
+				if child.Name == "ShardfallBar" then
+					drawHp()
+				end
+			end)
+			drawHp()
+		end)
+	end
+	if player.Character ~= nil then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
 
 	local card = Instance.new("Frame")
 	card.Name = "Result"
@@ -221,6 +516,10 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	local cardGeneration = 0
 	local function hideCard()
 		card.Visible = false
+		if downHold then
+			downHold = false
+			drawHp()
+		end
 	end
 	dismiss.MouseButton1Click:Connect(hideCard)
 
@@ -306,7 +605,100 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				color = Color3.fromRGB(255, 196, 64)
 				text = text .. "!"
 			end
-			floater(Vector3.new(x, y, z), text, color)
+			local numberSize = if payload.crit == true then 30 else 22
+			local combo = numberFrom(payload, "combo")
+			if combo ~= nil and combo > 1 then
+				comboLabel.Text = string.format("%d hit", combo)
+			elseif payload.kind == "damage" then
+				comboLabel.Text = ""
+			end
+			local shake = numberFrom(payload, "shake") or 0
+			if allowShake and shake > 0 then
+				shakeUntil = os.clock() + shake
+			end
+			local stop = numberFrom(payload, "hitstop") or 0
+			if stop > 0 and (payload.heavy == true or payload.weight == "kill") then
+				hitstopUntil = os.clock() + stop
+			end
+			local flashSeconds = numberFrom(payload, "flash") or 0
+			if flashSeconds > 0 then
+				flashUntil = os.clock() + flashSeconds
+				flash.BackgroundColor3 = if payload.crit == true
+					then Color3.fromRGB(255, 196, 64)
+					else Color3.fromRGB(255, 255, 255)
+			end
+			if payload.heavy == true then
+				text = text .. "!"
+			end
+			floater(Vector3.new(x, y, z), text, color, numberSize)
+			playCue("hit")
+		elseif payload.kind == "telegraph" then
+			local colorName = if type(payload.color) == "string" then payload.color else "red"
+			cueLabel.Text = ""
+			cueLabel.Visible = false
+			playCue(colorName)
+			local lesson = cuesSeen
+			cuesSeen += 1
+			if CombatFeel.teachCue(lesson) then
+				local rgb = CombatFeel.TELEGRAPHS[colorName]
+				if rgb ~= nil then
+					cueStroke.Color = Color3.fromRGB(rgb.rgb[1], rgb.rgb[2], rgb.rgb[3])
+				end
+				cueUntil = os.clock() + (numberFrom(payload, "seconds") or CombatFeel.TELEGRAPH_NORMAL)
+				cueEdge.Visible = true
+			else
+				cueEdge.Visible = false
+			end
+		elseif payload.kind == "dodge" then
+			local charges = numberFrom(payload, "charges")
+			if charges ~= nil and callbacks.onDodgeCharges ~= nil then
+				callbacks.onDodgeCharges(charges)
+			end
+			playCue(if payload.perfect == true then "perfect" else "dodge")
+			if payload.perfect == true then
+				local x = numberFrom(payload, "x") or 0
+				local y = numberFrom(payload, "y") or 0
+				local z = numberFrom(payload, "z") or 0
+				floater(Vector3.new(x, y + 3, z), "PERFECT", Color3.fromRGB(255, 236, 140))
+			end
+		elseif payload.kind == "kill" then
+			playCue("kill")
+			local x = numberFrom(payload, "x")
+			local y = numberFrom(payload, "y")
+			local z = numberFrom(payload, "z")
+			if x ~= nil and y ~= nil and z ~= nil and payload.shards == true then
+				for index = 1, 4 do
+					local shard = Instance.new("Part")
+					shard.Name = "KillShard"
+					shard.Size = Vector3.new(0.4, 0.4, 0.4)
+					shard.Anchored = true
+					shard.CanCollide = false
+					shard.CanQuery = false
+					shard.CanTouch = false
+					shard.Material = Enum.Material.Neon
+					shard.Color = Color3.fromRGB(255, 214, 120)
+					shard.CFrame = CFrame.new(x, y, z)
+					shard.Parent = workspace
+					local born = os.clock()
+					local angle = index * 1.57
+					local connection: RBXScriptConnection? = nil
+					connection = RunService.RenderStepped:Connect(function()
+						local age = os.clock() - born
+						shard.Position = Vector3.new(x, y, z)
+							+ Vector3.new(
+								math.cos(angle) * age * 6,
+								age * 4,
+								math.sin(angle) * age * 6
+							)
+						if age > 0.45 then
+							if connection ~= nil then
+								connection:Disconnect()
+							end
+							shard:Destroy()
+						end
+					end)
+				end
+			end
 		elseif payload.kind == "hp" then
 			local hp = numberFrom(payload, "hp")
 			local maxHp = numberFrom(payload, "maxHp")
@@ -316,11 +708,19 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		elseif payload.kind == "run" then
 			callbacks.onRun(payload.run)
 			if type(payload.text) == "string" and payload.text ~= "" then
-				callbacks.onHint(payload.text)
+				if CombatFeel.hintOnBanner(payload.text) then
+					callbacks.onHint(payload.text)
+				else
+					showCombatHint(payload.text)
+				end
 			end
 		elseif payload.kind == "hint" then
 			if type(payload.text) == "string" then
-				callbacks.onHint(payload.text)
+				if CombatFeel.hintOnBanner(payload.text) then
+					callbacks.onHint(payload.text)
+				else
+					showCombatHint(payload.text)
+				end
 			end
 		elseif payload.kind == "victory" then
 			local title = if type(payload.dungeonName) == "string"
@@ -335,6 +735,13 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			callbacks.onRun({ active = false })
 		elseif payload.kind == "defeat" then
 			local text = if type(payload.text) == "string" then payload.text else "Defeated."
+			-- Revive publishes max HP (100 + armor, which is where 103 came
+			-- from) in the same breath as this card. Hold the bar at 0 until
+			-- the card closes so the fill and the text agree.
+			downHold = true
+			drawHp()
+			showCombatHint("")
+			cueEdge.Visible = false
 			showCard(
 				"Defeated",
 				text,
@@ -381,6 +788,37 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			or UserInputService:IsKeyDown(Enum.KeyCode.D)
 		return if down then Vector3.new(1, 0, 0) else Vector3.zero
 	end
+	RunService.RenderStepped:Connect(function()
+		local now = os.clock()
+		if cueEdge.Visible then
+			if now >= cueUntil then
+				cueEdge.Visible = false
+			else
+				local pulse = 0.25 + 0.75 * math.abs(math.sin(now * 8))
+				cueStroke.Transparency = 1 - pulse
+			end
+		end
+		if now < flashUntil then
+			flash.BackgroundTransparency = 0.72
+		else
+			flash.BackgroundTransparency = 1
+		end
+		local character = player.Character
+		local humanoid = if character ~= nil
+			then character:FindFirstChildOfClass("Humanoid")
+			else nil
+		if humanoid ~= nil then
+			if now < hitstopUntil then
+				humanoid.CameraOffset = Vector3.new(0.08, 0, 0)
+			elseif allowShake and now < shakeUntil then
+				humanoid.CameraOffset =
+					Vector3.new(math.noise(now * 40) * 0.4, math.noise(now * 28) * 0.25, 0)
+			else
+				humanoid.CameraOffset = Vector3.zero
+			end
+		end
+	end)
+
 	RunService.Heartbeat:Connect(function()
 		if steer == nil or not steer:IsA("RemoteEvent") then
 			return
@@ -402,11 +840,22 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		if processed then
 			return
 		end
+		if input.KeyCode.Name == Keybinds.COMBAT.dodge then
+			CombatHud.dodge()
+			return
+		end
+		if
+			input.KeyCode.Name == Keybinds.COMBAT.heavy
+			or input.KeyCode.Name == Keybinds.GAMEPAD.heavy
+		then
+			CombatHud.swing(true)
+			return
+		end
 		if
 			input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch
 		then
-			CombatHud.swing()
+			CombatHud.swing(false)
 		end
 	end)
 end
