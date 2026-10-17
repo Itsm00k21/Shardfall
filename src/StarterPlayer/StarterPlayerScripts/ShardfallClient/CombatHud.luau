@@ -4,8 +4,9 @@
 	Health bar, floating numbers, and the victory card.
 
 	The server already decided the hit. CombatFx tells this script where to
-	draw it. Clicking the world (not a button) sends Attack with the camera
-	direction. The panel's Attack button calls CombatHud.swing() too.
+	draw it. A Codex snapshot puts a color icon over the boss. Clicking
+	the world (not a button) sends Attack with the camera direction.
+	The panel's Attack button calls CombatHud.swing() too.
 
 	While the player is steering (keyboard, gamepad, or the touch thumbstick),
 	this script tells the server so Auto-Farm stops issuing MoveTo.
@@ -20,6 +21,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Audio = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Audio"))
+local CodexCues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CodexCues"))
 local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
@@ -584,8 +586,97 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		return table.concat(lines, "\n")
 	end
 
+	local iconPart: Part? = nil
+	local iconRing: UIStroke? = nil
+	local iconMark: TextLabel? = nil
+	local function clearIcon()
+		if iconPart ~= nil then
+			iconPart:Destroy()
+			iconPart = nil
+			iconRing = nil
+			iconMark = nil
+		end
+	end
+	local function showIcon(icon: string, x: number, y: number, z: number)
+		if icon ~= "red" and icon ~= "blue" then
+			clearIcon()
+			return
+		end
+		if iconPart == nil or iconPart.Parent == nil then
+			local part = Instance.new("Part")
+			part.Name = "CodexTelegraph"
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Transparency = 1
+			part.Size = Vector3.new(1, 1, 1)
+			part.Parent = workspace
+			local billboard = Instance.new("BillboardGui")
+			billboard.Name = "CodexIcon"
+			billboard.Size = UDim2.fromOffset(48, 48)
+			billboard.StudsOffset = Vector3.new(0, 6, 0)
+			billboard.AlwaysOnTop = true
+			billboard.Parent = part
+			local disc = Instance.new("Frame")
+			disc.Name = "Disc"
+			disc.Size = UDim2.fromScale(1, 1)
+			disc.BackgroundColor3 = Color3.fromRGB(
+				CodexCues.COLOR.iconInk[1],
+				CodexCues.COLOR.iconInk[2],
+				CodexCues.COLOR.iconInk[3]
+			)
+			disc.BorderSizePixel = 0
+			disc.Parent = billboard
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(1, 0)
+			corner.Parent = disc
+			local ring = Instance.new("UIStroke")
+			ring.Name = "Ring"
+			ring.Thickness = 4
+			ring.Parent = disc
+			local letter = Instance.new("TextLabel")
+			letter.Name = "Mark"
+			letter.BackgroundTransparency = 1
+			letter.Size = UDim2.fromScale(1, 1)
+			letter.Font = Enum.Font.BuilderSansBold
+			letter.TextSize = 20
+			letter.TextColor3 = Color3.fromRGB(
+				CodexCues.COLOR.iconText[1],
+				CodexCues.COLOR.iconText[2],
+				CodexCues.COLOR.iconText[3]
+			)
+			letter.Parent = disc
+			local letterStroke = Instance.new("UIStroke")
+			letterStroke.Thickness = 1
+			letterStroke.Color = Color3.fromRGB(16, 14, 24)
+			letterStroke.Parent = letter
+			iconPart = part
+			iconRing = ring
+			iconMark = letter
+		end
+		if iconPart == nil or iconRing == nil or iconMark == nil then
+			return
+		end
+		iconPart.Position = Vector3.new(x, y, z)
+		local rgb = if icon == "blue" then CodexCues.COLOR.blue else CodexCues.COLOR.red
+		iconRing.Color = Color3.fromRGB(rgb[1], rgb[2], rgb[3])
+		iconMark.Text = if icon == "blue" then "B" else "R"
+	end
+
 	fx.OnClientEvent:Connect(function(payload)
 		if type(payload) ~= "table" then
+			return
+		end
+		local codex = CodexCues.accept(payload)
+		if codex.ok == true and type(codex.icon) == "string" then
+			local x = codex.x
+			local y = codex.y
+			local z = codex.z
+			if type(x) == "number" and type(y) == "number" and type(z) == "number" then
+				showIcon(codex.icon, x, y, z)
+			end
 			return
 		end
 		if payload.kind == "damage" or payload.kind == "heal" then
@@ -742,6 +833,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			drawHp()
 			showCombatHint("")
 			cueEdge.Visible = false
+			clearIcon()
 			showCard(
 				"Defeated",
 				text,

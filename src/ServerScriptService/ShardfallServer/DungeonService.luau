@@ -28,6 +28,8 @@ local TweenService = game:GetService("TweenService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Economy = require(ReplicatedStorage.Shared.Economy)
+local cueModule = ReplicatedStorage.Shared
+local CodexCues = require(cueModule.CodexCues)
 local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
@@ -138,6 +140,7 @@ type Restart = {
 }
 
 local runs: { [Player]: Run } = {}
+local lastCue: { [Player]: string } = {}
 -- Set while a reserved arrival still owns the fresh fight it is about to leave.
 -- echoHost skips that player so the next arrival cannot join the temporary fight.
 local echoJoinHold: { [Player]: boolean } = {}
@@ -204,6 +207,59 @@ local function fx(player: Player, payload: { [string]: any })
 	if remote ~= nil and remote:IsA("RemoteEvent") then
 		remote:FireClient(player, payload)
 	end
+end
+
+-- The server names the Codex moment. CombatFx already carries fight
+-- snapshots, so the cue rides that remote. The client does not send seen.
+local function publishCues(player: Player)
+	if player.Parent == nil then
+		return
+	end
+	local run = runs[player]
+	local enemies = {}
+	if run ~= nil then
+		for _, enemy in pairs(run.enemies) do
+			local x, y, z = 0, 0, 0
+			local part = enemy.part
+			if part ~= nil and part.Parent ~= nil then
+				local position = part.Position
+				x = position.X
+				y = position.Y
+				z = position.Z
+			end
+			table.insert(enemies, {
+				alive = enemy.hp > 0,
+				boss = enemy.boss == true,
+				color = enemy.telegraphColor,
+				untilAt = enemy.telegraphUntil,
+				x = x,
+				y = y,
+				z = z,
+			})
+		end
+	end
+	local named = CodexCues.facts({
+		profile = DataService.get(player),
+		inHaven = run == nil,
+		now = os.clock(),
+		enemies = enemies,
+	})
+	local painted = if named.ok == true then CodexCues.paint(named.facts) else nil
+	local event
+	local signature
+	if painted ~= nil and painted.ok == true then
+		event = painted.event
+		signature = painted.signature
+	else
+		local blank = CodexCues.cleared()
+		event = blank.event
+		signature = blank.signature
+	end
+	if lastCue[player] == signature then
+		return
+	end
+	lastCue[player] = signature
+	fx(player, event)
 end
 
 local function rootPart(player: Player): BasePart?
@@ -945,6 +1001,7 @@ local function spawnRoom(player: Player, run: Run)
 		text ..= ". Slam, then hit the gold weak spot. At half HP, stand in the sunbeam."
 	end
 	pushRun(player, text)
+	publishCues(player)
 end
 
 local function spawnWave(player: Player, run: Run)
@@ -962,6 +1019,7 @@ local function spawnWave(player: Player, run: Run)
 		text ..= ". Boss wave. Slam, then the sunbeam at half HP."
 	end
 	pushRun(player, text)
+	publishCues(player)
 end
 
 local function storyEcho(run: Run, fight: RaidEchoFight.Fight): boolean
@@ -1246,6 +1304,7 @@ destroyRun = function(player: Player, run: Run)
 	run.echo = nil
 	runs[player] = nil
 	echoJoinHold[player] = nil
+	pcall(publishCues, player)
 	if fight ~= nil then
 		local userId = tostring(player.UserId)
 		RaidEchoFight.depart(fight, userId)
@@ -1826,6 +1885,7 @@ function DungeonService.damageEnemy(
 			end
 		end
 	end
+	pcall(publishCues, player)
 	return enemy.hp <= 0
 end
 
@@ -2047,6 +2107,7 @@ local function tickEnemy(
 		end
 		local position = enemy.part.Position
 		enemy.telegraphUntil = 0
+		pcall(publishCues, player)
 		enemy.nextAttack = now + CombatMath.cooldown(enemy.attackSpeed)
 		local struck = CombatFeel.insideMarker(
 			hrp.Position.X,
@@ -2110,6 +2171,7 @@ local function tickEnemy(
 		y = hrp.Position.Y,
 		z = hrp.Position.Z,
 	})
+	pcall(publishCues, player)
 	marker(
 		run,
 		"Telegraph",
@@ -3028,6 +3090,10 @@ function DungeonService.start()
 		end
 	end
 
+	DataService.onChanged(function(player)
+		pcall(publishCues, player)
+	end)
+
 	Players.PlayerAdded:Connect(hook)
 	for _, player in ipairs(Players:GetPlayers()) do
 		hook(player)
@@ -3037,6 +3103,7 @@ function DungeonService.start()
 		if run ~= nil then
 			destroyRun(player, run)
 		end
+		lastCue[player] = nil
 		echoJoinHold[player] = nil
 		touchAt[player] = nil
 		fallAt[player] = nil
