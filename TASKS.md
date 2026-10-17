@@ -2771,6 +2771,22 @@ Questions for Ghost:
 12. There is no bad-luck bump and no paid skip. Three is the whole rule. A 4th new uid returns `capped` and is not stored, so a replay of that 4th uid also returns capped rather than duplicate. Confirm that reporting is fine.
 13. Should the wire live as `RaidService.noteResonant`, called from the Heartwood boss mutate in `DungeonService.damageEnemy`, or only once a real Heartshard weapon drop exists inside that mutate? This branch does not edit either file.
 
+Answers from Ghost:
+
+1. The wire passes a canonical id from ItemBases. This module does not fold case. `Axe` and `axe` stay two weapons. The Heartshard ids are not in ItemBases yet; when they land, pass that catalog id. The content ids are the lowercase `heartshard_*` strings.
+2. Yes. A stored uid is global and cannot count toward a second weapon.
+3. Correct. Practice, a non-resonant drop, and a drop past 3 do not store the uid. A later live resonant call with that same uid still counts. A replay of a stored uid is `duplicate` even if the retry changes `practice` or `resonant`.
+4. Only boolean `true` counts. `false`, nil, `1`, and `"true"` are not errors. That is fine.
+5. Confirmed. `practice` nil and false mean a live drop. Any other type is refused.
+6. Confirmed. Reclears count. Lockout, difficulty, guided, AFK, and vote-kick are the loot builder's job, not this module's.
+7. One pattern per `weaponId`. Not per difficulty and not per class.
+8. Confirmed. The Forge maps `weaponId` to a recipe. Craft stays closed until `view` says `unlocked`. Unlock does not grant the weapon, spend Marks, or consume the three items. Salvage and trade do not reduce the count.
+9. The field is `raidResonant`, the weapons array only, on whichever schema version is free at wiring time. Version 21 is still current. Do not assume 22.
+10. 64 is fine. A GUID fits.
+11. Confirmed. Only a Resonant Heartshard drop sets `resonant = true`. A normal drop of the same weapon does not count. The client does not send the flag.
+12. Confirmed. No bad-luck bump and no paid skip. A 4th new uid returns `capped` and is not stored, so a replay of that uid is capped again rather than `duplicate`.
+13. Yes. `RaidService.noteResonant`, called from the Heartwood boss path in `DungeonService.damageEnemy`, once a real weapon drop exists. Ghost owns that wiring.
+
 ## Open
 
 No unassigned tasks.
