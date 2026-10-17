@@ -221,11 +221,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 16,
-		TextWrapped = true,
+		TextScaled = false,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextYAlignment = Enum.TextYAlignment.Center,
 		TextColor3 = COLORS.ink,
 		Text = "",
 		Visible = false,
+		Active = false,
 		ZIndex = 20,
 	}, bannerGui) :: TextLabel
 	new("UIPadding", {
@@ -259,7 +262,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local function showBanner(text: string, kind: string, hold: boolean?)
 		bannerToken += 1
 		local token = bannerToken
-		local shown = if type(text) == "string" then string.match(text, "^%s*(.-)%s*$") or "" else ""
+		local shown = if type(text) == "string"
+			then string.match(text, "^%s*(.-)%s*$") or ""
+			else ""
 		local changed = banner.Text ~= shown or banner.Visible ~= (shown ~= "")
 		banner.Text = shown
 		banner.Visible = shown ~= ""

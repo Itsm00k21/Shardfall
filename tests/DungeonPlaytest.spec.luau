@@ -27,6 +27,7 @@ describe("Dungeon playtest", function()
 		-- Gold-banner fit owns the safe inset. Hide-when-empty stays.
 		expect(string.find(ui, "IgnoreGuiInset = false", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets", 1, true) ~= nil).toBeTrue()
+		expect(string.find(ui, "Size = UDim2.new(0.92, 0, 0, 56)", 1, true)).toBeNil()
 
 		local hud = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
 		expect(string.find(hud, "string.upper(colorName)", 1, true)).toBeNil()

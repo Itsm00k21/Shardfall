@@ -119,6 +119,31 @@ describe("BannerFit", function()
 		aboveToast(box, 390)
 	end)
 
+	it("clears the phone chips, the tracker band, and the hub close inset", function()
+		local margin = UiTheme.safeMargin()
+		for _, view in ipairs(PHONES) do
+			local vx = view[1]
+			local vy = view[2]
+			for _, scale in ipairs({ 1, 1.4 }) do
+				local box = BannerFit.fit(vx, vy, scale)
+				local pills = HudLayout.pills(vx, margin)
+				expect(HudLayout.overlaps(box, pills)).toEqual(false)
+				expect(box.y + box.h <= pills.y).toBeTrue()
+				local health = HudLayout.health(margin)
+				expect(box.y + box.h <= health.y + health.h + 8).toBeTrue()
+				local hub = HudLayout.hub(vx, vy, margin)
+				local close = {
+					x = hub.x + hub.w - UiTheme.PAD - UiTheme.TOUCH,
+					y = hub.y + UiTheme.PAD,
+					w = UiTheme.TOUCH,
+					h = UiTheme.TOUCH,
+				}
+				expect(HudLayout.overlaps(box, close)).toEqual(false)
+				inside(box, vx, vy)
+			end
+		end
+	end)
+
 	it("keeps setStatus on the same string and the same timer", function()
 		local ui = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/Ui.luau")
 		local showAt = string.find(ui, "local function showBanner", 1, true)
@@ -126,6 +151,7 @@ describe("BannerFit", function()
 		local panelAt = string.find(ui, 'Name = "Panel"', showAt :: number, true)
 		expect(panelAt ~= nil).toBeTrue()
 		local show = string.sub(ui, showAt :: number, (panelAt :: number) - 1)
+		expect(string.find(show, 'string.match(text, "^%s*(.-)%s*$")', 1, true) ~= nil).toBeTrue()
 		expect(string.find(show, "banner.Text = shown", 1, true) ~= nil).toBeTrue()
 		expect(string.find(show, 'banner.Visible = shown ~= ""', 1, true) ~= nil).toBeTrue()
 		expect(string.find(show, 'if shown == "" then', 1, true) ~= nil).toBeTrue()
@@ -147,10 +173,16 @@ describe("BannerFit", function()
 
 		local bannerAt = string.find(ui, 'Name = "ShardfallBanner"', 1, true)
 		expect(bannerAt ~= nil).toBeTrue()
-		local banner = string.sub(ui, bannerAt :: number, (bannerAt :: number) + 500)
+		local tokenAt = string.find(ui, "local bannerToken = 0", bannerAt :: number, true)
+		expect(tokenAt ~= nil).toBeTrue()
+		local banner = string.sub(ui, bannerAt :: number, (tokenAt :: number) - 1)
 		expect(string.find(banner, "IgnoreGuiInset = false", 1, true) ~= nil).toBeTrue()
 		expect(string.find(banner, "IgnoreGuiInset = true", 1, true)).toBeNil()
+		expect(string.find(banner, "CoreUISafeInsets", 1, true) ~= nil).toBeTrue()
+		expect(string.find(banner, "TextScaled = false", 1, true) ~= nil).toBeTrue()
+		expect(string.find(banner, "TextTruncate = Enum.TextTruncate.AtEnd", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "settings.access.textScale", 1, true) ~= nil).toBeTrue()
 		expect(string.find(ui, "BannerFit.fit", 1, true) ~= nil).toBeTrue()
+		expect(string.find(ui, "banner.TextSize = box.textSize", 1, true) ~= nil).toBeTrue()
 	end)
 end)
