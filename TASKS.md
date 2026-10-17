@@ -1253,6 +1253,141 @@ Questions for Ghost:
 11. User ids must be positive integers. Strings are not coerced. A self-trade is refused. Boss ids are exact strings. A proposal `bossId` that differs from the item, or a proposal boss with no item boss, is "not eligible". A missing item `bossId` is fine when the proposal omits it. Is that the stamp shape you want?
 12. Eligible means the list you stamp. The suggestion is: in the run when the boss died, not weekly-locked for that boss and difficulty, and not removed for AFK. A disconnect inside the T-035 rejoin window can stay eligible if they were present for the kill. This module does not compute that. Is that the list you want?
 
+### T-039 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, `Schema.luau`, `Trading.luau`, `MarketBoard.luau`, `Remotes.luau`, `RateLimiter.luau`, or any other T-012 file. The Heartwood Vendor catalog stays yours (T-010). `RaidMarks` is pure and ready to call. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged. No build stamp. No remote. Nothing here costs Robux. The T-039 row stays `claimed`.
+
+Thresholds are `RaidMarks.CONFIG`: `weeklyCap` 600, `bankWeeks` 3 (bank max 1800), `weekSeconds` 604800, `tuesdayOffset` 432000 (1970-01-06 00:00:00 UTC), first-timer bonus `1/10`, `eventMultiplier` 2, `doubleMarks` false. Payout placeholders: story 25, normal 40, hard 60, shardbreaker 80, fracture 20. Story and normal match the numbers `Raids.applyClear` pays today. Do not hardcode the numbers beside the module. Pass `os.time()` (unix seconds) in as `now`. The module does not read the clock. `os.clock()` is not wall time.
+
+`RaidMarks.weekKey(now)` is the Tuesday week. Week 1 is `tuesdayOffset`. The reset instant belongs to the new week: `1791849600` (2026-10-13 00:00:00 UTC) is key 2963, and one second earlier is 2962. A time before the first Tuesday is key 0. A negative, NaN, or infinite time returns nil.
+
+`Raids.weekNumber` and `Loops.weekNumber` stay `floor(now / 604800)`, which is Thursday 00:00 UTC. On that same Tuesday they return 2962. This module does not change them. Pass only keys from `RaidMarks.weekKey`, or a stored key below 0 for "never stamped".
+
+`RaidService.luau`, next to the `Raids` require, when you wire the calls. The live grant is `Raids.applyClear`, which `DungeonService` already calls. You can keep that call and do the mark math inside `applyClear`.
+
+```lua
+local RaidMarks = require(ReplicatedStorage.Shared.RaidMarks)
+```
+
+Build the record from the profile. Nil fields count as zeros, and a missing week key counts as -1, so a call before the migrate does not throw. It also does not persist.
+
+```lua
+local function marksState(data)
+	return {
+		balance = data.raidMarks,
+		weekKey = data.raidMarkWeek,
+		earnedThisWeek = data.raidMarksEarned,
+		bankedCap = data.raidMarksBank,
+	}
+end
+```
+
+The module returns a new result and does not write `data`. Persist only when `result.ok == true`. An `ok == false` result is a bad clock, a bad amount, a backwards week, or a non-finite record. The record failure returns zeros. Writing that would wipe a real balance.
+
+`earn` rolls the week, then adds `min(amount, room)` to the balance and to `earnedThisWeek`. `granted` may be smaller than `amount`. `capped == true` means the room ran out. `room` is what is left after this call. `rolled == true` means the week key changed. `settle(state, now)` is `earn(0, state, now)`.
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `weekKey(now)` | you need the Tuesday key and nothing else | the key, or nil when `now` cannot be used |
+| `settle(state, now)` | profile load, and any time the cap UI should be current | the week rolled, `granted == 0`. Idempotent in the same week. |
+| `payout(difficulty, clear)` | a boss clear is about to pay Marks | the per-player grant in `amount`. `gross` is that grant before an AFK forfeit. |
+| `earn(amount, state, now)` | `payout` returned `ok == true` | pass `payout.amount`. An AFK clear has amount 0, so the week rolls and the balance stays. |
+| `canSpend(cost, state)` | Heartwood Vendor, before the chest or title is granted | `ok == true` carries the balance after the price. It does not take a clock and does not roll the week. |
+
+A stored week key below 0 (the schema default is -1) stamps the current Tuesday, keeps `earnedThisWeek`, and does not bank the years since 1970. A new profile therefore starts with room 600. After that stamp is saved, a later week banks the gap even if they never logged in: unused room from the stored week, plus 600 for each fully skipped week, clamped to 1800. The new week then adds its own 600. A full bank has room 2400. Two settles in one week do not add a second bank. A week key ahead of `now` returns `ERRORS.clock` and grants 0.
+
+`payout` lowercases and trims the difficulty. `" Normal "` is normal. `locked == true` sets `reclear` and pays the same `amount` as a first clear. The module does not read `raidLock`. Each `firstTimers` adds 10% to that per-player amount. 25 with one first-timer rounds half up to 28. Two first-timers on normal pay 48. The amount is not split across the group.
+
+`removal` is nil, `"afk"`, or `"kick"`. `"afk"` is the T-027 90s removal: `amount` is 0, `keepMarks` is false, `forfeited` is true, `gross` still shows the grant. `"kick"` is a T-027 passed vote-kick: the full grant, including an idle reason. Already-paid balance is never subtracted. `"AFK"`, `"idle"`, and `"leave"` are refused. A refused payout must not be passed to `earn`.
+
+`event == true` multiplies only when `CONFIG.doubleMarks == true`. The switch is false, so Heartwood Night and the old-raid Echo pay 1x until you change it. The spec pins that false. `eventMultiplier` is 2.
+
+**Clear grant.** `Raids.applyClear` still adds Marks itself (`25` / `40`, Thursday `raidMarkWeek`, no bank). Leave that function as it is until the wiring change. In that change, replace the mark lines and keep the loot lock, pity, and `raidStory` flag. Calling `earn` and the old mark lines on the same clear pays twice. Practice Grove stays off this path. `DungeonService` already skips `applyClear` when `run.practice == true`.
+
+Inside the same `DataService.mutate` that grants the clear, after you know whether this player was removed:
+
+```lua
+local now = os.time()
+local removal = nil
+if afkRemoved then
+	removal = "afk"
+elseif voteKicked then
+	removal = "kick"
+end
+local grant = RaidMarks.payout(difficulty, {
+	firstTimers = freshCount,
+	locked = locks[bossId .. ":" .. difficulty] == RaidMarks.weekKey(now),
+	removal = removal,
+	event = heartwoodNight == true,
+})
+local paid = 0
+if grant.ok == true then
+	local ledger = RaidMarks.earn(grant.amount, marksState(data), now)
+	if ledger.ok == true then
+		data.raidMarks = ledger.balance
+		data.raidMarkWeek = ledger.weekKey
+		data.raidMarksEarned = ledger.earnedThisWeek
+		data.raidMarksBank = ledger.bankedCap
+		paid = ledger.granted
+	end
+end
+```
+
+`freshCount` is yours. This module does not know who is new. Count the Fresh Shard seats you want included. `afkRemoved` is `RaidConduct.afk` returning `state == "remove"` for this player before this grant. `voteKicked` is `RaidConduct.tally` returning `passed == true`. A removal after the grant does not claw the Marks back. `paid` is what the toast should show. `grant.amount` can be larger when `ledger.capped` is true.
+
+The lockout compare above uses the Tuesday key. `locks[key] == week` inside `applyClear` still uses `Raids.weekNumber` until you switch that too. Loot lock and Marks week should share one key when you wire this, or a Tuesday clear can pay Marks and still look unlocked for loot.
+
+**Vendor.** Prices stay in `Raids.SHOP`. This module has no catalog and no Robux price. `RaidService.buy` calls `Raids.buy`, which subtracts `raidMarks` itself. When you wire `canSpend`, stop subtracting in that same path or the price is paid twice.
+
+```lua
+local row = Raids.SHOP[itemId]
+if row == nil then
+	return "The vendor does not sell that."
+end
+local spent = RaidMarks.canSpend(row.marks, marksState(data))
+if spent.ok ~= true then
+	return spent.error or RaidMarks.ERRORS.short
+end
+data.raidMarks = spent.balance
+```
+
+Then grant the chest or title the way `Raids.buy` already does. `canSpend` does not roll the week. Call `settle` first when the purchase should also stamp a new Tuesday, and persist that settle before you read `marksState` for the price. A short wallet leaves the balance alone. Cost 0 returns `ok` with `spent` 0.
+
+**Login.** `earn` on a later clear banks a gap from the saved week key, so a missed login does not lose the bank. `settle` on profile load is what makes `raidMarksBank` and `earnedThisWeek` current for a vendor label before the next clear. Persist it the same way, and skip the write when `ok ~= true`.
+
+**Schema.** HELPER does not edit `Schema.luau`. Three fields already exist. One is new. Add the new one on whichever version is free when you wire this. Version 20 is current. T-015 sketched 21 for the pass fields, and T-027 / T-035 asked for raid fields on the same kind of bump. One migrate can add the bank with those.
+
+```lua
+raidMarks: number, -- wallet. Already in the template. Survives Tuesday.
+raidMarksEarned: number, -- already in the template. Earned against this week's room.
+raidMarkWeek: number, -- already in the template, default -1. Store RaidMarks.weekKey here.
+raidMarksBank: number, -- new. Unused earning room carried in, 0 to 1800.
+```
+
+`raidMarks`, `raidMarksEarned`, and `raidMarkWeek` are already on `ProfileData`, `template()`, `sanitize`, and the version 19 migrate (`raidMarkWeek = -1`). `snapshot` already sends `raidMarks`. Add `raidMarksBank = 0` beside those, and send `raidMarksEarned`, `raidMarkWeek`, and `raidMarksBank` on the snapshot when the vendor should show the room. `wholeNumber` defaults match `raidMarks`. A non-finite field makes `earn` and `canSpend` return `ok == false`. If `sanitize` turns that into 0 before the check, a broken wallet becomes spendable. Leave a non-finite balance for the module to refuse.
+
+Until `raidMarksBank` survives a load, the returned bank is dropped on the next read (nil counts as 0) and the carry will not hold.
+
+`tests/run.luau` requires `./RaidMarks.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The bank holds unused earning room up to 3 × 600 = 1800, and the current week adds a fresh 600, so a full bank can earn 2400 in one week. Should 3 weeks be the total room instead (1800, with the bank holding 1200)?
+2. Leftover marks carry exactly (earn 100 of 600, the next week banks 500). A fully skipped week adds 600. Is that the carry you want?
+3. A week key below 0 (schema `raidMarkWeek` default -1) stamps the current Tuesday and does not bank the years since 1970. `Raids.weekNumber` is Thursday 00:00 UTC. On 2026-10-13 the Thursday week is 2962 and this key is 2963. Passing the old Thursday number can bank one extra week. Should wiring pass `weekKey = -1` once, keep `raidMarksEarned`, and store the Tuesday key from that result?
+4. The balance survives Tuesday and has no wallet cap. The 600 is the earning room. Is an uncapped wallet right?
+5. Placeholders are story 25, normal 40 (what `Raids.applyClear` pays now), hard 60, shardbreaker 80, and fracture 20. The design's Fracture row lists score, dust, and cosmetics. Should fracture pay Marks, and are the hard and shardbreaker stand-ins the numbers you want?
+6. The amount is the per-player grant. Each first-timer adds 10% for every member who keeps Marks. It is not split across the group. There is no cap on the count. 25 with one first-timer rounds half up to 28. Is that the grant?
+7. An AFK removal pays 0 for this clear and does not subtract Marks already in the balance. A passed vote-kick pays the full grant, including an `idle` or `afk` reason, matching T-027 `keepMarks`. Should an idle-reason vote-kick forfeit this clear?
+8. The module uses the first-timer count you pass. An AFK first-timer still adds 10% for everyone else when you leave them in that count. Should a removed player stop counting?
+9. A clear larger than the remaining room grants the room, returns `ok` true, and sets `capped` true. Should that clear be refused with no Marks instead?
+10. `doubleMarks` is false and `eventMultiplier` is 2. `event = true` pays 1x until the switch is true. One switch covers Heartwood Night and the old-raid Echo. Guild "+Marks" and Guided double guild points are outside this module. Should those live here later, and is one switch enough?
+11. `canSpend` takes no clock and does not roll the week. A cost of 0 returns `ok` and `spent` 0. A short wallet returns "Not enough Raid Marks." Is a zero cost a legal no-op?
+
 ## Open
 
 No unassigned tasks.
