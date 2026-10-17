@@ -419,7 +419,7 @@ describe("Schema", function()
 			gold = 5,
 		})
 		assert(profile ~= nil)
-		expect(profile.schemaVersion).toEqual(24)
+		expect(profile.schemaVersion).toEqual(25)
 		expect(profile.gold).toEqual(5)
 		local bar = profile.actionBars.tidecaller
 		expect(bar.locked).toEqual(false)
@@ -454,7 +454,7 @@ describe("Schema", function()
 			},
 		})
 		assert(kept ~= nil)
-		expect(kept.schemaVersion).toEqual(24)
+		expect(kept.schemaVersion).toEqual(25)
 		expect(kept.gold).toEqual(1)
 		expect(kept.actionBars.tidecaller.locked).toEqual(true)
 		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
@@ -465,5 +465,180 @@ describe("Schema", function()
 		expect(copy.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
 		copy.actionBars.tidecaller.slots[1].id = "changed"
 		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+	end)
+end)
+
+describe("Codex seen flags", function()
+	local IDS = {
+		"attack",
+		"dodge",
+		"perfect",
+		"skills",
+		"telegraphs",
+		"shards",
+		"doors",
+		"pets",
+		"crafting",
+		"rarity",
+	}
+
+	local function expectLocked(codex: any)
+		expect(type(codex)).toEqual("table")
+		expect(type(codex.unlocked)).toEqual("table")
+		for _, id in ipairs(IDS) do
+			expect(codex.unlocked[id]).toEqual(false)
+		end
+	end
+
+	it("starts a new profile and a version 24 save locked", function()
+		expect(Schema.VERSION).toEqual(25)
+		local fresh = Schema.template()
+		expect(fresh.schemaVersion).toEqual(25)
+		expectLocked(fresh.codex)
+
+		local old = Schema.migrate({
+			schemaVersion = 24,
+			gold = 7,
+			codex = { unlocked = { attack = true } },
+		})
+		assert(old ~= nil)
+		expect(old.schemaVersion).toEqual(25)
+		expect(old.gold).toEqual(7)
+		expectLocked(old.codex)
+	end)
+
+	it("keeps saved flags and fills a missing record", function()
+		local unlocked = {}
+		for _, id in ipairs(IDS) do
+			unlocked[id] = false
+		end
+		unlocked.attack = true
+		unlocked.rarity = true
+		local kept = Schema.migrate({
+			schemaVersion = 25,
+			gold = 4,
+			codex = { unlocked = unlocked, paid = true },
+		})
+		assert(kept ~= nil)
+		expect(kept.schemaVersion).toEqual(25)
+		expect(kept.gold).toEqual(4)
+		expect(kept.codex.unlocked.attack).toEqual(true)
+		expect(kept.codex.unlocked.rarity).toEqual(true)
+		expect(kept.codex.unlocked.dodge).toEqual(false)
+		expect(kept.codex.unlocked.crafting).toEqual(false)
+		expect(kept.codex.paid).toBeNil()
+
+		local partial = Schema.migrate({
+			schemaVersion = 25,
+			codex = { unlocked = { attack = true, dodge = 1, pets = "true" } },
+		})
+		assert(partial ~= nil)
+		expect(partial.codex.unlocked.attack).toEqual(true)
+		expect(partial.codex.unlocked.dodge).toEqual(false)
+		expect(partial.codex.unlocked.pets).toEqual(false)
+		expect(partial.codex.unlocked.skills).toEqual(false)
+
+		local missing = Schema.migrate({ schemaVersion = 25, gold = 2 })
+		assert(missing ~= nil)
+		expect(missing.gold).toEqual(2)
+		expectLocked(missing.codex)
+
+		local copy = Schema.snapshot(kept)
+		expect(copy.codex.unlocked.attack).toEqual(true)
+		copy.codex.unlocked.attack = false
+		expect(kept.codex.unlocked.attack).toEqual(true)
+	end)
+
+	it("keeps the saved flags when an unlock fails", function()
+		local saved = {
+			unlocked = {
+				attack = true,
+				dodge = false,
+				perfect = false,
+				skills = false,
+				telegraphs = false,
+				shards = false,
+				doors = false,
+				pets = false,
+				crafting = false,
+				rarity = false,
+			},
+		}
+		table.freeze(saved.unlocked)
+		table.freeze(saved)
+		local failed = {
+			ok = false,
+			state = {
+				unlocked = {
+					attack = false,
+					dodge = true,
+				},
+			},
+			paid = true,
+			productId = 0,
+			robux = 0,
+			cost = 0,
+			skip = false,
+		}
+		table.freeze(failed.state.unlocked)
+		table.freeze(failed.state)
+		table.freeze(failed)
+		local kept = Schema.applyCodex(saved, failed)
+		expect(kept.unlocked.attack).toEqual(true)
+		expect(kept.unlocked.dodge).toEqual(false)
+		expect(kept.keys).toBeNil()
+		expect(kept.gold).toBeNil()
+		expect(saved.unlocked.attack).toEqual(true)
+		expect(failed.ok).toEqual(false)
+		expect(failed.state.unlocked.dodge).toEqual(true)
+		expect(kept == saved).toBeFalse()
+
+		local missing = Schema.applyCodex(saved, nil)
+		expect(missing.unlocked.attack).toEqual(true)
+
+		local skipped = Schema.applyCodex(saved, {
+			ok = true,
+			skip = true,
+			state = { unlocked = { attack = false, dodge = true } },
+		})
+		expect(skipped.unlocked.attack).toEqual(true)
+		expect(skipped.unlocked.dodge).toEqual(false)
+
+		local named = Schema.applyCodex(saved, {
+			ok = true,
+			userId = 1,
+			state = { unlocked = { dodge = true } },
+		})
+		expect(named.unlocked.attack).toEqual(true)
+		expect(named.unlocked.dodge).toEqual(false)
+
+		local opened = {
+			ok = true,
+			paid = true,
+			state = {
+				unlocked = {
+					attack = true,
+					dodge = true,
+					perfect = false,
+					skills = false,
+					telegraphs = false,
+					shards = false,
+					doors = false,
+					pets = false,
+					crafting = false,
+					rarity = true,
+				},
+			},
+		}
+		table.freeze(opened.state.unlocked)
+		table.freeze(opened.state)
+		table.freeze(opened)
+		local stored = Schema.applyCodex(saved, opened)
+		expect(stored.unlocked.attack).toEqual(true)
+		expect(stored.unlocked.dodge).toEqual(true)
+		expect(stored.unlocked.rarity).toEqual(true)
+		expect(stored.unlocked.skills).toEqual(false)
+		expect(saved.unlocked.dodge).toEqual(false)
+		expect(opened.state.unlocked.dodge).toEqual(true)
 	end)
 end)

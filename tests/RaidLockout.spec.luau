@@ -116,7 +116,7 @@ describe("RaidLockout config", function()
 		expect(RaidLockout.CONFIG.weekSeconds).toBeNil()
 		expect(RaidLockout.CONFIG.doubleMarks).toBeNil()
 		expect(RaidMarks.CONFIG.doubleMarks).toEqual(false)
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(25)
 	end)
 
 	it("freezes the config, the difficulties, and the errors", function()

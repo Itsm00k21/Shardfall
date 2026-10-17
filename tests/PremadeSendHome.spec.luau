@@ -167,10 +167,14 @@ describe("Premade send home", function()
 		expect(string.find(home, "hostUserId", 1, true)).toBeNil()
 		local releaseAt = string.find(home, "DataService.releaseForTeleport", 1, true)
 		local teleportAt = string.find(home, "TeleportToPlaceInstance", 1, true)
-		expect(releaseAt ~= nil and teleportAt ~= nil and (releaseAt :: number) < (teleportAt :: number)).toBeTrue()
+		expect(
+			releaseAt ~= nil
+				and teleportAt ~= nil
+				and (releaseAt :: number) < (teleportAt :: number)
+		).toBeTrue()
 		local span = string.sub(home, releaseAt :: number, teleportAt :: number)
 		expect(string.find(span, "function()", 1, true) ~= nil).toBeTrue()
 		expect(string.find(home, "releasePartyForTeleport", 1, true)).toBeNil()
-		expect(Schema.VERSION).toEqual(24)
+		expect(Schema.VERSION).toEqual(25)
 	end)
 end)
