@@ -168,28 +168,26 @@ function CombatStage.bind(character: Model)
 	tracks = {}
 end
 
-function CombatStage.swing()
+function CombatStage.swing(charged: boolean?)
 	local player = Players.LocalPlayer
 	local character = if player ~= nil then player.Character else nil
 	if character == nil then
 		return
 	end
 	local now = os.clock()
-	local step = CombatFeel.advanceCombo(chain, lastSwing, now, false)
+	local heavy = charged == true
+	local step = CombatFeel.advanceCombo(chain, lastSwing, now, heavy)
 	chain = step.chain
 	lastSwing = now
 	local clip = CombatFeel.attackAnim(step.index)
 	swingStart = now
-	local sparks = CombatFeel.vfxBudget(
-		tier,
-		intensity,
-		CombatFeel.juice(if step.heavy then "heavy" else "light")
-	)
-	if playClip(character, clip) then
+	local kind = if step.heavy then "heavy" else "light"
+	local sparks = CombatFeel.vfxBudget(tier, intensity, CombatFeel.juice(kind))
+	if playClip(character, clip) and not heavy then
 		sparks = CombatFeel.vfxBudget(tier, intensity, CombatFeel.juice("light"))
 	end
 	slash(character, sparks)
-	mark("Attack", 0.35)
+	mark(if heavy then "Heavy" else "Attack", 0.35)
 end
 
 function CombatStage.dodge()

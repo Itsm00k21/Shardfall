@@ -25,6 +25,7 @@ local CodexCues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild(
 local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
+local CombatStage = require(script.Parent:WaitForChild("CombatStage"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
@@ -735,7 +736,8 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				if rgb ~= nil then
 					cueStroke.Color = Color3.fromRGB(rgb.rgb[1], rgb.rgb[2], rgb.rgb[3])
 				end
-				cueUntil = os.clock() + (numberFrom(payload, "seconds") or CombatFeel.TELEGRAPH_NORMAL)
+				cueUntil = os.clock()
+					+ (numberFrom(payload, "seconds") or CombatFeel.TELEGRAPH_NORMAL)
 				cueEdge.Visible = true
 			else
 				cueEdge.Visible = false
@@ -940,6 +942,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			input.KeyCode.Name == Keybinds.COMBAT.heavy
 			or input.KeyCode.Name == Keybinds.GAMEPAD.heavy
 		then
+			CombatStage.swing(true)
 			CombatHud.swing(true)
 			return
 		end

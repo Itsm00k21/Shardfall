@@ -1262,6 +1262,10 @@ actionBar = ActionBar.start(playerGui, {
 		CombatStage.swing()
 		CombatHud.swing(false)
 	end,
+	onHeavy = function()
+		CombatStage.swing(true)
+		CombatHud.swing(true)
+	end,
 	onDodgeChip = function()
 		PetAura.note("Dodge")
 	end,
