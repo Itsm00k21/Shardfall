@@ -61,12 +61,16 @@ function HudLayout.skills(
 		clusterY = math.max(8, viewportY - button * 3 - 24)
 	end
 	local slots = {}
-	-- Two columns on the left of jump, then a row above it.
+	-- Two columns of three on the left of the jump button.
 	table.insert(slots, rect(clusterX, clusterY, button, button))
 	table.insert(slots, rect(clusterX, clusterY - button - gap, button, button))
 	table.insert(slots, rect(clusterX - button - gap, clusterY, button, button))
 	table.insert(slots, rect(clusterX - button - gap, clusterY - button - gap, button, button))
 	table.insert(slots, rect(clusterX, clusterY - (button + gap) * 2, button, button))
+	table.insert(
+		slots,
+		rect(clusterX - button - gap, clusterY - (button + gap) * 2, button, button)
+	)
 	return slots
 end
 

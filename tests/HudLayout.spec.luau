@@ -56,7 +56,7 @@ describe("Hud layout", function()
 			local jumpX = vx - 80
 			local jumpY = vy - 80
 			local slots = HudLayout.skills(vx, vy, jumpX, jumpY, 70, 44)
-			expect(#slots).toEqual(5)
+			expect(#slots).toEqual(6)
 			for _, slot in ipairs(slots) do
 				expect(slot.x + slot.w <= jumpX).toBeTrue()
 				expect(slot.x >= 0).toBeTrue()

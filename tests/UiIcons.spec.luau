@@ -21,6 +21,7 @@ describe("UiIcons", function()
 			"pass",
 			"settings",
 			"attack",
+			"heavy",
 			"dodge",
 			"skill",
 			"ult",

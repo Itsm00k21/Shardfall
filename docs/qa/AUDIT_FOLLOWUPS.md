@@ -2,19 +2,14 @@
 
 Left over from the 2026-10-16 debug audit after PR #65. The two P0s in that report (practice kill loot, forged perfect dodge) and the salvage hold (P1) are fixed on this branch. Nothing below is an open P0.
 
-#66 (AUDIT-B, T-061) is still open and already covers the hub, skill, roll-chain, and Haven rows. This file records them so they are not lost. It does not claim those files.
+#66 (AUDIT-B, T-061) merged at `d6a75b6` and closed the skill, hub-hotkey, rebind, roll-chain, and Haven rows. The leftovers below are what that merge did not take.
 
 ## Open
 
 | Pri | Where | What is left | Suggested fix |
 | --- | --- | --- | --- |
-| P1 | `HudShell.luau` skill handler (Shift returns when `processed` is true) | Skill 1 is Left Shift and Right Shift. The default control script sinks Left Shift for sprint, so the labeled key does not cast. Right Shift still casts. | Bind skill 1 to a key sprint does not sink, or cast it from the sprint action before returning Sink. Keep the on-screen button. AUDIT-B owns this. |
-| P1 | `MenuHub.luau` `ShardfallMenuSink` | While the hub is open the sink takes C, B, P, R, I, M and the combat keys and returns Sink. The hotkey handler then does nothing, so tab letters stop switching pages. Shoulders still change tabs. | Handle the tab letter inside the sink callback, or take the tab letters off the sink list. Leave W A S D, Space, Shift, and the combat keys sunk. AUDIT-B owns this. |
-| P1 | `MenuHub.luau` capture path, `Settings.luau` `normalize` | Rebind accepts any A–Z letter. Two tabs may share a letter. Q, E, and F then fire the combat listener and the tab listener together. | Reject a letter already used by a tab or by E, Q, R, F, Shift, or 2. Show the current owner on the row. AUDIT-B owns this. |
-| P1 | `MenuHub.luau` roll close path | Closing the hub sets the screen disabled and leaves `shownId`, `holdingRoll`, `autoOn`, and `activeReveal` in place. The hidden chain can still call `RollShard`, and auto-junk can still call `Salvage`. | On close, bump the reveal token, clear the held roll, and set the roll phase to idle. Chain only while the route is open on the roll page. AUDIT-B owns this. |
-| P1 | `init.client.luau` Haven prompt callback, `Ui.luau` legacy panel, `MarketHud.luau` | Haven prompts open the legacy `Shardfall` panel for the forge and the armory, and `MarketHud` for the market. The hub is a different screen. | Point Haven prompts at `MenuHub` tabs. Leave `Ui.mount` for the banner until those buttons are gone. AUDIT-B owns this. |
-| P1 | `CombatHud.luau` input, `HudShell.luau` skill keys, `MenuHub.luau` gamepad | Gamepad has tab shoulders and ButtonB. It has no dodge, heavy, attack, skill, or ultimate. Touch and mouse button 1 always send a light swing. Heavy is R only. | Add gamepad buttons next to the keyboard cases, and a heavy control on the touch cluster. Keep `processed` so a Gui tap does not also swing. |
-| P1 | `HudShell.luau` text paint, `MenuHub.luau` text rows, `Ui.luau` gold banner, `UiTheme.luau` `safeMargin` | `access.textScale` is applied only to HudShell labels. MenuHub and the legacy panel keep a fixed `TextSize`. The gold banner uses `IgnoreGuiInset` at DisplayOrder 100. | Apply `textScale` in MenuHub when settings change. Give the banner the same insets as the hub. |
+| P1 | `CombatHud.luau` input, `HudShell.luau` skill keys | Gamepad heavy is ButtonX. Dodge, light attack, skills, and ultimate still have no gamepad button. Touch and mouse button 1 still send a light swing. | Add the remaining gamepad buttons next to the keyboard cases, and a heavy control on the touch cluster. Keep `processed` so a Gui tap does not also swing. |
+| P1 | `InventoryHud.luau`, the legacy panel, `Ui.luau` gold banner | MenuHub follows the text-size slider. InventoryHud, the legacy panel, and the gold banner do not. The banner uses `IgnoreGuiInset` at DisplayOrder 100. | Apply `textScale` on those surfaces when settings change. Give the banner the same insets as the hub. |
 | P1 | `DataService.luau` `release` and `BindToClose`, `SessionLock.luau`, `RaidService.luau` `queue` | See the session-lock note below. The part that is worth fixing is the teleport race and the 25 second shutdown cutoff. | Save and clear the lock before `TeleportAsync` returns. In `BindToClose`, wait out the writes up to the engine's shutdown budget. Leave the 60 second autosave and the 20 minute crash lock as they are. |
 | P2 | `Schema.luau` version 21 block (around the `if version < 21` step) | That block sets `raw.schemaVersion = 21` and does not assign the local `version`. Every earlier step assigns both. A future version 22 step in the same `migrate` call would also run for a profile that just took the 21 step. Nothing follows 21 today, so no save is wrong yet. | When 22 is added, set `version = 21` in that block the same way 20 does. Do not bump the schema for this alone. |
 | P2 | `MenuHub.luau` hero viewport | The hero page builds a `ViewportFrame` and, in a spawned thread, `CreateHumanoidModelFromDescription` for R15 only. If the page is cleared before that returns, the model is never parented and never destroyed. An R6 description fails the call and the frame stays empty. | Parent into the viewport that is still alive, destroy the model on the other path, and accept R6. |
@@ -27,6 +22,11 @@ Left over from the 2026-10-16 debug audit after PR #65. The two P0s in that repo
 | Pri | Where | What the 2026-10-16 report said | Where it stands |
 | --- | --- | --- | --- |
 | P1 | `InventoryHud.luau` I listener, `Keybinds.luau` raids | I opened the old bag and the Raids tab. | T-058 (#62) removed the InventoryHud I listener. Raids stays on I in `Keybinds.MENU`. No second I listener is in the client scripts. No further change. |
+| P1 | `HudShell.luau` skill handler | Skill 1 was Left Shift, which sprint sinks. | T-061 (#66) binds skill 1 to 1. Shift stays sprint. |
+| P1 | `MenuHub.luau` `ShardfallMenuSink` | Tab letters stopped working while the hub was open. | T-061 handles C, B, P, T, I, and M inside the open menu. Movement, Shift, and the combat keys stay sunk. |
+| P1 | `MenuHub.luau` capture path, `Settings.luau` `normalize` | Rebind accepted any letter, including Q, E, and F. | T-061 refuses Q, E, F, R, Shift, 1, 2, ButtonX, and a second tab. A taken menu letter swaps. |
+| P1 | `MenuHub.luau` roll close path, `RollLoop.luau`, `RollService.luau` | A hidden roll chain could keep spending tokens and salvaging. | T-061 stops the chain when the hub closes, the roll tab is left, or the player dies. The server ignores a roll that arrives before the reveal would finish. |
+| P1 | `init.client.luau` Haven prompts | Haven stalls opened the legacy panel. | T-061 points Forge to Bag, Market to Market, Armory to Roll, and Pet Garden to Pets. |
 
 ## Session lock
 
