@@ -21,21 +21,30 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #146 The gold banner has a lane clear of the portrait, the HP bar, and the top menu button. That is T-143.
 - #147 Each Gate Plaza arch has its shape, its name, and its lock. That is T-144.
 - #148 The Gate Plaza mouths have quiet lights. That is T-145.
+- #150 Heartwood is an open Gate Plaza arch. That is T-153.
+- #151 A receipt lifts the trade cap only when it was verified and granted. That is T-151.
+- #152 Paid luck and paid chests stay off until launch. That is T-149.
+- #153 Vip does not change luck, and Patron has a finite cap. That is T-152.
+- #154 A receipt id is stored only after the grant sticks. That is T-150.
+- #155 The action bar answers the d-pad, and the left bumper shifts to slots 5-8. That is T-146.
+
+Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale.
 
 ## Next up
 
 The next week or two.
 
-- Pre-launch hardening. T-149 turns the paid switches off. T-150 grants a receipt before recording it. T-151 requires a verified granted receipt and a sane trade cap. T-152 takes paid luck off vip and caps Patron. Nothing is for sale.
-- T-146 and T-147 polish the action bar. A controller d-pad and the bumpers still do nothing. Then a short playtest: drag a skill on, drag it off, and check the phone 2 by 4 grid.
+- Echo's next row is T-154, the startup waits, on `helper/startup-waits-9721`. Brief: `docs/hooks/T-154.md`. T-155 is queued after it: a refused roll does not break the streak, on `helper/roll-refuse-9721`. Brief: `docs/hooks/T-155.md`.
+- T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
+- T-147 is the action-bar drag and phone 2×4 checklist. Kevin checks it in Studio. The d-pad and the bumper already landed in #155.
 - T-132 is one Raid Marks payout when a Heartwood clear pays. Raids stay paused, so this stays low on the list. A clear pays marks once.
-- The bug sweeps. The last three passes filed their crashes, and those are done (T-094, T-128, T-129). Still open from those notes: a wing change that holds Echo stacks (T-099), a boss that dies while an add is still up (T-100), a queue click inside a raid server that can hop again (T-101), and a follow-in with no teleport data (T-102). Written test plans sit on G-069 through G-073, G-079, and G-080. The next sweep starts after `c576019`.
+- The bug sweeps. The last three passes filed their crashes, and those are done (T-094, T-128, T-129). Still open from those notes: a wing change that holds Echo stacks (T-099), a boss that dies while an add is still up (T-100), a queue click inside a raid server that can hop again (T-101), and a follow-in with no teleport data (T-102). The startup waits and the refused roll from those notes are T-154 and T-155. Written test plans sit on G-069 through G-073, G-079, and G-080.
 
 ## Later
 
 Kevin asked to hold the lighting pass. The older queue stays behind the plaza and the banner.
 
-- T-148 is world lighting for Haven and the crawl. Backlog. It waits until the plaza lights exist.
+- T-148 is world lighting for Haven and the crawl. Backlog. The plaza lights landed in #148. This row still waits until Kevin asks.
 - T-099 through T-102 are the open Echo and raid-hop bugs in Next up. T-103 and T-104 are done: a miss clears the old roll card, and the RollNear header names its caller.
 - T-105 saves which Codex tips you have seen. T-106 paints the glows once the server says that moment is up.
 - T-107 is done. Loading tips show, including during a hop.
