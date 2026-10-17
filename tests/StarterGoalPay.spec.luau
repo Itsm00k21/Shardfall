@@ -99,7 +99,7 @@ describe("StarterGoalPay", function()
 			onboardDone = true,
 		})
 		assert(old ~= nil)
-		expect(old.schemaVersion).toEqual(22)
+		expect(old.schemaVersion).toEqual(23)
 		expect(old.gold).toEqual(9)
 		expect(old.shardKeys).toEqual(3)
 		expect(old.onboardDone).toEqual(true)

@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-	The player profile shape, version 22.
+	The player profile shape, version 23.
 
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
@@ -28,7 +28,11 @@ local Travel = require("./Travel")
 
 local Schema = {}
 
-Schema.VERSION = 22
+local function firstSessionKit()
+	return require("./FirstSessionKit")
+end
+
+Schema.VERSION = 23
 Schema.STARTER_TOKENS = 25
 Schema.INVENTORY_CAP = 100
 
@@ -179,6 +183,7 @@ export type ProfileData = {
 	tradeHandoff: boolean,
 	uiSettings: Settings.Data,
 	starterGoals: any,
+	firstSession: any,
 }
 
 function Schema.template(): ProfileData
@@ -287,6 +292,7 @@ function Schema.template(): ProfileData
 		tradeHandoff = false,
 		uiSettings = Settings.default(),
 		starterGoals = StarterGoalPay.blank(),
+		firstSession = firstSessionKit().blank(false),
 	}
 end
 
@@ -476,6 +482,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.verifiedTrader = data.verifiedTrader == true
 	data.tradeHandoff = data.tradeHandoff == true
 	data.starterGoals = StarterGoalPay.normalize(data.starterGoals)
+	data.firstSession = firstSessionKit().normalize(data.firstSession)
 	if type(data.raidLock) ~= "table" then
 		data.raidLock = {}
 	end
@@ -977,6 +984,14 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	if version < 22 then
 		raw.starterGoals = StarterGoalPay.blank()
 		raw.schemaVersion = 22
+		version = 22
+	end
+
+	-- A save that already finished onboarding does not get this kit.
+	-- A new profile stays returning false. Do not copy another account.
+	if version < 23 then
+		raw.firstSession = firstSessionKit().blank(raw.onboardDone == true)
+		raw.schemaVersion = 23
 	end
 
 	return Schema.reconcile(raw), nil

@@ -15,6 +15,7 @@ local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local CombatService = require(script.Parent.CombatService)
 local DataService = require(script.Parent.DataService)
 local DungeonService = require(script.Parent.DungeonService)
+local FirstSessionKit = require(ReplicatedStorage.Shared.FirstSessionKit)
 local OnboardingService = require(script.Parent.OnboardingService)
 
 local ClassService = {}
@@ -82,6 +83,7 @@ function ClassService.select(player: Player, classId: any): { [string]: any }
 		if type(data.classXp[classId]) ~= "number" then
 			data.classXp[classId] = 0
 		end
+		FirstSessionKit.grant(data)
 		return nil
 	end)
 	if not saved then

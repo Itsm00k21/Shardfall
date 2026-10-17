@@ -74,19 +74,26 @@ local function luaFiles(dir: string): { string }
 end
 
 local function requiresSession(source: string): boolean
-	if string.find(source, "Shared.FirstSession", 1, true) ~= nil then
+	local body = string.gsub(source, "FirstSessionKit", "")
+	if string.find(body, "Shared.FirstSession", 1, true) ~= nil then
 		return true
 	end
-	if string.find(source, "Shared/FirstSession", 1, true) ~= nil then
+	if string.find(body, "Shared/FirstSession", 1, true) ~= nil then
 		return true
 	end
-	if string.find(source, "Parent.FirstSession", 1, true) ~= nil then
+	if string.find(body, "Parent.FirstSession", 1, true) ~= nil then
 		return true
 	end
-	if string.find(source, 'WaitForChild("FirstSession")', 1, true) ~= nil then
+	if string.find(body, 'WaitForChild("FirstSession")', 1, true) ~= nil then
 		return true
 	end
-	if string.find(source, "WaitForChild('FirstSession')", 1, true) ~= nil then
+	if string.find(body, "WaitForChild('FirstSession')", 1, true) ~= nil then
+		return true
+	end
+	if string.find(body, 'require("./FirstSession")', 1, true) ~= nil then
+		return true
+	end
+	if string.find(body, "require('./FirstSession')", 1, true) ~= nil then
 		return true
 	end
 	return false
@@ -803,7 +810,7 @@ describe("FirstSession inputs", function()
 end)
 
 describe("FirstSession isolation", function()
-	it("is required by nothing in src and does not roll, wait, or read the clock", function()
+	it("is required only by the kit mint and does not roll, wait, or read the clock", function()
 		local source = fs.readFile("src/ReplicatedStorage/Shared/FirstSession.luau")
 		local requires = {}
 		for path in string.gmatch(source, 'require%("([^"]+)"%)') do
@@ -826,6 +833,6 @@ describe("FirstSession isolation", function()
 				table.insert(callers, path)
 			end
 		end
-		expect(callers).toEqual({})
+		expect(callers).toEqual({ "src/ReplicatedStorage/Shared/FirstSessionKit.luau" })
 	end)
 end)
