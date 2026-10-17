@@ -202,6 +202,10 @@ describe("Action slots", function()
 		expect(ActionSlots.border(tonic, profile)).toEqual({ 198, 196, 206 })
 		profile.inventory.sword.rarity = "Rare"
 		expect(ActionSlots.border(sword, profile)).toEqual({ 96, 168, 232 })
+		profile.inventory.sword.rarity = "Mythic"
+		expect(ActionSlots.border(sword, profile)).toEqual({ 230, 64, 78 })
+		profile.inventory.sword.rarity = "Secret"
+		expect(ActionSlots.border(sword, profile)).toEqual({ 255, 255, 255 })
 		expect(ActionSlots.secondsLeft(10, 8)).toEqual(2)
 		expect(ActionSlots.secondsLeft(8, 8)).toEqual(0)
 		expect(ActionSlots.sweep(0, 8)).toEqual(1)

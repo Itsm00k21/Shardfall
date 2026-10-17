@@ -1,5 +1,7 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -42,6 +44,38 @@ describe("UiTheme", function()
 			expect(UiTheme.contrast(UiTheme.RGB.gold, UiTheme.RGB[background]) >= 4.5).toBeTrue()
 		end
 		expect(UiTheme.MIN_TEXT >= 14).toBeTrue()
+	end)
+
+	it("paints Mythic red and Secret white from the Rarities ladder", function()
+		local red, green, blue = UiTheme.rarityColor("Mythic")
+		expect(red).toEqual(230)
+		expect(green).toEqual(64)
+		expect(blue).toEqual(78)
+		local whiteR, whiteG, whiteB = UiTheme.rarityColor("Secret")
+		expect(whiteR).toEqual(255)
+		expect(whiteG).toEqual(255)
+		expect(whiteB).toEqual(255)
+		local goldR, goldG, goldB = UiTheme.rarityColor("Legendary")
+		expect(goldR).toEqual(255)
+		expect(goldG).toEqual(196)
+		expect(goldB).toEqual(72)
+		local commonR, commonG, commonB = UiTheme.rarityColor("Common")
+		expect(commonR).toEqual(198)
+		expect(commonG).toEqual(196)
+		expect(commonB).toEqual(206)
+		local unknownR, unknownG, unknownB = UiTheme.rarityColor("NotARarity")
+		expect(unknownR).toEqual(commonR)
+		expect(unknownG).toEqual(commonG)
+		expect(unknownB).toEqual(commonB)
+
+		local bag = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/InventoryHud.luau")
+		expect(string.find(bag, 'rarity == "Mythic" or rarity == "Secret"', 1, true)).toBeNil()
+		expect(string.find(bag, 'selected.rarity == "Mythic" or selected.rarity == "Secret"', 1, true)).toBeNil()
+		local rainbows = 0
+		for _ in string.gmatch(bag, "Rarities%.isRainbow%(") do
+			rainbows += 1
+		end
+		expect(rainbows >= 2).toBeTrue()
 	end)
 
 	it("lifts a dark red so it can sit on the odds panel", function()

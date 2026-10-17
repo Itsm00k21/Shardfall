@@ -96,7 +96,7 @@ local function strokeFor(parent: Instance, rarity: string)
 		Thickness = 2,
 		Color = rarityColor(rarity),
 	}, parent) :: UIStroke
-	if rarity == "Mythic" or rarity == "Secret" then
+	if Rarities.isRainbow(rarity) then
 		local gradient = new("UIGradient", {
 			Color = ColorSequence.new({
 				ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 90)),
@@ -775,7 +775,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
 		name.Font = Enum.Font.BuilderSansBold
 		order += 1
-		if selected.rarity == "Mythic" or selected.rarity == "Secret" then
+		if Rarities.isRainbow(selected.rarity) then
 			local gradient = new("UIGradient", {
 				Color = ColorSequence.new({
 					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 90)),
