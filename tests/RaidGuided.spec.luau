@@ -673,6 +673,37 @@ describe("RaidGuided kick and AFK", function()
 		expect(RaidGuided.release(state, 102, "vote").removed).toEqual(false)
 		expect(RaidGuided.release(state, 102, { passed = true }).error).toEqual(ERRORS.kick)
 		expect(RaidGuided.release(state, 102, "warning").error).toEqual(ERRORS.removal)
+		local mixed = RaidGuided.release(state, 102, {
+			removal = "afk",
+			votes = { [2] = true },
+			reason = "idle",
+		})
+		expect(mixed.ok).toEqual(false)
+		expect(mixed.removed).toEqual(false)
+		expect(mixed.kick).toEqual(false)
+		expect(mixed.error).toEqual(ERRORS.kick)
+		local conduct = RaidGuided.release(state, 102, {
+			ok = true,
+			state = "remove",
+			idleSeconds = 90,
+			forfeitRewards = true,
+			queueBackfill = true,
+			keepMarks = false,
+			error = nil,
+		})
+		expect(conduct.ok).toEqual(true)
+		expect(conduct.removed).toEqual(true)
+		expect(conduct.kick).toEqual(false)
+		local warned = RaidGuided.release(state, 102, {
+			ok = true,
+			state = "warning",
+			idleSeconds = 60,
+			forfeitRewards = false,
+			queueBackfill = false,
+			keepMarks = true,
+		})
+		expect(warned.removed).toEqual(false)
+		expect(warned.error).toEqual(ERRORS.removal)
 		expect(#state.members).toEqual(5)
 	end)
 

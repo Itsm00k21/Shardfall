@@ -450,21 +450,22 @@ local function removalKind(cause: any): string
 	if type(cause) ~= "table" then
 		return "unknown"
 	end
+	-- Vote markers win. An AFK label cannot turn a kick into a removal.
 	if cause.passed == true or cause.spentKick == true then
+		return "kick"
+	end
+	if cause.reason ~= nil or cause.initiatorUserId ~= nil or cause.votes ~= nil then
+		return "kick"
+	end
+	local labeled = tokenOf(cause.removal or cause.cause or cause.kind)
+	if labeled == "kick" or labeled == "idle" or labeled == "vote" then
 		return "kick"
 	end
 	if cause.state == "remove" then
 		return "afk"
 	end
-	local labeled = tokenOf(cause.removal or cause.cause or cause.kind)
 	if labeled == "afk" or labeled == "remove" then
 		return "afk"
-	end
-	if labeled == "kick" or labeled == "idle" or labeled == "vote" then
-		return "kick"
-	end
-	if cause.reason ~= nil or cause.initiatorUserId ~= nil or cause.votes ~= nil then
-		return "kick"
 	end
 	return "unknown"
 end
