@@ -10,10 +10,11 @@
 
 	The roll route also decides how the Roll screen presents a result the
 	server already rolled. It does not roll, and it does not invent a
-	rarity. The live legendary guarantee is profile sinceLegendary against
-	RarityConfig.LEGENDARY_PITY. RollMath.rollsSinceLegendary and the pool
-	pityLegendaryAt are a different counter, and the crack path does not
-	use them. totalRolls is not pity.
+	rarity. 	The live legendary guarantee is profile sinceLegendary against
+	RarityConfig.LEGENDARY_PITY (1000). Epic pity is the other profile
+	counter against EPIC_PITY (100). The per-pool pity bucket is an old
+	save field. The crack does not write it, and it is not this guarantee.
+	totalRolls is not pity.
 
 	A close call is one flag from RollNear.near. Watched is a ladder name
 	or nothing. The pity triple is the post-roll legendary counter. The
@@ -359,8 +360,8 @@ function UiRouter.closeCall(note: any): CloseCall
 end
 
 -- Natural odds until the live guarantee is actually the next roll.
--- Passing sinceLegendary into RollMath early would light the pool's
--- pityLegendaryAt (50) and show a guarantee the server does not apply.
+-- The hub sheet is RarityConfig.disclose. A counter does not change it.
+-- There is no Legendary guarantee at 50.
 function UiRouter.oddsSince(sinceLegendary: any): number
 	local since = 0
 	if

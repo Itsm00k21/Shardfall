@@ -4,13 +4,14 @@
 	Shard rolls, as plain functions.
 
 	The server is the only place a roll is allowed to change a profile, but
-	the math itself lives here so the client can show the same odds the server
-	uses, and so tests can run without Roblox.
+	the math itself lives here so tests can run without Roblox.
 
-	Odds disclosed to players come from RollMath.odds. Pity is NOT baked into
-	those percentages: pity is a guarantee on top. The notice string says so.
-	Roblox requires paid random items to disclose their odds. Free rolls use
-	the same table so the numbers never diverge.
+	The player sheet is RarityConfig.disclose. The live crack is
+	RarityConfig.pick (Epic at 100, Legendary at 1000). RollMath.odds is the
+	weight table, not that sheet. Pity on this table follows
+	pool.pityLegendaryAt. Live pools set that to RarityConfig.LEGENDARY_PITY.
+	There is no Legendary guarantee at 50. Pity is not baked into the
+	weight percentages until that guarantee is the next roll.
 
 	Rng contract (matches Roblox Random):
 	  nextNumber() -> number in [0, 1)

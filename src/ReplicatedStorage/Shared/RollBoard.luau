@@ -75,11 +75,13 @@ end
 
 -- The draw is RarityConfig.pick / disclose, not the pool-weight table.
 -- sinceLegendary stays in the signature so a pity counter cannot change
--- these lines until the server guarantee is actually the next roll.
--- The last printed percent absorbs rounding so the shown column is 100%.
--- luck is a profile, or a shardLuck number with boost beside it. Either
--- way the multiplier is luckFromProfile, the same call the server draw,
--- GetOdds, and the reel use. A stored boost and vip follow that path.
+-- these lines. The hub and the reel both print RarityConfig.formatLine,
+-- which keeps four decimals under 1% so a real drop is never shown as 0.0%.
+-- disclose already gives the last rarity whatever remains, so the chances
+-- sum to 100%. luck is a profile, or a shardLuck number with boost beside
+-- it. Either way the multiplier is luckFromProfile, the same call the
+-- server draw, GetOdds, and the reel use. A stored boost and vip follow
+-- that path.
 function RollBoard.oddsLines(pool: any, luck: any, boost: any, _sinceLegendary: any): { string }
 	local lines = {}
 	if type(pool) ~= "table" then
@@ -96,28 +98,16 @@ function RollBoard.oddsLines(pool: any, luck: any, boost: any, _sinceLegendary: 
 	if not ok or type(odds) ~= "table" or type(odds.rarities) ~= "table" then
 		return lines
 	end
-	local rows = {}
 	for _, row in ipairs(odds.rarities) do
 		if
 			type(row) == "table"
 			and type(row.rarity) == "string"
 			and type(row.chance) == "number"
+			and type(row.oneIn) == "number"
+			and row.chance > 0
 		then
-			table.insert(rows, row)
+			table.insert(lines, RarityConfig.formatLine(row))
 		end
-	end
-	local shown = {}
-	local used = 0
-	for index, row in ipairs(rows) do
-		local percent = row.chance * 100
-		if index < #rows then
-			percent = math.floor(percent * 10 + 0.5) / 10
-			used += percent
-		else
-			percent = math.floor((100 - used) * 10 + 0.5) / 10
-		end
-		shown[index] = percent
-		table.insert(lines, string.format("%s  %.1f%%", row.rarity, percent))
 	end
 	return lines
 end

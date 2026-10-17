@@ -59,12 +59,22 @@ ClientChrome.TABS = {
 	{ id = "settings", label = "Settings", key = "" },
 }
 
--- The current roll line is "Pity 0 / 50 toward Legendary". 0/80 is a leftover.
+-- The live pity line is "Epic n/100 · Legendary n/1000".
+-- "Pity 0/80" and "Pity n/50 toward Legendary" are leftovers.
 function ClientChrome.legacyReadout(text: string): boolean
 	if string.find(text, "Pity 0/80", 1, true) ~= nil then
 		return true
 	end
 	if string.find(text, "Pity 0 / 80", 1, true) ~= nil then
+		return true
+	end
+	if string.find(text, "Pity 0/50", 1, true) ~= nil then
+		return true
+	end
+	if string.find(text, "/ 50 toward Legendary", 1, true) ~= nil then
+		return true
+	end
+	if string.find(text, "/50 toward Legendary", 1, true) ~= nil then
 		return true
 	end
 	-- An older rail (Inv, Shop, Guilds) is not the hub. HudShell and

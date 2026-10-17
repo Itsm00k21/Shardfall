@@ -5,8 +5,11 @@
 
 	Armory pools drop weapons and armor. Pet pools drop pets. The player's
 	ascension has to be at least the pool's ascension or the server will not
-	roll it. Odds are PLACEHOLDER. Weights sum to 10_000 so at 0 Shard Luck
-	the chance is weight / 100 percent. RollMath.odds reads these weights.
+	roll it. The player sheet is RarityConfig.disclose. Weights only split
+	items inside a chosen rarity. They are not the rarity odds.
+	pityLegendaryAt matches RarityConfig.LEGENDARY_PITY. There is no
+	Legendary guarantee at 50. The crack reads RarityConfig.pick, not this
+	field.
 
 	Higher realms (Sunken Reach, Emberforge, Frostveil, Void Rift) are a
 	short placeholder roster: one drop per rarity. Verdant Wilds is the
@@ -15,6 +18,7 @@
 ]]
 
 local ItemBases = require("./ItemBases")
+local RarityConfig = require("./RarityConfig")
 
 local Pools = {}
 
@@ -80,7 +84,7 @@ local function build(definition): Pool
 		area = definition.area,
 		ascension = definition.ascension,
 		theme = definition.theme,
-		pityLegendaryAt = 50,
+		pityLegendaryAt = RarityConfig.LEGENDARY_PITY,
 		placeholder = true,
 		public = true,
 		entries = entries,
