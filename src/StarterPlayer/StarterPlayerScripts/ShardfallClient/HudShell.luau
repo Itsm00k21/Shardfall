@@ -20,6 +20,7 @@ local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("C
 local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
+local ToastQueue = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ToastQueue"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
@@ -567,19 +568,88 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 	end)
 
-	local toast = Instance.new("TextLabel")
-	toast.Name = "Toast"
-	toast.BackgroundColor3 = rgb("panel")
-	toast.BackgroundTransparency = 0.08
-	toast.Font = Enum.Font.BuilderSansBold
-	toast.TextSize = UiTheme.MIN_TEXT
-	toast.TextColor3 = rgb("text")
-	toast.Text = ""
-	toast.Visible = false
-	toast.Parent = chrome
-	local toastCorner = Instance.new("UICorner")
-	toastCorner.CornerRadius = UDim.new(0, 8)
-	toastCorner.Parent = toast
+	local notices = ToastQueue.blank()
+	local toastHost = Instance.new("Frame")
+	toastHost.Name = "Toasts"
+	toastHost.BackgroundTransparency = 1
+	toastHost.Parent = chrome
+	local toastLabels = {}
+	for index = 1, ToastQueue.MAX do
+		local toast = Instance.new("TextLabel")
+		toast.Name = "Toast"
+		toast.BackgroundColor3 = rgb("panel")
+		toast.BackgroundTransparency = 0.08
+		toast.Font = Enum.Font.BuilderSansBold
+		toast.TextSize = UiTheme.MIN_TEXT
+		toast.TextColor3 = rgb("text")
+		toast.Text = ""
+		toast.Visible = false
+		toast.LayoutOrder = index
+		toast.Parent = toastHost
+		local toastCorner = Instance.new("UICorner")
+		toastCorner.CornerRadius = UDim.new(0, 8)
+		toastCorner.Parent = toast
+		toastLabels[index] = toast
+	end
+	local prompt = Instance.new("Frame")
+	prompt.Name = "Prompt"
+	prompt.BackgroundColor3 = rgb("panel")
+	prompt.Visible = false
+	prompt.Parent = chrome
+	local promptCorner = Instance.new("UICorner")
+	promptCorner.CornerRadius = UDim.new(0, 8)
+	promptCorner.Parent = prompt
+	local promptText = Instance.new("TextLabel")
+	promptText.Name = "Text"
+	promptText.BackgroundTransparency = 1
+	promptText.Size = UDim2.new(1, -16, 0, 28)
+	promptText.Position = UDim2.fromOffset(8, 4)
+	promptText.Font = Enum.Font.BuilderSansBold
+	promptText.TextSize = UiTheme.MIN_TEXT
+	promptText.TextColor3 = rgb("text")
+	promptText.TextXAlignment = Enum.TextXAlignment.Left
+	promptText.Text = ""
+	promptText.Parent = prompt
+	local function promptButton(name: string, label: string, x: number): TextButton
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.Position = UDim2.fromOffset(x, 36)
+		button.Size = UDim2.fromOffset(UiTheme.TOUCH * 2, UiTheme.TOUCH)
+		button.BackgroundColor3 = rgb("button")
+		button.Font = Enum.Font.BuilderSansBold
+		button.TextSize = UiTheme.MIN_TEXT
+		button.TextColor3 = rgb("text")
+		button.Text = label
+		button.AutoButtonColor = false
+		button.Parent = prompt
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 8)
+		corner.Parent = button
+		return button
+	end
+	local promptYes = promptButton("Equip", "Equip", 8)
+	local promptNo = promptButton("Keep", "Keep", 8 + UiTheme.TOUCH * 2 + 8)
+	local function paintNotices()
+		local shown = ToastQueue.visibleToasts(notices)
+		for index, label in ipairs(toastLabels) do
+			local row = shown[index]
+			label.Visible = row ~= nil
+			label.Text = if row ~= nil then row.text else ""
+		end
+		local current = ToastQueue.currentPrompt(notices)
+		prompt.Visible = current ~= nil
+		if current ~= nil then
+			promptText.Text = current.text
+			promptYes.Text = current.yes
+			promptNo.Text = current.no
+		end
+	end
+	local function answerPrompt()
+		notices = ToastQueue.answer(notices)
+		paintNotices()
+	end
+	promptYes.Activated:Connect(answerPrompt)
+	promptNo.Activated:Connect(answerPrompt)
 
 	local stamp = Instance.new("TextLabel")
 	stamp.Name = "BuildStamp"
@@ -633,7 +703,8 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		for _, button in ipairs(railButtons) do
 			button.Size = UDim2.fromOffset(side.button, side.button)
 		end
-		local stampBox = HudLayout.stamp(vy, margin, touchDevice, RunService:IsStudio())
+		local stampBox =
+			HudLayout.stamp(vy, margin, touchDevice, RunService:IsStudio(), side.x + side.w + 12)
 		if stampBox == nil then
 			stamp.Visible = false
 		else
@@ -642,8 +713,15 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			stamp.Size = UDim2.fromOffset(stampBox.w, stampBox.h)
 		end
 		local note = HudLayout.toast(vx, margin)
-		toast.Position = UDim2.fromOffset(note.x, note.y)
-		toast.Size = UDim2.fromOffset(note.w, note.h)
+		toastHost.Position = UDim2.fromOffset(note.x, note.y)
+		toastHost.Size =
+			UDim2.fromOffset(note.w, note.h * ToastQueue.MAX + 8 * (ToastQueue.MAX - 1))
+		for index, label in ipairs(toastLabels) do
+			label.Position = UDim2.fromOffset(0, (index - 1) * (note.h + 8))
+			label.Size = UDim2.fromOffset(note.w, note.h)
+		end
+		prompt.Position = UDim2.fromOffset(note.x, note.y + toastHost.Size.Y.Offset + 8)
+		prompt.Size = UDim2.fromOffset(note.w, 36 + UiTheme.TOUCH + 8)
 		local jx, jy, jw = jumpRect()
 		local size = math.floor(UiTheme.TOUCH * buttonScale + 0.5)
 		local slots = HudLayout.skills(vx, vy, jx, jy, jw, size)
@@ -797,8 +875,24 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 		end,
 		toast = function(text: string)
-			toast.Text = text
-			toast.Visible = text ~= ""
+			if text == "" then
+				return
+			end
+			local added = ToastQueue.pushToast(notices, text)
+			local newest = added.toasts[#added.toasts]
+			notices = added
+			paintNotices()
+			if newest ~= nil then
+				local id = newest.id
+				task.delay(3, function()
+					notices = ToastQueue.dropToast(notices, id)
+					paintNotices()
+				end)
+			end
+		end,
+		prompt = function(text: string)
+			notices = ToastQueue.pushPrompt(notices, text, "Equip", "Keep")
+			paintNotices()
 		end,
 		place = place,
 		ratio = function(): number

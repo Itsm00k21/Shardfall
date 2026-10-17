@@ -21,6 +21,7 @@ local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
+local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
@@ -32,6 +33,8 @@ local RollMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
+local UiMotion = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiMotion"))
+local UiSfx = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSfx"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
@@ -162,6 +165,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	body.BackgroundTransparency = 1
 	body.ZIndex = 4
 	body.Parent = panel
+	local tabScale = Instance.new("UIScale")
+	tabScale.Name = "TabScale"
+	tabScale.Scale = 1
+	tabScale.Parent = body
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
@@ -404,6 +411,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 
+	local shownId = ""
+
+	local function playUi(action: string)
+		local volume = UiSfx.volume(draft.audio.master, draft.audio.ui)
+		if volume <= 0 then
+			return
+		end
+		local sound = Instance.new("Sound")
+		sound.Name = "UiSfx"
+		sound.SoundId = UiSfx.clip(action)
+		sound.Volume = volume
+		sound.Parent = screen
+		sound:Play()
+		task.delay(1.5, function()
+			sound:Destroy()
+		end)
+	end
+
 	local function motion(button: GuiButton)
 		local pop = Instance.new("UIScale")
 		pop.Name = "Press"
@@ -422,30 +447,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		button.InputBegan:Connect(function(input)
 			if pressed(input) then
 				button.BackgroundColor3 = rgb("press")
-				TweenService:Create(
-					pop,
-					TweenInfo.new(
-						UiTheme.MOTION.pop,
-						Enum.EasingStyle.Back,
-						Enum.EasingDirection.Out
-					),
-					{ Scale = 0.96 }
-				):Play()
+				playUi("press")
+				local length = UiMotion.press(UiMotion.reduced(draft))
+				if length <= 0 then
+					pop.Scale = 0.96
+				else
+					TweenService:Create(
+						pop,
+						TweenInfo.new(length, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+						{ Scale = 0.96 }
+					):Play()
+				end
 			end
 		end)
 		button.InputEnded:Connect(function(input)
 			if pressed(input) then
 				local rest = restColor[button]
 				button.BackgroundColor3 = if rest ~= nil then rest else rgb("body")
-				TweenService:Create(
-					pop,
-					TweenInfo.new(
-						UiTheme.MOTION.pop,
-						Enum.EasingStyle.Back,
-						Enum.EasingDirection.Out
-					),
-					{ Scale = 1 }
-				):Play()
+				local length = UiMotion.press(UiMotion.reduced(draft))
+				if length <= 0 then
+					pop.Scale = 1
+				else
+					TweenService:Create(
+						pop,
+						TweenInfo.new(length, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+						{ Scale = 1 }
+					):Play()
+				end
 			end
 		end)
 	end
@@ -640,6 +668,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if hooks.onTab ~= nil then
 			hooks.onTab(if id == "sets" then "bag" else id)
 		end
+		if shownId ~= "" and shownId ~= id then
+			playUi("tab")
+			local length = UiMotion.panel(UiMotion.reduced(draft))
+			if length <= 0 then
+				tabScale.Scale = 1
+			else
+				tabScale.Scale = 0.98
+				TweenService:Create(
+					tabScale,
+					TweenInfo.new(length, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{ Scale = 1 }
+				):Play()
+			end
+		end
+		shownId = id
 		noteView(id)
 	end
 
@@ -1281,6 +1324,72 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		line(sheet, string.format("HP  %d", vitality.maxHealth), 8, rgb("text"))
 		line(sheet, string.format("Defense  %d", vitality.defense), 9, rgb("text"))
 		line(sheet, string.format("Gold find  %.0f%%", goldFind * 100), 10, rgb("text"))
+		line(sheet, string.format("Power  %d", HeroBoard.power(profile)), 11, rgb("gold"))
+		local barOrder = 12
+		for _, bar in ipairs(HeroBoard.bars(profile)) do
+			local host = Instance.new("Frame")
+			host.Name = bar.id
+			host.BackgroundColor3 = rgb("body")
+			host.Size = UDim2.new(1, 0, 0, 22)
+			host.BorderSizePixel = 0
+			host.LayoutOrder = barOrder
+			host.Parent = sheet
+			local fill = Instance.new("Frame")
+			fill.Name = "Fill"
+			fill.Size = UDim2.fromScale(bar.fill, 1)
+			fill.BackgroundColor3 = rgb("accent")
+			fill.BorderSizePixel = 0
+			fill.Parent = host
+			local caption = Instance.new("TextLabel")
+			caption.BackgroundTransparency = 1
+			caption.Size = UDim2.fromScale(1, 1)
+			caption.Font = bodyFont()
+			caption.TextSize = UiTheme.MIN_TEXT
+			caption.TextXAlignment = Enum.TextXAlignment.Left
+			caption.TextColor3 = rgb("text")
+			caption.Text = "  " .. bar.label
+			caption.ZIndex = 2
+			caption.Parent = host
+			barOrder += 1
+		end
+		local viewport = Instance.new("ViewportFrame")
+		viewport.Name = "Avatar"
+		viewport.BackgroundColor3 = rgb("header")
+		viewport.Size = UDim2.new(1, 0, 0, 180)
+		viewport.LayoutOrder = 0
+		viewport.Parent = hero
+		local world = Instance.new("WorldModel")
+		world.Name = "World"
+		world.Parent = viewport
+		local camera = Instance.new("Camera")
+		camera.CFrame = CFrame.new(Vector3.new(0, 2, -6), Vector3.new(0, 2, 0))
+		camera.Parent = viewport
+		viewport.CurrentCamera = camera
+		task.spawn(function()
+			local localPlayer = Players.LocalPlayer
+			local character = if localPlayer ~= nil then localPlayer.Character else nil
+			local humanoid = if character ~= nil
+				then character:FindFirstChildOfClass("Humanoid")
+				else nil
+			if humanoid == nil then
+				return
+			end
+			local described, description = pcall(function()
+				return humanoid:GetAppliedDescription()
+			end)
+			if not described or description == nil then
+				return
+			end
+			local built, model = pcall(function()
+				return Players:CreateHumanoidModelFromDescription(
+					description,
+					Enum.HumanoidRigType.R15
+				)
+			end)
+			if built and model ~= nil and viewport.Parent ~= nil then
+				model.Parent = world
+			end
+		end)
 
 		local classCard = Instance.new("Frame")
 		classCard.Name = "ClassCard"
@@ -2150,10 +2259,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			openScale.Scale = 1
 			return
 		end
+		playUi("open")
+		local length = UiMotion.panel(UiMotion.reduced(draft))
+		if length <= 0 then
+			openScale.Scale = 1
+			return
+		end
 		openScale.Scale = 0.96
 		local tween = TweenService:Create(
 			openScale,
-			TweenInfo.new(UiTheme.MOTION.open, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			TweenInfo.new(length, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 			{ Scale = 1 }
 		)
 		openTween = tween
@@ -2178,6 +2293,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			show(pageFor(state))
 			playOpenMotion(not wasOpen)
 		else
+			if wasOpen then
+				playUi("close")
+			end
 			playOpenMotion(false)
 		end
 		hooks.onDim(state.open)

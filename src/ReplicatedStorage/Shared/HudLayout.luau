@@ -194,13 +194,42 @@ function HudLayout.railFit(
 end
 
 -- Bottom-left of the safe area. Hidden on a phone unless debug is on.
-function HudLayout.stamp(viewportY: number, margin: number, touch: boolean, debug: boolean): Rect?
+function HudLayout.stamp(
+	viewportY: number,
+	margin: number,
+	touch: boolean,
+	debug: boolean,
+	left: number?
+): Rect?
 	if touch and not debug then
 		return nil
 	end
 	local height = 16
 	local y = math.max(margin, viewportY - margin - height)
-	return rect(margin, y, 140, height)
+	local x = margin
+	if type(left) == "number" and left > x then
+		x = left
+	end
+	return rect(x, y, 140, height)
+end
+
+-- phone, tablet, console, or pc. Height breaks a short 1280-wide TV
+-- out of the desktop layout.
+function HudLayout.breakpoint(width: number, height: number): string
+	if width < 900 or height < 500 then
+		return "phone"
+	end
+	if width < 1280 then
+		return "tablet"
+	end
+	if height <= 800 then
+		return "console"
+	end
+	return "pc"
+end
+
+function HudLayout.overlaps(a: Rect, b: Rect): boolean
+	return a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h
 end
 
 return HudLayout
