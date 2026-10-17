@@ -13,6 +13,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MobileShell = require(script.Parent.MobileShell)
+local RaidPremadeHop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RaidPremadeHop"))
 
 local RaidHud = {}
 local player = Players.LocalPlayer
@@ -222,6 +223,15 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 			end
 			if payload.kind == "victory" or payload.kind == "defeat" then
 				showEcho(nil)
+				return
+			end
+			if payload.kind == "premadeRecall" then
+				-- The server already decided this player was recalled.
+				-- Paint the frozen seated line. Do not read a client id.
+				show({ error = RaidPremadeHop.ERRORS.seated })
+				if statusLabel ~= nil then
+					statusLabel.Visible = true
+				end
 				return
 			end
 			if payload.kind ~= "run" then
