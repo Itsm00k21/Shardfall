@@ -20,6 +20,7 @@ local RollBoard = require("./RollBoard")
 local RollReveal = require("./RollReveal")
 local Schema = require("./Schema")
 local Settings = require("./Settings")
+local UiMotion = require("./UiMotion")
 
 local RollLoop = {}
 
@@ -322,6 +323,73 @@ function RollLoop.blocked(tokens: number, full: boolean): string?
 		return "bag"
 	end
 	return nil
+end
+
+export type ChainInput = {
+	open: boolean,
+	onRoll: boolean,
+	alive: boolean,
+	queued: boolean,
+	holding: boolean,
+	auto: boolean,
+	tokens: number,
+	bagFull: boolean,
+	rarity: string,
+	stopAt: string,
+	isNew: boolean,
+	isUpgrade: boolean,
+}
+
+-- Auto-roll and hold-to-chain run only on the open roll page, and only
+-- while the player is alive. Closing the hub, leaving the tab, or dying
+-- fails this gate before another RollShard is sent.
+function RollLoop.canChain(input: ChainInput): boolean
+	if input.open ~= true or input.onRoll ~= true or input.alive ~= true then
+		return false
+	end
+	if RollLoop.blocked(input.tokens, input.bagFull) ~= nil then
+		return false
+	end
+	if input.queued == true then
+		return true
+	end
+	if input.auto ~= true and input.holding ~= true then
+		return false
+	end
+	return RollLoop.stopReason({
+		auto = true,
+		tokens = input.tokens,
+		bagFull = input.bagFull,
+		rarity = input.rarity,
+		stopAt = input.stopAt,
+		isNew = input.isNew,
+		isUpgrade = input.isUpgrade,
+	}) == nil
+end
+
+-- Seconds the server waits after a crack before it accepts another.
+-- The floor is the tap cooldown. A longer reveal wins, so a request that
+-- arrives while that card should still be on screen is ignored.
+function RollLoop.gap(
+	settings: Settings.Data,
+	previousRarity: string?,
+	previousQuick: boolean,
+	nextQuick: boolean
+): number
+	local floor = RarityConfig.cooldown(nextQuick == true)
+	if type(previousRarity) ~= "string" or previousRarity == "" then
+		return floor
+	end
+	local reveal = RollLoop.seconds(
+		settings,
+		previousRarity,
+		previousQuick == true,
+		UiMotion.reduced(settings)
+	)
+	if reveal > floor then
+		return reveal
+	end
+	return floor
 end
 
 function RollLoop.stopReason(input: StopInput): string?

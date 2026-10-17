@@ -19,8 +19,10 @@ describe("Keybinds", function()
 		expect(gameplay.roll).toEqual("T")
 		expect(gameplay.attack).toEqual("E")
 		expect(gameplay.dodge).toEqual("Q")
-		expect(gameplay.skill1).toEqual("LeftShift")
+		expect(gameplay.skill1).toEqual("One")
+		expect(Keybinds.display(gameplay.skill1)).toEqual("1")
 		expect(gameplay.skill2).toEqual("Two")
+		expect(Keybinds.display(gameplay.skill2)).toEqual("2")
 		expect(gameplay.ult).toEqual("F")
 		expect(gameplay.hero).toEqual("C")
 		expect(gameplay.bag).toEqual("B")
@@ -67,6 +69,70 @@ describe("Keybinds", function()
 		expect(shift.hero).toEqual("C")
 	end)
 
+	it("refuses a tab on a combat key, Shift, or a skill key", function()
+		local fresh = Keybinds.copyMenu(nil)
+		local cases = {
+			{ "F", "F is already ult" },
+			{ "R", "R is already heavy" },
+			{ "Shift", "Shift is already sprint" },
+			{ "LeftShift", "Shift is already sprint" },
+			{ "1", "1 is already skill1" },
+			{ "2", "2 is already skill2" },
+			{ "One", "1 is already skill1" },
+			{ "ButtonX", "ButtonX is already heavy" },
+		}
+		for _, pair in ipairs(cases) do
+			local kept, warning = Keybinds.assign(fresh, "roll", pair[1])
+			expect(warning).toEqual(pair[2])
+			expect(kept.roll).toEqual("T")
+			expect(#Keybinds.conflicts(Keybinds.gameplay(kept))).toEqual(0)
+		end
+		local shared, sharedWarning = Keybinds.assign(fresh, "hero", "M")
+		expect(sharedWarning).toBeNil()
+		expect(shared.hero).toEqual("M")
+		expect(shared.market).toEqual("C")
+		expect(shared.hero ~= shared.market).toBeTrue()
+		expect(#Keybinds.conflicts(Keybinds.gameplay(shared))).toEqual(0)
+		local clean = Keybinds.sanitize({
+			hero = "Q",
+			bag = "e",
+			pets = "F",
+			roll = "R",
+			raids = "1",
+			market = "Shift",
+		})
+		expect(clean.hero).toEqual("C")
+		expect(clean.bag).toEqual("B")
+		expect(clean.pets).toEqual("P")
+		expect(clean.roll).toEqual("T")
+		expect(clean.raids).toEqual("I")
+		expect(clean.market).toEqual("M")
+		expect(#Keybinds.conflicts(Keybinds.gameplay(clean))).toEqual(0)
+		local stacked = Keybinds.sanitize({
+			hero = "Z",
+			bag = "Z",
+			pets = "Z",
+			roll = "Z",
+			raids = "Z",
+			market = "Z",
+		})
+		expect(stacked.hero).toEqual("Z")
+		expect(#Keybinds.conflicts(Keybinds.gameplay(stacked))).toEqual(0)
+		local seenLetter: { [string]: boolean } = {}
+		for _, field in ipairs(Keybinds.MENU_ORDER) do
+			expect(seenLetter[stacked[field]]).toBeNil()
+			seenLetter[stacked[field]] = true
+			expect(Keybinds.owner(stacked[field])).toBeNil()
+		end
+		local doubled = Keybinds.copyMenu(nil)
+		doubled.hero = "B"
+		doubled.bag = "B"
+		local repaired, repairWarning = Keybinds.assign(doubled, "roll", "B")
+		expect(repairWarning).toBeNil()
+		expect(repaired.roll).toEqual("B")
+		expect(#Keybinds.conflicts(Keybinds.gameplay(repaired))).toEqual(0)
+	end)
+
 	it("reads combat, the rail, and the menu sink from the same table", function()
 		local root = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
 		local combat = fs.readFile(root .. "CombatHud.luau")
@@ -81,26 +147,39 @@ describe("Keybinds", function()
 		expect(string.find(shell, "KeyCode.E", 1, true)).toBeNil()
 		expect(string.find(shell, "KeyCode.F", 1, true)).toBeNil()
 		expect(string.find(shell, "KeyCode.Two", 1, true)).toBeNil()
+		expect(string.find(shell, "KeyCode.One", 1, true)).toBeNil()
+		expect(string.find(shell, "Keybinds.ALIAS", 1, true)).toBeNil()
+		expect(string.find(shell, "Keybinds.display(Keybinds.COMBAT.skill1)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(combat, "Keybinds.GAMEPAD.heavy", 1, true) ~= nil).toBeTrue()
+		expect(string.find(combat, "KeyCode.ButtonX", 1, true)).toBeNil()
 		expect(string.find(hub, "Keybinds.sinkNames", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "Keybinds.assign", 1, true) ~= nil).toBeTrue()
 		expect(string.find(inventory, "KeyCode.I", 1, true)).toBeNil()
-		local sink = Keybinds.sinkNames(nil)
+		local sink = Keybinds.sinkNames()
 		local seen: { [string]: boolean } = {}
 		for _, name in ipairs(sink) do
 			expect(seen[name]).toBeNil()
 			seen[name] = true
 		end
 		expect(seen.R).toEqual(true)
-		expect(seen.T).toEqual(true)
 		expect(seen.E).toEqual(true)
 		expect(seen.Q).toEqual(true)
 		expect(seen.F).toEqual(true)
+		expect(seen.One).toEqual(true)
 		expect(seen.Two).toEqual(true)
 		expect(seen.LeftShift).toEqual(true)
-		expect(seen.C).toEqual(true)
-		expect(seen.B).toEqual(true)
-		expect(seen.P).toEqual(true)
-		expect(seen.I).toEqual(true)
-		expect(seen.M).toEqual(true)
+		expect(seen.RightShift).toEqual(true)
+		expect(seen.ButtonX).toEqual(true)
+		expect(seen.W).toEqual(true)
+		expect(seen.A).toEqual(true)
+		expect(seen.S).toEqual(true)
+		expect(seen.D).toEqual(true)
+		expect(seen.Space).toEqual(true)
+		expect(seen.C).toBeNil()
+		expect(seen.B).toBeNil()
+		expect(seen.P).toBeNil()
+		expect(seen.T).toBeNil()
+		expect(seen.I).toBeNil()
+		expect(seen.M).toBeNil()
 	end)
 end)
