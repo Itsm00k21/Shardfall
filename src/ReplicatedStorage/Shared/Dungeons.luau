@@ -308,7 +308,7 @@ local ROOTVAULT: DungeonDef = {
 		},
 	},
 	rewards = {
-		gold = 45,
+		gold = 360,
 		shardTokens = 3,
 		xp = 40,
 		materials = { wood = 4, vine = 3, spore = 2, bark = 1 },
@@ -367,7 +367,7 @@ local HEARTWOOD: DungeonDef = {
 		{ id = "awakened", name = "Grandmother Gnarl Awakened", enemies = { "grandmother_gnarl" } },
 	},
 	rewards = {
-		gold = 60,
+		gold = 480,
 		shardTokens = 4,
 		xp = 80,
 		materials = { wood = 4, vine = 3, spore = 2, bark = 2 },
@@ -564,7 +564,7 @@ function Dungeons.waveReward(wave: number): ClearReward
 		tokens = 1
 	end
 	return {
-		gold = math.floor(8 + n * 3),
+		gold = math.floor((8 + n * 3) * 8),
 		shardTokens = tokens,
 		xp = math.floor(6 + n * 2),
 		materials = materials,

@@ -2587,7 +2587,7 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 		if PracticeLoot.pays(run.practice == true) then
 			DataService.mutate(player, function(data)
 				PracticeLoot.grantRoom(data, false, os.time())
-				data.gold += 25
+				data.gold += Rootvault.TREASURE_GOLD
 				return nil
 			end)
 		end

@@ -49,7 +49,7 @@ function LoopService.progress(player: Player, id: string, amount: number)
 		Loops.refresh(data, now, player.UserId)
 		local finished = Loops.apply(data, id, amount)
 		if finished > 0 then
-			data.gold += 40 * finished
+			data.gold += Economy.QUEST_GOLD * finished
 			data.shardKeys = (data.shardKeys or 0) + finished
 			data.passXp = select(1, Loops.passXp(data.passXp or 0, 100 * finished))
 			local lines = data.boardLines or 0

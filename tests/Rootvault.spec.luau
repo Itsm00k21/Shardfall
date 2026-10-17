@@ -1,5 +1,7 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -47,5 +49,12 @@ describe("Rootvault", function()
 		expect(Rootvault.ROLES.charger.kind).toEqual("thorn_sprite")
 		expect(Rootvault.ROLES.mender.kind).toEqual("moss_crawler")
 		expect(Rootvault.shrine(2)).toEqual("ward")
+	end)
+
+	it("pays 200 gold for the treasure door", function()
+		expect(Rootvault.TREASURE_GOLD).toEqual(200)
+		local service = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		expect(string.find(service, "Rootvault.TREASURE_GOLD", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "data.gold += 25", 1, true)).toBeNil()
 	end)
 end)

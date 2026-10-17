@@ -15,13 +15,21 @@ Economy.FARM_SECONDS = 2 * 60 * 60
 Economy.FARM_RATE = 0.4
 Economy.UPGRADE_MAX = 10
 Economy.SHOP_KEY_COST = 40
+-- A finished daily and a finished weekly share this grant.
+Economy.QUEST_GOLD = 150
 
 function Economy.upgradeCost(level: number): (number, number)
 	local whole = math.floor(level)
 	if whole < 0 then
 		whole = 0
 	end
+	-- +1 and +2 are flat. From +3 the live 1.6 curve stays.
 	local gold = math.floor(500 * (1.6 ^ whole) + 0.5)
+	if whole == 0 then
+		gold = 150
+	elseif whole == 1 then
+		gold = 300
+	end
 	local bossMats = if whole >= 7 then 1 else 0
 	return gold, bossMats
 end
@@ -38,12 +46,12 @@ function Economy.upgrade(item: any, data: any): (boolean, string)
 	if (data.gold or 0) < gold then
 		return false, "Not enough gold."
 	end
-	if mats > 0 and ((data.materials and data.materials.bark) or 0) < mats then
+	if mats > 0 and ((data.materials and data.materials.gnarl_seed) or 0) < mats then
 		return false, "Needs boss bark."
 	end
 	data.gold -= gold
 	if mats > 0 then
-		data.materials.bark -= mats
+		data.materials.gnarl_seed -= mats
 	end
 	item.upgrade = level + 1
 	Economy.log(data, "forge_upgrade", "gold", -gold, data.gold)
