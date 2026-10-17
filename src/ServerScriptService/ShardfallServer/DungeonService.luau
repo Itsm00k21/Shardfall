@@ -24,6 +24,7 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Economy = require(ReplicatedStorage.Shared.Economy)
@@ -527,11 +528,20 @@ local function paintEnemy(enemy: Enemy)
 		if enemy.maxHp > 0 then
 			ratio = math.clamp(enemy.hp / enemy.maxHp, 0, 1)
 		end
-		fill.Size = UDim2.fromScale(ratio, 1)
+		TweenService:Create(
+			fill,
+			TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Size = UDim2.fromScale(ratio, 1) }
+		):Play()
 	end
 end
 
-local function dropPickup(parent: Instance, position: Vector3, landed: { [string]: number })
+local function dropPickup(
+	parent: Instance,
+	position: Vector3,
+	landed: { [string]: number },
+	player: Player
+)
 	local index = 0
 	for _, materialId in ipairs(Materials.ORDER) do
 		local count = landed[materialId]
@@ -541,38 +551,78 @@ local function dropPickup(parent: Instance, position: Vector3, landed: { [string
 		index += 1
 		local rarity = Materials.rarityName(materialId)
 		local red, green, blue = Rarities.rgb(rarity)
-		local anchor = Instance.new("Part")
-		anchor.Name = Materials.displayName(materialId)
-		anchor.Anchored = true
-		anchor.CanCollide = false
-		anchor.CanQuery = false
-		anchor.CanTouch = false
-		anchor.Transparency = 1
-		anchor.Size = Vector3.new(0.2, 0.2, 0.2)
-		anchor.Position = position + Vector3.new(0, 2.4 + (index - 1) * 0.9, 0)
-		anchor.Parent = parent
-
-		local gui = Instance.new("BillboardGui")
-		gui.Name = "DropLabel"
-		gui.Size = UDim2.fromOffset(180, 28)
-		gui.AlwaysOnTop = true
-		gui.LightInfluence = 0
-		gui.Parent = anchor
-
-		local label = Instance.new("TextLabel")
-		label.Name = "Material"
-		label.BackgroundTransparency = 1
-		label.Size = UDim2.fromScale(1, 1)
-		label.Font = Enum.Font.BuilderSansBold
-		label.TextSize = 16
-		label.TextColor3 = Color3.fromRGB(red, green, blue)
-		label.TextStrokeTransparency = 0.35
-		label.Text = string.format("%s x%d", Materials.displayName(materialId), count)
-		label.Parent = gui
-
-		task.delay(8, function()
-			if anchor.Parent ~= nil then
-				anchor:Destroy()
+		local color = Color3.fromRGB(red, green, blue)
+		local name = Materials.displayName(materialId)
+		local vx, vy, vz = CombatFeel.lootVelocity(index)
+		local orb = Instance.new("Part")
+		orb.Name = name
+		orb.Shape = Enum.PartType.Ball
+		orb.Size = Vector3.new(0.7, 0.7, 0.7)
+		orb.Material = Enum.Material.Neon
+		orb.Color = color
+		orb.Anchored = false
+		orb.CanCollide = true
+		orb.CanQuery = false
+		orb.CanTouch = false
+		orb.Position = position + Vector3.new(0, 2.2, 0)
+		orb.Parent = parent
+		orb.AssemblyLinearVelocity = Vector3.new(vx, vy, vz)
+		local beam = Instance.new("Part")
+		beam.Name = "RarityBeam"
+		beam.Anchored = true
+		beam.CanCollide = false
+		beam.CanQuery = false
+		beam.CanTouch = false
+		beam.Material = Enum.Material.Neon
+		beam.Color = color
+		beam.Size = Vector3.new(0.12, 5, 0.12)
+		beam.CFrame = CFrame.new(orb.Position + Vector3.new(0, 2.5, 0))
+		beam.Parent = parent
+		local born = os.clock()
+		local pulled = false
+		local follow: RBXScriptConnection? = nil
+		follow = RunService.Heartbeat:Connect(function()
+			if orb.Parent == nil then
+				if beam.Parent ~= nil then
+					beam:Destroy()
+				end
+				if follow ~= nil then
+					follow:Disconnect()
+				end
+				return
+			end
+			beam.CFrame = CFrame.new(orb.Position + Vector3.new(0, 2.4, 0))
+			local age = os.clock() - born
+			local character = player.Character
+			local root = if character ~= nil
+				then character:FindFirstChild("HumanoidRootPart")
+				else nil
+			if age >= 0.35 and root ~= nil and root:IsA("BasePart") then
+				local delta = root.Position - orb.Position
+				if delta.Magnitude <= CombatFeel.MAGNET_RANGE then
+					pulled = true
+					local unit = if delta.Magnitude > 0.05 then delta.Unit else Vector3.yAxis
+					orb.AssemblyLinearVelocity = unit * 36
+				end
+				if delta.Magnitude < 3.5 then
+					fx(player, { kind = "hint", text = "+" .. name })
+					orb:Destroy()
+					beam:Destroy()
+					if follow ~= nil then
+						follow:Disconnect()
+					end
+					return
+				end
+			end
+			if age > 6 then
+				orb:Destroy()
+				beam:Destroy()
+				if follow ~= nil then
+					follow:Disconnect()
+				end
+			end
+			if pulled and age > 2.5 and orb.Parent ~= nil then
+				orb.CanCollide = false
 			end
 		end)
 	end
@@ -1184,6 +1234,9 @@ function DungeonService.damageEnemy(
 		enemy.hp = 0
 	end
 	paintEnemy(enemy)
+	if enemy.hp > 0 then
+		enemy.part:SetAttribute("ShardfallFlinchUntil", now + CombatFeel.FLINCH_SECONDS)
+	end
 	pcall(ModelFactory.flash, enemy.part)
 	if enemy.hp > 0 then
 		if enemy.boss then
@@ -1276,7 +1329,7 @@ function DungeonService.damageEnemy(
 			end
 			if #bits > 0 then
 				-- The world label is the material, never the enemy that dropped it.
-				dropPickup(run.folder, enemy.part.Position, landed)
+				dropPickup(run.folder, enemy.part.Position, landed, player)
 				fx(player, {
 					kind = "hint",
 					text = "Picked up " .. table.concat(bits, ", ") .. ".",

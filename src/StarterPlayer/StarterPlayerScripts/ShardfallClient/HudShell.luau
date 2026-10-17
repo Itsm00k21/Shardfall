@@ -11,10 +11,12 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
+local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
@@ -279,6 +281,33 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		corner.Parent = button
+		local pop = Instance.new("UIScale")
+		pop.Name = "Press"
+		pop.Parent = button
+		local radial = Instance.new("Frame")
+		radial.Name = "Radial"
+		radial.AnchorPoint = Vector2.new(0, 1)
+		radial.Position = UDim2.fromScale(0, 1)
+		radial.Size = UDim2.fromScale(1, 0)
+		radial.BackgroundColor3 = Color3.new(0, 0, 0)
+		radial.BackgroundTransparency = 0.4
+		radial.BorderSizePixel = 0
+		radial.Active = false
+		radial.Visible = false
+		radial.ZIndex = 3
+		radial.Parent = button
+		local radialCorner = Instance.new("UICorner")
+		radialCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		radialCorner.Parent = radial
+		local function pressed(input: InputObject): boolean
+			return input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+		end
+		button.InputEnded:Connect(function(input)
+			if pressed(input) then
+				pop.Scale = 1
+			end
+		end)
 		button.Activated:Connect(function()
 			if layoutEdit then
 				return
@@ -286,6 +315,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			fire()
 		end)
 		button.InputBegan:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				if not layoutEdit then
+					pop.Scale = CombatFeel.PRESS
+				end
+			end
 			if not layoutEdit then
 				return
 			end
@@ -336,6 +373,25 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		callbacks.onSkill(2)
 	end)
 	skillButton("Ult", "Ult", callbacks.onUlt)
+	RunService.Heartbeat:Connect(function()
+		local now = os.clock()
+		for _, button in ipairs(skillButtons) do
+			local untilAt = button:GetAttribute("CooldownUntil")
+			local total = button:GetAttribute("CooldownTotal")
+			local cover = button:FindFirstChild("Radial")
+			if
+				cover ~= nil
+				and cover:IsA("Frame")
+				and type(untilAt) == "number"
+				and type(total) == "number"
+			then
+				local remaining = untilAt - now
+				local amount = CombatFeel.cooldownCover(total - remaining, total)
+				cover.Size = UDim2.fromScale(1, amount)
+				cover.Visible = amount > 0.02
+			end
+		end
+	end)
 
 	local toast = Instance.new("TextLabel")
 	toast.Name = "Toast"
