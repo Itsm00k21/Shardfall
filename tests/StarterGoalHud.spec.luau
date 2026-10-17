@@ -493,3 +493,181 @@ describe("StarterGoalHud chrome", function()
 		end
 	end)
 end)
+
+describe("StarterGoalHud polish", function()
+	local function promptOf(viewportX: number)
+		local margin = UiTheme.safeMargin()
+		local toast = HudLayout.toast(viewportX, margin)
+		local hostH = toast.h * 3 + 8 * 2
+		return {
+			x = toast.x,
+			y = toast.y + hostH + 8,
+			w = toast.w,
+			h = 36 + UiTheme.TOUCH + 8,
+		}
+	end
+
+	local function withPlace(hook: any, body: () -> ())
+		local previous = (HudLayout :: any).place;
+		(HudLayout :: any).place = hook
+		local ok, err = pcall(body);
+		(HudLayout :: any).place = previous
+		if not ok then
+			error(tostring(err), 2)
+		end
+	end
+
+	it("sizes each line to the scaled text", function()
+		expect(StarterGoalHud.lineHeight(14)).toEqual(18)
+		local grown = StarterGoalHud.lineHeight(20)
+		expect(grown >= 20).toBeTrue()
+		expect(grown).toBeGreaterThan(18)
+		local scaled = StarterGoalHud.chrome({
+			access = { textScale = 1.4 },
+		})
+		expect(scaled.textSize).toEqual(20)
+		expect(scaled.lineHeight).toEqual(grown)
+		expect(scaled.lineHeight).toBeGreaterThan(18)
+		local rested = StarterGoalHud.place(1920, 1080, 3)
+		expect(rested.x).toEqual(88)
+		expect(rested.y).toEqual(80)
+		expect(rested.h).toEqual(3 * 18 + 8)
+		expect(rested.collapsed == true).toBeFalse()
+		local placed = StarterGoalHud.place(1920, 1080, 3, scaled.textSize)
+		expect(placed.x).toEqual(88)
+		expect(placed.y).toEqual(80)
+		expect(placed.w).toEqual(320)
+		expect(placed.h).toEqual(3 * grown + 8)
+		expect(placed.h).toBeGreaterThan(rested.h)
+		expect(placed.collapsed == true).toBeFalse()
+
+		local hud = fs.readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/StarterGoalHud.luau"
+		)
+		expect(string.find(hud, "UDim2.new(1, -16, 0, lineH)", 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, "function StarterGoalHud.present(result: any)", 1, true)).toBeGreaterThan(
+			0
+		)
+		local _, presents = string.gsub(hud, "function StarterGoalHud.present", "")
+		expect(presents).toEqual(1)
+	end)
+
+	it("collapses a viewport shorter than the tested phones", function()
+		local phones = {
+			{ 844, 390 },
+			{ 390, 844 },
+			{ 800, 380 },
+		}
+		for _, view in ipairs(phones) do
+			local placed = StarterGoalHud.place(view[1], view[2], 3)
+			expect(placed.collapsed == true).toBeFalse()
+			expect(placed.h).toBeGreaterThan(0)
+			expect(placed.w).toBeGreaterThan(0)
+		end
+
+		local short = {
+			{ 844, 240 },
+			{ 800, 200 },
+			{ 390, 240 },
+		}
+		for _, view in ipairs(short) do
+			local vx = view[1]
+			local vy = view[2]
+			expect(vy < 380).toBeTrue()
+			local placed = StarterGoalHud.place(vx, vy, 3)
+			expect(placed.collapsed).toEqual(true)
+			expect(placed.w).toEqual(0)
+			expect(placed.h).toEqual(0)
+			local margin = UiTheme.safeMargin()
+			local toast = HudLayout.toast(vx, margin)
+			local stack = {
+				x = toast.x,
+				y = toast.y,
+				w = toast.w,
+				h = toast.h * 3 + 8 * 2,
+			}
+			expect(HudLayout.overlaps(placed, stack)).toEqual(false)
+			expect(placed.y + placed.h <= vy).toBeTrue()
+		end
+
+		withPlace(function()
+			return { x = 12, y = 14, w = 40, h = 20 }
+		end, function()
+			local hooked = StarterGoalHud.place(844, 240, 3)
+			expect(hooked.x).toEqual(12)
+			expect(hooked.y).toEqual(14)
+			expect(hooked.w).toEqual(40)
+			expect(hooked.h).toEqual(20)
+			expect(hooked.collapsed == true).toBeFalse()
+		end)
+	end)
+
+	it("hides through applyChrome when Chrome is missing", function()
+		local shell =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau")
+		local hud = fs.readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/StarterGoalHud.luau"
+		)
+		local setAt = string.find(shell, "setProfile = function(profile: any)", 1, true)
+		local callAt = string.find(shell, "StarterGoalHud.applyChrome(profile.uiSettings)", 1, true)
+		expect(setAt ~= nil).toBeTrue()
+		expect(callAt ~= nil).toBeTrue()
+		expect((setAt :: number) < (callAt :: number)).toBeTrue()
+		local _, calls =
+			string.gsub(shell, "StarterGoalHud%.applyChrome%(profile%.uiSettings%)", "")
+		expect(calls).toEqual(1)
+		expect(string.find(shell, "require(script.Parent.StarterGoalHud)", 1, true)).toBeGreaterThan(
+			0
+		)
+		expect(string.find(hud, "frame.Visible = show", 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, 'FindFirstChild("Chrome")', 1, true)).toBeGreaterThan(0)
+
+		local hidden = { hud = { hidden = true }, access = { textScale = 1.4 } }
+		expect(StarterGoalHud.chrome(hidden).hidden).toEqual(true)
+		expect(StarterGoalHud.shown(3, hidden)).toEqual(false)
+		expect(StarterGoalHud.chrome(hidden).lineHeight).toEqual(StarterGoalHud.lineHeight(20))
+		StarterGoalHud.applyChrome(hidden)
+		expect(StarterGoalHud.shown(3, hidden)).toEqual(false)
+		local shown = { hud = { hidden = false }, access = { textScale = 1 } }
+		expect(StarterGoalHud.shown(3, shown)).toEqual(true)
+		StarterGoalHud.applyChrome(shown)
+		expect(StarterGoalHud.chrome(shown).textSize).toEqual(UiTheme.MIN_TEXT)
+	end)
+
+	it("keeps a phone tracker off the equip prompt top edge", function()
+		local views = {
+			{ 844, 390 },
+			{ 390, 844 },
+			{ 800, 380 },
+		}
+		for _, view in ipairs(views) do
+			local vx = view[1]
+			local vy = view[2]
+			expect(HudLayout.breakpoint(vx, vy)).toEqual("phone")
+			local placed = StarterGoalHud.place(vx, vy, 3)
+			local prompt = promptOf(vx)
+			local top = { x = prompt.x, y = prompt.y, w = prompt.w, h = 1 }
+			expect(placed.collapsed == true).toBeFalse()
+			expect(HudLayout.overlaps(placed, prompt)).toEqual(false)
+			expect(HudLayout.overlaps(placed, top)).toEqual(false)
+			local margin = UiTheme.safeMargin()
+			expect(placed.x >= margin).toBeTrue()
+			expect(placed.y >= margin).toBeTrue()
+			expect(placed.x + placed.w <= vx - margin + 0.01).toBeTrue()
+			expect(placed.y + placed.h <= vy - margin + 0.01).toBeTrue()
+			local grown = StarterGoalHud.place(vx, vy, 3, 20)
+			expect(grown.collapsed == true).toBeFalse()
+			expect(grown.h).toEqual(3 * StarterGoalHud.lineHeight(20) + 8)
+			expect(HudLayout.overlaps(grown, prompt)).toEqual(false)
+			expect(HudLayout.overlaps(grown, top)).toEqual(false)
+		end
+
+		local desktop = StarterGoalHud.place(1920, 1080, 3)
+		expect(desktop.x).toEqual(88)
+		expect(desktop.y).toEqual(80)
+		expect(HudLayout.overlaps(desktop, promptOf(1920))).toEqual(false)
+		local mid = StarterGoalHud.place(1280, 800, 3)
+		expect(mid.x).toEqual(88)
+		expect(mid.y).toEqual(80)
+	end)
+end)
