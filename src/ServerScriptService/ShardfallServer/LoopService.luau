@@ -8,8 +8,8 @@
 	Seals land on random cells, up to nine a week.
 
 	Premium grants, claims, and tier skips refuse while
-	Loops.PREMIUM_ENABLED is false. ReceiptService is the only caller that
-	should grant the pass, and only after GHOST wires the product id.
+	Loops.PREMIUM_ENABLED is false. ProcessReceipt leaves every product
+	pending. It does not grant the pass.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -291,8 +291,8 @@ function LoopService.shuffle(player: Player)
 	return { ok = true, profile = DataService.snapshot(player) }
 end
 
--- ReceiptService calls this from its existing ProcessReceipt assignment.
--- False means leave the purchase pending. Never read ProcessReceipt here.
+-- ProcessReceipt does not grant the pass from here. A false return writes
+-- nothing, so the purchase stays pending. Never read ProcessReceipt here.
 function LoopService.grantPremium(player: Player, receiptId: any, productId: any): boolean
 	if Loops.PREMIUM_ENABLED ~= true then
 		return false
