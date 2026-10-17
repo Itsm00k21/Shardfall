@@ -274,6 +274,18 @@ function ClassService.onHit(player: Player)
 	end
 end
 
+function ClassService.cooldownLeft(player: Player, key: string): number
+	local found = sessions[player]
+	if found == nil or type(key) ~= "string" then
+		return 0
+	end
+	local left = (found.readyAt[key] or 0) - os.clock()
+	if left <= 0 then
+		return 0
+	end
+	return left
+end
+
 function ClassService.start()
 	CombatService.bindClassMods(function(player)
 		return ClassService.mods(player)

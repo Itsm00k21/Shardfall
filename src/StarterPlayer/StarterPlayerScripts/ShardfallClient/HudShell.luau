@@ -5,7 +5,7 @@
 
 	Top-left is the class portrait, a tweened HP bar, and the level.
 	Top-right, under the Roblox buttons, is Gold, Mastery, and Shards.
-	A mid-left rail opens the hub. Skills sit beside the jump button.
+	A mid-left rail opens the hub. Skills live on the action bar.
 	The bottom-left stays empty. Toasts sit top-center.
 ]]
 
@@ -17,7 +17,6 @@ local UserInputService = game:GetService("UserInputService")
 
 local Build = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Build"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
-local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local Progression = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Progression"))
@@ -37,12 +36,6 @@ export type Callbacks = {
 	onMarket: () -> (),
 	onPass: () -> (),
 	onSettings: () -> (),
-	onAttack: () -> (),
-	onDodge: () -> (),
-	onSkill: (number) -> (),
-	onUlt: () -> (),
-	onHeavy: () -> (),
-	onLayout: (string, number, number) -> (),
 }
 
 local RAIL = {
@@ -53,24 +46,6 @@ local RAIL = {
 	{ id = "Market", icon = "market", call = "onMarket" },
 	{ id = "Pass", icon = "pass", call = "onPass" },
 	{ id = "Settings", icon = "settings", call = "onSettings" },
-}
-
-local SKILL_ICON = {
-	Attack = "attack",
-	Dodge = "dodge",
-	Skill1 = "skill",
-	Skill2 = "skill",
-	Ult = "ult",
-	Heavy = "heavy",
-}
-
-local SKILL_BIND = {
-	Attack = Keybinds.display(Keybinds.COMBAT.attack),
-	Dodge = Keybinds.display(Keybinds.COMBAT.dodge),
-	Skill1 = Keybinds.display(Keybinds.COMBAT.skill1),
-	Skill2 = Keybinds.display(Keybinds.COMBAT.skill2),
-	Ult = Keybinds.display(Keybinds.COMBAT.ult),
-	Heavy = Keybinds.display(Keybinds.COMBAT.heavy),
 }
 
 local function rgb(name: string): Color3
@@ -434,214 +409,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		table.insert(railButtons, button)
 	end
 
-	local skills = Instance.new("Frame")
-	skills.Name = "Skills"
-	skills.BackgroundTransparency = 1
-	skills.Size = UDim2.fromScale(1, 1)
-	skills.Parent = chrome
-	local skillButtons = {}
-	local layoutEdit = false
-	local buttonScale = 1
-	local savedLayout: { [string]: { number } } = {}
 	local hudHidden = false
-	local function skillButton(name: string, fire: () -> ())
-		local button = Instance.new("TextButton")
-		button.Name = name
-		button.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
-		button.BackgroundColor3 = rgb("body")
-		button.BorderSizePixel = 0
-		button.Text = ""
-		button.AutoButtonColor = false
-		button.ClipsDescendants = true
-		button.Parent = skills
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = button
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = UiTheme.STROKE_BOLD
-		stroke.Color = rgb("accent")
-		stroke.Parent = button
-		local iconName = SKILL_ICON[name] or "skill"
-		local icon = Instance.new("ImageLabel")
-		icon.Name = "Icon"
-		icon.AnchorPoint = Vector2.new(0.5, 0.5)
-		icon.Position = UDim2.fromScale(0.5, 0.45)
-		icon.Size = UDim2.fromOffset(22, 22)
-		icon.BackgroundTransparency = 1
-		icon.ScaleType = Enum.ScaleType.Fit
-		icon.Image = UiIcons.get(iconName)
-		local red, green, blue = UiIcons.tintOf(iconName)
-		icon.ImageColor3 = Color3.fromRGB(red, green, blue)
-		icon.ZIndex = 2
-		icon.Parent = button
-		local bind = Instance.new("TextLabel")
-		bind.Name = "Bind"
-		bind.AnchorPoint = Vector2.new(1, 1)
-		bind.Position = UDim2.new(1, -2, 1, -2)
-		bind.Size = UDim2.fromOffset(28, 14)
-		bind.BackgroundTransparency = 1
-		bind.Font = Enum.Font.BuilderSansBold
-		bind.TextSize = 11
-		bind.TextXAlignment = Enum.TextXAlignment.Right
-		bind.TextColor3 = rgb("text")
-		bind.Text = SKILL_BIND[name] or ""
-		bind.ZIndex = 5
-		bind:SetAttribute("SkipTextScale", true)
-		bind.Parent = button
-		local pop = Instance.new("UIScale")
-		pop.Name = "Press"
-		pop.Parent = button
-		local radial = Instance.new("Frame")
-		radial.Name = "Radial"
-		radial.Size = UDim2.fromScale(1, 1)
-		radial.BackgroundColor3 = Color3.new(0, 0, 0)
-		radial.BackgroundTransparency = 0.35
-		radial.BorderSizePixel = 0
-		radial.Active = false
-		radial.Visible = false
-		radial.ZIndex = 4
-		radial.Parent = button
-		local radialCorner = Instance.new("UICorner")
-		radialCorner.CornerRadius = UDim.new(1, 0)
-		radialCorner.Parent = radial
-		local sweep = Instance.new("UIGradient")
-		sweep.Name = "Sweep"
-		sweep.Rotation = 0
-		sweep.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.2),
-			NumberSequenceKeypoint.new(0.5, 0.2),
-			NumberSequenceKeypoint.new(0.501, 1),
-			NumberSequenceKeypoint.new(1, 1),
-		})
-		sweep.Parent = radial
-		local function pressed(input: InputObject): boolean
-			return input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch
-		end
-		button.InputEnded:Connect(function(input)
-			if pressed(input) then
-				TweenService:Create(
-					pop,
-					TweenInfo.new(
-						UiTheme.MOTION.pop,
-						Enum.EasingStyle.Back,
-						Enum.EasingDirection.Out
-					),
-					{ Scale = 1 }
-				):Play()
-			end
-		end)
-		button.Activated:Connect(function()
-			if layoutEdit then
-				return
-			end
-			fire()
-		end)
-		button.InputBegan:Connect(function(input)
-			if
-				input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch
-			then
-				if not layoutEdit then
-					TweenService:Create(
-						pop,
-						TweenInfo.new(
-							UiTheme.MOTION.pop,
-							Enum.EasingStyle.Back,
-							Enum.EasingDirection.Out
-						),
-						{ Scale = CombatFeel.PRESS }
-					):Play()
-				end
-			end
-			if not layoutEdit then
-				return
-			end
-			if
-				input.UserInputType ~= Enum.UserInputType.MouseButton1
-				and input.UserInputType ~= Enum.UserInputType.Touch
-			then
-				return
-			end
-			local start = Vector2.new(input.Position.X, input.Position.Y)
-			local originX = button.Position.X.Offset
-			local originY = button.Position.Y.Offset
-			local moveConn: RBXScriptConnection? = nil
-			local endConn: RBXScriptConnection? = nil
-			moveConn = UserInputService.InputChanged:Connect(function(changed)
-				if
-					changed.UserInputType ~= input.UserInputType
-					and changed.UserInputType ~= Enum.UserInputType.MouseMovement
-				then
-					return
-				end
-				button.Position = UDim2.fromOffset(
-					originX + changed.Position.X - start.X,
-					originY + changed.Position.Y - start.Y
-				)
-			end)
-			endConn = UserInputService.InputEnded:Connect(function(ended)
-				if ended.UserInputType ~= input.UserInputType then
-					return
-				end
-				if moveConn ~= nil then
-					moveConn:Disconnect()
-				end
-				if endConn ~= nil then
-					endConn:Disconnect()
-				end
-				callbacks.onLayout(name, button.Position.X.Offset, button.Position.Y.Offset)
-			end)
-		end)
-		table.insert(skillButtons, button)
-	end
-	skillButton("Attack", callbacks.onAttack)
-	skillButton("Dodge", callbacks.onDodge)
-	skillButton("Skill1", function()
-		callbacks.onSkill(1)
-	end)
-	skillButton("Skill2", function()
-		callbacks.onSkill(2)
-	end)
-	skillButton("Ult", callbacks.onUlt)
-	skillButton("Heavy", callbacks.onHeavy)
-	RunService.Heartbeat:Connect(function()
-		local now = os.clock()
-		for _, button in ipairs(skillButtons) do
-			local untilAt = button:GetAttribute("CooldownUntil")
-			local total = button:GetAttribute("CooldownTotal")
-			local cover = button:FindFirstChild("Radial")
-			if
-				cover ~= nil
-				and cover:IsA("Frame")
-				and type(untilAt) == "number"
-				and type(total) == "number"
-			then
-				local remaining = untilAt - now
-				local amount = CombatFeel.cooldownCover(total - remaining, total)
-				local sweep = cover:FindFirstChild("Sweep")
-				if sweep ~= nil and sweep:IsA("UIGradient") then
-					sweep.Rotation = amount * 360
-				end
-				cover.Visible = amount > 0.02
-			end
-		end
-	end)
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if processed or layoutEdit then
-			return
-		end
-		local keyName = input.KeyCode.Name
-		if keyName == Keybinds.COMBAT.attack then
-			callbacks.onAttack()
-		elseif keyName == Keybinds.COMBAT.skill1 then
-			callbacks.onSkill(1)
-		elseif keyName == Keybinds.COMBAT.skill2 then
-			callbacks.onSkill(2)
-		elseif keyName == Keybinds.COMBAT.ult then
-			callbacks.onUlt()
-		end
-	end)
 
 	local notices = ToastQueue.blank()
 	local toastHost = Instance.new("Frame")
@@ -772,18 +540,6 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		return vx, vy
 	end
 
-	local function jumpRect(): (number, number, number)
-		local touch = playerGui:FindFirstChild("TouchGui")
-		local jump = if touch ~= nil then touch:FindFirstChild("JumpButton", true) else nil
-		if jump ~= nil and jump:IsA("GuiObject") then
-			local origin = screen.AbsolutePosition
-			local pos = jump.AbsolutePosition
-			return pos.X - origin.X, pos.Y - origin.Y, math.max(UiTheme.TOUCH, jump.AbsoluteSize.X)
-		end
-		local vx, vy = view()
-		return vx - 88, vy - 88, 70
-	end
-
 	local function place()
 		local vx, vy = view()
 		local margin = UiTheme.safeMargin()
@@ -821,21 +577,6 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		prompt.Position = UDim2.fromOffset(note.x, note.y + toastHost.Size.Y.Offset + 8)
 		prompt.Size = UDim2.fromOffset(note.w, 36 + UiTheme.TOUCH + 8)
-		local jx, jy, jw = jumpRect()
-		local size = math.floor(UiTheme.TOUCH * buttonScale + 0.5)
-		local slots = HudLayout.skills(vx, vy, jx, jy, jw, size)
-		for index, button in ipairs(skillButtons) do
-			button.Size = UDim2.fromOffset(size, size)
-			local custom = savedLayout[button.Name]
-			if custom ~= nil then
-				button.Position = UDim2.fromOffset(custom[1], custom[2])
-			else
-				local slot = slots[index]
-				if slot ~= nil then
-					button.Position = UDim2.fromOffset(slot.x, slot.y)
-				end
-			end
-		end
 	end
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
@@ -941,30 +682,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				hidden = settings.hud.hidden == true
 			end
 			uiScale.Scale = scale
-			buttonScale = 1
-			layoutEdit = false
-			savedLayout = {}
 			local textScale = 1
-			if type(settings) == "table" and type(settings.controls) == "table" then
-				if type(settings.controls.mobileScale) == "number" then
-					buttonScale = settings.controls.mobileScale
-				end
-				layoutEdit = settings.controls.layoutEdit == true
-				if type(settings.controls.layout) == "table" then
-					local nextLayout: { [string]: { number } } = {}
-					for name, pair in pairs(settings.controls.layout) do
-						if
-							type(name) == "string"
-							and type(pair) == "table"
-							and type(pair[1]) == "number"
-							and type(pair[2]) == "number"
-						then
-							nextLayout[name] = { pair[1], pair[2] }
-						end
-					end
-					savedLayout = nextLayout
-				end
-			end
 			if type(settings) == "table" and type(settings.access) == "table" then
 				if type(settings.access.textScale) == "number" then
 					textScale = settings.access.textScale

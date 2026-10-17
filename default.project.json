@@ -98,6 +98,12 @@
         "UseSkill": {
           "$className": "RemoteFunction"
         },
+        "UseActionSlot": {
+          "$className": "RemoteFunction"
+        },
+        "SetActionBar": {
+          "$className": "RemoteFunction"
+        },
         "Onboard": {
           "$className": "RemoteFunction"
         },
