@@ -1096,13 +1096,8 @@ end
 
 menuHub = MenuHub.start(playerGui, {
 	invoke = invoke,
-	onRoll = function()
-		if rollReel ~= nil then
-			rollReel.request(false)
-		end
-		if menuHub ~= nil then
-			menuHub.handoffRoll()
-		end
+	getPoolId = function()
+		return selectedPoolId
 	end,
 	onBag = function()
 		closePanels("inventory")
