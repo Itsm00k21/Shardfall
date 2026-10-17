@@ -14,11 +14,17 @@
 	RarityConfig.LEGENDARY_PITY. RollMath.rollsSinceLegendary and the pool
 	pityLegendaryAt are a different counter, and the crack path does not
 	use them. totalRolls is not pity.
+
+	A close call is one flag from RollNear.near. Watched is a ladder name
+	or nothing. The pity triple is the post-roll legendary counter. The
+	flag sits beside the card. It does not add a reel slot, paint a second
+	streak, or change the odds. A paid roll uses the same flag as a free roll.
 ]]
 
 local Rarities = require("./Rarities")
 local RarityConfig = require("./RarityConfig")
 local RollLoop = require("./RollLoop")
+local RollNear = require("./RollNear")
 local Settings = require("./Settings")
 
 local UiRouter = {}
@@ -280,6 +286,76 @@ function UiRouter.legendaryPity(profile: any, result: any): (any, number)
 		return profile.sinceLegendary, goal
 	end
 	return 0, goal
+end
+
+-- A watched stop is a ladder name. "Off" and any other name are not watched.
+function UiRouter.watchedRarity(stopAt: any): string?
+	if type(stopAt) ~= "string" then
+		return nil
+	end
+	if Rarities.INDEX[stopAt] == nil then
+		return nil
+	end
+	return stopAt
+end
+
+export type CloseCall = {
+	nearMiss: boolean,
+	rarity: string?,
+}
+
+-- This roll was a real close call. The words do not name the next rarity.
+UiRouter.CLOSE_BEAT = "Close call"
+
+local function noClose(): CloseCall
+	return {
+		nearMiss = false,
+		rarity = nil,
+	}
+end
+
+local function wholeCounter(value: any): number?
+	if type(value) ~= "number" then
+		return nil
+	end
+	if value ~= value or value == math.huge or value == -math.huge then
+		return nil
+	end
+	if value < 0 or value ~= math.floor(value) then
+		return nil
+	end
+	return value
+end
+
+-- One close-call flag for the shard Roll screen. RollNear.near judges the
+-- land and does not move a streak. paid is accepted and ignored. The counter
+-- is the post-roll legendary pity, and the pity rarity is Legendary. An
+-- unusable counter is left out so it cannot invent a pity beat or refuse a
+-- real watched step. Both rules true is still this one flag.
+function UiRouter.closeCall(note: any): CloseCall
+	if type(note) ~= "table" then
+		return noClose()
+	end
+	local counter, goal = UiRouter.legendaryPity(note.profile, note.result)
+	local since = wholeCounter(counter)
+	local pityGoal = wholeCounter(goal)
+	local passPity = since ~= nil and pityGoal ~= nil and pityGoal >= 1
+	local judged = RollNear.near({
+		rarity = note.rarity,
+		landed = note.landed,
+		watched = UiRouter.watchedRarity(note.stopAt),
+		paid = note.paid,
+		counter = if passPity then since else nil,
+		goal = if passPity then pityGoal else nil,
+		pity = if passPity then "Legendary" else nil,
+	})
+	if judged.ok ~= true then
+		return noClose()
+	end
+	return {
+		nearMiss = judged.nearMiss == true,
+		rarity = judged.rarity,
+	}
 end
 
 -- Natural odds until the live guarantee is actually the next roll.

@@ -357,9 +357,235 @@ describe("UiRouter", function()
 		expect(string.find(hub, "RollHype.pity", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "RollHype.tempo", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "noted.ok", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "hype.streak", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "near-miss", 1, true)).toBeNil()
 		expect(string.find(hub, "Near miss", 1, true)).toBeNil()
+		expect(string.find(hub, "Almost", 1, true)).toBeNil()
+		expect(string.find(hub, "So close", 1, true)).toBeNil()
 		expect(string.find(hub, "Robux", 1, true)).toBeNil()
 		expect(string.find(hub, "BuyPrism", 1, true)).toBeNil()
+		local _, freshCount = string.gsub(hub, "RollHype%.fresh", "")
+		expect(freshCount).toEqual(1)
+	end)
+
+	it("flags one honest close call and leaves the reel on the rolled item", function()
+		expect(UiRouter.watchedRarity("Off")).toBeNil()
+		expect(UiRouter.watchedRarity("off")).toBeNil()
+		expect(UiRouter.watchedRarity("Godly")).toBeNil()
+		expect(UiRouter.watchedRarity("")).toBeNil()
+		expect(UiRouter.watchedRarity(nil)).toBeNil()
+		for _, name in ipairs(Rarities.ORDER) do
+			expect(UiRouter.watchedRarity(name)).toEqual(name)
+		end
+		expect(UiRouter.CLOSE_BEAT).toEqual("Close call")
+		for _, name in ipairs(Rarities.ORDER) do
+			expect(string.find(UiRouter.CLOSE_BEAT, name, 1, true)).toBeNil()
+		end
+		expect(string.find(UiRouter.CLOSE_BEAT, "next", 1, true)).toBeNil()
+		expect(string.find(UiRouter.CLOSE_BEAT, "almost", 1, true)).toBeNil()
+
+		local quiet = UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Epic",
+			landed = true,
+			paid = false,
+			result = {
+				pity = {
+					sinceLegendary = 0,
+					sinceEpic = 99,
+					totalRolls = 400,
+					rollsSinceLegendary = 49,
+					pityLegendaryAt = 50,
+				},
+			},
+		})
+		expect(quiet.nearMiss).toEqual(false)
+		expect(quiet.rarity).toEqual("Epic")
+		expect(quiet.watchedStep).toBeNil()
+		expect(quiet.pityShort).toBeNil()
+
+		local watched = UiRouter.closeCall({
+			stopAt = "Rare",
+			rarity = "Uncommon",
+			landed = true,
+			paid = true,
+			result = { pity = { sinceLegendary = 0, sinceEpic = 99 } },
+		})
+		local watchedFree = UiRouter.closeCall({
+			stopAt = "Rare",
+			rarity = "Uncommon",
+			landed = true,
+			paid = false,
+			result = { pity = { sinceLegendary = 0, sinceEpic = 99 } },
+		})
+		expect(watched.nearMiss).toEqual(true)
+		expect(watched.rarity).toEqual("Uncommon")
+		expect(watchedFree.nearMiss).toEqual(watched.nearMiss)
+		expect(watchedFree.rarity).toEqual(watched.rarity)
+		expect(UiRouter.closeCall({
+			stopAt = "Nope",
+			rarity = "Uncommon",
+			landed = true,
+			result = { pity = { sinceLegendary = 0 } },
+		}).nearMiss).toEqual(false)
+
+		local pity = UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Epic",
+			landed = true,
+			paid = true,
+			profile = { sinceLegendary = 0, sinceEpic = 99, totalRolls = 900 },
+			result = {
+				pity = {
+					sinceLegendary = 999,
+					sinceEpic = 99,
+					totalRolls = 5000,
+					rollsSinceLegendary = 49,
+					pityLegendaryAt = 50,
+				},
+			},
+		})
+		local pityFree = UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Epic",
+			landed = true,
+			paid = false,
+			result = { pity = { sinceLegendary = 999 } },
+		})
+		expect(pity.nearMiss).toEqual(true)
+		expect(pity.rarity).toEqual("Epic")
+		expect(pityFree.nearMiss).toEqual(true)
+		expect(pityFree.rarity).toEqual("Epic")
+		expect(UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Epic",
+			landed = true,
+			result = { pity = { sinceLegendary = 998 } },
+		}).nearMiss).toEqual(false)
+		expect(UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Legendary",
+			landed = true,
+			result = { pity = { sinceLegendary = 0 } },
+		}).nearMiss).toEqual(false)
+		local mythic = UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Mythic",
+			landed = true,
+			result = { pity = { sinceLegendary = 0 } },
+		})
+		expect(mythic.nearMiss).toEqual(false)
+		expect(mythic.rarity).toEqual("Mythic")
+
+		local both = UiRouter.closeCall({
+			stopAt = "Legendary",
+			rarity = "Epic",
+			landed = true,
+			paid = true,
+			result = { pity = { sinceLegendary = 999, sinceEpic = 99 } },
+		})
+		local bothFree = UiRouter.closeCall({
+			stopAt = "Legendary",
+			rarity = "Epic",
+			landed = true,
+			paid = nil,
+			result = { pity = { sinceLegendary = 999, sinceEpic = 99 } },
+		})
+		expect(both.nearMiss).toEqual(true)
+		expect(both.rarity).toEqual("Epic")
+		expect(both.watchedStep).toBeNil()
+		expect(both.pityShort).toBeNil()
+		expect(bothFree.nearMiss).toEqual(both.nearMiss)
+
+		local missed = UiRouter.closeCall({
+			stopAt = "Legendary",
+			rarity = "Epic",
+			landed = false,
+			paid = true,
+			result = { pity = { sinceLegendary = 999 } },
+		})
+		expect(missed.nearMiss).toEqual(false)
+		expect(missed.rarity).toBeNil()
+
+		local fromProfile = UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Rare",
+			landed = true,
+			profile = { sinceLegendary = 999, totalRolls = 40 },
+			result = { pity = { sinceEpic = 99, pityLegendaryAt = 50 } },
+		})
+		expect(fromProfile.nearMiss).toEqual(true)
+		expect(fromProfile.rarity).toEqual("Rare")
+
+		local result = {
+			pity = {
+				sinceLegendary = 999,
+				sinceEpic = 99,
+				pityLegendaryAt = 50,
+			},
+		}
+		table.freeze(result.pity)
+		table.freeze(result)
+		local frozen = UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Epic",
+			landed = true,
+			paid = true,
+			result = result,
+		})
+		expect(frozen.nearMiss).toEqual(true)
+		expect(frozen.rarity).toEqual("Epic")
+		expect(result.pity.sinceLegendary).toEqual(999)
+
+		expect(UiRouter.closeCall(nil).nearMiss).toEqual(false)
+		expect(UiRouter.closeCall({
+			stopAt = "Rare",
+			rarity = "Uncommon",
+			landed = true,
+			result = { pity = { sinceLegendary = 0 / 0 } },
+		}).nearMiss).toEqual(true)
+		expect(UiRouter.closeCall({
+			stopAt = "Off",
+			rarity = "Epic",
+			landed = true,
+			result = { pity = { sinceLegendary = "999" } },
+		}).nearMiss).toEqual(false)
+		expect(UiRouter.closeCall({
+			stopAt = "Legendary",
+			rarity = "Godly",
+			landed = true,
+			result = { pity = { sinceLegendary = 999 } },
+		}).nearMiss).toEqual(false)
+
+		local slots = UiRouter.honestSlots({
+			{ name = "Crown", rarity = "Legendary" },
+			{ name = "Fern", rarity = "Epic" },
+		}, "Fern", "Epic")
+		expect(slots[#slots]).toEqual({ name = "Fern", rarity = "Epic" })
+		expect(#slots).toEqual(2)
+
+		local router = fs.readFile("src/ReplicatedStorage/Shared/UiRouter.luau")
+		local _, nearCount = string.gsub(router, "RollNear%.near%(", "")
+		expect(nearCount).toEqual(1)
+		expect(string.find(router, "RollNear.note", 1, true)).toBeNil()
+		expect(string.find(router, "RollNear.streak", 1, true)).toBeNil()
+		expect(string.find(router, "sinceEpic", 1, true)).toBeNil()
+
+		local hub =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		expect(string.find(hub, "UiRouter.closeCall", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "UiRouter.CLOSE_BEAT", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "CloseCall", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "RollNear", 1, true)).toBeNil()
+		local _, closeUses = string.gsub(hub, "closeFor%(", "")
+		expect(closeUses).toEqual(3)
+		local chainAt = string.find(hub, "local function stopRollChain", 1, true)
+		local chainEnd = string.find(hub, "local revealCard", chainAt or 1, true)
+		local chain = string.sub(hub, chainAt or 1, (chainEnd or 2) - 1)
+		expect(string.find(chain, "hideCloseBeat()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(chain, "hype", 1, true)).toBeNil()
+		local forge = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/Ui.luau")
+		expect(string.find(forge, "RollNear", 1, true)).toBeNil()
+		expect(string.find(forge, "closeCall", 1, true)).toBeNil()
 	end)
 end)
