@@ -38,6 +38,15 @@ export type Place = {
 	dungeonId: string?,
 	color: { number }?,
 	bearing: number?,
+	-- Gate dressing. `sealed` is the painted lock. `open` stays the live prompt.
+	level: number?,
+	subline: string?,
+	body: { number }?,
+	edge: { number }?,
+	glow: { number }?,
+	dress: string?,
+	sealed: boolean?,
+	height: number?,
 }
 
 Haven.CRYSTAL = {
@@ -63,6 +72,10 @@ Haven.COURT_RIM = 96
 Haven.VENDOR_RADIUS = 76
 -- Prompt reach. The chord is 16.3, so 18 would light two mouths.
 Haven.GATE_REACH = 8
+-- The player's right pier sits toward the next arch. 8 would swallow it.
+Haven.PIER_REACH = 4
+-- Gate names have to read from the pad. Zone signs stay at 70.
+Haven.NAMEPLATE_DISTANCE = 96
 
 Haven.ARMORY = {
 	id = "armory",
@@ -143,7 +156,8 @@ Haven.DISTRICTS = {
 } :: { Place }
 
 -- Left to right from the pad: Rootvault, then each later gate to the right.
--- Rootvault and Heartwood are live. The other four stay sealed.
+-- Rootvault and Heartwood are live prompts. Heartwood is painted shut until 15.
+-- The other four stay sealed. `color` is the mouth accent the M1 light already uses.
 Haven.PORTALS = {
 	{
 		id = "rootvault",
@@ -152,8 +166,15 @@ Haven.PORTALS = {
 		z = 108,
 		bearing = 0,
 		open = true,
+		sealed = false,
 		dungeonId = "rootvault",
 		color = { 64, 196, 96 },
+		body = { 86, 62, 40 },
+		edge = { 64, 196, 96 },
+		dress = "roots",
+		level = 1,
+		height = 18,
+		subline = "Lv 1 · Solo",
 	},
 	{
 		id = "heartwood",
@@ -162,8 +183,16 @@ Haven.PORTALS = {
 		z = 106.3,
 		bearing = 12,
 		open = true,
+		sealed = true,
 		dungeonId = "heartwood",
 		color = { 214, 140, 64 },
+		body = { 92, 140, 72 },
+		edge = { 214, 140, 64 },
+		dress = "bark",
+		level = 15,
+		height = 22,
+		subline = "Lv 15 · 4–8",
+		message = "Opens at level 15.",
 	},
 	{
 		id = "tidecrypt",
@@ -172,8 +201,15 @@ Haven.PORTALS = {
 		z = 101.3,
 		bearing = 24,
 		open = false,
+		sealed = true,
 		dungeonId = "tidecrypt",
 		color = { 36, 96, 140 },
+		body = { 210, 120, 110 },
+		edge = { 64, 168, 162 },
+		dress = "coral",
+		level = 20,
+		height = 18,
+		subline = "Lv 20 · Sealed",
 		message = "Sunken Reach is sealed.",
 	},
 	{
@@ -183,7 +219,14 @@ Haven.PORTALS = {
 		z = 93.1,
 		bearing = 36,
 		open = false,
+		sealed = true,
 		color = { 255, 120, 40 },
+		body = { 28, 26, 28 },
+		edge = { 255, 150, 40 },
+		dress = "basalt",
+		level = 30,
+		height = 18,
+		subline = "Lv 30 · Sealed",
 		message = "Emberforge is sealed.",
 	},
 	{
@@ -193,7 +236,14 @@ Haven.PORTALS = {
 		z = 82.2,
 		bearing = 48,
 		open = false,
+		sealed = true,
 		color = { 186, 228, 255 },
+		body = { 150, 176, 190 },
+		edge = { 186, 228, 255 },
+		dress = "ice",
+		level = 40,
+		height = 18,
+		subline = "Lv 40 · Sealed",
 		message = "Frostveil is sealed.",
 	},
 	{
@@ -203,7 +253,15 @@ Haven.PORTALS = {
 		z = 69,
 		bearing = 60,
 		open = false,
+		sealed = true,
 		color = { 120, 60, 180 },
+		body = { 42, 40, 48 },
+		edge = { 150, 70, 220 },
+		glow = { 18, 16, 24 },
+		dress = "obsidian",
+		level = 50,
+		height = 18,
+		subline = "Lv 50 · Sealed",
 		message = "Void Rift is sealed.",
 	},
 } :: { Place }
@@ -244,6 +302,11 @@ function Haven.portal(id: string): Place?
 		end
 	end
 	return nil
+end
+
+-- The inlay lights only for a gate that is not painted shut.
+function Haven.gateLit(portal: Place): boolean
+	return portal.sealed ~= true
 end
 
 -- Point on the court rim (a circle around spawn) toward a district.
