@@ -28,6 +28,7 @@ local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
+local CrackCard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackCard"))
 local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
 local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
@@ -994,7 +995,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.shardStone = Instance.new("Frame")
 	hubState.shardStone.Name = "Shard"
 	hubState.shardStone.AnchorPoint = Vector2.new(0.5, 0.5)
-	hubState.shardStone.Position = UDim2.fromScale(0.5, 0.62)
+	hubState.stoneY = 0.62
+	hubState.cardRoom = 112
+	hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
 	hubState.shardStone.Size = UDim2.fromOffset(28, 36)
 	hubState.shardStone.BackgroundColor3 = Color3.fromRGB(198, 206, 214)
 	hubState.shardStone.BackgroundTransparency = 0
@@ -1015,7 +1018,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.crackLine.Parent = hubState.shardStone
 	hubState.stoneRest = Color3.fromRGB(198, 206, 214)
 	hubFn.restShard = function()
-		hubState.shardStone.Position = UDim2.fromScale(0.5, 0.62)
+		hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
 		hubState.shardStone.BackgroundColor3 = hubState.stoneRest
 		hubState.crackLine.Size = UDim2.fromOffset(2, 0)
 		hubState.reelHost.BackgroundColor3 = rgb("header")
@@ -1176,14 +1179,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local inner = HudLayout.hubBody(box.w, box.h)
 			height = inner.h
 		end
-		local chrome = UiRouter.rollChrome(height)
-		local stage = math.max(72, chrome.reel)
-		hubState.reelHost.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD + 32)
+		local kindH = UiTheme.TOUCH
+		local kindRow = hubState.roll:FindFirstChild("ShardKind")
+		if kindRow ~= nil and kindRow:IsA("GuiObject") and kindRow.Size.Y.Offset >= UiTheme.TOUCH then
+			kindH = kindRow.Size.Y.Offset
+		end
+		local layout = CrackCard.layout(height, kindH)
+		local stage = layout.reel.h
+		hubState.reelHost.Position = UDim2.fromOffset(UiTheme.PAD, layout.reel.y)
 		hubState.reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, stage)
-		local compact = chrome.reel < 52
-		hubState.reelStreak.Visible = not compact
-		local windowTop = if compact then 4 else 22
-		local windowTrim = if compact then 8 else 28
+		hubState.reelStreak.Visible = not layout.compact
+		local windowTop = if layout.compact then 4 else 22
+		local windowTrim = if layout.compact then 8 else 28
 		local function placeWindow(label: TextLabel)
 			label.Position = UDim2.new(label.Position.X.Scale, 4, 0, windowTop)
 			label.Size = UDim2.new(label.Size.X.Scale, -8, 1, -windowTrim)
@@ -1191,25 +1198,31 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		placeWindow(hubState.reelLeft)
 		placeWindow(hubState.reelCenter)
 		placeWindow(hubState.reelRight)
-		hubState.rollButton.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, chrome.button)
-		local buttonText = if chrome.button < 56 then 20 else 28
+		hubState.stoneY = layout.stone.y
+		hubState.shardStone.Size = UDim2.fromOffset(layout.stone.w, layout.stone.h)
+		hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
+		hubState.rollButton.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, layout.button)
+		local buttonText = if layout.button < 56 then 20 else 28
 		hubState.rollButton.TextSize = buttonText
 		hubState.rollButton:SetAttribute("BaseText", buttonText)
-		local listTop = stage + UiTheme.PAD + 32
-		hubState.roll.Position = UDim2.fromOffset(0, listTop)
-		hubState.roll.Size = UDim2.new(1, 0, 1, -(listTop + chrome.button + UiTheme.PAD))
-		local cardH = math.max(96, chrome.card)
-		hubState.revealCard.Size = UDim2.new(1, -24, 0, cardH)
-		hubState.revealCard.Position = UDim2.new(0.5, 0, 1, -(chrome.button + UiTheme.PAD + 4))
-		local aboveCard = chrome.button + UiTheme.PAD + 4 + cardH + 6
+		hubState.roll.Position = UDim2.fromOffset(0, layout.listTop)
+		hubState.roll.Size = UDim2.new(1, 0, 1, -(layout.listTop + layout.button + UiTheme.PAD))
+		hubState.cardRoom = layout.card.h
+		hubState.revealCard.Size = UDim2.new(1, -24, 0, layout.card.h)
+		hubState.revealCard.Position = UDim2.new(0.5, 0, 0, layout.card.y + layout.card.h)
+		hubState.revealCard.AnchorPoint = Vector2.new(0.5, 1)
+		hubState.revealTitle.Position = UDim2.fromOffset(12, layout.name.y)
+		hubState.revealTitle.Size = UDim2.new(1, -120, 0, layout.name.h)
+		hubState.revealRarity.Visible = layout.rarity.visible
+		hubState.revealRarity.Position = UDim2.fromOffset(12, layout.rarity.y)
+		hubState.revealRarity.Size = UDim2.new(1, -120, 0, layout.rarity.h)
+		local aboveCard = height - layout.card.y + 6
 		hubState.closeBeat.Position = UDim2.new(1, -12, 1, -aboveCard)
-		if chrome.card < 88 then
-			hubState.revealFly.Visible = false
-			hubState.revealEquip.Size = UDim2.fromOffset(88, 36)
-		else
-			hubState.revealFly.Visible = true
-			hubState.revealEquip.Size = UDim2.fromOffset(120, UiTheme.TOUCH)
+		hubState.revealFly.Visible = layout.fly
+		if not layout.showEquip then
+			hubState.revealEquip.Visible = false
 		end
+		hubState.revealEquip.Size = UDim2.fromOffset(if layout.card.h >= 88 then 120 else 88, layout.equipH)
 	end
 	hubFn.fitRoll()
 	hubFn.paintReelIdle("Roll")
@@ -2932,6 +2945,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		hubState.slideHistory = false
+		hubFn.fitRoll()
 	end
 
 	hubState.activeItem = nil
@@ -3033,7 +3047,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local junk =
 			RollLoop.resolve(record.rarity, hubState.draft.rolls.junkBelow, hubState.draft.rolls.autoJunk, upgrade)
-		hubState.revealEquip.Visible = junk == "equip"
+		hubState.revealEquip.Visible = junk == "equip" and hubState.cardRoom >= 72
 		if type(item.uid) == "string" then
 			hubState.revealEquip:SetAttribute("Uid", item.uid)
 		end
@@ -3490,7 +3504,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if shake > 0 then
 				offset = math.sin(os.clock() * 46) * (2 + shake * 7)
 			end
-			hubState.shardStone.Position = UDim2.new(0.5, offset, 0.62, 0)
+			hubState.shardStone.Position = UDim2.new(0.5, offset, hubState.stoneY, 0)
 			hubState.crackLine.Size = UDim2.new(0, 2 + math.floor(sample.crack * 8), sample.crack * 0.76, 0)
 			if sample.burst > 0 then
 				hubState.shardStone.BackgroundColor3 = color
