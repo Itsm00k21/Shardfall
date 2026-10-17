@@ -34,9 +34,9 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-018 | L | content | Shard Pass season 1: 50 tiers, free and premium tracks, cosmetics and convenience only, a season theme and name | `docs/content/shard_pass_s1.md` | done | https://github.com/Itsm00k21/Shardfall/pull/105 |
 | G-019 | M | content | Shard Pass season 2 theme and 50-tier outline (cosmetics and convenience only) | `docs/content/shard_pass_s2.md` | done | https://github.com/Itsm00k21/Shardfall/pull/101 |
 | G-020 | S | content | 60 loading-screen tips (controls, rolls, pity, raids, pets, crafting), each under 90 characters | `docs/content/loading_tips.md` | done | https://github.com/Itsm00k21/Shardfall/pull/101 |
-| G-021 | M | content | Codex lore entries for every Mythic item and pet named so far in `docs/content/` | `docs/content/lore_mythics.md` | todo | — |
-| G-022 | M | content | 40 daily and weekly quest templates. Read `docs/design/shardfall_loops.md` and `Loops.luau`. | `docs/content/dailies.md` | todo | — |
-| G-023 | M | content | 30 cosmetics (auras, trails, weapon dyes, name plates) with rarity and visual note | `docs/content/cosmetics.md` | todo | — |
+| G-021 | M | content | Codex lore entries for every Mythic item and pet named so far in `docs/content/` | `docs/content/lore_mythics.md` | done | @@PR@@ |
+| G-022 | M | content | 40 daily and weekly quest templates. Read `docs/design/shardfall_loops.md` and `Loops.luau`. | `docs/content/dailies.md` | done | @@PR@@ |
+| G-023 | M | content | 30 cosmetics (auras, trails, weapon dyes, name plates) with rarity and visual note | `docs/content/cosmetics.md` | done | @@PR@@ |
 | G-024 | S | content | 15 mount concepts with rarity and visual note (cosmetic speed only, no combat power) | `docs/content/mounts.md` | todo | — |
 | G-025 | S | content | Flavor names and descriptions for every material in `Materials.luau`, plus 10 suggested new ones | `docs/content/materials.md` | todo | — |
 | G-026 | M | content | UI microcopy pass: button labels, empty states, error and confirm text for Bag, Pets, Roll, Raids, Market, Pass and Settings. Read `MenuHub.luau`. | `docs/content/ui_copy.md` | todo | — |
