@@ -48,7 +48,9 @@ local RULES: { [string]: Rule } = {
 	Debug = { capacity = 6, perSecond = 2 },
 	-- Attacks are limited by weapon cooldown too. This only stops a flood.
 	Attack = { capacity = 8, perSecond = 6 },
-	Dodge = { capacity = 6, perSecond = 3 },
+	-- Two charges can be spent together. The bucket stops a client from
+	-- probing the perfect-dodge window faster than that.
+	Dodge = { capacity = 3, perSecond = 2 },
 	SetClass = { capacity = 4, perSecond = 1 },
 	PickTalent = { capacity = 4, perSecond = 1 },
 	UseSkill = { capacity = 6, perSecond = 3 },

@@ -109,13 +109,18 @@ begin("CombatHooks", function()
 		end,
 		onEnemyHit = function(player, enemyId, amount, crit, heavy)
 			local killed = DungeonService.damageEnemy(player, enemyId, amount, crit, heavy == true)
-			ClassService.grantXp(player, if killed then 24 else 4)
+			if not DungeonService.isPractice(player) then
+				ClassService.grantXp(player, if killed then 24 else 4)
+			end
 		end,
 		onPlayerDown = function(player)
 			DungeonService.onPlayerDown(player)
 		end,
 		inRun = function(player)
 			return DungeonService.isInRun(player)
+		end,
+		paysProgress = function(player)
+			return not DungeonService.isPractice(player)
 		end,
 	})
 end)

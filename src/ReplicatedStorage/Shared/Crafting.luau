@@ -18,6 +18,7 @@ local Recipes = require("./Recipes")
 local RollMath = require("./RollMath")
 local Schema = require("./Schema")
 local Stats = require("./Stats")
+local Trading = require("./Trading")
 local Traits = require("./Traits")
 
 local Crafting = {}
@@ -357,6 +358,10 @@ function Crafting.salvage(
 	local item, bag = Schema.findItem(profile, targetUid)
 	if item == nil or bag == nil then
 		return nil, "You do not have that item."
+	end
+	local held = Trading.consumeBlock(targetUid)
+	if held ~= nil then
+		return nil, held
 	end
 	local blocked = InventoryView.salvageBlock(profile, item)
 	if blocked ~= nil then

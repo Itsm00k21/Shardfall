@@ -30,7 +30,6 @@ local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
-local Drops = require(ReplicatedStorage.Shared.Drops)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
@@ -38,6 +37,7 @@ local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
 local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
 local Loops = require(ReplicatedStorage.Shared.Loops)
+local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local Progression = require(ReplicatedStorage.Shared.Progression)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local LoopService = require(script.Parent.LoopService)
@@ -918,7 +918,7 @@ local function grant(
 	if rolled == nil then
 		return false
 	end
-	if run.practice == true then
+	if not PracticeLoot.pays(run.practice == true) then
 		fx(player, { kind = "hint", text = "Practice Grove. No loot." })
 		return true
 	end
@@ -1108,7 +1108,9 @@ end
 
 local function beginAdvance(player: Player, run: Run, text: string)
 	run.cleared = true
-	LoopService.progress(player, "rooms", 1)
+	if PracticeLoot.pays(run.practice == true) then
+		LoopService.progress(player, "rooms", 1)
+	end
 	if run.dungeon.id == Dungeons.HEARTWOOD_ID and run.roomIndex < #run.dungeon.rooms then
 		run.advanceAt = os.clock() + 2
 		run.advanceShown = 2
@@ -1282,36 +1284,30 @@ function DungeonService.damageEnemy(
 	end
 	if enemy.hp <= 0 then
 		-- Manual swings and Auto-Farm both call damageEnemy, so both grant drops.
+		-- Practice returns before any of that: no materials, chests, marks, or XP.
 		local landed = {}
 		local chestBits = {}
-		local saved, saveErr = DataService.mutate(player, function(data)
-			landed = Drops.apply(data.materials, enemy.kind, RollMath.defaultRng())
-			local drop = ChestConfig.enemyDrop(data, enemy.kind, RollMath.defaultRng())
-			if drop ~= nil then
-				table.insert(chestBits, drop.label)
-			end
-			if enemy.boss and run.dungeon.id == Dungeons.HEARTWOOD_ID and run.practice ~= true then
+		local saved = true
+		local saveErr: string? = nil
+		if PracticeLoot.pays(run.practice == true) then
+			saved, saveErr = DataService.mutate(player, function(data)
 				local room = run.dungeon.rooms[run.roomIndex]
 				local bossId = if room ~= nil then room.id else "wing"
-				local paid, dropped =
-					Raids.applyClear(data, bossId, run.difficulty, os.time(), math.random())
-				table.insert(chestBits, string.format("%d Raid Marks", paid))
-				if dropped then
-					table.insert(chestBits, "raid gear")
-				end
-			end
-			if enemy.boss then
-				for _, row in ipairs(ChestConfig.bossKill(data, os.time())) do
-					table.insert(chestBits, row.label)
-				end
-				local floorTier = Rootvault.difficulty(run.difficulty).chest
-				if floorTier == "Uncommon" or floorTier == "Rare" then
-					data.chests[floorTier] = (data.chests[floorTier] or 0) + 1
-					table.insert(chestBits, floorTier .. " chest")
-				end
-			end
-			return nil
-		end)
+				landed, chestBits = PracticeLoot.applyKill(data, {
+					practice = false,
+					enemyKind = enemy.kind,
+					boss = enemy.boss == true,
+					dungeonId = run.dungeon.id,
+					difficulty = run.difficulty,
+					roomId = bossId,
+					floorChest = Rootvault.difficulty(run.difficulty).chest,
+					now = os.time(),
+					rng = RollMath.defaultRng(),
+					roll = math.random(),
+				})
+				return nil
+			end)
+		end
 		if saved then
 			local bits = {}
 			for _, materialId in ipairs(Materials.ORDER) do
@@ -1361,10 +1357,12 @@ function DungeonService.damageEnemy(
 			elseif run.roomIndex >= #run.dungeon.rooms then
 				finish(player, true)
 			else
-				DataService.mutate(player, function(data)
-					ChestConfig.grantSource(data, "room", os.time())
-					return nil
-				end)
+				if PracticeLoot.pays(run.practice == true) then
+					DataService.mutate(player, function(data)
+						PracticeLoot.grantRoom(data, false, os.time())
+						return nil
+					end)
+				end
 				beginAdvance(
 					player,
 					run,
@@ -1405,6 +1403,11 @@ end
 function DungeonService.isInRun(player: Player): boolean
 	local run = runs[player]
 	return run ~= nil and not run.resolving
+end
+
+function DungeonService.isPractice(player: Player): boolean
+	local run = runs[player]
+	return run ~= nil and run.practice == true
 end
 
 local function moveEnemy(
@@ -1522,7 +1525,6 @@ local function tickEnemy(
 			return
 		end
 		local position = enemy.part.Position
-		local endsAt = enemy.telegraphUntil
 		enemy.telegraphUntil = 0
 		enemy.nextAttack = now + CombatMath.cooldown(enemy.attackSpeed)
 		if enemy.style == "projectile" then
@@ -1540,8 +1542,7 @@ local function tickEnemy(
 				enemy.damage,
 				hrp.Position.X,
 				hrp.Position.Y,
-				hrp.Position.Z,
-				endsAt
+				hrp.Position.Z
 			)
 			if enemy.boss and enemy.phase == 1 and runs[player] ~= nil then
 				enemy.weakUntil = os.clock() + enemy.weakSeconds
@@ -1569,12 +1570,12 @@ local function tickEnemy(
 	local cue = CombatFeel.telegraph(colorName, "normal")
 	enemy.telegraphColor = cue.color
 	enemy.telegraphUntil = now + cue.seconds
+	CombatService.noteTelegraph(player, enemy.telegraphUntil)
 	fx(player, {
 		kind = "telegraph",
 		color = cue.color,
 		verb = cue.verb,
 		seconds = cue.seconds,
-		endsAt = enemy.telegraphUntil,
 		x = hrp.Position.X,
 		y = hrp.Position.Y,
 		z = hrp.Position.Z,
@@ -1800,14 +1801,15 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		return reject("Pick Story or Normal.")
 	end
 	local diff = Rootvault.difficulty(difficulty)
-	if raidMode ~= nil and practice ~= true then
-		if (profile.level or 1) < raidMode.level then
-			return reject(string.format("Level %d opens The Heartwood.", raidMode.level))
+	if raidMode ~= nil then
+		local allowed, why = PracticeLoot.levelGate(profile.level)
+		if not allowed then
+			return reject(why or string.format("Level %d opens The Heartwood.", raidMode.level))
 		end
 		if raidMode.id == "normal" and profile.raidStory ~= true then
 			return reject("Clear Story once before Normal.")
 		end
-	elseif raidMode == nil and (profile.level or 1) < diff.level then
+	elseif (profile.level or 1) < diff.level then
 		return reject(string.format("Level %d opens %s.", diff.level, diff.id))
 	end
 	if activeFolder == nil then
@@ -1878,27 +1880,15 @@ function DungeonService.tuneRaid(player: Player, options: any)
 	if type(options.echo) == "number" then
 		run.echo = options.echo
 	end
-	local wing = if type(options.wing) == "number" then math.floor(options.wing) else 1
-	if wing < 1 then
-		wing = 1
-	end
-	if wing > #run.dungeon.rooms then
-		wing = #run.dungeon.rooms
-	end
+	local wing = PracticeLoot.wing(options.wing, #run.dungeon.rooms)
 	run.roomIndex = wing
 	run.placeIndex = wing
 	run.advanceAt = nil
 	run.offer = nil
 	teleport(player, roomSpawn(run.placeIndex))
 	spawnRoom(player, run)
-	local phase = if type(options.phase) == "number" then math.floor(options.phase) else 1
-	for _, enemy in pairs(run.enemies) do
-		if enemy.boss and phase >= 2 then
-			local ratio = if phase >= 3 then Rootvault.PHASE3 else Rootvault.PHASE2
-			enemy.hp = math.max(1, math.floor(enemy.maxHp * ratio))
-			enemy.phase = phase
-		end
-	end
+	-- Phase and hit points stay on the spawned boss. A client value is ignored.
+	PracticeLoot.openedPhase(options.phase, options.hp)
 	local room = run.dungeon.rooms[wing]
 	pushRun(player, if room ~= nil then room.name else "Heartwood")
 	return { ok = true, run = publicRun(player) }
@@ -2059,11 +2049,13 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 	end
 	run.offer = nil
 	if picked.id == "treasure" then
-		DataService.mutate(player, function(data)
-			ChestConfig.grantSource(data, "room", os.time())
-			data.gold += 25
-			return nil
-		end)
+		if PracticeLoot.pays(run.practice == true) then
+			DataService.mutate(player, function(data)
+				PracticeLoot.grantRoom(data, false, os.time())
+				data.gold += 25
+				return nil
+			end)
+		end
 	elseif picked.id == "elite" then
 		run.eliteNext = true
 	elseif picked.id == "spring" then
@@ -2072,14 +2064,16 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 	elseif picked.id == "shrine" then
 		run.shrine = Rootvault.shrine(math.random(1, 3))
 	elseif picked.id == "shop" then
-		DataService.mutate(player, function(data)
-			if (data.shardKeys or 0) < 40 then
+		if PracticeLoot.pays(run.practice == true) then
+			DataService.mutate(player, function(data)
+				if (data.shardKeys or 0) < 40 then
+					return nil
+				end
+				data.shardKeys -= 40
+				data.chests.Uncommon = (data.chests.Uncommon or 0) + 1
 				return nil
-			end
-			data.shardKeys -= 40
-			data.chests.Uncommon = (data.chests.Uncommon or 0) + 1
-			return nil
-		end)
+			end)
+		end
 	end
 	pushRun(player, picked.note)
 	OnboardingService.note(player, "door")

@@ -10,6 +10,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local DataService = require(script.Parent.DataService)
 
@@ -185,15 +186,18 @@ function RaidService.join(player: Player, listingId: any)
 end
 
 function RaidService.practice(player: Player, wing: any, phase: any)
-	local room = wing
-	if type(room) ~= "number" then
-		room = 1
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
 	end
-	local step = phase
-	if type(step) ~= "number" then
-		step = 1
+	local allowed, why = PracticeLoot.levelGate(profile.level)
+	if not allowed then
+		return reject(why or "Level 15 opens The Heartwood.")
 	end
-	local started = launch(player, "story", false, math.floor(room), math.floor(step), true)
+	local room = PracticeLoot.wing(wing, #Raids.WINGS)
+	-- phase is accepted so an old client payload still type-checks, then dropped.
+	local step = PracticeLoot.openedPhase(phase, nil)
+	local started = launch(player, "story", false, room, step, true)
 	if started.ok ~= true then
 		return started
 	end

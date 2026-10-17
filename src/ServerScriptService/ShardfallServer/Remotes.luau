@@ -641,7 +641,7 @@ function Remotes.bind()
 		end)
 	end
 
-	eventRemote("Dodge").OnServerEvent:Connect(function(player, telegraphEndsAt)
+	eventRemote("Dodge").OnServerEvent:Connect(function(player)
 		local reported = typeof(player)
 		local isPlayer = reported == "Instance" and player:IsA("Player")
 		local accepted, why = RemoteCaller.accept(reported, isPlayer)
@@ -652,7 +652,7 @@ function Remotes.bind()
 		if not RateLimiter.take(player.UserId, "Dodge") then
 			return
 		end
-		CombatService.dodge(player, telegraphEndsAt)
+		CombatService.dodge(player)
 	end)
 
 	eventRemote("Steer").OnServerEvent:Connect(function(player, moving)
