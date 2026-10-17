@@ -26,19 +26,20 @@ local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
+local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NotifyBadges"))
+local PetRoster = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetRoster"))
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local Rarities = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarities"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
 local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollHype"))
 local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
-local RollMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollMath"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
@@ -294,6 +295,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local autoOn = false
 	local quickOn = false
 	local infoOpen = false
+	local rollKind = "gear"
+	local pendingCount = 1
+	local replayResult: any = nil
+	local batchLeft: { any } = {}
+	local summaryItems: { any } = {}
+	local batching = false
+	local pendingFace: any = nil
+	local crackNamed = false
+	local crackSounded = false
 	local bagFilter = BagBoard.defaultFilter()
 	local seen = NotifyBadges.blank()
 	local salvageRarity = "Rare"
@@ -338,6 +348,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		nextTick: number,
 		slots: { UiRouter.ReelSlot }?,
 		generation: number,
+		plan: CrackReveal.Plan?,
 	}? =
 		nil
 	-- A newer roll bumps this and cancels the previous card tweens so a
@@ -692,14 +703,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tween:Play()
 	end
 
+	local restShard: () -> () = function() end
+
 	local function stopRollChain()
 		revealToken += 1
 		holdingRoll = false
 		activeReveal = nil
+		replayResult = nil
+		batchLeft = {}
+		batching = false
+		pendingCount = 1
+		pendingFace = nil
+		crackNamed = false
+		crackSounded = false
 		loop = RollLoop.idle()
 		rollBusy = false
 		setPulse(true)
 		hideCloseBeat()
+		restShard()
 		paintReelIdle("Roll")
 	end
 
@@ -867,11 +888,49 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local closeToken = 0
 	local closeTween: Tween? = nil
 
+	local wallet = Instance.new("Frame")
+	wallet.Name = "Wallet"
+	wallet.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD)
+	wallet.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, 28)
+	wallet.BackgroundColor3 = rgb("header")
+	wallet.BackgroundTransparency = 0
+	wallet.BorderSizePixel = 0
+	wallet.ZIndex = 6
+	wallet.Parent = rollPage
+	local walletCorner = Instance.new("UICorner")
+	walletCorner.CornerRadius = UDim.new(0, 8)
+	walletCorner.Parent = wallet
+	local walletTokens = Instance.new("TextLabel")
+	walletTokens.Name = "ShardTokens"
+	walletTokens.BackgroundTransparency = 1
+	walletTokens.Position = UDim2.fromOffset(10, 0)
+	walletTokens.Size = UDim2.new(0.5, -12, 1, 0)
+	walletTokens.Font = headerFont()
+	walletTokens.TextSize = UiTheme.MIN_TEXT
+	walletTokens.TextXAlignment = Enum.TextXAlignment.Left
+	walletTokens.TextColor3 = rgb("text")
+	walletTokens.Text = "Shard Tokens  0"
+	walletTokens.ZIndex = 7
+	walletTokens.Parent = wallet
+	local walletGold = Instance.new("TextLabel")
+	walletGold.Name = "Gold"
+	walletGold.BackgroundTransparency = 1
+	walletGold.Position = UDim2.fromScale(0.5, 0)
+	walletGold.Size = UDim2.new(0.5, -10, 1, 0)
+	walletGold.Font = headerFont()
+	walletGold.TextSize = UiTheme.MIN_TEXT
+	walletGold.TextXAlignment = Enum.TextXAlignment.Right
+	walletGold.TextColor3 = rgb("gold")
+	walletGold.Text = "Gold  0"
+	walletGold.ZIndex = 7
+	walletGold.Parent = wallet
+
 	local reelHost = Instance.new("Frame")
 	reelHost.Name = "Reel"
-	reelHost.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD)
+	reelHost.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD + 32)
 	reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, 68)
 	reelHost.BackgroundColor3 = rgb("header")
+	reelHost.BackgroundTransparency = 0
 	reelHost.BorderSizePixel = 0
 	reelHost.ClipsDescendants = true
 	reelHost.ZIndex = 6
@@ -933,6 +992,35 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local milestoneCorner = Instance.new("UICorner")
 	milestoneCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	milestoneCorner.Parent = reelMilestone
+	local shardStone = Instance.new("Frame")
+	shardStone.Name = "Shard"
+	shardStone.AnchorPoint = Vector2.new(0.5, 0.5)
+	shardStone.Position = UDim2.fromScale(0.5, 0.62)
+	shardStone.Size = UDim2.fromOffset(28, 36)
+	shardStone.BackgroundColor3 = Color3.fromRGB(198, 206, 214)
+	shardStone.BackgroundTransparency = 0
+	shardStone.BorderSizePixel = 0
+	shardStone.ZIndex = 8
+	shardStone.Parent = reelHost
+	local shardCorner = Instance.new("UICorner")
+	shardCorner.CornerRadius = UDim.new(0, 6)
+	shardCorner.Parent = shardStone
+	local crackLine = Instance.new("Frame")
+	crackLine.Name = "Crack"
+	crackLine.AnchorPoint = Vector2.new(0.5, 0)
+	crackLine.Position = UDim2.fromScale(0.5, 0.12)
+	crackLine.Size = UDim2.fromOffset(2, 0)
+	crackLine.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+	crackLine.BorderSizePixel = 0
+	crackLine.ZIndex = 9
+	crackLine.Parent = shardStone
+	local stoneRest = Color3.fromRGB(198, 206, 214)
+	restShard = function()
+		shardStone.Position = UDim2.fromScale(0.5, 0.62)
+		shardStone.BackgroundColor3 = stoneRest
+		crackLine.Size = UDim2.fromOffset(2, 0)
+		reelHost.BackgroundColor3 = rgb("header")
+	end
 
 	local function rarityColor3(name: string): Color3
 		local row = Rarities.COLOR[name]
@@ -1090,7 +1178,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			height = inner.h
 		end
 		local chrome = UiRouter.rollChrome(height)
-		reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, chrome.reel)
+		local stage = math.max(72, chrome.reel)
+		reelHost.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD + 32)
+		reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, stage)
 		local compact = chrome.reel < 52
 		reelStreak.Visible = not compact
 		local windowTop = if compact then 4 else 22
@@ -1106,12 +1196,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local buttonText = if chrome.button < 56 then 20 else 28
 		rollButton.TextSize = buttonText
 		rollButton:SetAttribute("BaseText", buttonText)
-		local listTop = chrome.reel + UiTheme.PAD
+		local listTop = stage + UiTheme.PAD + 32
 		roll.Position = UDim2.fromOffset(0, listTop)
 		roll.Size = UDim2.new(1, 0, 1, -(listTop + chrome.button + UiTheme.PAD))
-		revealCard.Size = UDim2.new(1, -24, 0, chrome.card)
+		local cardH = math.max(96, chrome.card)
+		revealCard.Size = UDim2.new(1, -24, 0, cardH)
 		revealCard.Position = UDim2.new(0.5, 0, 1, -(chrome.button + UiTheme.PAD + 4))
-		local aboveCard = chrome.button + UiTheme.PAD + 4 + chrome.card + 6
+		local aboveCard = chrome.button + UiTheme.PAD + 4 + cardH + 6
 		closeBeat.Position = UDim2.new(1, -12, 1, -aboveCard)
 		if chrome.card < 88 then
 			revealFly.Visible = false
@@ -2227,6 +2318,37 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				itemCard(host, pet, index, "pet")
 			end
 		end
+		row(pets, "Crack a Pet Shard", 20, function()
+			rollKind = "pets"
+			show("roll")
+		end)
+		for index, companion in ipairs(PetRoster.STARTER) do
+			line(pets, companion.name .. "  " .. companion.ability, 20 + index, rgb("text"))
+		end
+	end
+
+	local function rollPoolId(): string
+		if rollKind == "pets" then
+			local ascension = 0
+			if type(profile) == "table" and type(profile.ascension) == "number" then
+				ascension = profile.ascension
+			end
+			local picked = "verdant_pets"
+			for _, pool in ipairs(Pools.forArea("pets")) do
+				if Pools.isUnlocked(pool, ascension) then
+					picked = pool.id
+				end
+			end
+			return picked
+		end
+		local poolId = "verdant_armory"
+		if hooks.getPoolId ~= nil then
+			local picked = hooks.getPoolId()
+			if type(picked) == "string" and picked ~= "" then
+				poolId = picked
+			end
+		end
+		return poolId
 	end
 
 	local beginRoll: () -> ()
@@ -2239,6 +2361,71 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		pityTweens = {}
 		setPulse(loop.phase == "idle" and not rollBusy)
+		local tokens = 0
+		local goldHeld = 0
+		if type(profile) == "table" then
+			if type(profile.shardTokens) == "number" then
+				tokens = profile.shardTokens
+			end
+			if type(profile.gold) == "number" then
+				goldHeld = profile.gold
+			end
+		end
+		walletTokens.Text = string.format("Shard Tokens  %d", tokens)
+		walletGold.Text = string.format("Gold  %d", goldHeld)
+		rollButton.Text = if rollKind == "pets" then "Crack Pet" else "Crack"
+
+		local kindRow = Instance.new("Frame")
+		kindRow.Name = "ShardKind"
+		kindRow.BackgroundTransparency = 1
+		kindRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		kindRow.LayoutOrder = 1
+		kindRow.Parent = roll
+		local kindLayout = Instance.new("UIListLayout")
+		kindLayout.FillDirection = Enum.FillDirection.Horizontal
+		kindLayout.Padding = UDim.new(0, UiTheme.PAD)
+		kindLayout.Parent = kindRow
+		local function kindButton(name: string, text: string, on: boolean, fn: () -> ())
+			local button = Instance.new("TextButton")
+			button.Name = name
+			button.Size = UDim2.new(0.33, -6, 1, 0)
+			button.BackgroundColor3 = if on then rgb("button") else rgb("header")
+			button.BackgroundTransparency = 0
+			button.Font = headerFont()
+			button.TextSize = UiTheme.MIN_TEXT
+			button.TextColor3 = rgb("text")
+			button.Text = text
+			button.AutoButtonColor = false
+			button.Parent = kindRow
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = button
+			setRest(button, if on then rgb("button") else rgb("header"))
+			motion(button)
+			button.Activated:Connect(fn)
+		end
+		kindButton("GearShards", "Gear Shards", rollKind == "gear", function()
+			rollKind = "gear"
+			summaryItems = {}
+			paintRoll()
+			show("roll")
+		end)
+		kindButton("PetShards", "Pet Shards", rollKind == "pets", function()
+			rollKind = "pets"
+			summaryItems = {}
+			paintRoll()
+			show("roll")
+		end)
+		kindButton("TimesTen", "x10", pendingCount > 1 or batching, function()
+			if rollBusy then
+				return
+			end
+			pendingCount = 10
+			summaryItems = {}
+			batchLeft = {}
+			loop = RollLoop.press(loop)
+			beginRoll()
+		end)
 
 		local toggles = Instance.new("Frame")
 		toggles.Name = "Toggles"
@@ -2370,11 +2557,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		line(
 			roll,
 			UiRouter.streakText(hype.streak, lastMissed),
-			4,
+			6,
 			rgb(UiRouter.streakTone(hype.streak, lastMissed))
 		)
-		line(roll, string.format("Rolls  %d", hype.rolls), 5, rgb("text"))
-		line(roll, string.format("Next Epic in %d", RollLoop.nextEpic(sinceEpic)), 6, rgb("text"))
+		line(roll, string.format("Rolls  %d", hype.rolls), 7, rgb("text"))
 		local bestText = "Best pull  —"
 		if type(bestPull) == "table" then
 			bestText = string.format(
@@ -2383,14 +2569,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				tostring(bestPull.rarity or "")
 			)
 		end
-		line(roll, bestText, 7, rgb("accent"))
+		line(roll, bestText, 8, rgb("accent"))
 		line(
 			roll,
 			RollLoop.indexText(
 				RollLoop.discoveries(profile, sessionTemplates),
 				RollLoop.indexTotal()
 			),
-			8,
+			9,
 			rgb("text")
 		)
 
@@ -2406,7 +2592,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local info = Instance.new("Frame")
 			info.Name = "Odds"
 			info.BackgroundColor3 = rgb("header")
-			info.BackgroundTransparency = 0.1
+			info.BackgroundTransparency = 0
 			info.Size = UDim2.fromScale(1, 0)
 			info.AutomaticSize = Enum.AutomaticSize.Y
 			info.BorderSizePixel = 0
@@ -2429,26 +2615,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
 			local legendaryCount = if type(sinceLegendary) == "number" then sinceLegendary else 0
 			line(info, RarityConfig.pityLine(sinceEpic, legendaryCount), 3, rgb("text"))
-			local pool = Pools.get("verdant_armory")
-			if pool ~= nil then
-				local rolled, odds = pcall(RollMath.odds, pool, luck, {
-					luckBoost = boost,
-					rollsSinceLegendary = UiRouter.oddsSince(legendaryCount),
-				})
-				if rolled and type(odds) == "table" then
-					local order = 4
-					if type(odds.rarities) == "table" then
-						for _, rarity in ipairs(odds.rarities) do
-							line(
-								info,
-								string.format("%s  %.1f%%", rarity.rarity, rarity.chance * 100),
-								order,
-								rgb("text")
-							)
-							order += 1
-						end
-					end
-				end
+			local infoPool = if rollKind == "pets"
+				then Pools.get(rollPoolId())
+				else Pools.get("verdant_armory")
+			local infoOdds = RollBoard.oddsLines(
+				infoPool,
+				luck,
+				boost,
+				UiRouter.oddsSince(legendaryCount)
+			)
+			for index, text in ipairs(infoOdds) do
+				line(info, text, 3 + index, rgb("text"))
 			end
 		end
 
@@ -2583,7 +2760,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return fill, nextSeen
 		end
 		local nextEpicFill, nextEpicSeen =
-			paintPity("EpicPity", "Epic", epicMeter, "Epic", 10, epicFillShown, epicFlashRoll)
+			paintPity("EpicPity", "Epic", epicMeter, "Epic", 4, epicFillShown, epicFlashRoll)
 		epicFillShown = nextEpicFill
 		epicFlashRoll = nextEpicSeen
 		local nextLegendaryFill, nextLegendarySeen = paintPity(
@@ -2591,7 +2768,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			"Legendary",
 			pityMeter,
 			"Legendary",
-			11,
+			5,
 			legendaryFillShown,
 			legendaryFlashRoll
 		)
@@ -2603,6 +2780,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local oddsSince =
 			UiRouter.oddsSince(if type(sinceLegendary) == "number" then sinceLegendary else 0)
 		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, oddsSince)
+		if rollKind == "pets" then
+			odds = RollBoard.oddsLines(Pools.get(rollPoolId()), luck, boost, oddsSince)
+		end
 		if #odds == 0 then
 			line(roll, "Odds are unavailable.", 13, rgb("muted"))
 		else
@@ -2633,6 +2813,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		line(roll, "Last 10", 31, rgb("gold"))
 		divider(roll, 32)
+		if #summaryItems > 0 then
+			line(roll, "Cracked", 40, rgb("gold"))
+			for index, item in ipairs(summaryItems) do
+				local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
+				line(
+					roll,
+					string.format("%s  %s", tostring(item.name or "Shard"), rarity),
+					40 + index,
+					rarityColor3(rarity)
+				)
+			end
+		end
 		if #recent == 0 then
 			line(roll, "No rolls yet.", 33, rgb("muted"))
 		else
@@ -2814,8 +3006,63 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		})
 	end
 
+	local function stageReveal()
+		revealCard.Visible = true
+		revealTitle.Text = ""
+		revealRarity.Text = ""
+		revealNew.Visible = false
+		revealBest.Visible = false
+		revealEquip.Visible = false
+		revealCard.BackgroundColor3 = rgb("header")
+		revealStroke.Color = rgb("accent")
+		restShard()
+	end
+
+	local function crackMode(rarity: string, quick: boolean): string
+		if UiMotion.reduced(draft) then
+			return "reduced"
+		end
+		local skips = false
+		local skipOk, skipped = pcall(Settings.skipsCutscene, draft, rarity)
+		if skipOk and skipped == true then
+			skips = true
+		end
+		if skips then
+			return "skip"
+		end
+		if quick then
+			return "quick"
+		end
+		return "full"
+	end
+
 	finishReveal = function()
 		activeReveal = nil
+		restShard()
+		if #batchLeft > 0 then
+			local nextCrack = table.remove(batchLeft, 1)
+			replayResult = {
+				ok = true,
+				item = nextCrack.item,
+				rarity = nextCrack.rarity,
+				fillerSeed = nextCrack.fillerSeed,
+				pity = nextCrack.pity,
+				quick = true,
+				currency = "shard",
+			}
+			rollBusy = false
+			loop = { phase = "revealing", queued = false }
+			beginRoll()
+			return
+		end
+		if batching then
+			batching = false
+			pendingCount = 1
+			loop = RollLoop.idle()
+			setPulse(true)
+			paintRoll()
+			return
+		end
 		local finished = RollLoop.finish(loop)
 		if chainAllowed(finished.phase == "revealing") then
 			loop = { phase = "revealing", queued = false }
@@ -2841,22 +3088,63 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		revealFly.TextTransparency = 1
 		local generation = revealToken
 		task.spawn(function()
-			local waitFor = RarityConfig.COOLDOWN - (os.clock() - lastCrack)
-			if lastCrack > 0 and waitFor > 0 then
-				task.wait(waitFor)
-			end
-			if generation ~= revealToken then
-				rollBusy = false
-				return
-			end
-			local poolId = "verdant_armory"
-			if hooks.getPoolId ~= nil then
-				local picked = hooks.getPoolId()
-				if type(picked) == "string" and picked ~= "" then
-					poolId = picked
+			local replay = replayResult
+			replayResult = nil
+			local ok = false
+			local result: any = nil
+			local poolId = rollPoolId()
+			if replay ~= nil then
+				ok = true
+				result = replay
+			else
+				local waitFor = RarityConfig.COOLDOWN - (os.clock() - lastCrack)
+				if lastCrack > 0 and waitFor > 0 then
+					task.wait(waitFor)
+				end
+				if generation ~= revealToken then
+					rollBusy = false
+					return
+				end
+				if pendingCount > 1 then
+					local count = pendingCount
+					pendingCount = 1
+					local batchOk, batch = pcall(hooks.invoke, "RollShards", poolId, count)
+					if generation ~= revealToken then
+						rollBusy = false
+						return
+					end
+					if
+						batchOk
+						and type(batch) == "table"
+						and type(batch.items) == "table"
+						and #batch.items > 0
+					then
+						batching = true
+						summaryItems = {}
+						batchLeft = {}
+						for index = 2, #batch.items do
+							table.insert(batchLeft, batch.items[index])
+						end
+						local first = batch.items[1]
+						result = {
+							ok = true,
+							item = first.item,
+							rarity = first.rarity,
+							fillerSeed = first.fillerSeed,
+							pity = first.pity,
+							quick = true,
+							currency = batch.currency,
+						}
+						ok = true
+					else
+						batching = false
+						ok = batchOk
+						result = batch
+					end
+				else
+					ok, result = pcall(hooks.invoke, "RollShard", poolId, false)
 				end
 			end
-			local ok, result = pcall(hooks.invoke, "RollShard", poolId, false)
 			if generation ~= revealToken then
 				rollBusy = false
 				return
@@ -2981,7 +3269,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				then RollReveal.strip(seed, pool, shownRecord)
 				else { shownRecord }
 			local slots = UiRouter.honestSlots(raw, card.name, card.rarity)
-			paintResult(item, shownRecord, activeNew, activeUpgrade)
+			pendingFace = {
+				item = item,
+				record = shownRecord,
+				isNew = activeNew,
+				upgrade = activeUpgrade,
+			}
+			if batching then
+				table.insert(summaryItems, item)
+			end
+			crackNamed = false
+			crackSounded = false
+			stageReveal()
 			local callout, personal = UiRouter.rollShout(noted)
 			if personal ~= nil then
 				flashPersonalBest(personal)
@@ -2995,6 +3294,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			applyClose(close)
 			local color = rarityColor3(card.rarity)
 			local pop = UiRouter.rollPop(pace.tier, reduced)
+			local plan = CrackReveal.plan(card.rarity, crackMode(card.rarity, quick or batching))
+			duration = plan.seconds
 			if duration <= 0 then
 				paintReel(slots, #slots)
 				revealCard.BackgroundColor3 = color
@@ -3028,7 +3329,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				return
 			end
 			revealCard.BackgroundColor3 = rgb("header")
-			paintReel(slots, 1)
+			paintReelIdle("Shard")
 			activeReveal = {
 				started = os.clock(),
 				duration = duration,
@@ -3038,6 +3339,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				nextTick = os.clock(),
 				slots = slots,
 				generation = cardGeneration,
+				plan = plan,
 			}
 		end)
 	end
@@ -3099,6 +3401,67 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		local elapsed = os.clock() - active.started
+		if active.plan ~= nil then
+			local sample = CrackReveal.sample(active.plan, elapsed)
+			local color = rarityColor3(active.rarity)
+			local shake = sample.shake
+			local offset = 0
+			if shake > 0 then
+				offset = math.sin(os.clock() * 46) * (2 + shake * 7)
+			end
+			shardStone.Position = UDim2.new(0.5, offset, 0.62, 0)
+			crackLine.Size = UDim2.new(0, 2 + math.floor(sample.crack * 8), sample.crack * 0.76, 0)
+			if sample.burst > 0 then
+				shardStone.BackgroundColor3 = color
+				reelHost.BackgroundColor3 = color:Lerp(rgb("header"), 1 - sample.burst)
+				reelStroke.Color = color
+				reelStroke.Thickness = 2 + sample.glow * 5
+				reelCenter.Text = active.rarity
+				reelCenter.BackgroundColor3 = color
+				reelCenter.TextColor3 = rgb("ink")
+			elseif sample.tension then
+				reelStroke.Color = color
+				reelStroke.Thickness = 5
+				reelCenter.Text = "..."
+				reelCenter.BackgroundColor3 = rgb("body")
+				reelCenter.TextColor3 = rgb("text")
+			elseif sample.glow > 0 then
+				reelStroke.Color = color
+				reelStroke.Thickness = 2 + sample.glow * 3
+				reelCenter.Text = "Shard"
+			else
+				reelCenter.Text = "Shard"
+				reelCenter.BackgroundColor3 = rgb("body")
+				reelCenter.TextColor3 = rgb("text")
+			end
+			if sample.flash then
+				flashCover.BackgroundColor3 = color
+				flashCover.BackgroundTransparency = 0.42
+			elseif sample.burst >= 0.4 then
+				flashCover.BackgroundTransparency = 1
+			end
+			if sample.sound ~= nil and not crackSounded then
+				crackSounded = true
+				playUi(sample.sound)
+			end
+			if sample.showName and not crackNamed and type(pendingFace) == "table" then
+				crackNamed = true
+				paintResult(pendingFace.item, pendingFace.record, pendingFace.isNew, pendingFace.upgrade)
+			end
+			if elapsed >= active.duration then
+				if not crackNamed and type(pendingFace) == "table" then
+					crackNamed = true
+					paintResult(
+						pendingFace.item,
+						pendingFace.record,
+						pendingFace.isNew,
+						pendingFace.upgrade
+					)
+				end
+				finishReveal()
+			end
+			return
+		end
 		local reduced = UiMotion.reduced(draft)
 		local tint = RollLoop.tint(elapsed, active.duration, active.rarity)
 		local color = rarityColor3(active.rarity)
