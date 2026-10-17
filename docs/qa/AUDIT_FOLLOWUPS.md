@@ -69,3 +69,17 @@ The same audit row's settings half is separate and also P2: `SetSettings` replac
 | P2 | `DebugService.luau` `raid`, `RaidService.practice` | The Studio debug "raid" action calls `practice`, which now keeps the level 15 gate. A level 1 Studio profile is refused. | Leave the gate on the live remote. A Studio bypass belongs in `DebugService`, not in `practice`. |
 | P2 | `CombatFeel.luau` `DODGE_LATENCY` (0.1) | A dodge that arrives more than 0.1 seconds after the telegraph ends is not perfect, even if the press was inside the window. The early side is not extended. | Leave the early side tight. If playtests miss perfects on slow connections, raise the late allowance a little and keep one ult per telegraph. |
 | P2 | `CombatFeel.luau` `scoreAny` | If two telegraphs match one press, only the first window is awarded. A later dodge can still award the other. One press cannot take two ult gains. | Leave it. Paying both windows on one press would undo the one-ult cap. |
+
+## Grok second opinion (2026-10-16 23:09)
+
+New rows from that pass. The hotkey prefix bug was going to be T-075. HELPER already holds T-075 for Contest Weekend on this tip, so the hotkey fix is T-080.
+
+| id | Pri | Where | What is left |
+| --- | --- | --- | --- |
+| T-080 | P1 | `UiRouter.hotkey` | `string.sub(keyName, 1, 1)` treats `Two` as T, `Tab` as T, `Space` as S, `LeftShift` as L, `Backspace` as B, `Comma` as C, `Period` as P, `Minus` as M, and `Insert` as I. Match only a single-letter key name (KeyCode A-Z). |
+| T-076 | P1 | `DungeonService.luau` `onHeartbeat` | One player's error aborts the rest of the heartbeat. Isolate each player in `pcall`. The parallel agent on `cursor/echo-retry-yield-9721` owns the edit. |
+| T-077 | P1 | `DataService.luau` load, `ProfileLoad.open` | A load that exceeds `CallBudget`'s timeout keeps running and can still claim the lock and run `Progression.applyReturn` / `lastSeen`. Ignore late transforms with a per-attempt generation token. |
+| T-078 | P2 | `HudShell.luau` `prompt`, `ToastQueue.pushPrompt` | Equip and Keep only dequeue. `pushPrompt` has no cap. |
+| T-079 | P2 | `init.client.luau` `invoke`, `CombatHud.start` | `WaitForChild` has no timeout. |
+
+The rest of grok-audit.md was already covered. Practice loot and the forged perfect dodge are T-062. The session-lock teleport race and the shutdown cutoff are T-065, and the hop reclaim is T-067. The hub hotkey, rebind, and roll-chain stop are T-061. The NaN wing is the practice-wing choice left on purpose above. `savePair` is already in `docs/qa/DEBUG_AUDIT_2026-10-16.md`. The hero viewport leak is the P2 row above. No second row for those.

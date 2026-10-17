@@ -141,11 +141,13 @@ function UiRouter.toggle(state: State, tab: string): State
 	return UiRouter.open(state, tab)
 end
 
+-- KeyCode.Name is the whole name. "Two", "Tab", "Space", and "LeftShift"
+-- are not the letters T, S, and L. Only A-Z opens a tab.
 function UiRouter.hotkey(state: State, key: string, hotkeys: { [string]: string }): State
-	local letter = string.upper(string.sub(key, 1, 1))
-	if string.match(letter, "^%a$") == nil then
+	if string.match(key, "^%a$") == nil then
 		return state
 	end
+	local letter = string.upper(key)
 	for _, tab in ipairs(UiRouter.TABS) do
 		local bound = hotkeys[tab]
 		if type(bound) == "string" and string.upper(bound) == letter then
