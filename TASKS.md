@@ -50,7 +50,7 @@ GHOST keeps combat, classes, Rootvault, the Heartwood raid (including Raid Hard,
 
 T-010 is the rest of the cut line "Raid Hard, the Vault, and Relic Sets." Raid Hard itself is T-007. Relic Set rules come from T-025. T-010 keeps the Vault and the wiring. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never Relic Set pieces. Ghost wires that vendor later, under T-010.
 
-Next free id is T-054.
+Next free id is T-057.
 
 ## Claimed by HELPER
 
@@ -69,7 +69,7 @@ HELPER takes self-contained systems. New modules listed below are the owned path
 | T-043 | Premade board listing rules (pure, no wiring) + RaidFinder 8-player tank target | HELPER | `helper/premade-board-9721` | new `src/ReplicatedStorage/Shared/RaidPremade.luau`, new `tests/RaidPremade.spec.luau`, one require line in `tests/run.luau`, a 'T-043 hooks for GHOST' section in this file, plus a one-line CONFIG change in `src/ReplicatedStorage/Shared/RaidFinder.luau` and its spec. Pure, server-authoritative rules from `docs/design/shardfall_raids.md` Matchmaking "Premade board in the Guild Plaza (Party Finder style)": a listing has a difficulty (Story, Normal, Hard, Shardbreaker; Guided mode is out of scope), one or more tags from Learning, Farm, Speedrun, Achievement, an optional required clear count (non-negative integer), a party size of 4 to 8, and role slots using RaidFinder's role names (tank, healer, dps, flex). No gear-score requirement or filter is allowed on Story or Normal (refuse one). Provide pure functions to validate a listing, check whether a player may join (open slot for their role, flex takes any open slot, meets the required clear count), and report when a listing is full or expired. One active listing per host; the listing closes when the host leaves; listings expire after a placeholder time in a frozen CONFIG. The premade board ignores the RaidLeaver Finder cooldown (T-035 decision: Finder only). Listing title text is filtered by the caller with TextService, not in this module. Time comes in as unix seconds (`os.time()`). No MemoryStore, services, remotes, or DataStores. Do not edit `Raids.luau`, `RaidService.luau`, `DungeonService.luau`, Schema, Trading, MarketBoard, or any T-012 file. RaidFinder change: set `roleTargets[8]` to 1 tank, 1 healer, 6 DPS (the design's 1–2 Wardens means the minimum is 1) and update the spec. No build stamp, nothing premium. | done | [#49](https://github.com/Itsm00k21/Shardfall/pull/49) |
 | T-045 | Raid bad-luck protection rules | HELPER | `helper/raid-luck-9721` | new `src/ReplicatedStorage/Shared/RaidLuck.luau`, new `tests/RaidLuck.spec.luau`, one require line in `tests/run.luau`, and a 'T-045 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md`: each lockout clear with no gear drop adds +10% to the next drop chance, and the bonus resets when something drops. Do not edit raid code, Schema, or remotes. | done | [#53](https://github.com/Itsm00k21/Shardfall/pull/53) |
 | T-050 | Raid post-run recap rules (pure, no wiring) | HELPER | `helper/raid-recap-9721` | new `src/ReplicatedStorage/Shared/RaidRecap.luau`, new `tests/RaidRecap.spec.luau`, one require line in `tests/run.luau`, and a 'T-050 hooks for GHOST' section in this file. Pure rules from `docs/design/shardfall_raids.md` Anti-toxicity and fairness: each player gets a private panel built from caller-supplied per-player stats (damage, healing, deaths, mechanics handled by type such as soaks, interrupts, stacks, add kills, for example "You soaked 6 times") plus 1 to 2 tips picked from that player's mechanic failures using a placeholder tip table keyed by boss and mechanic in a frozen CONFIG. The public view shows only party kudos and mechanic MVP awards and never a damage or healing ranking or anyone else's numbers. Each player may give one kudos per run to another party member (not themselves, only members of that run). One MVP per mechanic type goes to the player who handled the most, with a deterministic tiebreak and no award when nobody handled any. An AFK-removed player (T-027 RaidConduct) gets their own private panel but is excluded from kudos and MVP. Inputs are plain tables. No services, remotes, DataStores, or TextService. Do not edit `DungeonService.luau`, `RaidService.luau`, `Raids.luau`, Schema, `CombatHud.luau`, the existing T-016 dungeon recap code, or any T-012 file. No build stamp, nothing premium. | done | [#55](https://github.com/Itsm00k21/Shardfall/pull/55) |
-| T-053 | Raid leaderboard rules: fastest clear (pure, no wiring) | HELPER | `helper/raid-leaderboard-9721` | new `src/ReplicatedStorage/Shared/RaidLeaderboard.luau`, new `tests/RaidLeaderboard.spec.luau`, one require line in `tests/run.luau`, and a 'T-053 hooks for GHOST' section in this file. Pure rules for the beta 'basic leaderboard (fastest Normal clear)' in `docs/design/shardfall_raids.md` (Firsts and races, Scope). Boards are keyed by difficulty and party size; a frozen CONFIG lists which boards are live (beta: normal only, story off), a top-N size, and a sanity floor on clear time. `submit(board, record)` takes a plain clear record (runId, difficulty, size, start and end times or duration, roster userIds, practice flag, removals) and returns a new board without writing the input: reject practice runs, unknown or disabled difficulties, bad times, and clears under the floor; credit only roster members who were not AFK-removed or vote-kicked; the same runId twice is a no-op; sort by duration with a deterministic tiebreak (earlier clear, then lower runId) and trim to top N. Also `personalBest(board, userId)` and a `rankOf` helper. Inputs are plain tables. No OrderedDataStore, MemoryStore, remotes, Schema, or TextService. Do not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, Schema, or any T-012 file. No build stamp, nothing premium. | claimed | — |
+| T-053 | Raid leaderboard rules: fastest clear (pure, no wiring) | HELPER | `helper/raid-leaderboard-9721` | new `src/ReplicatedStorage/Shared/RaidLeaderboard.luau`, new `tests/RaidLeaderboard.spec.luau`, one require line in `tests/run.luau`, and a 'T-053 hooks for GHOST' section in this file. Pure rules for the beta 'basic leaderboard (fastest Normal clear)' in `docs/design/shardfall_raids.md` (Firsts and races, Scope). Boards are keyed by difficulty and party size; a frozen CONFIG lists which boards are live (beta: normal only, story off), a top-N size, and a sanity floor on clear time. `submit(board, record)` takes a plain clear record (runId, difficulty, size, start and end times or duration, roster userIds, practice flag, removals) and returns a new board without writing the input: reject practice runs, unknown or disabled difficulties, bad times, and clears under the floor; credit only roster members who were not AFK-removed or vote-kicked; the same runId twice is a no-op; sort by duration with a deterministic tiebreak (earlier clear, then lower runId) and trim to top N. Also `personalBest(board, userId)` and a `rankOf` helper. Inputs are plain tables. No OrderedDataStore, MemoryStore, remotes, Schema, or TextService. Do not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, Schema, or any T-012 file. No build stamp, nothing premium. | done | [#58](https://github.com/Itsm00k21/Shardfall/pull/58) |
 
 Per `docs/design/shardfall_raids.md`, each of the five classes gets a 4-piece Verdant Relic Set from Heartwood Hard, with a 2-piece and a 4-piece bonus that changes play rather than adding raw power creep. The module defines the sets, counts equipped pieces, returns active bonuses, and exposes `setPct(owned)` (0-100) for the session recap. T-025 landed in #37 with pieces bound. Kevin's follow-up is T-031: pieces stay raid-drop only, and they are tradeable on the Market Board, not bound. Heartwood Vendor sells weaker helper items for Raid Marks or materials, never set pieces. Ghost wires that vendor under T-010. T-027 is claimed on `helper/raid-conduct-9721`.
 
@@ -1914,6 +1914,127 @@ Questions for Ghost:
 11. Mechanic keys are soak, interrupt, stack, and add. `" Soak "` works. `"soaks"` is refused. A bad tally fails the roster, including a `give` click. Should the plurals be accepted?
 12. `give` refuses a bad click. `publicView` drops a stored row that `give` would refuse and keeps the first legal row from that player. A malformed row fails `recap.ok`, empties `public`, and still returns the private panels. A kudos given before an AFK removal drops out of the party view. Should a rule-breaking stored row fail the recap instead of being dropped?
 13. Failures are the list you pass. A missing `count` means it happened, and 0 is ignored. I do not infer a missed soak from a low handled count. Should a tip be derived from the tally?
+
+### T-053 hooks for GHOST
+
+HELPER did not edit `RaidService.luau`, `DungeonService.luau`, `Raids.luau`, `Schema.luau`, `RaidConduct.luau`, `RaidRecap.luau`, or any other T-012 file. `RaidLeaderboard` is pure and ready to call. It does not require `RaidConduct`, `Raids`, or `RaidRecap`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RaidLeaderboard` yet, so this branch does not change a live run. No build stamp. No remote. No OrderedDataStore. No MemoryStore. No TextService. Nothing here costs Robux. The T-053 row stays `claimed`. Wiring is yours.
+
+Call `submit` once when the raid run ends, with the whole roster. Do not call it from the per-player boss mutate in `DungeonService.damageEnemy`. A second call with the same `runId` is a no-op, so the first player's payload would stick and everyone else would be dropped. Do not append a leaderboard line to `SessionRecap.line` or `CombatHud.victoryBody`. That card stays the T-016 session line. T-052 owns the recap panel. This board is separate.
+
+When you wire this, require the module next to the other raid rules:
+
+```lua
+local RaidLeaderboard = require(ReplicatedStorage.Shared.RaidLeaderboard)
+```
+
+**What each call does.**
+
+| call | when | what it returns |
+|---|---|---|
+| `submit(board, record)` | the run has cleared | `ok == true` is the only signal to store `board`. `accepted == true` means this clear took a row. |
+| `personalBest(board, userId)` | you want one player's fastest clear | `found == true` and `entry`. That entry may be on any live board. |
+| `rankOf(board, userId)` | you want the rank of that fastest clear | `rank` is that row's place on its own difficulty and size. |
+| `rankOf(board, userId, difficulty, size)` | you want one board | `rank` is their best row on that key. `" Normal "` is normal. |
+
+`nil` starts an empty board. `{}` does too. A bare array is `ERRORS.board`. Store `result.board` only when `result.ok == true`. A duplicate and a clear that misses the top N are still `ok == true` (the copy has the same rows). A bad record is `ok == false`. If the saved board itself does not parse, `ok == false` and `board` is `{ entries = {} }`. Do not write that over a save you could not read.
+
+`record` fields that are read: `runId`, `difficulty`, `size`, `start` or `startedAt`, `end` or `endedAt`, `duration`, `roster`, `practice`, `removals`. Anything else is ignored. A `removal` field on a roster entry is ignored. Put removals on `removals`.
+
+Checks run in this order: the board, the record type, `runId`, an already stored `runId` (no-op, the rest of the payload is not read), the practice flag, a practice run, difficulty, the clock, the floor, the roster, the size, removals, then an empty credited roster. The first failure is the error you get. A practice Story clear reports practice, not the disabled board.
+
+**Boards.** One table holds every key. A key is difficulty plus party size. Rows come back ordered by difficulty name, then size, then rank. Beta live set is `CONFIG.live`: normal only. Story, Hard, and Shardbreaker are known and return `ERRORS.disabled`. Fracture and Guided are not fastest-clear boards and return `ERRORS.difficulty`. Strings are trimmed and lowercased.
+
+Party size is 4 to 8 (`CONFIG.minParty`, `CONFIG.maxParty`). `size` must equal `#roster`. The roster includes players you then mark removed. A missing `size` uses the roster length. The stored row keeps that size and lists only the credited ids, sorted ascending, so a 5-player group with one kick still ranks on the size-5 board.
+
+**Clock.** Pass `start` and `end`, or the aliases `startedAt` and `endedAt`. Duration is `end - start`. If you also pass `duration`, it has to match that difference exactly. `end` plus `duration` without a start is allowed, and `end` is the clear time. Duration alone is allowed, and that row has no `clearedAt`. A start without an end is `ERRORS.time`. So is a zero, negative, or non-finite time, `end` before `start`, and two aliases that disagree. A positive duration under `CONFIG.floorSeconds` (300) is `ERRORS.floor`. 300 is ranked. The floor is not applied again when a saved row is read, so a later CONFIG change does not make an old row unreadable.
+
+**Credit.** An AFK removal or a passed vote-kick is left off the row. Anyone else on the roster is credited. This matches T-027's shapes and is stricter than T-050: T-050 keeps a vote-kick in kudos, and this board does not.
+
+| removal | credit |
+|---|---|
+| missing | credited |
+| `"afk"`, `"remove"`, `" AFK "` | not credited |
+| `RaidConduct.afk` with `state == "remove"` and `ok ~= false` | not credited |
+| `"kick"` | not credited |
+| a tally with `passed == true` | not credited |
+| `state` `"ok"`, `"warning"`, or `"paused"`, or `passed == false` | credited |
+| `ok == false`, `"leave"`, `"idle"`, `"vote"` | `ERRORS.removal` |
+
+`AFK_STATE` is `"remove"`. `ok` has to be a boolean when it is present. A warning is still a finisher. A removal whose user id is not on the roster is `ERRORS.absent`. The same user twice is `ERRORS.removalTwice`. A string key such as `"20"` is `ERRORS.userId`. If nobody is left, the error is `ERRORS.empty` and the `runId` is not consumed, so a later legal submit of that id can still rank.
+
+`removals` is either a map of user id to cause, or a dense list of `{ userId, removal }` (or `cause`). A dense list of cause strings is read as a map keyed by those indexes, so do not pass `{ "afk", "kick" }`. User id 1 with a conduct table is the map form. An empty table means nobody was removed.
+
+**Rank.** Sort is shortest duration, then earlier `clearedAt`, then lower `runId`. A row with no `clearedAt` loses a tie to a row that has one. Each difficulty and size keeps `CONFIG.topN` (10) rows. A clear that misses the cut returns `ok == true`, `accepted == false`, `trimmed == true`, and that `runId` is not remembered. The same `runId` already on any key is `duplicate == true` and does not replace a slower time. A positive integer and a string are different ids. `2` and `"2"` can both be on the board. On a tie, numbers rank before strings. `2` beats `10`. `"10"` beats `"2"`. Strings are trimmed and not lowercased. Two players on the same clear share that row's rank. `rank` is 1 for the fastest row.
+
+```lua
+local removals = {}
+for _, member in ipairs(roster) do
+	local afk = RaidConduct.afk({
+		now = now,
+		lastInputAt = member.lastInputAt,
+		inCutscene = member.inCutscene == true,
+	})
+	if afk.state == "remove" then
+		removals[member.userId] = afk
+	elseif member.vote ~= nil and member.vote.passed == true then
+		removals[member.userId] = member.vote
+	end
+end
+
+if run.practice ~= true then
+	local ranked = RaidLeaderboard.submit(board, {
+		runId = run.id,
+		difficulty = run.difficulty,
+		size = #roster,
+		start = run.startedAt,
+		["end"] = now,
+		roster = roster,
+		practice = false,
+		removals = removals,
+	})
+	if ranked.ok == true then
+		board = ranked.board
+	end
+end
+```
+
+On a lookup:
+
+```lua
+local best = RaidLeaderboard.personalBest(board, player.UserId)
+if best.found == true then
+	-- best.entry.duration, best.entry.difficulty, best.entry.size
+end
+local rank = RaidLeaderboard.rankOf(board, player.UserId, "normal", #roster)
+if rank.found == true then
+	-- rank.rank is 1 for the fastest credited row on that board
+end
+```
+
+There is no RNG. The same input returns the same board. Thresholds live in `RaidLeaderboard.CONFIG`. Do not hardcode 10 or 300 beside the module.
+
+**Schema.** HELPER does not edit `Schema.luau`. No new field is required. The board is the plain `{ entries }` table. It does not have to live on a profile. Version 21 is current. T-049's row already plans `raidLuck` on version 22, so do not take 22 for this. This module does not call OrderedDataStore or MemoryStore. An in-memory table on one server dies on restart.
+
+`tests/run.luau` requires `./RaidLeaderboard.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. The sanity floor is 300 seconds. A full clear is designed at 20–30 minutes. Is 300 the right floor, or should it sit closer to a real wing?
+2. `topN` is 10 for each difficulty and party size. Is that the beta length?
+3. Party size is 4 to 8. `size` must equal the roster length, and that roster includes AFK-removed and vote-kicked players. A 5-player group with one kick still ranks on the size-5 board. The stored row lists only the players who finished. Should the key be the number who finished?
+4. A backfill is credited when you put them on the roster and leave them out of `removals`. The kicked player has to stay on that same roster to be excluded. Dropping the kicked player and also listing them in `removals` is `ERRORS.absent`. Is the ranked roster the group that pulled, or the group that finished, including a backfill?
+5. A clear with nobody left is rejected and does not consume the `runId`. Should that clear still take a row?
+6. A `runId` already on any board is a no-op, even when the new time is faster or the payload is practice. A clear that misses the top N is not remembered, so a later submit of that id can still place. Should a missed id stay seen, and should a faster retry replace the row?
+7. Times are `start`/`startedAt` plus `end`/`endedAt`, or `duration`. If start and end are both set, duration is `end - start`, and a `duration` field must match exactly. Duration alone is allowed and loses a tie to a row that has an end time. `end` plus `duration` without `start` uses `end` as the clear time. Should a duration-only clear be refused?
+8. `personalBest(board, userId)` is the single fastest credited row across every difficulty and size. A shorter 4-player clear beats a longer 8-player clear. `rankOf(board, userId)` is that row's rank on its own board. `rankOf(board, userId, difficulty, size)` is their best row on that key. Two players on the same clear share that row's rank. Should a personal best stay on one board, and should the shown rank be per player instead of per clear?
+9. Removals follow T-027. `"afk"`, `"remove"`, or a `RaidConduct.afk` result with `state == "remove"` and `ok ~= false` are AFK. `"kick"` or a tally with `passed == true` is a vote-kick. Both are left off the row. `"ok"`, `"warning"`, and `"paused"` stay on it. `ok == false` is an error. `"leave"` and `"idle"` are errors. A `removal` field on a roster entry is ignored. Should a warning be left off, and should the roster entry's own removal count?
+10. Story, Hard, and Shardbreaker are known and switched off in `CONFIG.live`. Fracture and Guided are unknown. Only Normal is live. Should Hard stay unknown until T-007 names it?
+11. A run id is a positive integer or a trimmed non-empty string. Numbers rank before strings. `2` beats `10`. `"10"` beats `"2"`. The number `2` and the string `"2"` are different runs. Should run ids be strings only?
+12. No profile field. The board is the plain `{ entries }` table the caller keeps. There is no OrderedDataStore in this module. An in-memory table dies on restart. Where should the beta board live?
+13. Returned boards keep `entries` only. Other keys on the table you pass are dropped. A bare array is refused. `nil` starts an empty board. Is that the shape you want to store?
+14. This module does not rank Fracture level, class combo, or guild progression. Beta is fastest clear only. Confirm those stay out.
 
 ## Open
 
