@@ -1267,15 +1267,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	close.MouseButton1Click:Connect(function()
 		setOpen(false)
 	end)
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then
-			return
-		end
-		if input.KeyCode == Enum.KeyCode.I then
-			setOpen(not isOpen)
-		end
-	end)
-
+	-- I opens the Raids tab. The old inventory panel does not take that key.
 	RunService.RenderStepped:Connect(function()
 		local rotation = (os.clock() * 48) % 360
 		for index = #gradients, 1, -1 do

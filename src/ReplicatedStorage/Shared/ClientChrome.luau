@@ -8,6 +8,8 @@
 	still be drawing the previous panel (the one that said Pity 0/80).
 ]]
 
+local Keybinds = require("./Keybinds")
+
 local ClientChrome = {}
 
 local OWNED: { [string]: boolean } = {
@@ -45,12 +47,12 @@ end
 
 -- Hub tabs. The letter is the PC hotkey. Settings is the gear, not a letter.
 ClientChrome.TABS = {
-	{ id = "hero", label = "Hero", key = "C" },
-	{ id = "bag", label = "Bag", key = "B" },
-	{ id = "pets", label = "Pets", key = "P" },
-	{ id = "roll", label = "Roll", key = "R" },
-	{ id = "raids", label = "Raids", key = "I" },
-	{ id = "market", label = "Market", key = "M" },
+	{ id = "hero", label = "Hero", key = Keybinds.MENU.hero },
+	{ id = "bag", label = "Bag", key = Keybinds.MENU.bag },
+	{ id = "pets", label = "Pets", key = Keybinds.MENU.pets },
+	{ id = "roll", label = "Roll", key = Keybinds.MENU.roll },
+	{ id = "raids", label = "Raids", key = Keybinds.MENU.raids },
+	{ id = "market", label = "Market", key = Keybinds.MENU.market },
 	{ id = "pass", label = "Shard Pass", key = "" },
 	{ id = "settings", label = "Settings", key = "" },
 }
