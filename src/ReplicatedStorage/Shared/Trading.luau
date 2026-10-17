@@ -57,6 +57,9 @@ Trading.CAPS = {
 	StandardBase = 50000,
 	StandardPerLevel = 5000,
 	StandardMax = 150000,
+	-- Receipt trust only. Same ceiling as StandardMax. Level 40 and 60
+	-- clean days still use Trusted.
+	Receipt = 150000,
 	Trusted = 2000000,
 }
 
@@ -286,6 +289,30 @@ function Trading.emptyOffer(): Offer
 	}
 end
 
+-- The grant path is what sets granted. A boolean true is only the old
+-- idempotency mark, and a cosmetic or an id with no grant does not count.
+function Trading.receiptCounts(entry: any): boolean
+	if type(entry) ~= "table" then
+		return false
+	end
+	if entry.verified ~= true or entry.granted ~= true then
+		return false
+	end
+	return entry.cosmetic ~= true
+end
+
+function Trading.verifiedFromReceipts(data: any): boolean
+	if type(data) ~= "table" or type(data.receipts) ~= "table" then
+		return false
+	end
+	for _, entry in pairs(data.receipts) do
+		if Trading.receiptCounts(entry) then
+			return true
+		end
+	end
+	return false
+end
+
 function Trading.tier(actor: Actor): string
 	local level = whole(actor.level, 0)
 	local age = whole(actor.accountAgeDays, 0)
@@ -317,7 +344,12 @@ function Trading.dailyCap(actor: Actor): number
 		return math.huge
 	end
 	if tier == "Trusted" then
-		return Trading.CAPS.Trusted
+		local level = whole(actor.level, 0)
+		local clean = whole(actor.cleanHistoryDays, 0)
+		if level >= Trading.TRUSTED_LEVEL or clean >= Trading.CLEAN_DAYS then
+			return Trading.CAPS.Trusted
+		end
+		return Trading.CAPS.Receipt
 	end
 	if tier == "Standard" then
 		local extra = math.max(0, whole(actor.level, 0) - Trading.STANDARD_LEVEL)

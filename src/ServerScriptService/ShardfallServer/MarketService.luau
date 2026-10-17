@@ -38,15 +38,7 @@ local function fail(message: string)
 end
 
 local function hasReceipt(data: any): boolean
-	if type(data) ~= "table" or type(data.receipts) ~= "table" then
-		return false
-	end
-	for _, value in pairs(data.receipts) do
-		if value == true then
-			return true
-		end
-	end
-	return false
+	return Trading.verifiedFromReceipts(data)
 end
 
 local function actorOf(player: Player, data: any, now: number): Trading.Actor
@@ -67,7 +59,7 @@ local function actorOf(player: Player, data: any, now: number): Trading.Actor
 		level = if type(data.level) == "number" then data.level else 1,
 		accountAgeDays = age,
 		cleanHistoryDays = clean,
-		verifiedSpender = data.verifiedSpender == true or hasReceipt(data),
+		verifiedSpender = hasReceipt(data),
 		patron = data.vip == true,
 		verifiedTrader = data.verifiedTrader == true,
 		flagged = data.tradeFlagged == true,
