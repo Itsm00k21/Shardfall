@@ -61,6 +61,8 @@ function PetAura.start(playerGui: PlayerGui, getProfile: () -> any)
 		return nil
 	end
 
+	local generation = 0
+
 	UserInputService.InputBegan:Connect(function(input, _processed)
 		if not PetFlash.should(input.KeyCode.Name, PetRoster.equippedEffect(profile())) then
 			return
@@ -70,8 +72,14 @@ function PetAura.start(playerGui: PlayerGui, getProfile: () -> any)
 		if UserInputService:GetFocusedTextBox() ~= nil then
 			return
 		end
+		generation = PetFlash.bump(generation)
+		local token = generation
 		flash.BackgroundTransparency = 0.45
 		task.delay(0.12, function()
+			-- A newer dodge bumped the counter. This delay must not clear it.
+			if not PetFlash.holds(generation, token) then
+				return
+			end
 			flash.BackgroundTransparency = 1
 		end)
 	end)
