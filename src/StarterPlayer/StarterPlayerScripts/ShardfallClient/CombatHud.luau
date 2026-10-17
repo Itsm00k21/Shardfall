@@ -731,7 +731,10 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			CombatHud.dodge()
 			return
 		end
-		if input.KeyCode.Name == Keybinds.COMBAT.heavy then
+		if
+			input.KeyCode.Name == Keybinds.COMBAT.heavy
+			or input.KeyCode.Name == Keybinds.GAMEPAD.heavy
+		then
 			CombatHud.swing(true)
 			return
 		end

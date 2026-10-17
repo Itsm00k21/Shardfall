@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build c5b67d6+ client` in Output.
+	still leaves `[Shardfall] build e163aa8+ client` in Output.
 ]]
 
-print("[Shardfall] build c5b67d6+ client")
+print("[Shardfall] build e163aa8+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,6 +27,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
 local LegacyChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LegacyChrome"))
+local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local ForeignScripts =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
 local ActionBar = require(script.ActionBar)
@@ -1171,6 +1172,9 @@ hudShell = HudShell.start(playerGui, {
 			pcall(invoke, "UseSkill", "ult")
 		end)
 	end,
+	onHeavy = function()
+		CombatHud.swing(true)
+	end,
 	onLayout = function(name: string, x: number, y: number)
 		if type(latestProfile) ~= "table" then
 			return
@@ -1240,15 +1244,15 @@ actionBar = ActionBar.start(playerGui, {
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)
-		if kind == "market" then
-			closePanels("market")
-			MarketHud.open()
-			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
+		local tab = UiRouter.havenTab(kind, areaId)
+		if tab == nil or menuHub == nil or ClassHud.holdsChoice() then
 			return
 		end
-		closePanels(if kind == "craft" then "craft" else nil)
-		ui.openPanel(kind, areaId)
-		if kind == "craft" then
+		closePanels("menu")
+		menuHub.open(tab)
+		if kind == "market" then
+			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
+		elseif kind == "craft" then
 			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")
 		elseif areaId == "pets" then
 			ui.setStatus("Pet Garden. Companions.", "info")

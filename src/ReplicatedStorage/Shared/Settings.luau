@@ -186,7 +186,7 @@ function Settings.normalize(raw: any): Data
 	then
 		fps = fpsNumber
 	end
-	local SKILL_SLOTS = { "Attack", "Dodge", "Skill1", "Skill2", "Ult" }
+	local SKILL_SLOTS = { "Attack", "Dodge", "Skill1", "Skill2", "Ult", "Heavy" }
 	local layout: { [string]: { number } } = {}
 	if type(controls.layout) == "table" then
 		for _, name in ipairs(SKILL_SLOTS) do

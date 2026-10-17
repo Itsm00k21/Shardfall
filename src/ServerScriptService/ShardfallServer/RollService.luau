@@ -25,14 +25,18 @@ local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
+local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local Settings = require(ReplicatedStorage.Shared.Settings)
 local DataService = require(script.Parent.DataService)
 local PolicyCache = require(script.Parent.PolicyCache)
 
 local RollService = {}
 
-local lastRoll: { [number]: number } = {}
+type LastCrack = { at: number, rarity: string, quick: boolean }
+
+local lastRoll: { [number]: LastCrack } = {}
 local announcementsBound = false
 
 local function reject(message: string)
@@ -182,8 +186,14 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 	local quick = skip == true
 		and RarityConfig.quickAllowed(policyOk, RarityConfig.PAID_LUCK_ENABLED, entitled)
 	local previous = lastRoll[player.UserId]
-	local waitFor = RarityConfig.cooldown(quick)
-	if previous ~= nil and os.clock() - previous < waitFor then
+	local settings = Settings.normalize(profile.uiSettings)
+	local waitFor = RollLoop.gap(
+		settings,
+		if previous ~= nil then previous.rarity else nil,
+		if previous ~= nil then previous.quick else false,
+		quick
+	)
+	if previous ~= nil and os.clock() - previous.at < waitFor then
 		return reject("Roll cooling down.")
 	end
 
@@ -258,7 +268,11 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 	if not ok or captured == nil then
 		return reject(err or "Could not crack that shard.")
 	end
-	lastRoll[player.UserId] = os.clock()
+	lastRoll[player.UserId] = {
+		at = os.clock(),
+		rarity = if type(captured.rarity) == "string" then captured.rarity else "",
+		quick = quick,
+	}
 	local reveal = RarityConfig.reveal(captured.rarity, quick)
 	if reveal.announce then
 		broadcast(player.Name, captured.item.name, captured.rarity, false)

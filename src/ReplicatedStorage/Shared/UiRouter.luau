@@ -176,4 +176,22 @@ function UiRouter.top(state: State): string
 	return state.stack[#state.stack] or state.tab
 end
 
+-- Haven stalls open a hub tab. The legacy forge panel and MarketHud stay
+-- mounted for the banner, and these prompts do not call them.
+function UiRouter.havenTab(kind: string, areaId: string?): string?
+	if kind == "market" then
+		return "market"
+	end
+	if kind == "craft" then
+		return "bag"
+	end
+	if areaId == "pets" or kind == "pets" then
+		return "pets"
+	end
+	if kind == "shards" or kind == "armory" or areaId == "armory" then
+		return "roll"
+	end
+	return nil
+end
+
 return UiRouter

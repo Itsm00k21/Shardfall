@@ -295,6 +295,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local loop = RollLoop.idle()
 	local holdingRoll = false
 	local rollBusy = false
+	local playerAlive = true
 	local streak = 0
 	local bestPull: any = nil
 	local slideHistory = false
@@ -355,11 +356,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	-- Modal on the backdrop stops the mouse from steering the camera.
-	-- The sink stops the character. Shoulder buttons stay free for tabs.
+	-- The sink stops movement, sprint, and combat. Tab letters stay free.
 	local function bindSinkKeys()
 		ContextActionService:UnbindAction("ShardfallMenuSink")
 		local codes = {}
-		for _, name in ipairs(Keybinds.sinkNames(draft.controls.hotkeys)) do
+		for _, name in ipairs(Keybinds.sinkNames()) do
 			local code = (Enum.KeyCode :: any)[name]
 			if code ~= nil then
 				table.insert(codes, code)
@@ -637,6 +638,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tween:Play()
 	end
 
+	local function stopRollChain()
+		revealToken += 1
+		holdingRoll = false
+		activeReveal = nil
+		loop = RollLoop.idle()
+		rollBusy = false
+		setPulse(true)
+	end
+
 	local revealCard = Instance.new("Frame")
 	revealCard.Name = "Reveal"
 	revealCard.AnchorPoint = Vector2.new(0.5, 1)
@@ -852,8 +862,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				):Play()
 			end
 		end
+		local leftRoll = shownId == "roll" and id ~= "roll"
 		shownId = id
 		noteView(id)
+		if leftRoll then
+			stopRollChain()
+		end
 	end
 
 	local function publishBadges()
@@ -2321,33 +2335,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	local function chainAllowed(queued: boolean): boolean
 		local pending = if type(activeItem) == "table" then activeItem.uid else nil
-		local full = RollLoop.bagFull(profile, pending)
-		local tokens = tokenCount()
-		if RollLoop.blocked(tokens, full) ~= nil then
-			return false
-		end
-		if shownId ~= "roll" then
-			return false
-		end
-		if queued then
-			return true
-		end
-		if not (autoOn or holdingRoll) then
-			return false
-		end
 		local rarity = "Common"
 		if type(activeItem) == "table" and type(activeItem.rarity) == "string" then
 			rarity = activeItem.rarity
 		end
-		return RollLoop.stopReason({
-			auto = true,
-			tokens = tokens,
-			bagFull = full,
+		return RollLoop.canChain({
+			open = route.open,
+			onRoll = shownId == "roll",
+			alive = playerAlive,
+			queued = queued,
+			holding = holdingRoll,
+			auto = autoOn,
+			tokens = tokenCount(),
+			bagFull = RollLoop.bagFull(profile, pending),
 			rarity = rarity,
 			stopAt = stopAt,
 			isNew = activeNew,
 			isUpgrade = activeUpgrade,
-		}) == nil
+		})
 	end
 
 	finishReveal = function()
@@ -2563,6 +2568,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			finishReveal()
 		end
 	end)
+
+	local function applyTextScale()
+		local textScale = 1
+		if type(draft.access.textScale) == "number" then
+			textScale = draft.access.textScale
+		end
+		for _, desc in ipairs(screen:GetDescendants()) do
+			if desc:GetAttribute("SkipTextScale") == true then
+				continue
+			end
+			if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+				local base = desc:GetAttribute("BaseText")
+				if type(base) ~= "number" then
+					base = desc.TextSize
+					desc:SetAttribute("BaseText", base)
+				end
+				desc.TextSize =
+					math.max(UiTheme.MIN_TEXT, math.floor((base :: number) * textScale + 0.5))
+			end
+		end
+	end
 
 	local function paint()
 		paintHints()
@@ -2862,6 +2888,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 			end)
 		end
+		applyTextScale()
 	end
 
 	local function playOpenMotion(fromClosed: boolean)
@@ -2907,6 +2934,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			show(pageFor(state))
 			playOpenMotion(not wasOpen)
 		else
+			stopRollChain()
 			if wasOpen then
 				playUi("close")
 			end
@@ -3030,9 +3058,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then
-			return
-		end
 		if capturing ~= nil and input.UserInputType == Enum.UserInputType.Keyboard then
 			local key = input.KeyCode.Name
 			if string.match(key, "^%a$") ~= nil or #key == 1 then
@@ -3055,6 +3080,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					show("settings")
 				end
 			end
+			return
+		end
+		if processed then
 			return
 		end
 		if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.ButtonB then
@@ -3087,6 +3115,38 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		follow(nextState)
 	end)
+
+	local function bindLife(character: Model)
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid == nil then
+			local waited = character:WaitForChild("Humanoid", 8)
+			if waited ~= nil and waited:IsA("Humanoid") then
+				humanoid = waited
+			end
+		end
+		if humanoid == nil or not humanoid:IsA("Humanoid") then
+			return
+		end
+		local function died()
+			playerAlive = false
+			stopRollChain()
+		end
+		if humanoid.Health <= 0 then
+			died()
+		end
+		humanoid.Died:Connect(died)
+	end
+
+	local localPlayer = Players.LocalPlayer
+	if localPlayer ~= nil then
+		localPlayer.CharacterAdded:Connect(function(character)
+			playerAlive = true
+			task.spawn(bindLife, character)
+		end)
+		if localPlayer.Character ~= nil then
+			task.spawn(bindLife, localPlayer.Character)
+		end
+	end
 
 	paint()
 
@@ -3125,6 +3185,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			else
 				publishBadges()
 			end
+			applyTextScale()
 			showClassPrompt(false)
 		end,
 	}

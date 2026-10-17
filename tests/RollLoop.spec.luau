@@ -223,4 +223,58 @@ describe("RollLoop", function()
 		expect(string.find(hub, "hooks.onRoll", 1, true)).toBeNil()
 		expect(string.find(client, "handoffRoll", 1, true)).toBeNil()
 	end)
+
+	it("stops a chain when the hub, the roll tab, or the player is gone", function()
+		local function chain(patch: { [string]: any }): RollLoop.ChainInput
+			local input: RollLoop.ChainInput = {
+				open = true,
+				onRoll = true,
+				alive = true,
+				queued = false,
+				holding = false,
+				auto = true,
+				tokens = 3,
+				bagFull = false,
+				rarity = "Common",
+				stopAt = "Rare",
+				isNew = false,
+				isUpgrade = false,
+			}
+			for key, value in pairs(patch) do
+				(input :: any)[key] = value
+			end
+			return input
+		end
+		expect(RollLoop.canChain(chain({}))).toEqual(true)
+		expect(RollLoop.canChain(chain({ open = false }))).toEqual(false)
+		expect(RollLoop.canChain(chain({ onRoll = false }))).toEqual(false)
+		expect(RollLoop.canChain(chain({ alive = false }))).toEqual(false)
+		expect(RollLoop.canChain(chain({ auto = false, holding = true }))).toEqual(true)
+		expect(RollLoop.canChain(chain({ auto = false, queued = true }))).toEqual(true)
+		expect(RollLoop.canChain(chain({ auto = false }))).toEqual(false)
+		expect(RollLoop.canChain(chain({ tokens = 0 }))).toEqual(false)
+		local hub =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
+		expect(string.find(hub, "RollLoop.canChain", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "humanoid.Died", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "stopRollChain", 1, true) ~= nil).toBeTrue()
+		expect(string.find(roll, "RollLoop.gap", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("makes the server wait out the reveal before the next crack", function()
+		local settings = Settings.default()
+		expect(RollLoop.gap(settings, nil, false, false)).toEqual(RarityConfig.COOLDOWN)
+		expect(RollLoop.gap(settings, nil, false, true)).toEqual(RarityConfig.QUICK_COOLDOWN)
+		expect(RollLoop.gap(settings, "Common", false, false)).toEqual(RarityConfig.COOLDOWN)
+		local rare = RollLoop.seconds(settings, "Rare", false, false)
+		expect(rare > RarityConfig.COOLDOWN).toBeTrue()
+		expect(RollLoop.gap(settings, "Rare", false, false)).toEqual(rare)
+		local epic = RollLoop.seconds(settings, "Epic", false, false)
+		expect(RollLoop.gap(settings, "Epic", false, true)).toEqual(epic)
+		local instant = Settings.normalize({ rolls = { animation = "instant" } })
+		expect(RollLoop.gap(instant, "Epic", false, false)).toEqual(RarityConfig.COOLDOWN)
+		local reduced = Settings.normalize({ camera = { flash = "reduced" } })
+		expect(RollLoop.gap(reduced, "Legendary", false, false)).toEqual(RarityConfig.COOLDOWN)
+	end)
 end)

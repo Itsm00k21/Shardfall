@@ -39,6 +39,7 @@ export type Callbacks = {
 	onDodge: () -> (),
 	onSkill: (number) -> (),
 	onUlt: () -> (),
+	onHeavy: () -> (),
 	onLayout: (string, number, number) -> (),
 }
 
@@ -58,6 +59,7 @@ local SKILL_ICON = {
 	Skill1 = "skill",
 	Skill2 = "skill",
 	Ult = "ult",
+	Heavy = "heavy",
 }
 
 local SKILL_BIND = {
@@ -66,6 +68,7 @@ local SKILL_BIND = {
 	Skill1 = Keybinds.display(Keybinds.COMBAT.skill1),
 	Skill2 = Keybinds.display(Keybinds.COMBAT.skill2),
 	Ult = Keybinds.display(Keybinds.COMBAT.ult),
+	Heavy = Keybinds.display(Keybinds.COMBAT.heavy),
 }
 
 local function rgb(name: string): Color3
@@ -550,6 +553,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		callbacks.onSkill(2)
 	end)
 	skillButton("Ult", callbacks.onUlt)
+	skillButton("Heavy", callbacks.onHeavy)
 	RunService.Heartbeat:Connect(function()
 		local now = os.clock()
 		for _, button in ipairs(skillButtons) do
@@ -579,7 +583,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local keyName = input.KeyCode.Name
 		if keyName == Keybinds.COMBAT.attack then
 			callbacks.onAttack()
-		elseif keyName == Keybinds.COMBAT.skill1 or keyName == Keybinds.ALIAS.skill1 then
+		elseif keyName == Keybinds.COMBAT.skill1 then
 			callbacks.onSkill(1)
 		elseif keyName == Keybinds.COMBAT.skill2 then
 			callbacks.onSkill(2)
