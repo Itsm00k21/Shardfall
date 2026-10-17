@@ -42,6 +42,7 @@ local HudShell = require(script.HudShell)
 local MenuHub = require(script.MenuHub)
 local InventoryHud = require(script.InventoryHud)
 local LoadingHud = require(script.LoadingHud)
+local StarterGoalHud = require(script.StarterGoalHud)
 local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
@@ -1200,6 +1201,9 @@ hudShell = HudShell.start(playerGui, {
 		end)
 	end,
 })
+-- After the shell, so the rows can sit on ShardfallHud. The frame stays
+-- hidden until present. A new ScreenGui here would be removed on ChildAdded.
+StarterGoalHud.start(playerGui)
 
 actionBar = ActionBar.start(playerGui, {
 	onMenu = function()
