@@ -1348,10 +1348,24 @@ function RaidService.receive(player: Player)
 	local ok, join = pcall(function()
 		return player:GetJoinData()
 	end)
-	if not ok or type(join) ~= "table" or type(join.TeleportData) ~= "table" then
+	local payload = if ok and type(join) == "table" then join.TeleportData else nil
+	if type(payload) ~= "table" then
+		-- No teleport data. A follow-in on a reserved Heartwood server joins
+		-- the pull already running here. The host id comes from this server.
+		local onReserved =
+			not ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+		if onReserved then
+			local DungeonService = dungeon()
+			local storyHost = DungeonService.echoHost(player, "story")
+			local normalHost = DungeonService.echoHost(player, "normal")
+			if storyHost ~= nil and normalHost == nil then
+				startQueue(player, "story", "flex", false)
+			elseif normalHost ~= nil and storyHost == nil then
+				startQueue(player, "normal", "flex", false)
+			end
+		end
 		return
 	end
-	local payload = join.TeleportData
 	if payload.raid ~= "heartwood" then
 		return
 	end
