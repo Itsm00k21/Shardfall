@@ -10,8 +10,9 @@
 	use an empty state. A missing class opens the class cards.
 
 	The roll tab presents the server result. RollHype tracks the session,
-	the legendary pity bar, and the full-animation build-up. A close call
-	is one beat beside the card. The client does not decide the roll.
+	the Epic and Legendary pity bars, and the full-animation build-up.
+	A close call is one beat beside the card. The client does not decide
+	the roll, and it does not advance pity.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -316,7 +317,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local slideHistory = false
 	local revealToken = 0
 	local lastCrack = 0
-	local pityTween: Tween? = nil
+	local pityTweens: { Tween } = {}
+	local epicFillShown = 0
+	local legendaryFillShown = 0
+	local epicFlashRoll = -1
+	local legendaryFlashRoll = -1
 	local serverSince: number? = nil
 	local serverEpic: number? = nil
 	local lastMissed = false
@@ -2243,10 +2248,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	local function paintRoll()
 		clear(roll)
-		if pityTween ~= nil then
-			pityTween:Cancel()
-			pityTween = nil
+		for _, tween in ipairs(pityTweens) do
+			tween:Cancel()
 		end
+		pityTweens = {}
 		setPulse(loop.phase == "idle" and not rollBusy)
 
 		local toggles = Instance.new("Frame")
@@ -2372,6 +2377,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			then { pity = { sinceLegendary = serverSince } }
 			else nil
 		local sinceLegendary, pityGoal = UiRouter.legendaryPity(profile, pityResult)
+		local epicMeter = RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)
 		local pityMeter = RollHype.pity(sinceLegendary, pityGoal)
 		reelStreak.Text = UiRouter.streakText(hype.streak, lastMissed)
 		reelStreak.TextColor3 = rgb(UiRouter.streakTone(hype.streak, lastMissed))
@@ -2460,76 +2466,150 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 
+		local function playPity(tween: Tween)
+			table.insert(pityTweens, tween)
+			tween:Play()
+		end
+		-- Full-width rows. A phone hub is too narrow for two counters
+		-- side by side, and 14px text stays on one line.
 		local function meter(
 			name: string,
 			caption: string,
 			fill: number,
 			order: number,
-			flash: boolean
+			fromFill: number,
+			gold: boolean,
+			animate: string
 		)
 			local host = Instance.new("Frame")
 			host.Name = name
 			host.BackgroundColor3 = rgb("header")
-			host.Size = UDim2.new(1, 0, 0, 28)
+			host.Size = UDim2.new(1, 0, 0, 36)
 			host.BorderSizePixel = 0
+			host.ClipsDescendants = true
 			host.LayoutOrder = order
 			host.Parent = roll
 			local corner = Instance.new("UICorner")
 			corner.CornerRadius = UDim.new(0, 6)
 			corner.Parent = host
+			local from = math.clamp(fromFill, 0, 1)
+			local target = math.clamp(fill, 0, 1)
 			local bar = Instance.new("Frame")
 			bar.Name = "Fill"
-			bar.Size = UDim2.fromScale(math.clamp(fill, 0, 1), 1)
-			bar.BackgroundColor3 = if flash then rgb("gold") else rgb("accent")
+			bar.Size = UDim2.fromScale(from, 1)
+			bar.BackgroundColor3 = if gold then rgb("gold") else rgb("accent")
 			bar.BorderSizePixel = 0
 			bar.Parent = host
 			local barCorner = Instance.new("UICorner")
 			barCorner.CornerRadius = UDim.new(0, 6)
 			barCorner.Parent = bar
-			if flash and not UiMotion.reduced(draft) then
-				local tween = TweenService:Create(
+			local reduced = UiMotion.reduced(draft)
+			if not reduced and math.abs(target - from) > 0.001 then
+				playPity(TweenService:Create(
 					bar,
-					TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-					{ BackgroundTransparency = 0.45 }
-				)
-				pityTween = tween
-				tween:Play()
+					TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{ Size = UDim2.fromScale(target, 1) }
+				))
+			else
+				bar.Size = UDim2.fromScale(target, 1)
+			end
+			if animate == "flash" and not reduced then
+				bar.BackgroundTransparency = 0.55
+				playPity(TweenService:Create(
+					bar,
+					TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{ BackgroundTransparency = 0 }
+				))
+			elseif animate == "pulse" and not reduced then
+				playPity(TweenService:Create(
+					bar,
+					TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+					{ BackgroundTransparency = 0.35 }
+				))
 			end
 			local label = Instance.new("TextLabel")
 			label.BackgroundTransparency = 1
-			label.Size = UDim2.fromScale(1, 1)
+			label.Position = UDim2.fromOffset(8, 0)
+			label.Size = UDim2.new(1, -16, 1, 0)
 			label.Font = bodyFont()
 			label.TextSize = UiTheme.MIN_TEXT
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.TextTruncate = Enum.TextTruncate.AtEnd
 			label.TextColor3 = rgb("text")
+			label.TextStrokeColor3 = rgb("ink")
+			label.TextStrokeTransparency = 0.4
 			label.Text = caption
 			label.ZIndex = 2
 			label.Parent = host
 		end
-		if pityMeter.ok == true and type(pityMeter.goal) == "number" then
-			local shown = math.floor(pityMeter.counter)
-			local goal = math.floor(pityMeter.goal)
-			local reset = false
-			if shown == 0 and lastLanded ~= nil then
-				reset = Rarities.isLegendaryOrBetter(lastLanded)
+		local function pityCaption(label: string, meterRow: RollHype.Meter, reset: boolean): string
+			if meterRow.ok ~= true or type(meterRow.goal) ~= "number" then
+				return label .. " pity"
 			end
-			local caption = if reset
-				then string.format("Legendary reset  %d / %d", shown, goal)
-				else string.format("Legendary  %d / %d", shown, goal)
-			meter("LegendaryPity", caption, pityMeter.fill, 10, reset)
-		else
-			meter("LegendaryPity", "Legendary pity", 0, 10, false)
+			local shown = math.floor(meterRow.counter)
+			local goal = math.floor(meterRow.goal)
+			if reset then
+				return string.format("%s reset  %d / %d", label, shown, goal)
+			end
+			return string.format("%s  %d / %d", label, shown, goal)
 		end
+		local function armPayoff(shownRoll: number, on: boolean): (boolean, number)
+			if not on then
+				return false, shownRoll
+			end
+			if shownRoll == hype.rolls then
+				return false, shownRoll
+			end
+			return true, hype.rolls
+		end
+		local function paintPity(
+			name: string,
+			label: string,
+			meterRow: RollHype.Meter,
+			floor: string,
+			order: number,
+			fromFill: number,
+			shownRoll: number
+		): (number, number)
+			local fill = 0
+			local reset = false
+			local pulse = false
+			if meterRow.ok == true and type(meterRow.goal) == "number" then
+				fill = meterRow.fill
+				reset = RollBoard.payoff(meterRow.counter, lastLanded, floor)
+				pulse = RollBoard.pulse(meterRow.fill) and not reset
+			end
+			local flash, nextSeen = armPayoff(shownRoll, reset)
+			local animate = if flash then "flash" elseif pulse then "pulse" else "none"
+			meter(name, pityCaption(label, meterRow, reset), fill, order, fromFill, reset, animate)
+			return fill, nextSeen
+		end
+		local nextEpicFill, nextEpicSeen =
+			paintPity("EpicPity", "Epic", epicMeter, "Epic", 10, epicFillShown, epicFlashRoll)
+		epicFillShown = nextEpicFill
+		epicFlashRoll = nextEpicSeen
+		local nextLegendaryFill, nextLegendarySeen = paintPity(
+			"LegendaryPity",
+			"Legendary",
+			pityMeter,
+			"Legendary",
+			11,
+			legendaryFillShown,
+			legendaryFlashRoll
+		)
+		legendaryFillShown = nextLegendaryFill
+		legendaryFlashRoll = nextLegendarySeen
 		local luck = if type(profile) == "table" then profile.shardLuck or 0 else 0
 		local boost = if type(profile) == "table" then profile.luckBoost or 0 else 0
-		line(roll, "Odds", 11, rgb("gold"))
+		line(roll, "Odds", 12, rgb("gold"))
 		local oddsSince =
 			UiRouter.oddsSince(if type(sinceLegendary) == "number" then sinceLegendary else 0)
 		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), luck, boost, oddsSince)
 		if #odds == 0 then
-			line(roll, "Odds are unavailable.", 12, rgb("muted"))
+			line(roll, "Odds are unavailable.", 13, rgb("muted"))
 		else
 			for index, text in ipairs(odds) do
-				line(roll, text, 12 + index, rgb("text"))
+				line(roll, text, 13 + index, rgb("text"))
 			end
 		end
 

@@ -5,7 +5,8 @@
 
 	Pity fill, the odds lines, whether auto-roll should fire again, the
 	last results, and how big the celebration is. The reel still plays
-	the spin. This module does not roll.
+	the spin. This module does not roll. A paid roll is not an input:
+	pulse and payoff read only the counter the caller already has.
 ]]
 
 local Rarities = require("./Rarities")
@@ -31,6 +32,33 @@ function RollBoard.fill(since: any, cap: number): number
 		return 0
 	end
 	return math.clamp(value / cap, 0, 1)
+end
+
+-- A bar this full pulses. 0.9 is 90 of 100, and 900 of 1000.
+RollBoard.NEAR = 0.9
+
+function RollBoard.pulse(fill: any): boolean
+	if type(fill) ~= "number" or fill ~= fill or fill == math.huge or fill == -math.huge then
+		return false
+	end
+	return fill >= RollBoard.NEAR
+end
+
+-- The counter just cleared because this land met the bar's floor.
+-- shown must be the server counter, not a client tally.
+function RollBoard.payoff(shown: any, landed: any, floor: string): boolean
+	if type(shown) ~= "number" or shown ~= 0 then
+		return false
+	end
+	if type(landed) ~= "string" or type(floor) ~= "string" then
+		return false
+	end
+	local landedRank = Rarities.INDEX[landed]
+	local floorRank = Rarities.INDEX[floor]
+	if landedRank == nil or floorRank == nil then
+		return false
+	end
+	return landedRank >= floorRank
 end
 
 function RollBoard.bars(profile: any): Bars

@@ -122,6 +122,31 @@ describe("RarityConfig", function()
 		expect(secret).toEqual("Secret")
 	end)
 
+	it("does not give a paid roll an earlier pity floor", function()
+		local pool = ladderPool()
+		local huge = RarityConfig.luckMultiplier({
+			shardLuck = 10000,
+			luckBoost = 10000,
+			vip = true,
+			paidLuck = true,
+			shardRolls = 9,
+		})
+		local _, early, earlyFloor =
+			RarityConfig.pick(pool, huge, { sinceEpic = 98, sinceLegendary = 998 }, scripted(0.5))
+		expect(early).toEqual(false)
+		expect(earlyFloor).toBeNil()
+		local atEpic, epicOn, epicFloor =
+			RarityConfig.pick(pool, huge, { sinceEpic = 99, sinceLegendary = 0 }, scripted(0.5))
+		expect(epicOn).toEqual(true)
+		expect(epicFloor).toEqual("Epic")
+		expect(Rarities.INDEX[atEpic] >= Rarities.INDEX.Epic).toBeTrue()
+		local atLegend, legendOn, legendFloor =
+			RarityConfig.pick(pool, 1, { sinceEpic = 50, sinceLegendary = 999 }, scripted(0.5))
+		expect(atLegend).toEqual("Legendary")
+		expect(legendOn).toEqual(true)
+		expect(legendFloor).toEqual("Legendary")
+	end)
+
 	it("resets the pity counter the granted rarity clears", function()
 		local pity = { sinceEpic = 99, sinceLegendary = 40 }
 		RarityConfig.advance(pity, "Epic", "Epic")
