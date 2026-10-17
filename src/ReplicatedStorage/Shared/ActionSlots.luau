@@ -8,7 +8,7 @@
 	none is repeated. Keys are 1 through 8. Shift stays dodge and F stays
 	interact; neither is a slot.
 
-	Gamepad d-pad and bumper paging are not bound.
+	On a controller the D-pad fires slots 1-4. Holding ButtonL1 fires slots 5-8.
 
 	Skill unlocks follow the class list: levels 1, 2, 4, 6, then 10 for the
 	ultimate. A locked skill can sit on the bar. Using it is refused.
