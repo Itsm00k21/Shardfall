@@ -7,7 +7,10 @@
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
 	the existing panel. The Rootvault arch is an EnterPad. The Heartwood arch
 	starts the Story raid queue and is not an EnterPad. Milestone 2 dresses
-	each arch and its name plate. Lights stay as the blockout left them.
+	each arch and its name plate. Milestone 3 puts one shadowless light in
+	each mouth, a quiet emitter under the forge rate cap, and a flat court
+	ring. An open mouth pulses. A sealed mouth stays dim until someone
+	stands close. Global Lighting is left on the day cycle. No new sound id.
 
 	StreamingEnabled cannot be set from a script. It lives on Workspace in
 	default.project.json. The hub model is Persistent so the islands stay
@@ -35,6 +38,7 @@ local HavenBuilder = {}
 
 local orbitConnection: RBXScriptConnection? = nil
 local lifeConnection: RBXScriptConnection? = nil
+local gateConnection: RBXScriptConnection? = nil
 -- One Story queue per second. The dungeon enter debounce lives in DungeonService.
 local heartwoodReadyAt: { [number]: number } = {}
 local wavesReadyAt: { [number]: number } = {}
@@ -1165,14 +1169,453 @@ local function buildCourt(parent: Instance)
 	end
 end
 
-local GATE_LIGHT: { [string]: { brightness: number, range: number } } = {
-	rootvault = { brightness = 0.45, range = 16 },
-	heartwood = { brightness = 0.35, range = 14 },
-	tidecrypt = { brightness = 0.4, range = 14 },
-	ember = { brightness = 0.3, range = 12 },
-	frost = { brightness = 0.4, range = 16 },
-	void = { brightness = 0.2, range = 10 },
+-- Light and VFX table from docs/design/DUNGEON_GATE_PLAZA.md. One light,
+-- shadows off, range at or under 18, emitter rate at or under 8. Void has
+-- no emitter. Open mouths use the Heartwood pulse (0.15 over 3 seconds).
+-- A sealed mouth keeps that number and does not play it.
+HavenBuilder.RATE_CAP = 8
+HavenBuilder.RANGE_CAP = 18
+HavenBuilder.EMITTER_CAP = 8
+HavenBuilder.APPROACH_STUDS = 12
+HavenBuilder.QUIET_STUDS = 96
+HavenBuilder.PULSE_PERIOD = 3
+HavenBuilder.APPROACH_BOOST = 0.18
+HavenBuilder.SEALED_NEAR = 0.12
+
+type GateEmitterSpec = {
+	name: string,
+	rate: number,
+	lifeMin: number,
+	lifeMax: number,
+	speedMin: number,
+	speedMax: number,
+	color: { number },
+	colorEnd: { number }?,
+	host: string,
+	rise: boolean?,
+	fall: boolean?,
+	glow: number?,
+	size: number?,
+	drag: number?,
 }
+
+type GateVfxSpec = {
+	brightness: number,
+	range: number,
+	color: { number },
+	pulse: number,
+	emitters: { GateEmitterSpec },
+}
+
+type GateGlow = {
+	sealed: boolean,
+	pulse: number,
+	restBrightness: number,
+	restTransparency: number,
+	mouthX: number,
+	mouthZ: number,
+	light: PointLight,
+	fill: BasePart,
+	emitters: { ParticleEmitter },
+}
+
+type GatePerson = {
+	x: number,
+	z: number,
+	reduced: boolean,
+}
+
+export type MouthLook = {
+	brightness: number,
+	enabled: boolean,
+	transparency: number,
+	particles: boolean,
+}
+
+local GATE_VFX: { [string]: GateVfxSpec } = {
+	rootvault = {
+		brightness = 0.45,
+		range = 16,
+		color = { 64, 196, 96 },
+		pulse = 0.15,
+		emitters = {
+			{
+				name = "mist",
+				rate = 6,
+				lifeMin = 1.2,
+				lifeMax = 2.0,
+				speedMin = 0.35,
+				speedMax = 0.9,
+				color = { 64, 140, 86 },
+				host = "PillarL",
+				rise = true,
+				glow = 0.15,
+				size = 0.55,
+				drag = 2,
+			},
+		},
+	},
+	heartwood = {
+		brightness = 0.35,
+		range = 14,
+		color = { 214, 140, 64 },
+		pulse = 0.15,
+		emitters = {
+			{
+				name = "ash",
+				rate = 5,
+				lifeMin = 1.4,
+				lifeMax = 2.2,
+				speedMin = 0.25,
+				speedMax = 0.7,
+				color = { 70, 68, 66 },
+				colorEnd = { 176, 120, 64 },
+				host = "Lintel",
+				rise = true,
+				glow = 0.12,
+				size = 0.35,
+				drag = 1.5,
+			},
+		},
+	},
+	tidecrypt = {
+		brightness = 0.4,
+		range = 14,
+		color = { 36, 96, 140 },
+		pulse = 0,
+		emitters = {
+			{
+				name = "sheet",
+				rate = 4,
+				lifeMin = 1.1,
+				lifeMax = 1.8,
+				speedMin = 0.2,
+				speedMax = 0.55,
+				color = { 150, 210, 204 },
+				host = "PillarL",
+				fall = true,
+				glow = 0.2,
+				size = 0.4,
+				drag = 1,
+			},
+			{
+				name = "sheet",
+				rate = 4,
+				lifeMin = 1.1,
+				lifeMax = 1.8,
+				speedMin = 0.2,
+				speedMax = 0.55,
+				color = { 150, 210, 204 },
+				host = "PillarR",
+				fall = true,
+				glow = 0.2,
+				size = 0.4,
+				drag = 1,
+			},
+		},
+	},
+	ember = {
+		brightness = 0.3,
+		range = 12,
+		color = { 255, 120, 40 },
+		pulse = 0,
+		emitters = {
+			{
+				name = "sparks",
+				rate = 6,
+				lifeMin = 0.3,
+				lifeMax = 0.6,
+				speedMin = 0.4,
+				speedMax = 1.2,
+				color = { 255, 140, 48 },
+				host = "Seam",
+				rise = true,
+				glow = 0.35,
+				size = 0.2,
+				drag = 0.4,
+			},
+		},
+	},
+	frost = {
+		brightness = 0.4,
+		range = 16,
+		color = { 186, 228, 255 },
+		pulse = 0,
+		emitters = {
+			{
+				name = "wisp",
+				rate = 3,
+				lifeMin = 2.0,
+				lifeMax = 3.2,
+				speedMin = 0.05,
+				speedMax = 0.2,
+				color = { 236, 244, 248 },
+				host = "PillarL",
+				glow = 0.25,
+				size = 0.6,
+				drag = 3,
+			},
+		},
+	},
+	void = {
+		brightness = 0.2,
+		range = 10,
+		color = { 120, 60, 180 },
+		pulse = 0,
+		emitters = {},
+	},
+}
+
+HavenBuilder.GATE_VFX = GATE_VFX
+
+local gateElapsed = 0
+local gateEmitterCount = 0
+local gateGlows: { GateGlow } = {}
+local playersService: any = nil
+local dataServiceModule: any = nil
+local dataServiceTried = false
+
+function HavenBuilder.mouthLook(
+	restBrightness: number,
+	restTransparency: number,
+	sealed: boolean,
+	pulse: number,
+	elapsed: number,
+	distance: number?,
+	reduced: boolean
+): MouthLook
+	local time = 0
+	if type(elapsed) == "number" and elapsed == elapsed then
+		time = elapsed
+	end
+	local near = type(distance) == "number"
+		and distance == distance
+		and distance <= HavenBuilder.APPROACH_STUDS
+	local particles = reduced ~= true
+	if sealed then
+		if near then
+			return {
+				brightness = HavenBuilder.SEALED_NEAR,
+				enabled = true,
+				transparency = math.max(0.6, restTransparency - 0.13),
+				particles = particles,
+			}
+		end
+		return {
+			brightness = 0,
+			enabled = false,
+			transparency = restTransparency,
+			particles = particles,
+		}
+	end
+	local brightness = restBrightness
+	if reduced ~= true and type(pulse) == "number" and pulse > 0 then
+		local wave = math.sin(time * (math.pi * 2 / HavenBuilder.PULSE_PERIOD))
+		brightness += wave * (pulse / 2)
+	end
+	local transparency = restTransparency
+	if near then
+		brightness += HavenBuilder.APPROACH_BOOST
+		transparency = math.max(0.12, restTransparency - 0.15)
+	end
+	if brightness < 0 then
+		brightness = 0
+	end
+	return {
+		brightness = brightness,
+		enabled = true,
+		transparency = transparency,
+		particles = particles,
+	}
+end
+
+-- Same rule as UiMotion.reduced, plus a VFX slider parked at zero.
+local function settingsAreQuiet(settings: any): boolean
+	if type(settings) ~= "table" then
+		return false
+	end
+	local camera = settings.camera
+	if type(camera) == "table" and camera.flash == "reduced" then
+		return true
+	end
+	local graphics = settings.graphics
+	if type(graphics) == "table" and type(graphics.vfx) == "number" and graphics.vfx <= 0 then
+		return true
+	end
+	return false
+end
+
+local function personIsQuiet(player: any): boolean
+	if player == nil then
+		return false
+	end
+	if type(player.GetAttribute) == "function" and player:GetAttribute("ReducedMotion") == true then
+		return true
+	end
+	if not dataServiceTried then
+		dataServiceTried = true
+		if script ~= nil and script.Parent ~= nil then
+			local ok, loaded = pcall(function()
+				return require(script.Parent.DataService)
+			end)
+			if ok then
+				dataServiceModule = loaded
+			end
+		end
+	end
+	if dataServiceModule == nil or type(dataServiceModule.get) ~= "function" then
+		return false
+	end
+	local ok, profile = pcall(function()
+		return dataServiceModule.get(player)
+	end)
+	if not ok or type(profile) ~= "table" then
+		return false
+	end
+	return settingsAreQuiet(profile.uiSettings)
+end
+
+local function samplePeople(): { GatePerson }
+	local people: { GatePerson } = {}
+	if playersService == nil then
+		local ok, service = pcall(function()
+			return game:GetService("Players")
+		end)
+		if not ok or service == nil then
+			return people
+		end
+		playersService = service
+	end
+	local listed, list = pcall(function()
+		return playersService:GetPlayers()
+	end)
+	if not listed or type(list) ~= "table" then
+		return people
+	end
+	for _, player in ipairs(list) do
+		local quiet = false
+		local quietOk, value = pcall(personIsQuiet, player)
+		if quietOk and value == true then
+			quiet = true
+		end
+		local character = player.Character
+		local root: Instance? = nil
+		if character ~= nil and type(character.FindFirstChild) == "function" then
+			root = character:FindFirstChild("HumanoidRootPart")
+		end
+		if root ~= nil and root:IsA("BasePart") then
+			local position = root.Position
+			table.insert(people, {
+				x = position.X,
+				z = position.Z,
+				reduced = quiet,
+			})
+		end
+	end
+	return people
+end
+
+local function nearestPerson(people: { GatePerson }, x: number, z: number): (number?, boolean)
+	local best: number? = nil
+	local reduced = false
+	for _, person in ipairs(people) do
+		local dx = person.x - x
+		local dz = person.z - z
+		local distance = math.sqrt(dx * dx + dz * dz)
+		if best == nil or distance < best then
+			best = distance
+		end
+		if person.reduced == true and distance <= HavenBuilder.QUIET_STUDS then
+			reduced = true
+		end
+	end
+	return best, reduced
+end
+
+function HavenBuilder.stepGates(dt: number?, people: { GatePerson }?)
+	local step = 0
+	if type(dt) == "number" and dt == dt then
+		step = dt
+	end
+	gateElapsed += step
+	local crowd = people
+	if crowd == nil then
+		crowd = samplePeople()
+	end
+	for _, gate in ipairs(gateGlows) do
+		if gate.fill.Parent ~= nil then
+			local distance, reduced = nearestPerson(crowd, gate.mouthX, gate.mouthZ)
+			local look = HavenBuilder.mouthLook(
+				gate.restBrightness,
+				gate.restTransparency,
+				gate.sealed,
+				gate.pulse,
+				gateElapsed,
+				distance,
+				reduced
+			)
+			gate.light.Brightness = look.brightness
+			gate.light.Enabled = look.enabled
+			gate.light.Shadows = false
+			gate.fill.Transparency = look.transparency
+			for _, emitter in ipairs(gate.emitters) do
+				emitter.Enabled = look.particles
+			end
+		end
+	end
+end
+
+local function placeGateEmitter(host: Instance, spec: GateEmitterSpec): ParticleEmitter?
+	if gateEmitterCount >= HavenBuilder.EMITTER_CAP then
+		return nil
+	end
+	local rate = spec.rate
+	if type(rate) ~= "number" or rate ~= rate or rate <= 0 then
+		return nil
+	end
+	if rate > HavenBuilder.RATE_CAP then
+		rate = HavenBuilder.RATE_CAP
+	end
+	local emitter = borrow("ParticleEmitter") :: ParticleEmitter
+	emitter.Name = spec.name
+	emitter.Rate = rate
+	emitter.Lifetime = NumberRange.new(spec.lifeMin, spec.lifeMax)
+	emitter.Speed = NumberRange.new(spec.speedMin, spec.speedMax)
+	emitter.LightEmission = spec.glow or 0.2
+	emitter.Drag = spec.drag or 1
+	emitter.Size = NumberSequence.new(spec.size or 0.4)
+	emitter.Enabled = true
+	emitter.LockedToPart = true
+	local color = rgb(spec.color)
+	if spec.colorEnd ~= nil then
+		emitter.Color = ColorSequence.new(color, rgb(spec.colorEnd))
+	else
+		emitter.Color = ColorSequence.new(color)
+	end
+	if spec.fall == true then
+		emitter.EmissionDirection = Enum.NormalId.Bottom
+		emitter.Acceleration = Vector3.new(0, -0.45, 0)
+	elseif spec.rise == true then
+		emitter.EmissionDirection = Enum.NormalId.Top
+		emitter.Acceleration = Vector3.new(0, 1.1, 0)
+	else
+		emitter.EmissionDirection = Enum.NormalId.Top
+		emitter.Acceleration = Vector3.new(0, 0.12, 0)
+	end
+	emitter.Parent = host
+	gateEmitterCount += 1
+	return emitter
+end
+
+local function bindGateMotion()
+	if gateConnection ~= nil then
+		gateConnection:Disconnect()
+		gateConnection = nil
+	end
+	gateConnection = RunService.Heartbeat:Connect(function(dt)
+		HavenBuilder.stepGates(dt, nil)
+	end)
+end
 
 local DRESS_MATERIAL: { [string]: Enum.Material } = {
 	roots = Enum.Material.Wood,
@@ -1208,6 +1651,9 @@ local function accent(
 end
 
 local function buildPortals(parent: Instance)
+	table.clear(gateGlows)
+	gateEmitterCount = 0
+	gateElapsed = 0
 	local shelf = Instance.new("Model")
 	shelf.Name = "RealmArches"
 	shelf.Parent = parent
@@ -1270,26 +1716,45 @@ local function buildPortals(parent: Instance)
 			Enum.Material.Neon,
 			false
 		)
-		local open = portal.open == true
 		local sealed = portal.sealed == true
-		fill.Transparency = if sealed then 0.75 else 0.35
+		local restTransparency = if sealed then 0.75 else 0.35
+		fill.Transparency = restTransparency
 		fill.CanTouch = false
-		local spec = GATE_LIGHT[portal.id]
-		local brightness = 0.12
-		local lightRange = 12
-		if spec ~= nil then
-			lightRange = spec.range
-			if open then
-				brightness = spec.brightness
-			end
-		end
+		local vfx = GATE_VFX[portal.id]
 		local portalLight = Instance.new("PointLight")
 		portalLight.Name = "PointLight"
-		portalLight.Color = color
-		portalLight.Brightness = brightness
-		portalLight.Range = lightRange
 		portalLight.Shadows = false
+		if vfx ~= nil then
+			portalLight.Color = rgb(vfx.color)
+			portalLight.Range = math.min(vfx.range, HavenBuilder.RANGE_CAP)
+			portalLight:SetAttribute("GateBrightness", vfx.brightness)
+			portalLight:SetAttribute("GateRange", portalLight.Range)
+			portalLight:SetAttribute("GatePulse", vfx.pulse)
+			local rest = HavenBuilder.mouthLook(vfx.brightness, restTransparency, sealed, vfx.pulse, 0, nil, false)
+			portalLight.Brightness = rest.brightness
+			portalLight.Enabled = rest.enabled
+		else
+			portalLight.Color = color
+			portalLight.Brightness = 0
+			portalLight.Range = 12
+			portalLight.Enabled = false
+		end
 		portalLight.Parent = fill
+		if portal.id == "rootvault" then
+			-- The damp shaft is the neon the player reads at noon. One stud wide.
+			local shaft = part(
+				arch,
+				"Shaft",
+				Vector3.new(1, 8, 1),
+				at(0, glowY, 0),
+				mouth,
+				Enum.Material.Neon,
+				false
+			)
+			shaft.Transparency = 0.5
+			shaft.CastShadow = false
+			shaft.CanQuery = false
+		end
 		local reach = Haven.GATE_REACH
 		if portal.id == "rootvault" then
 			fill.Name = "EnterPad"
@@ -1402,8 +1867,79 @@ local function buildPortals(parent: Instance)
 			)
 			accent(arch, "Edge", Vector3.new(7.2, 0.2, 0.45), at(0, leftH + 0.25, 0), edge, Enum.Material.Neon, dress)
 		end
+		local glowEmitters: { ParticleEmitter } = {}
+		if vfx ~= nil then
+			for _, emitterSpec in ipairs(vfx.emitters) do
+				local host = arch:FindFirstChild(emitterSpec.host)
+				if host == nil or not host:IsA("BasePart") then
+					host = fill
+				end
+				local emitter = placeGateEmitter(host, emitterSpec)
+				if emitter ~= nil then
+					table.insert(glowEmitters, emitter)
+				end
+			end
+			table.insert(gateGlows, {
+				sealed = sealed,
+				pulse = vfx.pulse,
+				restBrightness = vfx.brightness,
+				restTransparency = restTransparency,
+				mouthX = fill.CFrame.Position.X,
+				mouthZ = fill.CFrame.Position.Z,
+				light = portalLight,
+				fill = fill,
+				emitters = glowEmitters,
+			})
+		end
 		gatePlate(arch, at(0, leftH + lintelSize.Y + 2.6, 0), portal.name, portal.subline or portal.name)
 	end
+
+	-- Flat ring on the court. Lit segments point at open gates. The top
+	-- stays on the inlay layer so the walk and the prompts stay clear.
+	local ring = Instance.new("Model")
+	ring.Name = "CourtRing"
+	ring.Parent = parent
+	local ringRadius = 36
+	local guideCenter = Haven.LAYER - 0.04
+	for _, portal in ipairs(Haven.PORTALS) do
+		local bearing = math.rad(portal.bearing or 0)
+		local lit = Haven.gateLit(portal)
+		local dirX = math.sin(bearing)
+		local dirZ = math.cos(bearing)
+		local color = if lit then rgb(portal.color :: { number }) else Color3.fromRGB(86, 86, 92)
+		local function lay(x: number, z: number, size: Vector3)
+			local guide = part(
+				ring,
+				"CourtGuide",
+				size,
+				CFrame.lookAt(
+					Vector3.new(x, guideCenter, z),
+					Vector3.new(x + dirX, guideCenter, z + dirZ)
+				),
+				color,
+				Enum.Material.Neon,
+				false
+			)
+			guide.Transparency = if lit then 0.42 else 0.86
+			guide.CastShadow = false
+			guide.CanQuery = false
+			guide:SetAttribute("GateId", portal.id)
+			guide:SetAttribute("GateLit", lit)
+		end
+		lay(
+			Haven.SPAWN.x + dirX * ringRadius,
+			Haven.SPAWN.z + dirZ * ringRadius,
+			Vector3.new(5.2, 0.08, 1.4)
+		)
+		if lit then
+			lay(
+				Haven.SPAWN.x + dirX * 26,
+				Haven.SPAWN.z + dirZ * 26,
+				Vector3.new(1.2, 0.08, 16)
+			)
+		end
+	end
+	bindGateMotion()
 end
 
 local function buildBridges(parent: Instance)

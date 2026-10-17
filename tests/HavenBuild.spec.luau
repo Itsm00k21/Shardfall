@@ -1656,7 +1656,9 @@ describe("HavenBuilder", function()
 			end
 			expect(dressed).toBeTrue()
 			expect(lights).toEqual(1)
-			expect(emitters).toEqual(0)
+			local vfx = builder.GATE_VFX[portal.id]
+			local expectedEmitters = if vfx ~= nil then #vfx.emitters else 0
+			expect(emitters).toEqual(expectedEmitters)
 			if parts > 12 then
 				error(portal.id .. " has " .. tostring(parts) .. " parts", 2)
 			end
@@ -1834,5 +1836,254 @@ describe("HavenBuilder", function()
 				end
 			end
 		end
+	end)
+
+	it("caps gate lights and emitters and keeps the walk and prompts clear", function()
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+
+		local expected = {
+			rootvault = { brightness = 0.45, range = 16, r = 64, g = 196, b = 96, rate = 6, emitters = 1, name = "mist" },
+			heartwood = { brightness = 0.35, range = 14, r = 214, g = 140, b = 64, rate = 5, emitters = 1, name = "ash" },
+			tidecrypt = { brightness = 0.4, range = 14, r = 36, g = 96, b = 140, rate = 4, emitters = 2, name = "sheet" },
+			ember = { brightness = 0.3, range = 12, r = 255, g = 120, b = 40, rate = 6, emitters = 1, name = "sparks" },
+			frost = { brightness = 0.4, range = 16, r = 186, g = 228, b = 255, rate = 3, emitters = 1, name = "wisp" },
+			void = { brightness = 0.2, range = 10, r = 120, g = 60, b = 180, rate = 0, emitters = 0, name = "" },
+		}
+		local forbidden = { "flower", "firefly", "face", "sparkle" }
+		local function banned(name: string): boolean
+			local lower = string.lower(name)
+			for _, word in ipairs(forbidden) do
+				if string.find(lower, word, 1, true) ~= nil then
+					return true
+				end
+			end
+			return false
+		end
+
+		local totalEmitters = 0
+		local promptHosts = {}
+		for _, portal in ipairs(Haven.PORTALS) do
+			local spec = expected[portal.id]
+			if spec == nil then
+				error("missing light spec for " .. portal.id, 2)
+			end
+			local arch = findNamed(hub, portal.id)
+			local lights = 0
+			local emitters = 0
+			local light = nil
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("PointLight") then
+					lights += 1
+					light = child
+				elseif child:IsA("ParticleEmitter") then
+					emitters += 1
+					totalEmitters += 1
+					if child.Rate > builder.RATE_CAP or child.Rate <= 0 then
+						error(portal.id .. " emitter rate is " .. tostring(child.Rate), 2)
+					end
+					if spec.name ~= "" and child.Name ~= spec.name then
+						error(portal.id .. " emitter is " .. tostring(child.Name), 2)
+					end
+					if spec.rate > 0 and child.Rate ~= spec.rate then
+						error(portal.id .. " rate is " .. tostring(child.Rate), 2)
+					end
+				end
+				if banned(child.Name) then
+					error(portal.id .. " has a " .. child.Name, 2)
+				end
+			end
+			expect(lights).toEqual(1)
+			expect(emitters).toEqual(spec.emitters)
+			if light == nil then
+				error(portal.id .. " has no light", 2)
+			end
+			expect(light.Shadows).toEqual(false)
+			expect(light.Range <= builder.RANGE_CAP).toBeTrue()
+			expect(light.Range).toEqual(spec.range)
+			expect(light.Color.R).toEqual(spec.r)
+			expect(light.Color.G).toEqual(spec.g)
+			expect(light.Color.B).toEqual(spec.b)
+			expect(light:GetAttribute("GateBrightness")).toEqual(spec.brightness)
+			local glow = arch:FindFirstChild("EnterPad") or arch:FindFirstChild("Glow")
+			if glow == nil or glow.Material.__enum ~= "Enum.Material.Neon" or glow.Transparency >= 1 then
+				error(portal.id .. " neon mouth does not read", 2)
+			end
+			if portal.sealed == true then
+				expect(light.Enabled).toEqual(false)
+				expect(light.Brightness).toEqual(0)
+				expect(glow.Transparency).toEqual(0.75)
+				local seal = arch:FindFirstChild("Seal")
+				if seal == nil or seal.Transparency >= 0.2 then
+					error(portal.id .. " seal does not read with particles off", 2)
+				end
+			else
+				expect(light.Enabled).toEqual(true)
+				expect(light.Brightness).toEqual(spec.brightness)
+				expect(glow.Transparency).toEqual(0.35)
+				expect(arch:FindFirstChild("Seal")).toBeNil()
+			end
+			table.insert(promptHosts, glow.CFrame.Position)
+			for _, child in ipairs(arch:GetDescendants()) do
+				if child:IsA("ProximityPrompt") then
+					local reach = child.MaxActivationDistance
+					local hostName = if child.Parent ~= nil then child.Parent.Name else ""
+					local onMouth = hostName == "EnterPad" or hostName == "Glow"
+					local onPier = hostName == "PillarL"
+					if onMouth and reach ~= Haven.GATE_REACH then
+						error(portal.id .. " mouth prompt reach changed", 2)
+					elseif onPier and reach ~= Haven.PIER_REACH then
+						error(portal.id .. " pier prompt reach changed", 2)
+					elseif not onMouth and not onPier then
+						error(portal.id .. " prompt moved onto " .. hostName, 2)
+					end
+				end
+			end
+		end
+		if totalEmitters > builder.EMITTER_CAP then
+			error("gate emitters " .. tostring(totalEmitters) .. " exceed the cap", 2)
+		end
+		expect(totalEmitters).toEqual(6)
+		local voidArch = findNamed(hub, "void")
+		for _, child in ipairs(voidArch:GetDescendants()) do
+			if child:IsA("ParticleEmitter") then
+				error("void has an emitter", 2)
+			end
+		end
+		local root = findNamed(hub, "rootvault")
+		local shaft = root:FindFirstChild("Shaft")
+		if shaft == nil or shaft.Transparency ~= 0.5 or shaft.Size.X ~= 1 or shaft.Size.Z ~= 1 then
+			error("rootvault shaft is not the 1-stud noon column", 2)
+		end
+		expect(findNamed(hub, "heartwood"):FindFirstChild("Shaft")).toBeNil()
+
+		local mist = nil
+		local sparks = nil
+		for _, child in ipairs(root:GetDescendants()) do
+			if child:IsA("ParticleEmitter") and child.Name == "mist" then
+				mist = child
+			end
+		end
+		for _, child in ipairs(findNamed(hub, "ember"):GetDescendants()) do
+			if child:IsA("ParticleEmitter") and child.Name == "sparks" then
+				sparks = child
+			end
+		end
+		if mist == nil or mist.Lifetime.Min ~= 1.2 or mist.Lifetime.Max ~= 2 then
+			error("rootvault mist lifetime is not 1.2–2.0", 2)
+		end
+		if sparks == nil or sparks.Lifetime.Min ~= 0.3 or sparks.Lifetime.Max ~= 0.6 then
+			error("ember sparks lifetime is not 0.3–0.6", 2)
+		end
+
+		local ring = findNamed(hub, "CourtRing")
+		if ring == nil then
+			error("court ring is missing", 2)
+		end
+		local guides = 0
+		local litGuides = 0
+		local walkLow = Haven.FLOOR_Y + 1.25
+		for _, child in ipairs(ring:GetDescendants()) do
+			if child:IsA("PointLight") or child:IsA("ParticleEmitter") or child:IsA("ProximityPrompt") then
+				error("court ring adds a " .. child.ClassName, 2)
+			end
+			if banned(child.Name) then
+				error("court has a " .. child.Name, 2)
+			end
+			if child.Name == "CourtGuide" then
+				guides += 1
+				if child.CanCollide == true or child.CastShadow == true then
+					error("court guide collides or casts a shadow", 2)
+				end
+				local _x0, _minY, _z0, _x1, maxY = worldBox(child)
+				if maxY > walkLow then
+					error(string.format("court guide rises into the walk at y %.2f", maxY), 2)
+				end
+				if child:GetAttribute("GateLit") == true then
+					litGuides += 1
+					if child:GetAttribute("GateId") ~= "rootvault" or child.Transparency >= 0.5 then
+						error("open court guide is not the bright rootvault mark", 2)
+					end
+				elseif child.Transparency < 0.8 then
+					error("sealed court guide is too bright", 2)
+				end
+			end
+		end
+		-- Six ring ticks, plus one path toward the only open gate.
+		expect(guides).toEqual(7)
+		expect(litGuides).toEqual(2)
+
+		for i = 1, #promptHosts do
+			for j = i + 1, #promptHosts do
+				local left = promptHosts[i]
+				local right = promptHosts[j]
+				local dx = left.X - right.X
+				local dy = left.Y - right.Y
+				local dz = left.Z - right.Z
+				local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+				if distance <= Haven.GATE_REACH * 2 then
+					error("two gate prompts overlap", 2)
+				end
+			end
+		end
+
+		local pulsed = builder.mouthLook(0.45, 0.35, false, 0.15, 0.75, nil, false)
+		requireNear(pulsed.brightness, 0.525, 0.002, "open pulse")
+		expect(pulsed.enabled).toEqual(true)
+		expect(pulsed.particles).toEqual(true)
+		expect(pulsed.transparency).toEqual(0.35)
+		local approached = builder.mouthLook(0.45, 0.35, false, 0.15, 0, 12, false)
+		requireNear(approached.brightness, 0.63, 0.002, "approach brighten")
+		requireNear(approached.transparency, 0.2, 0.002, "approach neon")
+		local outside = builder.mouthLook(0.45, 0.35, false, 0.15, 0, 12.01, false)
+		expect(outside.transparency).toEqual(0.35)
+		requireNear(outside.brightness, 0.45, 0.002, "outside approach")
+		local quiet = builder.mouthLook(0.45, 0.35, false, 0.15, 0.75, 4, true)
+		requireNear(quiet.brightness, 0.63, 0.002, "reduced approach")
+		expect(quiet.particles).toEqual(false)
+		local sealed = builder.mouthLook(0.35, 0.75, true, 0.15, 0.75, nil, false)
+		expect(sealed.enabled).toEqual(false)
+		expect(sealed.brightness).toEqual(0)
+		expect(sealed.transparency).toEqual(0.75)
+		expect(sealed.particles).toEqual(true)
+		local sealedNear = builder.mouthLook(0.35, 0.75, true, 0.15, 0.75, 6, false)
+		expect(sealedNear.enabled).toEqual(true)
+		expect(sealedNear.brightness).toEqual(builder.SEALED_NEAR)
+		requireNear(sealedNear.transparency, 0.62, 0.002, "sealed approach")
+		local sealedQuiet = builder.mouthLook(0.35, 0.75, true, 0, 0, nil, true)
+		expect(sealedQuiet.particles).toEqual(false)
+		expect(sealedQuiet.enabled).toEqual(false)
+
+		local rootGlow = root:FindFirstChild("EnterPad")
+		local rootLight = rootGlow:FindFirstChild("PointLight")
+		builder.stepGates(0.75, {})
+		requireNear(rootLight.Brightness, 0.525, 0.002, "stepped pulse")
+		expect(rootGlow.Transparency).toEqual(0.35)
+		local heart = findNamed(hub, "heartwood")
+		local heartGlow = heart:FindFirstChild("Glow")
+		local heartLight = heartGlow:FindFirstChild("PointLight")
+		expect(heartLight.Enabled).toEqual(false)
+		expect(heart:FindFirstChild("Seal") ~= nil).toBeTrue()
+		local mouth = rootGlow.CFrame.Position
+		builder.stepGates(0, {
+			{ x = mouth.X, z = mouth.Z, reduced = false },
+		})
+		requireNear(rootLight.Brightness, 0.705, 0.002, "stepped approach")
+		requireNear(rootGlow.Transparency, 0.2, 0.002, "stepped neon")
+		builder.stepGates(0, {
+			{ x = Haven.SPAWN.x, z = Haven.SPAWN.z, reduced = true },
+		})
+		expect(mist.Enabled).toEqual(false)
+		requireNear(rootLight.Brightness, 0.45, 0.002, "quiet holds the rest brightness")
+		local heartAt = heartGlow.CFrame.Position
+		builder.stepGates(0, {
+			{ x = heartAt.X, z = heartAt.Z + 6, reduced = false },
+		})
+		expect(heartLight.Enabled).toEqual(true)
+		expect(heartLight.Brightness).toEqual(builder.SEALED_NEAR)
+		expect(heart:FindFirstChild("Seal") ~= nil).toBeTrue()
+		expect(heartGlow.Transparency > 0.6).toBeTrue()
 	end)
 end)
