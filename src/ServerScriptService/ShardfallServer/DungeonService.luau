@@ -2183,7 +2183,7 @@ function DungeonService.onPlayerDown(player: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build b0746fe+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build 7bb02b5+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
