@@ -2425,6 +2425,96 @@ Questions for Ghost:
 14. No profile field, no new remote, and no build stamp. The session stays the in-memory `RaidPractice` state. Confirm.
 15. T-064 is reserved for a `DungeonService` practice-loot leak check. This branch does not touch `DungeonService` or `PracticeLoot`. Confirm that leak check stays on T-064.
 
+### T-066 hooks for GHOST
+
+HELPER did not edit `RollLoop.luau`, `RollReveal.luau`, `RollMath.luau`, `RollBoard.luau`, `PaidRollPolicy.luau`, `MenuHub.luau`, `RollReel.luau`, `RollService.luau`, `Schema.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or `DungeonService.luau`. `RollHype` is pure and ready to call. It requires `Rarities` and reads `Rarities.ORDER` and `Rarities.INDEX` only. It does not require `RollLoop`, `RollReveal`, `RollMath`, `RollBoard`, or `PaidRollPolicy`. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires `RollHype` yet, so this branch does not change a live run. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. The T-066 row stays `claimed`. Wiring is yours.
+
+When you wire this, require it next to the other roll rules:
+
+```lua
+local RollHype = require(ReplicatedStorage.Shared.RollHype)
+```
+
+**Return shape.** `fresh`, `note`, `pity`, and `tempo` each return one new table. They do not write the input. Check `ok == true` before you store `state` or show a rarity. A bad arg does not throw. nil, NaN, a huge string, and a wrong type take the failure path. Store a session only when `ok == true`. A failure returns a copy, or a blank session when the input session itself did not parse.
+
+| call | when | on success |
+|---|---|---|
+| `fresh(allTime)` | the roll tab opens, or the player joins | `{ rolls = 0, streak = 0, best = nil, personalBest = false, allTime }` |
+| `note(state, roll)` | a RollShard result comes back, or the invoke fails | a new session plus the display for this roll |
+| `pity(counter, goal)` | the meter is drawn | `fill` from 0 to 1 |
+| `tempo(rarity, paid)` | the reveal is about to play | `tier` and `buildUp` for that rarity |
+
+**Session.** `rolls` counts landed rolls. `streak` matches `RollLoop.streak`: it increments when a roll lands and goes to 0 when `landed == false`. A miss does not increment `rolls`, does not change `best`, and does not set a personal best. `best` is the highest rarity actually landed this session, or nil before the first land. `personalBest` is sticky. It becomes true once a landed rarity strictly outranks the all-time best that was on file, and it stays true. `allTime` is the running best used for that comparison. It starts as the rarity string passed to `fresh` (`nil` or `""` means none on file). It moves up when the player beats it. It is a record, not a drop. Do not paint `state.best` or `state.allTime` on the card for the roll that just finished. Those can belong to an earlier roll.
+
+**This roll.** Pass `{ rarity, landed, paid, allTime }`. `landed` defaults to true. `paid` is accepted and ignored. On a land, `rarity` is the rarity that was rolled, spelled as in `Rarities.ORDER`. `raisedBest` is true when that rarity is a new session high. `newPersonalBest` is true only on the roll that beat the running all-time best. `personalBest` on the result is the sticky flag after the note. `milestone` is 10, 25, 50, or 100 when the landed count becomes that number, and `callout` is `"10 rolls"`, `"25 rolls"`, `"50 rolls"`, or `"100 rolls"`. The callout does not name a rarity. On a miss, pass `{ landed = false }`. Any rarity on that table is ignored. `rarity`, `milestone`, and `callout` come back nil, and `streak` is 0.
+
+```lua
+local opened = RollHype.fresh(profileRollBest)
+if opened.ok == true then
+	session = opened.state
+end
+
+local noted = RollHype.note(session, {
+	rarity = record.rarity,
+	paid = paid == true,
+})
+if noted.ok == true then
+	session = noted.state
+end
+-- Card rarity is noted.rarity. Toast noted.callout when noted.milestone ~= nil.
+-- Toast a personal-best line only when noted.newPersonalBest == true, using noted.rarity.
+```
+
+A failed invoke is `RollHype.note(session, { landed = false })`. Keep the previous session when that call's `ok ~= true`.
+
+**Paid.** A paid roll and a free roll with the same rarity return the same session numbers, the same callout, and the same build-up. `pity` has no paid argument. Do not add a longer reveal, a different meter, or a different milestone for a Prism crack.
+
+**Pity.** `RollMath` stores `rollsSinceLegendary` and the pool's `pityLegendaryAt`. It has no 0-1 fill. `RollBoard.fill` and `RollBoard.bars` already draw `sinceEpic / RarityConfig.EPIC_PITY` (100) and `sinceLegendary / RarityConfig.LEGENDARY_PITY` (1000). This module does not read those caps. Pass the real counter and the real goal. A real 0 is an empty bar (`ok == true`, `fill == 0`). A counter above the goal is `fill == 1`, and the returned `counter` stays the number you passed. A missing goal, a goal of 0 or less, NaN, or infinity is `ERRORS.goal` and `fill == 0`. A missing, negative, or non-finite counter is `ERRORS.counter` and `fill == 0`. Infinity does not fill the bar. Check `ok == true` before showing the meter. The meter has no rarity field.
+
+```lua
+local meter = RollHype.pity(pityState.rollsSinceLegendary, pool.pityLegendaryAt)
+local epic = RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)
+local legendary = RollHype.pity(sinceLegendary, RarityConfig.LEGENDARY_PITY)
+```
+
+One table with one pair also works: `{ rollsSinceLegendary, pityLegendaryAt }`, `{ sinceEpic, epicGoal }`, `{ sinceLegendary, legendaryGoal }`, `{ counter, goal }`, or `{ since, goal }`. A table that names two of those pairs is `ERRORS.which` and `fill == 0`. `totalRolls` is not a pity counter. Pass the counter from after `RollMath.roll` if the bar should show the post-roll count. A Legendary-or-better result resets `rollsSinceLegendary` to 0 inside `RollMath.roll`. Pass the pre-roll count if the bar should show the progress that led into this spin. This module does not call `RollMath.roll`. Do not tween the bar past `fill`.
+
+**Tempo.** `tier` is `Rarities.INDEX`. `buildUp` seconds are placeholders in `CONFIG`: Common 0.45, Uncommon 0.6, Rare 0.9, Epic 1.2, Legendary 1.65, Mythic 2.4, Secret 3. Each step is longer than the one below it. `tempo` does not read Settings. `RollLoop.seconds` and `RollReveal.duration` still own short, instant, skip, and reduced motion. Suggested wire: when the animation is full and reduced motion is off, use `tempo.buildUp` as the reveal duration. Otherwise keep `RollLoop.seconds`. Paid and free share `buildUp`, so `RollReveal`'s rule that a paid roll is never longer than the free roll stays true when you pass that same duration. An unknown rarity is `ERRORS.rarity` with `tier` nil and `buildUp` nil. Do not fall back to Common.
+
+```lua
+local pace = RollHype.tempo(record.rarity, paid)
+if pace.ok == true and pace.buildUp ~= nil and fullAnimation and not reduced then
+	duration = pace.buildUp
+else
+	duration = RollLoop.seconds(settings, record.rarity, quick, reduced)
+end
+```
+
+**Call sites, still yours.** In `MenuHub` `beginRoll`, after `RollReveal.capture` succeeds, `note` the session with `record.rarity`. On a failed invoke, `note` `{ landed = false }`. Replace the local `streak` with `state.streak`. Toast `callout` when `milestone ~= nil`. The pity labels in `paintRoll` can keep `RollBoard.bars`, or switch the fill to `RollHype.pity` with the same `sinceEpic` / `sinceLegendary` numbers. `RollReveal.strip` already refuses a landing slot above the rolled rarity. Leave that function alone. Do not add a near-miss slot.
+
+**Profile.** No schema field was added. `allTime` lives in the session you keep in memory. `fresh(nil)` means nothing is on file, and the first landed roll sets `personalBest`. If that best should survive a rejoin, a later pass can store one rarity string. This branch does not edit `Schema.luau`.
+
+`tests/run.luau` requires `./RollHype.spec` on this branch. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER pure modules skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. Streak matches `RollLoop.streak`: consecutive landed rolls, reset to 0 when `landed == false`. Roll count only counts landed rolls, so after a miss the streak is 0 and the count stays. Confirm, or should a streak be consecutive copies of the same rarity?
+2. Milestones fire when the landed count becomes exactly 10, 25, 50, or 100. The text is `"10 rolls"` and does not name a rarity. Confirm the four counts and that the toast should stay rarity-free.
+3. `personalBest` on the session is sticky once a landed rarity strictly outranks the all-time best. `newPersonalBest` is true only on that roll. A tie is not a new best. With no all-time rarity on file, the first landed roll is a personal best. Confirm the tie rule and the empty-record rule.
+4. When both the session and the note carry an all-time rarity, the bar is the higher rank. A lower string does not downgrade the record. Confirm.
+5. `best` is the highest rarity landed this session. `RollLoop.best` can still pick a higher-power item of the same rarity. Confirm the shout is rarity-only, and that the card keeps using the captured item rather than `state.best`.
+6. A miss ignores any rarity on the note. `note.rarity` is nil. Confirm the card must not show `state.best` as if this roll landed it.
+7. Pity fill matches `RollBoard.fill` for a real non-negative counter and a goal above 0. A missing goal, a goal of 0 or less, or a non-finite counter returns `ok == false` and `fill == 0`, so the meter does not assume `EPIC_PITY` (100) or `LEGENDARY_PITY` (1000) and does not treat infinity as a full bar. Confirm whether the wire shows one meter or both bars, and which goal belongs to the `RollMath` path versus the profile path.
+8. A table that carries two counter pairs is `ERRORS.which`. Confirm the wire calls `pity` twice for the epic bar and the legendary bar, and that `totalRolls` must not be read as pity.
+9. Should the bar show the counter from before `RollMath.roll` or after it? A Legendary-or-better result resets `rollsSinceLegendary` to 0 inside `RollMath.roll`. This module does not call `roll`.
+10. Tempo seconds are placeholders: Common 0.45, Uncommon 0.6, Rare 0.9, Epic 1.2, Legendary 1.65, Mythic 2.4, Secret 3. Tier is `Rarities.INDEX`. Paid does not change them. Confirm the wire uses this build-up only for the full animation, and still uses `RollLoop.seconds` / `RollReveal.duration` for short, instant, skip, and reduced motion. Confirm the placeholder seconds.
+11. An unknown rarity is an error and is not echoed. There is no Common fallback and no near-miss field. Confirm a bad server rarity shows nothing rather than Common.
+12. Paid rolls advance the same streak, milestones, meter, and tempo as free rolls. Confirm a Prism crack should count as a real roll in this session.
+13. No profile field, no remote, and no build stamp. The session stays in client memory for one menu visit. `allTime` is caller-supplied. Confirm a Schema field for the all-time best rarity waits for a later GHOST pass.
+14. A failed note returns a copy and does not write the input. Store `state` only when `ok == true`. Confirm.
+
 ## Open
 
 No unassigned tasks.
