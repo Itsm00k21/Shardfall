@@ -33,6 +33,14 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #161 Holding LB and a D-pad direction fires action-bar slots 5-8. That is T-156.
 - #162 A refused roll does not break the streak. That is T-155 (`1441f41`).
 - #163 A Heartwood clear pays Raid Marks once. That is T-132.
+- #164 The board pass after T-155. It filed T-158. Docs only.
+- #165 A wing change no longer holds the shared Echo stacks. That is T-099 (`fcae0ad`).
+- #166 Glass Kestrel flashes on a dodge. That is T-158 (`1afc833`).
+- #167 A dead boss with a living add does not clear the Story Echo seat. That is T-100 (`eacd7ce`).
+- #168 Glass Kestrel flash QA, discovery notes, and 3D prompts. Docs only.
+- #169 A queue click inside a reserved raid server launches in place. That is T-101 (`e9daa41`).
+- #170 A follow-in with no teleport data joins the pull. That is T-102 (`be93c70`).
+- #171 The board marks T-102 done. Docs only.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale.
 
@@ -40,17 +48,18 @@ Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABL
 
 The next week or two.
 
-- Echo's next row is T-158, the Glass Kestrel dodge flash, on `helper/kestrel-flash-9721`. Brief: `docs/hooks/T-158.md`. T-155 is done in #162 (`1441f41`).
+- Echo's next row is T-159. A second Glass Kestrel flash inside 0.12s stays visible, on `helper/kestrel-flash-hold-9721`. Brief: `docs/hooks/T-159.md`. T-158 is done in #166 (`1afc833`).
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
 - T-147 is the action-bar drag and phone 2×4 checklist. Kevin checks it in Studio. The d-pad landed in #155. The LB chord landed in #161.
-- The bug sweeps. The last passes filed their crashes, and those are done (T-094, T-128, T-129, T-154, T-155, T-156). Still open from those notes: a wing change that holds Echo stacks (T-099), a boss that dies while an add is still up (T-100), a queue click inside a raid server that can hop again (T-101), and a follow-in with no teleport data (T-102). Written test plans sit on G-069 through G-073, G-079, G-080, and G-081. G-081 is T-158.
+- The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166. The open note on that flash is T-159.
+- Ghost's next row from the older queue is T-105, the Codex seen flags. T-106 stays until that save exists and the server names the moment. T-109 waits on T-105.
 
 ## Later
 
 Kevin asked to hold the lighting pass. The older queue stays behind the plaza and the banner.
 
 - T-148 is world lighting for Haven and the crawl. Backlog. The plaza lights landed in #148. This row still waits until Kevin asks.
-- T-099 through T-102 are the open Echo and raid-hop bugs in Next up. T-132 landed in #163. T-103 and T-104 are done: a miss clears the old roll card, and the RollNear header names its caller.
+- T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. T-158 landed in #166. T-132 landed in #163. T-103 and T-104 are done: a miss clears the old roll card, and the RollNear header names its caller.
 - T-105 saves which Codex tips you have seen. T-106 paints the glows once the server says that moment is up.
 - T-107 is done. Loading tips show, including during a hop.
 - T-108 is decided. The Training Grove hands in one ribbon and 15 gold. The ribbon is a collectible and is not worn yet.
