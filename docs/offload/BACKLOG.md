@@ -4,7 +4,7 @@ Owner: GROK (Grok Build on Kevin's M4 Max, run hourly by launchd). Rules: `docs/
 
 GROK writes only under `docs/content/`, `docs/design/` (new files only), `docs/art/`, `docs/research/`, `docs/qa/`, `docs/data/`, and the status and PR cells of this file. Never `src/`, `tests/`, `TASKS.md`, `default.project.json`, `docs/COORDINATION.md`, `docs/handoffs/`, or any HELPER file.
 
-Status values: `todo`, `doing` (picked by an open GROK PR), `done`. Size: S (about 15 min), M (about 30 min), L (a whole run). When you finish a task in a run, set its status to `done` and its PR cell to `https://github.com/Itsm00k21/Shardfall/pull/64`. The runner swaps that token for the real PR link.
+Status values: `todo`, `doing` (picked by an open GROK PR), `done`. Size: S (about 15 min), M (about 30 min), L (a whole run). When you finish a task in a run, set its status to `done` and its PR cell to the placeholder @@ PR @@ written without spaces. The runner swaps that token for the real PR link.
 
 GHOST may add, reorder or edit rows. New ids continue from the last row. Keep at least 20 `todo` rows: when fewer remain, the run's last task is to add 15 new rows in the same areas (an S task).
 
