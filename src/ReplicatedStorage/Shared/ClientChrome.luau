@@ -28,6 +28,7 @@ local OWNED: { [string]: boolean } = {
 	ShardfallMenu = true,
 	ShardfallOnboard = true,
 	ShardfallPets = true,
+	ShardfallPetAura = true,
 	ShardfallRaids = true,
 	ShardfallRoll = true,
 	ShardfallTouch = true,
@@ -64,6 +65,14 @@ function ClientChrome.legacyReadout(text: string): boolean
 		return true
 	end
 	if string.find(text, "Pity 0 / 80", 1, true) ~= nil then
+		return true
+	end
+	-- An older rail (Inv, Shop, Guilds) is not the hub. HudShell and
+	-- MenuHub use Hero, Bag, Pets, Roll, Raids, and Market.
+	if string.find(text, "Guilds", 1, true) ~= nil then
+		return true
+	end
+	if string.find(text, "Inv ", 1, true) ~= nil and string.find(text, "Shop", 1, true) ~= nil then
 		return true
 	end
 	return false

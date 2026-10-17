@@ -177,6 +177,12 @@ function Remotes.bind()
 		end)
 	end
 
+	functionRemote("RollShards").OnServerInvoke = function(player, poolId, count)
+		return guard(player, "RollShards", function()
+			return RollService.rollMany(player, poolId, count)
+		end)
+	end
+
 	functionRemote("BuyPrism").OnServerInvoke = function(player)
 		return guard(player, "BuyPrism", function()
 			return RollService.buyPrismPack(player)

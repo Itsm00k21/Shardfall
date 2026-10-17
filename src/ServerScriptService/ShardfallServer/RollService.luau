@@ -157,7 +157,7 @@ local function poolFromClient(poolId: any)
 	return pool
 end
 
-local function crack(player: Player, poolId: any, currency: string, skip: boolean)
+local function crack(player: Player, poolId: any, currency: string, skip: boolean, ignoreCooldown: boolean?)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")
@@ -194,7 +194,7 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 		if previous ~= nil then previous.quick else false,
 		quick
 	)
-	if previous ~= nil and os.clock() - previous.at < waitFor then
+	if ignoreCooldown ~= true and previous ~= nil and os.clock() - previous.at < waitFor then
 		return reject("Roll cooling down.")
 	end
 
@@ -306,6 +306,52 @@ end
 
 function RollService.rollFree(player: Player, poolId: any, skip: any)
 	return crack(player, poolId, Currencies.SHARD, skip == true)
+end
+
+-- One request, up to ten cracks. Each crack spends the same way a single
+-- Roll does: a voucher covers one, then a Shard Token. A later crack that
+-- cannot pay keeps the ones already saved.
+function RollService.rollMany(player: Player, poolId: any, count: any)
+	local total = count
+	if type(total) ~= "number" or total ~= total or total == math.huge then
+		return reject("Roll 1 to 10 shards.")
+	end
+	total = math.floor(total)
+	if total < 1 or total > 10 then
+		return reject("Roll 1 to 10 shards.")
+	end
+	local items = {}
+	local stopped: string? = nil
+	local lastPity: any = nil
+	for _ = 1, total do
+		local result = crack(player, poolId, Currencies.SHARD, false, true)
+		if type(result) ~= "table" or result.ok ~= true then
+			local reason = if type(result) == "table" and type(result.error) == "string"
+				then result.error
+				else "Could not crack that shard."
+			if #items == 0 then
+				return if type(result) == "table" then result else reject(reason)
+			end
+			stopped = reason
+			break
+		end
+		table.insert(items, {
+			item = result.item,
+			rollId = result.rollId,
+			rarity = result.rarity,
+			fillerSeed = result.fillerSeed,
+			pity = result.pity,
+		})
+		lastPity = result.pity
+	end
+	return {
+		ok = true,
+		items = items,
+		count = #items,
+		pity = lastPity,
+		stopped = stopped,
+		currency = Currencies.SHARD,
+	}
 end
 
 function RollService.rollPaid(player: Player, poolId: any, skip: any)

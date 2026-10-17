@@ -279,6 +279,9 @@ pet("dawnbloom_wolf", "Dawnbloom Wolf", "Legendary", 0)
 pet("thorn_hydra", "Thorn Hydra", "Mythic", 0)
 pet("grove_phoenix", "Grove Phoenix", "Mythic", 0)
 pet("sleeping_dryad", "The Sleeping Dryad", "Secret", 0)
+pet("shardjaw", "Shardjaw", "Common", 0, "beast")
+pet("thorn_lantern", "Thorn Lantern", "Uncommon", 0, "skitter")
+pet("glass_kestrel", "Glass Kestrel", "Rare", 0, "skitter")
 
 -- Ascension 1, Sunken Reach. Water and tide. Placeholder roster.
 weapon("driftwood_saber", "Driftwood Saber", "Common", "sword", 1)

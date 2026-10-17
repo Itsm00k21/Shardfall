@@ -47,6 +47,7 @@ local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
 local MarketHud = require(script.MarketHud)
+local PetAura = require(script.PetAura)
 local PetHud = require(script.PetHud)
 local RaidHud = require(script.RaidHud)
 local RollReel = require(script.RollReel)
@@ -486,13 +487,13 @@ end
 ui = Ui.mount(playerGui, {
 	showDev = false,
 	onCrack = function()
-		if rollReel ~= nil then
-			rollReel.request(false)
+		if menuHub ~= nil then
+			menuHub.open("roll")
 		end
 	end,
 	onPaid = function()
-		if rollReel ~= nil then
-			rollReel.request(true)
+		if menuHub ~= nil then
+			menuHub.open("roll")
 		end
 	end,
 	onBuyPrism = function()
@@ -1200,6 +1201,9 @@ menuHub = MenuHub.start(playerGui, {
 		end
 	end,
 })
+PetAura.start(playerGui, function()
+	return latestProfile
+end)
 
 hudShell = HudShell.start(playerGui, {
 	onHero = function()
