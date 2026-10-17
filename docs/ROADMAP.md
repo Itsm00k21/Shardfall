@@ -63,6 +63,7 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #192 The board marks T-163, T-165, and T-166 done and files Echo's T-167. Docs only.
 - #194 A narrow Roll row gives Pet Shards its own line. That is T-168 (`0d6f9ab`).
 - #195 The crack card stays off the shard and the pet row. That is T-169 (`ebe4149`).
+- #196 The board marks T-168 and T-169 done. Next free id is T-170. Docs only.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
