@@ -736,11 +736,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			if callbacks.menuOpen() then
 				return Enum.ContextActionResult.Pass
 			end
-			local modified = false
-			if modifierCode ~= nil and UserInputService:IsKeyDown(modifierCode) then
-				modified = true
+			-- ButtonL1 is a gamepad button. Read it on the pad that produced
+			-- this D-pad press. One call: slots 5-8 while LB is held, and
+			-- slots 1-4 when it is not. The chord does not also fire 1-4.
+			local inputType = input.UserInputType
+			local typeName = if inputType ~= nil then inputType.Name else ""
+			local modifierDown = false
+			if modifierCode ~= nil and inputType ~= nil and Keybinds.usesGamepad(typeName) then
+				modifierDown = UserInputService:IsGamepadButtonDown(inputType, modifierCode)
 			end
-			local index = Keybinds.padSlot(input.KeyCode.Name, modified)
+			local index = Keybinds.padChordSlot(input.KeyCode.Name, typeName, modifierDown)
 			if index == nil then
 				return Enum.ContextActionResult.Pass
 			end
