@@ -9,9 +9,32 @@ local it = framework.it
 local expect = framework.expect
 
 local Build = require("../src/ReplicatedStorage/Shared/Build")
+local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
 local StarterGoals = require("../src/ReplicatedStorage/Shared/StarterGoals")
+local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 local function loadHud()
+	local layoutToken = { Name = "HudLayout" }
+	local themeToken = { Name = "UiTheme" }
+	local shared = {
+		WaitForChild = function(_self, name)
+			if name == "HudLayout" then
+				return layoutToken
+			end
+			if name == "UiTheme" then
+				return themeToken
+			end
+			error("missing " .. tostring(name), 2)
+		end,
+	}
+	local replicated = {
+		WaitForChild = function(_self, name)
+			if name == "Shared" then
+				return shared
+			end
+			error("missing " .. tostring(name), 2)
+		end,
+	}
 	local source =
 		fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/StarterGoalHud.luau")
 	local bytecode = luau.compile(source, { debugLevel = 2 })
@@ -34,6 +57,23 @@ local function loadHud()
 			math = math,
 			string = string,
 			table = table,
+			require = function(module)
+				if module == layoutToken then
+					return HudLayout
+				end
+				if module == themeToken then
+					return UiTheme
+				end
+				error("unexpected require", 2)
+			end,
+			game = {
+				GetService = function(_game, name)
+					if name == "ReplicatedStorage" then
+						return replicated
+					end
+					error("no service " .. tostring(name), 2)
+				end,
+			},
 		},
 	})
 	return chunk()
@@ -281,11 +321,175 @@ describe("StarterGoalHud mount", function()
 			"RemoteFunction",
 			"InvokeServer",
 			"FireServer",
-			"require(",
 		}
+		local _, requires = string.gsub(hud, "require(", "")
+		expect(requires).toEqual(2)
+		expect(string.find(hud, 'WaitForChild("HudLayout")', 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, 'WaitForChild("UiTheme")', 1, true)).toBeGreaterThan(0)
 		for _, word in ipairs(banned) do
 			expect(string.find(hud, word, 1, true)).toBeNil()
 		end
 		expect(string.find(client, "StarterGoalHud.present", 1, true)).toBeNil()
+	end)
+end)
+
+describe("StarterGoalHud chrome", function()
+	local function scaled(scale: number): number
+		return math.max(UiTheme.MIN_TEXT, math.floor(UiTheme.MIN_TEXT * scale + 0.5))
+	end
+
+	local function withPlace(hook: any, body: () -> ())
+		local previous = (HudLayout :: any).place;
+		(HudLayout :: any).place = hook
+		local ok, err = pcall(body);
+		(HudLayout :: any).place = previous
+		if not ok then
+			error(tostring(err), 2)
+		end
+	end
+
+	it("hides when settings.hud.hidden and applies access text scale", function()
+		local hidden = StarterGoalHud.chrome({
+			hud = { hidden = true, scale = 1 },
+			access = { textScale = 1.4 },
+		})
+		expect(hidden.hidden).toEqual(true)
+		expect(hidden.textScale).toEqual(1.4)
+		expect(hidden.textSize).toEqual(scaled(1.4))
+		expect(hidden.textSize).toEqual(20)
+		expect(StarterGoalHud.shown(3, { hud = { hidden = true } })).toEqual(false)
+
+		local shown = StarterGoalHud.chrome({
+			hud = { hidden = false },
+			access = { textScale = 1 },
+		})
+		expect(shown.hidden).toEqual(false)
+		expect(shown.textSize).toEqual(UiTheme.MIN_TEXT)
+		expect(StarterGoalHud.shown(3, { hud = { hidden = false } })).toEqual(true)
+		expect(StarterGoalHud.shown(0, { hud = { hidden = false } })).toEqual(false)
+		expect(StarterGoalHud.chrome({ hud = { hidden = 1 } }).hidden).toEqual(false)
+		expect(StarterGoalHud.chrome({ access = { textScale = 0 / 0 } }).textScale).toEqual(1)
+
+		local fromProfile = StarterGoalHud.chrome({
+			uiSettings = {
+				hud = { hidden = true },
+				access = { textScale = 1.2 },
+			},
+		})
+		expect(fromProfile.hidden).toEqual(true)
+		expect(fromProfile.textScale).toEqual(1.2)
+		expect(fromProfile.textSize).toEqual(scaled(1.2))
+		StarterGoalHud.applyChrome({
+			hud = { hidden = true },
+			access = { textScale = 1.4 },
+		})
+		StarterGoalHud.present(freshShown())
+		expect(StarterGoalHud.shown(3, {
+			hud = { hidden = true },
+			access = { textScale = 1.4 },
+		})).toEqual(false)
+
+		local hud = fs.readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/StarterGoalHud.luau"
+		)
+		expect(string.find(hud, 'FindFirstChild("Chrome")', 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, "frame.Parent = holder", 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, 'label:SetAttribute("BaseText", BASE_TEXT)', 1, true)).toBeGreaterThan(
+			0
+		)
+		expect(string.find(hud, "hud.hidden == true", 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, "access.textScale", 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, "UDim2.fromOffset(88, 80)", 1, true)).toBeNil()
+		expect(string.find(hud, "SkipTextScale", 1, true)).toBeNil()
+	end)
+
+	it("places through HudLayout.place and stays off the toast on a phone", function()
+		local hud = fs.readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/StarterGoalHud.luau"
+		)
+		local layoutAt = string.find(hud, "HudLayout", 1, true)
+		expect(layoutAt).toBeGreaterThan(0)
+		expect(string.find(hud, ".place", layoutAt :: number, true)).toBeGreaterThan(0)
+		expect(string.find(hud, "HudLayout.place(viewportX, viewportY, rowCount)", 1, true)).toBeGreaterThan(
+			0
+		)
+
+		local seen = false
+		withPlace(function(viewportX, viewportY, rowCount)
+			seen = true
+			expect(viewportX).toEqual(844)
+			expect(viewportY).toEqual(390)
+			expect(rowCount).toEqual(3)
+			return { x = 40, y = 210, w = 180, h = 48 }
+		end, function()
+			local placed = StarterGoalHud.place(844, 390, 3)
+			expect(seen).toEqual(true)
+			expect(placed.x).toEqual(40)
+			expect(placed.y).toEqual(210)
+			expect(placed.w).toEqual(180)
+			expect(placed.h).toEqual(48)
+		end)
+
+		withPlace(function()
+			return "nope"
+		end, function()
+			local desktop = StarterGoalHud.place(1920, 1080, 3)
+			expect(desktop.x).toEqual(88)
+			expect(desktop.y).toEqual(80)
+			expect(desktop.w).toEqual(320)
+			expect(desktop.h).toEqual(3 * 18 + 8)
+		end)
+
+		local wide = StarterGoalHud.place(1920, 1080, 3)
+		expect(wide.x).toEqual(88)
+		expect(wide.y).toEqual(80)
+		expect(wide.w).toEqual(320)
+		local mid = StarterGoalHud.place(1280, 800, 3)
+		expect(mid.x).toEqual(88)
+		expect(mid.y).toEqual(80)
+
+		local views = {
+			{ 844, 390 },
+			{ 390, 844 },
+			{ 800, 380 },
+		}
+		for _, view in ipairs(views) do
+			local vx = view[1]
+			local vy = view[2]
+			expect(HudLayout.breakpoint(vx, vy)).toEqual("phone")
+			local placed = StarterGoalHud.place(vx, vy, 3)
+			local margin = UiTheme.safeMargin()
+			local toast = HudLayout.toast(vx, margin)
+			local stack = {
+				x = toast.x,
+				y = toast.y,
+				w = toast.w,
+				h = toast.h * 3 + 8 * 2,
+			}
+			expect(HudLayout.overlaps(placed, toast)).toEqual(false)
+			expect(HudLayout.overlaps(placed, stack)).toEqual(false)
+			expect(placed.y >= toast.y + toast.h).toBeTrue()
+			expect(placed.x >= margin).toBeTrue()
+			expect(placed.y >= margin).toBeTrue()
+			expect(placed.x + placed.w <= vx - margin + 0.01).toBeTrue()
+			expect(placed.y + placed.h <= vy - margin + 0.01).toBeTrue()
+			local rail = HudLayout.railFit(vy, margin, 7, UiTheme.TAP, UiTheme.TOUCH)
+			expect(HudLayout.overlaps(placed, {
+				x = rail.x,
+				y = rail.y,
+				w = rail.w,
+				h = rail.h,
+			})).toEqual(false)
+			local anchor = {
+				x = 88,
+				y = 80,
+				w = 320,
+				h = placed.h,
+			}
+			if vx < anchor.x + anchor.w + margin then
+				anchor.w = vx - margin - anchor.x
+			end
+			expect(HudLayout.overlaps(anchor, toast)).toEqual(true)
+		end
 	end)
 end)
