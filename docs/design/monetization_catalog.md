@@ -28,7 +28,7 @@ Choice: the ship list leaves out every live pitch that grants gear, luck, chests
 | A bound cosmetic, one grant | Raid lockout skips, extra loot, role, or queue priority |
 | | A Gem pack. Gems are not a Robux wallet on this list |
 
-Paid cosmetics use `paid`, `robux`, or `source = "robux"` so `Trading` keeps them bound while `ROBUX_ITEM_TRADING_ENABLED` is false (`Trading.luau:14-15`, `Trading.luau:366-371`). A dye does not change weapon size. A plate does not change the title string. A mount uses the player's walk and is not ridden in a fight. Shop rarity is a look label, not a gear drop.
+Paid cosmetics use `paid`, `robux`, or a `source` of `robux` or `premium`, so `Trading` keeps them bound while `ROBUX_ITEM_TRADING_ENABLED` is false (`Trading.luau:14-15`, `Trading.luau:366-371`). A dye does not change weapon size. A plate does not change the title string. A mount uses the player's walk and is not ridden in a fight. Shop rarity is a look label, not a gear drop.
 
 ## Live pitches, parked
 
@@ -52,9 +52,11 @@ Permanent. One purchase. Check ownership with the game-pass API. Do not copy own
 | sku | title | price | grant | does not grant | visual note |
 |---|---|---|---|---|---|
 | `gp_quick` | Quick Roll | suggested 120 | `quickRoll = true` | Tokens, odds, pity, or a shorter cooldown | Icon: a pale shard with one short gray crack. No glow. Not a reel of cards. |
-| `gp_pockets` | Inventory expansion | live 80 | `inventoryBonus += 10`, once | A second grant of this pass | Icon: a brown satchel, one tan stitch. No glow. |
+| `gp_pockets` | Inventory expansion | suggested 80 | `inventoryBonus += 10`, once | A second grant of this pass | Icon: a brown satchel, one tan stitch. No glow. |
 
-Quick Roll uses the live reveal. Common and Uncommon become a toast. The reel is skipped. A Legendary scene is skipped. The Mythic scene stays (`RarityConfig.luau:520-542`). The gap becomes `QUICK_COOLDOWN` 1.0 instead of `COOLDOWN` 0.6 (`RarityConfig.luau:29-30`, `RarityConfig.luau:498-502`), so it does not add rolls per minute. It still requires the paid-luck switch and a policy pass in current code (`RarityConfig.luau:473-478`). Suggested: when this pass ships, the entitlement alone should be enough, and the odds table should stay the earned 1-in-N draw.
+Quick Roll is a reveal shortcut only. It does not grant tokens, odds, pity, or extra rolls. Common and Uncommon become a toast. The reel is skipped. A Legendary scene is skipped. The Mythic scene stays (`RarityConfig.luau:520-542`). It still requires the paid-luck switch and a policy pass in current code (`RarityConfig.luau:473-478`). Suggested: when this pass ships, the entitlement alone should be enough, and the odds table should stay the earned 1-in-N draw.
+
+The tap constants are `COOLDOWN` 0.6 and `QUICK_COOLDOWN` 1.0 (`RarityConfig.luau:29-30`, `RarityConfig.luau:498-502`). The live server gap is the longer of the next tap constant and the previous reveal (`RollLoop.luau:373-392`). Under the default full animation, a Quick Roll chain is slower for Common and Uncommon (0.6s to 1.0s) and faster for Rare (1.1s to 1.0s) and Epic (1.65s to 1.1s) (`RollLoop.luau:72-104`, `Settings.luau:270-277`). Legendary and Mythic stay on the tap constant because the default skip cuts their reveal to 0 (`Settings.luau:91`, `Settings.luau:261-267`). Suggested: ship the reveal change only. Keep the earned gap, so Rare and Epic do not roll faster.
 
 ## Developer products
 
@@ -66,7 +68,9 @@ Quick Roll uses the live reveal. Common and Uncommon become a toast. The reel is
 |---|---|---|---|---|---|
 | `dp_pockets` | Extra pockets | live 80 | `inventoryBonus += 10` | Refuse when `inventoryBonus + 10` would pass 50 | Icon: the same satchel, two tan stitches. No glow. |
 
-The pass and this product share one counter. Suggested paid ceiling is 50 bonus slots (bag 150 with the base 100). The live reconcile clamp is 500 and stays a safety cap, not a shop target (`Schema.luau:38`, `Schema.luau:377-379`, `Schema.luau:1134-1143`). Five product buys reach 50. Four reach 50 if the pass already added 10.
+The live stub is one pitch: 10 slots for 80 Robux (`Currencies.luau:94-95`, `Currencies.luau:97-107`). There is no game-pass id. This catalog splits that pitch into one pass and one repeatable product. The product price quotes the stub. The pass price is suggested at the same 80.
+
+The pass and this product share one counter. Suggested paid ceiling is 50 bonus slots (bag 150 with the base 100). The base cap is 100 (`Schema.luau:38`). Reconcile clamps `inventoryBonus` at 500 (`Schema.luau:377-379`). `Schema.inventoryCap` adds that bonus (`Schema.luau:1134-1143`). The 500 clamp stays a safety cap, not a shop target. Five product buys reach 50. Four reach 50 if the pass already added 10.
 
 ### Shard Pass
 
@@ -143,12 +147,13 @@ Suggested, for the first time an id is allowed above 0. v0.1 still sells nothing
 | F4 | medium | `Loops.luau:380-400` | Buying pass and archive both set the same flag. Hide archive from owners. |
 | F5 | medium | `RarityConfig.luau:19`, `ChestConfig.luau:27` | The paid-luck and paid-chest switches are true while the buttons are stubs. Shipping a look must not turn those pitches into real grants. |
 | F6 | low | `Loops.luau:413-438` | Pass Gems share the Gem wallet, and Gem trading is on (`Trading.luau:49`). No new Gem sink may buy stats, luck, or raid loot. |
+| F7 | medium | `RollLoop.luau:72-104`, `RollLoop.luau:373-392` | Quick Roll is a reveal shortcut. On the default full animation it also shortens the Epic gap from 1.65s to 1.1s and the Rare gap from 1.1s to 1.0s. Do not let the entitlement lower `RollLoop.gap`. |
 
 ## Counts
 
 | group | count | Robux |
 |---|---|---|
-| Game passes | 2 | Quick Roll suggested 120. Pockets live 80 |
+| Game passes | 2 | Quick Roll suggested 120. Pockets suggested 80 |
 | Developer products | 19 | 16 looks, Extra pockets, Shard Pass, archive |
 | Paid random on the ship list | 0 | Parked pitches stay at their live numbers and stay unsold |
 | Suggested look ladder | 4 | 25, 50, 100, 200 |
