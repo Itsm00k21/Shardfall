@@ -847,6 +847,138 @@ setPct = relicPct,
 
 Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
 
+### T-027 hooks for GHOST
+
+HELPER did not edit `Raids.luau`, `RaidService.luau`, `Schema.luau`, `Remotes.luau`, `RateLimiter.luau`, `DungeonService.luau`, or any other T-012 file. `RaidConduct` is pure and ready to call. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing requires it until the calls below. Gameplay is unchanged. No build stamp.
+
+Thresholds are `RaidConduct.CONFIG`: warn at 60s, remove at 90s, vote lock 120s, vote `3/4` rounded up, 1 kick per UTC day (`daySeconds` 86400), reason length 80. Idle codes are `RaidConduct.IDLE_REASONS` (`idle` and `afk`, exact match after trim and lowercase). Do not hardcode the numbers beside the module. Pass `os.clock()` in as `now`. The module does not read the clock.
+
+`RaidService.luau`, next to the `Raids` require:
+
+```lua
+local RaidConduct = require(ReplicatedStorage.Shared.RaidConduct)
+```
+
+Keep the roster in memory on `RaidService`, not on the profile. One raid record, one seat per player:
+
+```lua
+type Seat = {
+	userId: number,
+	joinedAt: number,
+	lastInputAt: number,
+	removed: boolean,
+}
+
+type Conduct = {
+	raidStartedAt: number,
+	guided: boolean,
+	inCombat: boolean,
+	inCutscene: boolean,
+	seats: { [Player]: Seat },
+	open: {
+		initiator: Player,
+		targetUserId: number,
+		reason: string,
+		votes: { [number]: boolean },
+	}?,
+}
+```
+
+There is no raid roster in `RaidService` today. `launch` starts a solo Heartwood through `DungeonService.enter` and comes straight back. The live heartbeat is `DungeonService.onHeartbeat` (T-003), which T-008's row does not list.
+
+**Where to feed input.** On a successful `launch`, and again when a backfill joins: `joinedAt = now`, `lastInputAt = now`. Joining counts as input. Do not reset `raidStartedAt` for a backfill. After that, stamp `lastInputAt = now` only for a real action: `Humanoid.MoveDirection` magnitude greater than 0, a jump, or an ability the server actually accepted. Camera look, by itself, is not input. The client must not send the timestamp. Suggested stamp from a server heartbeat inside `RaidService` (movement) plus the ability handlers you already own. Those handlers are not in `RaidService` today. See the question below before editing `DungeonService` or `CombatService`.
+
+**Cutscene flag.** Nothing in the current raid run is a cutscene. Pass `inCutscene = false` until one exists. While a cutscene is playing, set the flag true for every seat in it. On the frame it ends, set each of those seats' `lastInputAt` to that `now` before clearing the flag. Otherwise a long scene looks like 90 seconds of idle on the next tick. Only `inCutscene == true` pauses the clock.
+
+**Combat flag.** Pass `inCombat = true` only while the current pull has a living hostile. A cleared room, loot, or the walk between pulls is not combat, so vote-kick can open there once the 2-minute lock is over. The AFK clock does not read this flag. Combat does not pause AFK.
+
+**When to tick AFK.** Once a second is enough. `RaidService` has no `Heartbeat` and no `start` today. Add the connection on `RaidService` so the tick stays inside T-008's file, then skip seats with `removed == true`. For each remaining seat:
+
+```lua
+local check = RaidConduct.afk({
+	now = now,
+	lastInputAt = seat.lastInputAt,
+	inCutscene = conduct.inCutscene == true,
+})
+```
+
+Act on `check.state`, not on a second comparison of `check.idleSeconds`.
+
+| state | what to do |
+|---|---|
+| `ok` | nothing |
+| `paused` | cutscene. Do not warn and do not remove. |
+| `warning` | tell that player once per idle stretch. The next call still returns `warning` until they input or hit 90s. A new input that drops them under 60s, then another idle stretch, warns again. |
+| `remove` | set `seat.removed = true`, skip later reward grants for this player for the rest of this run, and queue a backfill. `check.forfeitRewards` and `check.queueBackfill` are both true. `check.keepMarks` is false. |
+| `invalid` | do not remove. The stamp was missing. |
+
+`forfeitRewards` means do not call `Raids.applyClear` (or any other raid grant) for that player again this run. Do not subtract `raidMarks` they were already paid. This module does not claw rewards back.
+
+**How to call vote-kick.** One open vote at a time. Only the player who starts it goes through `openVote`. Later yes votes call `tally` only. Calling `openVote` per voter would spend their daily kick too.
+
+```lua
+local request = {
+	now = now,
+	raidStartedAt = conduct.raidStartedAt,
+	inCombat = conduct.inCombat == true,
+	guided = conduct.guided == true,
+	initiatorUserId = player.UserId,
+	targetUserId = targetUserId,
+	reason = reason,
+	members = members,
+	votes = if conduct.open ~= nil then conduct.open.votes else nil,
+	kickDay = data.raidKickDay,
+	kickCount = data.raidKicksToday,
+}
+```
+
+Build `members` from the seats you still count, as `{ { userId = seat.userId, joinedAt = seat.joinedAt } }`. Leave out `removed` seats. `joinedAt` is what starts that player's own 2-minute protection. A bare user id has no join grace. Ignore a client `guided`, `inCombat`, `now`, or yes-count. Store the opener's reason on `conduct.open` and pass that same string into every later `tally`. A later voter's text must not replace it.
+
+`openVote` returns `spentKick == true` only when the vote is legally open. Then persist the daily fields inside `DataService.mutate` (see the schema note). `passed` is still false. Record `votes[initiatorUserId] = true` yourself. The opener is not an automatic yes inside `tally`. A refused open (`spentKick == false`) must not write the profile. `kickCount` on that result is the old value.
+
+`tally` never spends a kick and never changes `kickDay` / `kickCount`. When `passed == true`, remove the target. `keepMarks` is true and `forfeitRewards` is false, including reason `unfair` and reason `idle`. Grant this run's Marks as you would have. `dropQueuePriority` is true only for a passed vote whose stored reason is exactly `idle` or `afk`. `queueBackfill` stays false on every vote result. When `ok == true` and `passed == false`, keep the vote open. When `ok == false` (combat started, Guided, or the window slammed shut), do not apply the kick. Hold the ballots and call `tally` again once the gate is open. This does not refund the daily kick.
+
+`guided == true` is a Guided Raid (guild host, Oath of the Grove, Seekers). A Hard or Shardbreaker premade is not Guided unless that mode is actually on. Kicking is disabled for the whole Guided run. AFK removal still runs there. The design's leaver penalty (3 leaves, 15-minute Finder cooldown, 3-minute rejoin) is not in this module.
+
+The client can send an intent. It cannot send the rules. A remote is T-012, so this branch does not add one. When you add it, a missing rate-limit rule rejects the call:
+
+```lua
+RaidConduct = { capacity = 4, perSecond = 1 },
+```
+
+| Remote | action | payload | server reads |
+|---|---|---|---|
+| RaidConduct | `input` | `nil` | stamp `lastInputAt`. Ignore any time in the payload. |
+| RaidConduct | `vote` | `{ targetUserId: number, reason: string }` | opener: `openVote` with your reason. Later yes: `tally` only. |
+
+`input` is optional if the server already sees movement and abilities. Without it, a player who only presses abilities on a still character never stamps, and the 60s warning is wrong. Button presses need a server-side stamp somewhere.
+
+**Schema.** HELPER does not edit `Schema.luau`. Suggested fields, same shape as `tradeDay` / `tradeValueToday`. Add them on whichever version is free when you wire this. Version 20 is current. T-015 already sketched 21 for the pass fields, so do not assume 21 is still open. `ProfileData`, `template()`, the matching `migrate` arm, and `snapshot`:
+
+```lua
+raidKickDay: number, -- floor(unix / 86400). 0 until the first opened vote.
+raidKicksToday: number,
+```
+
+Defaults: `raidKickDay = 0`, `raidKicksToday = 0`. Reset rule: `RaidConduct.dayNumber(now)` is the UTC day (`floor(now / 86400)`). If that differs from `raidKickDay`, the module treats the stored count as 0. Write `raidKickDay = result.kickDay` and `raidKicksToday = result.kickCount` only when `openVote` returns `spentKick == true`. Do not reset these on the Tuesday weekly raid reset. Do not write them from `tally`. Queue priority is not one of these fields. On `dropQueuePriority`, sort that player's next Finder ticket last until that UTC day ends.
+
+`tests/run.luau` requires `./RaidConduct.spec` on this branch.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is. Prior HELPER branches skipped the stamp the same way.
+
+Questions for Ghost:
+
+1. Vote size is `ceil(3/4)` of the whole group, and the target cannot vote. A group of 4 needs all 3 others. A group under 4 cannot open a vote. Should the target count in the 3/4, or is it 3/4 of the voters only?
+2. The daily kick is spent when the vote opens, even if it never reaches 3/4. A refused attempt (combat, grace, Guided, bad reason, group too small) does not spend it. A vote that becomes impossible because people left is not refunded. Should a failed vote be free?
+3. Every passed vote keeps Marks, idle included. Idle only drops queue priority. Only the 90s AFK removal forfeits rewards, and only rewards not yet granted. Should an idle vote-kick also forfeit Marks?
+4. `queueBackfill` is true only on AFK removal. A passed vote does not flag one. Should it?
+5. The 2-minute lock is the raid's opening, plus 2 minutes from `joinedAt` when you pass it, so a backfill is not kickable on arrival. Is the lock raid-wide only?
+6. The AFK clock pauses only in cutscenes. Combat does not pause it. Should combat pause AFK too? There is no cutscene flag on the raid run yet.
+7. The kick day is UTC `floor(now / 86400)`, matching `tradeDay`, not the Tuesday weekly reset and not a local midnight. Is that the day you want?
+8. `guided` is an explicit flag. Hard and Shardbreaker premades can still vote-kick. Should every Hard or Shardbreaker run count as Guided?
+9. T-008 lists `RaidService.luau` and `Raids.luau` only. The run heartbeat and the ability handlers live in `DungeonService` / `CombatService`. Should `noteInput` and the combat flag be called from those files, or do you want a `RaidService` heartbeat that only sees movement until a T-012 remote exists?
+10. The leaver penalty in the raids doc (3 leaves, 15-minute Finder cooldown, 3-minute rejoin) is not implemented here. Say if it belongs in this module.
+
 ## Open
 
 No unassigned tasks.
