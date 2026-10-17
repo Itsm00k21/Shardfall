@@ -106,6 +106,18 @@ Haven.SHRINE = {
 	message = "The shrine wakes inside a run.",
 }
 
+-- Training Grove dummy. South rim of the plaza disc, west of the Rootvault
+-- lane. halfX and halfZ are the prop's footprint. It is not a district and
+-- not a gate, so it stays out of Haven.places.
+Haven.GROVE = {
+	id = "grove",
+	name = "Training Grove",
+	x = -16,
+	z = 48.2,
+	halfX = 1.1,
+	halfZ = 0.8,
+}
+
 -- Five class stones for T-005. Grey, no prompt, not a gate.
 Haven.NOVICE = {
 	x = -40,

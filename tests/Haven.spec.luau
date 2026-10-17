@@ -217,6 +217,50 @@ describe("Haven", function()
 		expect(Haven.footprintsOverlap(plaza, neighbor)).toBeFalse()
 	end)
 
+	it("keeps the training dummy on the south rim and out of the gate lanes", function()
+		local grove = Haven.GROVE
+		expect(grove.id).toEqual("grove")
+		expect(grove.name).toEqual("Training Grove")
+		expect(grove.x).toEqual(-16)
+		expect(grove.z).toEqual(48.2)
+		local radius = math.sqrt(grove.x * grove.x + grove.z * grove.z)
+		expect(radius < Haven.PLAZA_RADIUS).toBeTrue()
+		expect(radius > Haven.PLAZA_RADIUS - 4).toBeTrue()
+		expect(grove.z > Haven.SPAWN.z).toBeTrue()
+		expect(grove.x < -8).toBeTrue()
+		for _, place in ipairs(Haven.places()) do
+			expect(place.id == "grove").toBeFalse()
+		end
+		local function inLane(x: number, z: number, portal: any): boolean
+			local bearing = math.rad(portal.bearing or 0)
+			local dirX = math.sin(bearing)
+			local dirZ = math.cos(bearing)
+			local sideX = math.cos(bearing)
+			local sideZ = -math.sin(bearing)
+			local dx = x - Haven.SPAWN.x
+			local dz = z - Haven.SPAWN.z
+			local along = dx * dirX + dz * dirZ
+			local side = math.abs(dx * sideX + dz * sideZ)
+			if along < 8 or along > Haven.GATE_RADIUS then
+				return false
+			end
+			return side <= 5
+		end
+		for _, portal in ipairs(Haven.PORTALS) do
+			local mouth = math.sqrt((grove.x - portal.x) * (grove.x - portal.x) + (grove.z - portal.z) * (grove.z - portal.z))
+			expect(mouth > 30).toBeTrue()
+			for _, sx in ipairs({ -1, 0, 1 }) do
+				for _, sz in ipairs({ -1, 0, 1 }) do
+					local x = grove.x + sx * grove.halfX
+					local z = grove.z + sz * grove.halfZ
+					if inLane(x, z, portal) then
+						error(portal.id .. " lane crosses the grove", 2)
+					end
+				end
+			end
+		end
+	end)
+
 	it("keeps the dungeon rooms beyond the islands", function()
 		local _, _, waveZ = Dungeons.roomOrigin(Dungeons.WAVES_ROOM_INDEX)
 		local _, _, roomZ = Dungeons.roomOrigin(1)
