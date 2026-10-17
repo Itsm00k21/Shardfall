@@ -79,7 +79,7 @@ LoadingTips.TIPS = table.freeze({
 		"raids",
 		"Wings: Thornwarden Twins, Mother Sapwell, Galecrown, Grandmother Gnarl Awakened."
 	),
-	tip("tip_37", "raids", "You can enter the Heartwood alone. A full party is 8."),
+	tip("tip_37", "raids", "A Heartwood party needs 4 players. Practice Grove is the solo path."),
 	tip("tip_38", "raids", "Warden can tank. Tidecaller can heal. Any class can be DPS."),
 	tip("tip_39", "raids", "Practice Grove is free and pays no loot."),
 	tip("tip_40", "raids", "Each boss rolls loot once per difficulty each week. Marks still pay."),

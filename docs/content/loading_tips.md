@@ -54,7 +54,7 @@ Each tip is under 90 characters. Counts below include spaces. Numbers are the li
 | `tip_34` | raids | 61 | Marks earned this week cap at 600. The wallet does not reset. |
 | `tip_35` | raids | 53 | Heartwood Student costs 200 Raid Marks at the vendor. |
 | `tip_36` | raids | 80 | Wings: Thornwarden Twins, Mother Sapwell, Galecrown, Grandmother Gnarl Awakened. |
-| `tip_37` | raids | 53 | You can enter the Heartwood alone. A full party is 8. |
+| `tip_37` | raids | 67 | A Heartwood party needs 4 players. Practice Grove is the solo path. |
 | `tip_38` | raids | 59 | Warden can tank. Tidecaller can heal. Any class can be DPS. |
 | `tip_39` | raids | 40 | Practice Grove is free and pays no loot. |
 | `tip_40` | raids | 68 | Each boss rolls loot once per difficulty each week. Marks still pay. |
@@ -90,7 +90,7 @@ Each tip is under 90 characters. Counts below include spaces. Numbers are the li
 | Odds labels | `RarityConfig.oneIn`: Common 2, Mythic 25000, at x1 before luck. |
 | Armory pity | Epic 100, Legendary 1000. The next crack is the guarantee at 99/100 and 999/1000. |
 | Chest pity | Rare chests 20 to Epic or better. Epic chests 15 to Legendary. Separate counters. |
-| Raids | Story and Normal are level 15. Story pays 25 marks, Normal 40, weekly room 600. Student is 200. |
+| Raids | Story and Normal are level 15. Story pays 25 marks, Normal 40, weekly room 600. Student is 200. Finder and premade parties start at 4. Practice Grove is the solo path. |
 | Wings | Thornwarden Twins, Mother Sapwell, Galecrown, Grandmother Gnarl Awakened. |
 | Practice | `RaidPractice.rewards` returns empty loot. |
 | Pets | An egg, or 50 gold. Affinity 5. Bond 5. Feed is 25 XP. A level is 50 XP, cap 50. Combos cap at 3. |
