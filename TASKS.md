@@ -2670,6 +2670,106 @@ Answers from Ghost:
 11. Confirmed. Do not carry kills stored on a week key below 0.
 12. `offer` refuses an item whose tier does not match its slot. `pick` refuses a stored mismatch and does not grant it. The loot builder still stamps the slot difficulty. This check is defense in depth.
 
+### T-071 hooks for GHOST
+
+HELPER did not edit `Crafting.luau`, `Recipes.luau`, `Raids.luau`, `RaidService.luau`, `RaidLootTrade.luau`, `DungeonService.luau`, `PracticeLoot.luau`, `CraftService.luau`, `Schema.luau`, `Remotes.luau`, `RateLimiter.luau`, `default.project.json`, `Build.luau`, the init scripts, or any other T-012 file. `RaidResonant` is pure and ready to call. It does not require `Crafting`, `Recipes`, `Raids`, `RaidMarks`, `RaidLootTrade`, or the weapon catalog. `$path` already includes `src/ReplicatedStorage/Shared`, so the module is in the place file without a `default.project.json` edit. Nothing in `src` requires it. Gameplay is unchanged. No build stamp. No new remote. No DataStore. No MemoryStore. No RNG. No clock. Nothing here costs Robux. There is no paid skip of the three drops. T-071 stays `claimed`. Wiring is yours.
+
+Thresholds are `RaidResonant.CONFIG`. `threshold` is 3. `maxIdLength` is 64, the same placeholder cap as the practice guard. A GUID from `HttpService:GenerateGUID(false)` is 36 characters and fits. Do not hardcode 3 beside the module. Read `result.threshold` or `CONFIG.threshold`.
+
+`RaidService.luau`, next to the other raid requires, when you wire this:
+
+```lua
+local RaidResonant = require(ReplicatedStorage.Shared.RaidResonant)
+```
+
+**Return shape.** `fresh`, `note`, and `view` each return one new table. They do not write the input. A bad arg does not throw. nil, a non-table, a blank id, and a wrong type take the failure path. Store `state` only when `note.persist == true`. `view.persist` is always false. An `ok == false` result with `persist == false` is a bad record or a bad drop. Writing the blank record from a state error would wipe real pattern progress.
+
+| call | when | on success |
+|---|---|---|
+| `fresh()` | a brand-new profile, before the first resonant drop | `{ weapons = {} }` |
+| `note(state, drop)` | the server grants one Heartshard drop | a new state. `counted` means this uid was stored. `unlocked` means this weapon's pattern is open. |
+| `view(state)` | the raids panel wants every weapon | the progress list. Top-level `count` is 0 and `unlocked` is false. |
+| `view(state, weaponId)` | the Forge asks if this pattern is open | that weapon's `count` and `unlocked`. An unseen weapon is 0 and false. |
+
+**What a drop is.** Pass `{ weaponId, resonant, practice, uid }`. `weaponId` is trimmed. `" axe "` is `axe`. It is not lowercased, so `Axe` and `axe` are two weapons. It is not checked against a catalog. A blank, missing, non-string, or over-long weapon id is `ERRORS.weapon`. `uid` is trimmed the same way. A missing or blank uid is `ERRORS.uid`. A non-string uid, or one longer than `maxIdLength`, is `ERRORS.uidShape`. A missing uid is refused on purpose, so a retry cannot invent a second count by omitting the id the first time and sending it the second. Extra fields (`difficulty`, a forged `unlocked`) are ignored.
+
+Only `resonant == true` counts. `false`, nil, `1`, and `"true"` return `ok == true`, `counted == false`, `reason == "resonant"`, and they do not store the uid. `practice == true` does not count (`reason == "practice"`), even when the drop is also resonant. `practice` nil or false is a live drop. Any other practice type is `ERRORS.practice`. Practice is not a difficulty.
+
+The same uid does not count twice. Uids are global across weapons: a uid stored on `axe` cannot count for `bow`. A replay is `reason == "duplicate"` and `duplicate == true`, including a retry that flips `practice` or `resonant` after the uid was stored. That check happens before the practice and resonant skips. A practice drop, a non-resonant drop, and a drop past the cap do not store the uid. A later live resonant call with that same uid can still count.
+
+The count sticks at 3. The third stored uid sets `unlocked`. A fourth new uid returns `reason == "capped"`, `counted == false`, `persist == false`, `count == 3`, and `unlocked == true`. That fourth uid is not stored, so a replay of it is capped again, not a duplicate. A replay of one of the three is a duplicate. Unlock stays set. Nothing in this module clears it. There is no skip, no Marks spend, and no material cost.
+
+Nil `state`, or `weapons` nil, is an empty record. The first counted drop should be saved. A broken row (count above 3, `unlocked` disagreeing with the count, a duplicate weapon id, a uid used twice, a non-array, a stored id that still has surrounding spaces) is `ERRORS.state`. The returned `state.weapons` is empty and `persist` is false. Do not write that blank over the profile.
+
+`view` copies the record and does not change counts. `view(state, "  axe  ")` trims. The `weapons` list on a successful view is every stored weapon, in the order they were first counted, not only the one you asked about. Do not save `view`. On a view error the progress list is empty. A state error's `state` is blank. A weapon-id error still carries the copied record on `state`, with `ok == false`.
+
+```lua
+local function resonantState(data)
+	return {
+		weapons = data.raidResonant,
+	}
+end
+
+local function saveResonant(data, result)
+	if result.persist ~= true then
+		return
+	end
+	data.raidResonant = result.state.weapons
+end
+```
+
+**Call sites, still yours.** Heartshard weapon drops are not granted yet. `PracticeLoot.applyKill` pays materials, chests, and `Raids.applyClear`. It does not mint a resonant weapon. Add `noteResonant` on `RaidService` and call it from the server mutate that grants the weapon, after the item uid exists. The kill path today is the `enemy.hp <= 0` block in `DungeonService.damageEnemy`, inside the `DataService.mutate` that already calls `PracticeLoot.applyKill` for a Heartwood boss. Do not fold these rules into `Raids.applyClear`, `PracticeLoot`, `Crafting`, or `Recipes`. Pass `practice = run.practice == true`. Pass `resonant = true` only when that granted item is a red-border Resonant drop. Pass that item's `uid`. Do not pass a material pile. The client does not get to set `resonant`.
+
+```lua
+function RaidService.noteResonant(player, drop)
+	return DataService.mutate(player, function(data)
+		local result = RaidResonant.note(resonantState(data), {
+			weaponId = drop.weaponId,
+			resonant = drop.resonant == true,
+			practice = drop.practice == true,
+			uid = drop.uid,
+		})
+		saveResonant(data, result)
+		if result.ok ~= true then
+			return result.error
+		end
+		return nil
+	end)
+end
+```
+
+The Forge check belongs in `CraftService.craft`, before `Crafting` runs, and only for a Heartshard pattern recipe. `RaidResonant.view(resonantState(data), weaponId).unlocked` must be true. This module does not know recipe ids, does not spend Marks, and does not take materials. `Crafting.luau` still owns the cost. A locked pattern does not craft. There is no Robux product that sets `unlocked`.
+
+The red border is paint. Show it from the drop the server already marked resonant. Do not let the client send the flag. The pattern progress for the panel is `RaidResonant.view`.
+
+**Schema.** HELPER does not edit `Schema.luau`. Add this on the next free schema version at wiring time. Do not assume a version number from this branch. Version 21 was current when T-071 opened. Do not assume 22 is still free.
+
+```lua
+raidResonant: { any }, -- { { weaponId, count, unlocked, uids } }. Default {}.
+```
+
+`count` is 1 to 3 for a stored row. `unlocked` is true only when `count` is 3. `uids` is the list of uids that counted, and its length is `count`. Weapons with no drops are absent. The threshold is `CONFIG`, so it does not need its own field. Leave a non-array or a bad row for the module to refuse. If `sanitize` turns a broken record into `{}`, a corrupt profile looks like a new player and the same three drops can count again under new uids. `snapshot` can send the view (`weaponId`, `count`, `unlocked`, `threshold`) when the panel or the Forge asks. The profile keeps the raw rows, including `uids`.
+
+`tests/run.luau` requires `./RaidResonant.spec`. That require is in `tests`, not in `src`.
+
+Build stamp files are T-012. This branch does not change them. The module is not required by the server or the client, so the printed stamp stays where it is.
+
+Questions for Ghost:
+
+1. Weapon ids are trimmed and not lowercased. `"Axe"` and `"axe"` are different weapons. Should the wire pass a canonical id, or should this module fold case?
+2. A uid is global across weapons. The same uid cannot count toward a second weapon. Confirm.
+3. Practice, a non-resonant drop, and a drop past 3 do not store the uid. A later live resonant call with that same uid still counts. A replay of a uid that already counted is `duplicate` even if the retry sets `practice` or clears `resonant`. Confirm, including that a practice attempt must not burn the uid.
+4. Only `resonant == true` counts. `false`, nil, `1`, and `"true"` do not count and are not errors. Confirm, or should a non-boolean be refused?
+5. `practice` nil and false mean a live drop. Any other type is refused. Confirm.
+6. Difficulty, guided, lockout, AFK, and vote-kick are not fields. A reclear can still add a resonant drop. The design line that reclears keep paying toward Resonant patterns is read that way. Confirm, including whether a resonant drop is eligible during the loot lockout.
+7. One pattern per `weaponId`, not per difficulty and not per class. Confirm.
+8. Unlock does not grant the weapon, spend Marks, or consume the three items. Salvage and trade do not reduce the count. The Forge pattern id is this same `weaponId` until you map it to a recipe. Confirm the map, and that `CraftService.craft` stays closed until `view` says `unlocked`.
+9. The field name is `raidResonant`, the weapons array only. Confirm. Version 21 was current. Add it on whichever version is free at wiring time.
+10. `CONFIG.maxIdLength` is 64. Confirm or raise it.
+11. The loot builder owns the red-border flag. This module does not read the item or the catalog. Confirm `resonant = true` is set only for a Resonant Heartshard weapon, and that a normal drop of the same weapon does not count.
+12. There is no bad-luck bump and no paid skip. Three is the whole rule. A 4th new uid returns `capped` and is not stored, so a replay of that 4th uid also returns capped rather than duplicate. Confirm that reporting is fine.
+13. Should the wire live as `RaidService.noteResonant`, called from the Heartwood boss mutate in `DungeonService.damageEnemy`, or only once a real Heartshard weapon drop exists inside that mutate? This branch does not edit either file.
+
 ## Open
 
 No unassigned tasks.
