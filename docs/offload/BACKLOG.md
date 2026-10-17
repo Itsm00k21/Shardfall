@@ -31,7 +31,7 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-015 | M | content | Haven NPC dialogue: 8 NPCs with a greeting, 3 idle lines, a shop line and a quest hand-in line | `docs/content/npc_dialogue_haven.md` | done | https://github.com/Itsm00k21/Shardfall/pull/95 |
 | G-016 | M | content | 50 achievements (combat, rolls, pets, raids, social, collection) with a reward idea | `docs/content/achievements.md` | done | https://github.com/Itsm00k21/Shardfall/pull/95 |
 | G-017 | S | content | 40 titles with unlock conditions and rarity tint | `docs/content/titles.md` | done | https://github.com/Itsm00k21/Shardfall/pull/101 |
-| G-018 | L | content | Shard Pass season 1: 50 tiers, free and premium tracks, cosmetics and convenience only, a season theme and name | `docs/content/shard_pass_s1.md` | todo | — |
+| G-018 | L | content | Shard Pass season 1: 50 tiers, free and premium tracks, cosmetics and convenience only, a season theme and name | `docs/content/shard_pass_s1.md` | done | @@PR@@ |
 | G-019 | M | content | Shard Pass season 2 theme and 50-tier outline (cosmetics and convenience only) | `docs/content/shard_pass_s2.md` | done | https://github.com/Itsm00k21/Shardfall/pull/101 |
 | G-020 | S | content | 60 loading-screen tips (controls, rolls, pity, raids, pets, crafting), each under 90 characters | `docs/content/loading_tips.md` | done | https://github.com/Itsm00k21/Shardfall/pull/101 |
 | G-021 | M | content | Codex lore entries for every Mythic item and pet named so far in `docs/content/` | `docs/content/lore_mythics.md` | todo | — |
