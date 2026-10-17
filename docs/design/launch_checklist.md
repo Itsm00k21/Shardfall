@@ -82,6 +82,19 @@ Suggested badge set, after the service exists. Each one is a moment the player a
 | 6. Friends, one evening | Kevin | Note the minute they drop. Target is the first clear inside 30 minutes |
 | 7. Public | Kevin | After steps 1–6. Paid products stay off. Event Tokens stay without a shop |
 
+### Action bar (T-147)
+
+Kevin checks the T-142 bar in Studio. Write `pass` or `fail` in the mark column. This list does not change gameplay.
+
+| case | mark |
+|---|---|
+| Drag a hero skill onto a slot | |
+| Drag a bag item onto a slot | |
+| Drag one slot onto another to swap | |
+| Drag a slot off the bar to clear it | |
+| The Lock toggle blocks a drag, a swap, and a clear | |
+| On 390×844 the eight slots are a 2×4 cluster at the bottom-right, clear of the joystick and the toast | |
+
 ## Copy before publish
 
 The forge spends one Gnarl's Seed on +8, +9, and +10 (`Economy.luau:34`, `Economy.luau:49`). The short-stack line still says `Needs boss bark.` (`Economy.luau:50`). Suggested player line: `Needs Gnarl's Seed.`
