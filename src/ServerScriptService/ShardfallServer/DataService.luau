@@ -540,10 +540,9 @@ local function recoverFailedHop(player: Player, record: Record): string
 	return "closed"
 end
 
--- Connect before TeleportAsync so a failure during the yield is visible,
--- then yield once after it returns. TeleportInitFailed can also arrive
--- after we have already reported success; that path reclaims below.
-local function beginHopWatch(player: Player, record: Record, teleport: () -> ()): () -> ()
+-- Connect before TeleportAsync so a failure during the yield is visible.
+-- TeleportInitFailed can also arrive after we have already reported success.
+local function armHop(player: Player, record: Record): HopWatch
 	disconnectHop(player)
 	local watch: HopWatch = {
 		conn = nil,
@@ -578,6 +577,14 @@ local function beginHopWatch(player: Player, record: Record, teleport: () -> ())
 			recoverFailedHop(player, record)
 		end)
 	end)
+	return watch
+end
+
+-- Connect before TeleportAsync so a failure during the yield is visible,
+-- then yield once after it returns. TeleportInitFailed can also arrive
+-- after we have already reported success; that path reclaims below.
+local function beginHopWatch(player: Player, record: Record, teleport: () -> ()): () -> ()
+	local watch = armHop(player, record)
 	return function()
 		teleport()
 		task.wait()
@@ -717,6 +724,170 @@ function DataService.releaseForTeleport(player: Player, teleport: () -> ()): (st
 	settleRecord(record, false, true)
 	warn("[Shardfall] Teleport save failed for", player.Name, handoff.reason, handoff.error)
 	return "kept", TELEPORT_SAVE_FAILED
+end
+
+-- Save every seated profile, then call teleport once. A thrown teleport or
+-- any TeleportInitFailed rolls the whole party back. Players still here are
+-- reclaimed. Players who already left stay released so the other server can
+-- load them, and the caller sends those players home.
+function DataService.releasePartyForTeleport(
+	players: { Player },
+	teleport: () -> ()
+): (string, { Player })
+	local empty: { Player } = {}
+	if type(players) ~= "table" or #players == 0 then
+		return "kept", empty
+	end
+	local seen: { [Player]: boolean } = {}
+	local ephemeral = false
+	local mixed = false
+	for _, player in ipairs(players) do
+		if typeof(player) ~= "Instance" or seen[player] == true then
+			return "kept", empty
+		end
+		seen[player] = true
+		local record = records[player]
+		if record == nil or not record.loaded or record.released then
+			return "kept", empty
+		end
+		if record.closing then
+			return "closing", empty
+		end
+		if record.ephemeral then
+			ephemeral = true
+		end
+	end
+	for _, player in ipairs(players) do
+		local record = records[player]
+		if record ~= nil and record.ephemeral ~= ephemeral then
+			mixed = true
+		end
+	end
+	if mixed then
+		return "kept", empty
+	end
+	for _, player in ipairs(players) do
+		local record = records[player]
+		if record ~= nil then
+			record.closing = true
+		end
+	end
+	if not ephemeral then
+		local released: { Player } = {}
+		for _, player in ipairs(players) do
+			local record = records[player]
+			if record == nil then
+				for _, waiting in ipairs(players) do
+					local waitingRecord = records[waiting]
+					if waitingRecord ~= nil and waitingRecord.closing then
+						settleRecord(waitingRecord, false, true)
+					end
+				end
+				return "kept", empty
+			end
+			local result = ProfileLoad.release(
+				currentAdapter(),
+				record.key,
+				os.time(),
+				serverId,
+				placeId,
+				SessionLock.TIMEOUT_SECONDS,
+				record.data
+			)
+			if not result.ok then
+				for _, done in ipairs(released) do
+					local doneRecord = records[done]
+					if doneRecord ~= nil then
+						ProfileLoad.reclaim(
+							currentAdapter(),
+							doneRecord.key,
+							os.time(),
+							serverId,
+							placeId,
+							SessionLock.TIMEOUT_SECONDS,
+							doneRecord.data
+						)
+						settleRecord(doneRecord, false, true)
+					end
+				end
+				for _, waiting in ipairs(players) do
+					local waitingRecord = records[waiting]
+					if waitingRecord ~= nil and waitingRecord.closing then
+						settleRecord(waitingRecord, false, true)
+					end
+				end
+				warn("[Shardfall] Party teleport save failed for", player.Name, result.reason)
+				return "kept", empty
+			end
+			table.insert(released, player)
+		end
+	end
+	local watches: { [Player]: HopWatch } = {}
+	for _, player in ipairs(players) do
+		local record = records[player]
+		if record ~= nil then
+			watches[player] = armHop(player, record)
+		end
+	end
+	local callOk, callErr = pcall(teleport)
+	task.wait()
+	local results = {}
+	for index, player in ipairs(players) do
+		local watch = watches[player]
+		local failed = (not callOk) or (watch ~= nil and watch.initFailed == true)
+		results[index] = if failed then "fail" else "ok"
+	end
+	local failedAny = not callOk
+	for _, result in ipairs(results) do
+		if result ~= "ok" then
+			failedAny = true
+		end
+	end
+	if failedAny then
+		local away: { Player } = {}
+		for _, player in ipairs(players) do
+			local record = records[player]
+			if record == nil then
+				continue
+			end
+			if player.Parent == Players then
+				if ephemeral then
+					disconnectHop(player)
+					settleRecord(record, false, true)
+				else
+					recoverFailedHop(player, record)
+				end
+			else
+				local watch = watches[player]
+				if watch ~= nil then
+					watch.settled = true
+				end
+				if ephemeral then
+					settleRecord(record, false, true)
+				else
+					settleRecord(record, true, false)
+				end
+				table.insert(away, player)
+			end
+		end
+		warn("[Shardfall] Party teleport failed", callErr)
+		return "rolled-back", away
+	end
+	for _, player in ipairs(players) do
+		local record = records[player]
+		local watch = watches[player]
+		if watch ~= nil then
+			watch.settled = true
+		end
+		if record ~= nil then
+			if ephemeral then
+				settleRecord(record, false, true)
+			else
+				settleRecord(record, true, false)
+			end
+		end
+	end
+	return "teleported", empty
 end
 
 local function onPlayer(player: Player)
