@@ -42,6 +42,7 @@ local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
 local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollHype"))
 local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
+local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
@@ -3202,19 +3203,40 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					hideCloseBeat()
 				end
 			end
-			if record == nil or type(result) ~= "table" or type(result.item) ~= "table" then
-				local missed = RollHype.note(hype, { landed = false })
-				local close = closeFor(nil, false)
-				if missed.ok == true then
-					hype = missed.state
+			-- A refusal did not land and did not miss. Leave the streak.
+			local kind = RollRefuse.classify(ok, result)
+			if kind ~= "land" or record == nil then
+				local caption = "Roll"
+				if kind == "refuse" then
+					hideCloseBeat()
+					caption = RollReveal.reelCaption(result)
+					if type(result) == "string" and string.find(result, "\n", 1, true) == nil then
+						local trimmed = string.match(result, "^%s*(.-)%s*$")
+						if trimmed ~= nil and trimmed ~= "" then
+							caption = result
+						end
+					end
+				elseif kind == "miss" then
+					local missed = RollHype.note(hype, { landed = false })
+					local close = closeFor(nil, false)
+					if missed.ok == true then
+						hype = missed.state
+					end
+					lastMissed = true
+					applyClose(close)
+				else
+					-- Unusable land. Do not note a miss.
+					hideCloseBeat()
 				end
-				lastMissed = true
 				loop = RollLoop.idle()
 				blankReveal()
 				reelMilestone.Visible = false
 				setPulse(true)
-				applyClose(close)
-				paintReelIdle(RollReveal.reelCaption(result))
+				if kind == "miss" then
+					paintReelIdle(RollReveal.reelCaption(result))
+				else
+					paintReelIdle(caption)
+				end
 				paintRoll()
 				return
 			end
