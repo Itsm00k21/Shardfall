@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build a2c5c1d+ client` in Output.
+	still leaves `[Shardfall] build 6beeacb+ client` in Output.
 ]]
 
-print("[Shardfall] build a2c5c1d+ client")
+print("[Shardfall] build 6beeacb+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -288,9 +288,11 @@ local function applyProfile(profile: any, saving: any)
 	CombatHud.setWallet(profile.gold or 0, profile.shardTokens or 0, profile.gems or 0)
 	if hudShell ~= nil then
 		hudShell.setProfile(profile)
+		hudShell.noteDevice(deviceIsTouch())
 	end
 	if menuHub ~= nil then
 		menuHub.setProfile(profile)
+		menuHub.promptClass(false)
 	end
 	ClassHud.setProfile(profile)
 	OnboardHud.setProfile(profile)
@@ -1089,7 +1091,7 @@ local function openHub(tab: string)
 	if not menuHub.isOpen() then
 		closePanels("menu")
 	end
-	menuHub.open(tab)
+	menuHub.toggle(tab)
 end
 
 menuHub = MenuHub.start(playerGui, {
@@ -1099,7 +1101,7 @@ menuHub = MenuHub.start(playerGui, {
 			rollReel.request(false)
 		end
 		if menuHub ~= nil then
-			menuHub.close()
+			menuHub.handoffRoll()
 		end
 	end,
 	onBag = function()
@@ -1117,19 +1119,23 @@ menuHub = MenuHub.start(playerGui, {
 		end
 	end,
 	onDim = function(open: boolean)
+		if hudShell ~= nil and not open then
+			hudShell.setRail("")
+		end
+	end,
+	onTab = function(id: string)
 		if hudShell ~= nil then
-			hudShell.setDimmed(open)
+			hudShell.setRail(id)
 		end
 	end,
 })
 
 hudShell = HudShell.start(playerGui, {
-	onMenu = function()
-		if menuHub ~= nil and menuHub.isOpen() then
-			menuHub.close()
-			return
-		end
+	onHero = function()
 		openHub("hero")
+	end,
+	onBag = function()
+		openHub("bag")
 	end,
 	onRoll = function()
 		openHub("roll")

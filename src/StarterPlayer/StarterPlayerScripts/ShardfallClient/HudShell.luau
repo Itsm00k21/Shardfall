@@ -15,15 +15,19 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local Build = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Build"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
+local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
+local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
 local HudShell = {}
 
 export type Callbacks = {
-	onMenu: () -> (),
+	onHero: () -> (),
+	onBag: () -> (),
 	onRoll: () -> (),
 	onPets: () -> (),
 	onMarket: () -> (),
@@ -37,12 +41,29 @@ export type Callbacks = {
 }
 
 local RAIL = {
-	{ id = "Menu", call = "onMenu" },
-	{ id = "Roll", call = "onRoll" },
-	{ id = "Pets", call = "onPets" },
-	{ id = "Market", call = "onMarket" },
-	{ id = "Pass", call = "onPass" },
-	{ id = "Settings", call = "onSettings" },
+	{ id = "Hero", icon = "hero", call = "onHero" },
+	{ id = "Bag", icon = "bag", call = "onBag" },
+	{ id = "Pets", icon = "pets", call = "onPets" },
+	{ id = "Roll", icon = "roll", call = "onRoll" },
+	{ id = "Market", icon = "market", call = "onMarket" },
+	{ id = "Pass", icon = "pass", call = "onPass" },
+	{ id = "Settings", icon = "settings", call = "onSettings" },
+}
+
+local SKILL_ICON = {
+	Attack = "attack",
+	Dodge = "dodge",
+	Skill1 = "skill",
+	Skill2 = "skill",
+	Ult = "ult",
+}
+
+local SKILL_BIND = {
+	Attack = "E",
+	Dodge = "Q",
+	Skill1 = "Shift",
+	Skill2 = "2",
+	Ult = "F",
 }
 
 local function rgb(name: string): Color3
@@ -200,40 +221,119 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	railLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	railLayout.Parent = rail
 	local dots: { [string]: Frame } = {}
+	local railAccents: { [string]: Frame } = {}
+	local railButtons: { TextButton } = {}
 	for index, entry in ipairs(RAIL) do
 		local button = Instance.new("TextButton")
 		button.Name = entry.id
 		button.LayoutOrder = index
-		button.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TAP)
-		button.BackgroundColor3 = rgb("button")
+		button.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
+		button.BackgroundColor3 = rgb("body")
 		button.BorderSizePixel = 0
-		button.Font = Enum.Font.BuilderSansBold
-		button.TextSize = UiTheme.MIN_TEXT
-		button.TextColor3 = rgb("text")
-		button.Text = if entry.id == "Settings" then "Gear" else entry.id
+		button.Text = ""
+		button.AutoButtonColor = false
 		button.Parent = rail
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		corner.Parent = button
-		local icon = Instance.new("Frame")
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = UiTheme.STROKE
+		stroke.Color = rgb("divider")
+		stroke.Parent = button
+		local accent = Instance.new("Frame")
+		accent.Name = "Accent"
+		accent.Size = UDim2.new(0, UiTheme.ACCENT, 1, -10)
+		accent.Position = UDim2.fromOffset(0, 5)
+		accent.BackgroundColor3 = rgb("accent")
+		accent.BorderSizePixel = 0
+		accent.Visible = false
+		accent.ZIndex = 4
+		accent.Parent = button
+		railAccents[entry.id] = accent
+		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
 		icon.AnchorPoint = Vector2.new(0.5, 0)
-		icon.Position = UDim2.new(0.5, 0, 0, 6)
+		icon.Position = UDim2.new(0.5, 0, 0, 4)
 		icon.Size = UDim2.fromOffset(22, 22)
-		icon.BackgroundColor3 = rgb("gold")
-		icon.BorderSizePixel = 0
+		icon.BackgroundTransparency = 1
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Image = UiIcons.get(entry.icon)
+		local red, green, blue = UiIcons.tintOf(entry.icon)
+		icon.ImageColor3 = Color3.fromRGB(red, green, blue)
+		icon.ZIndex = 2
 		icon.Parent = button
-		local iconCorner = Instance.new("UICorner")
-		iconCorner.CornerRadius = UDim.new(1, 0)
-		iconCorner.Parent = icon
-		local glyph = Instance.new("TextLabel")
-		glyph.BackgroundTransparency = 1
-		glyph.Size = UDim2.fromScale(1, 1)
-		glyph.Font = Enum.Font.BuilderSansBold
-		glyph.TextSize = UiTheme.MIN_TEXT
-		glyph.TextColor3 = rgb("ink")
-		glyph.Text = string.sub(entry.id, 1, 1)
-		glyph.Parent = icon
+		local caption = Instance.new("TextLabel")
+		caption.Name = "Caption"
+		caption.BackgroundTransparency = 1
+		caption.AnchorPoint = Vector2.new(0.5, 1)
+		caption.Position = UDim2.new(0.5, 0, 1, -1)
+		caption.Size = UDim2.new(1, -2, 0, 14)
+		caption.Font = Enum.Font.BuilderSans
+		caption.TextSize = 11
+		caption.TextColor3 = rgb("muted")
+		caption.Text = if entry.id == "Settings" then "Gear" else entry.id
+		caption.ZIndex = 3
+		caption:SetAttribute("SkipTextScale", true)
+		caption.Parent = button
+		local tip = Instance.new("TextLabel")
+		tip.Name = "Tip"
+		tip.AnchorPoint = Vector2.new(0, 0.5)
+		tip.Position = UDim2.new(1, 8, 0.5, 0)
+		tip.Size = UDim2.fromOffset(84, 28)
+		tip.BackgroundColor3 = rgb("header")
+		tip.Font = Enum.Font.BuilderSans
+		tip.TextSize = UiTheme.MIN_TEXT
+		tip.TextColor3 = rgb("text")
+		tip.Text = entry.id
+		tip.Visible = false
+		tip.ZIndex = 8
+		tip.Parent = button
+		local tipCorner = Instance.new("UICorner")
+		tipCorner.CornerRadius = UDim.new(0, 6)
+		tipCorner.Parent = tip
+		button.MouseEnter:Connect(function()
+			tip.Visible = true
+			button.BackgroundColor3 = rgb("hover")
+		end)
+		button.MouseLeave:Connect(function()
+			tip.Visible = false
+			button.BackgroundColor3 = rgb("body")
+		end)
+		local pop = Instance.new("UIScale")
+		pop.Name = "Press"
+		pop.Parent = button
+		button.InputBegan:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				TweenService:Create(
+					pop,
+					TweenInfo.new(
+						UiTheme.MOTION.pop,
+						Enum.EasingStyle.Back,
+						Enum.EasingDirection.Out
+					),
+					{ Scale = 0.94 }
+				):Play()
+			end
+		end)
+		button.InputEnded:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				TweenService:Create(
+					pop,
+					TweenInfo.new(
+						UiTheme.MOTION.pop,
+						Enum.EasingStyle.Back,
+						Enum.EasingDirection.Out
+					),
+					{ Scale = 1 }
+				):Play()
+			end
+		end)
 		local dot = Instance.new("Frame")
 		dot.Name = "Dot"
 		dot.AnchorPoint = Vector2.new(1, 0)
@@ -242,6 +342,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		dot.BackgroundColor3 = rgb("ok")
 		dot.BorderSizePixel = 0
 		dot.Visible = false
+		dot.ZIndex = 5
 		dot.Parent = button
 		local dotCorner = Instance.new("UICorner")
 		dotCorner.CornerRadius = UDim.new(1, 0)
@@ -254,6 +355,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				fn()
 			end
 		end)
+		table.insert(railButtons, button)
 	end
 
 	local skills = Instance.new("Frame")
@@ -266,46 +368,91 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local buttonScale = 1
 	local savedLayout: { [string]: { number } } = {}
 	local hudHidden = false
-	local hubOpen = false
-	local function skillButton(name: string, text: string, fire: () -> ())
+	local function skillButton(name: string, fire: () -> ())
 		local button = Instance.new("TextButton")
 		button.Name = name
 		button.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
-		button.BackgroundColor3 = rgb("buttonDim")
+		button.BackgroundColor3 = rgb("body")
 		button.BorderSizePixel = 0
-		button.Font = Enum.Font.BuilderSansBold
-		button.TextSize = UiTheme.MIN_TEXT
-		button.TextColor3 = rgb("text")
-		button.Text = text
+		button.Text = ""
+		button.AutoButtonColor = false
+		button.ClipsDescendants = true
 		button.Parent = skills
 		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		corner.CornerRadius = UDim.new(1, 0)
 		corner.Parent = button
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = UiTheme.STROKE_BOLD
+		stroke.Color = rgb("accent")
+		stroke.Parent = button
+		local iconName = SKILL_ICON[name] or "skill"
+		local icon = Instance.new("ImageLabel")
+		icon.Name = "Icon"
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.Position = UDim2.fromScale(0.5, 0.45)
+		icon.Size = UDim2.fromOffset(22, 22)
+		icon.BackgroundTransparency = 1
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Image = UiIcons.get(iconName)
+		local red, green, blue = UiIcons.tintOf(iconName)
+		icon.ImageColor3 = Color3.fromRGB(red, green, blue)
+		icon.ZIndex = 2
+		icon.Parent = button
+		local bind = Instance.new("TextLabel")
+		bind.Name = "Bind"
+		bind.AnchorPoint = Vector2.new(1, 1)
+		bind.Position = UDim2.new(1, -2, 1, -2)
+		bind.Size = UDim2.fromOffset(28, 14)
+		bind.BackgroundTransparency = 1
+		bind.Font = Enum.Font.BuilderSansBold
+		bind.TextSize = 11
+		bind.TextXAlignment = Enum.TextXAlignment.Right
+		bind.TextColor3 = rgb("text")
+		bind.Text = SKILL_BIND[name] or ""
+		bind.ZIndex = 5
+		bind:SetAttribute("SkipTextScale", true)
+		bind.Parent = button
 		local pop = Instance.new("UIScale")
 		pop.Name = "Press"
 		pop.Parent = button
 		local radial = Instance.new("Frame")
 		radial.Name = "Radial"
-		radial.AnchorPoint = Vector2.new(0, 1)
-		radial.Position = UDim2.fromScale(0, 1)
-		radial.Size = UDim2.fromScale(1, 0)
+		radial.Size = UDim2.fromScale(1, 1)
 		radial.BackgroundColor3 = Color3.new(0, 0, 0)
-		radial.BackgroundTransparency = 0.4
+		radial.BackgroundTransparency = 0.35
 		radial.BorderSizePixel = 0
 		radial.Active = false
 		radial.Visible = false
-		radial.ZIndex = 3
+		radial.ZIndex = 4
 		radial.Parent = button
 		local radialCorner = Instance.new("UICorner")
-		radialCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		radialCorner.CornerRadius = UDim.new(1, 0)
 		radialCorner.Parent = radial
+		local sweep = Instance.new("UIGradient")
+		sweep.Name = "Sweep"
+		sweep.Rotation = 0
+		sweep.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(0.5, 0.2),
+			NumberSequenceKeypoint.new(0.501, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		sweep.Parent = radial
 		local function pressed(input: InputObject): boolean
 			return input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch
 		end
 		button.InputEnded:Connect(function(input)
 			if pressed(input) then
-				pop.Scale = 1
+				TweenService:Create(
+					pop,
+					TweenInfo.new(
+						UiTheme.MOTION.pop,
+						Enum.EasingStyle.Back,
+						Enum.EasingDirection.Out
+					),
+					{ Scale = 1 }
+				):Play()
 			end
 		end)
 		button.Activated:Connect(function()
@@ -320,7 +467,15 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				or input.UserInputType == Enum.UserInputType.Touch
 			then
 				if not layoutEdit then
-					pop.Scale = CombatFeel.PRESS
+					TweenService:Create(
+						pop,
+						TweenInfo.new(
+							UiTheme.MOTION.pop,
+							Enum.EasingStyle.Back,
+							Enum.EasingDirection.Out
+						),
+						{ Scale = CombatFeel.PRESS }
+					):Play()
 				end
 			end
 			if not layoutEdit then
@@ -364,15 +519,15 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end)
 		table.insert(skillButtons, button)
 	end
-	skillButton("Attack", "Atk", callbacks.onAttack)
-	skillButton("Dodge", "Dodge", callbacks.onDodge)
-	skillButton("Skill1", "1", function()
+	skillButton("Attack", callbacks.onAttack)
+	skillButton("Dodge", callbacks.onDodge)
+	skillButton("Skill1", function()
 		callbacks.onSkill(1)
 	end)
-	skillButton("Skill2", "2", function()
+	skillButton("Skill2", function()
 		callbacks.onSkill(2)
 	end)
-	skillButton("Ult", "Ult", callbacks.onUlt)
+	skillButton("Ult", callbacks.onUlt)
 	RunService.Heartbeat:Connect(function()
 		local now = os.clock()
 		for _, button in ipairs(skillButtons) do
@@ -387,9 +542,28 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			then
 				local remaining = untilAt - now
 				local amount = CombatFeel.cooldownCover(total - remaining, total)
-				cover.Size = UDim2.fromScale(1, amount)
+				local sweep = cover:FindFirstChild("Sweep")
+				if sweep ~= nil and sweep:IsA("UIGradient") then
+					sweep.Rotation = amount * 360
+				end
 				cover.Visible = amount > 0.02
 			end
+		end
+	end)
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or layoutEdit then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.E then
+			callbacks.onAttack()
+		elseif
+			input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift
+		then
+			callbacks.onSkill(1)
+		elseif input.KeyCode == Enum.KeyCode.Two then
+			callbacks.onSkill(2)
+		elseif input.KeyCode == Enum.KeyCode.F then
+			callbacks.onUlt()
 		end
 	end)
 
@@ -406,6 +580,21 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local toastCorner = Instance.new("UICorner")
 	toastCorner.CornerRadius = UDim.new(0, 8)
 	toastCorner.Parent = toast
+
+	local stamp = Instance.new("TextLabel")
+	stamp.Name = "BuildStamp"
+	stamp.BackgroundTransparency = 1
+	stamp.Font = Enum.Font.BuilderSans
+	stamp.TextSize = 12
+	stamp.TextXAlignment = Enum.TextXAlignment.Left
+	stamp.TextColor3 = rgb("muted")
+	stamp.TextTransparency = 0.62
+	stamp.Text = Build.STAMP
+	stamp.ZIndex = 2
+	stamp:SetAttribute("SkipTextScale", true)
+	stamp.Parent = chrome
+
+	local touchDevice = Quality.touchDevice(UserInputService.TouchEnabled, nil)
 
 	local function view(): (number, number)
 		local size = screen.AbsoluteSize
@@ -438,9 +627,20 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local row = HudLayout.pills(vx, margin)
 		pills.Position = UDim2.fromOffset(row.x, row.y)
 		pills.Size = UDim2.fromOffset(row.w, row.h)
-		local side = HudLayout.rail(vy, margin, #RAIL, UiTheme.TAP)
+		local side = HudLayout.railFit(vy, margin, #RAIL, UiTheme.TAP, UiTheme.TOUCH)
 		rail.Position = UDim2.fromOffset(side.x, side.y)
 		rail.Size = UDim2.fromOffset(side.w, side.h)
+		for _, button in ipairs(railButtons) do
+			button.Size = UDim2.fromOffset(side.button, side.button)
+		end
+		local stampBox = HudLayout.stamp(vy, margin, touchDevice, RunService:IsStudio())
+		if stampBox == nil then
+			stamp.Visible = false
+		else
+			stamp.Visible = true
+			stamp.Position = UDim2.fromOffset(stampBox.x, stampBox.y)
+			stamp.Size = UDim2.fromOffset(stampBox.w, stampBox.h)
+		end
 		local note = HudLayout.toast(vx, margin)
 		toast.Position = UDim2.fromOffset(note.x, note.y)
 		toast.Size = UDim2.fromOffset(note.w, note.h)
@@ -521,9 +721,20 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local markCount = if type(profile) == "table" then profile.raidMarks or 0 else 0
 			shards.Text = string.format("Shards %d", shardCount)
 			marks.Text = string.format("Marks %d", markCount)
+			dots.Hero.Visible = classDef == nil
+			local heroButton = rail:FindFirstChild("Hero")
+			if heroButton ~= nil then
+				local tip = heroButton:FindFirstChild("Tip")
+				if tip ~= nil and tip:IsA("TextLabel") then
+					tip.Text = if classDef == nil then "Choose class" else "Hero"
+				end
+			end
+			dots.Bag.Visible = false
 			dots.Roll.Visible = shardCount > 0
 			dots.Pets.Visible = type(profile) == "table" and (profile.eggs or 0) > 0
+			dots.Market.Visible = false
 			dots.Pass.Visible = type(profile) == "table" and profile.dailyBossReady == true
+			dots.Settings.Visible = false
 			local settings = if type(profile) == "table" then profile.uiSettings else nil
 			local scale = 1
 			local hidden = false
@@ -564,6 +775,9 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				end
 			end
 			for _, desc in ipairs(chrome:GetDescendants()) do
+				if desc:GetAttribute("SkipTextScale") == true then
+					continue
+				end
 				if desc:IsA("TextLabel") or desc:IsA("TextButton") then
 					local base = desc:GetAttribute("BaseText")
 					if type(base) ~= "number" then
@@ -578,8 +792,6 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			place()
 			if hudHidden then
 				chrome.GroupTransparency = 1
-			elseif hubOpen then
-				chrome.GroupTransparency = 0.45
 			else
 				chrome.GroupTransparency = 0
 			end
@@ -588,22 +800,22 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			toast.Text = text
 			toast.Visible = text ~= ""
 		end,
-		setDimmed = function(open: boolean)
-			hubOpen = open
-			if hudHidden then
-				chrome.GroupTransparency = 1
-				return
-			end
-			local goal = if open then 0.45 else 0
-			TweenService:Create(
-				chrome,
-				TweenInfo.new(UiTheme.MOTION.open, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{ GroupTransparency = goal }
-			):Play()
-		end,
 		place = place,
 		ratio = function(): number
 			return shownRatio
+		end,
+		setRail = function(id: string)
+			local shown = string.upper(string.sub(id, 1, 1)) .. string.sub(id, 2)
+			if id == "" then
+				shown = ""
+			end
+			for name, accent in pairs(railAccents) do
+				accent.Visible = name == shown
+			end
+		end,
+		noteDevice = function(touch: boolean)
+			touchDevice = touch
+			place()
 		end,
 	}
 end
