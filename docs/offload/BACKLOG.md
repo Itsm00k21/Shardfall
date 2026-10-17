@@ -62,12 +62,12 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-045 | M | art | Rarity style sheet: color hex, glow, border, particle, sound per rarity. Read `UiTheme.luau` and `RarityConfig.luau`; note any mismatch. | `docs/art/rarity_style.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
 | G-046 | M | art | VFX list for combat, rolls and loot. Read `CombatFeel.luau` and `RollReveal.luau`. | `docs/art/vfx_list.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
 | G-047 | S | art | Audio cue list (SFX and music moods). Read `docs/design/shardfall_audio.md` and `Audio.luau`. | `docs/art/audio_cues.md` | done | https://github.com/Itsm00k21/Shardfall/pull/180 (6e2d9e5) |
-| G-048 | M | research | Top 10 Roblox action RPGs: core loop, menu layout, monetization, what Shardfall should copy or avoid | `docs/research/top_rpgs.md` | done | @@PR@@ |
-| G-049 | M | research | Top Roblox RNG / roll games: roll feel, pity, auto-roll, rarity display, retention hooks | `docs/research/top_rng.md` | done | @@PR@@ |
+| G-048 | M | research | Top 10 Roblox action RPGs: core loop, menu layout, monetization, what Shardfall should copy or avoid | `docs/research/top_rpgs.md` | done | https://github.com/Itsm00k21/Shardfall/pull/197 |
+| G-049 | M | research | Top Roblox RNG / roll games: roll feel, pity, auto-roll, rarity display, retention hooks | `docs/research/top_rng.md` | done | https://github.com/Itsm00k21/Shardfall/pull/197 |
 | G-050 | L | research | Next game brief, merge-army v1: one pad, about 15 tiers, free early auto-merge, PvE only, rebirth, mutated-merge RNG twist, dailies, unit Index, ad boosts; no PvP power | `docs/research/merge_army.md` | todo | — |
-| G-051 | M | research | Merge-army economy and monetization model (deep but no PvP power), v2 and v3 parking lot | `docs/research/merge_army_loop.md` | done | @@PR@@ |
-| G-052 | M | research | Reusable starter kit inventory: list every module in `src/` that can be reused in a new game, what to strip, and a folder layout | `docs/research/starter_kit.md` | done | @@PR@@ |
-| G-053 | S | research | Roblox rules summary for paid random items, age ratings, ads and policy services, with what Shardfall already does | `docs/research/roblox_policy.md` | done | @@PR@@ |
+| G-051 | M | research | Merge-army economy and monetization model (deep but no PvP power), v2 and v3 parking lot | `docs/research/merge_army_loop.md` | done | https://github.com/Itsm00k21/Shardfall/pull/197 |
+| G-052 | M | research | Reusable starter kit inventory: list every module in `src/` that can be reused in a new game, what to strip, and a folder layout | `docs/research/starter_kit.md` | done | https://github.com/Itsm00k21/Shardfall/pull/197 |
+| G-053 | S | research | Roblox rules summary for paid random items, age ratings, ads and policy services, with what Shardfall already does | `docs/research/roblox_policy.md` | done | https://github.com/Itsm00k21/Shardfall/pull/197 |
 | G-054 | S | research | Onboarding research: first-5-minute patterns in top Roblox games versus `docs/design/shardfall_onboarding.md` | `docs/research/onboarding_research.md` | todo | — |
 | G-055 | M | qa | Test-case list for rolls: read `RollMath.luau`, `RollLoop.luau`, `RollBoard.luau` and their specs; list missing cases | `docs/qa/qa_rolls.md` | todo | — |
 | G-056 | M | qa | Bug-risk review of the menu: `UiRouter.luau`, `MenuHub.luau`, `HudShell.luau` (stuck tabs, lost dim, overlap, input leaks) | `docs/qa/qa_menu.md` | todo | — |
