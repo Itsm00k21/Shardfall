@@ -16,7 +16,9 @@
 	check, and Story or Normal launches only after every seated member is
 	ready. Outside Studio that launch reserves one server and teleports the
 	seated party together. A failed or partial teleport puts them back on
-	the board seats. Studio still enters on this server. Hard and
+	the board seats. A hop that leaves this server does not drop those
+	seats: the reserved server may still send the party home if the pull
+	never starts. Studio still enters on this server. Hard and
 	Shardbreaker never enter from that path. The host id, the member list,
 	and the ready flags come from this server.
 	A seated player can leave that seat while they are still connected.
@@ -428,11 +430,19 @@ local function sendHome(row: Arrival, except: Player?)
 	if type(home) ~= "string" or home == "" then
 		return
 	end
+	-- The plaza kept the seats. The token is the one this server packed.
+	-- The payload does not name a player. The arriving server uses the
+	-- player who actually landed.
+	local recall = {
+		raid = "heartwood",
+		premadeRecall = true,
+		token = row.bucket.token,
+	}
 	local TeleportService = game:GetService("TeleportService")
 	for _, person in pairs(row.players) do
 		if person ~= except and person.Parent == Players then
 			pcall(function()
-				TeleportService:TeleportToPlaceInstance(game.PlaceId, home, person)
+				TeleportService:TeleportToPlaceInstance(game.PlaceId, home, person, nil, recall)
 			end)
 		end
 	end
@@ -461,7 +471,10 @@ end
 
 Players.PlayerRemoving:Connect(function(leaving: Player)
 	forgetArrival(leaving)
+	-- hopHold makes depart a no-op, so a hop that has not started keeps
+	-- the seat. Clear the hold after that check. A later leave can depart.
 	departUser(leaving.UserId)
+	hopHold[leaving.UserId] = nil
 end)
 
 -- Deliberate seat leave while this player is still connected.
@@ -928,16 +941,24 @@ local function hopPremade(
 		end
 		return stop(true, message)
 	end
-	for _, person in ipairs(seated) do
-		hopHold[person.UserId] = nil
-	end
-	for _, person in ipairs(seated) do
-		departUser(person.UserId)
-	end
+	-- TeleportAsync returned. The pull has not started on the reserved
+	-- server. Keep every seat. hopHold stays set so the disconnect that
+	-- follows this teleport does not depart them. Do not mark launched:
+	-- a recall has to be able to ready again. Departing here is what
+	-- left a recalled party with no seats.
+	row.hopping = true
+	row.hopToken = packed.token
 	row.pulling = false
 	row.ready = nil
-	row.launched = true
 	row.readyToken = token + 1
+	local held = table.clone(seated)
+	task.delay(RaidPremadeHop.CONFIG.waitSeconds, function()
+		for _, person in ipairs(held) do
+			if person.Parent == Players then
+				hopHold[person.UserId] = nil
+			end
+		end
+	end)
 	return {
 		ok = true,
 		id = row.id,
@@ -1221,7 +1242,7 @@ function RaidService.ready(player: Player)
 			note = "The party already launched.",
 		}
 	end
-	if seat.pulling == true then
+	if seat.hopping == true or seat.pulling == true then
 		return reject("The party is already launching.")
 	end
 	local state = RaidPremade.status(seat.listing, now)
@@ -1312,9 +1333,35 @@ function RaidService.receive(player: Player)
 		return
 	end
 	-- Reserved servers report a private id and owner 0. Launch here.
+	local reserved = not ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
+	if payload.premadeRecall == true then
+		if reserved then
+			return
+		end
+		-- A forged id is ignored. The player argument is the one who landed.
+		local named = false
+		for _, key in ipairs({ "userId", "UserId", "host", "hostUserId", "playerId", "PlayerId" }) do
+			if payload[key] ~= nil then
+				named = true
+				break
+			end
+		end
+		if named or type(payload.token) ~= "string" then
+			return
+		end
+		-- The hop never started. The listing was kept on this server.
+		-- Drop the in-flight flag so the same seats can ready again.
+		local now = os.time()
+		local seat = seatedRow(player.UserId, now)
+		if seat ~= nil and seat.launched ~= true and seat.hopToken == payload.token then
+			seat.hopping = nil
+			seat.pulling = false
+			seat.hopToken = nil
+		end
+		return
+	end
 	-- launch joins a matching in-progress pull on this server. The host is
 	-- that pull, not this payload. Queueing would ReserveServer and hop again.
-	local reserved = not ProfileLoad.hopOnArrival(game.PrivateServerId, game.PrivateServerOwnerId)
 	if payload.premade == true then
 		if not reserved then
 			return
@@ -1349,6 +1396,8 @@ function RaidService.receive(player: Player)
 				then
 					return
 				end
+				-- The pull never started. Send them home onto the seats
+				-- the plaza kept. Do not start the raid from this timeout.
 				arrivals[waited] = nil
 				sendHome(current, nil)
 			end)

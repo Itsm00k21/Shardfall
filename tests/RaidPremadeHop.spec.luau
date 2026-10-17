@@ -205,6 +205,48 @@ describe("RaidPremadeHop wire", function()
 		expect(string.find(receive, "ReserveServer(", 1, true)).toBeNil()
 		expect(string.find(depart, "hopHold[userId]", 1, true) ~= nil).toBeTrue()
 
+		-- A hop that returns from TeleportAsync keeps the seats. The pull
+		-- has not started, so the success path must not depart and must
+		-- not mark the listing launched.
+		local returned = string.find(hop, 'status ~= "teleported"', 1, true)
+		assert(returned ~= nil, "teleport result")
+		local afterReturn = string.sub(hop, returned)
+		expect(string.find(afterReturn, "departUser", 1, true)).toBeNil()
+		expect(string.find(afterReturn, "row.launched = true", 1, true)).toBeNil()
+		expect(string.find(afterReturn, "row.hopping = true", 1, true) ~= nil).toBeTrue()
+		-- The hold stays through the disconnect. It drops only if that
+		-- player is still on this server after the wait, so Leave works
+		-- when the teleport never removed them.
+		local stillHere = string.find(afterReturn, "person.Parent == Players", 1, true)
+		local clearHold = string.find(afterReturn, "hopHold[person.UserId] = nil", 1, true)
+		expect(
+			stillHere ~= nil and clearHold ~= nil and (stillHere :: number) < (clearHold :: number)
+		).toBeTrue()
+
+		local timeout = string.find(receive, "RaidPremadeHop.CONFIG.waitSeconds", 1, true)
+		assert(timeout ~= nil, "reserved-server timeout")
+		local timeoutBody = string.sub(receive, timeout, timeout + 700)
+		expect(string.find(timeoutBody, "current.started == true", 1, true) ~= nil).toBeTrue()
+		expect(string.find(timeoutBody, "sendHome(current, nil)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(timeoutBody, "startQueue", 1, true)).toBeNil()
+		expect(string.find(receive, "premadeRecall", 1, true) ~= nil).toBeTrue()
+		expect(string.find(receive, "payload.userId", 1, true)).toBeNil()
+		expect(string.find(receive, "payload.hostUserId", 1, true)).toBeNil()
+		local recallAt = string.find(receive, "payload.premadeRecall == true", 1, true)
+		local admitAt = string.find(receive, "RaidPremadeHop.admit", 1, true)
+		expect(recallAt ~= nil and admitAt ~= nil and (recallAt :: number) < (admitAt :: number)).toBeTrue()
+
+		local disconnect =
+			between(raid, "Players.PlayerRemoving:Connect", "function RaidService.leave")
+		local departAt = string.find(disconnect, "departUser(leaving.UserId)", 1, true)
+		local clearAt = string.find(disconnect, "hopHold[leaving.UserId] = nil", 1, true)
+		expect(departAt ~= nil and clearAt ~= nil and (departAt :: number) < (clearAt :: number)).toBeTrue()
+
+		local home = between(raid, "local function sendHome", "local function forgetArrival")
+		expect(string.find(home, "premadeRecall = true", 1, true) ~= nil).toBeTrue()
+		expect(string.find(home, "userId", 1, true)).toBeNil()
+		expect(string.find(home, "hostUserId", 1, true)).toBeNil()
+
 		local limiter = fs.readFile("src/ServerScriptService/ShardfallServer/RateLimiter.luau")
 		expect(string.find(limiter, "RaidJoin = { capacity = 3, perSecond = 0.5 }", 1, true) ~= nil).toBeTrue()
 		expect(
