@@ -60,6 +60,7 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #189 The Story Echo chip stays off the HP bar on a phone. That is T-163 (`7dd700e`).
 - #190 The on-screen Dodge button flashes Glass Kestrel. That is T-165 (`52a5717`).
 - #191 A controller dodges on ButtonY. ButtonX stays heavy. That is T-166 (`961bf5e`).
+- #192 The board marks T-163, T-165, and T-166 done and files Echo's T-167. Docs only.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
@@ -72,7 +73,7 @@ The next week or two.
 - T-164 landed in #187 (`90a4818`). Mythic is red `#E6404E` and Secret is white. Only Secret inventory strokes keep the rainbow.
 - T-015 is the remaining premium wiring. `grantPremium` treats only `receipts[id] == true` as a duplicate, so a T-151 receipt table at that id would be overwritten with `true` once the switch is on. Fix that when wiring T-015. The switch stays false.
 - T-148 is world lighting, and T-162 is the dungeon door nameplate restyle. Both wait. UI fixes and gameplay come first.
-- The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166 and #175. The hero viewport landed in #178. The menu load landed in #182.
+- The bug sweeps. The filed crashes are done (T-094, T-128, T-129, T-154, T-155, T-156). T-099, T-100, T-101, and T-102 landed in #165, #167, #169, and #170. The dodge flash landed in #166 and #175. The on-screen Dodge flash landed in #190. Gamepad dodge landed in #191. The hero viewport landed in #178. The menu load landed in #182. The Story Echo chip landed in #189.
 
 ## Later
 
