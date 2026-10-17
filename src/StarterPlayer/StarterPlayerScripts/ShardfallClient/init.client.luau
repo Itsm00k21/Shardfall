@@ -316,7 +316,12 @@ local function starterGoalKey(tracker: any): string
 		if type(row) == "table" then
 			table.insert(
 				parts,
-				string.format("%s:%s/%s", tostring(row.text), tostring(row.progress), tostring(row.goal))
+				string.format(
+					"%s:%s/%s",
+					tostring(row.text),
+					tostring(row.progress),
+					tostring(row.goal)
+				)
 			)
 		else
 			table.insert(parts, "-")
@@ -1252,6 +1257,10 @@ actionBar = ActionBar.start(playerGui, {
 	onDodge = function()
 		CombatStage.dodge()
 		CombatHud.dodge()
+	end,
+	onLight = function()
+		CombatStage.swing()
+		CombatHud.swing(false)
 	end,
 	onDodgeChip = function()
 		PetAura.note("Dodge")
