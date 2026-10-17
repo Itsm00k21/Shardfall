@@ -12,7 +12,9 @@
 
 	The plaza board is the in-memory listings array. RaidPremade accepts or
 	refuses a row. A join takes a seat and does not start Raid Finder.
+	A seated player can leave that seat while they are still connected.
 	RaidPost and RaidJoin keep the rate limits already on those remotes.
+	RaidLeave has its own limit. PlayerRemoving is a disconnect, not that leave.
 ]]
 
 local Players = game:GetService("Players")
@@ -368,7 +370,8 @@ local function departUser(userId: number)
 	sweep(now)
 end
 
--- DungeonService.PlayerRemoving should call this. Disconnect calls it too.
+-- Disconnect path. DungeonService.PlayerRemoving should call this too.
+-- A second call is safe. This is not the seated leave button.
 function RaidService.memberLeft(player: Player)
 	departUser(player.UserId)
 end
@@ -376,6 +379,30 @@ end
 Players.PlayerRemoving:Connect(function(leaving: Player)
 	departUser(leaving.UserId)
 end)
+
+-- Deliberate seat leave while this player is still connected.
+-- departUser calls RaidPremade.depart. PlayerRemoving does not call this.
+-- It does not launch a raid and it does not read a client user id.
+function RaidService.leave(player: Player)
+	local userId = player.UserId
+	local now = os.time()
+	sweep(now)
+	local seat = seatedRow(userId, now)
+	if seat == nil then
+		return reject("You are not seated on a premade listing.")
+	end
+	local leftId = seat.id
+	departUser(userId)
+	if seatedRow(userId, os.time()) ~= nil then
+		return reject("Could not leave that listing.")
+	end
+	return {
+		ok = true,
+		id = leftId,
+		board = RaidService.board(),
+		note = "Left the premade listing.",
+	}
+end
 
 local function clientPost(tag: any, difficulty: any): any
 	if type(tag) == "table" then

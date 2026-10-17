@@ -302,4 +302,41 @@ describe("RaidPremade wire", function()
 			expect(fresh.ok).toEqual(true)
 		end
 	)
+
+	it("leaves a connected seat through depart and keeps disconnect off that path", function()
+		local raid = fs.readFile(RAID)
+		local leave = between(raid, "function RaidService.leave", "local function clientPost")
+		local depart = between(raid, "local function departUser", "function RaidService.memberLeft")
+		local disconnect =
+			between(raid, "Players.PlayerRemoving:Connect", "function RaidService.leave")
+		local member =
+			between(raid, "function RaidService.memberLeft", "Players.PlayerRemoving:Connect")
+		expect(string.find(leave, "departUser(userId)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(depart, "RaidPremade.depart", 1, true) ~= nil).toBeTrue()
+		expect(string.find(leave, "You are not seated on a premade listing.", 1, true) ~= nil).toBeTrue()
+		expect(string.find(leave, "launch(", 1, true)).toBeNil()
+		expect(string.find(leave, "DungeonService", 1, true)).toBeNil()
+		expect(string.find(leave, "filterTitle", 1, true)).toBeNil()
+		expect(string.find(leave, "player.UserId", 1, true) ~= nil).toBeTrue()
+		expect(string.find(disconnect, "departUser(leaving.UserId)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(disconnect, "RaidService.leave", 1, true)).toBeNil()
+		expect(string.find(member, "departUser(player.UserId)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(member, "RaidService.leave", 1, true)).toBeNil()
+
+		local remotes = fs.readFile("src/ServerScriptService/ShardfallServer/Remotes.luau")
+		local limiter = fs.readFile("src/ServerScriptService/ShardfallServer/RateLimiter.luau")
+		local project = fs.readFile("default.project.json")
+		local hud =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RaidHud.luau")
+		expect(string.find(remotes, 'functionRemote("RaidLeave")', 1, true) ~= nil).toBeTrue()
+		expect(string.find(remotes, "RaidService.leave(player)", 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(limiter, "RaidLeave = { capacity = 3, perSecond = 0.5 }", 1, true) ~= nil
+		).toBeTrue()
+		expect(
+			string.find(project, '"RaidLeave": { "$className": "RemoteFunction" }', 1, true) ~= nil
+		).toBeTrue()
+		expect(string.find(hud, 'invoke("RaidLeave")', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hud, 'button("Leave"', 1, true) ~= nil).toBeTrue()
+	end)
 end)

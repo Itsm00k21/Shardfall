@@ -118,6 +118,7 @@
         "RaidJoin": { "$className": "RemoteFunction" },
         "RaidPractice": { "$className": "RemoteFunction" },
         "RaidBuy": { "$className": "RemoteFunction" },
+        "RaidLeave": { "$className": "RemoteFunction" },
         "CombatFx": {
           "$className": "RemoteEvent"
         },

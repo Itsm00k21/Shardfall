@@ -2,7 +2,8 @@
 
 --[[
 	Heartwood buttons. Each target is 64px.
-	Story queue, Normal queue, a premade post, Practice Grove, and the vendor.
+	Story queue, Normal queue, a premade post, Practice Grove, the vendor,
+	and a premade leave. Leave drops the seat while the player is connected.
 ]]
 
 local Players = game:GetService("Players")
@@ -43,6 +44,9 @@ end
 function RaidHud.close()
 	if rowRef ~= nil then
 		rowRef.Visible = false
+	end
+	if statusLabel ~= nil then
+		statusLabel.Visible = false
 	end
 end
 
@@ -131,7 +135,7 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	row.Name = "Raid"
 	row.AnchorPoint = Vector2.new(0, 0)
 	row.Position = UDim2.fromOffset(120, 132)
-	row.Size = UDim2.fromOffset(360, 64)
+	row.Size = UDim2.fromOffset(420, 64)
 	row.BackgroundTransparency = 1
 	row.Visible = false
 	row.Parent = screen
@@ -144,8 +148,8 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
 	note.AnchorPoint = Vector2.new(0, 0)
-	note.Position = UDim2.fromOffset(0, 66)
-	note.Size = UDim2.fromOffset(340, 20)
+	note.Position = UDim2.fromOffset(120, 198)
+	note.Size = UDim2.fromOffset(420, 20)
 	note.Font = Enum.Font.BuilderSans
 	note.TextSize = 13
 	note.TextColor3 = Color3.fromRGB(240, 236, 248)
@@ -153,7 +157,7 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	note.TextWrapped = true
 	note.Text = "Heartwood"
 	note.Visible = false
-	note.Parent = row
+	note.Parent = screen
 	statusLabel = note
 
 	toggle.Activated:Connect(function()
@@ -197,6 +201,9 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 	end)
 	button("Marks", "Marks", Color3.fromRGB(186, 96, 120), function()
 		show(invoke("RaidBuy", "rare_chest"))
+	end)
+	button("Leave", "Leave", Color3.fromRGB(110, 118, 140), function()
+		show(invoke("RaidLeave"))
 	end)
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
