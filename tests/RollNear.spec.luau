@@ -536,5 +536,7 @@ describe("RollNear isolation", function()
 		expect(callers).toEqual({
 			"src/ReplicatedStorage/Shared/UiRouter.luau",
 		})
+		expect(string.find(source, "src requires this module", 1, true)).toBeNil()
+		expect(string.find(source, "UiRouter", 1, true) ~= nil).toBeTrue()
 	end)
 end)
