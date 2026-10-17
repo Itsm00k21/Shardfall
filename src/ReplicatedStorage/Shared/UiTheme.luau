@@ -7,6 +7,8 @@
 	share one corner and one minimum tap size.
 ]]
 
+local Rarities = require("./Rarities")
+
 local UiTheme = {}
 
 UiTheme.PAD = 8
@@ -35,8 +37,9 @@ UiTheme.MOTION = {
 	pop = 0.12,
 }
 
--- Five read-on-dark rarity colors. Mythic reuses the legendary color so
--- the palette stays at five; the tier name is still "Mythic".
+-- Five read-on-dark rarity colors, Common through Legendary.
+-- Mythic and Secret are not in this table. rarityColor reads those two
+-- from the Rarities ladder: Mythic is red and Secret is white.
 UiTheme.RARITY = {
 	Common = { 198, 196, 206 },
 	Uncommon = { 96, 196, 120 },
@@ -92,9 +95,12 @@ function UiTheme.compareTone(delta: number): string
 end
 
 function UiTheme.rarityColor(name: string): (number, number, number)
+	if name == "Mythic" or name == "Secret" then
+		return Rarities.rgb(name)
+	end
 	local row = UiTheme.RARITY[name]
-	if name == "Mythic" or row == nil then
-		row = if name == "Mythic" then UiTheme.RARITY.Legendary else UiTheme.RARITY.Common
+	if row == nil then
+		row = UiTheme.RARITY.Common
 	end
 	return row[1], row[2], row[3]
 end

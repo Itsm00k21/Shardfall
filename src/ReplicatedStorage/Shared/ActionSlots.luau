@@ -519,8 +519,8 @@ end
 
 function ActionSlots.border(slot: Slot, profile: any): { number }
 	if slot.kind == "consumable" then
-		local row = UiTheme.RARITY.Common
-		return { row[1], row[2], row[3] }
+		local red, green, blue = UiTheme.rarityColor("Common")
+		return { red, green, blue }
 	end
 	if slot.kind == "item" then
 		local rarity = "Common"
@@ -528,11 +528,8 @@ function ActionSlots.border(slot: Slot, profile: any): { number }
 		if type(item) == "table" and type(item.rarity) == "string" then
 			rarity = item.rarity
 		end
-		local row = UiTheme.RARITY[rarity]
-		if rarity == "Mythic" or row == nil then
-			row = if rarity == "Mythic" then UiTheme.RARITY.Legendary else UiTheme.RARITY.Common
-		end
-		return { row[1], row[2], row[3] }
+		local red, green, blue = UiTheme.rarityColor(rarity)
+		return { red, green, blue }
 	end
 	return { 255, 206, 96 }
 end
