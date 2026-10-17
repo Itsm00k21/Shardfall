@@ -173,6 +173,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	hpFrame.Size = UDim2.fromOffset(220, 36)
 	hpFrame.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	hpFrame.BorderSizePixel = 0
+	hpFrame.Visible = false
 	hpFrame.Parent = screen
 	local hpCorner = Instance.new("UICorner")
 	hpCorner.CornerRadius = UDim.new(0, 8)
@@ -202,6 +203,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	wallet.TextColor3 = Color3.fromRGB(255, 220, 150)
 	wallet.TextTruncate = Enum.TextTruncate.AtEnd
 	wallet.Text = ""
+	wallet.Visible = false
 	wallet.Parent = screen
 	local walletStroke = Instance.new("UIStroke")
 	walletStroke.Thickness = 1

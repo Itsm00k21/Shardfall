@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 58fb5df+ client` in Output.
+	still leaves `[Shardfall] build 140bf33+ client` in Output.
 ]]
 
-print("[Shardfall] build 58fb5df+ client")
+print("[Shardfall] build 140bf33+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +26,7 @@ local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
+local LegacyChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LegacyChrome"))
 local ForeignScripts =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
 local ActionBar = require(script.ActionBar)
@@ -35,12 +36,13 @@ local CombatHud = require(script.CombatHud)
 local DebugHud = require(script.DebugHud)
 local DoorHud = require(script.DoorHud)
 local HavenClient = require(script.HavenClient)
+local HudShell = require(script.HudShell)
+local MenuHub = require(script.MenuHub)
 local InventoryHud = require(script.InventoryHud)
 local MusicController = require(script.MusicController)
 local OnboardHud = require(script.OnboardHud)
 local LoopHud = require(script.LoopHud)
 local MarketHud = require(script.MarketHud)
-local MenuHud = require(script.MenuHud)
 local PetHud = require(script.PetHud)
 local RaidHud = require(script.RaidHud)
 local RollReel = require(script.RollReel)
@@ -133,7 +135,13 @@ end
 local function clearStaleGuis(gui: PlayerGui)
 	local doomed = {}
 	for _, child in ipairs(gui:GetChildren()) do
-		if child:IsA("ScreenGui") and ClientChrome.shouldClear(child.Name) then
+		if
+			child:IsA("ScreenGui")
+			and (ClientChrome.shouldClear(child.Name) or LegacyChrome.shouldDestroy(child.Name))
+		then
+			if LegacyChrome.shouldDestroy(child.Name) then
+				warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
+			end
 			table.insert(doomed, child)
 		end
 	end
@@ -160,10 +168,17 @@ if script.Parent ~= nil then
 end
 dropStaleScripts(playerGui)
 clearStaleGuis(playerGui)
+playerGui.ChildAdded:Connect(function(child)
+	if child:IsA("ScreenGui") and LegacyChrome.shouldDestroy(child.Name) then
+		warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
+		child:Destroy()
+	end
+end)
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))
 local Quality = require(shared:WaitForChild("Quality"))
+local Settings = require(shared:WaitForChild("Settings"))
 local areaList = Areas.all()
 local firstArea = areaList[1]
 local firstPools = if firstArea ~= nil then Areas.pools(firstArea.id) else {}
@@ -183,7 +198,9 @@ local musicController = MusicController.start()
 local inventory
 local travel
 local actionBar
-local menuHud
+local hudShell
+local menuHub
+local latestProfile: any = nil
 local graphicsTier = "med"
 local graphicsSent = false
 
@@ -259,9 +276,16 @@ local function applyProfile(profile: any, saving: any)
 	if type(profile) ~= "table" then
 		return
 	end
+	latestProfile = profile
 	ui.clearStatus()
 	ui.setProfile(profile, saving == true)
 	CombatHud.setWallet(profile.gold or 0, profile.shardTokens or 0, profile.gems or 0)
+	if hudShell ~= nil then
+		hudShell.setProfile(profile)
+	end
+	if menuHub ~= nil then
+		menuHub.setProfile(profile)
+	end
 	ClassHud.setProfile(profile)
 	OnboardHud.setProfile(profile)
 	PetHud.setProfile(profile)
@@ -281,8 +305,36 @@ local function applyProfile(profile: any, saving: any)
 		rollReel.setProfile(profile)
 		rollReel.setTier(tier)
 	end
-	musicController.setVolumes(profile.musicVolume, profile.sfxVolume)
+	local master = 1
+	local uiVolume = profile.sfxVolume or 0
+	local settings = profile.uiSettings
+	if type(settings) == "table" and type(settings.audio) == "table" then
+		if type(settings.audio.master) == "number" then
+			master = settings.audio.master
+		end
+		if type(settings.audio.ui) == "number" then
+			uiVolume = settings.audio.ui
+		end
+	end
+	musicController.setVolumes(
+		(profile.musicVolume or 0) * master,
+		(profile.sfxVolume or 0) * master
+	)
+	musicController.setUiVolume(uiVolume * master)
 	CombatHud.setFeel(tier, profile.shake ~= false)
+	local camera = workspace.CurrentCamera
+	if camera ~= nil and type(settings) == "table" and type(settings.camera) == "table" then
+		if type(settings.camera.fov) == "number" then
+			camera.FieldOfView = settings.camera.fov
+		end
+	end
+	if
+		type(settings) == "table"
+		and type(settings.graphics) == "table"
+		and settings.graphics.shadows == false
+	then
+		game:GetService("Lighting").GlobalShadows = false
+	end
 	if Quality.normalize(profile.graphicsQuality) == nil and not graphicsSent then
 		graphicsSent = true
 		task.spawn(function()
@@ -638,8 +690,8 @@ local function setHubChrome(open: boolean, _keepRaid: boolean?)
 end
 
 local function closePanels(except: string?)
-	if except ~= "menu" and menuHud ~= nil then
-		menuHud.close()
+	if except ~= "menu" and menuHub ~= nil then
+		menuHub.close()
 	end
 	if except ~= "craft" then
 		ui.close()
@@ -1016,46 +1068,101 @@ function cycleGraphics()
 	end)
 end
 
-menuHud = MenuHud.start(playerGui, {
-	onCodes = function()
-		if menuHud ~= nil then
-			menuHud.setNote("Codes are not open yet.")
+local function openHub(tab: string)
+	if menuHub == nil or ClassHud.holdsChoice() then
+		return
+	end
+	if not menuHub.isOpen() then
+		closePanels("menu")
+	end
+	menuHub.open(tab)
+end
+
+menuHub = MenuHub.start(playerGui, {
+	invoke = invoke,
+	onRoll = function()
+		if rollReel ~= nil then
+			rollReel.request(false)
+		end
+		if menuHub ~= nil then
+			menuHub.close()
 		end
 	end,
-	onDaily = function()
-		closePanels("daily")
-		LoopHud.setOpen(true)
+	onBag = function()
+		closePanels("inventory")
+		inventory.open()
+		if menuHub ~= nil then
+			menuHub.close()
+		end
 	end,
-	onPass = function()
-		closePanels("pass")
-		LoopHud.setOpen(true)
+	onMarket = function()
+		closePanels("market")
+		MarketHud.open()
+		if menuHub ~= nil then
+			menuHub.close()
+		end
 	end,
-	onSettings = function()
-		cycleGraphics()
+	onDim = function(open: boolean)
+		if hudShell ~= nil then
+			hudShell.setDimmed(open)
+		end
+	end,
+})
+
+hudShell = HudShell.start(playerGui, {
+	onMenu = function()
+		if menuHub ~= nil and menuHub.isOpen() then
+			menuHub.close()
+			return
+		end
+		openHub("hero")
 	end,
 	onRoll = function()
-		closePanels("roll")
-		if rollReel ~= nil then
-			rollReel.setOpen(true)
+		openHub("roll")
+	end,
+	onPets = function()
+		openHub("pets")
+	end,
+	onMarket = function()
+		openHub("market")
+	end,
+	onPass = function()
+		openHub("pass")
+	end,
+	onSettings = function()
+		openHub("settings")
+	end,
+	onAttack = function()
+		CombatHud.swing()
+	end,
+	onDodge = function()
+		CombatHud.dodge()
+	end,
+	onSkill = function(index: number)
+		task.spawn(function()
+			pcall(invoke, "UseSkill", index)
+		end)
+	end,
+	onUlt = function()
+		task.spawn(function()
+			pcall(invoke, "UseSkill", "ult")
+		end)
+	end,
+	onLayout = function(name: string, x: number, y: number)
+		if type(latestProfile) ~= "table" then
+			return
 		end
-	end,
-	onCraft = function()
-		closePanels("craft")
-		ui.openPanel("craft")
-	end,
-	onBossrush = function()
-		closePanels(nil)
-		requestDungeon("enter", "rootvault_waves")
+		local nextSettings = Settings.normalize(latestProfile.uiSettings)
+		nextSettings.controls.layout[name] = { math.floor(x), math.floor(y) }
+		task.spawn(function()
+			pcall(invoke, "SetSettings", nextSettings)
+		end)
 	end,
 })
 
 actionBar = ActionBar.start(playerGui, {
 	onMenu = function()
-		local opening = menuHud == nil or not menuHud.isOpen()
-		closePanels(if opening then "menu" else nil)
-		if opening and menuHud ~= nil and not ClassHud.holdsChoice() then
-			menuHud.open()
-		end
+		openHub("hero")
 	end,
 	onInventory = function()
 		local opening = not inventory.isOpen()
@@ -1153,6 +1260,15 @@ setHubChrome(false)
 DebugHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
+local function retireChrome(name: string)
+	local gui = playerGui:FindFirstChild(name)
+	if gui ~= nil and gui:IsA("ScreenGui") then
+		gui.Enabled = false
+	end
+end
+retireChrome("ShardfallActions")
+retireChrome("ShardfallDebug")
+retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)

@@ -16,7 +16,27 @@ UiTheme.EDGE = 16
 UiTheme.MIN_TEXT = 14
 UiTheme.CORNER = 10
 UiTheme.TAP = 64
+UiTheme.TOUCH = 44
 UiTheme.STROKE = 1
+UiTheme.HEADER_FONT = "BuilderSansBold"
+UiTheme.BODY_FONT = "BuilderSans"
+UiTheme.BACKDROP = 0.5
+UiTheme.MOTION = {
+	open = 0.26,
+	stagger = 0.1,
+	pop = 0.12,
+}
+
+-- Five read-on-dark rarity colors. Mythic reuses the legendary color so
+-- the palette stays at five; the tier name is still "Mythic".
+UiTheme.RARITY = {
+	Common = { 198, 196, 206 },
+	Uncommon = { 96, 196, 120 },
+	Rare = { 96, 168, 232 },
+	Epic = { 186, 120, 232 },
+	Legendary = { 255, 196, 72 },
+}
+UiTheme.RARITY_ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
 
 local rgbRows: { [string]: { number } } = {
 	background = { 16, 14, 24 },
@@ -38,6 +58,14 @@ end
 
 function UiTheme.safeMargin(): number
 	return math.max(8, UiTheme.EDGE)
+end
+
+function UiTheme.rarityColor(name: string): (number, number, number)
+	local row = UiTheme.RARITY[name]
+	if name == "Mythic" or row == nil then
+		row = if name == "Mythic" then UiTheme.RARITY.Legendary else UiTheme.RARITY.Common
+	end
+	return row[1], row[2], row[3]
 end
 
 -- Dark rarity colors (Mythic red) disappear on the dark odds panel.

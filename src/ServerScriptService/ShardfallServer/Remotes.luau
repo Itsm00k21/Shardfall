@@ -38,6 +38,7 @@ local TravelService = require(script.Parent.TravelService)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local Quality = require(ReplicatedStorage.Shared.Quality)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
+local Settings = require(ReplicatedStorage.Shared.Settings)
 local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
 local RemoteCaller = require(ReplicatedStorage.Shared.RemoteCaller)
 
@@ -371,6 +372,31 @@ function Remotes.bind()
 			local ok, err = DataService.mutate(player, function(data)
 				data.musicVolume = Audio.clampVolume(music)
 				data.sfxVolume = Audio.clampVolume(sfx)
+				return nil
+			end)
+			if not ok then
+				return { ok = false, error = err }
+			end
+			return { ok = true }
+		end)
+	end
+
+	functionRemote("SetSettings").OnServerInvoke = function(player, patch)
+		return guard(player, "SetSettings", function()
+			if type(patch) ~= "table" then
+				return { ok = false, error = "Settings need a table." }
+			end
+			local nextSettings = Settings.normalize(patch)
+			local ok, err = DataService.mutate(player, function(data)
+				data.uiSettings = nextSettings
+				local quality = nextSettings.graphics.quality
+				data.graphicsQuality = if quality == "auto" then "" else quality
+				if Quality.normalize(data.graphicsQuality) == nil then
+					data.graphicsQuality = ""
+				end
+				data.shake = nextSettings.camera.shake
+				data.musicVolume = nextSettings.audio.music
+				data.sfxVolume = nextSettings.audio.sfx
 				return nil
 			end)
 			if not ok then
