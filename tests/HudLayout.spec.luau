@@ -29,6 +29,10 @@ describe("Hud layout", function()
 			expect(health.x >= face.x + face.w).toBeTrue()
 			expect(pills.x + pills.w <= vx - margin + 0.01).toBeTrue()
 			expect(pills.y >= margin).toBeTrue()
+			expect(pills.w >= 44).toBeTrue()
+			if vx >= 900 then
+				expect(pills.w >= 300).toBeTrue()
+			end
 			expect(rail.x >= margin).toBeTrue()
 			expect(toast.y >= health.y + health.h).toBeTrue()
 			expect(hub.x >= 0 and hub.y >= margin).toBeTrue()
@@ -95,5 +99,16 @@ describe("Hud layout", function()
 				expect(stamp.y + stamp.h <= view[2]).toBeTrue()
 			end
 		end
+	end)
+
+	it("names Gold, Mastery, and Shards", function()
+		local lines = HudLayout.counters(250, 0, 40)
+		expect(lines[1]).toEqual("Gold 250")
+		expect(lines[2]).toEqual("Mastery 0")
+		expect(lines[3]).toEqual("Shards 40")
+		local blank = HudLayout.counters(nil :: any, nil :: any, nil :: any)
+		expect(blank[1]).toEqual("Gold 0")
+		expect(blank[2]).toEqual("Mastery 0")
+		expect(blank[3]).toEqual("Shards 0")
 	end)
 end)

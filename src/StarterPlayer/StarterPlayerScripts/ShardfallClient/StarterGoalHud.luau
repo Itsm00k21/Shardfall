@@ -8,8 +8,11 @@
 	goal. Progress above the goal is drawn at the goal. An empty
 	list, or a result that is not ok, hides the tracker.
 
-	The frame is a child of Chrome, so the shell hide and the
-	access text walk include it. A row is at least 18px, and it
+	The frame sits under Chrome when Chrome is a plain GuiObject.
+	A live CanvasGroup does not draw children added after it is
+	parented, so in that case the tracker is a sibling on the
+	ScreenGui. applyChrome still hides it and sizes the text.
+	A row is at least 18px, and it
 	grows with the access text so a 20px label is not clipped in
 	an 18px line. HudLayout.place(viewportX, viewportY, rowCount)
 	supplies the rect when that function exists. Until then the
@@ -454,7 +457,7 @@ function StarterGoalHud.start(playerGui: PlayerGui)
 	end
 	local holder: Instance = host
 	local chrome = host:FindFirstChild("Chrome")
-	if chrome ~= nil and chrome:IsA("GuiObject") then
+	if chrome ~= nil and chrome:IsA("GuiObject") and not chrome:IsA("CanvasGroup") then
 		holder = chrome
 	end
 	local function discard(root: Instance)
@@ -473,7 +476,7 @@ function StarterGoalHud.start(playerGui: PlayerGui)
 	local frame = Instance.new("Frame")
 	frame.Name = "StarterGoals"
 	frame.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
-	frame.BackgroundTransparency = 0.12
+	frame.BackgroundTransparency = 0.08
 	frame.BorderSizePixel = 0
 	frame.Visible = false
 	frame.Active = false
@@ -509,6 +512,9 @@ function StarterGoalHud.start(playerGui: PlayerGui)
 
 	frameRef = frame
 	apply(StarterGoalHud.rows(held))
+	task.defer(function()
+		apply(StarterGoalHud.rows(held))
+	end)
 	host:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		apply(StarterGoalHud.rows(held))
 	end)

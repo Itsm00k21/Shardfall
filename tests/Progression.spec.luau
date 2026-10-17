@@ -24,6 +24,11 @@ describe("Progression", function()
 		expect(data.level).toEqual(20)
 	end)
 
+	it("keeps mastery at 0 through the beta cap", function()
+		expect(Progression.mastery(2)).toEqual(0)
+		expect(Progression.mastery(Progression.CAP)).toEqual(0)
+	end)
+
 	it("caps stacked XP boosts at +100% and welcomes a long absence", function()
 		expect(Progression.boost({ 1, 1, 0.25 })).toEqual(2)
 		local rested = { level = 1, xp = 0, restCharges = 2, welcomeCharges = 2, chests = {} }

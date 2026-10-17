@@ -503,6 +503,40 @@ function Classes.unstableTaken(classId: string?, unstable: boolean): number
 	return 1
 end
 
+function Classes.cooldownText(entry: any): string
+	if type(entry) ~= "table" then
+		return "Ult"
+	end
+	local cooldown = entry.cooldown
+	if
+		entry.kind == "ult"
+		or type(cooldown) ~= "number"
+		or cooldown ~= cooldown
+		or cooldown <= 0
+	then
+		return "Ult"
+	end
+	local whole = math.floor(cooldown + 1e-6)
+	if math.abs(cooldown - whole) < 1e-4 then
+		return string.format("%ds", whole)
+	end
+	return string.format("%.1fs", cooldown)
+end
+
+function Classes.skillLine(entry: any): string
+	local name = "Skill"
+	local note = ""
+	if type(entry) == "table" then
+		if type(entry.name) == "string" then
+			name = entry.name
+		end
+		if type(entry.note) == "string" then
+			note = entry.note
+		end
+	end
+	return string.format("%s  %s  %s", name, Classes.cooldownText(entry), note)
+end
+
 table.freeze(LIST)
 for _, row in ipairs(LIST) do
 	table.freeze(row.skills)

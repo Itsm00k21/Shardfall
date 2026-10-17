@@ -4,7 +4,7 @@
 	The only always-on HUD. One ScreenGui, one UIScale.
 
 	Top-left is the class portrait, a tweened HP bar, and the level.
-	Top-right, under the Roblox buttons, is Shards and Raid Marks.
+	Top-right, under the Roblox buttons, is Gold, Mastery, and Shards.
 	A mid-left rail opens the hub. Skills sit beside the jump button.
 	The bottom-left stays empty. Toasts sit top-center.
 ]]
@@ -20,6 +20,7 @@ local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("C
 local CombatFeel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatFeel"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
+local Progression = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Progression"))
 local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
 local ToastQueue = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ToastQueue"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
@@ -121,7 +122,28 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	initial.TextSize = 22
 	initial.TextColor3 = rgb("text")
 	initial.Text = "?"
+	initial.ZIndex = 3
 	initial.Parent = portrait
+	local headshot = Instance.new("ImageLabel")
+	headshot.Name = "Headshot"
+	headshot.BackgroundTransparency = 1
+	headshot.Size = UDim2.fromScale(1, 0.62)
+	headshot.ScaleType = Enum.ScaleType.Crop
+	headshot.ZIndex = 2
+	headshot.Parent = portrait
+	task.spawn(function()
+		local ok, content, ready = pcall(function()
+			return Players:GetUserThumbnailAsync(
+				player.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size100x100
+			)
+		end)
+		if ok and ready == true and type(content) == "string" and content ~= "" then
+			headshot.Image = content
+			initial.Visible = false
+		end
+	end)
 	local className = Instance.new("TextLabel")
 	className.Name = "ClassName"
 	className.BackgroundTransparency = 1
@@ -129,14 +151,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	className.Size = UDim2.fromScale(1, 0.4)
 	className.Font = Enum.Font.BuilderSans
 	className.TextSize = UiTheme.MIN_TEXT
-	className.TextColor3 = rgb("muted")
+	className.TextColor3 = rgb("text")
 	className.Text = "Class"
 	className.Parent = portrait
 
 	local health = Instance.new("Frame")
 	health.Name = "Health"
 	health.BackgroundColor3 = rgb("panel")
-	health.BackgroundTransparency = 0.15
+	health.BackgroundTransparency = 0.08
 	health.BorderSizePixel = 0
 	health.Parent = chrome
 	local healthCorner = Instance.new("UICorner")
@@ -149,8 +171,8 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local levelLabel = Instance.new("TextLabel")
 	levelLabel.Name = "Level"
 	levelLabel.BackgroundTransparency = 1
-	levelLabel.Position = UDim2.fromOffset(8, 4)
-	levelLabel.Size = UDim2.new(1, -16, 0, 18)
+	levelLabel.Position = UDim2.fromOffset(8, 2)
+	levelLabel.Size = UDim2.new(0.42, -8, 0, 16)
 	levelLabel.Font = Enum.Font.BuilderSansBold
 	levelLabel.TextSize = UiTheme.MIN_TEXT
 	levelLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -159,8 +181,8 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	levelLabel.Parent = health
 	local hpBack = Instance.new("Frame")
 	hpBack.Name = "Track"
-	hpBack.Position = UDim2.fromOffset(8, 28)
-	hpBack.Size = UDim2.new(1, -16, 0, 12)
+	hpBack.Position = UDim2.fromOffset(8, 20)
+	hpBack.Size = UDim2.new(1, -16, 0, 10)
 	hpBack.BackgroundColor3 = rgb("buttonDim")
 	hpBack.BorderSizePixel = 0
 	hpBack.Parent = health
@@ -173,14 +195,40 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local hpText = Instance.new("TextLabel")
 	hpText.Name = "Hp"
 	hpText.BackgroundTransparency = 1
-	hpText.Position = UDim2.fromOffset(8, 40)
-	hpText.Size = UDim2.new(1, -16, 0, 14)
-	hpText.Font = Enum.Font.BuilderSans
+	hpText.Position = UDim2.new(0.42, 0, 0, 2)
+	hpText.Size = UDim2.new(0.58, -8, 0, 16)
+	hpText.Font = Enum.Font.BuilderSansBold
 	hpText.TextSize = UiTheme.MIN_TEXT
-	hpText.TextXAlignment = Enum.TextXAlignment.Left
+	hpText.TextXAlignment = Enum.TextXAlignment.Right
 	hpText.TextColor3 = rgb("text")
+	hpText.TextStrokeColor3 = rgb("ink")
+	hpText.TextStrokeTransparency = 0.35
 	hpText.Text = "HP  100 / 100"
 	hpText.Parent = health
+	local xpText = Instance.new("TextLabel")
+	xpText.Name = "Xp"
+	xpText.BackgroundTransparency = 1
+	xpText.Position = UDim2.fromOffset(8, 32)
+	xpText.Size = UDim2.new(1, -16, 0, 14)
+	xpText.Font = Enum.Font.BuilderSansBold
+	xpText.TextSize = UiTheme.MIN_TEXT
+	xpText.TextXAlignment = Enum.TextXAlignment.Left
+	xpText.TextColor3 = rgb("text")
+	xpText.Text = "XP  0 / 100"
+	xpText.Parent = health
+	local xpBack = Instance.new("Frame")
+	xpBack.Name = "XpTrack"
+	xpBack.Position = UDim2.fromOffset(8, 46)
+	xpBack.Size = UDim2.new(1, -16, 0, 6)
+	xpBack.BackgroundColor3 = rgb("buttonDim")
+	xpBack.BorderSizePixel = 0
+	xpBack.Parent = health
+	local xpFill = Instance.new("Frame")
+	xpFill.Name = "Fill"
+	xpFill.Size = UDim2.fromScale(0, 1)
+	xpFill.BackgroundColor3 = rgb("gold")
+	xpFill.BorderSizePixel = 0
+	xpFill.Parent = xpBack
 
 	local pills = Instance.new("Frame")
 	pills.Name = "Pills"
@@ -194,28 +242,29 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local function pill(name: string, title: string): TextLabel
 		local label = Instance.new("TextLabel")
 		label.Name = name
-		label.Size = UDim2.fromOffset(94, 32)
+		label.Size = UDim2.fromOffset(108, 32)
 		label.BackgroundColor3 = rgb("panel")
-		label.BackgroundTransparency = 0.12
+		label.BackgroundTransparency = 0.2
 		label.Font = Enum.Font.BuilderSansBold
 		label.TextSize = UiTheme.MIN_TEXT
-		label.TextColor3 = rgb("gold")
+		label.TextColor3 = rgb("text")
+		label.TextStrokeColor3 = rgb("ink")
+		label.TextStrokeTransparency = 0
+		label.TextTruncate = Enum.TextTruncate.AtEnd
 		label.Text = title
 		label.Parent = pills
-		local aspect = Instance.new("UIAspectRatioConstraint")
-		aspect.AspectRatio = 94 / 32
-		aspect.Parent = label
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 8)
 		corner.Parent = label
 		local stroke = Instance.new("UIStroke")
 		stroke.Thickness = UiTheme.STROKE
-		stroke.Color = rgb("gold")
+		stroke.Color = rgb("ink")
 		stroke.Parent = label
 		return label
 	end
+	local gold = pill("Gold", "Gold 0")
+	local mastery = pill("Mastery", "Mastery 0")
 	local shards = pill("Shards", "Shards 0")
-	local marks = pill("Marks", "Marks 0")
 
 	local rail = Instance.new("Frame")
 	rail.Name = "Rail"
@@ -260,7 +309,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		icon.Name = "Icon"
 		icon.AnchorPoint = Vector2.new(0.5, 0)
 		icon.Position = UDim2.new(0.5, 0, 0, 4)
-		icon.Size = UDim2.fromOffset(22, 22)
+		icon.Size = UDim2.fromOffset(20, 20)
 		icon.BackgroundTransparency = 1
 		icon.ScaleType = Enum.ScaleType.Fit
 		icon.Image = UiIcons.get(entry.icon)
@@ -271,12 +320,13 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local caption = Instance.new("TextLabel")
 		caption.Name = "Caption"
 		caption.BackgroundTransparency = 1
-		caption.AnchorPoint = Vector2.new(0.5, 1)
-		caption.Position = UDim2.new(0.5, 0, 1, -1)
-		caption.Size = UDim2.new(1, -2, 0, 14)
-		caption.Font = Enum.Font.BuilderSans
-		caption.TextSize = 11
-		caption.TextColor3 = rgb("muted")
+		caption.AnchorPoint = Vector2.new(0.5, 0)
+		caption.Position = UDim2.new(0.5, 0, 0, 27)
+		caption.Size = UDim2.new(1, -4, 0, UiTheme.MIN_TEXT)
+		caption.Font = Enum.Font.BuilderSansBold
+		caption.TextSize = UiTheme.MIN_TEXT
+		caption.TextColor3 = rgb("text")
+		caption.TextTruncate = Enum.TextTruncate.AtEnd
 		local menuField = string.lower(entry.id)
 		local menuKey = Keybinds.MENU[menuField]
 		caption.Text = if entry.id == "Settings" then "Gear" else entry.id
@@ -845,9 +895,28 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				className.Text = "Class"
 			end
 			local shardCount = if type(profile) == "table" then profile.shardTokens or 0 else 0
-			local markCount = if type(profile) == "table" then profile.raidMarks or 0 else 0
-			shards.Text = string.format("Shards %d", shardCount)
-			marks.Text = string.format("Marks %d", markCount)
+			local goldCount = if type(profile) == "table"
+					and type(profile.gold) == "number"
+				then profile.gold
+				else 0
+			local lines = HudLayout.counters(goldCount, Progression.mastery(level), shardCount)
+			gold.Text = lines[1]
+			mastery.Text = lines[2]
+			shards.Text = lines[3]
+			local xp = if type(profile) == "table" and type(profile.xp) == "number"
+				then profile.xp
+				else 0
+			local xpNext = if type(profile) == "table"
+					and type(profile.xpToNext) == "number"
+				then profile.xpToNext
+				else 0
+			if xpNext > 0 then
+				xpText.Text = string.format("XP  %d / %d", math.floor(xp), math.floor(xpNext))
+				xpFill.Size = UDim2.fromScale(math.clamp(xp / xpNext, 0, 1), 1)
+			else
+				xpText.Text = "XP  Max"
+				xpFill.Size = UDim2.fromScale(1, 1)
+			end
 			dots.Hero.Visible = classDef == nil
 			local heroButton = rail:FindFirstChild("Hero")
 			if heroButton ~= nil then

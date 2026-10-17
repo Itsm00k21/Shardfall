@@ -388,6 +388,11 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		if bar == nil then
 			return
 		end
+		-- The shell already shows this player's HP. Other clients still
+		-- see the server bar for party members and enemies.
+		if bar:IsA("BillboardGui") then
+			bar.Enabled = false
+		end
 		local label = bar:FindFirstChild("Vitals")
 		if label == nil then
 			label = bar:FindFirstChild("Name")

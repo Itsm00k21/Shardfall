@@ -117,7 +117,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
 	panel.BackgroundColor3 = rgb("body")
-	panel.BackgroundTransparency = 0.04
+	panel.BackgroundTransparency = 0
 	panel.BorderSizePixel = 0
 	panel.ClipsDescendants = true
 	panel.Visible = false
@@ -141,9 +141,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	local header = Instance.new("Frame")
 	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, UiTheme.HEADER)
+	header.Size = UDim2.new(1, 0, 0, UiTheme.HEADER + UiTheme.PAD)
 	header.BackgroundColor3 = rgb("header")
-	header.BackgroundTransparency = 0.08
+	header.BackgroundTransparency = 0
 	header.BorderSizePixel = 0
 	header.ZIndex = 4
 	header.Parent = panel
@@ -196,8 +196,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "Close"
-	closeButton.AnchorPoint = Vector2.new(1, 0.5)
-	closeButton.Position = UDim2.new(1, -8, 0.5, 0)
+	closeButton.AnchorPoint = Vector2.new(1, 0)
+	closeButton.Position = UDim2.new(1, -8, 0, 8)
 	closeButton.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
 	closeButton.BackgroundColor3 = rgb("body")
 	closeButton.Font = headerFont()
@@ -465,8 +465,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		shadow.Position = UDim2.fromOffset(box.x + 4, box.y + 6)
 		shadow.Size = UDim2.fromOffset(box.w, box.h)
 		local column = HudLayout.tabColumn(box.w, box.h)
-		tabs.Position = UDim2.fromOffset(column.x, UiTheme.HEADER)
-		tabs.Size = UDim2.fromOffset(column.w, math.max(44, box.h - UiTheme.HEADER - 8))
+		local headerH = UiTheme.HEADER + UiTheme.PAD
+		tabs.Position = UDim2.fromOffset(column.x, headerH)
+		tabs.Size = UDim2.fromOffset(column.w, math.max(44, box.h - headerH - 8))
 		local inner = HudLayout.hubBody(box.w, box.h)
 		body.Position = UDim2.fromOffset(inner.x, inner.y)
 		body.Size = UDim2.fromOffset(inner.w, inner.h)
@@ -1851,7 +1852,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local sheet = Instance.new("Frame")
 		sheet.Name = "Stats"
 		sheet.BackgroundColor3 = rgb("header")
-		sheet.BackgroundTransparency = 0.2
+		sheet.BackgroundTransparency = 0.08
 		sheet.Size = UDim2.fromScale(1, 0)
 		sheet.AutomaticSize = Enum.AutomaticSize.Y
 		sheet.BorderSizePixel = 0
@@ -2016,24 +2017,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		divider(hero, 4)
 		if classDef ~= nil then
 			for index, skill in ipairs(classDef.skills) do
-				line(
-					hero,
-					string.format("%s  %ds  %s", skill.name, skill.cooldown, skill.note),
-					10 + index,
-					rgb("text")
-				)
+				line(hero, Classes.skillLine(skill), 10 + index, rgb("text"))
 			end
-			line(
-				hero,
-				string.format(
-					"%s  %ds  %s",
-					classDef.ultimate.name,
-					classDef.ultimate.cooldown,
-					classDef.ultimate.note
-				),
-				20,
-				rgb("gold")
-			)
+			line(hero, Classes.skillLine(classDef.ultimate), 20, rgb("gold"))
 		else
 			line(hero, "No skills until a class is chosen.", 10, rgb("muted"))
 		end
@@ -2505,27 +2491,39 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			barCorner.Parent = bar
 			local reduced = UiMotion.reduced(draft)
 			if not reduced and math.abs(target - from) > 0.001 then
-				playPity(TweenService:Create(
-					bar,
-					TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{ Size = UDim2.fromScale(target, 1) }
-				))
+				playPity(
+					TweenService:Create(
+						bar,
+						TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+						{ Size = UDim2.fromScale(target, 1) }
+					)
+				)
 			else
 				bar.Size = UDim2.fromScale(target, 1)
 			end
 			if animate == "flash" and not reduced then
 				bar.BackgroundTransparency = 0.55
-				playPity(TweenService:Create(
-					bar,
-					TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = 0 }
-				))
+				playPity(
+					TweenService:Create(
+						bar,
+						TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+						{ BackgroundTransparency = 0 }
+					)
+				)
 			elseif animate == "pulse" and not reduced then
-				playPity(TweenService:Create(
-					bar,
-					TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-					{ BackgroundTransparency = 0.35 }
-				))
+				playPity(
+					TweenService:Create(
+						bar,
+						TweenInfo.new(
+							0.7,
+							Enum.EasingStyle.Sine,
+							Enum.EasingDirection.InOut,
+							-1,
+							true
+						),
+						{ BackgroundTransparency = 0.35 }
+					)
+				)
 			end
 			local label = Instance.new("TextLabel")
 			label.BackgroundTransparency = 1
