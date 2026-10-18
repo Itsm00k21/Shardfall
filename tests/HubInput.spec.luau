@@ -1049,6 +1049,14 @@ describe("HubInput", function()
 		expect(card ~= nil).toBeTrue()
 		expect(ring.Parent).toEqual(card)
 		expect(ring.Enabled).toEqual(true)
+		local nested = nil
+		for _, child in ipairs(card:GetChildren()) do
+			if child ~= ring then
+				nested = child
+				break
+			end
+		end
+		expect(nested ~= nil).toBeTrue()
 		local destroyed = false
 		local destroy = ring.Destroy
 		rawset(ring, "Destroy", function(self)
@@ -1058,6 +1066,17 @@ describe("HubInput", function()
 		equip.BackgroundColor3 = { R = 1, G = 2, B = 3 }
 		hub.setProfile(data)
 		expect(card.Parent).toBeNil()
+		local cardOk = pcall(function()
+			card.Parent = screen
+		end)
+		expect(cardOk).toEqual(false)
+		expect(card.Parent).toBeNil()
+		expect(nested.Parent).toBeNil()
+		local nestedOk = pcall(function()
+			nested.Parent = card
+		end)
+		expect(nestedOk).toEqual(false)
+		expect(nested.Parent).toBeNil()
 		expect(destroyed).toEqual(false)
 		expect(GuiFake.findNamed(card, "PadRing")).toBeNil()
 		GuiFake.emit(equip, "MouseLeave")
