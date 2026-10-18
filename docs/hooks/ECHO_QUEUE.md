@@ -44,7 +44,7 @@ Assigned in issue #15 comment 6246173340.
 
 ## E-006 — in progress
 
-Controller pass on the first-60s path. Branch `helper/controller-first60-9721`. PR link lands in this row once the pull request is open, into `cursor/live-build-9721`.
+Controller pass on the first-60s path. Branch `helper/controller-first60-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/262 into `cursor/live-build-9721`.
 
 The click harness drives a gamepad from Close. With the hub tab column hidden, `PadRing` reaches the rail Roll, Bag, and Pets buttons, then the bag upgrade row (the in-hub Forge step). ButtonA runs the existing `padPress` registry. `UiRouter.switch` opens each rail page. The Roll crack button still cracks once through `rollFromPointer`. The Gold shop Healing Tonic and bag slot buy on ButtonA. Input stays in `Keybinds.luau`. Schema stays 26. No new remote. The plaza Forge sheet, the Chests button, and `SetChestOptions` stay on Ghost's lane.
 
