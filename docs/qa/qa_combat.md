@@ -2,7 +2,7 @@
 
 G-062. Hit validation and cooldown desync in `CombatService.luau`, `CombatHud.luau`, and `CombatFeel.luau`. This file does not change code.
 
-The server is the authority for damage. The client plays the slash and fires `Attack` without waiting (`Remotes.luau:569-570`). A dropped swing sends nothing back, so the local combo can run ahead of the server combo.
+The server is the authority for damage. The Attack button, the Heavy chip, and R play the slash and fire `Attack` without waiting (`init.client.luau:1309-1316`, `Remotes.luau:569-570`). A dropped swing on those paths sends nothing back, so the local combo can run ahead. A mouse or touch world click fires `Attack` and does not play the slash.
 
 The heavy button and the R key already play the local slash. That path is `docs/qa/qa_heavy_swing.md`. This file does not restate it. Gamepad chords in `docs/qa/AUDIT_FOLLOWUPS.md` are not reopened.
 
@@ -12,14 +12,14 @@ The heavy button and the R key already play the local slash. That path is `docs/
 |---|---|---|---|---|
 | C1 | `charged` is whatever the client sends. There is no charge timer | `Remotes.luau:571-583`, `CombatService.luau:805`, `CombatFeel.luau:186-197`, `CombatFeel.luau:23` | high | Every `Attack` with the fifth argument true uses `CHARGE_MULT` (1.75), not the third-hit 1.4. A normal light click sends false. A modified client can send true on every swing and get the heavy multiplier inside range |
 | C2 | Melee aim does not have to match the body facing | `CombatService.luau:595-607`, `CombatService.luau:748-770`, `CombatMath.luau:486-507` | high | Origin is the server root. A look vector whose length is between 0.05 and 3 becomes the arc. The body is not turned. An enemy behind the avatar and inside the weapon range can be the closest hit. A NaN look falls back to facing (`CombatService.luau:599-600`) |
-| C3 | The client slash and combo advance when the server drops the swing | `CombatStage.luau:171-190`, `CombatHud.luau:136-142`, `CombatService.luau:707-712`, `CombatService.luau:805-806`, `Remotes.luau:579-580` | high | Spam light attack. The sword still slashes. `releaseSwing` returns on cooldown or during i-frames and sends no fx. `RateLimiter.take` for `Attack` returns with no fx. `OnboardingService.note(player, "swing")` still runs after the drop, so the tutorial step can count a swing that did not land |
+| C3 | The Attack button, Heavy chip, and R play the slash before the server accepts | `CombatStage.luau:171-190`, `init.client.luau:1309-1316`, `CombatHud.luau:941-947`, `CombatService.luau:707-712`, `CombatService.luau:805-806`, `Remotes.luau:579-580` | high | Those paths call `CombatStage.swing` with no cooldown check, then fire `Attack`. A drop still shows the slash and advances the local combo. A mouse or touch world click does not slash (`CombatHud.luau:949-954`). `releaseSwing` returns on cooldown or during i-frames and sends no fx, then `OnboardingService.note(player, "swing")` still runs, so the tutorial can count that drop. `RateLimiter.take` returns before `attack` and does not call `note`. A swing outside a run returns before `note` too |
 | C4 | The weapon cooldown and the rate bucket are two clocks | `CombatMath.luau:156-160`, `RateLimiter.luau:50-51`, `CombatService.luau:717` | medium | Cooldown is `1 / attackSpeed`, or 1 second when speed is missing or not positive. The bucket is 8 burst and 6 per second. A fast weapon can be legal on cooldown and still be dropped by the bucket. A slow weapon can play six local slashes in a second and land one |
 | C5 | A dodge with no charge still plays, and a failed dodge still sends fx | `init.client.luau:1305-1307`, `CombatService.luau:809-818`, `CombatFeel.luau:99-109` | medium | Empty charges. The local dodge clip plays, then the server sends `kind = "dodge"` with `charges` 0 and `perfect` false. The next real charge is unchanged |
 | C6 | Shift can take two dodge paths if the sink does not mark it processed | `ActionBar.luau:899-912`, `CombatHud.luau:933-939` | medium | Hub closed. One LeftShift. Pass is one `Dodge` remote and one local clip. `ActionBar` sinks Shift and calls `onDodge` (clip plus remote). `CombatHud` also dodges on LeftShift when `processed` is false, and that branch does not call `CombatStage.dodge`. Two remotes fail the case |
 | C7 | A swing in Haven plays locally and does nothing on the server | `CombatService.luau:786-789` | medium | Not in a run. The slash plays. No damage number, no cooldown write. The server returns before `releaseSwing` |
 | C8 | Only the closest enemy in the arc is hit | `CombatService.luau:749-770` | low | Two enemies in the sword arc. The nearer one takes the hit. The farther one does not. This is the current rule, not a second swing |
 
-C1 and C2 are the hit checks a modified client can bend. C3 is the desync a normal player can see by clicking fast.
+C1 and C2 are the hit checks a modified client can bend. C3 is the desync a normal player can see from the Attack button, Heavy, or R. A world click is the missing slash in `docs/qa/qa_heavy_swing.md`.
 
 ## Cases
 

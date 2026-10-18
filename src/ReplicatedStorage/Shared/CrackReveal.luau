@@ -40,14 +40,16 @@ export type Sample = {
 	sound: string?,
 }
 
+-- Full playback. Common and Uncommon spend about a second on the
+-- shake and the crack, then burst. Rare and above hold longer.
 local FULL: { [string]: number } = {
-	Common = 0.55,
-	Uncommon = 0.72,
-	Rare = 1.15,
-	Epic = 1.6,
-	Legendary = 1.95,
-	Mythic = 2.35,
-	Secret = 2.6,
+	Common = 1.4,
+	Uncommon = 1.6,
+	Rare = 2.2,
+	Epic = 2.75,
+	Legendary = 3.1,
+	Mythic = 3.5,
+	Secret = 3.8,
 }
 
 local function rankOf(rarity: string): number
@@ -82,9 +84,11 @@ function CrackReveal.plan(rarity: any, mode: any): Plan
 	local rank = rankOf(name)
 	local rareUp = rank >= rankOf("Rare")
 	local epicUp = rank >= rankOf("Epic")
-	local shakeEnd = seconds * (if rareUp then 0.4 else 0.32)
-	local crackEnd = seconds * (if rareUp then 0.62 else 0.58)
-	local tensionEnd = if epicUp then seconds * 0.8 else crackEnd
+	-- Anticipation is the shake plus the spreading crack. The burst is
+	-- whatever is left, and Rare and above keep more of it.
+	local crackEnd = seconds * (if rareUp then 0.52 else 0.72)
+	local shakeEnd = crackEnd * 0.45
+	local tensionEnd = if epicUp then seconds * 0.78 else crackEnd
 	return {
 		rarity = name,
 		mode = picked,
@@ -94,7 +98,7 @@ function CrackReveal.plan(rarity: any, mode: any): Plan
 		tensionEnd = tensionEnd,
 		burstEnd = seconds,
 		flash = rareUp and picked ~= "reduced",
-		glow = rareUp,
+		glow = picked ~= "reduced",
 		sound = if epicUp then "stinger" elseif rareUp then "confirm" else "click",
 	}
 end

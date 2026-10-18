@@ -6,7 +6,7 @@ Rects below are what `HudLayout`, `ShellLayout`, and `ActionSlots.placement` ret
 
 Choice: the code has no "laptop" name. Laptop in this matrix is the `pc` breakpoint. Phone is tested in both orientations, because `HudLayout.breakpoint` returns `"phone"` when the width is under 900 or the height is under 500 (`HudLayout.luau:369-380`).
 
-Launch rail is six buttons: Hero, Bag, Pets, Roll, Shop, Settings (`HudShell.luau:42-48`). Mastery is hidden (`HudShell.luau:242`). Raids, Market, and Shard Pass stay off (`LaunchGate.luau:11-26`). The hub draws at DisplayOrder 80 (`MenuHub.luau:104`) over the shell at 30 (`HudShell.luau:61`).
+Launch rail is six buttons: Hero, Bag, Pets, Roll, Shop, Settings (`HudShell.luau:42-48`). Mastery is hidden (`HudShell.luau:242`). Raids, Market, and Shard Pass stay off (`LaunchGate.luau:11-26`). The hub draws at DisplayOrder 80 (`MenuHub.luau:113`) over the shell at 30 (`HudShell.luau:61`).
 
 `docs/qa/qa_menu.md` M3 said a 390-tall view covers the portrait at y=17. `railFit` now slides the rail to the right of the portrait when they overlap (`HudLayout.luau:334-342`). On 844×390 that slide lands on the HP bar. M2's width-390 pill row is not reopened.
 
@@ -25,7 +25,7 @@ Launch rail is six buttons: Hero, Bag, Pets, Roll, Shop, Settings (`HudShell.lua
 | id | risk | where | rating | what a tester sees |
 |---|---|---|---|---|
 | L1 | On a short phone the rail moves off the portrait and onto the HP bar | `HudLayout.luau:334-342`, `HudLayout.luau:32-53` | high | 844×390. Portrait is 16,16 56×56. Rail is 80,43 44×304. HP is 80,16 220×56. The rail covers the left 44px of the HP bar from y=43 to y=72. The six buttons still fit. They are not on the portrait |
-| L2 | The hub covers the equip prompt on every size in this matrix | `HudLayout.luau:170-174`, `HudLayout.luau:211-219`, `MenuHub.luau:104`, `HudShell.luau:61` | high | Prompt is up and the hub is open. Equip and Keep sit under the hub. Phone portrait: prompt 98,212 160×88, hub 55,102 280×640. Laptop: prompt 510,212 420×88, hub 290,130 860×640 |
+| L2 | The hub covers the equip prompt on every size in this matrix | `HudLayout.luau:170-174`, `HudLayout.luau:211-219`, `MenuHub.luau:113`, `HudShell.luau:61` | high | Prompt is up and the hub is open. Equip and Keep sit under the hub. Phone portrait: prompt 98,212 160×88, hub 55,102 280×640. Laptop: prompt 510,212 420×88, hub 290,130 860×640 |
 | L3 | The open hub covers the top of the action cluster on phone, tablet, and console | `HudLayout.luau:211-219`, `HudLayout.luau:383-387`, `ActionSlots.luau:602-654` | medium | Hub open. Phone portrait cluster is 158,600 216×140 and the hub runs to y=742. Console cluster is 356,604 568×100 and the hub runs to y=640. Laptop does not: hub ends at y=770 and the cluster starts at y=784 |
 | L4 | The Forge sheet is 140px wide on a portrait phone and 86px tall on a landscape phone | `Ui.luau:377-381`, `ShellLayout.luau:239-255` | high | Haven Forge opens the legacy panel. 390×844: 16,140 140×540. 844×390: 16,140 303×86. Upgrade rows clip. The live action cluster is not this panel |
 | L5 | The legacy 7-slot bar is off the right edge of a portrait phone | `ShellLayout.luau:146-154` | medium | 390×844. `actionBar` is 88,768 552×64 and ends at x=640. Door and Forge use that y. If a legacy thumb row is still visible, it clips. The live cluster stays on screen at 158,600 216×140 |

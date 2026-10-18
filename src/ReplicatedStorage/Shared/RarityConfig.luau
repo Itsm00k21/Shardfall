@@ -43,6 +43,8 @@ RarityConfig.AUTO_DISMISS = 1.5
 RarityConfig.BONUS_EVERY = 10
 RarityConfig.EPIC_PITY = 100
 RarityConfig.LEGENDARY_PITY = 1000
+RarityConfig.ROUNDING_NOTE =
+	"Probabilities are rounded; total of displayed individual probabilities may not equal 100%."
 
 local ONE_IN: { [string]: number } = {
 	Common = 2,
@@ -362,19 +364,50 @@ function RarityConfig.reel(
 	return slots
 end
 
--- The label is the luck-adjusted check (Common stays "1 in 2" at x1).
--- The percent beside it is the true rarest-first chance, so Common's
--- percent is whatever the rarer checks did not take.
+-- oneIn on a disclose row stays the luck-adjusted check. The printed
+-- line does not use that check. It prints one 1-in and one percent, both
+-- taken from the disclosed chance, so the two figures agree.
 local function shownOneIn(rarity: string, luck: number): number
 	return math.max(1, math.floor(RarityConfig.effectiveOneIn(rarity, luck) + 0.5))
 end
 
-function RarityConfig.formatPercent(chance: number): string
-	local percent = chance * 100
-	if percent >= 1 then
-		return string.format("%.2f%%", percent)
+local function shownPair(chance: number): (number, number, string)
+	local percent = 0
+	if type(chance) == "number" and chance == chance and chance > 0 and chance < math.huge then
+		percent = chance * 100
 	end
-	return string.format("%.4f%%", percent)
+	if percent > 100 then
+		percent = 100
+	end
+	local shown: number
+	local text: string
+	if percent >= 9.95 then
+		shown = math.floor(percent + 0.5)
+		text = string.format("%d%%", shown)
+	elseif percent >= 1 then
+		shown = math.floor(percent * 10 + 0.5) / 10
+		if math.abs(shown - math.floor(shown + 1e-9)) < 1e-6 then
+			text = string.format("%d%%", math.floor(shown + 0.5))
+		else
+			text = string.format("%.1f%%", shown)
+		end
+	else
+		shown = math.floor(percent * 100 + 0.5) / 100
+		if shown <= 0 and percent > 0 then
+			shown = 0.01
+		end
+		text = string.format("%.2f%%", shown)
+	end
+	local oneIn = 1
+	if shown > 0 then
+		oneIn = math.max(1, math.floor((100 / shown) + 0.5))
+	end
+	return oneIn, shown, text
+end
+
+function RarityConfig.formatPercent(chance: number): string
+	local _, _, text = shownPair(chance)
+	return text
 end
 
 function RarityConfig.disclose(pool: any, luck: number)
@@ -432,10 +465,11 @@ function RarityConfig.disclose(pool: any, luck: number)
 	end
 	return {
 		notice = string.format(
-			"Luck x%.2f. Every 10th roll is x2. Epic+ at %d, Legendary+ at %d.",
+			"Luck x%.2f. Every 10th roll is x2. Epic+ at %d, Legendary+ at %d. %s",
 			multiplier,
 			RarityConfig.EPIC_PITY,
-			RarityConfig.LEGENDARY_PITY
+			RarityConfig.LEGENDARY_PITY,
+			RarityConfig.ROUNDING_NOTE
 		),
 		luck = multiplier,
 		rarities = rarities,
@@ -444,12 +478,18 @@ function RarityConfig.disclose(pool: any, luck: number)
 end
 
 function RarityConfig.formatLine(row: any): string
-	return string.format(
-		"%s  1 in %d  (%s)",
-		tostring(row.rarity),
-		row.oneIn,
-		RarityConfig.formatPercent(row.chance)
-	)
+	local chance = 0
+	local rarity = "Common"
+	if type(row) == "table" then
+		if type(row.chance) == "number" then
+			chance = row.chance
+		end
+		if type(row.rarity) == "string" and row.rarity ~= "" then
+			rarity = row.rarity
+		end
+	end
+	local oneIn, _, text = shownPair(chance)
+	return string.format("%s  1 in %d  (%s)", rarity, oneIn, text)
 end
 
 function RarityConfig.quickEntitled(data: any, now: number): boolean

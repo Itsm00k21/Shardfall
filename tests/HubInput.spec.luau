@@ -1,5 +1,7 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -398,7 +400,7 @@ describe("HubInput", function()
 		}
 		button.InputBegan:Fire(input)
 		button.InputEnded:Fire(input)
-		button.Activated:Fire()
+		GuiFake.emit(button, "Activated")
 		local rolls = rolled(calls)
 		expect(#rolls).toEqual(before + 1)
 		expect(rolls[#rolls][1]).toEqual("RollShard")
@@ -413,7 +415,7 @@ describe("HubInput", function()
 		local screen = screenOf(world)
 		local button = GuiFake.findNamed(screen, "Roll")
 		local before = #rolled(calls)
-		button.Activated:Fire()
+		GuiFake.emit(button, "Activated")
 		local rolls = rolled(calls)
 		expect(#rolls).toEqual(before + 1)
 		expect(rolls[#rolls][1]).toEqual("RollShard")
@@ -438,7 +440,7 @@ describe("HubInput", function()
 			KeyCode = world.enum.KeyCode.Return,
 		}
 		button.InputBegan:Fire(key)
-		button.Activated:Fire()
+		GuiFake.emit(button, "Activated")
 		local rolls = rolled(calls)
 		expect(#rolls).toEqual(2)
 		expect(rolls[1][1]).toEqual("RollShard")
@@ -459,8 +461,8 @@ describe("HubInput", function()
 		}
 		button.InputBegan:Fire(pointer)
 		button.InputEnded:Fire(pointer)
-		task.wait(0.9)
-		button.Activated:Fire()
+		require("@lune/task").wait(0.9)
+		GuiFake.emit(button, "Activated")
 		local rolls = rolled(calls)
 		expect(#rolls).toEqual(2)
 		expect(rolls[1][1]).toEqual("RollShard")
@@ -648,5 +650,331 @@ describe("HubInput", function()
 			local page = GuiFake.findNamed(screenOf(world), "Body"):FindFirstChild(tab)
 			expect(page.Visible).toBeTrue()
 		end
+	end)
+
+	it("moves PadRing after a gamepad step and runs the focused button", function()
+		local world, hub = bootHub()
+		local ActionBar = world.load("ActionBar")
+		local slots = {}
+		local dodges = 0
+		local lights = 0
+		local heavies = 0
+		local bar = ActionBar.start(world.playerGui, {
+			invoke = function(name: string, ...)
+				table.insert(slots, { name, ... })
+				return { ok = true }
+			end,
+			menuOpen = function()
+				return hub.isOpen()
+			end,
+			onDodge = function()
+				dodges += 1
+			end,
+			onLight = function()
+				lights += 1
+			end,
+			onHeavy = function()
+				heavies += 1
+			end,
+			onSkill = function() end,
+			onToast = function() end,
+			onResult = function() end,
+			onRoll = function() end,
+			mobile = function()
+				return false
+			end,
+		})
+		bar.setProfile(profile())
+		local function press(key: string, processed: boolean?)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, processed == true)
+		end
+		local function stick(x: number, y: number)
+			world.userInput.InputChanged:Fire({
+				KeyCode = world.enum.KeyCode.Thumbstick1,
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = vector.create(x, y, 0),
+			}, false)
+		end
+		local function place(button: any, x: number, y: number)
+			button.AbsolutePosition = world.vector2(x, y)
+			button.AbsoluteSize = world.vector2(40, 36)
+		end
+		hub.open("roll")
+		local screen = screenOf(world)
+		expect(labelText(screen, "Title")).toEqual("Roll")
+		expect(GuiFake.findNamed(screen, "PadRing").Parent).toEqual(tabButton(screen, "roll"))
+		expect(tabButton(screen, "raids").Visible).toEqual(false)
+		expect(tabButton(screen, "market").Visible).toEqual(false)
+		expect(tabButton(screen, "pass").Visible).toEqual(false)
+		local stacked = 0
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("GuiButton") and child.Visible ~= false then
+				place(child, 0, stacked * 48)
+				stacked += 1
+			end
+		end
+		place(tabButton(screen, "roll"), 0, 0)
+		place(tabButton(screen, "shop"), 0, 400)
+		place(tabButton(screen, "settings"), 360, 0)
+		press("DPadRight", true)
+		local ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring ~= nil).toBeTrue()
+		expect(ring:IsA("UIStroke")).toBeTrue()
+		expect(ring:IsA("GuiObject")).toEqual(false)
+		expect(ring.Thickness).toEqual(4)
+		expect(ring.Color.R).toEqual(244)
+		expect(ring.Color.G).toEqual(240)
+		expect(ring.Color.B).toEqual(252)
+		expect(ring.BorderStrokePosition).toEqual(world.enum.BorderStrokePosition.Inner)
+		expect(ring.Enabled).toEqual(true)
+		expect(ring.Parent).toEqual(tabButton(screen, "settings"))
+		hub.close()
+		expect(GuiFake.findNamed(screen, "PadRing")).toBeNil()
+		hub.open("roll")
+		screen = screenOf(world)
+		expect(GuiFake.findNamed(screen, "PadRing").Parent).toEqual(tabButton(screen, "roll"))
+		press("DPadDown", true)
+		ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent).toEqual(tabButton(screen, "shop"))
+		press("ButtonA", true)
+		expect(labelText(screen, "Title")).toEqual("Shop")
+		local banned = { raids = true, market = true, pass = true }
+		for _ = 1, 40 do
+			press("DPadDown")
+			local parent = ring.Parent
+			expect(parent ~= nil and banned[parent.Name] ~= true).toBeTrue()
+		end
+		world.userInput.InputBegan:Fire({
+			KeyCode = world.enum.KeyCode.Unknown,
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			Position = { X = 0, Y = 0, Z = 0 },
+		}, false)
+		expect(ring.Parent).toBeNil()
+		expect(GuiFake.findNamed(screen, "PadRing")).toBeNil()
+		press("DPadDown")
+		expect(ring.Parent ~= nil).toBeTrue()
+		world.userInput.InputBegan:Fire({
+			KeyCode = world.enum.KeyCode.F13,
+			UserInputType = world.enum.UserInputType.Keyboard,
+		}, false)
+		expect(ring.Parent).toBeNil()
+		hub.close()
+		hub.open("hero")
+		screen = screenOf(world)
+		expect(GuiFake.findNamed(screen, "PadRing").Parent).toEqual(tabButton(screen, "hero"))
+		stick(0.1, 0.2)
+		expect(GuiFake.findNamed(screen, "PadRing").Parent).toEqual(tabButton(screen, "hero"))
+		stick(0, -0.8)
+		ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent).toEqual(tabButton(screen, "bag"))
+		local stepped = ring.Parent
+		stick(0, -0.9)
+		expect(ring.Parent).toEqual(stepped)
+		stick(0, 0)
+		stick(0, -0.8)
+		expect(ring.Parent).toEqual(tabButton(screen, "pets"))
+		press("ButtonB")
+		expect(hub.isOpen()).toEqual(false)
+		expect(GuiFake.findNamed(screen, "PadRing")).toBeNil()
+		expect(world.binds.ShardfallMenuSink).toBeNil()
+		press("ButtonA")
+		expect(hub.isOpen()).toEqual(false)
+		local before = #slots
+		world.binds.ShardfallActionBarPad("ShardfallActionBarPad", world.enum.UserInputState.Begin, {
+			KeyCode = world.enum.KeyCode.DPadUp,
+			UserInputType = world.enum.UserInputType.Gamepad1,
+		})
+		expect(#slots).toEqual(before + 1)
+		expect(slots[#slots][1]).toEqual("UseActionSlot")
+		expect(slots[#slots][2]).toEqual(1)
+		world.binds.ShardfallLight("ShardfallLight", world.enum.UserInputState.Begin, {
+			KeyCode = world.enum.KeyCode.ButtonR1,
+			UserInputType = world.enum.UserInputType.Gamepad1,
+		})
+		expect(lights).toEqual(1)
+		world.binds.ShardfallDodge("ShardfallDodge", world.enum.UserInputState.Begin, {
+			KeyCode = world.enum.KeyCode.ButtonY,
+			UserInputType = world.enum.UserInputType.Gamepad1,
+		})
+		expect(dodges).toEqual(1)
+		local actionScreen = GuiFake.findNamed(world.playerGui, "ShardfallActions")
+		GuiFake.activate(GuiFake.findNamed(actionScreen, "Heavy"))
+		expect(heavies).toEqual(1)
+		press("ButtonX")
+		expect(hub.isOpen()).toEqual(false)
+		expect(heavies).toEqual(1)
+		local combat = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
+		local heavyAt = string.find(combat, "Keybinds.GAMEPAD.heavy", 1, true)
+		expect(heavyAt ~= nil).toBeTrue()
+		local swingAt = string.find(combat, "CombatHud.swing(true)", heavyAt :: number, true)
+		expect(swingAt ~= nil).toBeTrue()
+		hub.open("roll")
+		expect(world.binds.ShardfallMenuSink ~= nil).toBeTrue()
+		local openBefore = #slots
+		world.binds.ShardfallActionBarPad("ShardfallActionBarPad", world.enum.UserInputState.Begin, {
+			KeyCode = world.enum.KeyCode.DPadDown,
+			UserInputType = world.enum.UserInputType.Gamepad1,
+		})
+		expect(#slots).toEqual(openBefore)
+		expect(GuiFake.findNamed(screenOf(world), "PadRing").Parent).toEqual(tabButton(screenOf(world), "roll"))
+		press("DPadDown")
+		local openRing = GuiFake.findNamed(screenOf(world), "PadRing")
+		expect(openRing.Parent).toEqual(tabButton(screenOf(world), "shop"))
+		local quick = nil
+		for _ = 1, 48 do
+			press("DPadDown")
+			if openRing.Parent ~= nil and openRing.Parent.Name == "Quick" then
+				quick = openRing.Parent
+				break
+			end
+		end
+		expect(quick ~= nil).toBeTrue()
+		press("ButtonA")
+		expect(hasText(screenOf(world), "Quick On")).toBeTrue()
+		hub.open("roll")
+		local rollButton = nil
+		openRing = GuiFake.findNamed(screenOf(world), "PadRing")
+		if openRing == nil or openRing.Parent == nil or openRing.Parent.Name ~= "Roll" then
+			for _ = 1, 48 do
+				press("DPadDown")
+				openRing = GuiFake.findNamed(screenOf(world), "PadRing")
+				if openRing ~= nil and openRing.Parent ~= nil and openRing.Parent.Name == "Roll" then
+					rollButton = openRing.Parent
+					break
+				end
+			end
+		else
+			rollButton = openRing.Parent
+		end
+		expect(rollButton ~= nil).toBeTrue()
+		local beforeRolls = #slots
+		press("ButtonA")
+		expect(hasText(screenOf(world), "You need a Shard Token to crack a shard.")).toBeTrue()
+		expect(#slots).toEqual(beforeRolls)
+		local firedOk = pcall(function()
+			rollButton.Activated:Fire()
+		end)
+		expect(firedOk).toEqual(false)
+		hub.open("settings")
+		screen = screenOf(world)
+		press("DPadDown")
+		press("DPadDown")
+		ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent.Parent.Name).toEqual("List")
+		local list = ring.Parent.Parent
+		local row = ring.Parent
+		list.AbsolutePosition = world.vector2(0, 0)
+		list.AbsoluteSize = world.vector2(200, 100)
+		list.CanvasPosition = world.vector2(0, 0)
+		row.AbsolutePosition = world.vector2(0, 400)
+		row.AbsoluteSize = world.vector2(80, 40)
+		press("DPadDown")
+		press("DPadUp")
+		expect(list.CanvasPosition.Y).toEqual(340)
+	end)
+
+	it("cracks one shard when ButtonA lands on the focused Roll button", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 3
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent).toEqual(tabButton(screen, "roll"))
+		expect(ring.Enabled).toEqual(true)
+		local function press(key: string)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, false)
+		end
+		local rollButton = nil
+		for _ = 1, 48 do
+			press("DPadDown")
+			if ring.Parent ~= nil and ring.Parent.Name == "Roll" then
+				rollButton = ring.Parent
+				break
+			end
+		end
+		expect(rollButton ~= nil).toBeTrue()
+		expect(ring.Enabled).toEqual(true)
+		expect(ring.Parent).toEqual(rollButton)
+		local before = #rolled(calls)
+		press("ButtonA")
+		local rolls = rolled(calls)
+		expect(#rolls).toEqual(before + 1)
+		expect(rolls[#rolls][1]).toEqual("RollShard")
+		GuiFake.emit(rollButton, "Activated")
+		expect(#rolled(calls)).toEqual(before + 1)
+		local firedOk = pcall(function()
+			rollButton.Activated:Fire()
+		end)
+		expect(firedOk).toEqual(false)
+		expect(#rolled(calls)).toEqual(before + 1)
+	end)
+
+	it("drops padPress and padTarget when a rebuilt list destroys its rows", function()
+		local source = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local clearAt = string.find(source, "function hubFn.clear(host: Instance)", 1, true)
+		expect(clearAt ~= nil).toBeTrue()
+		local nextFn = string.find(source, "\n\tfunction hubFn.", (clearAt :: number) + 1, true)
+		local body = string.sub(source, clearAt :: number, (nextFn :: number) - 1)
+		local pressAt = string.find(body, "hubState.padPress[node] = nil", 1, true)
+		local targetAt = string.find(body, "hubState.padTarget = nil", 1, true)
+		local descendAt = string.find(body, "GetDescendants()", 1, true)
+		local destroyAt = string.find(body, "child:Destroy()", 1, true)
+		expect(pressAt ~= nil).toBeTrue()
+		expect(targetAt ~= nil).toBeTrue()
+		expect(descendAt ~= nil).toBeTrue()
+		expect(destroyAt ~= nil).toBeTrue()
+		expect((pressAt :: number) < (destroyAt :: number)).toBeTrue()
+		expect((targetAt :: number) < (destroyAt :: number)).toBeTrue()
+		expect((descendAt :: number) < (destroyAt :: number)).toBeTrue()
+
+		local world, hub = bootHub()
+		local data = profile()
+		data.pets = {
+			ember = {
+				uid = "ember",
+				name = "Ember",
+				rarity = "Common",
+			},
+		}
+		hub.setProfile(data)
+		hub.open("pets")
+		local screen = screenOf(world)
+		local function press(key: string)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, false)
+		end
+		local ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent).toEqual(tabButton(screen, "pets"))
+		local card = nil
+		for _ = 1, 48 do
+			press("DPadDown")
+			if ring.Parent ~= nil and ring.Parent.Name == "PetCard" then
+				card = ring.Parent
+				break
+			end
+		end
+		expect(card ~= nil).toBeTrue()
+		expect(ring.Parent).toEqual(card)
+		hub.setProfile(data)
+		expect(card.Parent).toBeNil()
+		screen = screenOf(world)
+		local fresh = GuiFake.findNamed(screen, "PetCard")
+		expect(fresh ~= nil and fresh ~= card and fresh.Parent ~= nil).toBeTrue()
+		ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent ~= card).toBeTrue()
+		expect(ring.Parent).toEqual(tabButton(screen, "pets"))
 	end)
 end)

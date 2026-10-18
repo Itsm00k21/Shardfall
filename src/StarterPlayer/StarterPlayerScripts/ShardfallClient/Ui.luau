@@ -2331,16 +2331,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		heading(areaName .. "  ·  totals")
 		if type(odds.rarities) == "table" then
 			for _, rarityRow in ipairs(odds.rarities) do
-				local chanceText = RollMath.formatChance(rarityRow.chance)
-				local text = if type(rarityRow.oneIn) == "number"
-					then string.format(
-						"%s    1 in %d    %s",
-						rarityRow.rarity,
-						rarityRow.oneIn,
-						chanceText
-					)
-					else string.format("%s    %s", rarityRow.rarity, chanceText)
-				row(text, rarityRow.rarity)
+				row(RarityConfig.formatLine(rarityRow), rarityRow.rarity)
 			end
 		end
 		heading("Each drop")
