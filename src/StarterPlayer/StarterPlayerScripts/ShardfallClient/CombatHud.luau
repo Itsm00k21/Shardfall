@@ -139,7 +139,20 @@ function CombatHud.swing(charged: boolean?)
 		return
 	end
 	local look = lookVector()
-	remote:FireServer(look.X, look.Y, look.Z, charged == true)
+	if charged == true then
+		-- The server starts its own hold. The boolean on the later packet is ignored.
+		remote:FireServer(look.X, look.Y, look.Z, "begin")
+		task.delay(CombatFeel.CHARGE_HOLD, function()
+			local later = lookVector()
+			local current = attackRemote
+			if current == nil then
+				return
+			end
+			current:FireServer(later.X, later.Y, later.Z, charged == true)
+		end)
+		return
+	end
+	remote:FireServer(look.X, look.Y, look.Z, false)
 end
 
 function CombatHud.dodge()

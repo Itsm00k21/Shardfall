@@ -59,6 +59,7 @@ type State = {
 	ready: boolean,
 	combo: number,
 	comboAt: number,
+	charge: CombatFeel.ChargeClock,
 	dodge: CombatFeel.DodgeState,
 	ult: number,
 	hurt: boolean,
@@ -160,6 +161,7 @@ local function ensure(player: Player): State
 			ready = false,
 			combo = 0,
 			comboAt = 0,
+			charge = CombatFeel.blankCharge(),
 			dodge = CombatFeel.blankDodge(os.clock()),
 			ult = 0,
 			hurt = false,
@@ -700,7 +702,7 @@ local function releaseSwing(
 	offense: CombatMath.Offense,
 	aim: Vector3,
 	flat: Vector3,
-	charged: boolean
+	fromPlayer: boolean
 )
 	local state = ensure(player)
 	local now = os.clock()
@@ -711,7 +713,12 @@ local function releaseSwing(
 		-- A dodge cancels the end of a swing. The next hit waits out the roll.
 		return
 	end
-	local step = CombatFeel.advanceCombo(state.combo, state.comboAt, now, charged)
+	-- Auto swings pass false and leave a held charge for the player's click.
+	local heavy = false
+	if fromPlayer then
+		heavy = CombatFeel.takeCharge(state.charge, now, nil)
+	end
+	local step = CombatFeel.advanceCombo(state.combo, state.comboAt, now, heavy)
 	state.combo = step.chain
 	state.comboAt = now
 	state.nextAttack = now + CombatMath.cooldown(offense.attackSpeed)
@@ -782,7 +789,12 @@ local function releaseSwing(
 	end
 end
 
-function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any, charged: any)
+function CombatService.beginCharge(player: Player)
+	local state = ensure(player)
+	CombatFeel.beginCharge(state.charge, os.clock())
+end
+
+function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)
 	-- Haven has nothing to swing at. The old tip sat on the gold banner
 	-- from the moment the player spawned.
 	if not hooks.inRun(player) then
@@ -795,6 +807,9 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	local offense = CombatMath.loadout(DataService.get(player))
 	local facing = hrp.CFrame.LookVector
 	local aim = direction(lookX, lookY, lookZ, facing)
+	local cx, cy, cz =
+		CombatFeel.clampLook(aim.X, aim.Y, aim.Z, facing.X, facing.Y, facing.Z, CombatFeel.AIM_DOT)
+	aim = Vector3.new(cx, cy, cz)
 	local flat = Vector3.new(aim.X, 0, aim.Z)
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(facing.X, 0, facing.Z)
@@ -802,7 +817,7 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(0, 0, -1)
 	end
-	releaseSwing(player, hrp, offense, aim, flat.Unit, charged == true)
+	releaseSwing(player, hrp, offense, aim, flat.Unit, true)
 	OnboardingService.note(player, "swing")
 end
 
