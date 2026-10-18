@@ -2,9 +2,9 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo's open row is E-006. Do not queue new features. Ghost is holding the phone layout recheck until the `-a6e7` layout lane goes quiet.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo is holding after E-007. Do not queue new features. Ghost is holding the phone layout recheck until the `-a6e7` layout lane goes quiet.
 
-Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-006 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
+Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-007 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
 ## E-001 — done
 
@@ -50,9 +50,9 @@ The click harness drives a gamepad from Close. With the hub tab column hidden, `
 
 Assigned in issue #15 comment 6246173340. Cleared to start in PR #255 comment 6246379892.
 
-## E-007 — in progress
+## E-007 — done
 
-Docs and tests only. Branch `helper/controller-playtest-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/269 into `cursor/live-build-9721`.
+Docs and tests only. Branch `helper/controller-playtest-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/269 into `cursor/live-build-9721`. Merged in #269.
 
 One controller step in the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Open the hub with a gamepad, reach Roll, Bag, and Pets on the rail, then close it. The step has a pass line. Feel and looks only. The other ten steps stay as they are. The click harness tried a gamepad ButtonA and a mouse click on the same rail button in the same frame. On current code that pair fires twice (`UiRouter.switch` once from `padPress`, and the HudShell rail callback once), and the mouse path toggles the hub shut. That case is not in the committed run. No `src/` edit. Schema stays 26. No new remote.
 
