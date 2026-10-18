@@ -19,6 +19,7 @@ local INHERITS: { [string]: { [string]: boolean } } = {
 	ModuleScript = { Instance = true, LuaSourceContainer = true },
 	ScreenGui = { Instance = true, GuiBase2d = true, LayerCollector = true },
 	Frame = { Instance = true, GuiObject = true, GuiBase2d = true },
+	CanvasGroup = { Instance = true, GuiObject = true, GuiBase2d = true },
 	ScrollingFrame = { Instance = true, GuiObject = true, GuiBase2d = true },
 	TextButton = { Instance = true, GuiObject = true, GuiButton = true, GuiBase2d = true },
 	TextLabel = { Instance = true, GuiObject = true, GuiBase2d = true },
@@ -43,6 +44,7 @@ local INHERITS: { [string]: { [string]: boolean } } = {
 
 local GUI_OBJECT = {
 	Frame = true,
+	CanvasGroup = true,
 	ScrollingFrame = true,
 	TextButton = true,
 	TextLabel = true,
@@ -640,7 +642,7 @@ function GuiFake.world()
 	local folder = newInstance("Folder")
 	folder.Name = "ShardfallClient"
 	local scripts = {}
-	for _, name in ipairs({ "MenuHub", "ClassHud", "MobileShell", "ActionBar" }) do
+	for _, name in ipairs({ "MenuHub", "ClassHud", "MobileShell", "ActionBar", "HudShell", "StarterGoalHud" }) do
 		local moduleScript = newInstance("ModuleScript")
 		moduleScript.Name = name
 		moduleScript.Parent = folder
@@ -762,7 +764,14 @@ function GuiFake.world()
 				error("require " .. tostring(module), 2)
 			end
 			local moduleName = module.Name
-			if moduleName == "MenuHub" or moduleName == "ClassHud" or moduleName == "MobileShell" or moduleName == "ActionBar" then
+			if
+				moduleName == "MenuHub"
+				or moduleName == "ClassHud"
+				or moduleName == "MobileShell"
+				or moduleName == "ActionBar"
+				or moduleName == "HudShell"
+				or moduleName == "StarterGoalHud"
+			then
 				return loadClient(moduleName)
 			end
 			return require(SHARED .. moduleName)

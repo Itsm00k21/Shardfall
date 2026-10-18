@@ -634,6 +634,13 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		task.spawn(watch, character)
 	end)
 
+	local function showDot(id: string, on: boolean)
+		local dot = dots[id]
+		if dot ~= nil then
+			dot.Visible = on
+		end
+	end
+
 	return {
 		setProfile = function(profile: any)
 			local level = if type(profile) == "table" and type(profile.level) == "number"
@@ -674,7 +681,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				xpText.Text = "XP  Max"
 				xpFill.Size = UDim2.fromScale(1, 1)
 			end
-			dots.Hero.Visible = classDef == nil
+			showDot("Hero", classDef == nil)
 			local heroButton = rail:FindFirstChild("Hero")
 			if heroButton ~= nil then
 				local tip = heroButton:FindFirstChild("Tip")
@@ -682,12 +689,12 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 					tip.Text = if classDef == nil then "Choose class" else "Hero"
 				end
 			end
-			dots.Bag.Visible = false
-			dots.Roll.Visible = shardCount > 0
-			dots.Pets.Visible = type(profile) == "table" and (profile.eggs or 0) > 0
-			dots.Market.Visible = false
-			dots.Pass.Visible = type(profile) == "table" and profile.dailyBossReady == true
-			dots.Settings.Visible = false
+			showDot("Bag", false)
+			showDot("Roll", shardCount > 0)
+			showDot("Pets", type(profile) == "table" and (profile.eggs or 0) > 0)
+			showDot("Market", false)
+			showDot("Pass", type(profile) == "table" and profile.dailyBossReady == true)
+			showDot("Settings", false)
 			local settings = if type(profile) == "table" then profile.uiSettings else nil
 			local scale = 1
 			local hidden = false
