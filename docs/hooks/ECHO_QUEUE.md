@@ -22,9 +22,9 @@ While MenuHub is open, D-pad and the left stick (`Thumbstick1`, one step per dea
 
 Follow-up approved in issue #15 comment 6245616667. Ghost is listing it. No new id. Default yes on both: clear `hubState.restColor` keys in `hubFn.clear`, and unparent `PadRing` before `Destroy` when its row is in the cleared subtree.
 
-## E-003 — in progress
+## E-003 — done
 
-Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-script-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/237. 10 steps max. Each step says what you should see. Feel and looks only. Synced onto `bf4ed20` (#236): T-222, T-223, T-224, and T-226 are finished behavior. T-227 stays waiting.
+Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-script-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/237. 10 steps max. Each step says what you should see. Feel and looks only. Checked against `3b65804`. T-222, T-223, T-224, T-226, and T-227 are finished behavior. A new profile shows 10 shards. The settings rail caption reads Gear. The Gold shop lists a Healing Tonic and a bag slot. A pet slot is not for sale.
 
 ## Next
 
