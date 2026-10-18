@@ -24,7 +24,7 @@ Follow-up approved in issue #15 comment 6245616667. Ghost is listing it. No new 
 
 ## E-003 — in progress
 
-Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-script-9721`. 10 steps max. Each step says what you should see. Feel and looks only.
+Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-script-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/237. 10 steps max. Each step says what you should see. Feel and looks only. Synced onto `bf4ed20` (#236): T-222, T-223, T-224, and T-226 are finished behavior. T-227 stays waiting.
 
 ## Next
 

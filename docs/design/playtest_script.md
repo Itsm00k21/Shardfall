@@ -46,11 +46,9 @@ The name and the rarity color are readable. You can tell what you picked up. The
 
 ### 5. First crack
 
-Waiting on T-222, T-224, and T-226.
-
 You open Roll from the rail. From the moment you could move, this first result should land inside about a minute.
 
-The panel is readable: a crack button, a shard count, a pity line, and odds lines in one clear format. You crack once. The shard shakes, a crack spreads, then the result bursts in and the name is readable. If reduced motion is on, that reveal stays short. A tap during the motion skips to the result and does not spend a second shard.
+The panel is readable: a crack button, a shard count, a pity line, and odds lines in one clear format. You crack once. The shard shakes, a crack spreads, then the result bursts in and the name is readable. Rare and above hold longer before that burst. If reduced motion is on, that reveal stays short. A tap during the motion skips to the result and does not spend a second shard.
 
 The Roll panel stays open. You crack two more times. It stays open the whole time. A tap on the dark backdrop from the same press that cracked does not close it. A later tap on the backdrop still closes it.
 
@@ -59,8 +57,6 @@ The pity line stays readable on a phone and on PC. It reads Pity and a count, si
 After each crack, the shard number on the panel is the same number as the Shards counter on the HUD.
 
 ### 6. Controller hub
-
-Waiting on T-222 for the panel staying open after a pad crack.
 
 You open the hub with a controller.
 
