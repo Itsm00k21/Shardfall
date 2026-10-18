@@ -6,6 +6,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Progression = require("../src/ReplicatedStorage/Shared/Progression")
+local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local SessionRecap =
 	require("../src/StarterPlayer/StarterPlayerScripts/ShardfallClient/SessionRecap")
 
@@ -22,6 +23,21 @@ describe("Progression", function()
 		expect(data.chests.Rare).toEqual(1)
 		Progression.addXp(data, 5000)
 		expect(data.level).toEqual(20)
+	end)
+
+	it("levels a bar that is exactly full and leaves one point short", function()
+		local need = Progression.xpToNext(2)
+		local full = { level = 2, xp = need, chests = {} }
+		expect(Progression.settle(full)).toEqual(1)
+		expect(full.level).toEqual(3)
+		expect(full.xp).toEqual(0)
+		local short = { level = 2, xp = need - 1, chests = {} }
+		expect(Progression.settle(short)).toEqual(0)
+		expect(short.level).toEqual(2)
+		expect(short.xp).toEqual(need - 1)
+		local loaded = Schema.reconcile({ level = 2, xp = need })
+		expect(loaded.level).toEqual(3)
+		expect(loaded.xp).toEqual(0)
 	end)
 
 	it("keeps mastery at 0 through the beta cap", function()

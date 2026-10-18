@@ -177,6 +177,55 @@ describe("StarterGoalPay", function()
 		expect(data.shardKeys).toEqual(50)
 	end)
 
+	it("pays a visible goal that is already at its count and leaves it off the tracker", function()
+		local data = Schema.template()
+		data.shardRolls = 10
+		expect(StarterGoalPay.collect(data)).toEqual(10)
+		expect(data.shardKeys).toEqual(10)
+		expect(data.starterGoals.granted.rolls).toEqual(true)
+		local tracker = StarterGoalPay.tracker(data)
+		local listed = false
+		for _, goal in ipairs(tracker.goals) do
+			if goal.id == "rolls" then
+				listed = true
+			end
+		end
+		expect(listed).toEqual(false)
+		expect(StarterGoalPay.collect(data)).toEqual(0)
+		expect(data.shardKeys).toEqual(10)
+	end)
+
+	it("does not pay a hidden goal or a returning player", function()
+		local hidden = Schema.template()
+		hidden.level = 5
+		expect(StarterGoalPay.collect(hidden)).toEqual(0)
+		expect(hidden.starterGoals.granted.level).toEqual(false)
+		expect(hidden.shardKeys).toEqual(0)
+
+		local back = Schema.template()
+		back.shardRolls = 10
+		back.starterGoals.returning = true
+		expect(StarterGoalPay.collect(back)).toEqual(0)
+		expect(back.shardKeys).toEqual(0)
+		expect(back.starterGoals.granted.rolls).toEqual(false)
+	end)
+
+	it("pays the goal that becomes visible once the one in front clears", function()
+		local data = Schema.template()
+		data.level = 5
+		data.shardRolls = 10
+		data.starterGoals.crafts = 1
+		data.starterGoals.rootvaultClears = 1
+		expect(StarterGoalPay.collect(data)).toEqual(40)
+		expect(data.starterGoals.granted.forge).toEqual(true)
+		expect(data.starterGoals.granted.rootvault).toEqual(true)
+		expect(data.starterGoals.granted.rolls).toEqual(true)
+		expect(data.starterGoals.granted.level).toEqual(true)
+		expect(data.starterGoals.granted.guild).toEqual(false)
+		expect(StarterGoalPay.collect(data)).toEqual(0)
+		expect(data.shardKeys).toEqual(40)
+	end)
+
 	it("keeps show rows on the snapshot and leaves the pure module shape alone", function()
 		local data = Schema.template()
 		data.level = 5
@@ -235,6 +284,12 @@ describe("StarterGoalPay wires", function()
 			local rollAt = string.find(roll, "data.shardRolls = math.min", 1, true)
 			local grantAt = string.find(roll, 'StarterGoalPay.grant(data, "rolls", nil)', 1, true)
 			expect(rollAt ~= nil and grantAt ~= nil and (rollAt :: number) < (grantAt :: number)).toBeTrue()
+			expect(string.find(roll, "starterGoalTracker = captured.tracker", 1, true) ~= nil).toBeTrue()
+			expect(string.find(roll, "starterGoalTracker = tracker", 1, true) ~= nil).toBeTrue()
+			local client =
+				fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau")
+			expect(string.find(client, "result.starterGoalTracker", 1, true) ~= nil).toBeTrue()
+			expect(string.find(client, "presentStarterGoals(latestProfile)", 1, true) ~= nil).toBeTrue()
 
 			local dungeon =
 				fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")

@@ -59,22 +59,22 @@ function Progression.boost(extra: { number }): number
 	return 1 + sum
 end
 
-function Progression.addXp(data: any, amount: number): number
+-- Levels while xp is at the bar, including a saved full bar with no new gain.
+function Progression.settle(data: any): number
 	if type(data) ~= "table" then
 		return 0
 	end
-	local gain = math.max(0, math.floor(amount))
-	local extras = {}
-	if (data.restCharges or 0) > 0 then
-		table.insert(extras, 1)
-		data.restCharges = math.max(0, data.restCharges - 1)
+	if type(data.level) ~= "number" or data.level ~= data.level then
+		data.level = 1
 	end
-	if (data.welcomeCharges or 0) > 0 then
-		table.insert(extras, 1)
-		data.welcomeCharges = math.max(0, data.welcomeCharges - 1)
+	data.level = math.floor(data.level)
+	if data.level < 1 then
+		data.level = 1
 	end
-	gain = math.floor(gain * Progression.boost(extras) + 0.5)
-	data.xp = (data.xp or 0) + gain
+	if type(data.xp) ~= "number" or data.xp ~= data.xp or data.xp < 0 then
+		data.xp = 0
+	end
+	data.xp = math.floor(data.xp)
 	local levels = 0
 	while data.level < Progression.CAP do
 		local need = Progression.xpToNext(data.level)
@@ -97,6 +97,25 @@ function Progression.addXp(data: any, amount: number): number
 		data.xp = 0
 	end
 	return levels
+end
+
+function Progression.addXp(data: any, amount: number): number
+	if type(data) ~= "table" then
+		return 0
+	end
+	local gain = math.max(0, math.floor(amount))
+	local extras = {}
+	if (data.restCharges or 0) > 0 then
+		table.insert(extras, 1)
+		data.restCharges = math.max(0, data.restCharges - 1)
+	end
+	if (data.welcomeCharges or 0) > 0 then
+		table.insert(extras, 1)
+		data.welcomeCharges = math.max(0, data.welcomeCharges - 1)
+	end
+	gain = math.floor(gain * Progression.boost(extras) + 0.5)
+	data.xp = (data.xp or 0) + gain
+	return Progression.settle(data)
 end
 
 function Progression.applyReturn(data: any, now: number)

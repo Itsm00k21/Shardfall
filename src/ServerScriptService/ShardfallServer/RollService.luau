@@ -258,6 +258,7 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 			rollIndex = data.shardRolls,
 			sinceEpic = data.sinceEpic,
 			sinceLegendary = data.sinceLegendary,
+			tracker = StarterGoalPay.tracker(data),
 		}
 		return nil
 	end)
@@ -295,6 +296,7 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 			shardRolls = captured.rollIndex,
 		},
 		currency = currency,
+		starterGoalTracker = captured.tracker,
 	}
 end
 
@@ -317,6 +319,7 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 	local items = {}
 	local stopped: string? = nil
 	local lastPity: any = nil
+	local tracker: any = nil
 	for _ = 1, total do
 		local result = crack(player, poolId, Currencies.SHARD, false, true)
 		if type(result) ~= "table" or result.ok ~= true then
@@ -337,6 +340,7 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 			pity = result.pity,
 		})
 		lastPity = result.pity
+		tracker = result.starterGoalTracker
 	end
 	return {
 		ok = true,
@@ -345,6 +349,7 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 		pity = lastPity,
 		stopped = stopped,
 		currency = Currencies.SHARD,
+		starterGoalTracker = tracker,
 	}
 end
 
