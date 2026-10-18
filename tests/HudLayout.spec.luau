@@ -83,6 +83,17 @@ describe("Hud layout", function()
 		end
 	end)
 
+	it("leads with bag cards when Equip would sit past the list", function()
+		local cellH = 228
+		local centre = HudLayout.bagCard(cellH, cellH).equip.y + UiTheme.TOUCH / 2
+		local chrome = HudLayout.bagChromeAboveCards()
+		expect(HudLayout.bagCardsLead(240, cellH)).toBeTrue()
+		expect(HudLayout.bagCardsLead(232, cellH)).toBeTrue()
+		expect(HudLayout.bagCardsLead(560, cellH)).toBeFalse()
+		expect(UiTheme.PAD + centre <= 232).toBeTrue()
+		expect(chrome + centre > 240).toBeTrue()
+	end)
+
 	it("keeps the rail off the portrait at height 380 and 390", function()
 		local margin = 16
 		local face = HudLayout.portrait(margin)

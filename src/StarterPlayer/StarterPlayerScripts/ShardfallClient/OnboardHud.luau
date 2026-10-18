@@ -27,7 +27,9 @@ function OnboardHud.start(invoke: (string, ...any) -> any)
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallOnboard"
 	screen.ResetOnSpawn = false
-	screen.DisplayOrder = 20
+	-- Above the hub (80), the rail (85), and the equip prompt (90).
+	-- The banner stays at 100. A new player can still press Skip.
+	screen.DisplayOrder = 95
 	screen.Parent = player:WaitForChild("PlayerGui")
 	MobileShell.mount(screen)
 

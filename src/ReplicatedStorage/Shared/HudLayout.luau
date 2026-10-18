@@ -453,6 +453,25 @@ function HudLayout.bagCard(cellW: number, cellH: number): BagCard
 	}
 end
 
+-- Pills, the action row, and the gaps that sit above the bag cards.
+function HudLayout.bagChromeAboveCards(): number
+	local action = UiTheme.PAD + UiTheme.TOUCH + UiTheme.PAD
+	return UiTheme.PAD + UiTheme.TOUCH + UiTheme.GAP + action + UiTheme.GAP
+end
+
+-- True when pills and the action row would push Equip's centre past the list.
+function HudLayout.bagCardsLead(listHeight: number, cellH: number): boolean
+	if type(listHeight) ~= "number" or listHeight ~= listHeight or listHeight <= 0 then
+		return false
+	end
+	if type(cellH) ~= "number" or cellH ~= cellH or cellH <= 0 then
+		return false
+	end
+	local card = HudLayout.bagCard(math.max(44, cellH), cellH)
+	local centre = card.equip.y + card.equip.h / 2
+	return HudLayout.bagChromeAboveCards() + centre > listHeight
+end
+
 export type InventoryCard = {
 	name: Rect,
 	marks: Rect,
