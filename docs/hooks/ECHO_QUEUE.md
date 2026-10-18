@@ -2,7 +2,7 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo's row in progress is E-009, then E-010. Do not queue new features. The phone layout recheck is E-010.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). E-009 is done. E-010 is in review. Do not queue new features. The phone layout recheck is E-010.
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-007 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
@@ -66,9 +66,9 @@ M1 economy invariants. Tests only. Branch `helper/economy-invariants-9721`. PR h
 
 Assigned in PR #269 comment 6246758342.
 
-## E-009 — in progress
+## E-009 — done
 
-M1 remote fuzz. Tests only. Branch `helper/remote-fuzz-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/285 into `cursor/live-build-9721`. Out of `src/`, `TASKS.md`, `ops/`, and `tests/GuiFake.luau`. Do not start E-010 until this PR is up.
+M1 remote fuzz. Tests only. Branch `helper/remote-fuzz-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/285 into `cursor/live-build-9721`. Merged at `0474f65`. Out of `src/`, `TASKS.md`, `ops/`, and `tests/GuiFake.luau`.
 
 `tests/RemoteFuzz.spec.luau` fuzzes every RemoteFunction bound in `src/ServerScriptService/ShardfallServer/Remotes.luau` that is not a key of `PARKED_ACTION`. RemoteEvents (Attack, Dodge, Steer) are skipped. Parked names are skipped: Salvage, BulkSalvage, FusePet, Trade, Market, ClaimPass, PremiumPass, StartDailyBoss, RaidQueue, RaidPost, RaidJoin, RaidPractice, RaidBuy, RaidLeave, RaidReady, BuyTravelPass, BuyDustShard, SetChestOptions, BuyChestBundle, BuyForgeBoost, BuyBoost, BuyPrism, RollPaid, BuyInventoryExpansion.
 
@@ -76,13 +76,22 @@ Each call tries nil, a wrong type, an empty string, a negative, NaN, `math.huge`
 
 Pending, and not in the committed run: SetAudio accepts a negative and writes `Audio.clampVolume`, which stores 0. `src/ServerScriptService/ShardfallServer/Remotes.luau:444` and `src/ReplicatedStorage/Shared/Audio.luau:41`. No `src/` edit. Schema stays 26. No kill-switch change. No build stamp. Product ids stay 0.
 
-## E-010 — after E-009
+## E-010 — in review
 
-Phone layout recheck. After E-009. On the current tip, walk `docs/design/playtest_script.md` at 390×844 and 844×390. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Do not edit the playtest script. The PR reports pass or fail for each step. Feel and looks. Schema stays 26. No kill-switch change. Product ids stay 0.
+Phone layout recheck. Branch `helper/phone-recheck-9721`, cut from tip `0a6253b`. PR https://github.com/Itsm00k21/Shardfall/pull/291 into `cursor/live-build-9721`. Report `docs/hooks/E-010-phone-recheck.md`. `tests/PhoneRecheck.spec.luau` locks the checks that pass. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
+
+Walked `docs/design/playtest_script.md` at 390×844 and 844×390. Portrait: pass 7, fail 2, manual 2. Landscape: pass 6, fail 3, manual 2. Step 8 fails only in landscape.
+
+Pending, not fixed:
+
+- Portrait hub body under the rail. `MenuHub.luau:902`, `HudLayout.luau:214`, `HudLayout.luau:358`.
+- Bag tip clamped to x=8, under the rail at both sizes. `BagBoard.luau:266`, `BagBoard.luau:272`, called from `MenuHub.luau:2312`.
+- Landscape rail leaves the 16px inset. `HudLayout.luau:352`.
+- Landscape Forge sheet under the rail at every scroll position. `ShellLayout.luau:252`, `Ui.luau:380`.
 
 ## Next
 
-E-009 is in progress. E-010 waits until that PR is up.
+Ghost reviews E-010. The four overlaps stay pending. Do not queue a new row.
 
 ## PAUSED
 
