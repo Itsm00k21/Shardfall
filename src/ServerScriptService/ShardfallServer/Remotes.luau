@@ -117,12 +117,14 @@ end
 
 -- Remote action name to the launch switch that keeps it closed.
 local PARKED_ACTION: { [string]: string } = {
+	Salvage = "forgeSalvage",
 	BulkSalvage = "forgeSalvage",
 	FusePet = "petEvolution",
 	Trade = "trading",
 	Market = "market",
 	ClaimPass = "pass",
 	PremiumPass = "pass",
+	StartDailyBoss = "pass",
 	RaidQueue = "raids",
 	RaidPost = "raids",
 	RaidJoin = "raids",
@@ -131,6 +133,7 @@ local PARKED_ACTION: { [string]: string } = {
 	RaidLeave = "raids",
 	RaidReady = "raids",
 	BuyTravelPass = "extraRealms",
+	BuyDustShard = "extraCurrencies",
 }
 
 local function guard(player: Player, action: string, callback: () -> any)

@@ -4390,7 +4390,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if type(item.uid) == "string" then
 			hubState.revealEquip:SetAttribute("Uid", item.uid)
 		end
-		if junk == "salvage" and type(item.uid) == "string" then
+		if junk == "salvage" and LaunchGate.on("forgeSalvage") and type(item.uid) == "string" then
 			task.spawn(function()
 				pcall(hooks.invoke, "Salvage", item.uid)
 			end)
@@ -5201,7 +5201,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		)
 		cycle("Junk  " .. hubState.draft.rolls.autoJunk, 13, function()
-			local order = { "ask", "keep", "salvage" }
+			local order = { "ask", "keep" }
+			if LaunchGate.on("forgeSalvage") then
+				table.insert(order, "salvage")
+			end
 			local nextId = order[1]
 			for index, id in ipairs(order) do
 				if id == hubState.draft.rolls.autoJunk then

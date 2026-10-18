@@ -516,8 +516,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local dust = if type(profile.shardDust) == "number" then profile.shardDust else 0
 		label(detail, string.format("Shard Keys  %d", keys), order, COLORS.gold, 14)
 		order += 1
-		label(detail, string.format("Shard Dust  %d", dust), order, COLORS.gold, 14)
-		order += 1
+		if LaunchGate.on("extraCurrencies") then
+			label(detail, string.format("Shard Dust  %d", dust), order, COLORS.gold, 14)
+			order += 1
+		end
 		label(detail, ChestConfig.pityLine(profile), order, COLORS.muted, 13)
 		order += 1
 		local streak = if type(profile.loginStreak) == "number" then profile.loginStreak else 0
@@ -578,24 +580,26 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				callbacks.onChestOptions(mode, steps[(index % #steps) + 1])
 			end)
 		end
-		label(detail, "Dust shop", order, COLORS.muted, 13)
-		order += 1
-		if callbacks.onBuyDust ~= nil then
-			for _, row in ipairs(ChestConfig.dustCatalog(profile)) do
-				local buy = actionButton(
-					detail,
-					string.format("%s  ·  %d dust", tostring(row.name), row.cost),
-					order,
-					COLORS.buttonDim,
-					60
-				)
-				order += 1
-				local templateId = row.templateId
-				buy.MouseButton1Click:Connect(function()
-					if callbacks.onBuyDust ~= nil and type(templateId) == "string" then
-						callbacks.onBuyDust(templateId)
-					end
-				end)
+		if LaunchGate.on("extraCurrencies") then
+			label(detail, "Dust shop", order, COLORS.muted, 13)
+			order += 1
+			if callbacks.onBuyDust ~= nil then
+				for _, row in ipairs(ChestConfig.dustCatalog(profile)) do
+					local buy = actionButton(
+						detail,
+						string.format("%s  ·  %d dust", tostring(row.name), row.cost),
+						order,
+						COLORS.buttonDim,
+						60
+					)
+					order += 1
+					local templateId = row.templateId
+					buy.MouseButton1Click:Connect(function()
+						if callbacks.onBuyDust ~= nil and type(templateId) == "string" then
+							callbacks.onBuyDust(templateId)
+						end
+					end)
+				end
 			end
 		end
 		label(detail, "Paid bundle. Odds are listed before any purchase.", order, COLORS.muted, 13)

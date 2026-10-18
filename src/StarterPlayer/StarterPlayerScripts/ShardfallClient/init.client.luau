@@ -1358,7 +1358,7 @@ HavenClient.start({
 		closePanels("menu")
 		menuHub.open(tab)
 		if kind == "market" then
-			ui.setStatus("Gold shop. Potions, a bag slot, and a pet slot.", "info")
+			ui.setStatus("Gold shop. A Healing Tonic and a bag slot.", "info")
 		elseif areaId == "pets" then
 			ui.setStatus("Pet Garden. Companions.", "info")
 		else
