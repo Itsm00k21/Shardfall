@@ -42,6 +42,7 @@ local PetRoster = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild(
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local Rarities = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarities"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
+local RollBatch = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBatch"))
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
 local RollFocus = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollFocus"))
 local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollHype"))
@@ -1028,6 +1029,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.crackLine.ZIndex = 9
 	hubState.crackLine.Parent = hubState.shardStone
 	hubFn.restShard = function()
+		hubState.shardStone.Visible = true
 		hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
 		hubState.shardStone.BackgroundColor3 = hubState.stoneRest
 		hubState.crackLine.BackgroundColor3 = hubState.crackRest
@@ -1159,6 +1161,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 = rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
 		local wide = caption ~= "Roll" and caption ~= "Miss"
+		hubState.shardStone.Visible = not wide
 		hubFn.placeReelWindows(wide)
 		hubFn.paintWindow(hubState.reelLeft, "—", "Common", false)
 		hubFn.paintWindow(hubState.reelCenter, caption, "Common", false)
@@ -2513,6 +2516,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				return
 			end
 			if id == "TimesTen" then
+				local why = RollBatch.block(hubFn.tokenCount(), 10)
+				if why ~= nil then
+					hubFn.hideCloseBeat()
+					hubFn.paintReelIdle(why)
+					hubFn.showMilestone(why)
+					return
+				end
 				if hubState.rollBusy then
 					return
 				end
