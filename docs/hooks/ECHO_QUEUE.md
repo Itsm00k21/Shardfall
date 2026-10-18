@@ -22,9 +22,9 @@ Controller nav. D-pad and stick move through every MenuHub tab and button with a
 
 Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. 10 steps max. Each step says what you should see. Feel and looks only.
 
-## After E-003
+## Next
 
-Only core-loop polish on systems `docs/design/LAUNCH_PLAN.md` keeps: spawn to first loot under 60s, readability, and phone feel. That is the M5 first-60-seconds playtest, plus the M2 plaza restyle where it is still open.
+After E-001, E-002, and E-003, queue only M2 and M5 core-loop polish from `docs/design/LAUNCH_PLAN.md`. That is the first-run flow (spawn, plaza, first dungeon, first loot, first crack in under 60 seconds), readability, and phone feel. Do not add new ids for that polish.
 
 ## PAUSED
 

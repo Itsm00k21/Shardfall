@@ -2289,10 +2289,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		shown = picked
-		local pills = Instance.new("Frame")
+		local pills = Instance.new("ScrollingFrame")
 		pills.Name = "Pills"
 		pills.BackgroundTransparency = 1
 		pills.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		pills.BorderSizePixel = 0
+		pills.ScrollBarThickness = 4
+		pills.ScrollingEnabled = true
+		pills.AutomaticCanvasSize = Enum.AutomaticSize.X
+		pills.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
+		pills.ScrollingDirection = Enum.ScrollingDirection.X
+		pills.ClipsDescendants = true
 		pills.LayoutOrder = 0
 		pills.Parent = hubState.bag
 		local pillLayout = Instance.new("UIListLayout")
@@ -2302,7 +2309,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		for index, pill in ipairs(HubStyle.pills()) do
 			local button = Instance.new("TextButton")
 			button.Name = pill.id
-			button.Size = UDim2.new(0.2, -6, 1, 0)
+			button.Size = UDim2.fromOffset(HudLayout.chipWidth(pill.label), UiTheme.TOUCH)
 			local tone = if hubState.bagPill == pill.id then HubStyle.chipTone(index) else "header"
 			button.BackgroundColor3 = rgb(tone)
 			button.Font = headerFont()
@@ -2443,10 +2450,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.itemCard(host, item, index, "item")
 			end
 		end
-		local loadout = Instance.new("Frame")
+		local vx, vy = hubFn.view()
+		local hubBox = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+		local hubInner = HudLayout.hubBody(hubBox.w, hubBox.h)
+		local slotGap = 4
+		local slotBudget = hubInner.w - slotGap * (ActionSlots.COUNT - 1)
+		local slotW = math.floor(slotBudget / ActionSlots.COUNT)
+		if slotW < UiTheme.TOUCH then
+			slotW = UiTheme.TOUCH
+		end
+		local loadout = Instance.new("ScrollingFrame")
 		loadout.Name = "Loadout"
 		loadout.BackgroundColor3 = rgb("header")
 		loadout.BorderSizePixel = 0
+		loadout.ScrollBarThickness = 4
+		loadout.ScrollingEnabled = true
+		loadout.AutomaticCanvasSize = Enum.AutomaticSize.X
+		loadout.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
+		loadout.ScrollingDirection = Enum.ScrollingDirection.X
+		loadout.ClipsDescendants = true
 		loadout.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
 		loadout.LayoutOrder = 12
 		loadout.Parent = hubState.bag
@@ -2455,13 +2477,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		loadoutCorner.Parent = loadout
 		local loadoutLayout = Instance.new("UIListLayout")
 		loadoutLayout.FillDirection = Enum.FillDirection.Horizontal
-		loadoutLayout.Padding = UDim.new(0, 4)
+		loadoutLayout.Padding = UDim.new(0, slotGap)
 		loadoutLayout.Parent = loadout
 		local face = ActionSlots.face()
 		for index = 1, ActionSlots.COUNT do
 			local slotButton = Instance.new("TextButton")
 			slotButton.Name = "Slot" .. tostring(index)
-			slotButton.Size = UDim2.new(1 / ActionSlots.COUNT, -4, 1, 0)
+			slotButton.Size = UDim2.fromOffset(slotW, UiTheme.TOUCH)
 			slotButton.BackgroundColor3 = Color3.fromRGB(face.fill[1], face.fill[2], face.fill[3])
 			slotButton.Font = headerFont()
 			slotButton.TextSize = UiTheme.MIN_TEXT
