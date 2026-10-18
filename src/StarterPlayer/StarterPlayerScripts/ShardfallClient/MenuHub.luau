@@ -347,6 +347,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.bagFilter = BagBoard.defaultFilter()
 	hubState.bagPill = "All"
 	hubState.seen = NotifyBadges.blank()
+	hubState.kept = {}
 	hubState.salvageRarity = "Rare"
 	hubState.salvageArmed = false
 	hubState.stopAt = "Off"
@@ -547,7 +548,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if button ~= nil and button:IsA("GuiButton") then
 				if hubState.padPress[button] == nil then
 					hubState.padPress[button] = function()
-						hubFn.paint()
 						hubFn.follow(UiRouter.switch(hubState.route, tabId))
 					end
 				end
@@ -1789,6 +1789,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		for pageId, frame in pairs(hubState.pages) do
 			frame.Visible = pageId == id
 		end
+		-- The page is visible before any rebuild, on the same frame as the tap.
+		hubFn.ensure(id)
 		local label = id
 		for _, tab in ipairs(ClientChrome.TABS) do
 			if tab.id == id then
@@ -1815,7 +1817,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if hubState.shownId ~= "" and hubState.shownId ~= id then
 			hubFn.playUi("tab")
-			local length = UiMotion.panel(UiMotion.reduced(hubState.draft))
+			local length = hubFn.panelMotion()
 			if length <= 0 then
 				hubState.tabScale.Scale = 1
 			else
@@ -2886,6 +2888,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hooks.onClassSheet()
 			end
 		end)
+		hubFn.hold("hero")
 	end
 
 	function hubFn.cardHost(
@@ -3216,6 +3219,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		else
 			hubFn.paintWorn()
 		end
+		hubFn.hold("bag")
 	end
 
 	function hubFn.paintPets()
@@ -3383,6 +3387,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			label.Size = UDim2.new(1, 0, 0, fitted.h)
 			label.ClipsDescendants = true
 		end
+		hubFn.hold("pets")
 	end
 
 	function hubFn.rollPoolId(): string
@@ -4277,6 +4282,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.fitRoll()
 		hubFn.applyTextScale()
 		hubFn.paintCrackButton()
+		hubFn.hold("roll")
 	end
 
 	function hubFn.applyControl(id: string)
@@ -5177,15 +5183,148 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 			)
 		end
+		hubFn.hold("shop")
 	end
 
-	function hubFn.paint()
-		hubFn.paintHints()
-		hubFn.paintHero()
-		hubFn.paintBag()
-		hubFn.paintPets()
-		hubFn.paintRoll()
-		hubFn.paintShop()
+	function hubFn.flat(value: any, depth: number, sink: { string }, seen: { [any]: boolean })
+		if type(value) ~= "table" then
+			table.insert(sink, tostring(value))
+			return
+		end
+		if depth > 5 or seen[value] == true then
+			table.insert(sink, ".")
+			return
+		end
+		seen[value] = true
+		local keys = {}
+		for key in pairs(value) do
+			if type(key) == "string" or type(key) == "number" then
+				table.insert(keys, key)
+			end
+		end
+		table.sort(keys, function(left, right)
+			return tostring(left) < tostring(right)
+		end)
+		for _, key in ipairs(keys) do
+			table.insert(sink, tostring(key))
+			hubFn.flat(value[key], depth + 1, sink, seen)
+		end
+	end
+
+	function hubFn.joined(value: any): string
+		local sink = {}
+		local seen: { [any]: boolean } = {}
+		hubFn.flat(value, 0, sink, seen)
+		return table.concat(sink, "\1")
+	end
+
+	function hubFn.profileSlice(): any
+		local profile = hubState.profile
+		if type(profile) ~= "table" then
+			return nil
+		end
+		return {
+			level = profile.level,
+			xp = profile.xp,
+			classId = profile.classId,
+			classXp = profile.classXp,
+			gold = profile.gold,
+			shardTokens = profile.shardTokens,
+			shardRolls = profile.shardRolls,
+			sinceEpic = profile.sinceEpic,
+			sinceLegendary = profile.sinceLegendary,
+			ascension = profile.ascension,
+			inventory = profile.inventory,
+			pets = profile.pets,
+			companions = profile.companions,
+			equipped = profile.equipped,
+			consumables = profile.consumables,
+			materials = profile.materials,
+			raidMarks = profile.raidMarks,
+			passTier = profile.passTier,
+		}
+	end
+
+	function hubFn.viewKey(id: string): string
+		local page = if id == "sets" then "bag" else id
+		local vx, vy = hubFn.view()
+		local access = hubState.draft.access
+		local textScale = if type(access) == "table" then access.textScale else 1
+		local extra: { [string]: any } = {
+			page = page,
+			text = textScale,
+			vx = vx,
+			vy = vy,
+		}
+		if page == "bag" then
+			extra.filter = hubState.bagFilter
+			extra.pill = hubState.bagPill
+			extra.salvage = hubState.salvageArmed
+			extra.salvageRarity = hubState.salvageRarity
+			extra.detail = hubState.detailOpen
+			extra.uid = hubState.selectedUid
+		elseif page == "pets" then
+			extra.pick = hubState.petPick
+		elseif page == "roll" then
+			local rolls = hubState.draft.rolls
+			extra.kind = hubState.rollKind
+			extra.pending = hubState.pendingCount
+			extra.batch = hubState.batching
+			extra.quick = hubState.quickOn
+			extra.stop = hubState.stopAt
+			extra.info = hubState.infoOpen
+			extra.junk = if type(rolls) == "table" then rolls.autoJunk else nil
+			extra.below = if type(rolls) == "table" then rolls.junkBelow else nil
+			extra.anim = if type(rolls) == "table" then rolls.animation else nil
+			extra.epic = hubState.serverEpic
+			extra.since = hubState.serverSince
+			extra.rolls = if type(hubState.hype) == "table" then hubState.hype.rolls else 0
+			extra.streak = if type(hubState.hype) == "table" then hubState.hype.streak else 0
+			extra.miss = hubState.lastMissed
+			extra.best = hubState.bestPull
+			extra.phase = if type(hubState.loop) == "table" then hubState.loop.phase else nil
+			extra.tokens = hubState.shownTokens
+			extra.auto = hubState.autoOn
+		elseif page == "shop" then
+			extra.note = hubState.shopNote
+		elseif page == "settings" or page == "raids" or page == "market" or page == "pass" then
+			extra.draft = hubState.draft
+			extra.capturing = hubState.capturing
+			extra.bind = hubState.bindNote
+		end
+		return hubFn.joined(hubFn.profileSlice()) .. "\2" .. hubFn.joined(extra)
+	end
+
+	function hubFn.hold(id: string)
+		hubState.kept[id] = hubFn.viewKey(id)
+	end
+
+	function hubFn.fresh(id: string): boolean
+		local page = if id == "sets" then "bag" else id
+		return hubState.kept[page] == hubFn.viewKey(page)
+	end
+
+	function hubFn.ensure(id: string)
+		local page = if id == "sets" then "bag" else id
+		if hubFn.fresh(page) then
+			return
+		end
+		if page == "hero" then
+			hubFn.paintHero()
+		elseif page == "bag" then
+			hubFn.paintBag()
+		elseif page == "pets" then
+			hubFn.paintPets()
+		elseif page == "roll" then
+			hubFn.paintRoll()
+		elseif page == "shop" then
+			hubFn.paintShop()
+		elseif page == "settings" or page == "raids" or page == "market" or page == "pass" then
+			hubFn.paintSettings()
+		end
+	end
+
+	function hubFn.paintSettings()
 		hubFn.clear(hubState.raids)
 		hubFn.clear(hubState.market)
 		hubFn.clear(hubState.pass)
@@ -5497,7 +5636,29 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 			end)
 		end
+		hubFn.hold("settings")
+		hubFn.hold("raids")
+		hubFn.hold("market")
+		hubFn.hold("pass")
+	end
+
+	function hubFn.paint()
+		hubFn.paintHints()
+		hubFn.paintHero()
+		hubFn.paintBag()
+		hubFn.paintPets()
+		hubFn.paintRoll()
+		hubFn.paintShop()
+		hubFn.paintSettings()
 		hubFn.applyTextScale()
+	end
+
+	function hubFn.panelMotion(): number
+		local length = UiMotion.panel(UiMotion.reduced(hubState.draft))
+		if length > 0.15 then
+			return 0.15
+		end
+		return length
 	end
 
 	function hubFn.playOpenMotion(fromClosed: boolean)
@@ -5510,7 +5671,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		hubFn.playUi("open")
-		local length = UiMotion.panel(UiMotion.reduced(hubState.draft))
+		local length = hubFn.panelMotion()
 		if length <= 0 then
 			hubState.openScale.Scale = 1
 			return
@@ -5585,16 +5746,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.open(id: string)
-		hubFn.paint()
 		hubFn.follow(UiRouter.open(hubState.route, id))
 	end
 
 	function hubFn.toggle(id: string)
-		local nextState = UiRouter.toggle(hubState.route, id)
-		if nextState.open then
-			hubFn.paint()
-		end
-		hubFn.follow(nextState)
+		hubFn.follow(UiRouter.toggle(hubState.route, id))
 	end
 
 	for index, tab in ipairs(ClientChrome.TABS) do
@@ -5636,7 +5792,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.motion(button)
 		local tabId = tab.id
 		hubFn.bindActivated(button, function()
-			hubFn.paint()
 			hubFn.follow(UiRouter.switch(hubState.route, tabId))
 		end)
 		local dot = Instance.new("Frame")
@@ -5695,7 +5850,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.setRest(button, rgb("body"))
 		hubFn.motion(button)
 		hubFn.bindActivated(button, function()
-			hubFn.paint()
 			hubFn.follow(UiRouter.switch(hubState.route, "shop"))
 		end)
 		local dot = Instance.new("Frame")
@@ -5829,9 +5983,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		local nextState = UiRouter.key(hubState.route, input.KeyCode.Name, hubState.draft.controls.hotkeys)
-		if nextState.open then
-			hubFn.paint()
-		end
 		hubFn.follow(nextState)
 	end)
 
