@@ -3000,7 +3000,7 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build 5c1277e+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build 6cedebc+ spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)
