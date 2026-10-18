@@ -214,9 +214,19 @@ function HavenClient.start(callbacks: Callbacks)
 		open(action, prompt.ObjectText, prompt:GetAttribute("HavenMessage"))
 	end)
 
-	local remotes = ReplicatedStorage:WaitForChild("Remotes")
-	local remote = remotes:WaitForChild("HavenPrompt")
-	if remote:IsA("RemoteEvent") then
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if remotes == nil then
+		remotes = ReplicatedStorage:WaitForChild("Remotes", 15)
+	end
+	if remotes == nil then
+		warn("[Shardfall] Remotes are not available")
+		return
+	end
+	local remote = remotes:FindFirstChild("HavenPrompt")
+	if remote == nil then
+		remote = remotes:WaitForChild("HavenPrompt", 15)
+	end
+	if remote ~= nil and remote:IsA("RemoteEvent") then
 		remote.OnClientEvent:Connect(function(action, message)
 			print("[Shardfall] Server asked the client to open:", action)
 			open(action, nil, message)

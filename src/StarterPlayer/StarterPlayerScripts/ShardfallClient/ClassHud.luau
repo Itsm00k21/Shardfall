@@ -329,7 +329,13 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 	end
 
 	paint = draw
-	remotes:WaitForChild("SetClass")
+	local setClass = remotes:FindFirstChild("SetClass")
+	if setClass == nil then
+		setClass = remotes:WaitForChild("SetClass", 15)
+	end
+	if setClass == nil then
+		warn("[Shardfall] SetClass remote is not available")
+	end
 	paint()
 end
 

@@ -230,8 +230,22 @@ function RaidHud.start(invoke: (string, ...any) -> any)
 		show(invoke("RaidReady"))
 	end)
 
-	local remotes = ReplicatedStorage:WaitForChild("Remotes")
-	local fx = remotes:WaitForChild("CombatFx")
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if remotes == nil then
+		remotes = ReplicatedStorage:WaitForChild("Remotes", 15)
+	end
+	if remotes == nil then
+		warn("[Shardfall] Remotes are not available")
+		return
+	end
+	local fx = remotes:FindFirstChild("CombatFx")
+	if fx == nil then
+		fx = remotes:WaitForChild("CombatFx", 15)
+	end
+	if fx == nil then
+		warn("[Shardfall] CombatFx remote is not available")
+		return
+	end
 	if fx:IsA("RemoteEvent") then
 		fx.OnClientEvent:Connect(function(payload: any)
 			if type(payload) ~= "table" then
