@@ -657,6 +657,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end)
 	-- Shift calls onDodge only. The on-screen chip also notes the flash.
 	dodge.Activated:Connect(function()
+		if callbacks.menuOpen() then
+			return
+		end
 		callbacks.onDodge()
 		local note = callbacks.onDodgeChip
 		if note ~= nil then
@@ -664,9 +667,15 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 	end)
 	heavy.Activated:Connect(function()
+		if callbacks.menuOpen() then
+			return
+		end
 		callbacks.onHeavy()
 	end)
 	attack.Activated:Connect(function()
+		if callbacks.menuOpen() then
+			return
+		end
 		callbacks.onLight()
 	end)
 	jump.Activated:Connect(function()
@@ -765,7 +774,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			heldTip = false
 			return
-		elseif from ~= nil and not heldTip and target == from then
+		elseif from ~= nil and not heldTip and target == from and not callbacks.menuOpen() then
 			useSlot(from)
 		end
 		heldTip = false

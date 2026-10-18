@@ -332,6 +332,64 @@ describe("HubInput", function()
 		end
 	end)
 
+	it("keeps on-screen combat quiet while the hub is open", function()
+		local world = GuiFake.world()
+		local ActionBar = world.load("ActionBar")
+		local calls = {}
+		local open = true
+		local dodges = 0
+		local lights = 0
+		local heavies = 0
+		local bar = ActionBar.start(world.playerGui, {
+			invoke = function(name: string, ...)
+				table.insert(calls, { name, ... })
+				return { ok = true }
+			end,
+			menuOpen = function()
+				return open
+			end,
+			onDodge = function()
+				dodges += 1
+			end,
+			onLight = function()
+				lights += 1
+			end,
+			onHeavy = function()
+				heavies += 1
+			end,
+			onSkill = function() end,
+			onToast = function() end,
+			onResult = function() end,
+			onRoll = function() end,
+			mobile = function()
+				return true
+			end,
+		})
+		bar.setProfile(profile())
+		local screen = GuiFake.findNamed(world.playerGui, "ShardfallActions")
+		local slot = GuiFake.findNamed(screen, "Slot1")
+		slot.AbsolutePosition = world.vector2(0, 200)
+		slot.AbsoluteSize = world.vector2(44, 44)
+		GuiFake.pointerClick(slot, world.userInput)
+		GuiFake.activate(GuiFake.findNamed(screen, "Heavy"))
+		GuiFake.activate(GuiFake.findNamed(screen, "Swing"))
+		GuiFake.activate(GuiFake.findNamed(screen, "Dodge"))
+		expect(#calls).toEqual(0)
+		expect(dodges).toEqual(0)
+		expect(lights).toEqual(0)
+		expect(heavies).toEqual(0)
+		open = false
+		GuiFake.pointerClick(slot, world.userInput)
+		expect(calls[#calls][1]).toEqual("UseActionSlot")
+		expect(calls[#calls][2]).toEqual(1)
+		GuiFake.activate(GuiFake.findNamed(screen, "Heavy"))
+		GuiFake.activate(GuiFake.findNamed(screen, "Swing"))
+		GuiFake.activate(GuiFake.findNamed(screen, "Dodge"))
+		expect(heavies).toEqual(1)
+		expect(lights).toEqual(1)
+		expect(dodges).toEqual(1)
+	end)
+
 	it("paints the roll, bag, and pets mockup structure", function()
 		local world, hub, calls = bootHub()
 		hub.open("roll")
