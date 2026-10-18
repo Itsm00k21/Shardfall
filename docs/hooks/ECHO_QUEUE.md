@@ -28,7 +28,7 @@ Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLA
 
 ## E-004 — in progress
 
-Clear stale `restColor` keys and unparent `PadRing` when MenuHub rebuilds a page. Branch `helper/restcolor-padring-9721`. PR link lands here once the pull request is open.
+Clear stale `restColor` keys and unparent `PadRing` when MenuHub rebuilds a page. Branch `helper/restcolor-padring-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/245 into `cursor/live-build-9721`.
 
 `hubFn.clear` drops `hubState.restColor` keys for the destroyed row and its descendants. It unparents `PadRing` before `Destroy` when that row is in the cleared subtree, so the same stroke can show again on the next gamepad step. Tabs and Close keep their rest colors. Schema stays 26. No new remote. Kill switches stay off.
 
