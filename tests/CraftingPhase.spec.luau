@@ -73,6 +73,20 @@ describe("Crafting phase 1", function()
 		expect(#profile.milestoneTable).toEqual(10)
 	end)
 
+	it("levels a crafting bar that is exactly full", function()
+		local need = CraftingLevel.xpToNext(2)
+		local profile = { craftingLevel = 2, craftingXp = need }
+		expect(CraftingLevel.settle(profile)).toEqual(1)
+		expect(profile.craftingLevel).toEqual(3)
+		expect(profile.craftingXp).toEqual(0)
+		local short = { craftingLevel = 2, craftingXp = need - 1 }
+		expect(CraftingLevel.settle(short)).toEqual(0)
+		expect(short.craftingLevel).toEqual(2)
+		local loaded = Schema.reconcile({ craftingLevel = 2, craftingXp = need })
+		expect(loaded.craftingLevel).toEqual(3)
+		expect(loaded.craftingXp).toEqual(0)
+	end)
+
 	it("doubles crafting XP while a Forge Boost is active", function()
 		local profile = Schema.template()
 		profile.forgeBoostUntil = 500

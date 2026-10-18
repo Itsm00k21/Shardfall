@@ -496,6 +496,7 @@ function Schema.reconcile(data: any): ProfileData
 	data.schemaVersion = Schema.VERSION
 	data.level = wholeNumber(data.level, 1, 1)
 	data.xp = wholeNumber(data.xp, 0, 0)
+	Progression.settle(data)
 	data.ascension = wholeNumber(data.ascension, 0, 0)
 	data.gold = wholeNumber(data.gold, 0, 0)
 	data.shardTokens = wholeNumber(data.shardTokens, Schema.STARTER_TOKENS, 0)
@@ -510,6 +511,7 @@ function Schema.reconcile(data: any): ProfileData
 	if data.craftingLevel >= CraftingLevel.MAX then
 		data.craftingXp = 0
 	end
+	CraftingLevel.settle(data)
 	data.forgeBoostUntil = wholeNumber(data.forgeBoostUntil, 0, 0)
 	data.inventoryBonus = wholeNumber(data.inventoryBonus, 0, 0)
 	if data.inventoryBonus > 500 then
@@ -643,6 +645,10 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.shardKeys = wholeNumber(data.shardKeys, 0, 0)
+	if data.shardKeys > 99999 then
+		data.shardKeys = 99999
+	end
+	StarterGoalPay.collect(data)
 	if data.shardKeys > 99999 then
 		data.shardKeys = 99999
 	end

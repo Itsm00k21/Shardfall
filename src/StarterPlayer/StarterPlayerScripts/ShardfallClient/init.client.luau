@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 945b123+ client` in Output.
+	still leaves `[Shardfall] build b9366a1+ client` in Output.
 ]]
 
-print("[Shardfall] build 945b123+ client")
+print("[Shardfall] build b9366a1+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -453,6 +453,14 @@ local function applyResult(result: any)
 	end
 	if type(result.profile) == "table" then
 		applyProfile(result.profile, result.saving)
+	end
+	if type(result.starterGoalTracker) == "table" then
+		if type(latestProfile) ~= "table" then
+			latestProfile = {}
+		end
+		latestProfile.starterGoalTracker = result.starterGoalTracker
+		local shown = latestProfile
+		presentStarterGoals(shown)
 	end
 	if type(result.policy) == "table" then
 		ui.setPolicy(result.policy)

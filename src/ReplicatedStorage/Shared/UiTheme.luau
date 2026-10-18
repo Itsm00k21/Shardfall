@@ -51,7 +51,6 @@ UiTheme.RARITY_ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
 
 local rgbRows: { [string]: { number } } = {
 	background = { 16, 14, 24 },
-	panel = { 28, 24, 40 },
 	text = { 244, 240, 252 },
 	muted = { 198, 192, 214 },
 	gold = { 255, 206, 96 },
@@ -60,15 +59,22 @@ local rgbRows: { [string]: { number } } = {
 	buttonDim = { 54, 46, 78 },
 	debug = { 72, 52, 36 },
 	ok = { 120, 210, 150 },
-	-- Layered chrome. Panels are a dark body plus a header, not one purple fill.
-	header = { 42, 36, 58 },
-	body = { 18, 16, 28 },
+	-- Layered chrome. Panels are a dark slate body plus a header.
+	-- The numbers are the mockup pass in docs/design/UI_STYLE.md.
+	header = { 42, 48, 60 },
+	body = { 20, 24, 32 },
+	panel = { 32, 36, 46 },
 	shadow = { 0, 0, 0 },
-	divider = { 78, 70, 102 },
+	divider = { 120, 132, 156 },
 	loss = { 220, 92, 96 },
 	hover = { 64, 56, 92 },
 	press = { 36, 30, 54 },
 	accent = { 255, 206, 96 },
+	close = { 176, 48, 58 },
+	equip = { 36, 84, 168 },
+	claim = { 28, 110, 70 },
+	upgrade = { 96, 196, 120 },
+	newDot = { 230, 64, 78 },
 }
 UiTheme.RGB = rgbRows
 
