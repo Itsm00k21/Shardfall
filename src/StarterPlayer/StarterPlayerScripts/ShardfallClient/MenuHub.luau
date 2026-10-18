@@ -45,6 +45,7 @@ local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local RollBatch = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBatch"))
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
 local RollFocus = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollFocus"))
+local HubPress = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HubPress"))
 local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollHype"))
 local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
@@ -2336,7 +2337,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.itemCard(host, item, index, "item")
 			end
 		end
-		hubFn.row(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, nil)
+		hubFn.line(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, rgb("muted"))
 		if hubState.detailOpen and hubState.selectedUid ~= nil then
 			local item = hubFn.findItem(hubState.selectedUid)
 			if item ~= nil then
@@ -2376,7 +2377,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		for index = 1, 3 do
 			local slot = slots[index]
 			local slotName = if type(slot) == "table" then tostring(slot.name or "Pet") else "Empty"
-			hubFn.row(hubState.pets, string.format("Slot %d  %s", index, slotName), index + 1, nil)
+			hubFn.line(hubState.pets, string.format("Slot %d  %s", index, slotName), index + 1, rgb("text"))
 		end
 		hubFn.divider(hubState.pets, 6)
 		local cards = {}
@@ -2394,7 +2395,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			})
 		end
 		if #cards == 0 then
-			hubFn.emptyState(hubState.pets, "pets", "No companions yet.", "Open pets", function() end)
+			hubFn.emptyState(hubState.pets, "pets", "No companions yet.", "Open pets", function()
+				hubState.rollKind = "pets"
+				hubFn.show("roll")
+			end)
 		else
 			local host = hubFn.cardHost(hubState.pets, hubState.pets, #cards, 7)
 			for index, pet in ipairs(cards) do
@@ -2470,6 +2474,22 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return math.max(44, pageW - UiTheme.PAD * 2)
 	end
 
+	function hubFn.rollPressState()
+		return {
+			infoOpen = hubState.infoOpen == true,
+			rollKind = hubState.rollKind,
+			autoOn = hubState.autoOn == true,
+			quickOn = hubState.quickOn == true,
+			stopAt = hubState.stopAt,
+			autoJunk = hubState.draft.rolls.autoJunk,
+			junkBelow = hubState.draft.rolls.junkBelow,
+			tokens = hubFn.tokenCount(),
+			focused = hubState.windowFocused == true,
+			busy = hubState.rollBusy == true,
+			batching = hubState.batching == true,
+		}
+	end
+
 	function hubFn.paintRoll()
 		hubFn.clear(hubState.roll)
 		for _, tween in ipairs(hubState.pityTweens) do
@@ -2499,44 +2519,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		kindRow.LayoutOrder = 1
 		kindRow.Parent = hubState.roll
 		local function kindOn(id: string): boolean
-			if id == "PetShards" then
-				return hubState.rollKind == "pets"
-			end
 			if id == "TimesTen" then
 				return hubState.pendingCount > 1 or hubState.batching
 			end
-			return hubState.rollKind == "gear"
-		end
-		local function kindPress(id: string)
-			if id == "PetShards" then
-				hubState.rollKind = "pets"
-				hubState.summaryItems = {}
-				hubFn.paintRoll()
-				hubFn.show("roll")
-				return
-			end
-			if id == "TimesTen" then
-				local why = RollBatch.block(hubFn.tokenCount(), 10)
-				if why ~= nil then
-					hubFn.hideCloseBeat()
-					hubFn.paintReelIdle(why)
-					hubFn.showMilestone(why)
-					return
-				end
-				if hubState.rollBusy then
-					return
-				end
-				hubState.pendingCount = 10
-				hubState.summaryItems = {}
-				hubState.batchLeft = {}
-				hubState.loop = RollLoop.press(hubState.loop)
-				hubFn.beginRoll()
-				return
-			end
-			hubState.rollKind = "gear"
-			hubState.summaryItems = {}
-			hubFn.paintRoll()
-			hubFn.show("roll")
+			return HubPress.lit(hubFn.rollPressState(), id)
 		end
 		for _, spot in ipairs(band.buttons) do
 			local button = Instance.new("TextButton")
@@ -2560,7 +2546,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.motion(button)
 			local spotId = spot.id
 			button.Activated:Connect(function()
-				kindPress(spotId)
+				hubFn.applyControl(spotId)
 			end)
 		end
 
@@ -2574,7 +2560,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		toggleLayout.FillDirection = Enum.FillDirection.Horizontal
 		toggleLayout.Padding = UDim.new(0, UiTheme.PAD)
 		toggleLayout.Parent = toggles
-		local function toggle(name: string, text: string, on: boolean, fn: () -> ())
+		local function toggle(name: string, text: string, on: boolean)
 			local button = Instance.new("TextButton")
 			button.Name = name
 			button.Size = UDim2.new(0.25, -6, 1, 0)
@@ -2590,40 +2576,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			corner.Parent = button
 			hubFn.setRest(button, if on then rgb("button") else rgb("header"))
 			hubFn.motion(button)
-			button.Activated:Connect(fn)
+			button.Activated:Connect(function()
+				hubFn.applyControl(button.Name)
+			end)
 		end
-		toggle("Auto", if hubState.autoOn then "Auto On" else "Auto", hubState.autoOn, function()
-			hubState.focusCut = false
-			hubState.autoOn = RollFocus.keep(hubState.windowFocused, not hubState.autoOn)
-			hubState.draft.rolls.autoConfirm = hubState.autoOn
-			hubFn.save()
-			if hubState.autoOn and hubState.loop.phase == "idle" and not hubState.rollBusy then
-				hubState.loop = RollLoop.press(hubState.loop)
-				hubFn.beginRoll()
-			end
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
+		toggle("Auto", if hubState.autoOn then "Auto On" else "Auto", hubState.autoOn)
 		toggle(
 			"Stop",
 			if hubState.stopAt == "Off" then "Stop  Off" else "Stop at  " .. hubState.stopAt,
-			hubState.stopAt ~= "Off",
-			function()
-				hubState.stopAt = RollBoard.nextStop(hubState.stopAt)
-				hubFn.paintRoll()
-				hubFn.show("roll")
-			end
+			hubState.stopAt ~= "Off"
 		)
-		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn, function()
-			hubState.quickOn = not hubState.quickOn
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
-		toggle("Info", "Info", hubState.infoOpen, function()
-			hubState.infoOpen = not hubState.infoOpen
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
+		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn)
+		toggle("Info", "Info", hubState.infoOpen)
 
 		local junkRow = Instance.new("Frame")
 		junkRow.Name = "Junk"
@@ -2635,7 +2599,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		junkLayout.FillDirection = Enum.FillDirection.Horizontal
 		junkLayout.Padding = UDim.new(0, UiTheme.PAD)
 		junkLayout.Parent = junkRow
-		local function junkButton(name: string, text: string, fn: () -> ())
+		local function junkButton(name: string, text: string)
 			local button = Instance.new("TextButton")
 			button.Name = name
 			button.Size = UDim2.new(0.5, -4, 1, 0)
@@ -2651,34 +2615,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			corner.Parent = button
 			hubFn.setRest(button, rgb("header"))
 			hubFn.motion(button)
-			button.Activated:Connect(fn)
+			button.Activated:Connect(function()
+				hubFn.applyControl(button.Name)
+			end)
 		end
-		junkButton("JunkMode", "Junk  " .. hubState.draft.rolls.autoJunk, function()
-			local order = { "ask", "keep", "salvage" }
-			local nextId = order[1]
-			for index, id in ipairs(order) do
-				if id == hubState.draft.rolls.autoJunk then
-					nextId = order[(index % #order) + 1]
-				end
-			end
-			hubState.draft.rolls.autoJunk = nextId
-			hubFn.save()
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
-		junkButton("JunkBelow", "Below  " .. hubState.draft.rolls.junkBelow, function()
-			local order = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
-			local nextId = order[1]
-			for index, id in ipairs(order) do
-				if id == hubState.draft.rolls.junkBelow then
-					nextId = order[(index % #order) + 1]
-				end
-			end
-			hubState.draft.rolls.junkBelow = nextId
-			hubFn.save()
-			hubFn.paintRoll()
-			hubFn.show("roll")
-		end)
+		junkButton("JunkMode", "Junk  " .. hubState.draft.rolls.autoJunk)
+		junkButton("JunkBelow", "Below  " .. hubState.draft.rolls.junkBelow)
 
 		local sinceEpic = if hubState.serverEpic ~= nil
 			then hubState.serverEpic
@@ -3033,22 +2975,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if #recent == 0 then
 			hubFn.line(hubState.roll, "No rolls yet.", 33, rgb("muted"))
 		else
+			local placed = HubPress.history(hubFn.rollRowWidth(), #recent)
 			local strip = Instance.new("Frame")
 			strip.Name = "History"
 			strip.BackgroundTransparency = 1
-			strip.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+			strip.ClipsDescendants = true
+			strip.Size = UDim2.fromOffset(placed.w, placed.h)
 			strip.LayoutOrder = 33
 			strip.Parent = hubState.roll
-			local stripLayout = Instance.new("UIListLayout")
-			stripLayout.FillDirection = Enum.FillDirection.Horizontal
-			stripLayout.Padding = UDim.new(0, 4)
-			stripLayout.Parent = strip
 			for index, item in ipairs(recent) do
+				local chipBox = placed.chips[index]
+				if chipBox == nil then
+					break
+				end
 				local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
 				local red, green, blue = UiTheme.rarityColor(rarity)
 				local chip = Instance.new("TextLabel")
 				chip.Name = "Result"
-				chip.Size = UDim2.fromOffset(72, UiTheme.TOUCH)
+				chip.Position = UDim2.fromOffset(chipBox.x, chipBox.y)
+				chip.Size = UDim2.fromOffset(chipBox.w, chipBox.h)
 				chip.BackgroundColor3 = Color3.fromRGB(red, green, blue)
 				chip.Font = bodyFont()
 				chip.TextSize = UiTheme.MIN_TEXT
@@ -3079,6 +3024,65 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.slideHistory = false
 		hubFn.fitRoll()
 		hubFn.applyTextScale()
+	end
+
+	function hubFn.applyControl(id: string)
+		local state = hubFn.rollPressState()
+		local nextState, effect = HubPress.press(state, id)
+		if effect.handled ~= true then
+			return
+		end
+		hubState.infoOpen = nextState.infoOpen
+		hubState.rollKind = nextState.rollKind
+		hubState.autoOn = nextState.autoOn
+		hubState.quickOn = nextState.quickOn
+		hubState.stopAt = nextState.stopAt
+		hubState.windowFocused = nextState.focused
+		hubState.draft.rolls.autoJunk = nextState.autoJunk
+		hubState.draft.rolls.junkBelow = nextState.junkBelow
+		if id == "Auto" then
+			hubState.focusCut = false
+			hubState.autoOn = RollFocus.keep(hubState.windowFocused, hubState.autoOn)
+			hubState.draft.rolls.autoConfirm = hubState.autoOn
+		end
+		if id == "GearShards" or id == "PetShards" then
+			hubState.summaryItems = {}
+		end
+		if id == "TimesTen" then
+			local why = RollBatch.block(hubFn.tokenCount(), 10)
+			if why ~= nil then
+				hubFn.hideCloseBeat()
+				hubFn.paintReelIdle(why)
+				hubFn.showMilestone(why)
+				hubFn.paintRoll()
+				hubFn.show("roll")
+				return
+			end
+			if hubState.rollBusy then
+				return
+			end
+			hubState.pendingCount = 10
+			hubState.summaryItems = {}
+			hubState.batchLeft = {}
+			hubState.loop = RollLoop.press(hubState.loop)
+			hubFn.beginRoll()
+			return
+		end
+		if effect.save == true then
+			hubFn.save()
+		end
+		if effect.rollCount ~= nil and hubState.rollBusy ~= true then
+			hubState.pendingCount = effect.rollCount
+			hubState.summaryItems = {}
+			hubState.batchLeft = {}
+			hubState.loop = RollLoop.press(hubState.loop)
+			hubFn.paintRoll()
+			hubFn.show("roll")
+			hubFn.beginRoll()
+			return
+		end
+		hubFn.paintRoll()
+		hubFn.show("roll")
 	end
 
 	hubState.activeItem = nil
@@ -3800,7 +3804,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			"pass",
 			string.format("The Shard Pass is quiet. Tier %s.", tostring(tier)),
 			"Check daily",
-			function() end
+			function()
+				hubFn.line(hubState.pass, "Daily check is quiet.", 3, rgb("muted"))
+			end
 		)
 
 		local function cycle(label: string, order: number, step: () -> ())
