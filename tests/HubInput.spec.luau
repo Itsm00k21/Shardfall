@@ -1484,4 +1484,168 @@ describe("HubInput", function()
 		expect(calls[#calls][1]).toEqual("UpgradeGear")
 		expect(calls[#calls][2]).toEqual("sword")
 	end)
+
+	it("drives a gamepad from Close through Roll, Bag, Forge, Pets, and the Gold shop", function()
+		local world = GuiFake.world()
+		local HudShell = world.load("HudShell")
+		HudShell.start(world.playerGui, {
+			onHero = function() end,
+			onBag = function() end,
+			onRoll = function() end,
+			onPets = function() end,
+			onShop = function() end,
+			onSettings = function() end,
+		})
+		local MenuHub = world.load("MenuHub")
+		local calls = {}
+		local hub = MenuHub.start(world.playerGui, hooks(calls))
+		local data = profile()
+		data.shardTokens = 10
+		data.gold = 400
+		data.pets = {
+			ember = {
+				uid = "ember",
+				name = "Ember",
+				rarity = "Common",
+			},
+		}
+		hub.setProfile(data)
+		hub.open("hero")
+		local screen = screenOf(world)
+		expect(GuiFake.findNamed(screen, "Tabs").Visible).toEqual(false)
+		local function press(key: string)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, false)
+		end
+		local function ring(): any
+			return GuiFake.findNamed(world.playerGui, "PadRing")
+		end
+		local banned = { raids = true, market = true, pass = true }
+		local function seek(match: (any) -> boolean): any
+			for _ = 1, 120 do
+				local stroke = ring()
+				local parent = if stroke ~= nil then stroke.Parent else nil
+				if parent ~= nil then
+					expect(banned[parent.Name] ~= true).toBeTrue()
+					if
+						parent:IsA("TextButton")
+						and string.find(parent.Text, "Salvage", 1, true) ~= nil
+					then
+						error("PadRing landed on Salvage", 0)
+					end
+					if match(parent) then
+						return parent
+					end
+				end
+				press("DPadDown")
+			end
+			return nil
+		end
+		local function countOf(name: string): number
+			local total = 0
+			for _, call in ipairs(calls) do
+				if call[1] == name then
+					total += 1
+				end
+			end
+			return total
+		end
+		local function onRail(label: string): (any) -> boolean
+			return function(button)
+				return button.Name == label
+					and button.Parent ~= nil
+					and button.Parent.Name == "Rail"
+			end
+		end
+		local stroke = ring()
+		expect(stroke ~= nil and stroke.Parent ~= nil and stroke.Parent.Name == "Close").toBeTrue()
+		expect(stroke.Enabled).toEqual(true)
+		local rollRail = seek(onRail("Roll"))
+		expect(rollRail ~= nil).toBeTrue()
+		expect(rollRail.Visible).toEqual(true)
+		expect(rollRail.Parent.Visible).toEqual(true)
+		expect(countOf("RollShard")).toEqual(0)
+		press("ButtonA")
+		expect(labelText(screenOf(world), "Title")).toEqual("Roll")
+		expect(countOf("RollShard")).toEqual(0)
+		expect(hub.isOpen()).toEqual(true)
+		local crack = seek(function(button)
+			return button.Name == "Roll" and button.Parent ~= nil and button.Parent.Name == "roll"
+		end)
+		expect(crack ~= nil).toBeTrue()
+		expect(ring().Parent).toEqual(crack)
+		press("ButtonA")
+		expect(countOf("RollShard")).toEqual(1)
+		expect(rolled(calls)[1][1]).toEqual("RollShard")
+		GuiFake.emit(crack, "Activated")
+		expect(countOf("RollShard")).toEqual(1)
+		local firedOk = pcall(function()
+			crack.Activated:Fire()
+		end)
+		expect(firedOk).toEqual(false)
+		expect(countOf("RollShard")).toEqual(1)
+		local bagRail = seek(onRail("Bag"))
+		expect(bagRail ~= nil).toBeTrue()
+		press("ButtonA")
+		expect(labelText(screenOf(world), "Title")).toEqual("Bag")
+		expect(countOf("UpgradeGear")).toEqual(0)
+		local card = seek(function(button)
+			return button.Name == "Card"
+		end)
+		expect(card ~= nil).toBeTrue()
+		press("ButtonA")
+		local forge = seek(function(button)
+			return button:IsA("TextButton") and string.find(button.Text, "UPGRADE", 1, true) ~= nil
+		end)
+		expect(forge ~= nil).toBeTrue()
+		expect(ring().Parent).toEqual(forge)
+		press("ButtonA")
+		expect(countOf("UpgradeGear")).toEqual(1)
+		expect(calls[#calls][1]).toEqual("UpgradeGear")
+		expect(calls[#calls][2]).toEqual("sword")
+		local petsRail = seek(onRail("Pets"))
+		expect(petsRail ~= nil).toBeTrue()
+		press("ButtonA")
+		expect(labelText(screenOf(world), "Title")).toEqual("Pets")
+		local petCard = seek(function(button)
+			return button.Name == "PetCard"
+		end)
+		expect(petCard ~= nil).toBeTrue()
+		press("ButtonA")
+		expect(petCard.Parent).toBeNil()
+		local shopRail = seek(onRail("Shop"))
+		expect(shopRail ~= nil).toBeTrue()
+		press("ButtonA")
+		expect(labelText(screenOf(world), "Title")).toEqual("Shop")
+		expect(countOf("BuyGoldShop")).toEqual(0)
+		expect(hasText(screenOf(world), "  Healing Tonic  40 Gold")).toBeTrue()
+		expect(hasText(screenOf(world), "  Bag slot  250 Gold")).toBeTrue()
+		local tonic = seek(function(button)
+			return button:IsA("TextButton") and button.Text == "  Healing Tonic  40 Gold"
+		end)
+		expect(tonic ~= nil).toBeTrue()
+		press("ButtonA")
+		local slot = seek(function(button)
+			return button:IsA("TextButton") and button.Text == "  Bag slot  250 Gold"
+		end)
+		expect(slot ~= nil).toBeTrue()
+		press("ButtonA")
+		local buys = {}
+		for _, call in ipairs(calls) do
+			if call[1] == "BuyGoldShop" then
+				table.insert(buys, call[2])
+			end
+		end
+		expect(buys).toEqual({ "tonic", "bag" })
+		press("ButtonB")
+		expect(hub.isOpen()).toEqual(false)
+		expect(ring()).toBeNil()
+		press("ButtonA")
+		expect(hub.isOpen()).toEqual(false)
+		press("DPadDown")
+		expect(hub.isOpen()).toEqual(false)
+	end)
 end)
