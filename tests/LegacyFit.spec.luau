@@ -82,10 +82,11 @@ describe("Legacy panel text scale", function()
 		expect(string.find(spin, "gradient.Rotation", 1, true) ~= nil).toBeTrue()
 	end)
 
-	it("fits at the end of the five paints", function()
+	it("fits at the end of the five paints and the odds rebuild", function()
 		local source = fs.readFile(UI)
-		-- The definition line contains this text, plus one call in each of the five paints.
-		expect(count(source, "fitLegacyText()")).toEqual(6)
+		-- The definition line contains this text, plus one call in each of the five paints
+		-- and one at the end of setOdds.
+		expect(count(source, "fitLegacyText()")).toEqual(7)
 		calledAtEnd(between(source, "local function paintChips()", "local realmRow"))
 		calledAtEnd(
 			between(
@@ -113,5 +114,6 @@ describe("Legacy panel text scale", function()
 		expect(fitAt ~= nil).toBeTrue()
 		expect((scaleAt :: number) < (fitAt :: number)).toBeTrue()
 		expect(string.find(profile, "applyBannerFit()", 1, true) ~= nil).toBeTrue()
+		calledAtEnd(between(source, "function controller.setOdds", "function controller.showRoll"))
 	end)
 end)

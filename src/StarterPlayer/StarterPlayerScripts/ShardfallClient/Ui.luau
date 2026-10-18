@@ -2251,6 +2251,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				)
 			end
 		end
+		-- applyProfile refreshes odds after setProfile, so this rebuild
+		-- has to fit the new rows or they stay at the design size.
+		fitLegacyText()
 	end
 
 	function controller.showRoll(result: any)
