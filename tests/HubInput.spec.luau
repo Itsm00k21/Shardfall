@@ -1404,4 +1404,84 @@ describe("HubInput", function()
 		expect(body.Position.X.Offset).toEqual(8)
 		expect(body.Size.X.Offset >= panel.Size.X.Offset - 16).toBeTrue()
 	end)
+
+	it("walks skip, the starter shards, the first crack, equip, the tonic, and an upgrade", function()
+		local world = GuiFake.world()
+		world.playerGui.Parent = world.player
+		local calls = {}
+		local OnboardHud = world.load("OnboardHud")
+		OnboardHud.start(function(name: string, action: string)
+			table.insert(calls, { name, action })
+			return { ok = true }
+		end)
+		OnboardHud.setProfile({
+			onboardDone = false,
+			onboardStep = "open",
+		})
+		local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
+		local skip = GuiFake.findNamed(onboard, "Skip")
+		expect(skip.Text).toEqual("Skip intro")
+		expect(skip.Parent.Visible).toEqual(true)
+		GuiFake.activate(skip)
+		expect(calls[1][1]).toEqual("Onboard")
+		expect(calls[1][2]).toEqual("skip")
+		OnboardHud.setProfile({
+			onboardDone = true,
+			onboardStep = "haven",
+		})
+		expect(skip.Parent.Visible).toEqual(false)
+
+		local MenuHub = world.load("MenuHub")
+		local hub = MenuHub.start(world.playerGui, {
+			invoke = function(name: string, ...)
+				table.insert(calls, { name, ... })
+				return { ok = true }
+			end,
+			onBag = function() end,
+			onMarket = function() end,
+			onDim = function() end,
+			onToast = function() end,
+		})
+		local data = profile()
+		data.shardTokens = 10
+		data.gold = 400
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		expect(labelText(screen, "ShardCount")).toEqual(HubStyle.shardCount(10))
+		GuiFake.emit(GuiFake.findNamed(screen, "Roll"), "Activated")
+		expect(calls[#calls][1]).toEqual("RollShard")
+
+		hub.open("bag")
+		screen = screenOf(world)
+		GuiFake.activate(GuiFake.findNamed(screen, "Equip"))
+		expect(calls[#calls][1]).toEqual("EquipItem")
+		expect(calls[#calls][2]).toEqual("sword")
+
+		hub.open("shop")
+		local tonic = nil
+		for _, child in ipairs(screenOf(world):GetDescendants()) do
+			if child:IsA("TextButton") and child.Text == "  Healing Tonic  40 Gold" then
+				tonic = child
+			end
+		end
+		expect(tonic ~= nil).toBeTrue()
+		GuiFake.activate(tonic)
+		expect(calls[#calls][1]).toEqual("BuyGoldShop")
+		expect(calls[#calls][2]).toEqual("tonic")
+
+		hub.open("bag")
+		screen = screenOf(world)
+		GuiFake.activate(GuiFake.findNamed(screen, "Card"))
+		local upgrade = nil
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and string.find(child.Text, "UPGRADE", 1, true) ~= nil then
+				upgrade = child
+			end
+		end
+		expect(upgrade ~= nil).toBeTrue()
+		GuiFake.activate(upgrade)
+		expect(calls[#calls][1]).toEqual("UpgradeGear")
+		expect(calls[#calls][2]).toEqual("sword")
+	end)
 end)

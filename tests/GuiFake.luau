@@ -672,6 +672,7 @@ function GuiFake.world()
 		"PadFocus",
 		"HudShell",
 		"StarterGoalHud",
+		"OnboardHud",
 	}) do
 		local moduleScript = newInstance("ModuleScript")
 		moduleScript.Name = name
@@ -801,6 +802,7 @@ function GuiFake.world()
 				or moduleName == "PadFocus"
 				or moduleName == "HudShell"
 				or moduleName == "StarterGoalHud"
+				or moduleName == "OnboardHud"
 			then
 				return loadClient(moduleName)
 			end
