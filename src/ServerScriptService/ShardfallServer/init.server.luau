@@ -15,10 +15,10 @@
 	subscribe cannot sit in front of the profile load.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build b3f35c4+ server` in Output.
+	still leaves `[Shardfall] build fcae09b+ server` in Output.
 ]]
 
-print("[Shardfall] build b3f35c4+ server")
+print("[Shardfall] build fcae09b+ server")
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)
