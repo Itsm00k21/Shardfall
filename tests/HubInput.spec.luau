@@ -427,13 +427,6 @@ describe("HubInput", function()
 		screen = screenOf(world)
 		expect(GuiFake.findNamed(screen, "PetList") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "PetDetail") ~= nil).toBeTrue()
-		local crackPet = false
-		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and string.find(child.Text, HubStyle.CRACK_PET, 1, true) ~= nil then
-				crackPet = true
-			end
-		end
-		expect(crackPet).toBeTrue()
 		local crackRow = false
 		for _, child in ipairs(screen:GetDescendants()) do
 			if child:IsA("TextButton") and string.find(child.Text, "Crack a Pet Shard", 1, true) ~= nil then

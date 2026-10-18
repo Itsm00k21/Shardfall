@@ -52,8 +52,6 @@ local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NotifyBadges"))
-local PetLine = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetLine"))
-local PetRoster = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetRoster"))
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local Rarities = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarities"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
@@ -1366,7 +1364,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.walletTokens.Name = "ShardTokens"
 	hubState.walletTokens.BackgroundTransparency = 1
 	hubState.walletTokens.Position = UDim2.fromOffset(10, 0)
-	hubState.walletTokens.Size = UDim2.new(0.5, -12, 1, 0)
+	hubState.walletTokens.Size = UDim2.new(1, -20, 1, 0)
 	hubState.walletTokens.Font = headerFont()
 	hubState.walletTokens.TextSize = UiTheme.MIN_TEXT
 	hubState.walletTokens.TextXAlignment = Enum.TextXAlignment.Left
@@ -1384,6 +1382,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.walletGold.TextXAlignment = Enum.TextXAlignment.Right
 	hubState.walletGold.TextColor3 = rgb("gold")
 	hubState.walletGold.Text = "Gold  0"
+	hubState.walletGold.Visible = false
 	hubState.walletGold.ZIndex = 7
 	hubState.walletGold.Parent = hubState.wallet
 
@@ -2712,41 +2711,46 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		sheetPad.Parent = sheet
 		hubFn.line(sheet, "Stat sheet", 1, rgb("gold"))
 		hubFn.divider(sheet, 2)
-		local offense, vitality, goldFind = CombatMath.loadout(hubState.profile)
+		local offense, _, goldFind = CombatMath.loadout(hubState.profile)
 		hubFn.line(sheet, string.format("Level  %d", level), 3, rgb("text"))
-		hubFn.line(sheet, string.format("Damage  %d", math.floor(offense.damage + 0.5)), 4, rgb("text"))
 		hubFn.line(sheet, string.format("Attack speed  %.2f", offense.attackSpeed), 5, rgb("text"))
 		hubFn.line(sheet, string.format("Crit  %.0f%%", offense.critChance * 100), 6, rgb("text"))
 		hubFn.line(sheet, string.format("Crit damage  %.2f", offense.critDamage), 7, rgb("text"))
-		hubFn.line(sheet, string.format("HP  %d", vitality.maxHealth), 8, rgb("text"))
-		hubFn.line(sheet, string.format("Defense  %d", vitality.defense), 9, rgb("text"))
 		hubFn.line(sheet, string.format("Gold find  %.0f%%", goldFind * 100), 10, rgb("text"))
 		hubFn.line(sheet, string.format("Power  %d", HeroBoard.power(hubState.profile)), 11, rgb("gold"))
 		local barOrder = 12
 		for _, bar in ipairs(HeroBoard.bars(hubState.profile)) do
 			local host = Instance.new("Frame")
 			host.Name = bar.id
-			host.BackgroundColor3 = rgb("body")
-			host.Size = UDim2.new(1, 0, 0, 22)
+			host.BackgroundTransparency = 1
+			host.Size = UDim2.new(1, 0, 0, 28)
 			host.BorderSizePixel = 0
 			host.LayoutOrder = barOrder
 			host.Parent = sheet
+			local caption = Instance.new("TextLabel")
+			caption.Name = "Caption"
+			caption.BackgroundTransparency = 1
+			caption.Position = UDim2.fromOffset(0, 0)
+			caption.Size = UDim2.new(1, 0, 0, 16)
+			caption.Font = bodyFont()
+			caption.TextSize = UiTheme.MIN_TEXT
+			caption.TextXAlignment = Enum.TextXAlignment.Left
+			caption.TextColor3 = rgb("text")
+			caption.Text = bar.label
+			caption.Parent = host
+			local track = Instance.new("Frame")
+			track.Name = "Track"
+			track.BackgroundColor3 = rgb("body")
+			track.BorderSizePixel = 0
+			track.Position = UDim2.fromOffset(0, 18)
+			track.Size = UDim2.new(1, 0, 0, 6)
+			track.Parent = host
 			local fill = Instance.new("Frame")
 			fill.Name = "Fill"
 			fill.Size = UDim2.fromScale(bar.fill, 1)
 			fill.BackgroundColor3 = rgb("accent")
 			fill.BorderSizePixel = 0
-			fill.Parent = host
-			local caption = Instance.new("TextLabel")
-			caption.BackgroundTransparency = 1
-			caption.Size = UDim2.fromScale(1, 1)
-			caption.Font = bodyFont()
-			caption.TextSize = UiTheme.MIN_TEXT
-			caption.TextXAlignment = Enum.TextXAlignment.Left
-			caption.TextColor3 = rgb("text")
-			caption.Text = "  " .. bar.label
-			caption.ZIndex = 2
-			caption.Parent = host
+			fill.Parent = track
 			barOrder += 1
 		end
 		local viewport = Instance.new("ViewportFrame")
@@ -3271,12 +3275,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				rarity = companion.rarity or "Common",
 			})
 		end
-		if #cards == 0 then
-			hubFn.emptyState(hubState.pets, "pets", "No companions yet.", "Open pets", function()
-				hubState.rollKind = "pets"
-				hubFn.show("roll")
-			end)
-		end
 		local petSpec = HubStyle.petStage(hubFn.rollRowWidth(), 280)
 		local petStage = Instance.new("Frame")
 		petStage.Name = "PetStage"
@@ -3354,39 +3352,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.row(petDetail, HubStyle.EQUIP, 20, function()
 				hubFn.equipUid(petUid)
 			end)
-		else
-			hubFn.row(petDetail, HubStyle.EQUIP, 20, function() end)
 		end
-		hubFn.row(petDetail, HubStyle.CRACK_PET, 21, function()
-			hubState.rollKind = "pets"
-			hubFn.show("roll")
-		end)
 		hubFn.row(hubState.pets, "Crack a Pet Shard", 20, function()
 			hubState.rollKind = "pets"
 			hubFn.show("roll")
 		end)
-		local textScale = 1
-		if type(hubState.draft.access.textScale) == "number" then
-			textScale = hubState.draft.access.textScale
-		end
-		local pageW = hubState.pets.AbsoluteSize.X
-		if pageW < 80 then
-			local vx, vy = hubFn.view()
-			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
-			local inner = HudLayout.hubBody(box.w, box.h)
-			pageW = inner.w
-		end
-		local lineW = math.max(44, pageW - UiTheme.PAD * 2)
-		for index, companion in ipairs(PetRoster.STARTER) do
-			local text = companion.name .. "  " .. companion.ability
-			local fitted = PetLine.box(text, lineW, textScale)
-			local label = hubFn.line(hubState.pets, text, 20 + index, rgb("text"))
-			label.TextWrapped = true
-			label.TextSize = UiTheme.MIN_TEXT
-			label:SetAttribute("BaseText", UiTheme.MIN_TEXT)
-			label.Size = UDim2.new(1, 0, 0, fitted.h)
-			label.ClipsDescendants = true
-		end
 		hubFn.hold("pets")
 	end
 
@@ -5159,7 +5129,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.paintShop()
 		hubFn.clear(hubState.shop)
-		hubFn.line(hubState.shop, "Gold shop. Gold only.", 1, rgb("gold"))
 		local purse = 0
 		if type(hubState.profile) == "table" and type(hubState.profile.gold) == "number" then
 			purse = hubState.profile.gold
