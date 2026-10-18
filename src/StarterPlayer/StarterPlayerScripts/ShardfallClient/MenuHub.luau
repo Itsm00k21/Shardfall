@@ -42,6 +42,7 @@ local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Poo
 local Rarities = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarities"))
 local RarityConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RarityConfig"))
 local RollBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollBoard"))
+local RollFocus = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollFocus"))
 local RollHype = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollHype"))
 local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollLoop"))
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
@@ -304,6 +305,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.detailOpen = false
 	hubState.selectedUid = nil
 	hubState.autoOn = false
+	hubState.focusCut = false
+	hubState.windowFocused = true
+	pcall(function()
+		if UserInputService.WindowFocused == false then
+			hubState.windowFocused = false
+		end
+	end)
 	hubState.quickOn = false
 	hubState.infoOpen = false
 	hubState.rollKind = "gear"
@@ -2535,7 +2543,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			button.Activated:Connect(fn)
 		end
 		toggle("Auto", if hubState.autoOn then "Auto On" else "Auto", hubState.autoOn, function()
-			hubState.autoOn = not hubState.autoOn
+			hubState.focusCut = false
+			hubState.autoOn = RollFocus.keep(hubState.windowFocused, not hubState.autoOn)
 			hubState.draft.rolls.autoConfirm = hubState.autoOn
 			hubFn.save()
 			if hubState.autoOn and hubState.loop.phase == "idle" and not hubState.rollBusy then
@@ -3059,6 +3068,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.chainAllowed(queued: boolean): boolean
+		if RollFocus.chain(hubState.windowFocused) ~= true then
+			return false
+		end
 		local pending = if type(hubState.activeItem) == "table" then hubState.activeItem.uid else nil
 		local rarity = "Common"
 		if type(hubState.activeItem) == "table" and type(hubState.activeItem.rarity) == "string" then
@@ -3177,6 +3189,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 				if generation ~= hubState.revealToken then
 					hubState.rollBusy = false
+					return
+				end
+				if RollFocus.chain(hubState.windowFocused) ~= true then
+					hubState.rollBusy = false
+					hubState.loop = RollLoop.idle()
+					hubFn.setPulse(true)
 					return
 				end
 				if hubState.pendingCount > 1 then
@@ -3716,7 +3734,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			12,
 			function()
 				hubState.draft.rolls.autoConfirm = not hubState.draft.rolls.autoConfirm
-				hubState.autoOn = hubState.draft.rolls.autoConfirm
+				hubState.focusCut = false
+				hubState.autoOn = RollFocus.keep(
+					hubState.windowFocused,
+					hubState.draft.rolls.autoConfirm
+				)
 			end
 		)
 		cycle("Junk  " .. hubState.draft.rolls.autoJunk, 13, function()
@@ -4102,6 +4124,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.detail.Visible = false
 	end)
 
+	UserInputService.WindowFocusReleased:Connect(function()
+		hubState.windowFocused = false
+		hubState.focusCut = true
+		hubState.holdingRoll = false
+		hubState.autoOn = RollFocus.keep(false, hubState.autoOn)
+		if hubState.shownId == "roll" then
+			hubFn.paintRoll()
+		end
+	end)
+	UserInputService.WindowFocused:Connect(function()
+		hubState.windowFocused = true
+	end)
+
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if hubState.capturing ~= nil and input.UserInputType == Enum.UserInputType.Keyboard then
 			local key = input.KeyCode.Name
@@ -4374,7 +4409,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if type(nextProfile) == "table" and type(nextProfile.uiSettings) == "table" then
 				hubState.draft = Settings.normalize(nextProfile.uiSettings)
 				hubState.uiScale.Scale = hubState.draft.hud.scale
-				hubState.autoOn = hubState.draft.rolls.autoConfirm == true
+				if hubState.focusCut == true then
+					hubState.autoOn = false
+				else
+					hubState.autoOn = RollFocus.keep(
+						hubState.windowFocused,
+						hubState.draft.rolls.autoConfirm == true
+					)
+				end
 				hubFn.paintHints()
 			end
 			if hubState.route.open then
