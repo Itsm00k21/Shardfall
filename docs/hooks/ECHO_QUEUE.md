@@ -2,7 +2,9 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Ghost approved the lane split in issue #15 (comment 6244200982) and this starting queue (comment 6244209275). E-003 follows the correction in comment 6244222156.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Until then Echo works only on E-001, E-002 (controller nav), and E-003 (update `docs/design/playtest_script.md`). Do not queue new features.
+
+Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001, E-002, and E-003 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
 ## E-001 — this PR
 
@@ -14,23 +16,32 @@ Follows vision priorities 1 and 2 in `docs/design/vision/VISION.md`. The shots i
 
 ## E-002 — queued
 
-Controller support. D-pad and stick move through every MenuHub tab and button with a visible selection ring. B closes. The action bar maps to controller buttons. Extend the click harness from #213.
+Controller nav. D-pad and stick move through every MenuHub tab and button with a visible selection ring. B closes. The action bar maps to controller buttons. Extend the click harness from #213. Hold this until #217 is merged.
 
 ## E-003 — queued
 
 Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. 10 steps max. Each step says what you should see. Feel and looks only.
 
-## Next
+## After E-003
 
-After E-001, E-002, and E-003: a pet evolution rules module and tests, then the raid wiring PRs (contest, weekly loot lock, leaver rules, loot stamps). Any remote or schema change goes in its own PR first for Ghost review.
+Only core-loop polish on systems `docs/design/LAUNCH_PLAN.md` keeps: spawn to first loot under 60s, readability, and phone feel. That is the M5 first-60-seconds playtest, plus the M2 plaza restyle where it is still open.
+
+## PAUSED
+
+Hidden or off per `docs/design/LAUNCH_PLAN.md` (PARKED: code stays, kill switches off, nav hidden). Do not queue these:
+
+- Raid wiring
+- Trading / Market Board
+- Pet evolution
+- Boss pets
 
 ## Questions
 
-No remote, schema, or shared-module change is waiting on Ghost. Defaults used in E-001:
+No remote, schema, or shared-module change is waiting on Ghost. Ghost confirmed the E-001 defaults in issue #15 comment 6244475659:
 
-1. The mid-left rail still overlaps the portrait on 844×390 and 800×380. Seven 44px buttons do not fit under the 56px portrait and inside the 16px margin. Default: leave `railFit`. Shrinking a button under 44, or dropping a rail button, is Ghost's call.
-2. The equip prompt and the heavy chip still meet the 2×4 bar on 844×390 and 800×380. The toast stack, the prompt, and the bar cannot all stack on a 390-tall screen. Default: the bar stays at the bottom and the prompt stays under the toast. The layout spec does not fail that pair.
-3. The gold banner stays on BannerFit's 8px lane (`y = 8` on landscape and on 1280×720). It is inside the viewport. It is not pulled down to the 16px safe margin.
-4. Counters stay top-right. On a viewport under 500px wide they are a column. Vision's left-edge column is not used, because that edge is the portrait, the HP bar, and the rail.
-5. On 844×390 and 800×380 the bag body is 36–46px tall and scrolls. Header, tabs, and filters stay 44px. Default: scroll, do not squash the card.
-6. No build stamp. The client build print is unchanged. Schema stays 26.
+1. The mid-left rail still overlaps the portrait on 844×390 and 800×380. Leave `railFit`. Do not shrink a button under 44 or drop a rail button in this PR.
+2. The equip prompt and the heavy chip still meet the 2×4 bar on 844×390 and 800×380. The bar stays at the bottom and the prompt stays under the toast. The layout spec does not fail that pair.
+3. The gold banner stays on BannerFit's 8px lane (`y = 8` on landscape and on 1280×720). It is not pulled down to the 16px safe margin.
+4. Counters stay top-right. On a viewport under 500px wide they are a column. They do not move to the vision's left edge.
+5. On 844×390 and 800×380 the bag body may scroll at 36–46px. Do not squash the card.
+6. No build stamp. This branch does not edit `Build.luau` or the init prints. The printed line is whatever `cursor/live-build-9721` has (`b9366a1+` after the merge).
