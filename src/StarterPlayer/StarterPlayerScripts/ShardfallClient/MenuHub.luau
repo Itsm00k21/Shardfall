@@ -33,6 +33,7 @@ local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChil
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
 local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
+local HubStyle = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HubStyle"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
@@ -133,7 +134,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	hubState.panel = Instance.new("Frame")
 	hubState.panel.Name = "Panel"
-	hubState.panel.BackgroundColor3 = rgb("body")
+	hubState.panel.BackgroundColor3 = rgb("panel")
 	hubState.panel.BackgroundTransparency = 0
 	hubState.panel.BorderSizePixel = 0
 	hubState.panel.ClipsDescendants = true
@@ -149,7 +150,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.panelCorner.Parent = hubState.panel
 	hubState.panelStroke = Instance.new("UIStroke")
 	hubState.panelStroke.Thickness = UiTheme.STROKE
-	hubState.panelStroke.Color = rgb("divider")
+	hubState.panelStroke.Color = rgb("accent")
 	hubState.panelStroke.Parent = hubState.panel
 	hubState.gradient = Instance.new("UIGradient")
 	hubState.gradient.Rotation = 90
@@ -215,12 +216,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.closeButton.Name = "Close"
 	hubState.closeButton.AnchorPoint = Vector2.new(1, 0)
 	hubState.closeButton.Position = UDim2.new(1, -8, 0, 8)
-	hubState.closeButton.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
-	hubState.closeButton.BackgroundColor3 = rgb("body")
+	hubState.closeButton.Size = UDim2.fromOffset(96, UiTheme.TOUCH)
+	hubState.closeButton.BackgroundColor3 = rgb("close")
 	hubState.closeButton.Font = headerFont()
 	hubState.closeButton.TextSize = UiTheme.MIN_TEXT
 	hubState.closeButton.TextColor3 = rgb("text")
-	hubState.closeButton.Text = "X"
+	hubState.closeButton.Text = HubStyle.CLOSE
 	hubState.closeButton.ZIndex = 5
 	hubState.closeButton.Parent = hubState.header
 	hubState.closeCorner = Instance.new("UICorner")
@@ -328,6 +329,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.crackNamed = false
 	hubState.crackSounded = false
 	hubState.bagFilter = BagBoard.defaultFilter()
+	hubState.bagPill = "All"
 	hubState.seen = NotifyBadges.blank()
 	hubState.salvageRarity = "Rare"
 	hubState.salvageArmed = false
@@ -581,7 +583,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	hubFn.motion(hubState.closeButton)
-	hubFn.setRest(hubState.closeButton, rgb("body"))
+	hubFn.setRest(hubState.closeButton, rgb("close"))
 	hubFn.motion(hubState.classClose)
 	hubFn.setRest(hubState.classClose, rgb("header"))
 
@@ -1618,12 +1620,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.line(hubState.detailList, powerText, 80, powerColor)
 		if type(item.uid) == "string" then
 			local uid = item.uid
-			hubFn.row(hubState.detailList, if same then "Equipped" else "Equip", 90, function()
-				if not same then
-					hubFn.equipUid(uid)
+			local equip = hubFn.row(
+				hubState.detailList,
+				if same then "EQUIPPED" else HubStyle.EQUIP,
+				90,
+				function()
+					if not same then
+						hubFn.equipUid(uid)
+					end
 				end
+			)
+			if not same then
+				equip.BackgroundColor3 = rgb("equip")
+				equip.TextColor3 = rgb("text")
+				hubFn.setRest(equip, rgb("equip"))
+			end
+			local upgrade = hubFn.row(hubState.detailList, HubStyle.upgradeLabel(item.upgrade), 91, function()
+				task.spawn(function()
+					pcall(hooks.invoke, "UpgradeGear", uid)
+				end)
 			end)
+			upgrade.BackgroundColor3 = rgb("gold")
+			upgrade.TextColor3 = rgb("ink")
+			hubFn.setRest(upgrade, rgb("gold"))
 		end
+		local detailBox = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
+		hubState.detail.Position = UDim2.fromOffset(detailBox.detail.x, detailBox.detail.y)
+		hubState.detail.Size = UDim2.fromOffset(detailBox.detail.w, detailBox.detail.h)
 		hubState.detail.Visible = true
 		hubState.detailOpen = true
 	end
@@ -1672,7 +1695,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		wash.Parent = card
 		hubFn.setRest(card, rgb("body"))
 		hubFn.motion(card)
-		hubFn.iconOn(card, iconName, 8, 8, 36)
+		local cellW = 228
+		local cellH = 228
+		local gridLayout = parent:FindFirstChildOfClass("UIGridLayout")
+		if gridLayout ~= nil then
+			if gridLayout.CellSize.X.Offset >= 44 then
+				cellW = gridLayout.CellSize.X.Offset
+			end
+			if gridLayout.CellSize.Y.Offset >= 44 then
+				cellH = gridLayout.CellSize.Y.Offset
+			end
+		end
+		local parts = HudLayout.bagCard(cellW, cellH)
+		hubFn.iconOn(card, iconName, parts.icon.x, parts.icon.y, parts.icon.w)
 		local pip = Instance.new("Frame")
 		pip.Name = "Pip"
 		pip.Position = UDim2.fromOffset(50, 16)
@@ -1685,8 +1720,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pipCorner.Parent = pip
 		local name = Instance.new("TextLabel")
 		name.BackgroundTransparency = 1
-		name.Position = UDim2.fromOffset(8, 48)
-		name.Size = UDim2.new(1, -16, 0, 36)
+		name.Position = UDim2.fromOffset(parts.name.x, parts.name.y)
+		name.Size = UDim2.fromOffset(parts.name.w, parts.name.h)
 		name.Font = bodyFont()
 		name.TextSize = UiTheme.MIN_TEXT
 		name.TextXAlignment = Enum.TextXAlignment.Left
@@ -1698,9 +1733,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if BagBoard.isNew(item, hubState.seen.bagAt) then
 			local badge = Instance.new("TextLabel")
 			badge.Name = "New"
-			badge.AnchorPoint = Vector2.new(1, 0)
-			badge.Position = UDim2.new(1, -8, 0, 8)
-			badge.Size = UDim2.fromOffset(44, 22)
+			badge.AnchorPoint = Vector2.new(0, 0)
+			badge.Position = UDim2.fromOffset(parts.badge.x, parts.badge.y)
+			badge.Size = UDim2.fromOffset(parts.badge.w, parts.badge.h)
 			badge.BackgroundColor3 = rgb("accent")
 			badge.Font = headerFont()
 			badge.TextSize = UiTheme.MIN_TEXT
@@ -1716,8 +1751,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tip.Name = "Tip"
 		tip.BackgroundColor3 = rgb("header")
 		tip.BackgroundTransparency = 0.05
-		tip.Position = UDim2.fromOffset(8, 86)
-		tip.Size = UDim2.new(1, -16, 0, 32)
+		tip.Position = UDim2.fromOffset(parts.tip.x, parts.tip.y)
+		tip.Size = UDim2.fromOffset(parts.tip.w, parts.tip.h)
 		tip.Font = bodyFont()
 		tip.TextSize = UiTheme.MIN_TEXT
 		tip.TextWrapped = true
@@ -1753,9 +1788,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 			local equip = Instance.new("TextButton")
 			equip.Name = "Equip"
-			equip.AnchorPoint = Vector2.new(0, 1)
-			equip.Position = UDim2.new(0, 8, 1, -8)
-			equip.Size = UDim2.new(1, -16, 0, UiTheme.TOUCH)
+			equip.AnchorPoint = Vector2.new(0, 0)
+			equip.Position = UDim2.fromOffset(parts.equip.x, parts.equip.y)
+			equip.Size = UDim2.fromOffset(parts.equip.w, parts.equip.h)
 			equip.BackgroundColor3 = rgb("header")
 			equip.Font = headerFont()
 			equip.TextSize = UiTheme.MIN_TEXT
@@ -1774,9 +1809,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 			local lock = Instance.new("TextButton")
 			lock.Name = "Lock"
-			lock.AnchorPoint = Vector2.new(1, 1)
-			lock.Position = UDim2.new(1, -8, 1, -56)
-			lock.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
+			lock.AnchorPoint = Vector2.new(0, 0)
+			lock.Position = UDim2.fromOffset(parts.lock.x, parts.lock.y)
+			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
 			lock.BackgroundColor3 = rgb("header")
 			lock.Font = headerFont()
 			lock.TextSize = UiTheme.MIN_TEXT
@@ -2247,10 +2282,65 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.clear(hubState.bag)
 		local items = hubFn.bagItems()
 		local shown = BagBoard.rows(items, hubState.bagFilter, hubState.seen.bagAt)
-		local bar = Instance.new("Frame")
+		local picked = {}
+		for _, item in ipairs(shown) do
+			if HubStyle.inPill(item, hubState.bagPill) then
+				table.insert(picked, item)
+			end
+		end
+		shown = picked
+		local pills = Instance.new("ScrollingFrame")
+		pills.Name = "Pills"
+		pills.BackgroundTransparency = 1
+		pills.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		pills.BorderSizePixel = 0
+		pills.ScrollBarThickness = 4
+		pills.ScrollingEnabled = true
+		pills.AutomaticCanvasSize = Enum.AutomaticSize.X
+		pills.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
+		pills.ScrollingDirection = Enum.ScrollingDirection.X
+		pills.ClipsDescendants = true
+		pills.LayoutOrder = 0
+		pills.Parent = hubState.bag
+		local pillLayout = Instance.new("UIListLayout")
+		pillLayout.FillDirection = Enum.FillDirection.Horizontal
+		pillLayout.Padding = UDim.new(0, 6)
+		pillLayout.Parent = pills
+		for index, pill in ipairs(HubStyle.pills()) do
+			local button = Instance.new("TextButton")
+			button.Name = pill.id
+			button.Size = UDim2.fromOffset(HudLayout.chipWidth(pill.label), UiTheme.TOUCH)
+			local tone = if hubState.bagPill == pill.id then HubStyle.chipTone(index) else "header"
+			button.BackgroundColor3 = rgb(tone)
+			button.Font = headerFont()
+			button.TextSize = UiTheme.MIN_TEXT
+			button.TextColor3 = rgb("text")
+			button.Text = pill.label
+			button.AutoButtonColor = false
+			button.Parent = pills
+			local pillCorner = Instance.new("UICorner")
+			pillCorner.CornerRadius = UDim.new(1, 0)
+			pillCorner.Parent = button
+			hubFn.setRest(button, rgb(tone))
+			hubFn.motion(button)
+			local pillId = pill.id
+			button.Activated:Connect(function()
+				hubState.bagPill = pillId
+				hubFn.paintBag()
+				hubFn.show("bag")
+			end)
+		end
+		local bar = Instance.new("ScrollingFrame")
 		bar.Name = "Filters"
 		bar.BackgroundTransparency = 1
 		bar.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		bar.BorderSizePixel = 0
+		bar.ScrollBarThickness = 4
+		bar.ScrollingEnabled = true
+		bar.AutomaticCanvasSize = Enum.AutomaticSize.X
+		bar.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
+		bar.ScrollingDirection = Enum.ScrollingDirection.X
+		bar.ClipsDescendants = true
 		bar.LayoutOrder = 1
 		bar.Parent = hubState.bag
 		local barLayout = Instance.new("UIListLayout")
@@ -2259,7 +2349,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		barLayout.Parent = bar
 		local function chip(label: string, fn: () -> ())
 			local button = Instance.new("TextButton")
-			button.Size = UDim2.new(0.25, -6, 1, 0)
+			button.Size = UDim2.fromOffset(HudLayout.chipWidth(label), UiTheme.TOUCH)
 			button.BackgroundColor3 = rgb("header")
 			button.Font = headerFont()
 			button.TextSize = UiTheme.MIN_TEXT
@@ -2268,7 +2358,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			button.AutoButtonColor = false
 			button.Parent = bar
 			local corner = Instance.new("UICorner")
-			corner.CornerRadius = UDim.new(0, 8)
+			corner.CornerRadius = UDim.new(1, 0)
 			corner.Parent = button
 			hubFn.setRest(button, rgb("header"))
 			hubFn.motion(button)
@@ -2360,6 +2450,53 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.itemCard(host, item, index, "item")
 			end
 		end
+		local vx, vy = hubFn.view()
+		local hubBox = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+		local hubInner = HudLayout.hubBody(hubBox.w, hubBox.h)
+		local slotGap = 4
+		local slotBudget = hubInner.w - slotGap * (ActionSlots.COUNT - 1)
+		local slotW = math.floor(slotBudget / ActionSlots.COUNT)
+		if slotW < UiTheme.TOUCH then
+			slotW = UiTheme.TOUCH
+		end
+		local loadout = Instance.new("ScrollingFrame")
+		loadout.Name = "Loadout"
+		loadout.BackgroundColor3 = rgb("header")
+		loadout.BorderSizePixel = 0
+		loadout.ScrollBarThickness = 4
+		loadout.ScrollingEnabled = true
+		loadout.AutomaticCanvasSize = Enum.AutomaticSize.X
+		loadout.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
+		loadout.ScrollingDirection = Enum.ScrollingDirection.X
+		loadout.ClipsDescendants = true
+		loadout.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		loadout.LayoutOrder = 12
+		loadout.Parent = hubState.bag
+		local loadoutCorner = Instance.new("UICorner")
+		loadoutCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		loadoutCorner.Parent = loadout
+		local loadoutLayout = Instance.new("UIListLayout")
+		loadoutLayout.FillDirection = Enum.FillDirection.Horizontal
+		loadoutLayout.Padding = UDim.new(0, slotGap)
+		loadoutLayout.Parent = loadout
+		local face = ActionSlots.face()
+		for index = 1, ActionSlots.COUNT do
+			local slotButton = Instance.new("TextButton")
+			slotButton.Name = "Slot" .. tostring(index)
+			slotButton.Size = UDim2.fromOffset(slotW, UiTheme.TOUCH)
+			slotButton.BackgroundColor3 = Color3.fromRGB(face.fill[1], face.fill[2], face.fill[3])
+			slotButton.Font = headerFont()
+			slotButton.TextSize = UiTheme.MIN_TEXT
+			slotButton.TextColor3 = rgb("text")
+			slotButton.Text = tostring(index)
+			slotButton.AutoButtonColor = false
+			slotButton.LayoutOrder = index
+			slotButton.Parent = loadout
+			local slotCorner = Instance.new("UICorner")
+			slotCorner.CornerRadius = UDim.new(0, 6)
+			slotCorner.Parent = slotButton
+			slotButton.Activated:Connect(function() end)
+		end
 		hubFn.line(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, rgb("muted"))
 		if hubState.detailOpen and hubState.selectedUid ~= nil then
 			local item = hubFn.findItem(hubState.selectedUid)
@@ -2422,12 +2559,91 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.rollKind = "pets"
 				hubFn.show("roll")
 			end)
-		else
-			local host = hubFn.cardHost(hubState.pets, hubState.pets, #cards, 7)
-			for index, pet in ipairs(cards) do
-				hubFn.itemCard(host, pet, index, "pet")
-			end
 		end
+		local petSpec = HubStyle.petStage(hubFn.rollRowWidth(), 280)
+		local petStage = Instance.new("Frame")
+		petStage.Name = "PetStage"
+		petStage.BackgroundTransparency = 1
+		petStage.Size = UDim2.fromOffset(petSpec.w, petSpec.h)
+		petStage.LayoutOrder = 8
+		petStage.Parent = hubState.pets
+		local petList = Instance.new("Frame")
+		petList.Name = "PetList"
+		petList.BackgroundTransparency = 1
+		petList.Position = UDim2.fromOffset(petSpec.list.x, petSpec.list.y)
+		petList.Size = UDim2.fromOffset(petSpec.list.w, petSpec.list.h)
+		petList.Parent = petStage
+		local petLayout = Instance.new("UIListLayout")
+		petLayout.Padding = UDim.new(0, 6)
+		petLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		petLayout.Parent = petList
+		for index, pet in ipairs(cards) do
+			local card = Instance.new("TextButton")
+			card.Name = "PetCard"
+			card.Size = UDim2.new(1, 0, 0, 56)
+			card.BackgroundColor3 = rgb("header")
+			card.Text = ""
+			card.AutoButtonColor = false
+			card.LayoutOrder = index
+			card.Parent = petList
+			local cardCorner = Instance.new("UICorner")
+			cardCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+			cardCorner.Parent = card
+			local cardName = Instance.new("TextLabel")
+			cardName.BackgroundTransparency = 1
+			cardName.Position = UDim2.fromOffset(8, 0)
+			cardName.Size = UDim2.new(1, -12, 1, 0)
+			cardName.Font = headerFont()
+			cardName.TextSize = UiTheme.MIN_TEXT
+			cardName.TextXAlignment = Enum.TextXAlignment.Left
+			cardName.TextColor3 = rgb("text")
+			cardName.Text = tostring(pet.name or "Pet")
+			cardName.Parent = card
+			local pick = index
+			card.Activated:Connect(function()
+				hubState.petPick = pick
+				hubFn.paintPets()
+				hubFn.show("pets")
+			end)
+		end
+		local picked = cards[1]
+		if type(hubState.petPick) == "number" and cards[hubState.petPick] ~= nil then
+			picked = cards[hubState.petPick]
+		end
+		local petDetail = Instance.new("Frame")
+		petDetail.Name = "PetDetail"
+		petDetail.BackgroundColor3 = rgb("header")
+		petDetail.BorderSizePixel = 0
+		petDetail.Position = UDim2.fromOffset(petSpec.detail.x, petSpec.detail.y)
+		petDetail.Size = UDim2.fromOffset(petSpec.detail.w, petSpec.detail.h)
+		petDetail.Parent = petStage
+		local petDetailCorner = Instance.new("UICorner")
+		petDetailCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		petDetailCorner.Parent = petDetail
+		local petDetailList = Instance.new("UIListLayout")
+		petDetailList.Padding = UDim.new(0, 4)
+		petDetailList.SortOrder = Enum.SortOrder.LayoutOrder
+		petDetailList.Parent = petDetail
+		local perkPet = if type(picked) == "table" then picked else { name = "No companions yet" }
+		hubFn.line(petDetail, tostring(perkPet.name or "Pet"), 1, rgb("text"))
+		hubFn.line(petDetail, "Perk  " .. HubStyle.petPerk(perkPet), 2, rgb("gold"))
+		local statOrder = 3
+		for _, stat in ipairs(HubStyle.petStats(perkPet)) do
+			hubFn.line(petDetail, stat.label .. "  " .. stat.value, statOrder, rgb("text"))
+			statOrder += 1
+		end
+		if type(picked) == "table" and type(picked.uid) == "string" then
+			local petUid = picked.uid
+			hubFn.row(petDetail, HubStyle.EQUIP, 20, function()
+				hubFn.equipUid(petUid)
+			end)
+		else
+			hubFn.row(petDetail, HubStyle.EQUIP, 20, function() end)
+		end
+		hubFn.row(petDetail, HubStyle.CRACK_PET, 21, function()
+			hubState.rollKind = "pets"
+			hubFn.show("roll")
+		end)
 		hubFn.row(hubState.pets, "Crack a Pet Shard", 20, function()
 			hubState.rollKind = "pets"
 			hubFn.show("roll")
@@ -2513,6 +2729,219 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		}
 	end
 
+	function hubFn.mountRollStage(tokens: number): Frame
+		local spec = HubStyle.rollStage(hubFn.rollRowWidth(), 320)
+		local stage = Instance.new("Frame")
+		stage.Name = "Stage"
+		stage.BackgroundTransparency = 1
+		stage.Size = UDim2.fromOffset(spec.w, spec.h)
+		stage.LayoutOrder = 2
+		stage.Parent = hubState.roll
+		local pedestal = Instance.new("Frame")
+		pedestal.Name = "Pedestal"
+		pedestal.Position = UDim2.fromOffset(spec.pedestal.x, spec.pedestal.y)
+		pedestal.Size = UDim2.fromOffset(spec.pedestal.w, spec.pedestal.h)
+		pedestal.BackgroundColor3 = rgb("header")
+		pedestal.BorderSizePixel = 0
+		pedestal.Parent = stage
+		local pedestalCorner = Instance.new("UICorner")
+		pedestalCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		pedestalCorner.Parent = pedestal
+		local base = Instance.new("Frame")
+		base.Name = "Base"
+		base.AnchorPoint = Vector2.new(0.5, 1)
+		base.Position = UDim2.new(0.5, 0, 1, -12)
+		base.Size = UDim2.fromOffset(math.max(48, math.floor(spec.pedestal.w * 0.62)), 18)
+		base.BackgroundColor3 = rgb("panel")
+		base.BorderSizePixel = 0
+		base.Parent = pedestal
+		local baseCorner = Instance.new("UICorner")
+		baseCorner.CornerRadius = UDim.new(1, 0)
+		baseCorner.Parent = base
+		local crystal = ShardBoard.visual(hubState.rollKind)
+		local shard = Instance.new("Frame")
+		shard.Name = "Crystal"
+		shard.AnchorPoint = Vector2.new(0.5, 1)
+		shard.Position = UDim2.new(0.5, 0, 1, -28)
+		shard.Size = UDim2.fromOffset(crystal.w, crystal.h)
+		shard.BackgroundColor3 = Color3.fromRGB(crystal.fill[1], crystal.fill[2], crystal.fill[3])
+		shard.BorderSizePixel = 0
+		shard.Parent = pedestal
+		local shardCorner = Instance.new("UICorner")
+		shardCorner.CornerRadius = UDim.new(0, 10)
+		shardCorner.Parent = shard
+		local oddsBars = Instance.new("Frame")
+		oddsBars.Name = "OddsBars"
+		oddsBars.Position = UDim2.fromOffset(spec.odds.x, spec.odds.y)
+		oddsBars.Size = UDim2.fromOffset(spec.odds.w, spec.odds.h)
+		oddsBars.BackgroundColor3 = rgb("body")
+		oddsBars.BorderSizePixel = 0
+		oddsBars.Parent = stage
+		local oddsCorner = Instance.new("UICorner")
+		oddsCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		oddsCorner.Parent = oddsBars
+		local oddsList = Instance.new("UIListLayout")
+		oddsList.Padding = UDim.new(0, 4)
+		oddsList.SortOrder = Enum.SortOrder.LayoutOrder
+		oddsList.Parent = oddsBars
+		local oddsPad = Instance.new("UIPadding")
+		oddsPad.PaddingTop = UDim.new(0, 8)
+		oddsPad.PaddingLeft = UDim.new(0, 8)
+		oddsPad.PaddingRight = UDim.new(0, 8)
+		oddsPad.Parent = oddsBars
+		local title = Instance.new("TextLabel")
+		title.Name = "OddsTitle"
+		title.BackgroundTransparency = 1
+		title.Size = UDim2.fromOffset(math.max(40, spec.odds.w - 16), 18)
+		title.Font = headerFont()
+		title.TextSize = UiTheme.MIN_TEXT
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.TextColor3 = rgb("text")
+		title.Text = "ODDS"
+		title.LayoutOrder = 1
+		title.Parent = oddsBars
+		local row = Instance.new("Frame")
+		row.Name = "CrackRow"
+		row.Position = UDim2.fromOffset(spec.row.x, spec.row.y)
+		row.Size = UDim2.fromOffset(spec.row.w, spec.row.h)
+		row.BackgroundTransparency = 1
+		row.Parent = stage
+		local count = Instance.new("TextLabel")
+		count.Name = "ShardCount"
+		count.Position = UDim2.fromOffset(spec.count.x, spec.count.y)
+		count.Size = UDim2.fromOffset(spec.count.w, spec.count.h)
+		count.BackgroundColor3 = rgb("header")
+		count.Font = headerFont()
+		count.TextSize = UiTheme.MIN_TEXT
+		count.TextColor3 = rgb("text")
+		count.Text = HubStyle.shardCount(tokens)
+		count.TextTruncate = Enum.TextTruncate.AtEnd
+		count.Parent = row
+		local countCorner = Instance.new("UICorner")
+		countCorner.CornerRadius = UDim.new(0, 8)
+		countCorner.Parent = count
+		for _, spot in ipairs(spec.buttons) do
+			if spot.id ~= "Roll" then
+				local on = false
+				if spot.id == "Auto" then
+					on = hubState.autoOn == true
+				elseif spot.id == "Info" then
+					on = hubState.infoOpen == true
+				elseif spot.id == "TimesTen" then
+					on = hubState.pendingCount > 1 or hubState.batching == true
+				end
+				local tone = "header"
+				if on then
+					tone = "button"
+				elseif spot.id == "TimesTen" then
+					tone = "claim"
+				end
+				local label = spot.label
+				if spot.id == "Auto" and on then
+					label = "Auto On"
+				end
+				local button = Instance.new("TextButton")
+				button.Name = spot.id
+				button.Position = UDim2.fromOffset(spot.x, spot.y)
+				button.Size = UDim2.fromOffset(spot.w, spot.h)
+				button.BackgroundColor3 = rgb(tone)
+				button.Font = headerFont()
+				button.TextSize = UiTheme.MIN_TEXT
+				button.TextColor3 = rgb("text")
+				button.Text = label
+				button.TextTruncate = Enum.TextTruncate.AtEnd
+				button.AutoButtonColor = false
+				button.Parent = row
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0, 8)
+				corner.Parent = button
+				hubFn.setRest(button, rgb(tone))
+				hubFn.motion(button)
+				local spotId = spot.id
+				button.Activated:Connect(function()
+					hubFn.applyControl(spotId)
+				end)
+			end
+		end
+		return oddsBars
+	end
+
+	function hubFn.paintOddsBars(host: Frame, epicFill: number, legendaryFill: number)
+		local pool = if hubState.rollKind == "pets"
+			then Pools.get(hubFn.rollPoolId())
+			else Pools.get("verdant_armory")
+		local rows = RollBoard.oddsRows(pool, hubState.profile, 0, 0)
+		for index, row in ipairs(rows) do
+			local bar = Instance.new("Frame")
+			bar.Name = row.rarity
+			bar.BackgroundTransparency = 1
+			bar.Size = UDim2.fromOffset(math.max(40, host.Size.X.Offset - 16), 18)
+			bar.LayoutOrder = 1 + index
+			bar.Parent = host
+			local caption = Instance.new("TextLabel")
+			caption.BackgroundTransparency = 1
+			caption.Size = UDim2.fromOffset(bar.Size.X.Offset, 12)
+			caption.Font = bodyFont()
+			caption.TextSize = UiTheme.MIN_TEXT
+			caption.TextXAlignment = Enum.TextXAlignment.Left
+			caption.TextColor3 = rgb("text")
+			caption.Text = row.text
+			caption.TextTruncate = Enum.TextTruncate.AtEnd
+			caption.Parent = bar
+			local track = Instance.new("Frame")
+			track.Name = "Track"
+			track.BackgroundColor3 = rgb("header")
+			track.BorderSizePixel = 0
+			track.Position = UDim2.fromOffset(0, 12)
+			track.Size = UDim2.fromOffset(bar.Size.X.Offset, 6)
+			track.Parent = bar
+			local fill = Instance.new("Frame")
+			fill.Name = "Fill"
+			fill.BackgroundColor3 = hubFn.rarityColor3(row.rarity)
+			fill.BorderSizePixel = 0
+			fill.Size = UDim2.fromScale(HubStyle.barScale(row.chance), 1)
+			fill.Parent = track
+		end
+		local function pityBar(name: string, captionText: string, fillAmount: number, order: number)
+			local scale = fillAmount
+			if type(scale) ~= "number" or scale ~= scale or scale < 0 then
+				scale = 0
+			elseif scale > 1 then
+				scale = 1
+			end
+			local bar = Instance.new("Frame")
+			bar.Name = name
+			bar.BackgroundTransparency = 1
+			bar.Size = UDim2.fromOffset(math.max(40, host.Size.X.Offset - 16), 18)
+			bar.LayoutOrder = order
+			bar.Parent = host
+			local label = Instance.new("TextLabel")
+			label.BackgroundTransparency = 1
+			label.Size = UDim2.fromOffset(math.floor(bar.Size.X.Offset * 0.42), 18)
+			label.Font = bodyFont()
+			label.TextSize = UiTheme.MIN_TEXT
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.TextColor3 = rgb("muted")
+			label.Text = captionText
+			label.Parent = bar
+			local track = Instance.new("Frame")
+			track.Name = "Track"
+			track.BackgroundColor3 = rgb("header")
+			track.BorderSizePixel = 0
+			track.Position = UDim2.fromOffset(label.Size.X.Offset + 4, 5)
+			track.Size = UDim2.fromOffset(math.max(8, bar.Size.X.Offset - label.Size.X.Offset - 4), 8)
+			track.Parent = bar
+			local fill = Instance.new("Frame")
+			fill.Name = "Fill"
+			fill.BackgroundColor3 = rgb("accent")
+			fill.BorderSizePixel = 0
+			fill.Size = UDim2.fromScale(scale, 1)
+			fill.Parent = track
+		end
+		pityBar("EpicBar", "Epic pity", epicFill, 40)
+		pityBar("LegendaryBar", "Legendary pity", legendaryFill, 41)
+	end
+
 	function hubFn.paintRoll()
 		hubFn.clear(hubState.roll)
 		for _, tween in ipairs(hubState.pityTweens) do
@@ -2530,9 +2959,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				goldHeld = hubState.profile.gold
 			end
 		end
-		hubState.walletTokens.Text = string.format("Shard Tokens  %d", tokens)
+		hubState.walletTokens.Text = HubStyle.shardCount(tokens)
 		hubState.walletGold.Text = string.format("Gold  %d", goldHeld)
-		hubState.rollButton.Text = if hubState.rollKind == "pets" then "Crack Pet" else "Crack"
+		hubState.rollButton.Text = HubStyle.CRACK_ONE
 
 		local band = RollSpot.place(hubFn.rollRowWidth())
 		local kindRow = Instance.new("Frame")
@@ -2548,6 +2977,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return HubPress.lit(hubFn.rollPressState(), id)
 		end
 		for _, spot in ipairs(band.buttons) do
+			if spot.id == "TimesTen" then
+				continue
+			end
 			local button = Instance.new("TextButton")
 			local chosen = kindOn(spot.id)
 			button.Name = spot.id
@@ -2572,12 +3004,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.applyControl(spotId)
 			end)
 		end
+		local oddsPane = hubFn.mountRollStage(tokens)
 
 		local toggles = Instance.new("Frame")
 		toggles.Name = "Toggles"
 		toggles.BackgroundTransparency = 1
 		toggles.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
-		toggles.LayoutOrder = 2
+		toggles.LayoutOrder = 3
 		toggles.Parent = hubState.roll
 		local toggleLayout = Instance.new("UIListLayout")
 		toggleLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -2603,20 +3036,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.applyControl(button.Name)
 			end)
 		end
-		toggle("Auto", if hubState.autoOn then "Auto On" else "Auto", hubState.autoOn)
 		toggle(
 			"Stop",
 			if hubState.stopAt == "Off" then "Stop  Off" else "Stop at  " .. hubState.stopAt,
 			hubState.stopAt ~= "Off"
 		)
 		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn)
-		toggle("Info", "Info", hubState.infoOpen)
 
 		local junkRow = Instance.new("Frame")
 		junkRow.Name = "Junk"
 		junkRow.BackgroundTransparency = 1
 		junkRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
-		junkRow.LayoutOrder = 3
+		junkRow.LayoutOrder = 5
 		junkRow.Parent = hubState.roll
 		local junkLayout = Instance.new("UIListLayout")
 		junkLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -2960,6 +3391,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.line(oddsLines, text, index, rgb("text"))
 			end
 		end
+		hubFn.paintOddsBars(oddsPane, nextEpicFill, nextLegendaryFill)
 
 		local recent = if #hubState.sessionRolls > 0
 			then hubState.sessionRolls

@@ -547,12 +547,26 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local face = HudLayout.portrait(margin)
 		portrait.Position = UDim2.fromOffset(face.x, face.y)
 		portrait.Size = UDim2.fromOffset(face.w, face.h)
-		local bar = HudLayout.health(margin)
+		local bar = HudLayout.health(margin, vx)
 		health.Position = UDim2.fromOffset(bar.x, bar.y)
 		health.Size = UDim2.fromOffset(bar.w, bar.h)
 		local row = HudLayout.pills(vx, margin)
 		pills.Position = UDim2.fromOffset(row.x, row.y)
 		pills.Size = UDim2.fromOffset(row.w, row.h)
+		local vertical = row.h > row.w
+		if vertical then
+			pillLayout.FillDirection = Enum.FillDirection.Vertical
+		else
+			pillLayout.FillDirection = Enum.FillDirection.Horizontal
+		end
+		local gap = UiTheme.PAD
+		local span = if vertical then row.h else row.w
+		local each = math.max(1, math.floor((span - gap * 2) / 3))
+		local labelW = if vertical then row.w else each
+		local labelH = if vertical then each else math.min(32, row.h)
+		gold.Size = UDim2.fromOffset(labelW, labelH)
+		mastery.Size = UDim2.fromOffset(labelW, labelH)
+		shards.Size = UDim2.fromOffset(labelW, labelH)
 		local side = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
 		rail.Position = UDim2.fromOffset(side.x, side.y)
 		rail.Size = UDim2.fromOffset(side.w, side.h)

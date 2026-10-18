@@ -19,13 +19,13 @@ local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 local RAID = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/RaidHud.luau"
 
-local PHONE = { x = 246, y = 96, w = 128, h = 28 }
+local PHONE = { x = 266, y = 136, w = 108, h = 28 }
 
 local LOCKED = {
 	{ 390, 844, PHONE },
-	{ 844, 390, { x = 700, y = 16, w = 128, h = 28 } },
-	{ 800, 380, { x = 656, y = 16, w = 128, h = 28 } },
-	{ 1280, 720, { x = 1136, y = 16, w = 128, h = 28 } },
+	{ 844, 390, { x = 700, y = 80, w = 128, h = 28 } },
+	{ 800, 380, { x = 656, y = 80, w = 128, h = 28 } },
+	{ 1280, 720, { x = 1136, y = 96, w = 128, h = 28 } },
 }
 
 local function clear(box: { x: number, y: number, w: number, h: number }, vx: number, vy: number)
@@ -73,7 +73,7 @@ describe("EchoChip", function()
 
 	it("keeps a side of 200", function()
 		local box = EchoChip.place(200, 200)
-		expect(box).toEqual({ x = 56, y = 96, w = 128, h = 28 })
+		expect(box).toEqual({ x = 56, y = 136, w = 128, h = 28 })
 		clear(box, 200, 200)
 	end)
 
@@ -82,7 +82,7 @@ describe("EchoChip", function()
 		expect(EchoChip.place(390, 844, paid)).toEqual(PHONE)
 		expect(EchoChip.place(390, 844, true)).toEqual(PHONE)
 		expect(EchoChip.place(390, 844, { paid = true })).toEqual(PHONE)
-		expect(EchoChip.place(844, 390, paid)).toEqual({ x = 700, y = 16, w = 128, h = 28 })
+		expect(EchoChip.place(844, 390, paid)).toEqual({ x = 700, y = 80, w = 128, h = 28 })
 	end)
 
 	it("does not write its arguments", function()

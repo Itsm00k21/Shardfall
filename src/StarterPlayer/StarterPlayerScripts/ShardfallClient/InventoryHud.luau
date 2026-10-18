@@ -21,7 +21,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
+local HudLayout = require(Shared:WaitForChild("HudLayout"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
+local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
@@ -191,12 +193,22 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local function phoneLayout(): boolean
 		return ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
 	end
+	local placeChrome: (() -> ())? = nil
 	local function fitRoot()
 		local vx, vy = MobileShell.view(screen)
-		local box = ShellLayout.inventory(vx, vy, phoneLayout())
+		local phone = phoneLayout()
+		local box = ShellLayout.inventory(vx, vy, phone)
 		local pet = ShellLayout.petRect()
-		root.Position = UDim2.fromOffset(16, pet.y + pet.h + 8)
+		if phone then
+			root.Position = UDim2.fromOffset(UiTheme.safeMargin(), UiTheme.safeMargin())
+		else
+			root.Position = UDim2.fromOffset(16, pet.y + pet.h + 8)
+		end
 		root.Size = UDim2.fromOffset(box.w, box.h)
+		local place = placeChrome
+		if place ~= nil then
+			place()
+		end
 	end
 	fitRoot()
 	local fitCamera = workspace.CurrentCamera
@@ -204,12 +216,6 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		fitCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitRoot)
 	end
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitRoot)
-	new("UIPadding", {
-		PaddingTop = UDim.new(0, 12),
-		PaddingBottom = UDim.new(0, 12),
-		PaddingLeft = UDim.new(0, 12),
-		PaddingRight = UDim.new(0, 12),
-	}, root)
 
 	local header = new("Frame", {
 		BackgroundTransparency = 1,
@@ -318,6 +324,18 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.new(1, 0, 1, -164),
 		BackgroundTransparency = 1,
 	}, root) :: Frame
+	placeChrome = function()
+		local chrome = HudLayout.bagChrome(root.Size.X.Offset, root.Size.Y.Offset)
+		header.Position = UDim2.fromOffset(chrome.header.x, chrome.header.y)
+		header.Size = UDim2.fromOffset(chrome.header.w, chrome.header.h)
+		tabBar.Position = UDim2.fromOffset(chrome.tabs.x, chrome.tabs.y)
+		tabBar.Size = UDim2.fromOffset(chrome.tabs.w, chrome.tabs.h)
+		filterBar.Position = UDim2.fromOffset(chrome.filters.x, chrome.filters.y)
+		filterBar.Size = UDim2.fromOffset(chrome.filters.w, chrome.filters.h)
+		body.Position = UDim2.fromOffset(chrome.body.x, chrome.body.y)
+		body.Size = UDim2.fromOffset(chrome.body.w, chrome.body.h)
+	end
+	fitRoot()
 
 	local grid = new("ScrollingFrame", {
 		Name = "Grid",
@@ -678,21 +696,37 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			if row.id == selectedId then
 				still = true
 			end
+			local cellW = gridLayout.CellSize.X.Offset
+			local cellH = gridLayout.CellSize.Y.Offset
+			local inner = HudLayout.inventoryCard(cellW, cellH)
 			local card = new("TextButton", {
 				Name = row.id,
 				BackgroundColor3 = COLORS.row,
 				BorderSizePixel = 0,
 				Font = Enum.Font.BuilderSansBold,
 				TextSize = 13,
-				TextWrapped = true,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = rarityColor(row.rarity),
-				Text = row.name,
+				Text = "",
 				AutoButtonColor = true,
 				LayoutOrder = index,
+				ClipsDescendants = true,
 			}, grid) :: TextButton
 			corner(card, 8)
 			strokeFor(card, row.rarity)
+			local nameLabel = new("TextLabel", {
+				Name = "Name",
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(inner.name.x, inner.name.y),
+				Size = UDim2.fromOffset(inner.name.w, inner.name.h),
+				Font = Enum.Font.BuilderSansBold,
+				TextSize = 13,
+				TextWrapped = true,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextColor3 = rarityColor(row.rarity),
+				Text = row.name,
+			}, card) :: TextLabel
+			nameLabel.Name = "Name"
 			if socketCue and row.sockets >= 1 then
 				new("UIStroke", {
 					Name = "SocketGlow",
@@ -726,9 +760,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			local footer = new("TextLabel", {
 				BackgroundTransparency = 1,
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, 8, 1, -6),
-				Size = UDim2.new(1, -16, 0, 16),
+				AnchorPoint = Vector2.new(0, 0),
+				Position = UDim2.fromOffset(inner.marks.x, inner.marks.y),
+				Size = UDim2.fromOffset(inner.marks.w, inner.marks.h),
 				Font = Enum.Font.BuilderSans,
 				TextSize = 11,
 				TextXAlignment = Enum.TextXAlignment.Left,

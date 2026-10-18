@@ -29,6 +29,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
+local BannerFit = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BannerFit"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
 local StarterGoalHud = {}
@@ -325,6 +326,25 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 					break
 				end
 			end
+		end
+	end
+
+	-- Portrait puts the gold banner on this same lane. Drop under the
+	-- taller 1.4 line so both text scales stay clear.
+	local banner = BannerFit.fit(viewportX, viewportY, 1.4)
+	if HudLayout.overlaps(box, banner) then
+		local dropped: Rect = {
+			x = box.x,
+			y = banner.y + banner.h + TOAST_GAP,
+			w = box.w,
+			h = height,
+		}
+		if
+			onScreen(dropped, viewportX, viewportY, margin)
+			and clearOf(dropped, block, prompt, rail)
+			and not HudLayout.overlaps(dropped, banner)
+		then
+			box = dropped
 		end
 	end
 
