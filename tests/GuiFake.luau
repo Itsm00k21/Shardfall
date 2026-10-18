@@ -11,6 +11,8 @@ local luau = require("@lune/luau")
 
 local GuiFake = {}
 
+GuiFake.invalidReads = 0
+
 local CLIENT = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
 local SHARED = "../src/ReplicatedStorage/Shared/"
 
@@ -42,6 +44,239 @@ local INHERITS: { [string]: { [string]: boolean } } = {
 	Humanoid = { Instance = true },
 	Part = { Instance = true, BasePart = true },
 }
+
+-- Properties that exist on the class. A read of anything else, with no
+-- child of that name, throws the way Roblox does. Unset members stay nil.
+local PROPS: { [string]: { [string]: boolean } } = {
+	Instance = { Name = true, Parent = true, ClassName = true, Archivable = true },
+	GuiBase2d = { AbsolutePosition = true, AbsoluteSize = true },
+	LayerCollector = { Enabled = true },
+	GuiObject = {
+		Visible = true,
+		Active = true,
+		AnchorPoint = true,
+		AutomaticSize = true,
+		BackgroundColor3 = true,
+		BackgroundTransparency = true,
+		BorderColor3 = true,
+		BorderMode = true,
+		BorderSizePixel = true,
+		ClipsDescendants = true,
+		LayoutOrder = true,
+		Position = true,
+		Rotation = true,
+		Selectable = true,
+		SelectionOrder = true,
+		Size = true,
+		SizeConstraint = true,
+		ZIndex = true,
+		Interactable = true,
+	},
+	GuiButton = { AutoButtonColor = true, Modal = true, Selected = true, Style = true },
+	Text = {
+		Font = true,
+		LineHeight = true,
+		MaxVisibleGraphemes = true,
+		RichText = true,
+		Text = true,
+		TextColor3 = true,
+		TextScaled = true,
+		TextSize = true,
+		TextStrokeColor3 = true,
+		TextStrokeTransparency = true,
+		TextTransparency = true,
+		TextTruncate = true,
+		TextWrapped = true,
+		TextXAlignment = true,
+		TextYAlignment = true,
+	},
+	Image = {
+		Image = true,
+		ImageColor3 = true,
+		ImageRectOffset = true,
+		ImageRectSize = true,
+		ImageTransparency = true,
+		ResampleMode = true,
+		ScaleType = true,
+		SliceCenter = true,
+		SliceScale = true,
+	},
+	ScreenGui = {
+		ClipToDeviceSafeArea = true,
+		DisplayOrder = true,
+		IgnoreGuiInset = true,
+		ResetOnSpawn = true,
+		ScreenInsets = true,
+		ZIndexBehavior = true,
+	},
+	ScrollingFrame = {
+		AutomaticCanvasSize = true,
+		CanvasPosition = true,
+		CanvasSize = true,
+		ElasticBehavior = true,
+		HorizontalScrollBarInset = true,
+		ScrollBarImageColor3 = true,
+		ScrollBarThickness = true,
+		ScrollingDirection = true,
+		ScrollingEnabled = true,
+		VerticalScrollBarInset = true,
+		VerticalScrollBarPosition = true,
+	},
+	CanvasGroup = { GroupColor3 = true, GroupTransparency = true },
+	ViewportFrame = {
+		Ambient = true,
+		CurrentCamera = true,
+		ImageColor3 = true,
+		ImageTransparency = true,
+		LightColor = true,
+		LightDirection = true,
+	},
+	UIListLayout = {
+		FillDirection = true,
+		HorizontalAlignment = true,
+		HorizontalFlex = true,
+		ItemLineAlignment = true,
+		Padding = true,
+		SortOrder = true,
+		VerticalAlignment = true,
+		VerticalFlex = true,
+		Wraps = true,
+	},
+	UIGridLayout = {
+		CellPadding = true,
+		CellSize = true,
+		FillDirection = true,
+		FillDirectionMaxCells = true,
+		HorizontalAlignment = true,
+		SortOrder = true,
+		StartCorner = true,
+		VerticalAlignment = true,
+	},
+	UIPadding = {
+		PaddingBottom = true,
+		PaddingLeft = true,
+		PaddingRight = true,
+		PaddingTop = true,
+	},
+	UICorner = { CornerRadius = true },
+	UIStroke = {
+		ApplyStrokeMode = true,
+		BorderOffset = true,
+		Color = true,
+		Enabled = true,
+		LineJoinMode = true,
+		StrokeSizingMode = true,
+		Thickness = true,
+		Transparency = true,
+	},
+	UIGradient = {
+		Color = true,
+		Enabled = true,
+		Offset = true,
+		Rotation = true,
+		Transparency = true,
+	},
+	UIScale = { Scale = true },
+	Sound = {
+		Looped = true,
+		PlaybackSpeed = true,
+		Playing = true,
+		RollOffMode = true,
+		SoundId = true,
+		TimePosition = true,
+		Volume = true,
+	},
+	Camera = {
+		CFrame = true,
+		CameraSubject = true,
+		CameraType = true,
+		FieldOfView = true,
+		Focus = true,
+		ViewportSize = true,
+	},
+	Player = {
+		AccountAge = true,
+		Character = true,
+		DisplayName = true,
+		Team = true,
+		UserId = true,
+	},
+	Humanoid = {
+		DisplayDistanceType = true,
+		Health = true,
+		HipHeight = true,
+		JumpHeight = true,
+		JumpPower = true,
+		MaxHealth = true,
+		RigType = true,
+		WalkSpeed = true,
+	},
+	BasePart = {
+		Anchored = true,
+		BrickColor = true,
+		CFrame = true,
+		CanCollide = true,
+		CanQuery = true,
+		CanTouch = true,
+		CastShadow = true,
+		Color = true,
+		Material = true,
+		Position = true,
+		Shape = true,
+		Size = true,
+		Transparency = true,
+	},
+	ModuleScript = { Source = true },
+}
+
+-- Text and Image are property groups, not classes. IsA stays on INHERITS.
+local MIXIN: { [string]: { [string]: boolean } } = {
+	TextButton = { Text = true },
+	TextLabel = { Text = true },
+	ImageButton = { Image = true },
+	ImageLabel = { Image = true },
+}
+
+local function validMember(className: string, key: string): boolean
+	local own = PROPS[className]
+	if own ~= nil and own[key] == true then
+		return true
+	end
+	local parents = INHERITS[className]
+	if parents ~= nil then
+		for parent, on in pairs(parents) do
+			if on == true and validMember(parent, key) then
+				return true
+			end
+		end
+	end
+	local mix = MIXIN[className]
+	if mix ~= nil then
+		for parent, on in pairs(mix) do
+			if on == true and PROPS[parent] ~= nil and PROPS[parent][key] == true then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function instancePath(self: any): string
+	local names = {}
+	local current = self
+	local guard = 0
+	while type(current) == "table" and guard < 32 do
+		guard += 1
+		local props = rawget(current, "_props")
+		local name = "Instance"
+		if type(props) == "table" and props.Name ~= nil then
+			name = tostring(props.Name)
+		end
+		table.insert(names, 1, name)
+		current = rawget(current, "_parent")
+	end
+	return table.concat(names, ".")
+end
 
 local GUI_OBJECT = {
 	Frame = true,
@@ -214,11 +449,24 @@ local instanceMeta = {
 		if key == "AbsolutePosition" then
 			return methods._origin(self)
 		end
+		local className = rawget(self, "_class")
+		if validMember(className, key) then
+			return nil
+		end
 		local child = methods.FindFirstChild(self, key, false)
 		if child ~= nil then
 			return child
 		end
-		return nil
+		GuiFake.invalidReads += 1
+		error(
+			tostring(key)
+				.. " is not a valid member of "
+				.. tostring(className)
+				.. ' "'
+				.. instancePath(self)
+				.. '"',
+			2
+		)
 	end,
 	__newindex = function(self, key, value)
 		if key == "Parent" then
@@ -491,7 +739,10 @@ end
 local function shown(node: any): boolean
 	local current = node
 	while current ~= nil do
-		if current.Visible == false or current.Enabled == false then
+		if current:IsA("GuiObject") and current.Visible == false then
+			return false
+		end
+		if current:IsA("LayerCollector") and current.Enabled == false then
 			return false
 		end
 		current = current.Parent

@@ -56,7 +56,11 @@ local function shownText(root: any, text: string): boolean
 		local node = child
 		local visible = true
 		while node ~= nil do
-			if node.Visible == false or node.Enabled == false then
+			if node:IsA("GuiObject") and node.Visible == false then
+				visible = false
+				break
+			end
+			if node:IsA("LayerCollector") and node.Enabled == false then
 				visible = false
 				break
 			end
