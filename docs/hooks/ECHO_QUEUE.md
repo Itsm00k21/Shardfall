@@ -6,17 +6,19 @@ Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved 
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001, E-002, and E-003 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
-## E-001 — this PR
+## E-001 — done
 
-Phone layout pass. Branch `helper/phone-layout-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/217.
+Phone layout pass. Branch `helper/phone-layout-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/217. Merged at `aa6ebac`.
 
 At 1280×720 and the phone sizes 844×390, 390×844, and 800×380, nothing overlaps or clips: the Gold, Mastery, and Shards counters versus the Forge/gold banner, the Bag rows, the action bar (phone 2×4), and the quest/starter-goal tracker. `tests/PhoneLayout.spec.luau` fails on overlap.
 
 Follows vision priorities 1 and 2 in `docs/design/vision/VISION.md`. The shots in `docs/design/vision/refs/` are reference only. No copied art, names, or paid offers. No premium currency. Nothing costs Robux.
 
-## E-002 — queued
+## E-002 — in progress
 
-Controller nav. D-pad and stick move through every MenuHub tab and button with a visible selection ring. B closes. The action bar maps to controller buttons. Extend the click harness from #213. Hold this until #217 is merged.
+Controller nav. Branch `helper/controller-nav-9721`.
+
+D-pad and left stick move through every MenuHub tab and every interactive button in the open tab, with a visible selection ring. ButtonA activates the selected item. ButtonB closes the open menu and returns to world input, except while a hotkey capture is active. While the hub is closed, D-pad Up/Right/Down/Left fire action-bar slots 1–4 and LB plus the same D-pad fires slots 5–8. ButtonY stays dodge, ButtonR1 stays the light attack, and ButtonX stays heavy. The click harness from #213 covers the ring, B, and the slot map.
 
 ## E-003 — queued
 

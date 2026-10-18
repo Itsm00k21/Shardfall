@@ -13,6 +13,13 @@
 	the Epic and Legendary pity bars, and the full-animation build-up.
 	A close call is one beat beside the card. The client does not decide
 	the roll, and it does not advance pity.
+
+	A gamepad moves a white selection ring through the tabs and the
+	buttons on the open page. D-pad and the left stick share that step.
+	ButtonA activates the ring. ButtonB still closes, except while a
+	hotkey capture is waiting. That capture belongs to Ghost's rebind
+	fix: this file does not clear it. While the hub is closed the D-pad
+	stays on the action bar (slots 1-4, and 5-8 with LB).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -61,6 +68,7 @@ local UiSfx = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiS
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
+local PadFocus = require(script.Parent.PadFocus)
 
 local MenuHub = {}
 
@@ -430,6 +438,227 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return hubState.controls
 	end
 
+	hubState.padTarget = nil
+	hubState.padStick = ""
+	hubState.padRing = nil
+
+	function hubFn.padShown(node: any): boolean
+		local current = node
+		while current ~= nil do
+			if current:IsA("ScreenGui") then
+				return current.Enabled ~= false
+			end
+			if current:IsA("GuiObject") and current.Visible == false then
+				return false
+			end
+			current = current.Parent
+		end
+		return true
+	end
+
+	function hubFn.padRing(): Frame
+		if hubState.padRing ~= nil then
+			return hubState.padRing
+		end
+		local ring = Instance.new("Frame")
+		ring.Name = "PadRing"
+		ring.BackgroundTransparency = 1
+		ring.BorderSizePixel = 0
+		ring.Active = false
+		ring.Selectable = false
+		ring.Size = UDim2.new(1, -6, 1, -6)
+		ring.Position = UDim2.fromOffset(3, 3)
+		ring.ZIndex = 30
+		ring.Visible = false
+		local stroke = Instance.new("UIStroke")
+		stroke.Name = "Ring"
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Thickness = PadFocus.RING
+		stroke.Transparency = 0
+		local color = PadFocus.RING_RGB
+		stroke.Color = Color3.fromRGB(color[1], color[2], color[3])
+		stroke.Parent = ring
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 8)
+		corner.Parent = ring
+		hubState.padRing = ring
+		return ring
+	end
+
+	function hubFn.padClear()
+		hubState.padTarget = nil
+		hubState.padStick = ""
+		if hubState.padRing ~= nil then
+			hubState.padRing.Visible = false
+			hubState.padRing.Parent = nil
+		end
+	end
+
+	function hubFn.padEntries(): { any }
+		local entries = {}
+		local seq = 0
+		local function add(button: any, column: number)
+			if button == nil or not button:IsA("GuiButton") then
+				return
+			end
+			if button.Name == "Backdrop" or button.Name == "PadRing" then
+				return
+			end
+			if not hubFn.padShown(button) then
+				return
+			end
+			seq += 1
+			local pos = button.AbsolutePosition
+			local size = button.AbsoluteSize
+			local layoutOrder = if type(button.LayoutOrder) == "number" then button.LayoutOrder else seq
+			table.insert(entries, {
+				button = button,
+				x = pos.X,
+				y = pos.Y,
+				w = size.X,
+				h = size.Y,
+				column = column,
+				order = layoutOrder,
+				seq = seq,
+			})
+		end
+		local function walk(root: any, column: number)
+			if root == nil or not hubFn.padShown(root) then
+				return
+			end
+			local function visit(node: any)
+				local indexed = {}
+				for index, child in ipairs(node:GetChildren()) do
+					indexed[index] = { child = child, index = index }
+				end
+				table.sort(indexed, function(a, b)
+					local ao = if type(a.child.LayoutOrder) == "number" then a.child.LayoutOrder else 0
+					local bo = if type(b.child.LayoutOrder) == "number" then b.child.LayoutOrder else 0
+					if ao ~= bo then
+						return ao < bo
+					end
+					return a.index < b.index
+				end)
+				for _, row in ipairs(indexed) do
+					local child = row.child
+					if child.Name ~= "PadRing" then
+						if child:IsA("GuiButton") then
+							add(child, column)
+						end
+						if child:IsA("GuiObject") then
+							visit(child)
+						end
+					end
+				end
+			end
+			visit(root)
+		end
+		for _, tab in ipairs(ClientChrome.TABS) do
+			add(hubState.tabButtons[tab.id], 0)
+		end
+		add(hubState.closeButton, 1)
+		walk(hubState.pages[hubState.shownId], 2)
+		walk(hubState.classModal, 3)
+		walk(hubState.detail, 3)
+		return entries
+	end
+
+	function hubFn.padPlace(showRing: boolean)
+		if not hubState.route.open then
+			hubFn.padClear()
+			return
+		end
+		local entries = hubFn.padEntries()
+		if #entries == 0 then
+			hubFn.padClear()
+			return
+		end
+		local index = 1
+		local found = false
+		for cursor, entry in ipairs(entries) do
+			if entry.button == hubState.padTarget then
+				index = cursor
+				found = true
+				break
+			end
+		end
+		if not found then
+			local tabId = hubState.shownId
+			if tabId == "sets" then
+				tabId = "bag"
+			end
+			local tabButton = hubState.tabButtons[tabId]
+			for cursor, entry in ipairs(entries) do
+				if entry.button == tabButton then
+					index = cursor
+					break
+				end
+			end
+		end
+		local chosen = entries[index]
+		hubState.padTarget = chosen.button
+		local ring = hubFn.padRing()
+		ring.Parent = chosen.button
+		ring.Visible = showRing == true
+	end
+
+	function hubFn.padRefresh()
+		if not hubState.route.open then
+			hubFn.padClear()
+			return
+		end
+		local showRing = hubState.padRing ~= nil and hubState.padRing.Visible == true
+		hubFn.padPlace(showRing)
+	end
+
+	function hubFn.padMove(direction: string)
+		local entries = hubFn.padEntries()
+		if #entries == 0 then
+			return
+		end
+		local index = 1
+		for cursor, entry in ipairs(entries) do
+			if entry.button == hubState.padTarget then
+				index = cursor
+			end
+		end
+		local nextIndex = PadFocus.step(entries, index, direction)
+		local chosen = entries[nextIndex]
+		if chosen == nil then
+			return
+		end
+		hubState.padTarget = chosen.button
+		local ring = hubFn.padRing()
+		ring.Parent = chosen.button
+		ring.Visible = true
+	end
+
+	function hubFn.padActivate()
+		local button = hubState.padTarget
+		if button == nil or button.Parent == nil then
+			hubFn.padPlace(true)
+			button = hubState.padTarget
+		end
+		if button == nil then
+			return
+		end
+		local ring = hubFn.padRing()
+		ring.Visible = true
+		if button == hubState.rollButton then
+			hubFn.pressRoll()
+		else
+			button.Activated:Fire()
+		end
+		if not hubState.route.open then
+			hubFn.padClear()
+			return
+		end
+		if button.Parent == nil or not hubFn.padShown(button) then
+			hubState.padTarget = nil
+		end
+		hubFn.padPlace(true)
+	end
+
 	-- Modal on the backdrop stops the mouse from steering the camera.
 	-- The sink stops movement, sprint, and combat. Tab letters stay free.
 	function hubFn.bindSinkKeys()
@@ -441,6 +670,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				table.insert(codes, code)
 			end
 		end
+		-- ButtonA jumps while the hub is closed. While it is open, A
+		-- activates the selection ring, so the sink keeps the jump.
+		table.insert(codes, Enum.KeyCode.ButtonA)
 		ContextActionService:BindActionAtPriority(
 			"ShardfallMenuSink",
 			hubFn.sink,
@@ -1383,6 +1615,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if leftRoll then
 			hubFn.stopRollChain()
 			hubFn.blankReveal()
+		end
+		if hubFn.padRefresh ~= nil then
+			hubFn.padRefresh()
 		end
 	end
 
@@ -4680,6 +4915,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.screen.Enabled = state.open
 		hubState.shadow.Visible = state.open
 		hubState.panel.Visible = state.open
+		if not state.open then
+			hubFn.padClear()
+		elseif not wasOpen then
+			hubState.padTarget = nil
+			hubState.padStick = ""
+		end
 		hubState.classModal.Visible = state.open and UiRouter.top(state) == "class"
 		if state.open then
 			hubFn.place()
@@ -4847,6 +5088,36 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			return
 		end
+		local keyName = input.KeyCode.Name
+		-- A hotkey capture owns Escape and ButtonB. Closing here would
+		-- leave the capture set, which is Ghost's rebind fix. ButtonB
+		-- does not close the hub while that capture is active.
+		if hubState.capturing ~= nil and (keyName == "Escape" or keyName == "ButtonB") then
+			return
+		end
+		if hubState.route.open and hubState.capturing == nil then
+			local direction = PadFocus.direction(keyName)
+			if direction ~= nil then
+				hubFn.padMove(direction)
+				return
+			end
+			if keyName == "ButtonA" then
+				hubFn.padActivate()
+				return
+			end
+		end
+		local kind = input.UserInputType
+		if
+			hubState.padRing ~= nil
+			and (
+				kind == Enum.UserInputType.MouseButton1
+				or kind == Enum.UserInputType.MouseButton2
+				or kind == Enum.UserInputType.Touch
+				or kind == Enum.UserInputType.Keyboard
+			)
+		then
+			hubState.padRing.Visible = false
+		end
 		if processed then
 			return
 		end
@@ -4879,6 +5150,31 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.paint()
 		end
 		hubFn.follow(nextState)
+	end)
+
+	UserInputService.InputChanged:Connect(function(input, _processed)
+		if not hubState.route.open or hubState.capturing ~= nil then
+			return
+		end
+		if input.KeyCode.Name ~= "Thumbstick1" then
+			return
+		end
+		local position = input.Position
+		local x = 0
+		local y = 0
+		if position ~= nil then
+			if type(position.X) == "number" then
+				x = position.X
+			end
+			if type(position.Y) == "number" then
+				y = position.Y
+			end
+		end
+		local direction, held = PadFocus.stick(x, y, hubState.padStick)
+		hubState.padStick = held
+		if direction ~= nil then
+			hubFn.padMove(direction)
+		end
 	end)
 
 	-- Combat pins Humanoid.Health to MaxHealth, so Died never fires on a

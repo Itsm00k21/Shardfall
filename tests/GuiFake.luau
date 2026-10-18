@@ -426,6 +426,7 @@ local function tween()
 		Play = function() end,
 		Cancel = function() end,
 		Pause = function() end,
+		Completed = makeSignal(),
 	}
 end
 
@@ -558,10 +559,10 @@ function GuiFake.world()
 		GetLastInputType = function()
 			return EnumRoot.UserInputType.Keyboard
 		end,
-		IsGamepadButtonDown = function()
-			return false
-		end,
 	}
+	function userInput:IsGamepadButtonDown()
+		return self.gamepadModifier == true
+	end
 	local binds = {}
 	local context = {
 		BindActionAtPriority = function(_self, name, callback, ...)
@@ -639,7 +640,7 @@ function GuiFake.world()
 	local folder = newInstance("Folder")
 	folder.Name = "ShardfallClient"
 	local scripts = {}
-	for _, name in ipairs({ "MenuHub", "ClassHud", "MobileShell", "ActionBar" }) do
+	for _, name in ipairs({ "MenuHub", "ClassHud", "MobileShell", "ActionBar", "PadFocus" }) do
 		local moduleScript = newInstance("ModuleScript")
 		moduleScript.Name = name
 		moduleScript.Parent = folder
@@ -750,6 +751,12 @@ function GuiFake.world()
 		if loadedClient[name] ~= nil then
 			return loadedClient[name]
 		end
+		if scripts[name] == nil then
+			local moduleScript = newInstance("ModuleScript")
+			moduleScript.Name = name
+			moduleScript.Parent = folder
+			scripts[name] = moduleScript
+		end
 		local source = fs.readFile(CLIENT .. name .. ".luau")
 		local env = {}
 		for key, value in pairs(base) do
@@ -761,7 +768,7 @@ function GuiFake.world()
 				error("require " .. tostring(module), 2)
 			end
 			local moduleName = module.Name
-			if moduleName == "MenuHub" or moduleName == "ClassHud" or moduleName == "MobileShell" or moduleName == "ActionBar" then
+			if fs.isFile(CLIENT .. moduleName .. ".luau") then
 				return loadClient(moduleName)
 			end
 			return require(SHARED .. moduleName)
