@@ -5,9 +5,101 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local FirstSession = require("../src/ReplicatedStorage/Shared/FirstSession")
+local Onboarding = require("../src/ReplicatedStorage/Shared/Onboarding")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 
 describe("Schema", function()
+	it("treats a missing key as a new profile", function()
+		local profile, err = Schema.migrate(nil)
+		expect(err).toBeNil()
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
+		expect(profile.onboardDone).toEqual(false)
+		expect(profile.onboardStep).toEqual("open")
+		expect(profile.firstSession.returning).toEqual(false)
+		expect(profile.shardTokens).toEqual(25)
+		local payout = Schema.deepCopy(profile)
+		Onboarding.starter(payout)
+		expect(payout.gold).toEqual(250)
+		expect(payout.onboardDone).toEqual(true)
+		local skipped = FirstSession.skip(profile.firstSession, { classId = "warden" })
+		expect(skipped.ok).toEqual(true)
+		expect(#skipped.rewards > 0).toBeTrue()
+
+		local legacy, legacyErr = Schema.migrate({ schemaVersion = 13, gold = 4 })
+		expect(legacyErr).toBeNil()
+		assert(legacy ~= nil)
+		expect(legacy.onboardDone).toEqual(true)
+		expect(legacy.onboardStep).toEqual("haven")
+		expect(legacy.gold).toEqual(4)
+		expect(legacy.firstSession.returning).toEqual(true)
+		local oldSkip = FirstSession.skip(legacy.firstSession, { classId = "warden" })
+		expect(oldSkip.ok).toEqual(true)
+		expect(#oldSkip.rewards).toEqual(0)
+	end)
+
+	it("keeps a versionless profile's wallets and lastSeen", function()
+		local seen = 1_600_000_000
+		local saved = {
+			gold = 40,
+			shardTokens = 100,
+			gems = 9,
+			raidMarks = 12,
+			lastSeen = seen,
+			companions = {
+				{ species = "shardjaw", name = "Shardjaw" },
+			},
+			codex = { unlocked = { attack = true } },
+			inventory = {
+				abc = { uid = "abc", name = "Wooden Sword", kind = "Weapon" },
+			},
+		}
+		local profile, err = Schema.migrate(saved)
+		expect(err).toBeNil()
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
+		expect(profile.gold).toEqual(40)
+		expect(profile.shardTokens).toEqual(100)
+		expect(profile.gems).toEqual(9)
+		expect(profile.raidMarks).toEqual(12)
+		expect(profile.lastSeen).toEqual(seen)
+		expect(profile.companions[1].species).toEqual("shardjaw")
+		expect(profile.codex.unlocked.attack).toEqual(true)
+		expect(profile.inventory.abc.name).toEqual("Wooden Sword")
+	end)
+
+	it("refuses a bag that is not a table and does not empty it", function()
+		local saved = {
+			schemaVersion = 26,
+			gold = 10,
+			inventory = "nope",
+			pets = "nope",
+			materials = "nope",
+			equipped = { weapon = "abc" },
+		}
+		local profile, err = Schema.migrate(saved)
+		expect(profile).toBeNil()
+		expect(err).toEqual("corrupt")
+		expect(saved.inventory).toEqual("nope")
+		expect(saved.gold).toEqual(10)
+		expect(saved.equipped.weapon).toEqual("abc")
+
+		local reconciled = Schema.reconcile({
+			schemaVersion = 26,
+			gold = 10,
+			inventory = "nope",
+			pets = "nope",
+			materials = "nope",
+			equipped = { weapon = "abc" },
+		})
+		expect(reconciled.inventory).toEqual("nope")
+		expect(reconciled.pets).toEqual("nope")
+		expect(reconciled.materials).toEqual("nope")
+		expect(reconciled.gold).toEqual(10)
+		expect(reconciled.equipped.weapon).toEqual("abc")
+	end)
+
 	it("starts a new profile at version 1 with starter tokens", function()
 		local profile = Schema.template()
 		expect(profile.schemaVersion).toEqual(Schema.VERSION)

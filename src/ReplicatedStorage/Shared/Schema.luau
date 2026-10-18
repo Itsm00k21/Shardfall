@@ -482,10 +482,12 @@ function Schema.reconcile(data: any): ProfileData
 			data[key] = Schema.deepCopy(value)
 		end
 	end
-	if type(data.inventory) ~= "table" then
+	-- A missing bag is a new or partial profile. A string or number is
+	-- corrupt. Leave that value in place so a save cannot replace it with {}.
+	if data.inventory == nil then
 		data.inventory = {}
 	end
-	if type(data.pets) ~= "table" then
+	if data.pets == nil then
 		data.pets = {}
 	end
 	if type(data.pity) ~= "table" then
@@ -699,14 +701,18 @@ function Schema.reconcile(data: any): ProfileData
 	-- An equipped id that is not in the bag must not survive. The client
 	-- names whatever this points at, so a stale id would look like a sword
 	-- the player does not have.
-	if data.equipped.weapon ~= nil and data.inventory[data.equipped.weapon] == nil then
+	if
+		type(data.inventory) == "table"
+		and data.equipped.weapon ~= nil
+		and data.inventory[data.equipped.weapon] == nil
+	then
 		data.equipped.weapon = nil
 	end
-	if data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
+	if type(data.pets) == "table" and data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
 		data.equipped.pet = nil
 	end
 	local armor = {}
-	if type(data.equipped.armor) == "table" then
+	if type(data.equipped.armor) == "table" and type(data.inventory) == "table" then
 		for slot, uid in pairs(data.equipped.armor) do
 			if Schema.ARMOR_SLOTS[slot] == true and data.inventory[uid] ~= nil then
 				armor[slot] = uid
@@ -715,7 +721,7 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	data.equipped.armor = armor
 	local accessories = {}
-	if type(data.equipped.accessories) == "table" then
+	if type(data.equipped.accessories) == "table" and type(data.inventory) == "table" then
 		for slot, uid in pairs(data.equipped.accessories) do
 			if Schema.ACCESSORY_SLOTS[slot] == true and data.inventory[uid] ~= nil then
 				accessories[slot] = uid
@@ -723,7 +729,9 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.equipped.accessories = accessories
-	data.materials = Materials.sanitize(data.materials)
+	if data.materials == nil or type(data.materials) == "table" then
+		data.materials = Materials.sanitize(data.materials)
+	end
 	data.consumables = Materials.sanitizeCounts(data.consumables, { Materials.TONIC_ID })
 	data.vouchers = Materials.sanitizeCounts(data.vouchers, Materials.VOUCHER_AREAS)
 	local function sanitizeGear(item: any)
@@ -760,11 +768,15 @@ function Schema.reconcile(data: any): ProfileData
 		item.upgrade = upgrade
 		Stars.applyStats(item)
 	end
-	for _, item in pairs(data.inventory) do
-		sanitizeGear(item)
+	if type(data.inventory) == "table" then
+		for _, item in pairs(data.inventory) do
+			sanitizeGear(item)
+		end
 	end
-	for _, item in pairs(data.pets) do
-		sanitizeGear(item)
+	if type(data.pets) == "table" then
+		for _, item in pairs(data.pets) do
+			sanitizeGear(item)
+		end
 	end
 	return data
 end
@@ -776,14 +788,38 @@ end
 	version means a future server already saved this player; an old server
 	should refuse the session instead of rolling the data backwards.
 ]]
+
+-- A missing schemaVersion still walks the steps, but a field that is
+-- already stored stays. A real older version still receives the default.
+local function keepExisting(versionless: boolean, current: any, replacement: any): any
+	if versionless and current ~= nil then
+		return current
+	end
+	return replacement
+end
+
+local function corruptCollection(value: any): boolean
+	return value ~= nil and type(value) ~= "table"
+end
+
 function Schema.migrate(raw: any): (ProfileData?, string?)
 	if raw == nil then
-		raw = {}
+		-- A missing key is a new player. The version walk treats nil as 0,
+		-- and the v14 step would mark the tutorial finished.
+		return Schema.template(), nil
 	elseif type(raw) ~= "table" then
+		return nil, "corrupt"
+	elseif
+		corruptCollection(raw.inventory)
+		or corruptCollection(raw.pets)
+		or corruptCollection(raw.materials)
+	then
+		-- Replacing a string bag with {} would store an empty profile.
 		return nil, "corrupt"
 	end
 
 	local version = raw.schemaVersion
+	local versionless = version == nil
 	if version == nil then
 		version = 0
 	elseif type(version) ~= "number" or version ~= version then
@@ -1054,7 +1090,11 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		if type(raw.onboardStep) ~= "string" then
 			raw.onboardStep = "haven"
 		end
-		if raw.onboardDone ~= true then
+		if versionless then
+			if type(raw.onboardDone) ~= "boolean" then
+				raw.onboardDone = true
+			end
+		elseif raw.onboardDone ~= true then
 			raw.onboardDone = true
 		end
 		raw.schemaVersion = 14
@@ -1062,74 +1102,74 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	end
 
 	if version < 15 then
-		raw.restCharges = 0
-		raw.welcomeCharges = 0
-		raw.lastSeen = os.time()
-		raw.milestoneTitle = ""
-		raw.welcomeNote = ""
+		raw.restCharges = keepExisting(versionless, raw.restCharges, 0)
+		raw.welcomeCharges = keepExisting(versionless, raw.welcomeCharges, 0)
+		raw.lastSeen = keepExisting(versionless, raw.lastSeen, os.time())
+		raw.milestoneTitle = keepExisting(versionless, raw.milestoneTitle, "")
+		raw.welcomeNote = keepExisting(versionless, raw.welcomeNote, "")
 		raw.schemaVersion = 15
 		version = 15
 	end
 
 	if version < 16 then
-		raw.gems = 0
-		raw.eventTokens = 0
-		raw.ledger = {}
-		raw.receipts = {}
+		raw.gems = keepExisting(versionless, raw.gems, 0)
+		raw.eventTokens = keepExisting(versionless, raw.eventTokens, 0)
+		raw.ledger = keepExisting(versionless, raw.ledger, {})
+		raw.receipts = keepExisting(versionless, raw.receipts, {})
 		raw.schemaVersion = 16
 		version = 16
 	end
 
 	if version < 17 then
-		raw.eggs = 1
-		raw.companions = {}
+		raw.eggs = keepExisting(versionless, raw.eggs, 1)
+		raw.companions = keepExisting(versionless, raw.companions, {})
 		raw.schemaVersion = 17
 		version = 17
 	end
 
 	if version < 18 then
-		raw.dailies = {}
-		raw.weekly = {}
-		raw.weeklyWeek = -1
-		raw.board = {}
-		raw.boardLines = 0
-		raw.passXp = 0
-		raw.passClaimed = 0
-		raw.firstClearDay = -1
-		raw.nightmareBest = 0
-		raw.dailyBonusDay = -1
-		raw.dailyRerollDay = -1
+		raw.dailies = keepExisting(versionless, raw.dailies, {})
+		raw.weekly = keepExisting(versionless, raw.weekly, {})
+		raw.weeklyWeek = keepExisting(versionless, raw.weeklyWeek, -1)
+		raw.board = keepExisting(versionless, raw.board, {})
+		raw.boardLines = keepExisting(versionless, raw.boardLines, 0)
+		raw.passXp = keepExisting(versionless, raw.passXp, 0)
+		raw.passClaimed = keepExisting(versionless, raw.passClaimed, 0)
+		raw.firstClearDay = keepExisting(versionless, raw.firstClearDay, -1)
+		raw.nightmareBest = keepExisting(versionless, raw.nightmareBest, 0)
+		raw.dailyBonusDay = keepExisting(versionless, raw.dailyBonusDay, -1)
+		raw.dailyRerollDay = keepExisting(versionless, raw.dailyRerollDay, -1)
 		raw.schemaVersion = 18
 		version = 18
 	end
 
 	if version < 19 then
-		raw.raidMarks = 0
-		raw.raidMarksEarned = 0
-		raw.raidMarkWeek = -1
-		raw.raidLock = {}
-		raw.raidPity = {}
-		raw.raidStory = false
-		raw.raidEcho = 0
-		raw.raidBest = 0
+		raw.raidMarks = keepExisting(versionless, raw.raidMarks, 0)
+		raw.raidMarksEarned = keepExisting(versionless, raw.raidMarksEarned, 0)
+		raw.raidMarkWeek = keepExisting(versionless, raw.raidMarkWeek, -1)
+		raw.raidLock = keepExisting(versionless, raw.raidLock, {})
+		raw.raidPity = keepExisting(versionless, raw.raidPity, {})
+		raw.raidStory = keepExisting(versionless, raw.raidStory, false)
+		raw.raidEcho = keepExisting(versionless, raw.raidEcho, 0)
+		raw.raidBest = keepExisting(versionless, raw.raidBest, 0)
 		raw.schemaVersion = 19
 		version = 19
 	end
 
 	if version < 20 then
-		raw.tradeDay = 0
-		raw.tradeValueToday = 0
-		raw.tradeLocked = false
-		raw.tradeFlagged = false
-		raw.verifiedTrader = false
-		raw.tradeCleanSince = 0
-		raw.tradeHandoff = false
+		raw.tradeDay = keepExisting(versionless, raw.tradeDay, 0)
+		raw.tradeValueToday = keepExisting(versionless, raw.tradeValueToday, 0)
+		raw.tradeLocked = keepExisting(versionless, raw.tradeLocked, false)
+		raw.tradeFlagged = keepExisting(versionless, raw.tradeFlagged, false)
+		raw.verifiedTrader = keepExisting(versionless, raw.verifiedTrader, false)
+		raw.tradeCleanSince = keepExisting(versionless, raw.tradeCleanSince, 0)
+		raw.tradeHandoff = keepExisting(versionless, raw.tradeHandoff, false)
 		raw.schemaVersion = 20
 		version = 20
 	end
 
 	if version < 21 then
-		raw.uiSettings = Settings.default()
+		raw.uiSettings = keepExisting(versionless, raw.uiSettings, Settings.default())
 		raw.schemaVersion = 21
 		version = 21
 	end
@@ -1137,7 +1177,7 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	-- T-049 named 22 for raidLuck and never shipped. This is the free version.
 	-- A save from 21 starts unpaid. Do not copy onboardDone or another profile.
 	if version < 22 then
-		raw.starterGoals = StarterGoalPay.blank()
+		raw.starterGoals = keepExisting(versionless, raw.starterGoals, StarterGoalPay.blank())
 		raw.schemaVersion = 22
 		version = 22
 	end
@@ -1145,7 +1185,8 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	-- A save that already finished onboarding does not get this kit.
 	-- A new profile stays returning false. Do not copy another account.
 	if version < 23 then
-		raw.firstSession = firstSessionKit().blank(raw.onboardDone == true)
+		raw.firstSession =
+			keepExisting(versionless, raw.firstSession, firstSessionKit().blank(raw.onboardDone == true))
 		raw.schemaVersion = 23
 		version = 23
 	end
@@ -1153,14 +1194,14 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	-- Per-class action bars. A save with none gets the class defaults.
 	-- Do not copy another profile's layout.
 	if version < 24 then
-		raw.actionBars = ActionSlots.fresh()
+		raw.actionBars = keepExisting(versionless, raw.actionBars, ActionSlots.fresh())
 		raw.schemaVersion = 24
 		version = 24
 	end
 
 	-- Codex seen flags. A save from 24 starts locked. Do not copy another profile.
 	if version < 25 then
-		raw.codex = blankCodex()
+		raw.codex = keepExisting(versionless, raw.codex, blankCodex())
 		raw.schemaVersion = 25
 		version = 25
 	end
@@ -1168,7 +1209,7 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	-- Training Grove. A save from 25 starts empty. Do not copy another profile.
 	-- Do not fold this into codex. Keys and gold are not stored.
 	if version < 26 then
-		raw.trainingGrove = blankGrove()
+		raw.trainingGrove = keepExisting(versionless, raw.trainingGrove, blankGrove())
 		raw.schemaVersion = 26
 		version = 26
 	end

@@ -196,6 +196,9 @@ function DataService.mutate(
 end
 
 local function write(record: Record, releaseLock: boolean): (boolean, string)
+	if record.ephemeral == true then
+		return false, "unloaded"
+	end
 	local outcome = "unwritten"
 	local store = currentAdapter()
 	local callOk, callErr = pcall(function()
@@ -611,11 +614,12 @@ function DataService.release(player: Player)
 		records[player] = nil
 		return
 	end
+	local wasLoaded = record.loaded
+	local ephemeral = record.ephemeral == true
 	record.released = true
 	playerStarted[player] = false
-	local wasLoaded = record.loaded
 	record.loaded = false
-	if wasLoaded then
+	if ProfileLoad.maySave(wasLoaded, ephemeral) then
 		local ok, reason = write(record, true)
 		if not ok and reason ~= "missing" then
 			warn("[Shardfall] Final save failed for", player.Name, reason)
@@ -919,7 +923,7 @@ local function autosave()
 			local player = entry.player
 			local record = entry.record
 			if
-				record.loaded
+				ProfileLoad.maySave(record.loaded, record.ephemeral)
 				and not record.released
 				and not record.closing
 				and player.Parent == Players
