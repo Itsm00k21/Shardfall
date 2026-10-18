@@ -74,13 +74,13 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-057 | L | qa | Bug-risk review of saves: `DataService.luau`, `Schema.luau`, `ProfileLoad.luau`, `SessionLock.luau` (data loss, migrate gaps) | `docs/qa/qa_data.md` | done | https://github.com/Itsm00k21/Shardfall/pull/227 |
 | G-058 | M | qa | Exploit review of trading: `Trading.luau`, `TradeService.luau`, `TradeAudit.luau` (dupes, races, scams) | `docs/qa/qa_trading.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
 | G-059 | M | qa | Remote coverage review: every remote in `Remotes.luau` and `default.project.json` versus its `RateLimiter.luau` rule and server-side validation | `docs/qa/qa_remotes.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
-| G-060 | M | qa | Test-case list for raid rules (RaidFinder, RaidPremade, RaidMarks, RaidLeaver, RaidLuck, RaidRecap, RaidLeaderboard) | `docs/qa/qa_raids.md` | todo | — |
+| G-060 | M | qa | Test-case list for raid rules (RaidFinder, RaidPremade, RaidMarks, RaidLeaver, RaidLuck, RaidRecap, RaidLeaderboard) | `docs/qa/qa_raids.md` | done | https://github.com/Itsm00k21/Shardfall/pull/252 |
 | G-061 | S | qa | Manual layout test matrix: phone, tablet, laptop, console sizes for every panel. Read `HudLayout.luau` and `ShellLayout.luau`. | `docs/qa/qa_mobile.md` | done | https://github.com/Itsm00k21/Shardfall/pull/235 |
 | G-062 | M | qa | Bug-risk review of combat: `CombatService.luau`, `CombatHud.luau`, `CombatFeel.luau` (hit validation, cooldown desync) | `docs/qa/qa_combat.md` | done | https://github.com/Itsm00k21/Shardfall/pull/235 |
-| G-063 | S | data | Luau-ready table for G-001 weapons (plain `return { ... }`, fields match `ItemBases.luau` style) | `docs/data/weapons_batch1.luau` | todo | — |
-| G-064 | S | data | Luau-ready table for G-003 pets (fields match `Pets.luau` style) | `docs/data/pets_batch1.luau` | todo | — |
-| G-065 | S | data | Luau-ready table for G-016 achievements | `docs/data/achievements.luau` | todo | — |
-| G-066 | S | data | Luau-ready table for G-020 loading tips | `docs/data/loading_tips.luau` | todo | — |
+| G-063 | S | data | Luau-ready table for G-001 weapons (plain `return { ... }`, fields match `ItemBases.luau` style) | `docs/data/weapons_batch1.luau` | done | https://github.com/Itsm00k21/Shardfall/pull/252 |
+| G-064 | S | data | Luau-ready table for G-003 pets (fields match `Pets.luau` style) | `docs/data/pets_batch1.luau` | done | https://github.com/Itsm00k21/Shardfall/pull/252 |
+| G-065 | S | data | Luau-ready table for G-016 achievements | `docs/data/achievements.luau` | done | https://github.com/Itsm00k21/Shardfall/pull/252 |
+| G-066 | S | data | Luau-ready table for G-020 loading tips | `docs/data/loading_tips.luau` | done | https://github.com/Itsm00k21/Shardfall/pull/252 |
 | G-067 | S | data | Luau-ready table for G-018 Shard Pass season 1 | `docs/data/shard_pass_s1.luau` | todo | — |
 | G-068 | S | data | Luau-ready table for G-029 XP curve | `docs/data/xp_curve.luau` | todo | — |
 | G-069 | S | qa | Test plan for the heavy touch button. `init.client.luau` `onHeavy` calls `CombatHud.swing(true)` only. Attack and Dodge also call `CombatStage`. List the missing local swing and slash, for the button and for keyboard R. Do not restate the open gamepad follow-up in `docs/qa/AUDIT_FOLLOWUPS.md`. | `docs/qa/qa_heavy_swing.md` | done | https://github.com/Itsm00k21/Shardfall/pull/235 |
