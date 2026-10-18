@@ -419,6 +419,54 @@ describe("HubInput", function()
 		expect(rolls[#rolls][1]).toEqual("RollShard")
 	end)
 
+	it("cracks again after a drag leaves the pointer flag set", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 4
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Roll")
+		local pointer = {
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			KeyCode = world.enum.KeyCode.Unknown,
+		}
+		button.InputBegan:Fire(pointer)
+		button.InputEnded:Fire(pointer)
+		local key = {
+			UserInputType = world.enum.UserInputType.Keyboard,
+			KeyCode = world.enum.KeyCode.Return,
+		}
+		button.InputBegan:Fire(key)
+		button.Activated:Fire()
+		local rolls = rolled(calls)
+		expect(#rolls).toEqual(2)
+		expect(rolls[1][1]).toEqual("RollShard")
+		expect(rolls[2][1]).toEqual("RollShard")
+	end)
+
+	it("cracks again when a pointer press never activates", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 4
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Roll")
+		local pointer = {
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			KeyCode = world.enum.KeyCode.Unknown,
+		}
+		button.InputBegan:Fire(pointer)
+		button.InputEnded:Fire(pointer)
+		task.wait(0.9)
+		button.Activated:Fire()
+		local rolls = rolled(calls)
+		expect(#rolls).toEqual(2)
+		expect(rolls[1][1]).toEqual("RollShard")
+		expect(rolls[2][1]).toEqual("RollShard")
+	end)
+
 	it("shows a shop refusal and repaints the Gold line", function()
 		local world = GuiFake.world()
 		local MenuHub = world.load("MenuHub")
@@ -478,6 +526,40 @@ describe("HubInput", function()
 		expect(hasText(screen, "Gold  0")).toBeTrue()
 		expect(hasText(screen, "You need more Gold.")).toBeFalse()
 		expect(hasText(screen, "  Healing Tonic  40 Gold")).toBeTrue()
+	end)
+
+	it("toasts a fixed sentence when a shop buy throws", function()
+		local world = GuiFake.world()
+		local MenuHub = world.load("MenuHub")
+		local toasts = {}
+		local hub = MenuHub.start(world.playerGui, {
+			invoke = function(name: string)
+				if name == "BuyGoldShop" then
+					error("raw boom from BuyGoldShop")
+				end
+				return { ok = true }
+			end,
+			onBag = function() end,
+			onMarket = function() end,
+			onDim = function() end,
+			onToast = function(message: string)
+				table.insert(toasts, message)
+			end,
+		})
+		hub.setProfile(profile())
+		hub.open("shop")
+		local screen = screenOf(world)
+		local bag = nil
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and child.Text == "  Bag slot  250 Gold" then
+				bag = child
+			end
+		end
+		expect(bag ~= nil).toBeTrue()
+		GuiFake.activate(bag)
+		expect(toasts[#toasts]).toEqual("Could not buy that.")
+		expect(hasText(screen, "Could not buy that.")).toBeTrue()
+		expect(hasText(screen, "raw boom from BuyGoldShop")).toBeFalse()
 	end)
 
 	it("says why a crack with no shards does nothing", function()

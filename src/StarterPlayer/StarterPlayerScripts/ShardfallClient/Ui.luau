@@ -36,6 +36,7 @@ local CraftingLevel = require(Shared:WaitForChild("CraftingLevel"))
 local Currencies = require(Shared:WaitForChild("Currencies"))
 local Dungeons = require(Shared:WaitForChild("Dungeons"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
+local Economy = require(Shared:WaitForChild("Economy"))
 local LaunchGate = require(Shared:WaitForChild("LaunchGate"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Pools = require(Shared:WaitForChild("Pools"))
@@ -57,6 +58,7 @@ export type Callbacks = {
 	onDev: (kind: string) -> (),
 	onArea: (poolId: string) -> (),
 	onCraft: (recipeId: string, targetUid: string?) -> (),
+	onUpgrade: ((uid: string) -> ())?,
 	onSalvage: (uid: string) -> (),
 	onBuyForge: () -> (),
 	onDungeon: (action: string, dungeonId: string?) -> (),
@@ -176,6 +178,60 @@ local function makeButton(
 	}, parent) :: TextButton
 	corner(widget, 8)
 	return widget
+end
+
+local function upgradeGear(profile: any): { any }
+	local rows = {}
+	if type(profile) ~= "table" or type(profile.inventory) ~= "table" then
+		return rows
+	end
+	for _, item in pairs(profile.inventory) do
+		if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
+			table.insert(rows, item)
+		end
+	end
+	table.sort(rows, function(a, b)
+		return tostring(a.name) < tostring(b.name)
+	end)
+	return rows
+end
+
+local function paintUpgradeRows(profile: any, parent: Instance, onUpgrade: ((string) -> ())?)
+	local gear = upgradeGear(profile)
+	if #gear == 0 then
+		new("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 18),
+			Font = Enum.Font.BuilderSans,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = COLORS.muted,
+			Text = "Upgrade gear from your bag.",
+			LayoutOrder = 1,
+		}, parent)
+		return
+	end
+	for index, item in ipairs(gear) do
+		local level = 0
+		if type(item.upgrade) == "number" and item.upgrade == item.upgrade then
+			level = math.floor(item.upgrade)
+		end
+		local gold = Economy.upgradeCost(level)
+		local uid = item.uid
+		local button = makeButton(
+			parent,
+			string.format("%s  UPGRADE  %d", tostring(item.name), gold),
+			COLORS.gold,
+			index,
+			44
+		)
+		button.TextColor3 = COLORS.ink
+		button.MouseButton1Click:Connect(function()
+			if onUpgrade ~= nil and type(uid) == "string" and uid ~= "" then
+				onUpgrade(uid)
+			end
+		end)
+	end
 end
 
 function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
@@ -1262,10 +1318,14 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 6),
 	}, forgeTabs)
-	local forgeTab = "craft"
-	local craftTabButton = makeButton(forgeTabs, "Craft", COLORS.gold, 1, 26)
+	local forgeTab = if LaunchGate.on("forgeCraft") then "craft" else "upgrade"
+	local upgradeTabButton = makeButton(forgeTabs, "Upgrade", COLORS.gold, 0, 26)
+	upgradeTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
+	upgradeTabButton.TextSize = 13
+	local craftTabButton = makeButton(forgeTabs, "Craft", COLORS.buttonDim, 1, 26)
 	craftTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
 	craftTabButton.TextSize = 13
+	craftTabButton.Visible = LaunchGate.on("forgeCraft")
 	local salvageTabButton = makeButton(forgeTabs, "Salvage", COLORS.buttonDim, 2, 26)
 	salvageTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
 	salvageTabButton.TextSize = 13
@@ -1689,14 +1749,19 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		applyChrome()
 	end
 
+	local refreshForge: () -> ()
 	function controller.openPanel(kind: string, areaId: string?)
 		userOpen = true
 		applyChrome()
 		if kind == "craft" then
 			page = "craft"
+			if not LaunchGate.on("forgeCraft") then
+				forgeTab = "upgrade"
+			end
 			applyPage()
 			panel.CanvasPosition = Vector2.zero
 			print("[ForgeUI] opened")
+			refreshForge()
 			return
 		end
 		page = "shards"
@@ -1790,19 +1855,15 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local function paintForgeTabs()
-		craftTabButton.BackgroundColor3 = if forgeTab == "craft"
-			then COLORS.gold
-			else COLORS.buttonDim
-		craftTabButton.TextColor3 = if forgeTab == "craft" then COLORS.ink else COLORS.text
-		salvageTabButton.BackgroundColor3 = if forgeTab == "salvage"
-			then COLORS.gold
-			else COLORS.buttonDim
-		salvageTabButton.TextColor3 = if forgeTab == "salvage" then COLORS.ink else COLORS.text
-		materialTabButton.BackgroundColor3 = if forgeTab == "materials"
-			then COLORS.gold
-			else COLORS.buttonDim
-		materialTabButton.TextColor3 = if forgeTab == "materials" then COLORS.ink else COLORS.text
-		craftList.Visible = forgeTab == "craft"
+		local function paint(button: TextButton, on: boolean)
+			button.BackgroundColor3 = if on then COLORS.gold else COLORS.buttonDim
+			button.TextColor3 = if on then COLORS.ink else COLORS.text
+		end
+		paint(upgradeTabButton, forgeTab == "upgrade")
+		paint(craftTabButton, forgeTab == "craft")
+		paint(salvageTabButton, forgeTab == "salvage")
+		paint(materialTabButton, forgeTab == "materials")
+		craftList.Visible = forgeTab == "craft" or forgeTab == "upgrade"
 		salvageList.Visible = forgeTab == "salvage"
 		materialList.Visible = forgeTab == "materials"
 	end
@@ -1834,6 +1895,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		local untilTime = if type(profile) == "table" then profile.forgeBoostUntil else 0
 		forgeNote.Text = Currencies.forgeBoostPitch(untilTime, os.time())
 		paintForgeTabs()
+		if forgeTab == "upgrade" then
+			paintUpgradeRows(profile, craftList, callbacks.onUpgrade)
+		end
 		local bag = if type(profile) == "table" then profile.materials else nil
 		local gear = traitGear(profile)
 		local stillThere = false
@@ -1846,6 +1910,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			selectedTarget = if gear[1] ~= nil then gear[1].uid else nil
 		end
 
+		if forgeTab == "craft" then
 		for index, recipe in ipairs(Recipes.all()) do
 			if
 				not LaunchGate.on("forgeCraft")
@@ -2014,6 +2079,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				callbacks.onCraft(recipe.id, target)
 			end)
 		end
+		end
 
 		local salvageRows = {}
 		if type(profile) == "table" and type(profile.inventory) == "table" then
@@ -2122,6 +2188,15 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			paintForgeTabs()
 		end
 	end
+
+	function refreshForge()
+		if latestProfile ~= nil then
+			renderCraft(latestProfile)
+		end
+	end
+	upgradeTabButton.MouseButton1Click:Connect(function()
+		showForgeTab("upgrade")
+	end)
 	craftTabButton.MouseButton1Click:Connect(function()
 		showForgeTab("craft")
 	end)
