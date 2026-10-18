@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 8e07e8e+ client` in Output.
+	still leaves `[Shardfall] build e95d029+ client` in Output.
 ]]
 
-print("[Shardfall] build 8e07e8e+ client")
+print("[Shardfall] build e95d029+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
