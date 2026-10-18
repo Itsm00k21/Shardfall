@@ -24,6 +24,7 @@
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -33,6 +34,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
+local CombatCluster = require(Shared:WaitForChild("CombatCluster"))
 local HeavyChip = require(Shared:WaitForChild("HeavyChip"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local PadLight = require(Shared:WaitForChild("PadLight"))
@@ -78,6 +80,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local promptsShown = 0
 	local skillsCue = false
 	local dodgeCue = false
+	local picked = 1
+	local noticed: { [string]: boolean } = {}
 	local payloadMoved = false
 	local payloadOrigin = Vector2.zero
 	local showTip: (number) -> ()
@@ -207,13 +211,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		glyph.Parent = button
 		local bind = Instance.new("TextLabel")
 		bind.Name = "Bind"
-		bind.AnchorPoint = Vector2.new(1, 1)
-		bind.Position = UDim2.new(1, -3, 1, -2)
-		bind.Size = UDim2.fromOffset(22, 16)
+		bind.AnchorPoint = Vector2.new(0, 0)
+		bind.Position = UDim2.fromOffset(3, 1)
+		bind.Size = UDim2.fromOffset(16, 14)
 		bind.BackgroundTransparency = 1
 		bind.Font = Enum.Font.BuilderSansBold
-		bind.TextSize = 13
-		bind.TextXAlignment = Enum.TextXAlignment.Right
+		bind.TextSize = 11
+		bind.TextXAlignment = Enum.TextXAlignment.Left
 		bind.TextColor3 = Color3.fromRGB(255, 248, 230)
 		bind.Text = ActionSlots.keyLabel(index)
 		bind.ZIndex = 6
@@ -322,6 +326,19 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		secondStroke.Thickness = 1
 		secondStroke.Color = Color3.fromRGB(12, 8, 20)
 		secondStroke.Parent = seconds
+		local dot = Instance.new("Frame")
+		dot.Name = "NewDot"
+		dot.AnchorPoint = Vector2.new(1, 0)
+		dot.Position = UDim2.new(1, -3, 0, 3)
+		dot.Size = UDim2.fromOffset(8, 8)
+		dot.BackgroundColor3 = theme("newDot")
+		dot.BorderSizePixel = 0
+		dot.Visible = false
+		dot.ZIndex = 8
+		dot.Parent = button
+		local dotCorner = Instance.new("UICorner")
+		dotCorner.CornerRadius = UDim.new(1, 0)
+		dotCorner.Parent = dot
 		buttons[index] = button
 		button.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -384,7 +401,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		button.AutoButtonColor = false
 		button.Parent = screen
 		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
+		corner.CornerRadius = UDim.new(1, 0)
 		corner.Parent = button
 		local stroke = Instance.new("UIStroke")
 		stroke.Thickness = UiTheme.STROKE_BOLD
@@ -408,6 +425,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local dodge = promptButton("Dodge", "Shift")
 	local heavy = promptButton("Heavy", "Heavy")
+	local attack = promptButton("Swing", "Atk")
+	local jump = promptButton("Jump", "Jump")
 	heavy.Visible = false
 	local dodgePulse = Instance.new("UIStroke")
 	dodgePulse.Name = "DodgePulse"
@@ -512,7 +531,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				glyph.TextColor3 = Color3.fromRGB(liftedR, liftedG, liftedB)
 			end
 			if border ~= nil and border:IsA("UIStroke") then
-				border.Color = rgb(ActionSlots.border(slot, profile))
+				if index == picked then
+					border.Color = Color3.fromRGB(255, 255, 255)
+				else
+					border.Color = rgb(ActionSlots.border(slot, profile))
+				end
+			end
+			local dot = button:FindFirstChild("NewDot")
+			if dot ~= nil and dot:IsA("Frame") then
+				local seenAt = if noticed[slot.id] == true then math.huge else 0
+				dot.Visible = ActionSlots.unseen(slot, profile, seenAt)
 			end
 			local skillGlow = button:FindFirstChild("SkillGlow")
 			if skillGlow ~= nil and skillGlow:IsA("UIStroke") then
@@ -570,11 +598,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local function useSlot(index: number)
+		picked = index
 		flashUntil[index] = os.clock() + 0.12
 		local bar = currentBar()
 		local slot = bar.slots[index]
 		if slot == nil or slot.kind == "empty" then
+			paint()
 			return
+		end
+		if slot.kind == "item" and slot.id ~= "" then
+			noticed[slot.id] = true
 		end
 		local cooling = (readyAt[index] or 0) > os.clock()
 		local reason = ActionSlots.block(classId(), slot, profile, cooling, true)
@@ -633,6 +666,17 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	heavy.Activated:Connect(function()
 		callbacks.onHeavy()
 	end)
+	attack.Activated:Connect(function()
+		callbacks.onLight()
+	end)
+	jump.Activated:Connect(function()
+		local player = Players.LocalPlayer
+		local character = if player ~= nil then player.Character else nil
+		local humanoid = if character ~= nil then character:FindFirstChildOfClass("Humanoid") else nil
+		if humanoid ~= nil then
+			humanoid.Jump = true
+		end
+	end)
 
 	local lastInputName = UserInputService:GetLastInputType().Name
 	local function dodgeFace(mobile: boolean): string
@@ -660,12 +704,17 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		layout.CellSize = UDim2.fromOffset(spot.slot, spot.slot)
 		layout.CellPadding = UDim2.fromOffset(spot.gap, spot.gap)
 		local chips = ActionSlots.prompts(spot, size.X, size.Y)
-		dodge.Position = UDim2.fromOffset(chips.dodge.x, chips.dodge.y)
-		dodge.Size = UDim2.fromOffset(chips.dodge.w, chips.dodge.h)
+		local cluster = CombatCluster.place(size.X, size.Y)
+		attack.Position = UDim2.fromOffset(cluster.attack.x, cluster.attack.y)
+		attack.Size = UDim2.fromOffset(cluster.attack.w, cluster.attack.h)
+		dodge.Position = UDim2.fromOffset(cluster.dodge.x, cluster.dodge.y)
+		dodge.Size = UDim2.fromOffset(cluster.dodge.w, cluster.dodge.h)
+		jump.Position = UDim2.fromOffset(cluster.jump.x, cluster.jump.y)
+		jump.Size = UDim2.fromOffset(cluster.jump.w, cluster.jump.h)
 		interact.Position = UDim2.fromOffset(chips.interact.x, chips.interact.y)
 		interact.Size = UDim2.fromOffset(chips.interact.w, chips.interact.h)
-		dodgeHint.Position = UDim2.fromOffset(chips.dodge.x, math.max(0, chips.dodge.y - 32))
-		dodgeHint.Size = UDim2.fromOffset(math.max(chips.dodge.w, 88), 28)
+		dodgeHint.Position = UDim2.fromOffset(cluster.dodge.x, math.max(0, cluster.dodge.y - 32))
+		dodgeHint.Size = UDim2.fromOffset(math.max(cluster.dodge.w, 88), 28)
 		dodgeHint.Text = if dodgeCue then CodexCues.HINT else ""
 		dodgeHint.Visible = dodgeCue
 		local bind = dodge:FindFirstChild("Bind")
@@ -673,9 +722,14 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			bind.Text = dodgeFace(mobile)
 		end
 		local heavySpot = HeavyChip.place(size.X, size.Y)
-		heavy.Position = UDim2.fromOffset(heavySpot.x, heavySpot.y)
-		heavy.Size = UDim2.fromOffset(heavySpot.w, heavySpot.h)
 		heavy.Visible = HeavyChip.show(mobile)
+		if heavy.Visible then
+			heavy.Position = UDim2.fromOffset(cluster.heavy.x, cluster.heavy.y)
+			heavy.Size = UDim2.fromOffset(cluster.heavy.w, cluster.heavy.h)
+		else
+			heavy.Position = UDim2.fromOffset(heavySpot.x, heavySpot.y)
+			heavy.Size = UDim2.fromOffset(heavySpot.w, heavySpot.h)
+		end
 	end
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)

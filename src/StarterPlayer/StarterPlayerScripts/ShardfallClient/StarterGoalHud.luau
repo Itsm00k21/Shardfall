@@ -441,7 +441,7 @@ local function apply(rows: { Row })
 			label.Size = UDim2.new(1, -16, 0, lineH)
 			if row ~= nil then
 				label.Visible = true
-				label.Text = row.line
+				label.Text = "\u{25C6}  " .. row.line
 			else
 				label.Visible = false
 				label.Text = ""
