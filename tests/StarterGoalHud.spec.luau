@@ -8,6 +8,7 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local BannerFit = require("../src/ReplicatedStorage/Shared/BannerFit")
 local Build = require("../src/ReplicatedStorage/Shared/Build")
 local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
 local StarterGoals = require("../src/ReplicatedStorage/Shared/StarterGoals")
@@ -15,11 +16,15 @@ local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 local function loadHud()
 	local layoutToken = { Name = "HudLayout" }
+	local bannerToken = { Name = "BannerFit" }
 	local themeToken = { Name = "UiTheme" }
 	local shared = {
 		WaitForChild = function(_self, name)
 			if name == "HudLayout" then
 				return layoutToken
+			end
+			if name == "BannerFit" then
+				return bannerToken
 			end
 			if name == "UiTheme" then
 				return themeToken
@@ -60,6 +65,9 @@ local function loadHud()
 			require = function(module)
 				if module == layoutToken then
 					return HudLayout
+				end
+				if module == bannerToken then
+					return BannerFit
 				end
 				if module == themeToken then
 					return UiTheme
@@ -323,8 +331,9 @@ describe("StarterGoalHud mount", function()
 			"FireServer",
 		}
 		local _, requires = string.gsub(hud, "require(", "")
-		expect(requires).toEqual(2)
+		expect(requires).toEqual(3)
 		expect(string.find(hud, 'WaitForChild("HudLayout")', 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, 'WaitForChild("BannerFit")', 1, true)).toBeGreaterThan(0)
 		expect(string.find(hud, 'WaitForChild("UiTheme")', 1, true)).toBeGreaterThan(0)
 		for _, word in ipairs(banned) do
 			expect(string.find(hud, word, 1, true)).toBeNil()

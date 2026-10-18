@@ -82,7 +82,7 @@ local function occupied(vx: number, vy: number, margin: number): { Box }
 	local rail = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
 	return {
 		HudLayout.portrait(margin),
-		HudLayout.health(margin),
+		HudLayout.health(margin, vx),
 		HudLayout.pills(vx, margin),
 		HudLayout.toastHost(vx, margin),
 		HudLayout.equipPrompt(vx, margin),
