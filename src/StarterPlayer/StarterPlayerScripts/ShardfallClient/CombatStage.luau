@@ -197,21 +197,22 @@ function CombatStage.bind(character: Model)
 	tracks = {}
 end
 
-function CombatStage.swing(charged: boolean?)
+function CombatStage.swing(charged: boolean?): boolean
 	if not inRun then
-		return
+		return false
 	end
 	local now = os.clock()
 	if now < nextSwing or CombatFeel.iframe(dodge, now) then
-		return
+		return false
 	end
 	local player = Players.LocalPlayer
 	local character = if player ~= nil then player.Character else nil
 	if character == nil then
-		return
+		return false
 	end
-	nextSwing = now + swingCooldown
 	local heavy = charged == true
+	local lock = CombatFeel.swingLock(now, swingCooldown, heavy)
+	nextSwing = lock
 	local step = CombatFeel.advanceCombo(chain, lastSwing, now, heavy)
 	chain = step.chain
 	lastSwing = now
@@ -223,7 +224,9 @@ function CombatStage.swing(charged: boolean?)
 		sparks = CombatFeel.vfxBudget(tier, intensity, CombatFeel.juice("light"))
 	end
 	slash(character, sparks)
-	mark(if heavy then "Heavy" else "Attack", 0.35)
+	local cover = if heavy then lock - now else 0.35
+	mark(if heavy then "Heavy" else "Attack", cover)
+	return true
 end
 
 function CombatStage.dodge()

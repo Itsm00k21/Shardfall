@@ -231,6 +231,24 @@ function CombatFeel.takeCharge(clock: ChargeClock, now: number, _clientFlag: any
 	return true
 end
 
+-- When the next local slash may start. A heavy's Attack packet lands
+-- CHARGE_HOLD after the press, and the server cooldown starts then.
+function CombatFeel.swingLock(now: number, cooldown: number, charged: boolean?): number
+	local at = now
+	if type(at) ~= "number" or at ~= at then
+		at = 0
+	end
+	local wait = cooldown
+	if type(wait) ~= "number" or wait ~= wait or wait < 0 then
+		wait = 1
+	end
+	local hold = 0
+	if charged == true then
+		hold = CombatFeel.CHARGE_HOLD
+	end
+	return at + hold + wait
+end
+
 local function unitOf(x: number, y: number, z: number): (number?, number?, number?)
 	if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then
 		return nil, nil, nil

@@ -676,8 +676,9 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onAttack = function()
-		CombatStage.swing()
-		CombatHud.swing()
+		if CombatStage.swing() then
+			CombatHud.swing()
+		end
 	end,
 	onAudio = function(music: number, sfx: number, commit: boolean)
 		musicController.setVolumes(music, sfx)
@@ -1310,12 +1311,14 @@ actionBar = ActionBar.start(playerGui, {
 		CombatHud.dodge()
 	end,
 	onLight = function()
-		CombatStage.swing()
-		CombatHud.swing(false)
+		if CombatStage.swing() then
+			CombatHud.swing(false)
+		end
 	end,
 	onHeavy = function()
-		CombatStage.swing(true)
-		CombatHud.swing(true)
+		if CombatStage.swing(true) then
+			CombatHud.swing(true)
+		end
 	end,
 	onDodgeChip = function()
 		PetAura.note("Dodge")
