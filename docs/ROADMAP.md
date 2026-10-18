@@ -69,6 +69,7 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #199 The phone Heavy chip, R, and ButtonX play the local heavy slash. That is T-171 (`05b6eb1`). 1267 tests.
 - #200 The board marks T-167, T-170, and T-171 done. Echo's next row is T-172. The next GHOST row is T-173. Next free id is T-176. Docs only.
 - #201 Roll-tab auto stops when the window loses focus, and focusing the window does not turn it back on. That is T-173 (`6acf20d`). 1274 tests.
+- #203 The board marks T-173 and T-174 done. The Roll tab Info button is the only details control. No code. Echo stays on T-172. Next free id is T-176. Docs only.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
@@ -79,7 +80,7 @@ The next week or two.
 - T-173 landed in #201 (`6acf20d`). Roll-tab auto stops when the window loses focus, and focusing the window does not turn it back on. 1274 tests. That came before the lighting pass and the door nameplates.
 - T-174 is done. The Roll tab Info button is the only details control. It says Info and shows the disclose lines. No odds control is only an icon or `(i)`. No code.
 - Next free id is T-176. No new GHOST row was filed. T-175, T-148, and T-162 stay deferred.
-- Echo stays on T-172. The legacy panel follows the text-size slider, on `helper/legacy-text-scale-9721`. Brief: `docs/hooks/T-172.md`. That pull request has not merged. T-167 is done in #193 (`a364c03`).
+- Echo stays on T-172. The legacy panel follows the text-size slider, on `helper/legacy-text-scale-9721`. Brief: `docs/hooks/T-172.md`. #202 is open and has not merged. T-167 is done in #193 (`a364c03`).
 - T-170 landed in #198 (`a0f9184`). ButtonR1 light-attacks while the menu is closed. T-171 landed in #199 (`05b6eb1`). The phone Heavy chip plays the slash.
 - T-165 landed in #190 (`52a5717`). The on-screen Dodge button flashes Glass Kestrel. T-166 landed in #191 (`961bf5e`). ButtonY dodges and ButtonX stays heavy.
 - T-164 landed in #187 (`90a4818`). Mythic is red `#E6404E` and Secret is white. Only Secret inventory strokes keep the rainbow.
