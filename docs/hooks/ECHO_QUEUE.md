@@ -16,7 +16,7 @@ Follows vision priorities 1 and 2 in `docs/design/vision/VISION.md`. The shots i
 
 ## E-002 — in progress
 
-Controller nav. Branch `helper/controller-nav-9721`.
+Controller nav. Branch `helper/controller-nav-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/222.
 
 D-pad and left stick move through every MenuHub tab and every interactive button in the open tab, with a visible selection ring. ButtonA activates the selected item. ButtonB closes the open menu and returns to world input, except while a hotkey capture is active. While the hub is closed, D-pad Up/Right/Down/Left fire action-bar slots 1–4 and LB plus the same D-pad fires slots 5–8. ButtonY stays dodge, ButtonR1 stays the light attack, and ButtonX stays heavy. The click harness from #213 covers the ring, B, and the slot map.
 
