@@ -306,7 +306,8 @@ function HudLayout.railFit(
 	margin: number,
 	count: number,
 	preferred: number,
-	minimum: number
+	minimum: number,
+	viewportX: number?
 ): RailFit
 	local gap = 8
 	local safeCount = math.max(1, count)
@@ -339,6 +340,19 @@ function HudLayout.railFit(
 			y = below
 		else
 			x = face.x + face.w + gap
+		end
+	end
+	-- A short landscape phone used to park that slide on the HP bar.
+	if type(viewportX) == "number" and viewportX == viewportX and viewportX > 0 and viewportX < math.huge then
+		local hp = HudLayout.health(margin, viewportX)
+		local placed = { x = x, y = y, w = button, h = height }
+		if HudLayout.overlaps(placed, hp) then
+			local belowHp = hp.y + hp.h + gap
+			local endY = belowHp + height
+			if endY <= viewportY then
+				x = margin
+				y = belowHp
+			end
 		end
 	end
 	return { x = x, y = y, w = button, h = height, button = button }

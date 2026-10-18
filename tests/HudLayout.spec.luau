@@ -169,6 +169,19 @@ describe("Hud layout", function()
 		expect(string.find(shell, "HudLayout.PROMPT_LABEL", 1, true) ~= nil).toBeTrue()
 	end)
 
+	it("keeps the landscape phone rail off the HP bar", function()
+		local margin = 16
+		local rail = HudLayout.railFit(390, margin, HudLayout.RAIL_COUNT, 64, 44, 844)
+		local hp = HudLayout.health(margin, 844)
+		local face = HudLayout.portrait(margin)
+		local box = { x = rail.x, y = rail.y, w = rail.w, h = rail.h }
+		expect(rail.button >= 44).toBeTrue()
+		expect(HudLayout.overlaps(box, hp)).toEqual(false)
+		expect(HudLayout.overlaps(box, face)).toEqual(false)
+		expect(rail.y + rail.h <= 390).toBeTrue()
+		expect(rail.x >= 0).toBeTrue()
+	end)
+
 	it("names Gold, Mastery, and Shards", function()
 		local lines = HudLayout.counters(250, 0, 40)
 		expect(lines[1]).toEqual("Gold 250")

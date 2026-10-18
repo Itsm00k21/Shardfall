@@ -259,7 +259,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	local block = toastHost(viewportX, margin)
 	local prompt = equipPrompt(viewportX, margin)
 	local railFit =
-		HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
+		HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, viewportX)
 	local rail: Rect = { x = railFit.x, y = railFit.y, w = railFit.w, h = railFit.h }
 	local railRight = railFit.x + railFit.w + TOAST_GAP
 	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"

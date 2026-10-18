@@ -79,7 +79,7 @@ end
 local function occupied(vx: number, vy: number, margin: number): { Box }
 	local pad = UiTheme.PAD
 	local hub = HudLayout.hub(vx, vy, margin)
-	local rail = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
+	local rail = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
 	return {
 		HudLayout.portrait(margin),
 		HudLayout.health(margin, vx),
