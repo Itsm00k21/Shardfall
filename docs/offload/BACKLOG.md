@@ -71,7 +71,7 @@ Game context: Roblox action RPG with RNG rolls. Rarities, low to high: Common, U
 | G-054 | S | research | Onboarding research: first-5-minute patterns in top Roblox games versus `docs/design/shardfall_onboarding.md` | `docs/research/onboarding_research.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
 | G-055 | M | qa | Test-case list for rolls: read `RollMath.luau`, `RollLoop.luau`, `RollBoard.luau` and their specs; list missing cases | `docs/qa/qa_rolls.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
 | G-056 | M | qa | Bug-risk review of the menu: `UiRouter.luau`, `MenuHub.luau`, `HudShell.luau` (stuck tabs, lost dim, overlap, input leaks) | `docs/qa/qa_menu.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
-| G-057 | L | qa | Bug-risk review of saves: `DataService.luau`, `Schema.luau`, `ProfileLoad.luau`, `SessionLock.luau` (data loss, migrate gaps) | `docs/qa/qa_data.md` | todo | — |
+| G-057 | L | qa | Bug-risk review of saves: `DataService.luau`, `Schema.luau`, `ProfileLoad.luau`, `SessionLock.luau` (data loss, migrate gaps) | `docs/qa/qa_data.md` | done | @@PR@@ |
 | G-058 | M | qa | Exploit review of trading: `Trading.luau`, `TradeService.luau`, `TradeAudit.luau` (dupes, races, scams) | `docs/qa/qa_trading.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
 | G-059 | M | qa | Remote coverage review: every remote in `Remotes.luau` and `default.project.json` versus its `RateLimiter.luau` rule and server-side validation | `docs/qa/qa_remotes.md` | done | https://github.com/Itsm00k21/Shardfall/pull/218 |
 | G-060 | M | qa | Test-case list for raid rules (RaidFinder, RaidPremade, RaidMarks, RaidLeaver, RaidLuck, RaidRecap, RaidLeaderboard) | `docs/qa/qa_raids.md` | todo | — |
