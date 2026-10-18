@@ -1,9 +1,10 @@
 --!strict
 
 --[[
-	The launch Gold shop. Three offers: a healing tonic, one bag slot,
-	and one pet slot. Prices are Gold. A paid flag does not change them,
-	and this module never reads a product id.
+	The launch Gold shop. A healing tonic and one bag slot. Prices are
+	Gold. The pet slot is not for sale; petSlotBonus stays 0 until three
+	equipped pets are real. A paid flag does not change a price, and this
+	module never reads a product id.
 ]]
 
 local Materials = require("./Materials")
@@ -23,7 +24,6 @@ export type Offer = {
 local OFFERS: { Offer } = {
 	{ id = "tonic", label = "Healing Tonic", price = 40 },
 	{ id = "bag", label = "Bag slot", price = 250 },
-	{ id = "pet", label = "Pet slot", price = 400 },
 }
 
 local BY_ID: { [string]: Offer } = {}
@@ -66,7 +66,7 @@ function GoldShop.apply(data: any, offerId: any, _extra: any?): string?
 	if type(data) ~= "table" then
 		return "That is not for sale."
 	end
-	if type(offerId) ~= "string" then
+	if type(offerId) ~= "string" or offerId == "pet" then
 		return "That is not for sale."
 	end
 	local offer = BY_ID[offerId]
@@ -98,13 +98,7 @@ function GoldShop.apply(data: any, offerId: any, _extra: any?): string?
 		data.inventoryBonus = bonus + 1
 		return nil
 	end
-	local bonus = whole(data.petSlotBonus) or 0
-	if bonus >= GoldShop.PET_BONUS_CAP then
-		return "You cannot equip more pets."
-	end
-	data.gold = gold - offer.price
-	data.petSlotBonus = bonus + 1
-	return nil
+	return "That is not for sale."
 end
 
 return GoldShop

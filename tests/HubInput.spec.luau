@@ -234,7 +234,7 @@ describe("HubInput", function()
 		GuiFake.activate(tabButton(screen, "shop"))
 		expect(hasText(screen, "  Healing Tonic  40 Gold")).toBeTrue()
 		expect(hasText(screen, "  Bag slot  250 Gold")).toBeTrue()
-		expect(hasText(screen, "  Pet slot  400 Gold")).toBeTrue()
+		expect(hasText(screen, "  Pet slot  400 Gold")).toBeFalse()
 		expect(hasText(screen, "Robux")).toBeFalse()
 	end)
 
@@ -381,6 +381,103 @@ describe("HubInput", function()
 			end
 		end
 		expect(crackRow).toBeTrue()
+	end)
+
+	it("cracks one shard when a tap begins, ends, and activates", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 4
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Roll")
+		local before = #rolled(calls)
+		local input = {
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			KeyCode = world.enum.KeyCode.Unknown,
+		}
+		button.InputBegan:Fire(input)
+		button.InputEnded:Fire(input)
+		button.Activated:Fire()
+		local rolls = rolled(calls)
+		expect(#rolls).toEqual(before + 1)
+		expect(rolls[#rolls][1]).toEqual("RollShard")
+	end)
+
+	it("cracks once from Activated alone", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 2
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Roll")
+		local before = #rolled(calls)
+		button.Activated:Fire()
+		local rolls = rolled(calls)
+		expect(#rolls).toEqual(before + 1)
+		expect(rolls[#rolls][1]).toEqual("RollShard")
+	end)
+
+	it("shows a shop refusal and repaints the Gold line", function()
+		local world = GuiFake.world()
+		local MenuHub = world.load("MenuHub")
+		local calls = {}
+		local hub = MenuHub.start(world.playerGui, {
+			invoke = function(name: string, offerId: any)
+				table.insert(calls, { name, offerId })
+				if name == "BuyGoldShop" and offerId == "bag" then
+					return { ok = false, error = "You need more Gold." }
+				end
+				if name == "BuyGoldShop" and offerId == "tonic" then
+					return {
+						ok = true,
+						profile = {
+							gold = 0,
+							shardTokens = 0,
+							inventory = {},
+							pets = {},
+							equipped = {},
+						},
+					}
+				end
+				return { ok = true }
+			end,
+			onBag = function() end,
+			onMarket = function() end,
+			onDim = function() end,
+			onToast = function(message: string)
+				table.insert(calls, { "toast", message })
+			end,
+		})
+		local data = profile()
+		data.gold = 40
+		hub.setProfile(data)
+		hub.open("shop")
+		local screen = screenOf(world)
+		local broke = nil
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and child.Text == "  Bag slot  250 Gold" then
+				broke = child
+			end
+		end
+		expect(broke ~= nil).toBeTrue()
+		GuiFake.activate(broke)
+		expect(hasText(screen, "You need more Gold.")).toBeTrue()
+		expect(hasText(screen, "Gold  40")).toBeTrue()
+		expect(calls[#calls][1]).toEqual("toast")
+		expect(calls[#calls][2]).toEqual("You need more Gold.")
+		local tonic = nil
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and child.Text == "  Healing Tonic  40 Gold" then
+				tonic = child
+			end
+		end
+		expect(tonic ~= nil).toBeTrue()
+		GuiFake.activate(tonic)
+		expect(hasText(screen, "Gold  0")).toBeTrue()
+		expect(hasText(screen, "You need more Gold.")).toBeFalse()
+		expect(hasText(screen, "  Healing Tonic  40 Gold")).toBeTrue()
 	end)
 
 	it("says why a crack with no shards does nothing", function()

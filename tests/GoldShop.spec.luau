@@ -17,13 +17,13 @@ local function purse(gold: number)
 end
 
 describe("GoldShop", function()
-	it("sells a tonic, a bag slot, and a pet slot for Gold", function()
+	it("sells a tonic and a bag slot for Gold, and refuses the pet slot", function()
 		local ids = {}
 		for _, offer in ipairs(GoldShop.offers()) do
 			table.insert(ids, offer.id)
 			expect(offer.price > 0).toBeTrue()
 		end
-		expect(ids).toEqual({ "tonic", "bag", "pet" })
+		expect(ids).toEqual({ "tonic", "bag" })
 		local data = purse(1000)
 		expect(GoldShop.apply(data, "tonic", { paid = true })).toBeNil()
 		expect(data.gold).toEqual(960)
@@ -31,11 +31,14 @@ describe("GoldShop", function()
 		expect(GoldShop.apply(data, "bag")).toBeNil()
 		expect(data.inventoryBonus).toEqual(1)
 		expect(data.gold).toEqual(710)
+		expect(data.petSlotBonus).toEqual(0)
 		expect(GoldShop.petCap(data)).toEqual(3)
-		expect(GoldShop.apply(data, "pet")).toBeNil()
-		expect(data.petSlotBonus).toEqual(1)
-		expect(GoldShop.petCap(data)).toEqual(4)
-		expect(data.gold).toEqual(310)
+		expect(GoldShop.apply(data, "pet")).toEqual("That is not for sale.")
+		expect(data.petSlotBonus).toEqual(0)
+		expect(data.gold).toEqual(710)
+		local later = purse(0)
+		later.petSlotBonus = 2
+		expect(GoldShop.petCap(later)).toEqual(5)
 	end)
 
 	it("refuses a short purse, a full stack, and an unknown offer", function()
@@ -50,7 +53,9 @@ describe("GoldShop", function()
 		full.inventoryBonus = GoldShop.BAG_BONUS_CAP
 		expect(GoldShop.apply(full, "bag")).toEqual("Your bag cannot grow more.")
 		full.petSlotBonus = GoldShop.PET_BONUS_CAP
-		expect(GoldShop.apply(full, "pet")).toEqual("You cannot equip more pets.")
+		expect(GoldShop.apply(full, "pet")).toEqual("That is not for sale.")
+		expect(full.petSlotBonus).toEqual(GoldShop.PET_BONUS_CAP)
+		expect(full.gold).toEqual(5000)
 		expect(GoldShop.apply(full, "nope")).toEqual("That is not for sale.")
 		expect(GoldShop.apply(full, 1)).toEqual("That is not for sale.")
 		local weird = purse(100)

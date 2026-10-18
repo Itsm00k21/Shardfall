@@ -77,6 +77,7 @@ export type Hooks = {
 	onBadges: (({ [string]: NotifyBadges.Badge }) -> ())?,
 	getPoolId: (() -> string)?,
 	onClassSheet: (() -> ())?,
+	onToast: ((string) -> ())?,
 }
 
 local function rgb(name: string): Color3
@@ -339,6 +340,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.stopAt = "Off"
 	hubState.loop = RollLoop.idle()
 	hubState.holdingRoll = false
+	hubState.rollFromPointer = false
+	hubState.shopNote = ""
 	hubState.rollBusy = false
 	hubState.playerAlive = true
 	hubState.openedHype = RollHype.fresh(nil)
@@ -4213,11 +4216,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.rollButton.BackgroundColor3 = rgb("button")
 	end)
 	hubState.rollButton.Activated:Connect(function()
+		-- A mouse, touch, or ButtonA press already called pressRoll from
+		-- InputBegan. Activated still cracks once for a keyboard or
+		-- controller selection that never began a pointer press.
+		if hubState.rollFromPointer == true then
+			hubState.rollFromPointer = false
+			return
+		end
 		hubFn.pressRoll()
 	end)
 	hubState.rollButton.InputBegan:Connect(function(input)
 		if hubFn.pointerDown(input) then
 			hubState.holdingRoll = true
+			hubState.rollFromPointer = true
 			hubState.rollButton.BackgroundColor3 = rgb("press")
 			hubFn.pressRoll()
 		end
@@ -4387,6 +4398,29 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
+	function hubFn.buyOffer(offerId: string)
+		local ok, result = pcall(hooks.invoke, "BuyGoldShop", offerId)
+		local message: string? = nil
+		if not ok then
+			message = tostring(result)
+		elseif type(result) ~= "table" or result.ok ~= true then
+			local err = if type(result) == "table" then result.error else nil
+			message = if type(err) == "string" and err ~= "" then err else "Could not buy that."
+		end
+		if ok and type(result) == "table" and type(result.profile) == "table" then
+			hubState.profile = result.profile
+		end
+		if message ~= nil then
+			hubState.shopNote = message
+			if hooks.onToast ~= nil then
+				hooks.onToast(message)
+			end
+		else
+			hubState.shopNote = ""
+		end
+		hubFn.paintShop()
+	end
+
 	function hubFn.paintShop()
 		hubFn.clear(hubState.shop)
 		hubFn.line(hubState.shop, "Gold shop. Gold only.", 1, rgb("gold"))
@@ -4395,15 +4429,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			purse = hubState.profile.gold
 		end
 		hubFn.line(hubState.shop, string.format("Gold  %d", purse), 2, rgb("text"))
+		local noteOrder = 2
+		if type(hubState.shopNote) == "string" and hubState.shopNote ~= "" then
+			noteOrder = 3
+			hubFn.line(hubState.shop, hubState.shopNote, noteOrder, rgb("gold"))
+		end
 		for index, offer in ipairs(GoldShop.offers()) do
 			local offerId = offer.id
 			hubFn.row(
 				hubState.shop,
 				string.format("%s  %d Gold", offer.label, offer.price),
-				index + 2,
+				index + noteOrder,
 				function()
 					task.spawn(function()
-						pcall(hooks.invoke, "BuyGoldShop", offerId)
+						hubFn.buyOffer(offerId)
 					end)
 				end
 			)

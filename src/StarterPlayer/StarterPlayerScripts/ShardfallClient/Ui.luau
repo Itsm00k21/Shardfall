@@ -1848,6 +1848,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 		for index, recipe in ipairs(Recipes.all()) do
 			if
+				not LaunchGate.on("forgeCraft")
+				and type(recipe.result) == "table"
+				and recipe.result.kind ~= "reroll"
+			then
+				continue
+			end
+			if
 				not LaunchGate.on("forgeReroll")
 				and type(recipe.result) == "table"
 				and recipe.result.kind == "reroll"

@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build d4da5fd+ client` in Output.
+	still leaves `[Shardfall] build 95b3c34+ client` in Output.
 ]]
 
-print("[Shardfall] build d4da5fd+ client")
+print("[Shardfall] build 95b3c34+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -263,35 +263,50 @@ local function remoteError(ok: boolean, result: any, fallback: string): string?
 	return nil
 end
 
+-- One GetOdds in flight, plus one trailing request. Pity and the roll
+-- count paint from the profile, so a crack batch does not refetch.
+local oddsPull = { busy = false, again = false }
+
 local function refreshOdds()
-	local ok, result = pcall(function()
-		return invoke("GetOdds", selectedPoolId)
-	end)
-	local message = remoteError(ok, result, "Could not load odds.")
-	if message ~= nil then
-		ui.setStatus(message, "error")
-		ui.setNotice(message)
+	if oddsPull.busy then
+		oddsPull.again = true
 		return
 	end
-	ui.setOdds((result :: any).odds)
+	oddsPull.busy = true
+	task.spawn(function()
+		repeat
+			oddsPull.again = false
+			local poolId = selectedPoolId
+			local ok, result = pcall(function()
+				return invoke("GetOdds", poolId)
+			end)
+			local message: string? = nil
+			if not ok then
+				message = tostring(result)
+			elseif type(result) ~= "table" then
+				message = "Could not load odds. (remote returned " .. typeof(result) .. ")"
+			elseif result.ok ~= true then
+				message = tostring(result.error or "Could not load odds.")
+			else
+				ui.setOdds(result.odds)
+			end
+			if message ~= nil and message ~= "Slow down a moment." then
+				warn("[Shardfall] " .. message)
+				ui.setStatus(message, "error")
+				ui.setNotice(message)
+			end
+		until oddsPull.again ~= true
+		oddsPull.busy = false
+	end)
 end
 
 local function oddsKey(profile: any): string
-	local since = 0
-	if type(profile.pity) == "table" then
-		local bucket = profile.pity[selectedPoolId]
-		if type(bucket) == "table" then
-			since = bucket.rollsSinceLegendary or 0
-		end
-	end
 	return string.format(
-		"%s:%s:%s:%s:%s:%s",
+		"%s:%s:%s:%s",
 		selectedPoolId,
 		tostring(profile.shardLuck or 0),
 		tostring(profile.luckBoost or 0),
-		tostring(profile.shardRolls or 0),
-		tostring(profile.vip == true),
-		tostring(since)
+		tostring(profile.vip == true)
 	)
 end
 
@@ -1222,6 +1237,11 @@ menuHub = MenuHub.start(playerGui, {
 			ClassHud.setVisible(true)
 		else
 			ClassHud.dismiss()
+		end
+	end,
+	onToast = function(message: string)
+		if hudShell ~= nil then
+			hudShell.toast(message)
 		end
 	end,
 })
