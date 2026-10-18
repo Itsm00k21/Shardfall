@@ -91,7 +91,7 @@ Pending, not fixed:
 
 ## E-011 — in progress
 
-Tablet and small-desktop layout recheck. Branch `helper/layout-recheck-wide-9721`, cut from tip `a5a8ec6`, rebased onto `540ed07`. Report `docs/hooks/E-011-wide-recheck.md`. `tests/WideRecheck.spec.luau` locks the checks that pass. It does not assert the 1280×720 forge row. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
+Tablet and small-desktop layout recheck. Branch `helper/layout-recheck-wide-9721`, cut from tip `a5a8ec6`, rebased onto `540ed07`. PR https://github.com/Itsm00k21/Shardfall/pull/295 into `cursor/live-build-9721`. Report `docs/hooks/E-011-wide-recheck.md`. `tests/WideRecheck.spec.luau` locks the checks that pass. It does not assert the 1280×720 forge row. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
 
 Walked `docs/design/playtest_script.md` at 1024×768 and 1280×720. 1024×768: pass 9, fail 0, manual 2. 1280×720: pass 8, fail 1, manual 2. Step 8 fails only at 1280×720.
 
