@@ -13,12 +13,6 @@
 	service calls. DataService.mutate is Schema.deepCopy, and a reason or a
 	throw puts that copy back. A refused or ignored call leaves the profile
 	equal to the copy taken before it. Nothing under src/ changes here.
-
-	Pending, omitted from this run: SetAudio with a negative. The remote
-	accepts any tonumber result and writes Audio.clampVolume, which turns a
-	negative into 0. That changes musicVolume and sfxVolume.
-	src/ServerScriptService/ShardfallServer/Remotes.luau:444
-	src/ReplicatedStorage/Shared/Audio.luau:41
 ]]
 
 local fs = require("@lune/fs")
@@ -464,6 +458,9 @@ function handlers.SetAudio(data, music, sfx)
 	if tonumber(music) == nil or tonumber(sfx) == nil then
 		return fail("Volume needs a number.")
 	end
+	if (tonumber(music) :: number) < 0 or (tonumber(sfx) :: number) < 0 then
+		return fail("Volume cannot be negative.")
+	end
 	local saved, err = mutate(data, function(profile)
 		profile.musicVolume = Audio.clampVolume(music)
 		profile.sfxVolume = Audio.clampVolume(sfx)
@@ -854,12 +851,7 @@ local REMOTES: { Remote } = {
 	{ name = "BuyGoldShop", arity = 1 },
 	{ name = "Travel", arity = 1 },
 	{ name = "SetShake", arity = 1 },
-	{
-		name = "SetAudio",
-		arity = 2,
-		-- A negative is tonumber-able. clampVolume writes 0. See the header.
-		omit = { negative = true, ["negative plus extra"] = true },
-	},
+	{ name = "SetAudio", arity = 2 },
 	{ name = "SetSettings", arity = 1 },
 	{ name = "SetGraphicsQuality", arity = 1 },
 	{

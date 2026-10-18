@@ -216,6 +216,16 @@ function HudLayout.hub(viewportX: number, viewportY: number, margin: number): Re
 	if y + h > viewportY - margin then
 		h = math.max(160, viewportY - margin - y)
 	end
+	-- A centered portrait hub covers the rail. Park it on the rail's right.
+	local rail = HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, 64, 44, viewportX)
+	local railRect = rect(rail.x, rail.y, rail.w, rail.h)
+	if HudLayout.overlaps(rect(x, y, w, h), railRect) then
+		x = rail.x + rail.w
+		local limit = viewportX - margin
+		if x + w > limit then
+			w = math.max(44, limit - x)
+		end
+	end
 	return rect(x, y, w, h)
 end
 
@@ -343,8 +353,8 @@ function HudLayout.railFit(
 		end
 	end
 	-- A short landscape phone used to park that slide on the HP bar.
-	-- Sit under the bar. Tighten the gap, then the button, so 800×380
-	-- still clears the bar and stays inside the viewport.
+	-- Sit under the bar, inside the 16px inset. Tighten the gap, then
+	-- the button. The button stays at the 44px floor when that still fits.
 	if type(viewportX) == "number" and viewportX == viewportX and viewportX > 0 and viewportX < math.huge then
 		local hp = HudLayout.health(margin, viewportX)
 		local placed = { x = x, y = y, w = button, h = height }
@@ -354,7 +364,7 @@ function HudLayout.railFit(
 			local function stack(size: number, pad: number): number
 				return safeCount * size + math.max(0, safeCount - 1) * pad
 			end
-			local room = viewportY - belowHp
+			local room = viewportY - margin - belowHp
 			local size = button
 			local pad = gap
 			if stack(size, pad) > room then
@@ -482,10 +492,27 @@ function HudLayout.bagCard(cellW: number, cellH: number): BagCard
 	}
 end
 
--- Pills, the action row, and the gaps that sit above the bag cards.
+-- Pills, filters, the action row, and the gaps that sit above the bag cards.
 function HudLayout.bagChromeAboveCards(): number
 	local action = UiTheme.PAD + UiTheme.TOUCH + UiTheme.PAD
-	return UiTheme.PAD + UiTheme.TOUCH + UiTheme.GAP + action + UiTheme.GAP
+	local filters = UiTheme.TOUCH
+	return UiTheme.PAD
+		+ UiTheme.TOUCH
+		+ UiTheme.GAP
+		+ filters
+		+ UiTheme.GAP
+		+ action
+		+ UiTheme.GAP
+end
+
+-- Distance from the top of the bag list to the centre of the first Equip.
+function HudLayout.bagEquipCentre(listHeight: number, cellH: number): number
+	local card = HudLayout.bagCard(math.max(44, cellH), cellH)
+	local centre = card.equip.y + card.equip.h / 2
+	if HudLayout.bagCardsLead(listHeight, cellH) then
+		return UiTheme.PAD + centre
+	end
+	return HudLayout.bagChromeAboveCards() + centre
 end
 
 -- True when pills and the action row would push Equip's centre past the list.

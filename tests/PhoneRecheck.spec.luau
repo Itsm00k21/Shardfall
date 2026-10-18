@@ -1,9 +1,9 @@
 --!strict
 
 --[[
-	E-010 phone recheck. Locks the playtest checks that pass at
-	390x844 and 844x390. Pending overlaps stay in
-	docs/hooks/E-010-phone-recheck.md. This file does not assert them.
+	E-010 phone recheck. Locks the playtest checks at 390x844 and
+	844x390. The portrait hub page, the bag tip, and the landscape
+	Forge sheet stay clear of the rail.
 ]]
 
 local framework = require("./framework")
@@ -294,6 +294,20 @@ describe("Phone recheck", function()
 		local topRow = { x = portraitSheet.x, y = portraitSheet.y, w = portraitSheet.w, h = 44 }
 		expect(hits(topRow, portraitRail)).toBeFalse()
 		expect(hits(topRow, portraitBar)).toBeFalse()
+		local portraitHub = HudLayout.hub(390, 844, margin)
+		local headerH = UiTheme.HEADER + UiTheme.PAD
+		local portraitBody = {
+			x = portraitHub.x + 8,
+			y = portraitHub.y + headerH,
+			w = math.max(44, portraitHub.w - 16),
+			h = math.max(44, portraitHub.h - headerH - 8),
+		}
+		expect(hits(portraitBody, portraitRail)).toBeFalse()
+		local landscapeSheet = ShellLayout.menuRect(844, 390)
+		local landscapeRail = railOf(844, 390)
+		expect(hits(landscapeSheet, landscapeRail)).toBeFalse()
+		expect(landscapeRail.w).toEqual(UiTheme.TOUCH)
+		expect(landscapeRail.y + landscapeRail.h <= 390 - margin).toBeTrue()
 	end)
 
 	it("walks the hub pages at both phone sizes", function()
@@ -356,6 +370,7 @@ describe("Phone recheck", function()
 			local tip = GuiFake.findNamed(ui.screen, "Tip")
 			expect(tip.Visible).toBeTrue()
 			expect(inside(boxOf(tip), vx, vy, 8)).toBeTrue()
+			expect(hits(boxOf(tip), railOf(vx, vy))).toBeFalse()
 			local tipName = tip:FindFirstChild("Name")
 			expect(tipName.Text).toEqual("Practice Blade")
 			local red, green, blue = UiTheme.rarityColor("Rare")

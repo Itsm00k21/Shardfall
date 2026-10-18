@@ -10,6 +10,8 @@
 ]]
 
 local ActionSlots = require("./ActionSlots")
+local HudLayout = require("./HudLayout")
+local UiTheme = require("./UiTheme")
 
 local ShellLayout = {}
 
@@ -248,8 +250,17 @@ function ShellLayout.menuRect(viewportX: number, viewportY: number): Rect
 	if h < 0 then
 		h = 0
 	end
-	local w = math.min(360, math.max(0, viewportX - 32))
-	return { x = 16, y = y, w = w, h = h }
+	local rail = HudLayout.railFit(
+		viewportY,
+		16,
+		HudLayout.RAIL_COUNT,
+		UiTheme.TAP,
+		UiTheme.TOUCH,
+		viewportX
+	)
+	local x = math.max(16, rail.x + rail.w)
+	local w = math.min(360, math.max(0, viewportX - x - 16))
+	return { x = x, y = y, w = w, h = h }
 end
 
 -- Odds and version readout. The roll sheet draws this on the left.
