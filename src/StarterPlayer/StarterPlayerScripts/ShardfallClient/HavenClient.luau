@@ -178,6 +178,9 @@ function HavenClient.start(callbacks: Callbacks)
 		end
 		task.spawn(function()
 			local root = character:WaitForChild("HumanoidRootPart", 8)
+			if Players.LocalPlayer.Character ~= character then
+				return
+			end
 			if root == nil or not root:IsA("BasePart") then
 				clearArrow()
 				return

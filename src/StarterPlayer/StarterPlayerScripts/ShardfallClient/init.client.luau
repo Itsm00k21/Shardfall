@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build e26a6ce+ client` in Output.
+	still leaves `[Shardfall] build d088087+ client` in Output.
 ]]
 
-print("[Shardfall] build e26a6ce+ client")
+print("[Shardfall] build d088087+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1358,7 +1358,7 @@ HavenClient.start({
 		closePanels("menu")
 		menuHub.open(tab)
 		if kind == "market" then
-			ui.setStatus("Gold shop. Potions, a bag slot, and a pet slot.", "info")
+			ui.setStatus("Gold shop. A Healing Tonic and a bag slot.", "info")
 		elseif areaId == "pets" then
 			ui.setStatus("Pet Garden. Companions.", "info")
 		else
