@@ -76,7 +76,7 @@ end
 -- The draw is RarityConfig.pick / disclose, not the pool-weight table.
 -- sinceLegendary stays in the signature so a pity counter cannot change
 -- these lines. The hub and the reel both print RarityConfig.formatLine,
--- which keeps four decimals under 1% so a real drop is never shown as 0.0%.
+-- which prints one 1-in and one percent from that same disclosed chance.
 -- disclose already gives the last rarity whatever remains, so the chances
 -- sum to 100%. luck is a profile, or a shardLuck number with boost beside
 -- it. Either way the multiplier is luckFromProfile, the same call the

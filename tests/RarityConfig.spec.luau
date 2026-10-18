@@ -5,6 +5,7 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
 local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
 
@@ -42,7 +43,8 @@ describe("RarityConfig", function()
 		for _, row in ipairs(odds.rarities) do
 			sum += row.chance
 			local line = RarityConfig.formatLine(row)
-			expect(string.find(line, "1 in " .. tostring(row.oneIn), 1, true) ~= nil).toBeTrue()
+			expect(string.find(line, "  1 in ", 1, true) ~= nil).toBeTrue()
+			expect(string.find(line, "%)", 1, true) ~= nil).toBeTrue()
 			if row.rarity == "Mythic" then
 				mythic = row
 			end
@@ -61,6 +63,39 @@ describe("RarityConfig", function()
 			end
 		end
 		expect(math.abs(mythic.chance - ((1 - 1 / 100000) * (1 / 25000))) < 1e-12).toBeTrue()
+		expect(string.find(odds.notice, RarityConfig.ROUNDING_NOTE, 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("prints one 1-in and one percent from the disclosed chance", function()
+		expect(RarityConfig.formatLine({ rarity = "Rare", chance = 0.02, oneIn = 10 })).toEqual(
+			"Rare  1 in 50  (2%)"
+		)
+		local odds = RarityConfig.disclose(ladderPool(), 1)
+		local shownSum = 0
+		for _, row in ipairs(odds.rarities) do
+			local line = RarityConfig.formatLine(row)
+			local rarity, oneInText, percentText =
+				string.match(line, "^(%S+)  1 in (%d+)  %(([%d%.]+)%%%)")
+			expect(rarity).toEqual(row.rarity)
+			local oneIn = tonumber(oneInText)
+			local percent = tonumber(percentText)
+			assert(oneIn ~= nil and percent ~= nil)
+			shownSum += percent
+			expect(math.abs(percent - row.chance * 100) <= 0.55).toBeTrue()
+			expect(oneIn).toEqual(math.max(1, math.floor((100 / percent) + 0.5)))
+		end
+		expect(math.abs(shownSum - 100) <= 1).toBeTrue()
+		local live = RarityConfig.disclose(Pools.get("verdant_armory"), 1)
+		local liveSum = 0
+		for _, row in ipairs(live.rarities) do
+			local _, _, percentText = string.match(
+				RarityConfig.formatLine(row),
+				"^(%S+)  1 in (%d+)  %(([%d%.]+)%%%)"
+			)
+			expect(percentText ~= nil).toBeTrue()
+			liveSum += tonumber(percentText) or 0
+		end
+		expect(math.abs(liveSum - 100) <= 1).toBeTrue()
 	end)
 
 	it("halves the 1-in thresholds when luck is x2", function()
