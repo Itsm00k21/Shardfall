@@ -34,6 +34,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
 local Raids = require(ReplicatedStorage.Shared.Raids)
@@ -657,6 +658,9 @@ local function copyStrings(source: any): { string }
 end
 
 function RaidService.queue(player: Player, difficulty: any, role: any)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	local now = os.time()
 	sweep(now)
 	if seatedRow(player.UserId, now) ~= nil then
@@ -1300,6 +1304,9 @@ function RaidService.ready(player: Player)
 end
 
 function RaidService.practice(player: Player, wing: any, phase: any)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	local profile = DataService.get(player)
 	if profile == nil then
 		return reject("Profile is still loading.")

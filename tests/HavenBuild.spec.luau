@@ -17,6 +17,7 @@ local expect = framework.expect
 
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local HavenLife = require("../src/ReplicatedStorage/Shared/HavenLife")
 local SavedWorld = require("../src/ReplicatedStorage/Shared/SavedWorld")
 local ShellLayout = require("../src/ReplicatedStorage/Shared/ShellLayout")
@@ -422,6 +423,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 	local savedModule = instance("ModuleScript")
 	savedModule.Name = "SavedWorld"
 	savedModule.Parent = shared
+	local gateModule = instance("ModuleScript")
+	gateModule.Name = "LaunchGate"
+	gateModule.Parent = shared
 
 	local runService = {
 		Heartbeat = {
@@ -535,6 +539,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			end
 			if module == savedModule then
 				return SavedWorld
+			end
+			if module == gateModule then
+				return LaunchGate
 			end
 			error("unexpected require", 2)
 		end,
@@ -1341,18 +1348,26 @@ describe("HavenBuilder", function()
 			if lights ~= 1 then
 				error(portal.id .. " needs one accent light", 2)
 			end
-			if prompt == nil or prompt.MaxActivationDistance ~= Haven.GATE_REACH then
-				error(portal.id .. " prompt reach is not the gate reach", 2)
-			end
-			if portal.id == "rootvault" then
-				expect(prompt:GetAttribute("HavenAction")).toEqual("rootvault")
-				expect(prompt.ActionText).toEqual("Enter")
-			elseif portal.id == "heartwood" then
-				expect(prompt:GetAttribute("HavenAction")).toEqual("heartwood")
-				expect(prompt.ActionText).toEqual("Finder")
-				expect(prompt.ObjectText).toEqual("Opens at level 15.")
+			if portal.id == "heartwood" then
+				local raidPrompts = 0
+				for _, child in ipairs(arch:GetDescendants()) do
+					if child:IsA("ProximityPrompt") then
+						raidPrompts += 1
+					end
+				end
+				expect(LaunchGate.on("raids")).toEqual(false)
+				expect(raidPrompts).toEqual(0)
+				expect(arch:FindFirstChild("PillarL") ~= nil).toBeTrue()
+				expect(arch:FindFirstChild("PillarR") ~= nil).toBeTrue()
+				expect(arch:FindFirstChild("Lintel") ~= nil).toBeTrue()
+				expect(arch:FindFirstChild("Glow") ~= nil).toBeTrue()
 				expect(arch:FindFirstChild("EnterPad")).toBeNil()
 				expect(arch:FindFirstChild("Seal")).toBeNil()
+			elseif prompt == nil or prompt.MaxActivationDistance ~= Haven.GATE_REACH then
+				error(portal.id .. " prompt reach is not the gate reach", 2)
+			elseif portal.id == "rootvault" then
+				expect(prompt:GetAttribute("HavenAction")).toEqual("rootvault")
+				expect(prompt.ActionText).toEqual("Enter")
 			else
 				expect(prompt:GetAttribute("HavenAction")).toEqual("soon")
 				expect(prompt:GetAttribute("HavenMessage")).toEqual(portal.message)
@@ -1745,25 +1760,24 @@ describe("HavenBuilder", function()
 		local heartArch = findNamed(hub, "heartwood")
 		expect(math.abs(heartArch.PillarL.Size.Y - rootArch.PillarL.Size.Y - 4) < 0.05).toBeTrue()
 		local waves = nil
-		local practice = nil
+		local heartPrompts = 0
 		for _, child in ipairs(rootArch:GetDescendants()) do
 			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "waves" then
 				waves = child
 			end
 		end
 		for _, child in ipairs(heartArch:GetDescendants()) do
-			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "practice" then
-				practice = child
+			if child:IsA("ProximityPrompt") then
+				heartPrompts += 1
 			end
 		end
 		if waves == nil or waves.Parent.Name ~= "PillarL" or waves.ActionText ~= "Waves" then
 			error("Waves is not on the Rootvault pier", 2)
 		end
-		if practice == nil or practice.Parent.Name ~= "PillarL" or practice.ActionText ~= "Practice" then
-			error("Practice is not on the Heartwood pier", 2)
-		end
 		expect(waves.MaxActivationDistance).toEqual(Haven.PIER_REACH)
-		expect(practice.MaxActivationDistance).toEqual(Haven.PIER_REACH)
+		expect(LaunchGate.on("raids")).toEqual(false)
+		expect(heartPrompts).toEqual(0)
+		expect(heartArch:FindFirstChild("PillarL") ~= nil).toBeTrue()
 
 		local inlays = findAll(hub, "Inlay")
 		expect(#inlays).toEqual(6)
@@ -2139,10 +2153,17 @@ describe("HavenBuilder", function()
 					prompt = child
 				end
 			end
-			if prompt == nil then
+			local live = false
+			if portal.id == "heartwood" and not LaunchGate.on("raids") then
+				if prompt ~= nil then
+					error("heartwood mouth still has a raid prompt", 2)
+				end
+				live = true
+			elseif prompt == nil then
 				error(portal.id .. " mouth has no prompt", 2)
+			else
+				live = prompt:GetAttribute("HavenAction") ~= "soon"
 			end
-			local live = prompt:GetAttribute("HavenAction") ~= "soon"
 			local seal = arch:FindFirstChild("Seal")
 			local segment = false
 			local litSegment = false
@@ -2253,5 +2274,37 @@ describe("HavenBuilder", function()
 		expect(title.TextStrokeTransparency).toEqual(0)
 		expect(title.TextColor3.R + title.TextColor3.G + title.TextColor3.B >= 700).toBeTrue()
 		expect(plate.BackgroundTransparency < 0.2).toBeTrue()
+	end)
+
+	it("leaves the Heartwood arch and omits Finder and Practice while raids are closed", function()
+		expect(LaunchGate.on("raids")).toEqual(false)
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+		local arch = findNamed(hub, "heartwood")
+		expect(arch:FindFirstChild("PillarL") ~= nil).toBeTrue()
+		expect(arch:FindFirstChild("PillarR") ~= nil).toBeTrue()
+		expect(arch:FindFirstChild("Lintel") ~= nil).toBeTrue()
+		expect(arch:FindFirstChild("Glow") ~= nil).toBeTrue()
+		expect(arch:FindFirstChild("Seal")).toBeNil()
+		expect(arch:FindFirstChild("EnterPad")).toBeNil()
+		for _, child in ipairs(arch:GetDescendants()) do
+			if child:IsA("ProximityPrompt") then
+				error("Heartwood still has a " .. tostring(child.ActionText) .. " prompt", 2)
+			end
+		end
+		local root = findNamed(hub, "rootvault")
+		local enter = nil
+		local waves = nil
+		for _, child in ipairs(root:GetDescendants()) do
+			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "rootvault" then
+				enter = child
+			elseif child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "waves" then
+				waves = child
+			end
+		end
+		expect(enter ~= nil and enter.ActionText == "Enter").toBeTrue()
+		expect(waves ~= nil and waves.ActionText == "Waves").toBeTrue()
 	end)
 end)
