@@ -37,6 +37,7 @@ local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local NotifyBadges = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NotifyBadges"))
+local PetLine = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetLine"))
 local PetRoster = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetRoster"))
 local Pools = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pools"))
 local Rarities = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarities"))
@@ -2401,8 +2402,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.rollKind = "pets"
 			hubFn.show("roll")
 		end)
+		local textScale = 1
+		if type(hubState.draft.access.textScale) == "number" then
+			textScale = hubState.draft.access.textScale
+		end
+		local pageW = hubState.pets.AbsoluteSize.X
+		if pageW < 80 then
+			local vx, vy = hubFn.view()
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local inner = HudLayout.hubBody(box.w, box.h)
+			pageW = inner.w
+		end
+		local lineW = math.max(44, pageW - UiTheme.PAD * 2)
 		for index, companion in ipairs(PetRoster.STARTER) do
-			hubFn.line(hubState.pets, companion.name .. "  " .. companion.ability, 20 + index, rgb("text"))
+			local text = companion.name .. "  " .. companion.ability
+			local fitted = PetLine.box(text, lineW, textScale)
+			local label = hubFn.line(hubState.pets, text, 20 + index, rgb("text"))
+			label.TextWrapped = true
+			label.TextSize = UiTheme.MIN_TEXT
+			label:SetAttribute("BaseText", UiTheme.MIN_TEXT)
+			label.Size = UDim2.new(1, 0, 0, fitted.h)
+			label.ClipsDescendants = true
 		end
 	end
 
