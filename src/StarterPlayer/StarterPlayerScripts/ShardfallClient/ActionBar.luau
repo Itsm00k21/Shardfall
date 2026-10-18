@@ -700,7 +700,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local function place()
 		local size = screen.AbsoluteSize
-		local mobile = callbacks.mobile() or size.X < 700
+		local mobile = callbacks.mobile() or size.X < 700 or size.Y < 500
 		local spot = ActionSlots.placement(size.X, size.Y, mobile)
 		local chrome = ActionSlots.chrome(spot)
 		lock.Position = UDim2.fromOffset(chrome.lock.x, chrome.lock.y)
@@ -713,7 +713,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		layout.CellSize = UDim2.fromOffset(spot.slot, spot.slot)
 		layout.CellPadding = UDim2.fromOffset(spot.gap, spot.gap)
 		local chips = ActionSlots.prompts(spot, size.X, size.Y)
-		local cluster = CombatCluster.place(size.X, size.Y)
+		local cluster = CombatCluster.place(size.X, size.Y, nil, mobile)
 		attack.Position = UDim2.fromOffset(cluster.attack.x, cluster.attack.y)
 		attack.Size = UDim2.fromOffset(cluster.attack.w, cluster.attack.h)
 		dodge.Position = UDim2.fromOffset(cluster.dodge.x, cluster.dodge.y)

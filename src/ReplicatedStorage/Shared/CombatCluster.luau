@@ -7,6 +7,9 @@
 	smaller phone button and stays hidden on desktop through HeavyChip.
 
 	A third argument, including paid = true, does not move a rect.
+	A short landscape phone is still a phone: height under 500 uses the
+	2x4 bar, same as a narrow portrait. The fourth argument forces that
+	bar when the device is touch even if the window is wide.
 	Nothing here costs Robux.
 ]]
 
@@ -35,14 +38,21 @@ local function overlaps(rect: Rect, bar: ActionSlots.Place): boolean
 	return ActionSlots.overlaps(rect, { x = bar.x, y = bar.y, w = bar.w, h = bar.h })
 end
 
-function CombatCluster.place(width: any, height: any, _extra: any?): { attack: Rect, dodge: Rect, jump: Rect, heavy: Rect }
+function CombatCluster.place(
+	width: any,
+	height: any,
+	_extra: any?,
+	phone: boolean?
+): { attack: Rect, dodge: Rect, jump: Rect, heavy: Rect }
 	local w = axis(width, 1280)
 	local h = axis(height, 720)
 	local margin = 16
 	local gap = 8
 	local attackSize = if w < 700 then 64 else 72
 	local small = if w < 700 then 44 else 48
-	local mobile = w < 700
+	-- Width under 700 is portrait. Height under 500 is a landscape phone.
+	-- Touch on a wider window passes phone = true from the action bar.
+	local mobile = phone == true or w < 700 or h < 500
 	local bar = ActionSlots.placement(w, h, mobile)
 	local attack: Rect = {
 		x = w - margin - attackSize,
