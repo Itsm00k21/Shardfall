@@ -99,16 +99,14 @@ function HubStyle.inPill(item: any, pill: any): boolean
 		return false
 	end
 	local kind = if type(item.kind) == "string" then item.kind else ""
-	local slot = if type(item.slot) == "string" then item.slot else ""
 	if pill == "Weapons" then
-		return kind == "Weapon" or item.weaponType ~= nil
+		return kind == "Weapon"
 	end
 	if pill == "Armor" then
 		return kind == "Armor"
-			or slot == "helm"
-			or slot == "chest"
-			or slot == "legs"
-			or slot == "boots"
+	end
+	if pill == "Items" then
+		return kind ~= "Weapon" and kind ~= "Armor" and kind ~= "Pet" and kind ~= "Relic"
 	end
 	if pill == "Relics" then
 		return kind == "Relic" or item.relic == true
