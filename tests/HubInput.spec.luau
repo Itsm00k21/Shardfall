@@ -117,7 +117,7 @@ describe("HubInput", function()
 	it("gives every open-tab button a click handler and no invisible cover", function()
 		local world, hub = bootHub()
 		local screen = screenOf(world)
-		local tabs = { "hero", "bag", "pets", "roll", "raids", "market", "pass", "settings" }
+		local tabs = { "hero", "bag", "pets", "roll", "shop", "settings" }
 		for _, tab in ipairs(tabs) do
 			hub.open(tab)
 			expect(HubPress.blocker(GuiFake.covers(screen))).toEqual(nil)
@@ -219,21 +219,23 @@ describe("HubInput", function()
 			bag = "Bag",
 			pets = "Pets",
 			roll = "Roll",
-			raids = "Raids",
-			market = "Market",
-			pass = "Shard Pass",
+			shop = "Shop",
 			settings = "Settings",
 			hero = "Hero",
 		}
-		for _, tab in ipairs({ "bag", "pets", "roll", "raids", "market", "pass", "settings", "hero" }) do
+		for _, tab in ipairs({ "bag", "pets", "roll", "shop", "settings", "hero" }) do
 			GuiFake.activate(tabButton(screen, tab))
 			expect(#rolled(calls)).toEqual(before)
 			expect(labelText(screen, "Title")).toEqual(titles[tab])
 		end
-		GuiFake.activate(tabButton(screen, "pass"))
-		local pass = GuiFake.findNamed(screen, "Body"):FindFirstChild("pass", false)
-		GuiFake.activate(pass:FindFirstChild("Cta", true))
-		expect(hasText(screen, "Daily check is quiet.")).toBeTrue()
+		expect(tabButton(screen, "raids").Visible).toBeFalse()
+		expect(tabButton(screen, "market").Visible).toBeFalse()
+		expect(tabButton(screen, "pass").Visible).toBeFalse()
+		GuiFake.activate(tabButton(screen, "shop"))
+		expect(hasText(screen, "  Healing Tonic  40 Gold")).toBeTrue()
+		expect(hasText(screen, "  Bag slot  250 Gold")).toBeTrue()
+		expect(hasText(screen, "  Pet slot  400 Gold")).toBeTrue()
+		expect(hasText(screen, "Robux")).toBeFalse()
 	end)
 
 	it("fires action slots, Lock, T, and the key binds as themselves", function()
@@ -392,13 +394,14 @@ describe("HubInput", function()
 		expect(labelText(screen, "Milestone")).toEqual("You need a Shard Token to crack a shard.")
 	end)
 
-	it("opens Market from the market tab and keeps pets off the bag", function()
+	it("opens the Gold shop from the shop tab and keeps pets off the bag", function()
 		local world, hub = bootHub()
-		hub.open("market")
+		hub.open("shop")
 		local screen = screenOf(world)
-		expect(labelText(screen, "Title")).toEqual("Market")
+		expect(labelText(screen, "Title")).toEqual("Shop")
 		local body = GuiFake.findNamed(screen, "Body")
-		expect(body:FindFirstChild("market").Visible).toBeTrue()
+		expect(body:FindFirstChild("shop").Visible).toBeTrue()
+		expect(body:FindFirstChild("market").Visible).toBeFalse()
 		expect(body:FindFirstChild("pass").Visible).toBeFalse()
 		hub.open("pets")
 		screen = screenOf(world)
@@ -460,7 +463,7 @@ describe("HubInput", function()
 			end
 		end
 		expect(styled).toBeTrue()
-		for _, tab in ipairs({ "hero", "bag", "pets", "roll", "market" }) do
+		for _, tab in ipairs({ "hero", "bag", "pets", "roll", "shop" }) do
 			hub.open(tab)
 			expect(labelText(screenOf(world), "Title") ~= "").toBeTrue()
 			local page = GuiFake.findNamed(screenOf(world), "Body"):FindFirstChild(tab)

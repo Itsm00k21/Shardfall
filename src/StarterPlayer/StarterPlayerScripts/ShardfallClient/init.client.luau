@@ -1242,11 +1242,8 @@ hudShell = HudShell.start(playerGui, {
 	onPets = function()
 		openHub("pets")
 	end,
-	onMarket = function()
-		openHub("market")
-	end,
-	onPass = function()
-		openHub("pass")
+	onShop = function()
+		openHub("shop")
 	end,
 	onSettings = function()
 		openHub("settings")
@@ -1307,7 +1304,7 @@ HavenClient.start({
 			closePanels("craft")
 			ui.openPanel("craft")
 			if hudShell ~= nil then
-				hudShell.toast("Forge. Craft, upgrade, and reroll.")
+				hudShell.toast("Forge. Upgrade gear.")
 			end
 			return
 		end
@@ -1318,7 +1315,7 @@ HavenClient.start({
 		closePanels("menu")
 		menuHub.open(tab)
 		if kind == "market" then
-			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
+			ui.setStatus("Gold shop. Potions, a bag slot, and a pet slot.", "info")
 		elseif areaId == "pets" then
 			ui.setStatus("Pet Garden. Companions.", "info")
 		else

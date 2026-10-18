@@ -18,6 +18,7 @@ local UserInputService = game:GetService("UserInputService")
 local Build = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Build"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
 local Progression = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Progression"))
 local Quality = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quality"))
@@ -33,8 +34,7 @@ export type Callbacks = {
 	onBag: () -> (),
 	onRoll: () -> (),
 	onPets: () -> (),
-	onMarket: () -> (),
-	onPass: () -> (),
+	onShop: () -> (),
 	onSettings: () -> (),
 }
 
@@ -44,8 +44,7 @@ local RAIL = {
 	{ id = "Bag", icon = "bag", call = "onBag" },
 	{ id = "Pets", icon = "pets", call = "onPets" },
 	{ id = "Roll", icon = "roll", call = "onRoll" },
-	{ id = "Market", icon = "market", call = "onMarket" },
-	{ id = "Pass", icon = "pass", call = "onPass" },
+	{ id = "Shop", icon = "market", call = "onShop" },
 	{ id = "Settings", icon = "settings", call = "onSettings" },
 }
 
@@ -240,6 +239,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 	local gold = pill("Gold", "Gold 0")
 	local mastery = pill("Mastery", "Mastery 0")
+	mastery.Visible = LaunchGate.on("extraCurrencies")
 	local shards = pill("Shards", "Shards 0")
 
 	local rail = Instance.new("Frame")

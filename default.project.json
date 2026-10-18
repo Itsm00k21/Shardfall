@@ -153,6 +153,9 @@
         "BuyInventoryExpansion": {
           "$className": "RemoteFunction"
         },
+        "BuyGoldShop": {
+          "$className": "RemoteFunction"
+        },
         "UseTonic": {
           "$className": "RemoteFunction"
         },

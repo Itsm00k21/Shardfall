@@ -248,6 +248,7 @@ export type ProfileData = {
 	milestoneTable: { any },
 	forgeBoostUntil: number,
 	inventoryBonus: number,
+	petSlotBonus: number,
 	waystones: { [string]: boolean },
 	lastTravel: number,
 	travelPass: boolean,
@@ -353,6 +354,7 @@ function Schema.template(): ProfileData
 		milestoneTable = CraftingLevel.copyTable(),
 		forgeBoostUntil = 0,
 		inventoryBonus = 0,
+		petSlotBonus = 0,
 		waystones = {},
 		lastTravel = 0,
 		travelPass = false,
@@ -516,6 +518,10 @@ function Schema.reconcile(data: any): ProfileData
 	data.inventoryBonus = wholeNumber(data.inventoryBonus, 0, 0)
 	if data.inventoryBonus > 500 then
 		data.inventoryBonus = 500
+	end
+	data.petSlotBonus = wholeNumber(data.petSlotBonus, 0, 0)
+	if data.petSlotBonus > 5 then
+		data.petSlotBonus = 5
 	end
 	local knownStones = {}
 	for _, id in ipairs(Travel.ids()) do
@@ -1328,6 +1334,7 @@ function Schema.snapshot(data: ProfileData)
 			accessories = Schema.deepCopy(data.equipped.accessories),
 		},
 		inventoryBonus = data.inventoryBonus,
+		petSlotBonus = data.petSlotBonus,
 		inventoryCap = Schema.inventoryCap(data),
 		materials = Schema.deepCopy(data.materials),
 		consumables = Schema.deepCopy(data.consumables),

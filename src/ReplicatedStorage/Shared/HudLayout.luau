@@ -15,7 +15,7 @@ local UiTheme = require("./UiTheme")
 local HudLayout = {}
 
 -- HudShell's RAIL list stays this long.
-HudLayout.RAIL_COUNT = 7
+HudLayout.RAIL_COUNT = 6
 -- Equip and Keep start this far down the prompt frame.
 HudLayout.PROMPT_LABEL = 36
 
@@ -316,11 +316,10 @@ function HudLayout.railFit(
 		return safeCount * size + (safeCount - 1) * gap
 	end
 	local available = math.max(floorSize, viewportY - margin * 2)
+	-- A short viewport cannot keep the preferred icon. Use the floor
+	-- so the quest tracker still has a lane beside the rail.
 	if heightOf(button) > available then
-		button = math.floor((available - (safeCount - 1) * gap) / safeCount)
-		if button < floorSize then
-			button = floorSize
-		end
+		button = floorSize
 	end
 	local height = heightOf(button)
 	local y = math.floor((viewportY - height) / 2)
