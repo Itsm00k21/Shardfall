@@ -359,6 +359,13 @@ describe("Codex cues", function()
 
 		local haven = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HavenClient.luau")
 		expect(string.find(haven, "ForgeArrow", 1, true) ~= nil).toBeTrue()
+		expect(string.find(haven, 'WaitForChild("HumanoidRootPart", 8)', 1, true) ~= nil).toBeTrue()
+		expect(string.find(haven, "task.defer(showArrow)", 1, true)).toBeNil()
+		local added = string.find(haven, "CharacterAdded:Connect", 1, true)
+		expect(added ~= nil).toBeTrue()
+		local addedBody = string.sub(haven, added or 1, (added or 1) + 400)
+		expect(string.find(addedBody, "showArrow()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(addedBody, "clearArrow()", 1, true) ~= nil).toBeTrue()
 
 		local dungeon = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
 		expect(string.find(dungeon, "publishCues", 1, true) ~= nil).toBeTrue()

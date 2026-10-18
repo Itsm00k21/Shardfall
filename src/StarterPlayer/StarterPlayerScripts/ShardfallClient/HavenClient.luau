@@ -172,10 +172,18 @@ function HavenClient.start(callbacks: Callbacks)
 		mark = billboard
 	end
 
-	Players.LocalPlayer.CharacterAdded:Connect(function()
-		if crafting then
-			task.defer(showArrow)
+	Players.LocalPlayer.CharacterAdded:Connect(function(character)
+		if not crafting then
+			return
 		end
+		task.spawn(function()
+			local root = character:WaitForChild("HumanoidRootPart", 8)
+			if root == nil or not root:IsA("BasePart") then
+				clearArrow()
+				return
+			end
+			showArrow()
+		end)
 	end)
 	local recent = ""
 	local recentAt = 0
