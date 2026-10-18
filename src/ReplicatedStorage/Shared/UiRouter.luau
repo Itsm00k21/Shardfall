@@ -203,8 +203,9 @@ function UiRouter.havenTab(kind: string, areaId: string?): string?
 	if kind == "market" then
 		return "market"
 	end
+	-- The Forge prompt opens the craft panel, not a hub tab.
 	if kind == "craft" then
-		return "bag"
+		return nil
 	end
 	if areaId == "pets" or kind == "pets" then
 		return "pets"
