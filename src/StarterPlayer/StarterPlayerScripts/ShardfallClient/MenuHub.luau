@@ -1918,9 +1918,86 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return string.format("%s  %d", name, math.floor(value + 0.5))
 	end
 
+	function hubFn.itemWorn(uid: string): boolean
+		local profile = hubState.profile
+		if type(profile) ~= "table" or type(profile.equipped) ~= "table" or type(uid) ~= "string" then
+			return false
+		end
+		local equipped = profile.equipped
+		if equipped.weapon == uid or equipped.pet == uid then
+			return true
+		end
+		if type(equipped.armor) == "table" then
+			for _, slotUid in pairs(equipped.armor) do
+				if slotUid == uid then
+					return true
+				end
+			end
+		end
+		if type(equipped.accessories) == "table" then
+			for _, slotUid in pairs(equipped.accessories) do
+				if slotUid == uid then
+					return true
+				end
+			end
+		end
+		return false
+	end
+
+	-- The button flips before the remote returns. mutate notifies without a
+	-- DataStore write, and this click does not wait on that write either.
 	function hubFn.equipUid(uid: string)
+		local profile = hubState.profile
+		local backup = nil
+		if type(profile) == "table" and type(profile.inventory) == "table" then
+			local item = profile.inventory[uid]
+			if type(profile.equipped) == "table" then
+				backup = {}
+				for key, value in pairs(profile.equipped) do
+				if type(value) == "table" then
+					backup[key] = table.clone(value)
+				else
+						backup[key] = value
+					end
+				end
+			else
+				profile.equipped = {}
+			end
+			if type(item) == "table" then
+				local equipped = profile.equipped
+				if item.kind == "Weapon" then
+					equipped.weapon = uid
+				elseif item.kind == "Pet" then
+					equipped.pet = uid
+				elseif item.kind == "Armor" and type(item.slot) == "string" then
+					if type(equipped.armor) ~= "table" then
+						equipped.armor = {}
+					end
+					equipped.armor[item.slot] = uid
+				elseif item.kind == "Accessory" and type(item.slot) == "string" then
+					if type(equipped.accessories) ~= "table" then
+						equipped.accessories = {}
+					end
+					equipped.accessories[item.slot] = uid
+				end
+			end
+		end
 		task.spawn(function()
-			pcall(hooks.invoke, "EquipItem", uid)
+			local ok, result = pcall(hooks.invoke, "EquipItem", uid)
+			local accepted = ok and type(result) == "table" and result.ok == true
+			if accepted then
+				if type(result.profile) == "table" then
+					hubState.profile = result.profile
+				end
+				return
+			end
+			if type(hubState.profile) == "table" and backup ~= nil then
+				hubState.profile.equipped = backup
+			end
+			hubFn.showMilestone("Could not equip that.")
+			if hubState.shownId == "bag" then
+				hubFn.paintBag()
+			end
 		end)
 	end
 
@@ -2229,7 +2306,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			equip.Font = headerFont()
 			equip.TextSize = UiTheme.MIN_TEXT
 			equip.TextColor3 = rgb("text")
-			equip.Text = "Equip"
+			equip.Text = if hubFn.itemWorn(itemUid) then "Equipped" else "Equip"
 			equip.AutoButtonColor = false
 			equip.ZIndex = 7
 			equip.Parent = card
@@ -2239,6 +2316,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.setRest(equip, rgb("header"))
 			hubFn.motion(equip)
 			hubFn.bindActivated(equip, function()
+				if equip:GetAttribute("Equipping") == true then
+					return
+				end
+				equip:SetAttribute("Equipping", true)
+				equip.Text = "Equipped"
 				hubFn.equipUid(itemUid)
 			end)
 			local lock = Instance.new("TextButton")

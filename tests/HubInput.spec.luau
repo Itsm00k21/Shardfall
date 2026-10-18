@@ -1153,4 +1153,54 @@ describe("HubInput", function()
 		expect(note ~= nil).toBeTrue()
 		expect(string.find(note.Text, "rounded", 1, true) ~= nil).toBeTrue()
 	end)
+
+	it("flips Equip before the remote returns and rolls back on a reject", function()
+		local function start(mode: string): (any, any, { any }, { string })
+			local world = GuiFake.world()
+			local MenuHub = world.load("MenuHub")
+			local calls = {}
+			local seen = { "" }
+			local hub = MenuHub.start(world.playerGui, {
+				invoke = function(name: string, ...: any)
+					table.insert(calls, { name, ... })
+					if name == "EquipItem" then
+						local button = GuiFake.findNamed(world.playerGui, "Equip")
+						seen[1] = if button ~= nil then button.Text else ""
+						if mode == "reject" then
+							return { ok = false, error = "no" }
+						end
+						local landed = profile()
+						landed.equipped = { weapon = "sword" }
+						return { ok = true, profile = landed }
+					end
+					return { ok = true }
+				end,
+				onBag = function() end,
+				onMarket = function() end,
+				onDim = function() end,
+			})
+			return world, hub, calls, seen
+		end
+		local world, hub, calls, seen = start("ok")
+		hub.setProfile(profile())
+		hub.open("bag")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Equip")
+		expect(button.Text).toEqual("Equip")
+		GuiFake.emit(button, "Activated")
+		expect(seen[1]).toEqual("Equipped")
+		expect(#calls).toEqual(1)
+		expect(calls[1][1]).toEqual("EquipItem")
+		expect(GuiFake.findNamed(screenOf(world), "Equip").Text).toEqual("Equipped")
+
+		local rejectedWorld, rejectedHub, rejectedCalls, rejectedSeen = start("reject")
+		rejectedHub.setProfile(profile())
+		rejectedHub.open("bag")
+		local rejected = GuiFake.findNamed(screenOf(rejectedWorld), "Equip")
+		GuiFake.emit(rejected, "Activated")
+		expect(rejectedSeen[1]).toEqual("Equipped")
+		expect(#rejectedCalls).toEqual(1)
+		expect(GuiFake.findNamed(screenOf(rejectedWorld), "Equip").Text).toEqual("Equip")
+		expect(string.find(labelText(screenOf(rejectedWorld), "Milestone"), "Could not equip", 1, true) ~= nil).toBeTrue()
+	end)
 end)
