@@ -39,6 +39,36 @@ describe("Schema", function()
 		expect(#oldSkip.rewards).toEqual(0)
 	end)
 
+	it("turns an infinite wallet into zero and keeps a real gold value", function()
+		local broken, err = Schema.migrate({
+			schemaVersion = Schema.VERSION,
+			gold = math.huge,
+			gems = math.huge,
+			raidMarks = math.huge,
+		})
+		expect(err).toBeNil()
+		assert(broken ~= nil)
+		expect(broken.gold).toEqual(0)
+		expect(broken.gems).toEqual(0)
+		expect(broken.raidMarks).toEqual(0)
+
+		local nanGold, nanErr = Schema.migrate({
+			schemaVersion = Schema.VERSION,
+			gold = 0 / 0,
+		})
+		expect(nanErr).toBeNil()
+		assert(nanGold ~= nil)
+		expect(nanGold.gold).toEqual(0)
+
+		local kept, keptErr = Schema.migrate({
+			schemaVersion = Schema.VERSION,
+			gold = 40,
+		})
+		expect(keptErr).toBeNil()
+		assert(kept ~= nil)
+		expect(kept.gold).toEqual(40)
+	end)
+
 	it("keeps a versionless profile's wallets and lastSeen", function()
 		local seen = 1_600_000_000
 		local saved = {
