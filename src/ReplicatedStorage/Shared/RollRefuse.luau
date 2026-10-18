@@ -7,10 +7,12 @@
 	"land", "miss", or "refuse". It does not write them.
 
 	A thrown invoke is a refusal. The pcall error string is not a miss.
-	A result that is not a table is a refusal. ok == true with an item
-	table is a land. ok == true with no item and no error string is a
-	miss. A blank error or a missing error counts as no error. The live
-	server does not send that miss. The branch stays.
+	A result that is not a table is a refusal. 	ok == true with an item
+	table is a land. ok == true with an empty items list is a refusal,
+	so a batch that landed nothing does not look like a miss. ok == true
+	with no item, no items list, and no error string is a miss. A blank
+	error or a missing error counts as no error. The live server does
+	not send that miss. The branch stays.
 
 	Anything else is a refusal. That includes ok ~= true, ok == false,
 	and a non-empty error such as "not enough tokens" or the timeout
@@ -47,6 +49,10 @@ function RollRefuse.classify(invokedOk: any, result: any): Class
 	local item = result.item
 	if accepted and type(item) == "table" then
 		return "land"
+	end
+	local items = result.items
+	if accepted and type(items) == "table" and #items == 0 then
+		return "refuse"
 	end
 	if accepted and item == nil and reason(result.error) == nil then
 		return "miss"
