@@ -1648,4 +1648,10 @@ describe("HubInput", function()
 		press("DPadDown")
 		expect(hub.isOpen()).toEqual(false)
 	end)
+
+	-- E-007 same-frame rail press is not registered. On the Bag rail button,
+	-- ButtonA runs padPress → UiRouter.switch once, and a mouse Activated
+	-- in that same turn runs the HudShell rail callback once (counts 1 and
+	-- 1). The mouse path is menuHub.toggle, so the hub closes. Left out of
+	-- this run. No src/ change until Ghost picks one handler.
 end)

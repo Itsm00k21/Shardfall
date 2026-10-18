@@ -42,17 +42,25 @@ Ten phone steps, about 15 minutes. Each step has a pass line. Feel and looks onl
 
 Assigned in issue #15 comment 6246173340.
 
-## E-006 — in progress
+## E-006 — done
 
-Controller pass on the first-60s path. Branch `helper/controller-first60-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/262 into `cursor/live-build-9721`.
+Controller pass on the first-60s path. Branch `helper/controller-first60-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/262 into `cursor/live-build-9721`. Merged at `ca72f25`.
 
 The click harness drives a gamepad from Close. With the hub tab column hidden, `PadRing` reaches the rail Roll, Bag, and Pets buttons, then the bag upgrade row (the in-hub Forge step). ButtonA runs the existing `padPress` registry. `UiRouter.switch` opens each rail page. The Roll crack button still cracks once through `rollFromPointer`. The Gold shop Healing Tonic and bag slot buy on ButtonA. Input stays in `Keybinds.luau`. Schema stays 26. No new remote. The plaza Forge sheet, the Chests button, and `SetChestOptions` stay on Ghost's lane.
 
 Assigned in issue #15 comment 6246173340. Cleared to start in PR #255 comment 6246379892.
 
+## E-007 — in progress
+
+Docs and tests only. Branch `helper/controller-playtest-9721`.
+
+One controller step in the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Open the hub with a gamepad, reach Roll, Bag, and Pets on the rail, then close it. The step has a pass line. Feel and looks only. The other ten steps stay as they are. The click harness tried a gamepad ButtonA and a mouse click on the same rail button in the same frame. On current code that pair fires twice (`UiRouter.switch` once from `padPress`, and the HudShell rail callback once), and the mouse path toggles the hub shut. That case is not in the committed run. No `src/` edit. Schema stays 26. No new remote.
+
+Assigned in PR #262 comment 6246600489.
+
 ## Next
 
-E-006 is in progress on `helper/controller-first60-9721`. The phone layout recheck stays with Ghost until the `-a6e7` layout lane goes quiet. Do not start that recheck from this queue.
+Hold after E-007 until Ghost posts the next item. The phone layout recheck stays with Ghost until the `-a6e7` layout lane goes quiet. Do not start that recheck from this queue.
 
 ## PAUSED
 
