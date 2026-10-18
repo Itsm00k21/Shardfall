@@ -5308,6 +5308,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local keys = hubState.draft.controls.hotkeys
 		local keyOrder = 50
 		for _, field in ipairs(Keybinds.MENU_ORDER) do
+			if field == "raids" and not LaunchGate.on("raids") then
+				continue
+			end
+			if field == "market" and not LaunchGate.on("market") then
+				continue
+			end
 			local fieldName = field
 			local label = string.format("Hotkey %s  %s", fieldName, keys[fieldName])
 			if hubState.capturing == fieldName then
@@ -5339,19 +5345,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		cycle("Layout edit  " .. (if hubState.draft.controls.layoutEdit then "On" else "Off"), 61, function()
 			hubState.draft.controls.layoutEdit = not hubState.draft.controls.layoutEdit
 		end)
-		cycle("Trades  " .. hubState.draft.social.trades, 70, function()
-			local order = { "everyone", "friends", "off" }
-			local nextId = order[1]
-			for index, id in ipairs(order) do
-				if id == hubState.draft.social.trades then
-					nextId = order[(index % #order) + 1]
+		if LaunchGate.on("trading") then
+			cycle("Trades  " .. hubState.draft.social.trades, 70, function()
+				local order = { "everyone", "friends", "off" }
+				local nextId = order[1]
+				for index, id in ipairs(order) do
+					if id == hubState.draft.social.trades then
+						nextId = order[(index % #order) + 1]
+					end
 				end
-			end
-			hubState.draft.social.trades = nextId
-		end)
-		cycle("Raid invites  " .. (if hubState.draft.social.raidInvites then "On" else "Off"), 71, function()
-			hubState.draft.social.raidInvites = not hubState.draft.social.raidInvites
-		end)
+				hubState.draft.social.trades = nextId
+			end)
+		end
+		if LaunchGate.on("raids") then
+			cycle("Raid invites  " .. (if hubState.draft.social.raidInvites then "On" else "Off"), 71, function()
+				hubState.draft.social.raidInvites = not hubState.draft.social.raidInvites
+			end)
+		end
 		cycle("Chat filter  " .. hubState.draft.social.chatFilter, 72, function()
 			local order = { "default", "strict", "off" }
 			local nextId = order[1]

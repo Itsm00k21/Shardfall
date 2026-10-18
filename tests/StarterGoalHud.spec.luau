@@ -500,8 +500,14 @@ describe("StarterGoalHud chrome", function()
 			expect(placed.y >= margin).toBeTrue()
 			expect(placed.x + placed.w <= vx - margin + 0.01).toBeTrue()
 			expect(placed.y + placed.h <= vy - margin + 0.01).toBeTrue()
-			local rail =
-				HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
+			local rail = HudLayout.railFit(
+				vy,
+				margin,
+				HudLayout.RAIL_COUNT,
+				UiTheme.TAP,
+				UiTheme.TOUCH,
+				vx
+			)
 			expect(HudLayout.overlaps(placed, {
 				x = rail.x,
 				y = rail.y,

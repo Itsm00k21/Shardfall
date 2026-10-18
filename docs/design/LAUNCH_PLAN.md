@@ -23,7 +23,7 @@ Raids, trading, the Market Board, the season pass, pet evolution, boss pets, rel
 - Timed boosts: 2x Luck, 2x XP, 2x Gold (30 or 60 minutes, stackable).
 - Game passes: Auto-Roll, Fast Crack, +Pet slot, +Bag space, VIP (small permanent luck boost and a chat tag).
 - Starter Pack: a one-time, low-price bundle.
-- Gold shop NPC (no Robux): potions, a bag slot, a pet slot.
+- Gold shop NPC (no Robux): a Healing Tonic and a bag slot. Pet slots come later under T-194.
 - Everything paid can also be earned by playing, just slower.
 
 ### Policy gate before the first sale (docs/research/roblox_policy.md)

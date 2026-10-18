@@ -305,7 +305,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		caption.TextTruncate = Enum.TextTruncate.AtEnd
 		local menuField = string.lower(entry.id)
 		local menuKey = Keybinds.MENU[menuField]
-		caption.Text = if entry.id == "Settings" then "Gear" else entry.id
+		caption.Text = entry.id
 		caption.ZIndex = 3
 		caption:SetAttribute("SkipTextScale", true)
 		caption.Parent = button
@@ -439,7 +439,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	prompt.Name = "Prompt"
 	prompt.BackgroundColor3 = rgb("panel")
 	prompt.Visible = false
-	prompt.Parent = chrome
+	local promptGui = Instance.new("ScreenGui")
+	promptGui.Name = "ShardfallPrompt"
+	promptGui.ResetOnSpawn = false
+	promptGui.DisplayOrder = 90
+	promptGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	promptGui.IgnoreGuiInset = false
+	promptGui.Parent = playerGui
+	prompt.Parent = promptGui
 	local promptCorner = Instance.new("UICorner")
 	promptCorner.CornerRadius = UDim.new(0, 8)
 	promptCorner.Parent = prompt
@@ -567,7 +574,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		gold.Size = UDim2.fromOffset(labelW, labelH)
 		mastery.Size = UDim2.fromOffset(labelW, labelH)
 		shards.Size = UDim2.fromOffset(labelW, labelH)
-		local side = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH)
+		local side = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
 		rail.Position = UDim2.fromOffset(side.x, side.y)
 		rail.Size = UDim2.fromOffset(side.w, side.h)
 		for _, button in ipairs(railButtons) do
