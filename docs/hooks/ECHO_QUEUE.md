@@ -78,7 +78,7 @@ Pending, and not in the committed run: SetAudio accepts a negative and writes `A
 
 ## E-010 — in review
 
-Phone layout recheck. Branch `helper/phone-recheck-9721`, cut from tip `0a6253b`. Report `docs/hooks/E-010-phone-recheck.md`. `tests/PhoneRecheck.spec.luau` locks the checks that pass. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
+Phone layout recheck. Branch `helper/phone-recheck-9721`, cut from tip `0a6253b`. PR https://github.com/Itsm00k21/Shardfall/pull/291 into `cursor/live-build-9721`. Report `docs/hooks/E-010-phone-recheck.md`. `tests/PhoneRecheck.spec.luau` locks the checks that pass. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
 
 Walked `docs/design/playtest_script.md` at 390×844 and 844×390. Portrait: pass 7, fail 2, manual 2. Landscape: pass 6, fail 3, manual 2. Step 8 fails only in landscape.
 
