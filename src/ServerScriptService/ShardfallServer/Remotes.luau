@@ -580,7 +580,11 @@ function Remotes.bind()
 			return
 		end
 		local ok, err = xpcall(function()
-			CombatService.attack(player, lookX, lookY, lookZ, charged == true)
+			if charged == "begin" then
+				CombatService.beginCharge(player)
+				return
+			end
+			CombatService.attack(player, lookX, lookY, lookZ)
 		end, function(message)
 			return debug.traceback(tostring(message), 2)
 		end)

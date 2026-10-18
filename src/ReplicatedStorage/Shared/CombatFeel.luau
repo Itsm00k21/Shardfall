@@ -22,6 +22,11 @@ CombatFeel.PERFECT_ULT = 12
 CombatFeel.COMBO_HITS = 3
 CombatFeel.CHARGE_MULT = 1.75
 CombatFeel.HEAVY_MULT = 1.4
+-- A heavy is a hold the server measured. The client boolean is not a multiplier.
+CombatFeel.CHARGE_HOLD = 0.35
+CombatFeel.CHARGE_GRACE = 1
+-- cos(60 degrees). Aim outside this cone uses the server facing.
+CombatFeel.AIM_DOT = 0.5
 CombatFeel.COMBO_IDLE = 3
 CombatFeel.STAGGER_MAX = 100
 CombatFeel.STAGGER_STUN = 4
@@ -181,6 +186,94 @@ end
 
 function CombatFeel.notePerfect(state: DodgeState, now: number)
 	state.slowUntil = now + CombatFeel.SLOWMO_SECONDS
+end
+
+export type ChargeClock = {
+	startedAt: number?,
+}
+
+function CombatFeel.blankCharge(): ChargeClock
+	return {}
+end
+
+function CombatFeel.beginCharge(clock: ChargeClock, now: number)
+	if type(clock) ~= "table" or type(now) ~= "number" or now ~= now then
+		return
+	end
+	local started = clock.startedAt
+	local window = CombatFeel.CHARGE_HOLD + CombatFeel.CHARGE_GRACE
+	if type(started) == "number" and started == started and now - started <= window then
+		return
+	end
+	clock.startedAt = now
+end
+
+-- `_clientFlag` is accepted and ignored. A forged true does not shorten the hold.
+function CombatFeel.takeCharge(clock: ChargeClock, now: number, _clientFlag: any): boolean
+	if type(clock) ~= "table" then
+		return false
+	end
+	local started = clock.startedAt
+	clock.startedAt = nil
+	if type(started) ~= "number" or started ~= started then
+		return false
+	end
+	if type(now) ~= "number" or now ~= now then
+		return false
+	end
+	local held = now - started
+	if held < CombatFeel.CHARGE_HOLD then
+		return false
+	end
+	if held > CombatFeel.CHARGE_HOLD + CombatFeel.CHARGE_GRACE then
+		return false
+	end
+	return true
+end
+
+local function unitOf(x: number, y: number, z: number): (number?, number?, number?)
+	if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then
+		return nil, nil, nil
+	end
+	if x ~= x or y ~= y or z ~= z then
+		return nil, nil, nil
+	end
+	if math.abs(x) == math.huge or math.abs(y) == math.huge or math.abs(z) == math.huge then
+		return nil, nil, nil
+	end
+	local length = math.sqrt(x * x + y * y + z * z)
+	if length < 1e-4 then
+		return nil, nil, nil
+	end
+	return x / length, y / length, z / length
+end
+
+function CombatFeel.clampLook(
+	aimX: number,
+	aimY: number,
+	aimZ: number,
+	faceX: number,
+	faceY: number,
+	faceZ: number,
+	minDot: number
+): (number, number, number)
+	local fx, fy, fz = unitOf(faceX, faceY, faceZ)
+	if fx == nil or fy == nil or fz == nil then
+		return 0, 0, -1
+	end
+	local ax, ay, az = unitOf(aimX, aimY, aimZ)
+	if ax == nil or ay == nil or az == nil then
+		return fx, fy, fz
+	end
+	local limit = CombatFeel.AIM_DOT
+	if type(minDot) == "number" and minDot == minDot then
+		limit = minDot
+	end
+	local dot = ax * fx + ay * fy + az * fz
+	if dot < limit then
+		return fx, fy, fz
+	end
+	return ax, ay, az
 end
 
 function CombatFeel.advanceCombo(chain: number, lastAt: number, now: number, charged: boolean)
