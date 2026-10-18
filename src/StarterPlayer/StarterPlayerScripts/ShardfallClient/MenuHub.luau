@@ -571,11 +571,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local function ordered(root: any): { any }
 			local rows = {}
 			for index, child in ipairs(root:GetChildren()) do
-				local order = child.LayoutOrder
-				if type(order) ~= "number" then
-					order = 0
+				-- UIListLayout and other constraints are children of the
+				-- page list. LayoutOrder exists on GuiObject only.
+				if child:IsA("GuiObject") then
+					local order = child.LayoutOrder
+					if type(order) ~= "number" then
+						order = 0
+					end
+					table.insert(rows, { child = child, index = index, order = order })
 				end
-				table.insert(rows, { child = child, index = index, order = order })
 			end
 			table.sort(rows, function(a, b)
 				if a.order ~= b.order then
@@ -590,7 +594,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return out
 		end
 		local function walk(root: any)
-			if root == nil or not hubFn.padShown(root) then
+			if root == nil or not root:IsA("GuiObject") or not hubFn.padShown(root) then
 				return
 			end
 			for _, child in ipairs(ordered(root)) do
@@ -598,9 +602,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					if child:IsA("GuiButton") then
 						add(child)
 					end
-					if child:IsA("GuiObject") then
-						walk(child)
-					end
+					walk(child)
 				end
 			end
 		end
@@ -700,25 +702,32 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.padSync()
-		if not hubState.route.open then
-			hubFn.padClear()
-			return
-		end
-		local found = false
-		if hubState.padTarget ~= nil then
-			for cursor, button in ipairs(hubFn.padList()) do
-				if button == hubState.padTarget then
-					hubState.padIndex = cursor
-					found = true
-					break
+		-- A bad focus walk must not abort show(). The panel is already
+		-- visible by the time this runs.
+		local ok, err = pcall(function()
+			if not hubState.route.open then
+				hubFn.padClear()
+				return
+			end
+			local found = false
+			if hubState.padTarget ~= nil then
+				for cursor, button in ipairs(hubFn.padList()) do
+					if button == hubState.padTarget then
+						hubState.padIndex = cursor
+						found = true
+						break
+					end
 				end
 			end
-		end
-		if not found then
-			hubFn.padAim()
-		end
-		if hubState.padHidden ~= true then
-			hubFn.padShow()
+			if not found then
+				hubFn.padAim()
+			end
+			if hubState.padHidden ~= true then
+				hubFn.padShow()
+			end
+		end)
+		if not ok then
+			warn(err)
 		end
 	end
 
