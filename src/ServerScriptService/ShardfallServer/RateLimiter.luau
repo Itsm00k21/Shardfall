@@ -84,6 +84,7 @@ local RULES: { [string]: Rule } = {
 	BulkSalvage = { capacity = 2, perSecond = 0.5 },
 	BuyForgeBoost = { capacity = 2, perSecond = 0.5 },
 	BuyInventoryExpansion = { capacity = 2, perSecond = 0.5 },
+	BuyGoldShop = { capacity = 3, perSecond = 1 },
 	Travel = { capacity = 4, perSecond = 1 },
 	BuyTravelPass = { capacity = 2, perSecond = 0.5 },
 	SetGraphicsQuality = { capacity = 4, perSecond = 1 },

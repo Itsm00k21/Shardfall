@@ -18,6 +18,7 @@ LaunchGate.SHOW = {
 	relicSets = false,
 	forgeReroll = false,
 	forgeSalvage = false,
+	forgeCraft = false,
 	guilds = false,
 	leaderboards = false,
 	extraRealms = false,

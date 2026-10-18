@@ -68,7 +68,6 @@ local function applyCrawlLight()
 		end
 		player.CameraMaxZoomDistance = Dungeons.CAMERA_MAX_ZOOM
 		player.CameraMinZoomDistance = Dungeons.CAMERA_MIN_ZOOM
-		player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
 		Lighting.GlobalShadows = false
 		local light = Dungeons.CRAWL_LIGHT
 		Lighting.Ambient = Color3.fromRGB(light.ambient[1], light.ambient[2], light.ambient[3])

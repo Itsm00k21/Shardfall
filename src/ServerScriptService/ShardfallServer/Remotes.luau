@@ -343,10 +343,15 @@ function Remotes.bind()
 			if targetUid ~= nil and not validUid(targetUid) then
 				return { ok = false, error = "You do not have that item." }
 			end
-			if type(recipeId) == "string" and not LaunchGate.on("forgeReroll") then
+			if type(recipeId) == "string" then
 				local recipe = Recipes.get(recipeId)
-				if recipe ~= nil and recipe.result.kind == "reroll" then
-					return { ok = false, error = "That is closed." }
+				if recipe ~= nil and type(recipe.result) == "table" then
+					local kind = recipe.result.kind
+					local closed = (kind == "reroll" and not LaunchGate.on("forgeReroll"))
+						or (kind ~= "reroll" and not LaunchGate.on("forgeCraft"))
+					if closed then
+						return { ok = false, error = "That is closed." }
+					end
 				end
 			end
 			return CraftService.craft(player, recipeId, targetUid)
