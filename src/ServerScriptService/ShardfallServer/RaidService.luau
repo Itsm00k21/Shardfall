@@ -502,6 +502,9 @@ end)
 -- departUser calls RaidPremade.depart. PlayerRemoving does not call this.
 -- It does not launch a raid and it does not read a client user id.
 function RaidService.leave(player: Player)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	local userId = player.UserId
 	local now = os.time()
 	sweep(now)
@@ -699,6 +702,9 @@ function RaidService.board()
 end
 
 function RaidService.post(player: Player, tag: any, difficulty: any)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	local profile = DataService.get(player)
 	if profile == nil then
 		return reject("Profile is still loading.")
@@ -776,6 +782,9 @@ function RaidService.post(player: Player, tag: any, difficulty: any)
 end
 
 function RaidService.join(player: Player, listingId: any)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	local rawId = listingId
 	local rawRole = nil
 	if type(listingId) == "table" then
@@ -1255,6 +1264,9 @@ local function launchPremade(row: any): any
 end
 
 function RaidService.ready(player: Player)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	local now = os.time()
 	sweep(now)
 	local seat = seatedRow(player.UserId, now)
@@ -1332,6 +1344,9 @@ function RaidService.practice(player: Player, wing: any, phase: any)
 end
 
 function RaidService.buy(player: Player, itemId: any)
+	if not LaunchGate.on("raids") then
+		return reject("That is closed.")
+	end
 	if type(itemId) ~= "string" then
 		return reject("Pick a vendor item.")
 	end

@@ -19,6 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Materials = require(ReplicatedStorage.Shared.Materials)
@@ -354,6 +355,9 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 end
 
 function RollService.rollPaid(player: Player, poolId: any, skip: any)
+	if not LaunchGate.on("paid") then
+		return reject("That is closed.")
+	end
 	return crack(player, poolId, Currencies.PRISM, skip == true)
 end
 
@@ -385,10 +389,16 @@ local function paidStub(player: Player, pitch: string)
 end
 
 function RollService.buyPrismPack(player: Player)
+	if not LaunchGate.on("paid") then
+		return reject("That is closed.")
+	end
 	return paidStub(player, Currencies.packPitch())
 end
 
 function RollService.buyLuckBoost(player: Player)
+	if not LaunchGate.on("paid") then
+		return reject("That is closed.")
+	end
 	if not RarityConfig.PAID_LUCK_ENABLED then
 		return reject(RarityConfig.PAID_OFF_MESSAGE)
 	end
@@ -398,12 +408,18 @@ function RollService.buyLuckBoost(player: Player)
 end
 
 function RollService.buyForgeBoost(player: Player)
+	if not LaunchGate.on("paid") then
+		return reject("That is closed.")
+	end
 	local profile = DataService.get(player)
 	local untilTime = if profile ~= nil then profile.forgeBoostUntil else 0
 	return paidStub(player, Currencies.forgeBoostPitch(untilTime, os.time()))
 end
 
 function RollService.buyInventoryExpansion(player: Player)
+	if not LaunchGate.on("paid") then
+		return reject("That is closed.")
+	end
 	local profile = DataService.get(player)
 	local bonus = if profile ~= nil then profile.inventoryBonus else 0
 	return paidStub(player, Currencies.inventoryPitch(bonus))

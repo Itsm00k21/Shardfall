@@ -15,6 +15,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local Loops = require(ReplicatedStorage.Shared.Loops)
 local DataService = require(script.Parent.DataService)
@@ -160,6 +161,9 @@ function LoopService.reroll(player: Player, index: any)
 end
 
 function LoopService.claim(player: Player)
+	if not LaunchGate.on("pass") then
+		return reject("That is closed.")
+	end
 	local ok, err = DataService.mutate(player, function(data)
 		local claimed, reward, ready = Loops.claimFree(data.passXp or 0, data.passClaimed or 0)
 		if not ready then
@@ -189,6 +193,9 @@ function LoopService.claim(player: Player)
 end
 
 function LoopService.premium()
+	if not LaunchGate.on("pass") then
+		return reject("That is closed.")
+	end
 	local open, reason = Loops.premium()
 	if not open then
 		return { ok = false, error = reason }
@@ -310,6 +317,9 @@ function LoopService.grantPremium(player: Player, receiptId: any, productId: any
 end
 
 function LoopService.claimPremium(player: Player)
+	if not LaunchGate.on("pass") then
+		return reject("That is closed.")
+	end
 	if Loops.PREMIUM_ENABLED ~= true then
 		return reject("The premium track is not for sale yet.")
 	end

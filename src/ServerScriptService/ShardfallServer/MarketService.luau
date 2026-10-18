@@ -16,6 +16,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataService = require(script.Parent.DataService)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local TradeAudit = require(script.Parent.TradeAudit)
 local MarketBoard = require(ReplicatedStorage.Shared.MarketBoard)
 local PolicyCache = require(script.Parent.PolicyCache)
@@ -277,6 +278,9 @@ local function cancel(player: Player, payload: any)
 end
 
 function MarketService.handle(player: Player, action: any, payload: any)
+	if not LaunchGate.on("market") then
+		return { ok = false, error = "That is closed." }
+	end
 	if action == "browse" then
 		return browse(payload)
 	end
