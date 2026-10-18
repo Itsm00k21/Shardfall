@@ -16,9 +16,11 @@
 
 	While the hub is open, D-pad and the left stick move a UIStroke named
 	PadRing through the live tabs and the visible buttons on the open
-	page. The stroke stays hidden until the first gamepad step. ButtonA
-	runs the handler that button already connected, and the Roll button
-	calls pressRoll. ButtonB still closes on the path already in InputBegan.
+	page. The stroke is shown on the opened tab. Mouse, touch, and
+	keyboard hide it, and the next gamepad step shows it again. ButtonA
+	runs the handler that button already connected. The Roll button goes
+	through its InputBegan path. ButtonB still closes on the path already
+	in InputBegan. ButtonA is not in the menu sink.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -449,6 +451,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.padHeld = ""
 	hubState.padRing = nil
 	hubState.padPress = {}
+	hubState.padHidden = false
 
 	function hubFn.bindActivated(button: any, handler: any)
 		if button == nil or type(handler) ~= "function" then
@@ -487,7 +490,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return ring
 	end
 
-	function hubFn.padHide()
+	function hubFn.padUnparent()
 		if hubState.padRing == nil then
 			return
 		end
@@ -495,11 +498,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.padRing.Parent = nil
 	end
 
+	function hubFn.padHide()
+		hubState.padHidden = true
+		hubFn.padUnparent()
+	end
+
 	function hubFn.padClear()
 		hubState.padTarget = nil
 		hubState.padIndex = 1
 		hubState.padHeld = ""
-		hubFn.padHide()
+		hubState.padHidden = false
+		hubFn.padUnparent()
 	end
 
 	function hubFn.padList(): { any }
@@ -603,6 +612,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if button == nil then
 			return
 		end
+		hubState.padHidden = false
 		local ring = hubFn.padStroke()
 		ring.Parent = button
 		ring.Enabled = true
@@ -632,7 +642,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.padIndex = index
 		hubState.padTarget = target
 		hubState.padHeld = ""
-		hubFn.padHide()
 	end
 
 	function hubFn.padSync()
@@ -640,9 +649,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.padClear()
 			return
 		end
-		local showing = hubState.padRing ~= nil and hubState.padRing.Parent ~= nil
 		local found = false
-		if showing and hubState.padTarget ~= nil then
+		if hubState.padTarget ~= nil then
 			for cursor, button in ipairs(hubFn.padList()) do
 				if button == hubState.padTarget then
 					hubState.padIndex = cursor
@@ -651,12 +659,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 			end
 		end
-		if found then
-			hubFn.padShow()
-			return
+		if not found then
+			hubFn.padAim()
 		end
-		hubFn.padAim()
-		if showing and hubState.padTarget ~= nil then
+		if hubState.padHidden ~= true then
 			hubFn.padShow()
 		end
 	end
@@ -713,7 +719,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		if button == hubState.rollButton then
-			hubFn.pressRoll()
+			hubFn.rollPointerBegan({
+				UserInputType = Enum.UserInputType.Gamepad1,
+				KeyCode = Enum.KeyCode.ButtonA,
+			})
 		else
 			local handler = hubState.padPress[button]
 			if type(handler) == "function" then
@@ -722,6 +731,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if not hubState.route.open then
 			hubFn.padClear()
+		end
+	end
+
+	function hubFn.rollPointerBegan(input: any)
+		if hubState.rollButton == nil then
+			return
+		end
+		if hubFn.pointerDown(input) then
+			hubState.holdingRoll = true
+			hubState.rollFromPointer = true
+			hubState.rollPointerAt = os.clock()
+			hubState.rollButton.BackgroundColor3 = rgb("press")
+			hubFn.pressRoll()
+		else
+			hubState.rollFromPointer = false
 		end
 	end
 
@@ -745,7 +769,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				table.insert(codes, code)
 			end
 		end
-		table.insert(codes, Enum.KeyCode.ButtonA)
 		ContextActionService:BindActionAtPriority(
 			"ShardfallMenuSink",
 			hubFn.sink,
@@ -4530,17 +4553,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubFn.pressRoll()
 	end)
-	hubState.rollButton.InputBegan:Connect(function(input)
-		if hubFn.pointerDown(input) then
-			hubState.holdingRoll = true
-			hubState.rollFromPointer = true
-			hubState.rollPointerAt = os.clock()
-			hubState.rollButton.BackgroundColor3 = rgb("press")
-			hubFn.pressRoll()
-		else
-			hubState.rollFromPointer = false
-		end
-	end)
+	hubState.rollButton.InputBegan:Connect(hubFn.rollPointerBegan)
 	hubState.rollButton.InputEnded:Connect(function(input)
 		if hubFn.pointerDown(input) then
 			hubState.holdingRoll = false

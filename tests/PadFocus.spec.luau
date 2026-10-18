@@ -13,7 +13,8 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
-local PadFocus = require("../src/StarterPlayer/StarterPlayerScripts/ShardfallClient/PadFocus")
+local GuiFake = require("./GuiFake")
+local PadFocus = GuiFake.world().load("PadFocus")
 
 local HUB = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau"
 
@@ -149,8 +150,9 @@ describe("PadFocus", function()
 
 	it("parents a UIStroke named PadRing and does not fire Activated", function()
 		local source = fs.readFile(HUB)
+		local focus = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/PadFocus.luau")
 		expect(string.find(source, 'WaitForChild("PadFocus")', 1, true) ~= nil).toBeTrue()
-		expect(string.find(source, 'WaitForChild("PadNav")', 1, true)).toBeNil()
+		expect(string.find(focus, 'WaitForChild("PadNav")', 1, true) ~= nil).toBeTrue()
 		expect(string.find(source, "Activated:Fire", 1, true)).toBeNil()
 		local nameAt = string.find(source, 'ring.Name = "PadRing"', 1, true)
 		expect(nameAt ~= nil).toBeTrue()
@@ -174,9 +176,16 @@ describe("PadFocus", function()
 		local sinkAt = string.find(source, "function hubFn.bindSinkKeys", 1, true)
 		local sinkEnd = string.find(source, "function hubFn.setWorldInput", sinkAt :: number, true)
 		local sinkBody = string.sub(source, sinkAt :: number, sinkEnd :: number)
-		expect(string.find(sinkBody, "Enum.KeyCode.ButtonA", 1, true) ~= nil).toBeTrue()
+		expect(string.find(sinkBody, "Keybinds.sinkNames()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(sinkBody, "Enum.KeyCode.ButtonA", 1, true)).toBeNil()
 		expect(string.find(source, "PadFocus.canvas", 1, true) ~= nil).toBeTrue()
-		expect(string.find(source, "hubFn.pressRoll()", 1, true) ~= nil).toBeTrue()
+		local useAt = string.find(source, "function hubFn.padUse", 1, true)
+		local afterUse = string.find(source, "function hubFn.rollPointerBegan", useAt :: number, true)
+		expect(useAt ~= nil and afterUse ~= nil).toBeTrue()
+		local useBody = string.sub(source, useAt :: number, afterUse :: number)
+		expect(string.find(useBody, "pressRoll", 1, true)).toBeNil()
+		expect(string.find(useBody, "rollPointerBegan", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "rollButton.InputBegan:Connect(hubFn.rollPointerBegan)", 1, true) ~= nil).toBeTrue()
 		local _, activations = string.gsub(source, "rollButton%.Activated:Connect", "")
 		local _, begins = string.gsub(source, "rollButton%.InputBegan:Connect", "")
 		expect(activations).toEqual(1)

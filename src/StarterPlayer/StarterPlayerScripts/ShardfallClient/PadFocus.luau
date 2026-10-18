@@ -1,7 +1,9 @@
 --!strict
 
 --[[
-	Client-only focus math for the hub ring.
+	Client focus math for the hub ring. PadNav owns the next index, the
+	deadzone, and which D-pad keys count. This module asks PadNav for
+	those, then picks a nearer control on left and right.
 
 	Up and down follow the focus list and wrap. Left and right jump to
 	the nearest control in that direction, and wrap the same way when
@@ -17,9 +19,11 @@
 	services. Nothing here costs Robux.
 ]]
 
+local PadNav = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("PadNav"))
+
 local PadFocus = {}
 
-PadFocus.DEADZONE = 0.5
+PadFocus.DEADZONE = PadNav.DEADZONE
 PadFocus.SPREAD = 8
 
 local KEY_DIRECTION: { [string]: string } = {
@@ -53,8 +57,8 @@ local function component(source: any, key: string): number
 	return finite(source[key]) or 0
 end
 
-function PadFocus.direction(keyName: any, _extra: any): string?
-	if type(keyName) ~= "string" then
+function PadFocus.direction(keyName: any, extra: any): string?
+	if PadNav.counts(keyName, extra) ~= true or type(keyName) ~= "string" then
 		return nil
 	end
 	return KEY_DIRECTION[keyName]
@@ -77,19 +81,15 @@ local function indexOf(index: any, count: number): number
 end
 
 local function wrap(count: number, index: number, direction: string): number
-	if count < 1 then
-		return 1
+	local key = "DPadUp"
+	if direction == "down" then
+		key = "DPadDown"
+	elseif direction == "right" then
+		key = "DPadRight"
+	elseif direction == "left" then
+		key = "DPadLeft"
 	end
-	if direction == "down" or direction == "right" then
-		if index >= count then
-			return 1
-		end
-		return index + 1
-	end
-	if index <= 1 then
-		return count
-	end
-	return index - 1
+	return PadNav.next({ count = count, index = index, held = "" }, key).index
 end
 
 local function center(boxes: any, index: number): (number, number)
