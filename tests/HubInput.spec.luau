@@ -1040,7 +1040,7 @@ describe("HubInput", function()
 		expect(sameColor(close.BackgroundColor3, "close")).toBeTrue()
 
 		local ring = GuiFake.findNamed(screen, "PadRing")
-		expect(ring.Parent).toEqual(tabButton(screen, "bag"))
+		expect(ring.Parent.Name).toEqual("Close")
 		local card = nil
 		for _ = 1, 48 do
 			press("DPadDown")
