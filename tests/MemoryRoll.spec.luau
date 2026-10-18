@@ -56,7 +56,7 @@ describe("memory-mode roll", function()
 			return written
 		end)
 		assert(live ~= nil, "profile should load from memory")
-		expect(live.shardTokens).toEqual(25)
+		expect(live.shardTokens).toEqual(10)
 		expect(live.shardLuck).toEqual(0)
 
 		local pool = Pools.get(Pools.DEFAULT_POOL_ID)
@@ -93,7 +93,7 @@ describe("memory-mode roll", function()
 			return nil
 		end)
 		assert(saved ~= nil, "memory key should still exist")
-		expect(saved.Data.shardTokens).toEqual(29)
+		expect(saved.Data.shardTokens).toEqual(14)
 		expect(saved.Data.shardLuck).toEqual(25)
 		expect(saved.Data.inventory["item-1"].templateId).toEqual("vinewood_sword")
 		expect(saved.Data.inventory["item-1"].name).toEqual("Vinewood Sword")
