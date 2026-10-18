@@ -2,7 +2,7 @@
 
 G-050. The v1 brief for the next game: one pad, the Glass Mile, and the first five minutes. PvE only. No paid power. This file does not change Shardfall code.
 
-Choice: the title, the 16 cells, the 15 ranks, the wallets, the shop, the mutation kinds, and the ad times stay the ones in `docs/research/merge_army_loop.md`. This brief does not add a SKU. Two blanks in that file are filled here, both suggested. The pebble price steps when your tallest rank this life goes up, not on every click. A 1.15 rise on every pebble cannot pay for a tier 15. Merges pay Glass, which that file named and did not number. A rebirth closes the arches so the mile can be walked again. The Index stays.
+Choice: the title, the 16 cells, the 15 ranks, the wallets, the shop, the mutation kinds, and the ad times stay the ones in `docs/research/merge_army_loop.md`. This brief does not add a SKU. Six blanks in that file are filled here, all suggested. The pebble price steps when your tallest rank this life goes up, not on every click. A 1.15 rise on every pebble cannot pay for a tier 15. Merges pay Glass, which that file named and did not number. A rebirth closes the arches so the mile can be walked again. The Index stays.
 
 Flags: Cooling Yard is not Saltglass Strand. Glass the wallet is not Slag Glass and not Tideglass. Glassmarch Sovereign is not Geode Sovereign and not Sovereign's Hollow Core. Kiln Marshal is not Kiln Tyrant. Emberwake Titan is not a place from another game. No rank uses a rainbow. Rainbow stays the Shardfall Secret treatment. No aura list, egg roster, or steal verb from another game. No gore. Faces stay readable. No real-world weapons.
 
@@ -131,13 +131,13 @@ Once per profile. Wallet starts at 30 Glass. Pits 1 and 2 hold a Pebble Recruit 
 | 0:00 | Lands | Loading line "Two of a kind cool into the next rank." Pad, price 10, March reading "Merge two Pebble Recruits first." | 30 | The pad is the game |
 | 0:30 | Drags pebble onto pebble | One Flint Ranker. One cooling tick. Price becomes 12 because the tallest rank grew | 50 | Two of a kind make the next rank, and the price moved |
 | 1:30 | Buys | One Pebble Recruit in the first empty pit. That buy spends 12. The next pebble stays 12 until the tallest rank grows | 38 | The price is on the button |
-| 2:30 | Marches | Arch 1 takes `#A8A8B0` and a steady rim. Pad unchanged. The arch pays 25, then the Mile toast pays 40 Glass and 2 Sparks | 103 | A clear pays. The board stays |
-| 3:30 | Opens the Index | Pebble Recruit and Flint Ranker stamp. 5 Sparks each. Page daily pays 2 Sparks | 103 Glass, 12 Sparks | The Index remembers. It has no power column |
-| 4:30 | Reads one line, then it leaves | "Two Flint Rankers make a Quartz Spearman. Auto-merge is free while your tallest rank is Brine Warden or below." Auto may run | 103 | Free auto is a timer on rank, not a purchase |
+| 2:30 | Marches | Arch 1 takes `#A8A8B0` and a steady rim. Pad unchanged. The arch pays 25, then the Mile toast pays 40 Glass and 2 Sparks | 103 Glass, 2 Sparks | A clear pays. The board stays |
+| 3:30 | Opens the Index | Pebble Recruit and Flint Ranker stamp. 5 Sparks each. Page daily pays 2 Sparks | 103 Glass, 14 Sparks | The Index remembers. It has no power column |
+| 4:30 | Reads one line, then it leaves | "Two Flint Rankers make a Quartz Spearman. Auto-merge is free while your tallest rank is Brine Warden or below." Auto may run | 103 Glass, 14 Sparks | Free auto is a timer on rank, not a purchase |
 
 The scripted path buys once, then marches. Buying first still works: March unlocks on the first hand merge either way. The Mile daily counts that first clear. Hands stays 1 of 20, so the day still has a merge goal. Page completes when the Index opens.
 
-At 5:00 the player has a Flint Ranker and a Pebble Recruit, Arch 1 open, and no mark. Marks start when a merge makes Veinbreaker or higher.
+At 5:00 the player has a Flint Ranker and a Pebble Recruit, Arch 1 open, 103 Glass, 14 Sparks, and no mark. Marks start when a merge makes Veinbreaker or higher.
 
 ## After the tutorial
 
