@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build ace94de+ client` in Output.
+	still leaves `[Shardfall] build 5702724+ client` in Output.
 ]]
 
-print("[Shardfall] build ace94de+ client")
+print("[Shardfall] build 5702724+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -676,8 +676,9 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onAttack = function()
-		CombatStage.swing()
-		CombatHud.swing()
+		if CombatStage.swing() then
+			CombatHud.swing()
+		end
 	end,
 	onAudio = function(music: number, sfx: number, commit: boolean)
 		musicController.setVolumes(music, sfx)
@@ -1310,12 +1311,14 @@ actionBar = ActionBar.start(playerGui, {
 		CombatHud.dodge()
 	end,
 	onLight = function()
-		CombatStage.swing()
-		CombatHud.swing(false)
+		if CombatStage.swing() then
+			CombatHud.swing(false)
+		end
 	end,
 	onHeavy = function()
-		CombatStage.swing(true)
-		CombatHud.swing(true)
+		if CombatStage.swing(true) then
+			CombatHud.swing(true)
+		end
 	end,
 	onDodgeChip = function()
 		PetAura.note("Dodge")

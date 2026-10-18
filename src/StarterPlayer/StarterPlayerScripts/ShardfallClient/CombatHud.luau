@@ -960,16 +960,18 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			input.KeyCode.Name == Keybinds.COMBAT.heavy
 			or input.KeyCode.Name == Keybinds.GAMEPAD.heavy
 		then
-			CombatStage.swing(true)
-			CombatHud.swing(true)
+			if CombatStage.swing(true) then
+				CombatHud.swing(true)
+			end
 			return
 		end
 		if
 			input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch
 		then
-			CombatStage.swing(false)
-			CombatHud.swing(false)
+			if CombatStage.swing(false) then
+				CombatHud.swing(false)
+			end
 		end
 	end)
 end
