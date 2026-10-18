@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Onboarding = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Onboarding"))
+local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local OnboardHud = {}
@@ -31,9 +32,9 @@ function OnboardHud.start(invoke: (string, ...any) -> any)
 	MobileShell.mount(screen)
 
 	local frame = Instance.new("Frame")
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Position = UDim2.new(0.5, 0, 0, 12)
-	frame.Size = UDim2.fromOffset(460, 150)
+	frame.AnchorPoint = Vector2.new(0, 0)
+	frame.Position = UDim2.fromOffset(16, 96)
+	frame.Size = UDim2.fromOffset(460, 144)
 	frame.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	frame.BackgroundTransparency = 0.08
 	frame.BorderSizePixel = 0
@@ -87,7 +88,8 @@ function OnboardHud.start(invoke: (string, ...any) -> any)
 		buttonCorner.Parent = button
 		return button
 	end
-	press("Continue", "Continue", 12).MouseButton1Click:Connect(function()
+	local advance = press("Continue", "Continue", 12)
+	advance.MouseButton1Click:Connect(function()
 		local invokeNow = callRemote
 		if invokeNow ~= nil then
 			task.spawn(function()
@@ -95,7 +97,8 @@ function OnboardHud.start(invoke: (string, ...any) -> any)
 			end)
 		end
 	end)
-	press("Skip", "Skip intro", 164).MouseButton1Click:Connect(function()
+	local skip = press("Skip", "Skip intro", 164)
+	skip.MouseButton1Click:Connect(function()
 		local invokeNow = callRemote
 		if invokeNow ~= nil then
 			task.spawn(function()
@@ -106,17 +109,37 @@ function OnboardHud.start(invoke: (string, ...any) -> any)
 
 	local tracker = Instance.new("TextLabel")
 	tracker.BackgroundTransparency = 1
-	tracker.AnchorPoint = Vector2.new(1, 0)
-	tracker.Position = UDim2.new(1, -16, 0, 16)
-	tracker.Size = UDim2.fromOffset(220, 80)
+	tracker.AnchorPoint = Vector2.new(0, 0)
+	tracker.Position = UDim2.fromOffset(16, 248)
+	tracker.Size = UDim2.fromOffset(280, 72)
 	tracker.Font = Enum.Font.BuilderSans
 	tracker.TextSize = 14
-	tracker.TextXAlignment = Enum.TextXAlignment.Right
+	tracker.TextWrapped = true
+	tracker.TextXAlignment = Enum.TextXAlignment.Left
 	tracker.TextYAlignment = Enum.TextYAlignment.Top
 	tracker.TextColor3 = Color3.fromRGB(240, 236, 248)
 	tracker.Text = ""
 	tracker.Parent = screen
 	goals = tracker
+
+	local function apply()
+		local vx, vy = MobileShell.view(screen)
+		local layout = HudLayout.onboard(vx, vy)
+		frame.Position = UDim2.fromOffset(layout.card.x, layout.card.y)
+		frame.Size = UDim2.fromOffset(layout.card.w, layout.card.h)
+		advance.Position = UDim2.fromOffset(layout.continueButton.x, layout.continueButton.y)
+		advance.Size = UDim2.fromOffset(layout.continueButton.w, layout.continueButton.h)
+		skip.Position = UDim2.fromOffset(layout.skip.x, layout.skip.y)
+		skip.Size = UDim2.fromOffset(layout.skip.w, layout.skip.h)
+		tracker.Position = UDim2.fromOffset(layout.tracker.x, layout.tracker.y)
+		tracker.Size = UDim2.fromOffset(layout.tracker.w, layout.tracker.h)
+	end
+	apply()
+	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(apply)
+	local camera = workspace.CurrentCamera
+	if camera ~= nil then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(apply)
+	end
 end
 
 function OnboardHud.setProfile(profile: any)

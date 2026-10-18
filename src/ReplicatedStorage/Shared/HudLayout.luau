@@ -512,4 +512,72 @@ function HudLayout.overlaps(a: Rect, b: Rect): boolean
 	return a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h
 end
 
+export type Onboard = {
+	card: Rect,
+	continueButton: Rect,
+	skip: Rect,
+	tracker: Rect,
+}
+
+-- Intro card and the goal line. Both sit under the counters. A short
+-- landscape phone puts the goal line beside the card so it stays above
+-- the action bar. Button rects are inside the card.
+function HudLayout.onboard(viewportX: number, viewportY: number): Onboard
+	local margin = 16
+	local gap = 8
+	local vx = math.max(200, math.floor(axisWidth(viewportX)))
+	local rawY = viewportY
+	local vy = 720
+	if type(rawY) == "number" and rawY == rawY and rawY >= 200 and rawY < math.huge then
+		vy = math.floor(rawY)
+	end
+	local health = HudLayout.health(margin, vx)
+	local pills = HudLayout.pills(vx, margin)
+	local bar = HudLayout.actionCluster(vx, vy)
+	local top = math.max(health.y + health.h, pills.y + pills.h) + gap
+	local bottom = bar.y - gap
+	local cardH = 144
+	local trackH = 72
+	local cardW = math.min(460, vx - margin * 2)
+	local cardX = math.max(margin, math.floor((vx - cardW) / 2))
+	local cardY = top
+	local tracker: Rect
+	if bottom - top >= cardH + gap + trackH then
+		tracker = rect(cardX, cardY + cardH + gap, math.min(280, cardW), trackH)
+	else
+		local trackW = 168
+		cardW = math.min(460, math.max(200, vx - margin * 2 - gap - trackW))
+		cardX = margin + trackW + gap
+		if cardX + cardW > vx - margin then
+			cardW = math.max(160, vx - margin - cardX)
+		end
+		local room = bottom - cardY
+		if room < cardH then
+			cardH = math.max(120, room)
+		end
+		tracker = rect(margin, cardY, trackW, cardH)
+	end
+	local card = rect(cardX, cardY, cardW, cardH)
+	local buttonH = UiTheme.TOUCH
+	local buttonW = math.floor((card.w - 24 - gap) / 2)
+	if buttonW > 140 then
+		buttonW = 140
+	end
+	if buttonW < 1 then
+		buttonW = 1
+	end
+	local buttonsW = buttonW * 2 + gap
+	local buttonX = math.floor((card.w - buttonsW) / 2)
+	local buttonY = card.h - 12 - buttonH
+	if buttonY < 36 then
+		buttonY = 36
+	end
+	return {
+		card = card,
+		continueButton = rect(buttonX, buttonY, buttonW, buttonH),
+		skip = rect(buttonX + buttonW + gap, buttonY, buttonW, buttonH),
+		tracker = tracker,
+	}
+end
+
 return HudLayout
