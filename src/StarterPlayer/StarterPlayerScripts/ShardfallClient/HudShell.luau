@@ -584,6 +584,11 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local side = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
 		rail.Position = UDim2.fromOffset(side.x, side.y)
 		rail.Size = UDim2.fromOffset(side.w, side.h)
+		local pad = side.gap
+		if type(pad) ~= "number" or pad ~= pad or pad < 0 then
+			pad = UiTheme.PAD
+		end
+		railLayout.Padding = UDim.new(0, pad)
 		for _, button in ipairs(railButtons) do
 			button.Size = UDim2.fromOffset(side.button, side.button)
 		end
