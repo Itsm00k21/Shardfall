@@ -68,6 +68,7 @@ Oct 17, 2026. Short on purpose, so it reads on a phone. `Loops.PREMIUM_ENABLED` 
 - #198 A controller light-attacks on the right bumper while the menu is closed. That bumper still changes tabs while the menu is open. That is T-170 (`a0f9184`). 1261 tests.
 - #199 The phone Heavy chip, R, and ButtonX play the local heavy slash. That is T-171 (`05b6eb1`). 1267 tests.
 - #200 The board marks T-167, T-170, and T-171 done. Echo's next row is T-172. The next GHOST row is T-173. Next free id is T-176. Docs only.
+- #201 Roll-tab auto stops when the window loses focus, and focusing the window does not turn it back on. That is T-173 (`6acf20d`). 1274 tests.
 
 Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABLED` stays false. Nothing is for sale. Schema is 26.
 
@@ -75,9 +76,10 @@ Pre-launch money hardening is done except the T-015 wiring. `Loops.PREMIUM_ENABL
 
 The next week or two.
 
-- T-173 is the next GHOST row, and it is unblocked. Roll-tab auto stops when the window loses focus, and focusing the window does not turn auto back on. That comes before the lighting pass and the door nameplates.
-- T-174 audits the Roll tab Info control. The button already says Info and opens the odds lines. Confirm that, and list any odds control that is only an icon.
-- Echo's next row is T-172. The legacy panel follows the text-size slider, on `helper/legacy-text-scale-9721`. Brief: `docs/hooks/T-172.md`. T-167 is done in #193 (`a364c03`).
+- T-173 landed in #201 (`6acf20d`). Roll-tab auto stops when the window loses focus, and focusing the window does not turn it back on. 1274 tests. That came before the lighting pass and the door nameplates.
+- T-174 is done. The Roll tab Info button is the only details control. It says Info and shows the disclose lines. No odds control is only an icon or `(i)`. No code.
+- Next free id is T-176. No new GHOST row was filed. T-175, T-148, and T-162 stay deferred.
+- Echo stays on T-172. The legacy panel follows the text-size slider, on `helper/legacy-text-scale-9721`. Brief: `docs/hooks/T-172.md`. That pull request has not merged. T-167 is done in #193 (`a364c03`).
 - T-170 landed in #198 (`a0f9184`). ButtonR1 light-attacks while the menu is closed. T-171 landed in #199 (`05b6eb1`). The phone Heavy chip plays the slash.
 - T-165 landed in #190 (`52a5717`). The on-screen Dodge button flashes Glass Kestrel. T-166 landed in #191 (`961bf5e`). ButtonY dodges and ButtonX stays heavy.
 - T-164 landed in #187 (`90a4818`). Mythic is red `#E6404E` and Secret is white. Only Secret inventory strokes keep the rainbow.
@@ -95,7 +97,7 @@ Kevin asked to hold the lighting pass. The older queue stays behind the plaza an
 - T-107 is done. Loading tips show, including during a hop.
 - T-108 is decided. The Training Grove hands in one ribbon and 15 gold. The ribbon is a collectible and is not worn yet.
 - T-109 landed in #174. The grove record saves on schema 26. T-110 landed in #176. The dummy stands on the plaza.
-- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-163 landed in #189 (`7dd700e`). T-164 landed in #187 (`90a4818`). T-165 landed in #190 (`52a5717`). T-166 landed in #191 (`961bf5e`). T-168 landed in #194 (`0d6f9ab`). T-169 landed in #195 (`ebe4149`). T-162, the door nameplates, stays with the lighting pass. T-170 landed in #198 (`a0f9184`). T-171 landed in #199 (`05b6eb1`). T-167 landed in #193 (`a364c03`). T-173 is the next gameplay row. T-174 is the Roll tab Info audit. T-175 stays deferred until a Prism sale.
+- T-160 landed in #178. T-147 landed in #181. T-161 landed in #182. T-163 landed in #189 (`7dd700e`). T-164 landed in #187 (`90a4818`). T-165 landed in #190 (`52a5717`). T-166 landed in #191 (`961bf5e`). T-168 landed in #194 (`0d6f9ab`). T-169 landed in #195 (`ebe4149`). T-162, the door nameplates, stays with the lighting pass. T-170 landed in #198 (`a0f9184`). T-171 landed in #199 (`05b6eb1`). T-167 landed in #193 (`a364c03`). T-173 landed in #201 (`6acf20d`). T-174 is done: the Info button is the only Roll-tab details control, and no code changed. T-175 stays deferred until a Prism sale.
 - T-082 wires the raid contest once gear has a whole-number item level. The statue is one server-wide record.
 - T-084 wires the weekly loot lock. A reclear pays marks, dust, and materials.
 - T-036 wires the raid-leaver rules and four save fields: leaves today, the finder cooldown, and the rejoin window.
