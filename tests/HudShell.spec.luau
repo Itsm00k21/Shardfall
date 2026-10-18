@@ -1,5 +1,7 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -78,5 +80,24 @@ describe("Hud shell", function()
 		local pets = GuiFake.findNamed(screen, "Pets")
 		local petsDot = pets:FindFirstChild("Dot")
 		expect(petsDot ~= nil and petsDot.Visible == true).toBeTrue()
+		local settings = GuiFake.findNamed(screen, "Settings")
+		local caption = settings:FindFirstChild("Caption")
+		expect(caption ~= nil and caption.Text == "Settings").toBeTrue()
+		local promptGui = world.playerGui:FindFirstChild("ShardfallPrompt")
+		expect(promptGui ~= nil and promptGui.DisplayOrder == 90).toBeTrue()
+		local prompt = GuiFake.findNamed(promptGui, "Prompt")
+		expect(prompt ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(prompt, "Equip") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(prompt, "Keep") ~= nil).toBeTrue()
+	end)
+
+	it("hides parked trade, raid, and market settings", function()
+		local hub = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		expect(string.find(hub, 'LaunchGate.on("trading")', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'LaunchGate.on("raids")', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'field == "market"', 1, true) ~= nil).toBeTrue()
+		local plan = fs.readFile("docs/design/LAUNCH_PLAN.md")
+		expect(string.find(plan, "Healing Tonic and a bag slot", 1, true) ~= nil).toBeTrue()
+		expect(string.find(plan, "a pet slot.", 1, true)).toBeNil()
 	end)
 end)
