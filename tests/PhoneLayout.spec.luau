@@ -320,4 +320,37 @@ describe("PhoneLayout", function()
 		expect(string.find(bag, "HudLayout.bagChrome", 1, true)).toBeGreaterThan(0)
 		expect(string.find(bag, "HudLayout.inventoryCard", 1, true)).toBeGreaterThan(0)
 	end)
+
+	it("keeps the intro card and goal line off the counters and the bar", function()
+		local margin = UiTheme.safeMargin()
+		for _, view in ipairs(VIEWS) do
+			local vx = view[1]
+			local vy = view[2]
+			local layout = HudLayout.onboard(vx, vy)
+			local health = HudLayout.health(margin, vx)
+			local pills = HudLayout.pills(vx, margin)
+			local bar = HudLayout.actionCluster(vx, vy)
+			local rows: { Named } = {}
+			add(rows, "card", layout.card, 8)
+			add(rows, "tracker", layout.tracker, 8)
+			add(rows, "health", health, 0)
+			add(rows, "pills", pills, 0)
+			add(rows, "bar", bar, 0)
+			assertClear(rows)
+			expect(inside(layout.card, vx, vy, margin)).toBeTrue()
+			expect(inside(layout.tracker, vx, vy, margin)).toBeTrue()
+			local card = layout.card
+			for _, button in ipairs({ layout.continueButton, layout.skip }) do
+				expect(button.w >= UiTheme.TOUCH).toBeTrue()
+				expect(button.h >= UiTheme.TOUCH).toBeTrue()
+				expect(button.x >= 0 and button.y >= 0).toBeTrue()
+				expect(button.x + button.w <= card.w).toBeTrue()
+				expect(button.y + button.h <= card.h).toBeTrue()
+			end
+			expect(hits(layout.continueButton, layout.skip)).toBeFalse()
+		end
+		local onboard =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/OnboardHud.luau")
+		expect(string.find(onboard, "HudLayout.onboard", 1, true) ~= nil).toBeTrue()
+	end)
 end)
