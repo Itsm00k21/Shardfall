@@ -13,7 +13,7 @@ A paid random item is a random outcome bought with Robux, or with a currency the
 | rule | source | Shardfall |
 |---|---|---|
 | Show every outcome as a percent. The percents sum to 100. Long decimals may round to four or more places past the first non-zero digit, with a disclaimer that the shown numbers may not sum to 100 | Creator Hub, paid random items | Earned cracks are not required to do this. We disclose anyway |
-| A details control needs the word Details or Info. A bare (i) is not enough | same | Not audited on the Roll tab this pass |
+| A details control needs the word Details or Info. A bare (i) is not enough | same | T-174. The Roll tab Info button is the only details control. It says Info and shows the disclose lines. No odds control is only an icon or (i) |
 | Many items in one rarity still need each item's odds, in that details view | same | `disclose` builds per-entry chances (`RarityConfig.luau:420-431`). The roll lines print rarity rows (`RollBoard.luau:101-111`) |
 | Paid luck or pity must be numeric, and the shown odds update | same | Pity is in the notice (`RarityConfig.luau:434-438`). Paid luck is off (`RarityConfig.luau:18-19`) |
 | An outcome cannot be a total loss of the payment | Community Standards note, May 2026 clarification | No paid roll is on sale |
