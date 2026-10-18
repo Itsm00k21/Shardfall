@@ -52,7 +52,7 @@ describe("Dungeon playtest", function()
 		expect(string.find(service, "Materials.lootHint", 1, true) ~= nil).toBeTrue()
 		expect(string.find(service, "CombatFeel.insideMarker", 1, true) ~= nil).toBeTrue()
 		expect(string.find(service, "ModelFactory.adorn", 1, true) ~= nil).toBeTrue()
-		expect(string.find(service, "build 64f7ef7+", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "build ace94de+", 1, true) ~= nil).toBeTrue()
 
 		local factory = fs.readFile("src/ReplicatedStorage/Shared/ModelFactory.luau")
 		expect(string.find(factory, "ShardfallHitbox", 1, true) ~= nil).toBeTrue()
