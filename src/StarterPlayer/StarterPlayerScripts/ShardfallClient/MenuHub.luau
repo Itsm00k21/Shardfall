@@ -1353,13 +1353,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubState.title.Text = label
 		hubFn.paintTabs(if id == "sets" then "bag" else id)
-		if id ~= "bag" then
+		if id ~= "bag" and id ~= "sets" then
 			hubState.detailOpen = false
 		end
 		if id ~= "roll" then
 			hubState.holdingRoll = false
 		end
-		hubState.detail.Visible = id == "bag" and hubState.detailOpen
+		hubState.detail.Visible = id == "bag" or id == "sets"
 		if hooks.onTab ~= nil then
 			hooks.onTab(if id == "sets" then "bag" else id)
 		end
@@ -1544,13 +1544,69 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 	end
 
+	function hubFn.mountWorn(parent: Instance)
+		local viewport = Instance.new("ViewportFrame")
+		viewport.Name = "Worn"
+		viewport.BackgroundColor3 = rgb("header")
+		viewport.Size = UDim2.new(1, 0, 0, 140)
+		viewport.LayoutOrder = 0
+		viewport.Parent = parent
+		local world = Instance.new("WorldModel")
+		world.Name = "World"
+		world.Parent = viewport
+		local wornCam = Instance.new("Camera")
+		wornCam.CFrame = CFrame.new(Vector3.new(0, 2.2, -6.2), Vector3.new(0, 2, 0))
+		wornCam.Parent = viewport
+		viewport.CurrentCamera = wornCam
+		task.spawn(function()
+			local localPlayer = Players.LocalPlayer
+			local character = if localPlayer ~= nil then localPlayer.Character else nil
+			local humanoid = if character ~= nil then character:FindFirstChildOfClass("Humanoid") else nil
+			if humanoid == nil then
+				return
+			end
+			local described, description = pcall(function()
+				return humanoid:GetAppliedDescription()
+			end)
+			if not described or description == nil then
+				return
+			end
+			local rigName = HeroView.rig(humanoid.RigType.Name)
+			local rigType = if rigName == "R6" then Enum.HumanoidRigType.R6 else Enum.HumanoidRigType.R15
+			local built, model = pcall(function()
+				return Players:CreateHumanoidModelFromDescription(description, rigType)
+			end)
+			local action = HeroView.place(built, model ~= nil, viewport.Parent ~= nil)
+			if action == "parent" then
+				model.Parent = world
+			elseif action == "destroy" then
+				model:Destroy()
+			end
+		end)
+	end
+
+	function hubFn.placeDetail()
+		local detailBox = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
+		hubState.detail.Position = UDim2.fromOffset(detailBox.detail.x, detailBox.detail.y)
+		hubState.detail.Size = UDim2.fromOffset(detailBox.detail.w, detailBox.detail.h)
+	end
+
+	function hubFn.paintWorn()
+		hubFn.clear(hubState.detailList)
+		hubFn.mountWorn(hubState.detailList)
+		hubFn.line(hubState.detailList, "Equipped", 2, rgb("text"))
+		hubFn.placeDetail()
+		hubState.detail.Visible = hubState.shownId == "bag" or hubState.shownId == "sets"
+	end
+
 	function hubFn.paintDetail(item: any)
 		hubFn.clear(hubState.detailList)
 		if type(item) ~= "table" then
-			hubState.detail.Visible = false
 			hubState.detailOpen = false
+			hubFn.paintWorn()
 			return
 		end
+		hubFn.mountWorn(hubState.detailList)
 		local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
 		local red, green, blue = UiTheme.rarityColor(rarity)
 		hubFn.line(hubState.detailList, tostring(item.name or "Item"), 1, rgb("text"))
@@ -1644,9 +1700,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			upgrade.TextColor3 = rgb("ink")
 			hubFn.setRest(upgrade, rgb("gold"))
 		end
-		local detailBox = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
-		hubState.detail.Position = UDim2.fromOffset(detailBox.detail.x, detailBox.detail.y)
-		hubState.detail.Size = UDim2.fromOffset(detailBox.detail.w, detailBox.detail.h)
+		hubFn.placeDetail()
 		hubState.detail.Visible = true
 		hubState.detailOpen = true
 	end
@@ -2315,9 +2369,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			button.Font = headerFont()
 			button.TextSize = UiTheme.MIN_TEXT
 			button.TextColor3 = rgb("text")
-			button.Text = pill.label
+			button.Text = "   " .. pill.label
 			button.AutoButtonColor = false
 			button.Parent = pills
+			if type(pill.icon) == "string" then
+				hubFn.iconOn(button, pill.icon, 6, 8, 20)
+			end
 			local pillCorner = Instance.new("UICorner")
 			pillCorner.CornerRadius = UDim.new(1, 0)
 			pillCorner.Parent = button
@@ -2497,6 +2554,47 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			slotCorner.Parent = slotButton
 			slotButton.Activated:Connect(function() end)
 		end
+		local foot = Instance.new("Frame")
+		foot.Name = "BagFoot"
+		foot.BackgroundTransparency = 1
+		foot.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		foot.LayoutOrder = 13
+		foot.Parent = hubState.bag
+		local footLayout = Instance.new("UIListLayout")
+		footLayout.FillDirection = Enum.FillDirection.Horizontal
+		footLayout.Padding = UDim.new(0, 8)
+		footLayout.Parent = foot
+		local equipBest = Instance.new("TextButton")
+		equipBest.Name = "EquipBest"
+		equipBest.Size = UDim2.new(0.48, -4, 1, 0)
+		equipBest.BackgroundColor3 = rgb("equip")
+		equipBest.Font = headerFont()
+		equipBest.TextSize = UiTheme.MIN_TEXT
+		equipBest.TextColor3 = rgb("text")
+		equipBest.Text = "Equip Best"
+		equipBest.AutoButtonColor = false
+		equipBest.Parent = foot
+		local equipBestCorner = Instance.new("UICorner")
+		equipBestCorner.CornerRadius = UDim.new(0, 8)
+		equipBestCorner.Parent = equipBest
+		hubFn.setRest(equipBest, rgb("equip"))
+		hubFn.motion(equipBest)
+		equipBest.Activated:Connect(function()
+			local before = hubState.profile
+			for _, uid in ipairs(HubStyle.bestGear(before)) do
+				hubFn.equipUid(uid)
+			end
+		end)
+		local capacity = Instance.new("TextLabel")
+		capacity.Name = "Capacity"
+		capacity.BackgroundTransparency = 1
+		capacity.Size = UDim2.new(0.48, -4, 1, 0)
+		capacity.Font = bodyFont()
+		capacity.TextSize = UiTheme.MIN_TEXT
+		capacity.TextXAlignment = Enum.TextXAlignment.Right
+		capacity.TextColor3 = rgb("text")
+		capacity.Text = HubStyle.capacityLine(hubState.profile)
+		capacity.Parent = foot
 		hubFn.line(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, rgb("muted"))
 		if hubState.detailOpen and hubState.selectedUid ~= nil then
 			local item = hubFn.findItem(hubState.selectedUid)
@@ -2504,8 +2602,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.paintDetail(item)
 			else
 				hubState.detailOpen = false
-				hubState.detail.Visible = false
+				hubFn.paintWorn()
 			end
+		else
+			hubFn.paintWorn()
 		end
 	end
 

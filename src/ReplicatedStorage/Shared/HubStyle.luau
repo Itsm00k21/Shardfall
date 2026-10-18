@@ -13,6 +13,7 @@
 ]]
 
 local Economy = require("./Economy")
+local InventoryView = require("./InventoryView")
 
 local HubStyle = {}
 
@@ -24,11 +25,11 @@ HubStyle.CRACK_PET = "CRACK PET SHARD"
 HubStyle.CURRENCIES = { "Gold", "Shards", "Keys", "Mastery" }
 
 local PILLS = {
-	{ id = "All", label = "All" },
-	{ id = "Weapons", label = "Weapons" },
-	{ id = "Armor", label = "Armor" },
-	{ id = "Relics", label = "Relics" },
-	{ id = "Pets", label = "Pets" },
+	{ id = "All", label = "All", icon = "bag" },
+	{ id = "Weapons", label = "Weapons", icon = "attack" },
+	{ id = "Armor", label = "Armor", icon = "class" },
+	{ id = "Relics", label = "Relics", icon = "ult" },
+	{ id = "Pets", label = "Pets", icon = "pet" },
 }
 
 local CHIP = { "equip", "claim", "close", "button" }
@@ -73,10 +74,10 @@ local function grouped(amount: number): string
 	return out
 end
 
-function HubStyle.pills(): { { id: string, label: string } }
+function HubStyle.pills(): { { id: string, label: string, icon: string } }
 	local copy = {}
 	for _, pill in ipairs(PILLS) do
-		table.insert(copy, { id = pill.id, label = pill.label })
+		table.insert(copy, { id = pill.id, label = pill.label, icon = pill.icon })
 	end
 	return copy
 end
@@ -116,6 +117,104 @@ function HubStyle.inPill(item: any, pill: any): boolean
 		return kind == "Pet" or type(item.species) == "string"
 	end
 	return false
+end
+
+function HubStyle.capacityLine(profile: any, _extra: any?): string
+	local used = 0
+	local cap = 100
+	if type(profile) == "table" then
+		if type(profile.inventory) == "table" then
+			for _ in pairs(profile.inventory) do
+				used += 1
+			end
+		end
+		if type(profile.pets) == "table" then
+			for _ in pairs(profile.pets) do
+				used += 1
+			end
+		end
+		if
+			type(profile.inventoryCap) == "number"
+			and profile.inventoryCap == profile.inventoryCap
+			and profile.inventoryCap >= 1
+			and profile.inventoryCap < math.huge
+		then
+			cap = math.floor(profile.inventoryCap)
+		end
+	end
+	return string.format("Capacity: %d/%d", used, cap)
+end
+
+local function gearBucket(item: any): string?
+	if type(item) ~= "table" then
+		return nil
+	end
+	if item.kind == "Weapon" then
+		return "weapon"
+	end
+	if item.kind == "Armor" and type(item.slot) == "string" and item.slot ~= "" then
+		return "armor:" .. item.slot
+	end
+	if item.kind == "Accessory" and type(item.slot) == "string" and item.slot ~= "" then
+		return "accessory:" .. item.slot
+	end
+	return nil
+end
+
+local function wornUid(profile: any, bucket: string): string?
+	if type(profile) ~= "table" or type(profile.equipped) ~= "table" then
+		return nil
+	end
+	local equipped = profile.equipped
+	if bucket == "weapon" then
+		if type(equipped.weapon) == "string" then
+			return equipped.weapon
+		end
+		return nil
+	end
+	local kind, slot = string.match(bucket, "^(%a+):(.+)$")
+	if kind == "armor" and type(equipped.armor) == "table" and type(slot) == "string" then
+		local uid = equipped.armor[slot]
+		if type(uid) == "string" then
+			return uid
+		end
+	end
+	if kind == "accessory" and type(equipped.accessories) == "table" and type(slot) == "string" then
+		local uid = equipped.accessories[slot]
+		if type(uid) == "string" then
+			return uid
+		end
+	end
+	return nil
+end
+
+function HubStyle.bestGear(profile: any, _extra: any?): { string }
+	local picks = {}
+	if type(profile) ~= "table" or type(profile.inventory) ~= "table" then
+		return picks
+	end
+	local best: { [string]: any } = {}
+	for _, item in pairs(profile.inventory) do
+		local bucket = gearBucket(item)
+		if bucket ~= nil and type(item) == "table" and type(item.uid) == "string" and item.uid ~= "" then
+			local current = best[bucket]
+			if current == nil or InventoryView.powerOf(item) > InventoryView.powerOf(current) then
+				best[bucket] = item
+			end
+		end
+	end
+	local keys = {}
+	for bucket in pairs(best) do
+		table.insert(keys, bucket)
+	end
+	table.sort(keys)
+	for _, bucket in ipairs(keys) do
+		local item = best[bucket]
+		if wornUid(profile, bucket) ~= item.uid then
+			table.insert(picks, item.uid)
+		end
+	end
+	return picks
 end
 
 function HubStyle.shardCount(tokens: any): string

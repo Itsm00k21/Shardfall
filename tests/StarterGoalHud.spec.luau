@@ -565,6 +565,7 @@ describe("StarterGoalHud polish", function()
 			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/StarterGoalHud.luau"
 		)
 		expect(string.find(hud, "UDim2.new(1, -16, 0, lineH)", 1, true)).toBeGreaterThan(0)
+		expect(string.find(hud, "\\u{25C6}", 1, true)).toBeGreaterThan(0)
 		expect(string.find(hud, "function StarterGoalHud.present(result: any)", 1, true)).toBeGreaterThan(
 			0
 		)

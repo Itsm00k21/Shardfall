@@ -517,6 +517,21 @@ function ActionSlots.stacks(slot: Slot, profile: any): number?
 	return math.max(0, math.floor(owned))
 end
 
+function ActionSlots.unseen(slot: any, profile: any, seenAt: any): boolean
+	if type(slot) ~= "table" or slot.kind ~= "item" or type(slot.id) ~= "string" then
+		return false
+	end
+	local item = itemOf(profile, slot.id)
+	if type(item) ~= "table" or type(item.obtainedAt) ~= "number" then
+		return false
+	end
+	local at = 0
+	if type(seenAt) == "number" and seenAt == seenAt and seenAt > 0 and seenAt < math.huge then
+		at = seenAt
+	end
+	return item.obtainedAt > at
+end
+
 function ActionSlots.border(slot: Slot, profile: any): { number }
 	if slot.kind == "consumable" then
 		local red, green, blue = UiTheme.rarityColor("Common")

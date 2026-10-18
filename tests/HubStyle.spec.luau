@@ -90,6 +90,26 @@ describe("HubStyle", function()
 		expect(paid.detail.x).toEqual(bag.detail.x)
 		expect(#HubStyle.pills()).toEqual(5)
 		expect(HubStyle.pills()[2].label).toEqual("Weapons")
+		expect(HubStyle.pills()[2].icon).toEqual("attack")
+		expect(HubStyle.capacityLine({ inventory = { a = {} }, pets = {}, inventoryCap = 100 })).toEqual(
+			"Capacity: 1/100"
+		)
+		expect(HubStyle.capacityLine(nil)).toEqual("Capacity: 0/100")
+		local gold = 40
+		local profile = {
+			gold = gold,
+			inventory = {
+				worn = { uid = "worn", kind = "Weapon", rarity = "Common" },
+				better = { uid = "better", kind = "Weapon", rarity = "Rare" },
+				relic = { uid = "relic", kind = "Relic", rarity = "Legendary" },
+			},
+			equipped = { weapon = "worn" },
+		}
+		expect(HubStyle.bestGear(profile)).toEqual({ "better" })
+		expect(HubStyle.bestGear(profile, { paid = true })).toEqual({ "better" })
+		expect(profile.gold).toEqual(gold)
+		profile.equipped.weapon = "better"
+		expect(HubStyle.bestGear(profile)).toEqual({})
 	end)
 
 	it("is what MenuHub paints, and the legacy panel is untouched", function()
@@ -102,6 +122,11 @@ describe("HubStyle", function()
 		expect(string.find(hub, 'Name = "PetDetail"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "HubStyle.CRACK_PET", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "HubStyle.CRACK_ONE", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'Name = "Worn"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'Name = "EquipBest"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, 'Name = "Capacity"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "HubStyle.capacityLine", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "HubStyle.bestGear", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "x100", 1, true)).toBeNil()
 		expect(string.find(hub, "Robux", 1, true)).toBeNil()
 		local legacy = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/Ui.luau")

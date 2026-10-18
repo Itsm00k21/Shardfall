@@ -41,3 +41,25 @@ Pill tabs filter the tile grid. The detail pane names the item, then EQUIP, then
 ## Pets
 
 Each companion is a card in the list. The detail pane shows the perk and the stat lines that already exist on the pet (level, bond, affinity, role). EQUIP uses the existing equip path. CRACK PET SHARD opens the pet roll. No gem price sits on that button.
+
+## Play references
+
+These three shots are UI references from another fantasy RPG. Match the structure. Do not copy the world, the plaza, or the character art.
+
+- [Hotbar and quest tracker](refs/ref_hotbar.jpg) — a slim row of square slots at bottom center. Each slot has a small key in the top-left. The selected slot is outlined in white. A red dot marks a new item. Round combat buttons sit at bottom-right: attack is the large one, dodge and jump are smaller.
+- [Inventory](refs/ref_inventory.jpg) — gear-type icon tabs above the grid, a detail pane that shows the equipped character, Equip Best, and a `Capacity: N/100` line at the bottom of the Bag.
+- [Daily rewards](refs/ref_daily.jpg) — a rewards board only. It is not a store.
+
+Shardfall has no Robux weapon or pet packs. `Loops.PREMIUM_ENABLED` stays false. Nothing on these screens costs Robux.
+
+## Hotbar
+
+The eight slots stay on keys 1–8, centered along the bottom on a desktop. The key letter sits in the top-left of the slot. The selected slot uses a white stroke. A new item (`obtainedAt` newer than the last time that slot was used) shows the `newDot` color. Attack calls the existing light attack. Dodge stays dodge. Jump sets the local humanoid jump. Heavy stays the phone chip from `HeavyChip` and stays hidden on desktop.
+
+## Bag additions
+
+The pill tabs keep their names and gain the gear icons from `UiIcons` (bag, attack, class, ult, pet). The detail pane includes a `Worn` viewport of the equipped character, then the item lines when one is selected. Equip Best asks the existing EquipItem path for each stronger weapon, armor piece, or accessory from `HubStyle.bestGear`. It does not spend gold and it does not equip relics. `Capacity: N/100` uses the item count and `inventoryCap` (100 when the profile has no cap).
+
+## Quest tracker
+
+The starter-goal tracker stays top-left and compact. Each row keeps its sentence and its `N/M` counter, with a diamond bullet in front: `◆  Roll 10 shards 3/10`. The goal data line itself stays `text N/M`.
