@@ -3146,6 +3146,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local grid = HudLayout.cardGrid(math.max(44, listW - 16), math.max(44, listH), #shown)
 			local cardOrder = 8
 			if HudLayout.bagCardsLead(listH, grid.cellH) then
+				bar.LayoutOrder = 3
 				pills.LayoutOrder = 4
 				actions.LayoutOrder = 5
 				cardOrder = 1

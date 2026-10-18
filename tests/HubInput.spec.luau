@@ -8,6 +8,7 @@ local it = framework.it
 local expect = framework.expect
 
 local ActionSlots = require("../src/ReplicatedStorage/Shared/ActionSlots")
+local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
 local HubPress = require("../src/ReplicatedStorage/Shared/HubPress")
 local HubStyle = require("../src/ReplicatedStorage/Shared/HubStyle")
 local Materials = require("../src/ReplicatedStorage/Shared/Materials")
@@ -708,6 +709,39 @@ describe("HubInput", function()
 			local page = GuiFake.findNamed(screenOf(world), "Body"):FindFirstChild(tab)
 			expect(page.Visible).toBeTrue()
 		end
+	end)
+
+	it("hits Equip at its centre in the default bag view", function()
+		local function openAt(width: number, height: number)
+			local world, hub, calls = bootHub()
+			local screen = screenOf(world)
+			screen.AbsoluteSize = { X = width, Y = height }
+			screen:GetPropertyChangedSignal("AbsoluteSize"):Fire()
+			hub.open("bag")
+			local card = GuiFake.findNamed(screen, "Card")
+			local equip = card:FindFirstChild("Equip")
+			expect(equip ~= nil).toBeTrue()
+			local pos = equip.AbsolutePosition
+			local size = equip.AbsoluteSize
+			local centreX = pos.X + size.X / 2
+			local centreY = pos.Y + size.Y / 2
+			expect(centreX > pos.X and centreX < pos.X + size.X).toBeTrue()
+			expect(centreY > pos.Y and centreY < pos.Y + size.Y).toBeTrue()
+			local bag = GuiFake.findNamed(screen, "Body"):FindFirstChild("bag", false)
+			local list = bag:FindFirstChild("List")
+			local layout = card.Parent:FindFirstChildOfClass("UIGridLayout")
+			local along = HudLayout.bagEquipCentre(list.AbsoluteSize.Y, layout.CellSize.Y.Offset)
+			expect(along <= list.AbsoluteSize.Y).toBeTrue()
+			expect(along >= size.Y / 2).toBeTrue()
+			local before = #calls
+			GuiFake.pointerClick(equip, world.userInput)
+			GuiFake.emit(equip, "Activated")
+			expect(#calls).toEqual(before + 1)
+			expect(calls[#calls][1]).toEqual("EquipItem")
+			expect(calls[#calls][2]).toEqual("sword")
+		end
+		openAt(1280, 800)
+		openAt(1280, 540)
 	end)
 
 	it("moves PadRing after a gamepad step and runs the focused button", function()

@@ -7,8 +7,10 @@
 	go through the server.
 ]]
 
+local HudLayout = require("./HudLayout")
 local InventoryView = require("./InventoryView")
 local Rarities = require("./Rarities")
+local UiTheme = require("./UiTheme")
 
 local BagBoard = {}
 
@@ -261,20 +263,25 @@ function BagBoard.tipPlace(
 	local originY = finite(cardY, 8)
 	local span = finite(cardW, 0)
 	local tall = finite(cardH, 0)
+	local rail = HudLayout.railFit(height, 16, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, width)
+	local left = rail.x + rail.w
+	if left < 8 then
+		left = 8
+	end
 	local x = originX + span + 8
 	local y = originY
 	if span + boxW + 16 > width then
-		x = 8
+		x = left
 		y = originY + tall + 8
 	elseif x + boxW > width - 8 then
 		x = originX - boxW - 8
 	end
-	if x < 8 then
-		x = 8
+	if x < left then
+		x = left
 	end
 	if x + boxW > width - 8 then
-		boxW = math.max(120, width - 16)
-		x = 8
+		boxW = math.max(120, width - left - 8)
+		x = left
 	end
 	if y + boxH > height - 8 then
 		y = height - 8 - boxH

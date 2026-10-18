@@ -440,6 +440,9 @@ function Remotes.bind()
 			if tonumber(music) == nil or tonumber(sfx) == nil then
 				return { ok = false, error = "Volume needs a number." }
 			end
+			if (tonumber(music) :: number) < 0 or (tonumber(sfx) :: number) < 0 then
+				return { ok = false, error = "Volume cannot be negative." }
+			end
 			local ok, err = DataService.mutate(player, function(data)
 				data.musicVolume = Audio.clampVolume(music)
 				data.sfxVolume = Audio.clampVolume(sfx)
