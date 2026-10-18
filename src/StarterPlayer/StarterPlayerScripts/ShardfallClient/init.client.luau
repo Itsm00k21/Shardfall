@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 95b3c34+ client` in Output.
+	still leaves `[Shardfall] build 2654682+ client` in Output.
 ]]
 
-print("[Shardfall] build 95b3c34+ client")
+print("[Shardfall] build 2654682+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -265,7 +265,7 @@ end
 
 -- One GetOdds in flight, plus one trailing request. Pity and the roll
 -- count paint from the profile, so a crack batch does not refetch.
-local oddsPull = { busy = false, again = false }
+local oddsPull = { busy = false, again = false, limited = 0 }
 
 local function refreshOdds()
 	if oddsPull.busy then
@@ -273,6 +273,7 @@ local function refreshOdds()
 		return
 	end
 	oddsPull.busy = true
+	oddsPull.limited = 0
 	task.spawn(function()
 		repeat
 			oddsPull.again = false
@@ -289,8 +290,16 @@ local function refreshOdds()
 				message = tostring(result.error or "Could not load odds.")
 			else
 				ui.setOdds(result.odds)
+				oddsPull.limited = 0
 			end
-			if message ~= nil and message ~= "Slow down a moment." then
+			if message == "Slow down a moment." then
+				if oddsPull.limited < 2 then
+					oddsPull.limited += 1
+					oddsPull.again = true
+					task.wait(1.1)
+				end
+			elseif message ~= nil then
+				oddsPull.limited = 0
 				warn("[Shardfall] " .. message)
 				ui.setStatus(message, "error")
 				ui.setNotice(message)
@@ -573,6 +582,20 @@ ui = Ui.mount(playerGui, {
 	onArea = function(poolId: string)
 		selectedPoolId = poolId
 		refreshOdds()
+	end,
+	onUpgrade = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("UpgradeGear", uid)
+			end)
+			local message = remoteError(ok, result, "Could not upgrade that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Upgraded.", "ok")
+		end)
 	end,
 	onCraft = function(recipeId: string, targetUid: string?)
 		task.spawn(function()

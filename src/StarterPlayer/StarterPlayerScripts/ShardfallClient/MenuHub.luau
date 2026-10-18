@@ -348,6 +348,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.loop = RollLoop.idle()
 	hubState.holdingRoll = false
 	hubState.rollFromPointer = false
+	hubState.rollPointerAt = 0
 	hubState.shopNote = ""
 	hubState.rollBusy = false
 	hubState.playerAlive = true
@@ -4517,10 +4518,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.rollButton.Activated:Connect(function()
 		-- A mouse, touch, or ButtonA press already called pressRoll from
 		-- InputBegan. Activated still cracks once for a keyboard or
-		-- controller selection that never began a pointer press.
+		-- controller selection that never began a pointer press. A drag
+		-- that never fires Activated expires the flag so the next press
+		-- is not swallowed.
 		if hubState.rollFromPointer == true then
+			local age = os.clock() - hubState.rollPointerAt
 			hubState.rollFromPointer = false
-			return
+			if age <= 0.75 then
+				return
+			end
 		end
 		hubFn.pressRoll()
 	end)
@@ -4528,8 +4534,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if hubFn.pointerDown(input) then
 			hubState.holdingRoll = true
 			hubState.rollFromPointer = true
+			hubState.rollPointerAt = os.clock()
 			hubState.rollButton.BackgroundColor3 = rgb("press")
 			hubFn.pressRoll()
+		else
+			hubState.rollFromPointer = false
 		end
 	end)
 	hubState.rollButton.InputEnded:Connect(function(input)
@@ -4701,7 +4710,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local ok, result = pcall(hooks.invoke, "BuyGoldShop", offerId)
 		local message: string? = nil
 		if not ok then
-			message = tostring(result)
+			message = "Could not buy that."
 		elseif type(result) ~= "table" or result.ok ~= true then
 			local err = if type(result) == "table" then result.error else nil
 			message = if type(err) == "string" and err ~= "" then err else "Could not buy that."
