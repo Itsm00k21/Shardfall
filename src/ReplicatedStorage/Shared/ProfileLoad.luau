@@ -93,6 +93,19 @@ function ProfileLoad.shutdownStillWaiting(pending: number, elapsed: number): boo
 	return pending > 0 and elapsed < ProfileLoad.SHUTDOWN_BUDGET_SECONDS
 end
 
+-- A timed-out load can still be marked loaded once the memory fallback is
+-- installed. That fallback is ephemeral. Autosave and release must not
+-- write it, because the store may already hold the real claimed profile.
+function ProfileLoad.maySave(loaded: boolean, ephemeral: boolean): boolean
+	return loaded == true and ephemeral ~= true
+end
+
+-- A later mutate already committed. Restoring the earlier backup would
+-- erase that commit.
+function ProfileLoad.mutateShouldRestore(started: number, current: number): boolean
+	return started == current
+end
+
 local function sessionProfile(now: number): any
 	local migrated = Schema.migrate(nil)
 	if migrated ~= nil then
@@ -221,6 +234,37 @@ function ProfileLoad.release(
 	return {
 		ok = true,
 		reason = "saved",
+	}
+end
+
+-- Drop a lock this server owns and leave the stored profile alone.
+-- A failed load uses this so the next server does not wait out the timeout.
+function ProfileLoad.releaseOwned(adapter: Adapter, key: string, serverId: string): Release
+	local reason = "error"
+	local ok, err = pcall(function()
+		adapter:updateAsync(key, function(document)
+			local current = if type(document) == "table" then document else nil
+			local written, releaseReason = SessionLock.tryRelease(current, serverId)
+			reason = releaseReason
+			return written
+		end)
+	end)
+	if not ok then
+		return {
+			ok = false,
+			reason = "error",
+			error = tostring(err),
+		}
+	end
+	if reason ~= "released" then
+		return {
+			ok = false,
+			reason = reason,
+		}
+	end
+	return {
+		ok = true,
+		reason = "released",
 	}
 end
 

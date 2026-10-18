@@ -81,6 +81,9 @@ type Record = {
 	closing: boolean,
 	ephemeral: boolean,
 	error: string?,
+	-- Bumped at the start of each mutate. A restore is valid only while
+	-- this is still the generation that copied the backup.
+	mutateGeneration: number,
 }
 
 type Listener = (Player, any, boolean) -> ()
@@ -100,6 +103,9 @@ local playerStarted: { [Player]: boolean } = {}
 local adapter: StoreAdapter.Adapter? = nil
 local persistent = false
 local started = false
+-- Set before shutdown spawns releases. Autosave must not start a write
+-- after this, and release must not wait on a teleport.
+local shuttingDown = false
 
 local function currentAdapter(): StoreAdapter.Adapter
 	local current = adapter
@@ -180,15 +186,22 @@ function DataService.mutate(
 	if record.closing then
 		return false, "Profile is closing for a teleport."
 	end
+	record.mutateGeneration += 1
+	local generation = record.mutateGeneration
 	local backup = Schema.deepCopy(record.data)
 	local ok, result = pcall(mutator, record.data)
+	local restore = ProfileLoad.mutateShouldRestore(generation, record.mutateGeneration)
 	if not ok then
-		record.data = backup
+		if restore then
+			record.data = backup
+		end
 		warn("[Shardfall] Profile mutate failed:", result)
 		return false, "Could not update your profile."
 	end
 	if result ~= nil then
-		record.data = backup
+		if restore then
+			record.data = backup
+		end
 		return false, result
 	end
 	notify(player)
@@ -196,6 +209,9 @@ function DataService.mutate(
 end
 
 local function write(record: Record, releaseLock: boolean): (boolean, string)
+	if record.ephemeral == true then
+		return false, "unloaded"
+	end
 	local outcome = "unwritten"
 	local store = currentAdapter()
 	local callOk, callErr = pcall(function()
@@ -275,10 +291,25 @@ function DataService.savePair(
 	return false, whyFirst or whySecond
 end
 
+-- The load that timed out may already have claimed. Clear that lock and
+-- leave the stored profile in place.
+local function clearOwnedLock(key: string)
+	if not persistent then
+		return
+	end
+	local ok, err = pcall(function()
+		ProfileLoad.releaseOwned(currentAdapter(), key, serverId)
+	end)
+	if not ok then
+		warn("[Shardfall] Could not release the lock after a failed load:", err)
+	end
+end
+
 local function failLoad(record: Record, message: string): (boolean, string)
 	record.loading = false
 	record.failed = true
 	record.error = message
+	clearOwnedLock(record.key)
 	return false, message
 end
 
@@ -294,6 +325,7 @@ local function sessionFallback(record: Record, player: Player, why: any): (boole
 	if migrated == nil then
 		return failLoad(record, "Could not load your Shardfall profile. Rejoin.")
 	end
+	clearOwnedLock(record.key)
 	record.data = migrated
 	record.loaded = true
 	record.loading = false
@@ -325,6 +357,7 @@ local function load(player: Player): (boolean, string?)
 		released = false,
 		closing = false,
 		ephemeral = false,
+		mutateGeneration = 0,
 	}
 	records[player] = record
 	local studio = RunService:IsStudio()
@@ -392,6 +425,7 @@ local function load(player: Player): (boolean, string?)
 			)
 			if studio or not persistent then
 				if type(outcome.data) == "table" then
+					clearOwnedLock(record.key)
 					record.data = outcome.data
 					record.loaded = true
 					record.loading = false
@@ -604,6 +638,10 @@ function DataService.release(player: Player)
 	-- the record without saving again. A second write would either replay
 	-- stale memory or, if it claimed, take the lock back from the raid server.
 	while record.closing do
+		-- Shutdown's budget belongs to the final release, not a teleport wait.
+		if shuttingDown then
+			break
+		end
 		task.wait(0.05)
 	end
 	if record.released then
@@ -611,13 +649,14 @@ function DataService.release(player: Player)
 		records[player] = nil
 		return
 	end
+	local wasLoaded = record.loaded
+	local ephemeral = record.ephemeral == true
 	record.released = true
 	playerStarted[player] = false
-	local wasLoaded = record.loaded
 	record.loaded = false
-	if wasLoaded then
+	if ProfileLoad.maySave(wasLoaded, ephemeral) then
 		local ok, reason = write(record, true)
-		if not ok and reason ~= "missing" then
+		if not ok then
 			warn("[Shardfall] Final save failed for", player.Name, reason)
 		end
 	end
@@ -911,15 +950,21 @@ end
 local function autosave()
 	while true do
 		task.wait(AUTOSAVE_SECONDS)
+		if shuttingDown then
+			return
+		end
 		local snapshot = {}
 		for player, record in pairs(records) do
 			table.insert(snapshot, { player = player, record = record })
 		end
 		for _, entry in ipairs(snapshot) do
+			if shuttingDown then
+				break
+			end
 			local player = entry.player
 			local record = entry.record
 			if
-				record.loaded
+				ProfileLoad.maySave(record.loaded, record.ephemeral)
 				and not record.released
 				and not record.closing
 				and player.Parent == Players
@@ -967,6 +1012,7 @@ function DataService.start()
 	end)
 
 	game:BindToClose(function()
+		shuttingDown = true
 		local pending = 0
 		for _, player in ipairs(Players:GetPlayers()) do
 			pending += 1
