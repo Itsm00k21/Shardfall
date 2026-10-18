@@ -2,7 +2,7 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). E-009 is done. E-010 is in review. Do not queue new features. The phone layout recheck is E-010.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). E-009 is done. E-010 is done. E-011 is in progress. Do not queue new features.
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-007 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
@@ -76,9 +76,9 @@ Each call tries nil, a wrong type, an empty string, a negative, NaN, `math.huge`
 
 Pending, and not in the committed run: SetAudio accepts a negative and writes `Audio.clampVolume`, which stores 0. `src/ServerScriptService/ShardfallServer/Remotes.luau:444` and `src/ReplicatedStorage/Shared/Audio.luau:41`. No `src/` edit. Schema stays 26. No kill-switch change. No build stamp. Product ids stay 0.
 
-## E-010 — in review
+## E-010 — done
 
-Phone layout recheck. Branch `helper/phone-recheck-9721`, cut from tip `0a6253b`. PR https://github.com/Itsm00k21/Shardfall/pull/291 into `cursor/live-build-9721`. Report `docs/hooks/E-010-phone-recheck.md`. `tests/PhoneRecheck.spec.luau` locks the checks that pass. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
+Phone layout recheck. Branch `helper/phone-recheck-9721`, cut from tip `0a6253b`. PR https://github.com/Itsm00k21/Shardfall/pull/291 into `cursor/live-build-9721`. Merged at `540ed07`. Report `docs/hooks/E-010-phone-recheck.md`. `tests/PhoneRecheck.spec.luau` locks the checks that pass. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
 
 Walked `docs/design/playtest_script.md` at 390×844 and 844×390. Portrait: pass 7, fail 2, manual 2. Landscape: pass 6, fail 3, manual 2. Step 8 fails only in landscape.
 
@@ -89,9 +89,17 @@ Pending, not fixed:
 - Landscape rail leaves the 16px inset. `HudLayout.luau:352`.
 - Landscape Forge sheet under the rail at every scroll position. `ShellLayout.luau:252`, `Ui.luau:380`.
 
+## E-011 — in progress
+
+Tablet and small-desktop layout recheck. Branch `helper/layout-recheck-wide-9721`, cut from tip `a5a8ec6`, rebased onto `540ed07`. Report `docs/hooks/E-011-wide-recheck.md`. `tests/WideRecheck.spec.luau` locks the checks that pass. It does not assert the 1280×720 forge row. The playtest script was not edited. No `src/` edit. Schema stays 26. No kill-switch change. Product ids stay 0.
+
+Walked `docs/design/playtest_script.md` at 1024×768 and 1280×720. 1024×768: pass 9, fail 0, manual 2. 1280×720: pass 8, fail 1, manual 2. Step 8 fails only at 1280×720.
+
+Pending, not fixed: at 1280×720 a 44px Forge upgrade row is never fully clear of the rail and the desktop action bar. The rail cover is the known E-010 landscape sheet (`ShellLayout.luau:252`, `Ui.luau:380`). The new part is the 32px band under that rail before `ActionSlots.luau:639`. Not re-filed: the four E-010 phone overlaps, and the E-009 negative SetAudio write (`Remotes.luau:444`, `Audio.luau:41`).
+
 ## Next
 
-Ghost reviews E-010. The four overlaps stay pending. Do not queue a new row.
+E-011 is in progress. Ghost reviews it. The 1280×720 forge row stays pending. Do not queue a new row.
 
 ## PAUSED
 
