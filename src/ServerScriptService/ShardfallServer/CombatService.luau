@@ -707,11 +707,11 @@ local function releaseSwing(
 	local state = ensure(player)
 	local now = os.clock()
 	if now < state.nextAttack then
-		return
+		return false
 	end
 	if now < state.dodge.iframeUntil then
 		-- A dodge cancels the end of a swing. The next hit waits out the roll.
-		return
+		return false
 	end
 	-- Auto swings pass false and leave a held charge for the player's click.
 	local heavy = false
@@ -749,7 +749,7 @@ local function releaseSwing(
 				then Color3.fromRGB(120, 220, 140)
 				else Color3.fromRGB(230, 210, 140)
 		)
-		return
+		return true
 	end
 
 	swingFlash(hrp.Position, flat, offense.range, step.heavy)
@@ -787,6 +787,7 @@ local function releaseSwing(
 			step.heavy
 		)
 	end
+	return true
 end
 
 function CombatService.beginCharge(player: Player)
@@ -817,8 +818,9 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(0, 0, -1)
 	end
-	releaseSwing(player, hrp, offense, aim, flat.Unit, true)
-	OnboardingService.note(player, "swing")
+	if releaseSwing(player, hrp, offense, aim, flat.Unit, true) then
+		OnboardingService.note(player, "swing")
+	end
 end
 
 function CombatService.dodge(player: Player)

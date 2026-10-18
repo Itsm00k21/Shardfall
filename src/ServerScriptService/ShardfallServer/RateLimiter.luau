@@ -47,8 +47,9 @@ local RULES: { [string]: Rule } = {
 	GetOdds = { capacity = 4, perSecond = 1 },
 	DevGrant = { capacity = 4, perSecond = 2 },
 	Debug = { capacity = 6, perSecond = 2 },
-	-- Attacks are limited by weapon cooldown too. This only stops a flood.
-	Attack = { capacity = 8, perSecond = 6 },
+	-- Attack speed is clamped to 4. A heavy sends begin, then the swing.
+	-- Twelve a second stays above that pair, so cooldown is the only clock.
+	Attack = { capacity = 16, perSecond = 12 },
 	-- Two charges can be spent together. The bucket stops a client from
 	-- probing the perfect-dodge window faster than that.
 	Dodge = { capacity = 3, perSecond = 2 },
