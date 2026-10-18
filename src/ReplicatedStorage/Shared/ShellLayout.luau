@@ -237,20 +237,18 @@ function ShellLayout.classRect(viewportX: number, viewportY: number): Rect
 end
 
 function ShellLayout.menuRect(viewportX: number, viewportY: number): Rect
-	local door = ShellLayout.doorRect(viewportX, viewportY)
-	local loop = ShellLayout.loopRect(viewportX, viewportY)
+	-- The Forge sheet scrolls its upgrade rows. Stopping at the door
+	-- left 86px on a short phone, and 36% of a narrow phone was 140px.
 	local pet = ShellLayout.petRect()
+	local bar = ShellLayout.actionBar(viewportX, viewportY)
+	local market = ShellLayout.marketButton(viewportX, viewportY)
 	local y = pet.y + pet.h + 16
-	local bottom = door.y - 8
+	local bottom = math.min(bar.y, market.y) - 8
 	local h = bottom - y
 	if h < 0 then
 		h = 0
 	end
-	local w = math.min(360, math.floor(viewportX * 0.36))
-	local maxW = math.max(160, loop.x - 8 - 16)
-	if w > maxW then
-		w = maxW
-	end
+	local w = math.min(360, math.max(0, viewportX - 32))
 	return { x = 16, y = y, w = w, h = h }
 end
 
