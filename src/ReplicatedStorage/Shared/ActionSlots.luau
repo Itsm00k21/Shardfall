@@ -615,7 +615,7 @@ function ActionSlots.placement(viewportX: number, viewportY: number, mobile: boo
 		}
 	end
 	local columns = 8
-	local slot = fitSlot(width - margin * 2, columns, gap, 56, 44)
+	local slot = fitSlot(width - margin * 2, columns, gap, 64, 44)
 	local barW = columns * slot + (columns - 1) * gap
 	local barH = slot + 36
 	local x = math.floor((width - barW) / 2)
@@ -633,6 +633,42 @@ function ActionSlots.placement(viewportX: number, viewportY: number, mobile: boo
 		columns = columns,
 		rows = 1,
 		mobile = false,
+	}
+end
+
+export type Chrome = {
+	lock: Rect,
+	roll: Rect,
+}
+
+export type Face = {
+	fill: { number },
+	stroke: { number },
+	thickness: number,
+}
+
+function ActionSlots.chrome(place: any, _extra: any?): Chrome
+	local slot = 44
+	local gap = 8
+	if type(place) == "table" then
+		if type(place.slot) == "number" and place.slot == place.slot and place.slot > 0 then
+			slot = place.slot
+		end
+		if type(place.gap) == "number" and place.gap == place.gap and place.gap >= 0 then
+			gap = place.gap
+		end
+	end
+	return {
+		lock = { x = 0, y = 4, w = slot, h = 28 },
+		roll = { x = slot + gap, y = 4, w = slot, h = 28 },
+	}
+end
+
+function ActionSlots.face(_extra: any?): Face
+	return {
+		fill = { 12, 10, 16 },
+		stroke = { 255, 214, 120 },
+		thickness = 3,
 	}
 end
 

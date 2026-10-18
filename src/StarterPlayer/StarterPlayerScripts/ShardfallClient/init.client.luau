@@ -1281,6 +1281,9 @@ actionBar = ActionBar.start(playerGui, {
 	onResult = function(result: any)
 		applyResult(result)
 	end,
+	onRoll = function()
+		openHub("roll")
+	end,
 	mobile = deviceIsTouch,
 })
 if latestProfile ~= nil then
