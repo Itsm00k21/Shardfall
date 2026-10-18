@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build 3224204+ client` in Output.
+	still leaves `[Shardfall] build 897389b+ client` in Output.
 ]]
 
-print("[Shardfall] build 3224204+ client")
+print("[Shardfall] build 897389b+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +26,7 @@ local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local LegacyChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LegacyChrome"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local ForeignScripts =
@@ -696,9 +697,10 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onChests = function()
-		if inventory ~= nil then
-			inventory.openTab("chests")
+		if not LaunchGate.on("chests") or inventory == nil then
+			return
 		end
+		inventory.openTab("chests")
 	end,
 	onGraphics = function()
 		cycleGraphics()

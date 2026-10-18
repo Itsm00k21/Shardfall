@@ -1145,7 +1145,11 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		button.Size = UDim2.fromOffset(120, 44)
 		button.AutomaticSize = Enum.AutomaticSize.None
 		tabButtons[tab] = button
+		button.Visible = tab ~= "chests" or LaunchGate.on("chests")
 		button.MouseButton1Click:Connect(function()
+			if tab == "chests" and not LaunchGate.on("chests") then
+				return
+			end
 			query.tab = tab
 			query.slot = nil
 			selectedId = nil
@@ -1430,6 +1434,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	function controller.openTab(tab: string)
+		if tab == "chests" and not LaunchGate.on("chests") then
+			return
+		end
 		query.tab = tab
 		paintFilters()
 		if isOpen then

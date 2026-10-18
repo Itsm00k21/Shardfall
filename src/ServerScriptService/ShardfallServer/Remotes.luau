@@ -134,6 +134,13 @@ local PARKED_ACTION: { [string]: string } = {
 	RaidReady = "raids",
 	BuyTravelPass = "extraRealms",
 	BuyDustShard = "extraCurrencies",
+	SetChestOptions = "chests",
+	BuyChestBundle = "chests",
+	BuyForgeBoost = "paid",
+	BuyBoost = "paid",
+	BuyPrism = "paid",
+	RollPaid = "paid",
+	BuyInventoryExpansion = "paid",
 }
 
 local function guard(player: Player, action: string, callback: () -> any)
@@ -639,7 +646,11 @@ function Remotes.bind()
 	end
 	functionRemote("Loops").OnServerInvoke = function(player)
 		return guard(player, "Loops", function()
-			return LoopService.refresh(player)
+			local result = LoopService.refresh(player)
+			if type(result) == "table" and not LaunchGate.on("leaderboards") then
+				result.leaderboard = nil
+			end
+			return result
 		end)
 	end
 	functionRemote("RerollDaily").OnServerInvoke = function(player, index)
