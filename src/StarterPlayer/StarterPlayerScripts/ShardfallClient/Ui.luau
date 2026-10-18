@@ -14,7 +14,7 @@
 	above the player's ascension stays locked. The client sends the selected
 	pool id.
 
-	Shards and Craft are tabs. Rootvault sits under them: Enter, Attack, Auto
+	Shards and Forge are tabs. Rootvault sits under them: Enter, Attack, Auto
 	Attack, and a Healing Tonic button. Auto Attack defaults on. The server
 	still owns the rolls, the hits, and the craft. Feed spends a duplicate
 	into the kept copy.
@@ -516,7 +516,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local shardTab = makeButton(tabRow, "Shards", COLORS.gold, 1, 28)
 	shardTab.Size = UDim2.new(0.5, -3, 1, 0)
 	shardTab.TextSize = 14
-	local craftTab = makeButton(tabRow, "Craft", COLORS.buttonDim, 2, 28)
+	local craftTab = makeButton(tabRow, "Forge", COLORS.buttonDim, 2, 28)
 	craftTab.Size = UDim2.new(0.5, -3, 1, 0)
 	craftTab.TextSize = 14
 
@@ -1147,7 +1147,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		LayoutOrder = 17,
 	}, panel)
 	local graphicsButton: TextButton? = nil
-	if callbacks.onChests ~= nil then
+	if callbacks.onChests ~= nil and LaunchGate.on("chests") then
 		local chests = makeButton(panel, "Chests", COLORS.button, 21, 44)
 		local openChests = callbacks.onChests
 		chests.MouseButton1Click:Connect(function()
@@ -1306,6 +1306,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	}, craftPage) :: TextLabel
 	local forgeBoostButton = makeButton(craftPage, "Forge Boost", COLORS.buttonDim, 4, 26)
 	forgeBoostButton.TextSize = 13
+	forgeBoostButton.Visible = LaunchGate.on("paid")
 	forgeBoostButton.MouseButton1Click:Connect(callbacks.onBuyForge)
 	local forgeTabs = new("Frame", {
 		BackgroundTransparency = 1,
@@ -1333,6 +1334,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local materialTabButton = makeButton(forgeTabs, "Materials", COLORS.buttonDim, 3, 26)
 	materialTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
 	materialTabButton.TextSize = 13
+	materialTabButton.Visible = LaunchGate.on("forgeCraft")
 	local craftList = new("Frame", {
 		Name = "Recipes",
 		BackgroundTransparency = 1,
@@ -1855,6 +1857,12 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local function paintForgeTabs()
+		if not LaunchGate.on("forgeCraft") and (forgeTab == "craft" or forgeTab == "materials") then
+			forgeTab = "upgrade"
+		end
+		if not LaunchGate.on("forgeSalvage") and forgeTab == "salvage" then
+			forgeTab = "upgrade"
+		end
 		local function paint(button: TextButton, on: boolean)
 			button.BackgroundColor3 = if on then COLORS.gold else COLORS.buttonDim
 			button.TextColor3 = if on then COLORS.ink else COLORS.text
@@ -1893,7 +1901,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			xpFill.Size = UDim2.fromScale(ratio, 1)
 		end
 		local untilTime = if type(profile) == "table" then profile.forgeBoostUntil else 0
-		forgeNote.Text = Currencies.forgeBoostPitch(untilTime, os.time())
+		forgeBoostButton.Visible = LaunchGate.on("paid")
+		forgeNote.Text = if LaunchGate.on("paid")
+			then Currencies.forgeBoostPitch(untilTime, os.time())
+			else ""
 		paintForgeTabs()
 		if forgeTab == "upgrade" then
 			paintUpgradeRows(profile, craftList, callbacks.onUpgrade)

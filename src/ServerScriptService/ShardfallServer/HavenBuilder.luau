@@ -904,7 +904,7 @@ local function buildForge(parent: Instance)
 	light.Range = 10
 	light.Brightness = 0.4
 	light.Parent = forge
-	promptOn(forge, "Forge", "Craft, upgrade, reroll", "craft", nil)
+	promptOn(forge, "Forge", "Upgrade gear", "craft", nil)
 	labelBehind(model, place.x, place.z, place.radius * 0.62, "Forge")
 end
 
