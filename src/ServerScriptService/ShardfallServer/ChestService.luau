@@ -13,6 +13,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
 local DataService = require(script.Parent.DataService)
 local PolicyCache = require(script.Parent.PolicyCache)
@@ -187,6 +188,9 @@ function ChestService.claimLogin(player: Player)
 end
 
 function ChestService.buyDust(player: Player, templateId: any)
+	if not LaunchGate.on("extraCurrencies") then
+		return reject("That is closed.")
+	end
 	if type(templateId) ~= "string" then
 		return reject("Unknown shard.")
 	end
@@ -209,6 +213,9 @@ function ChestService.buyDust(player: Player, templateId: any)
 end
 
 function ChestService.buyBundle(player: Player)
+	if not LaunchGate.on("chests") then
+		return reject("That is closed.")
+	end
 	if not ChestConfig.PAID_CHESTS_ENABLED then
 		return reject(ChestConfig.PAID_OFF_MESSAGE)
 	end
@@ -228,6 +235,9 @@ function ChestService.buyBundle(player: Player)
 end
 
 function ChestService.setOptions(player: Player, mode: any, salvage: any)
+	if not LaunchGate.on("chests") then
+		return reject("That is closed.")
+	end
 	if mode ~= "dust" and mode ~= "star" then
 		return reject("Duplicates become dust or a star.")
 	end

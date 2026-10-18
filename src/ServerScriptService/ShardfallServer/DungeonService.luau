@@ -27,6 +27,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local cueModule = ReplicatedStorage.Shared
 local CodexCues = require(cueModule.CodexCues)
@@ -2586,6 +2587,9 @@ function DungeonService.leave(player: Player)
 end
 
 function DungeonService.startDailyBoss(player: Player)
+	if not LaunchGate.on("pass") then
+		return { ok = false, error = "That is closed." }
+	end
 	local profile = DataService.get(player)
 	if profile == nil then
 		return reject("Profile is still loading.")

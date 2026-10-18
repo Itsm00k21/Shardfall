@@ -10,6 +10,7 @@
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Pets = require(ReplicatedStorage.Shared.Pets)
 local DataService = require(script.Parent.DataService)
 local LoopService = require(script.Parent.LoopService)
@@ -83,6 +84,9 @@ function PetService.care(player: Player, uid: any, kind: any)
 end
 
 function PetService.fuse(player: Player, keepUid: any, feedUid: any)
+	if not LaunchGate.on("petEvolution") then
+		return reject("That is closed.")
+	end
 	if type(keepUid) ~= "string" or type(feedUid) ~= "string" or keepUid == feedUid then
 		return reject("Pick two different companions.")
 	end
