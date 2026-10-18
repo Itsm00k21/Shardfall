@@ -31,9 +31,16 @@ local function move(data, eventId: string)
 	data.onboardStep = following
 end
 
+local function grantKit(data)
+	if data.onboardDone == true then
+		FirstSessionKit.grant(data)
+	end
+end
+
 function OnboardingService.note(player: Player, eventId: string)
 	DataService.mutate(player, function(data)
 		move(data, eventId)
+		grantKit(data)
 		return nil
 	end)
 end
@@ -52,6 +59,7 @@ function OnboardingService.advance(player: Player)
 		else
 			move(data, data.onboardStep)
 		end
+		grantKit(data)
 		return nil
 	end)
 	if not saved then

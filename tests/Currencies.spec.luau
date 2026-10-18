@@ -50,4 +50,17 @@ describe("Currencies", function()
 		expect(string.find(pack, "100", 1, true) ~= nil).toBeTrue()
 		expect(string.find(pack, "10", 1, true) ~= nil).toBeTrue()
 	end)
+
+	it("tells a single crack why it cannot pay", function()
+		local reason = "You need a Shard Token to crack a shard."
+		expect(Currencies.crackBlock(0, 0)).toEqual(reason)
+		expect(Currencies.crackBlock(0 / 0, nil)).toEqual(reason)
+		expect(Currencies.crackBlock(math.huge, 0)).toEqual(reason)
+		expect(Currencies.crackBlock(1, 0)).toBeNil()
+		expect(Currencies.crackBlock(0, 1)).toBeNil()
+		expect(Currencies.crackBlock(0, 0, { paid = true })).toEqual(reason)
+		local wallet = { shardTokens = 0, prismTokens = 0 }
+		local _, taken = Currencies.take(wallet, Currencies.SHARD)
+		expect(taken).toEqual(reason)
+	end)
 end)

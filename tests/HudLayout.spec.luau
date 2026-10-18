@@ -83,6 +83,30 @@ describe("Hud layout", function()
 		end
 	end)
 
+	it("keeps the rail off the portrait at height 380 and 390", function()
+		local margin = 16
+		local face = HudLayout.portrait(margin)
+		for _, height in ipairs({ 380, 390 }) do
+			local rail = HudLayout.railFit(height, margin, HudLayout.RAIL_COUNT, 64, 44)
+			expect(rail.button >= 44).toBeTrue()
+			expect(HudLayout.overlaps({
+				x = rail.x,
+				y = rail.y,
+				w = rail.w,
+				h = rail.h,
+			}, face)).toEqual(false)
+			expect(rail.y + rail.h <= height).toBeTrue()
+		end
+		local tall = HudLayout.railFit(720, margin, HudLayout.RAIL_COUNT, 64, 44)
+		expect(tall.x).toEqual(margin)
+		expect(HudLayout.overlaps({
+			x = tall.x,
+			y = tall.y,
+			w = tall.w,
+			h = tall.h,
+		}, face)).toEqual(false)
+	end)
+
 	it("keeps the stamp off the rail at 1280x720 and 844x390", function()
 		expect(HudLayout.breakpoint(844, 390)).toEqual("phone")
 		expect(HudLayout.breakpoint(1024, 768)).toEqual("tablet")

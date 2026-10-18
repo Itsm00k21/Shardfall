@@ -330,7 +330,19 @@ function HudLayout.railFit(
 	if y + height > viewportY - margin then
 		y = math.max(0, viewportY - margin - height)
 	end
-	return { x = margin, y = y, w = button, h = height, button = button }
+	local x = margin
+	local face = HudLayout.portrait(margin)
+	local railRect = { x = x, y = y, w = button, h = height }
+	if HudLayout.overlaps(railRect, face) then
+		local below = face.y + face.h + gap
+		local room = viewportY - margin - below
+		if height <= room then
+			y = below
+		else
+			x = face.x + face.w + gap
+		end
+	end
+	return { x = x, y = y, w = button, h = height, button = button }
 end
 
 -- Bottom-left of the safe area. Hidden on a phone unless debug is on.

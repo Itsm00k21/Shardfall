@@ -37,6 +37,7 @@ local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local CrackCard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackCard"))
 local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
+local Currencies = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Currencies"))
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
 local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
@@ -683,15 +684,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.setWorldInput(blocked: boolean)
-		if blocked == hubState.worldBlocked then
+		local changed = blocked ~= hubState.worldBlocked
+		if not changed and not (blocked and hubState.controlsHeld ~= true) then
 			return
 		end
 		hubState.worldBlocked = blocked
-		if blocked then
-			hubFn.bindSinkKeys()
-			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-		else
-			ContextActionService:UnbindAction("ShardfallMenuSink")
+		if changed then
+			if blocked then
+				hubFn.bindSinkKeys()
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			else
+				ContextActionService:UnbindAction("ShardfallMenuSink")
+			end
 		end
 		local pad = hubFn.playerControls()
 		if type(pad) == "table" then
@@ -699,10 +703,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				pcall(function()
 					pad:Disable()
 				end)
-			elseif type(pad.Enable) == "function" then
+				hubState.controlsHeld = true
+			elseif not blocked and type(pad.Enable) == "function" then
 				pcall(function()
 					pad:Enable()
 				end)
+				hubState.controlsHeld = false
 			end
 		end
 	end
@@ -3886,6 +3892,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return 0
 	end
 
+	function hubFn.crackBlock(): string?
+		local voucher = 0
+		local pool = Pools.get(hubFn.rollPoolId())
+		if type(pool) == "table" and type(hubState.profile) == "table" then
+			local area = (pool :: any).area
+			local vouchers = hubState.profile.vouchers
+			if type(area) == "string" and type(vouchers) == "table" and type(vouchers[area]) == "number" then
+				voucher = vouchers[area]
+			end
+		end
+		return Currencies.crackBlock(hubFn.tokenCount(), voucher)
+	end
+
 	function hubFn.hapticTick()
 		pcall(function()
 			local haptic = game:GetService("HapticService")
@@ -4214,6 +4233,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				else
 					hubFn.paintReelIdle(caption)
 				end
+				if caption ~= "Roll" and caption ~= "Miss" then
+					hubFn.showMilestone(caption)
+				end
 				hubFn.paintRoll()
 				return
 			end
@@ -4386,6 +4408,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.squash()
 		hubFn.hapticTick()
 		hubFn.cameraTick()
+		local why = hubFn.crackBlock()
+		if why ~= nil then
+			hubFn.hideCloseBeat()
+			hubFn.paintReelIdle(why)
+			hubFn.showMilestone(why)
+			return
+		end
 		local previous = hubState.loop.phase
 		hubState.loop = RollLoop.press(hubState.loop)
 		if previous ~= "revealing" then
@@ -4398,6 +4427,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 	hubState.rollButton.MouseLeave:Connect(function()
 		hubState.rollButton.BackgroundColor3 = rgb("button")
+	end)
+	hubState.rollButton.Activated:Connect(function()
+		hubFn.pressRoll()
 	end)
 	hubState.rollButton.InputBegan:Connect(function(input)
 		if hubFn.pointerDown(input) then
@@ -5064,6 +5096,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
+		if hubState.capturing ~= nil and input.KeyCode == Enum.KeyCode.Escape then
+			hubState.capturing = nil
+			hubState.bindNote = nil
+			hubFn.paint()
+			return
+		end
 		if hubState.capturing ~= nil and input.UserInputType == Enum.UserInputType.Keyboard then
 			local key = input.KeyCode.Name
 			if string.match(key, "^%a$") ~= nil or #key == 1 then
@@ -5122,6 +5160,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.ButtonB then
+			hubState.capturing = nil
+			hubState.bindNote = nil
 			if hubState.route.open then
 				hubFn.pop()
 			end

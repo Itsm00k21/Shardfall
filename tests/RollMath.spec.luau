@@ -338,6 +338,24 @@ describe("RollMath rolls", function()
 		expect(pity.rollsSinceLegendary).toEqual(0)
 	end)
 
+	it("treats a non-finite pity counter as zero and still forces the guarantee", function()
+		local pool = starter()
+		local pity = { rollsSinceLegendary = 0 / 0, totalRolls = 0 / 0 }
+		local missed = RollMath.roll(pool, pity, context("nan", 0), zeroRng())
+		expect(missed.pityTriggered).toBeFalse()
+		expect(pity.rollsSinceLegendary).toEqual(1)
+		expect(pity.totalRolls).toEqual(1)
+		pity.rollsSinceLegendary = math.huge
+		pity.totalRolls = -math.huge
+		RollMath.roll(pool, pity, context("inf", 0), zeroRng())
+		expect(pity.rollsSinceLegendary).toEqual(1)
+		expect(pity.totalRolls).toEqual(1)
+		pity.rollsSinceLegendary = pool.pityLegendaryAt - 1
+		local forced = RollMath.roll(pool, pity, context("due", 0), zeroRng())
+		expect(forced.pityTriggered).toBeTrue()
+		expect(Rarities.isLegendaryOrBetter(forced.item.rarity)).toBeTrue()
+	end)
+
 	it("does not let one pool's pity advance another pool", function()
 		local left = { rollsSinceLegendary = 0, totalRolls = 0 }
 		local right = { rollsSinceLegendary = 4, totalRolls = 4 }
