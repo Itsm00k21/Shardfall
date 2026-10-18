@@ -50,6 +50,7 @@ export type Callbacks = {
 	onSkill: () -> (),
 	onToast: (string) -> (),
 	onResult: (any) -> (),
+	onRoll: (() -> ())?,
 	mobile: () -> boolean,
 }
 
@@ -96,6 +97,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	root.AnchorPoint = Vector2.new(0, 0)
 	root.Parent = screen
 
+	local contrast = ActionSlots.face()
+	local function applyFace(gui: GuiObject, stroke: UIStroke)
+		gui.BackgroundColor3 = Color3.fromRGB(contrast.fill[1], contrast.fill[2], contrast.fill[3])
+		stroke.Color = Color3.fromRGB(contrast.stroke[1], contrast.stroke[2], contrast.stroke[3])
+		stroke.Thickness = contrast.thickness
+	end
+
 	local lock = Instance.new("TextButton")
 	lock.Name = "Lock"
 	lock.Size = UDim2.fromOffset(72, 28)
@@ -116,6 +124,32 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	lockStroke.Thickness = UiTheme.STROKE
 	lockStroke.Color = theme("accent")
 	lockStroke.Parent = lock
+	applyFace(lock, lockStroke)
+
+	local rollKey = Instance.new("TextButton")
+	rollKey.Name = "RollKey"
+	rollKey.Size = UDim2.fromOffset(64, 28)
+	rollKey.Position = UDim2.fromOffset(72, 0)
+	rollKey.BackgroundTransparency = 0
+	rollKey.BorderSizePixel = 0
+	rollKey.Font = Enum.Font.BuilderSansBold
+	rollKey.TextSize = UiTheme.MIN_TEXT
+	rollKey.TextColor3 = theme("text")
+	rollKey.Text = "T"
+	rollKey.AutoButtonColor = false
+	rollKey.Parent = root
+	local rollCorner = Instance.new("UICorner")
+	rollCorner.CornerRadius = UDim.new(0, 8)
+	rollCorner.Parent = rollKey
+	local rollStroke = Instance.new("UIStroke")
+	rollStroke.Parent = rollKey
+	applyFace(rollKey, rollStroke)
+	rollKey.Activated:Connect(function()
+		local open = callbacks.onRoll
+		if open ~= nil then
+			open()
+		end
+	end)
 
 	local grid = Instance.new("Frame")
 	grid.Name = "Slots"
@@ -132,7 +166,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	for index = 1, ActionSlots.COUNT do
 		local button = Instance.new("TextButton")
 		button.Name = "Slot" .. tostring(index)
-		button.BackgroundColor3 = theme("body")
+		button.BackgroundColor3 = Color3.fromRGB(contrast.fill[1], contrast.fill[2], contrast.fill[3])
 		button.BackgroundTransparency = 0
 		button.BorderSizePixel = 0
 		button.Text = ""
@@ -145,8 +179,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		corner.Parent = button
 		local stroke = Instance.new("UIStroke")
 		stroke.Name = "Border"
-		stroke.Thickness = UiTheme.STROKE_BOLD
-		stroke.Color = theme("accent")
+		stroke.Thickness = contrast.thickness
+		stroke.Color = Color3.fromRGB(contrast.stroke[1], contrast.stroke[2], contrast.stroke[3])
 		stroke.Parent = button
 		local skillGlow = Instance.new("UIStroke")
 		skillGlow.Name = "SkillGlow"
@@ -615,6 +649,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local size = screen.AbsoluteSize
 		local mobile = callbacks.mobile() or size.X < 700
 		local spot = ActionSlots.placement(size.X, size.Y, mobile)
+		local chrome = ActionSlots.chrome(spot)
+		lock.Position = UDim2.fromOffset(chrome.lock.x, chrome.lock.y)
+		lock.Size = UDim2.fromOffset(chrome.lock.w, chrome.lock.h)
+		rollKey.Position = UDim2.fromOffset(chrome.roll.x, chrome.roll.y)
+		rollKey.Size = UDim2.fromOffset(chrome.roll.w, chrome.roll.h)
 		root.Position = UDim2.fromOffset(spot.x, spot.y)
 		root.Size = UDim2.fromOffset(spot.w, spot.h)
 		grid.Size = UDim2.fromOffset(spot.w, spot.h - 36)

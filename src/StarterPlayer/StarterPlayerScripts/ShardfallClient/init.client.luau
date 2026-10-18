@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build ac9ed13+ client` in Output.
+	still leaves `[Shardfall] build 5c1277e+ client` in Output.
 ]]
 
-print("[Shardfall] build ac9ed13+ client")
+print("[Shardfall] build 5c1277e+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1280,6 +1280,9 @@ actionBar = ActionBar.start(playerGui, {
 	end,
 	onResult = function(result: any)
 		applyResult(result)
+	end,
+	onRoll = function()
+		openHub("roll")
 	end,
 	mobile = deviceIsTouch,
 })
