@@ -64,6 +64,20 @@ function Currencies.take(wallet: Wallet, currency: string): (boolean, string?)
 	return false, "Unknown token."
 end
 
+-- A single crack with no token and no voucher. The words match take().
+-- A voucher of at least 1 still cracks. A bad token count is 0.
+-- paid does not change the reason.
+function Currencies.crackBlock(tokens: any, voucher: any, _extra: any?): string?
+	if type(voucher) == "number" and voucher == voucher and voucher >= 1 and voucher < math.huge then
+		return nil
+	end
+	local held = tokens
+	if type(held) ~= "number" or held ~= held or held == math.huge or held == -math.huge or held < 1 then
+		return "You need a Shard Token to crack a shard."
+	end
+	return nil
+end
+
 function Currencies.packPitch(): string
 	return string.format(
 		"%d Robux for %d Prism Tokens. Placeholder price. Not for sale yet.",

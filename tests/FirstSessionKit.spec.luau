@@ -184,6 +184,7 @@ describe("FirstSessionKit", function()
 				fs.readFile("src/ServerScriptService/ShardfallServer/OnboardingService.luau")
 			expect(string.find(skip, "Onboarding.starter(data)", 1, true) ~= nil).toBeTrue()
 			expect(string.find(skip, "FirstSessionKit.grant(data)", 1, true) ~= nil).toBeTrue()
+			expect(string.find(skip, "grantKit(data)", 1, true) ~= nil).toBeTrue()
 			expect(string.find(skip, "classId", 1, true)).toBeNil()
 		end
 	)

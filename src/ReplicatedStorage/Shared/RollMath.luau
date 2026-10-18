@@ -354,11 +354,15 @@ function RollMath.odds(pool: Pool, luckPoints: number, query: any): OddsTable
 	}
 end
 
+local function finiteCount(value: any): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge and value >= 0
+end
+
 local function normalizePity(pity: PityState)
-	if type(pity.rollsSinceLegendary) ~= "number" or pity.rollsSinceLegendary < 0 then
+	if not finiteCount(pity.rollsSinceLegendary) then
 		pity.rollsSinceLegendary = 0
 	end
-	if type(pity.totalRolls) ~= "number" or pity.totalRolls < 0 then
+	if not finiteCount(pity.totalRolls) then
 		pity.totalRolls = 0
 	end
 end

@@ -426,6 +426,7 @@ local function tween()
 		Play = function() end,
 		Cancel = function() end,
 		Pause = function() end,
+		Completed = makeSignal(),
 	}
 end
 

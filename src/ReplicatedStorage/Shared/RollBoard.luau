@@ -143,7 +143,7 @@ function RollBoard.shouldRollAgain(
 	end
 	local stopRank = Rarities.INDEX[stopAt]
 	if type(stopRank) ~= "number" then
-		return true
+		return false
 	end
 	local got = Rarities.INDEX[lastRarity]
 	if type(got) ~= "number" then
