@@ -20,11 +20,19 @@ Controller nav. Board row T-188. Brief `docs/hooks/T-188.md`. Branch `helper/con
 
 While MenuHub is open, D-pad and the left stick (`Thumbstick1`, one step per deadzone exit) move a `UIStroke` named `PadRing` (4px, RGB 244,240,252, inset). Up and down follow focus order. Left and right jump to the nearest control. The list is `UiRouter.cycle()` plus Close plus the visible buttons on the open page, and it skips `Visible = false` (raids, market, and pass). Opening focuses the opened tab (`sets` uses the bag tab) and shows the ring there. Mouse, touch, and keyboard hide it. The next gamepad step shows it again. ButtonA runs the handler that button already connected, through a registry MenuHub owns. The focused Roll button goes through the #225 `InputBegan` path (`rollFromPointer`), not a direct `pressRoll()` from the pad. `Activated:Fire` is not used. ButtonA is not in the menu sink, so jump still works in the world. ButtonB keeps the #221 capture path already in `InputBegan`. A focused row inside a ScrollingFrame is scrolled into view. `PadNav` in Shared owns the next index, the deadzone, and which D-pad keys count. `PadFocus` is the client module that calls it. Schema stays 26. No new remote. The action bar is unchanged: closed-hub D-pad slots, ButtonY dodge, ButtonR1 light, and ButtonX heavy stay on the base binds. The one-tap crack guard stays (both `rollButton.Activated` and `InputBegan` still call `pressRoll`, and a pointer press does not crack a second time). The click harness covers the ring, ButtonA on Roll cracking once, ButtonB, scroll, and those closed-hub actions.
 
-Follow-up approved in issue #15 comment 6245616667. Ghost is listing it. No new id. Default yes on both: clear `hubState.restColor` keys in `hubFn.clear`, and unparent `PadRing` before `Destroy` when its row is in the cleared subtree.
+Follow-up is E-004 (issue #15 comments 6245616667 and 6245850348).
 
 ## E-003 — done
 
 Update the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-script-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/237. 10 steps max. Each step says what you should see. Feel and looks only. Checked against `3b65804`. T-222, T-223, T-224, T-226, and T-227 are finished behavior. A new profile shows 10 shards. The settings rail caption reads Gear. The Gold shop lists a Healing Tonic and a bag slot. A pet slot is not for sale.
+
+## E-004 — in progress
+
+Clear stale `restColor` keys and unparent `PadRing` when MenuHub rebuilds a page. Branch `helper/restcolor-padring-9721`. PR link lands here once the pull request is open.
+
+`hubFn.clear` drops `hubState.restColor` keys for the destroyed row and its descendants. It unparents `PadRing` before `Destroy` when that row is in the cleared subtree, so the same stroke can show again on the next gamepad step. Tabs and Close keep their rest colors. Schema stays 26. No new remote. Kill switches stay off.
+
+Approved in issue #15 comment 6245616667. Listed in comment 6245850348.
 
 ## Next
 
