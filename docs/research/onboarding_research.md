@@ -29,7 +29,7 @@ The doc's clock is the draft dated Oct 16 2026. The live list is six lines. Ther
 | 0:50–1:40 | Three saplings, skill 1, a red dodge, a level-up, skill 2 | `swing` and `dodge` only (`Onboarding.luau:20-21`) | No skill step and no level-up step |
 | 1:40–2:20 | Carry a shard to a shrine. Rare or better. Socket it. The swing changes | No step id. The floor lives on `FirstSession.CONFIG.rollFloor` (`FirstSession.luau:42`) | The teach is a reward rule, not a step |
 | 2:20–3:40 | Two rooms, a door choice, a mini-boss | `door`: "Two doors. Look, then choose." (`Onboarding.luau:22`) | No mini-boss step. The armor reward is `FirstSession` step `miniboss` |
-| 3:40–4:20 | A Rare chest, then a pet egg that hatches | No chest step. The weapon and the egg are `FirstSession` steps `chest` and the egg floor (`FirstSession.luau:43-45`) | Same split |
+| 3:40–4:20 | A Rare chest, then a pet egg that hatches | No chest step. Step id `chest` is `FirstSession.luau:30`. The weapon rarity and the egg floor are `FirstSession.CONFIG` (`FirstSession.luau:43-45`) | Same split |
 | 4:20–5:00 | Plaza flyover, daily chest, goal "Clear Rootvault (Normal)", a Legendary passerby | `haven`: "Haven. The Forge remembers what you carry." (`Onboarding.luau:23`) | No flyover, no daily chest, and no passerby in this module |
 | After 5:00 | Five goals, three at a time, each pays Shard Keys | `StarterGoals.GOALS` is those five lines. `visible` is 3. Pay is 10 `shardKeys` (`StarterGoals.luau:43-62`) | The parenthetical "unlock talent" is not on the level row. The row says "Reach Lv 5" |
 

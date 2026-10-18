@@ -94,7 +94,7 @@ Function remotes go through `guard`: player check, rate bucket, `xpcall`, then `
 
 | id | risk | where | rating | test |
 |---|---|---|---|---|
-| R1 | A handler error returns a traceback to the client, cut at 300 characters | `Remotes.luau:97-99`, `Remotes.luau:127-131` | medium | Force a throw inside `GetProfile`'s callback. The client `error` string has no file path and no `traceback` |
+| R1 | A handler error's first line reaches the client, cut at 300 characters. The stack stays on the server warn | `Remotes.luau:89-99`, `Remotes.luau:127-131` | low | Force a throw inside `GetProfile`'s callback. The client `error` is one line, at most 300 characters, and has no stack frames. The server warn has the traceback |
 | R2 | Dodge spends a token and then calls the service with no `xpcall`. Attack wraps the call. Steer does not | `Remotes.luau:673-684`, `Remotes.luau:525-534` | medium | A throw inside `CombatService.dodge` does not surface a raw error to the client. The next dodge still works. The bucket still spent one token |
 | R3 | `UpgradeGear` does not use `validUid`. A huge string reaches the service | `Remotes.luau:640-643` | medium | uid `""`, uid longer than 64, and uid with a slash each return the same "do not have that item" style refusal and do not write the profile |
 | R4 | `Onboard` treats every value except the string `"skip"` as advance | `Remotes.luau:646-651` | low | `nil`, `1`, and `"advance"` on step `swing` return "Try it in the world first." and do not set `onboardDone`. `"skip"` pays the skip path once |
