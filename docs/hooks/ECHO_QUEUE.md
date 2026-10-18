@@ -52,7 +52,7 @@ Assigned in issue #15 comment 6246173340. Cleared to start in PR #255 comment 62
 
 ## E-007 — in progress
 
-Docs and tests only. Branch `helper/controller-playtest-9721`.
+Docs and tests only. Branch `helper/controller-playtest-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/269 into `cursor/live-build-9721`.
 
 One controller step in the existing `docs/design/playtest_script.md`. Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Open the hub with a gamepad, reach Roll, Bag, and Pets on the rail, then close it. The step has a pass line. Feel and looks only. The other ten steps stay as they are. The click harness tried a gamepad ButtonA and a mouse click on the same rail button in the same frame. On current code that pair fires twice (`UiRouter.switch` once from `padPress`, and the HudShell rail callback once), and the mouse path toggles the hub shut. That case is not in the committed run. No `src/` edit. Schema stays 26. No new remote.
 
