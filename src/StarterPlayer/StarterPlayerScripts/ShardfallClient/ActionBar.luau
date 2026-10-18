@@ -12,9 +12,7 @@
 	gamepad was the last input.
 	On a gamepad the D-pad uses slots 1-4, and holding LB uses slots 5-8.
 	The corner shows that glyph while a gamepad was the last input, and
-	the key number otherwise. Both paths call useSlot. While the hub is
-	open the D-pad passes through so the hub ring can move. ButtonY
-	stays dodge, ButtonR1 stays the light attack, and ButtonX stays heavy.
+	the key number otherwise. Both paths call useSlot.
 
 	The old cluster used the settings gear, the help-tab question mark, and
 	an empty icon, and it dropped the key when the engine had already

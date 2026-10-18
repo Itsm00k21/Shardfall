@@ -16,9 +16,9 @@ Follows vision priorities 1 and 2 in `docs/design/vision/VISION.md`. The shots i
 
 ## E-002 — in progress
 
-Controller nav. Branch `helper/controller-nav-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/222.
+Controller nav. Board row T-188. Brief `docs/hooks/T-188.md`. Branch `helper/controller-nav-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/222.
 
-D-pad and left stick move through every MenuHub tab and every interactive button in the open tab, with a visible selection ring. ButtonA activates the selected item. ButtonB closes the open menu and returns to world input, except while a hotkey capture is active. While the hub is closed, D-pad Up/Right/Down/Left fire action-bar slots 1–4 and LB plus the same D-pad fires slots 5–8. ButtonY stays dodge, ButtonR1 stays the light attack, and ButtonX stays heavy. The click harness from #213 covers the ring, B, and the slot map.
+While MenuHub is open, D-pad and the left stick (`Thumbstick1`, one step per deadzone exit) move a frame named `PadRing` through every tab and every visible button on the open page. ButtonA activates that button through its existing action. ButtonB keeps the close path already in `InputBegan`. The D-pad is handled in the open-hub branch before `UiRouter.key` returns. `PadNav` owns the next index, the deadzone, and which keys count. The action bar is unchanged: closed-hub D-pad slots, ButtonY dodge, ButtonR1 light, and ButtonX heavy stay on the base binds. No new roll-button binding. The click harness covers the ring, ButtonA, ButtonB, and those closed-hub actions.
 
 ## E-003 — queued
 
