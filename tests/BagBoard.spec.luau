@@ -101,4 +101,39 @@ describe("BagBoard", function()
 		expect(named("Armor")).toEqual({ "Woven Bark Vest" })
 		expect(named("Item")).toEqual({ "Healing Tonic" })
 	end)
+
+	it("puts one stat on each tooltip line and keeps the box on screen", function()
+		local worn = piece("Oak", "Common", "sword", 1, 0.1)
+		worn.stats = {
+			{ id = "damage", value = 10 },
+			{ id = "health", value = 20 },
+		}
+		local better = piece("Yew", "Rare", "sword", 2, 0.8)
+		better.stats = {
+			{ id = "damage", value = 14 },
+			{ id = "health", value = 18 },
+		}
+		local profile = {
+			inventory = { Oak = worn, Yew = better },
+			equipped = { weapon = "Oak" },
+		}
+		local tip = BagBoard.tip(profile, better)
+		expect(tip.name).toEqual("Yew")
+		expect(tip.rarity).toEqual("Rare")
+		expect(#tip.lines).toEqual(3)
+		expect(string.find(tip.lines[1], "Damage", 1, true) ~= nil).toBeTrue()
+		expect(string.find(tip.lines[1], "Health", 1, true)).toBeNil()
+		expect(string.find(tip.lines[1], "+", 1, true) ~= nil).toBeTrue()
+		expect(string.find(tip.lines[2], "HP", 1, true) ~= nil).toBeTrue()
+		expect(string.find(tip.lines[2], "-", 1, true) ~= nil).toBeTrue()
+		expect(string.find(tip.lines[3], "power", 1, true) ~= nil).toBeTrue()
+		local phone = BagBoard.tipPlace(300, 700, 80, 120, 390, 844, #tip.lines)
+		expect(phone.x >= 8).toBeTrue()
+		expect(phone.y >= 8).toBeTrue()
+		expect(phone.x + phone.w <= 382).toBeTrue()
+		expect(phone.y + phone.h <= 836).toBeTrue()
+		local desk = BagBoard.tipPlace(100, 40, 228, 228, 1280, 720, 3)
+		expect(desk.x >= 336).toBeTrue()
+		expect(desk.x + desk.w <= 1272).toBeTrue()
+	end)
 end)

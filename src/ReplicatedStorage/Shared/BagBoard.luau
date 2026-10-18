@@ -179,6 +179,116 @@ function BagBoard.summary(profile: any, item: any): string
 	return string.format("Vs %s  power %+d", tostring(other.name or "equipped"), delta)
 end
 
+export type Tip = {
+	name: string,
+	rarity: string,
+	lines: { string },
+}
+
+export type TipBox = {
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+}
+
+function BagBoard.tip(profile: any, item: any): Tip
+	local name = "Item"
+	local rarity = "Common"
+	if type(item) == "table" then
+		if type(item.name) == "string" and item.name ~= "" then
+			name = item.name
+		end
+		if type(item.rarity) == "string" and item.rarity ~= "" then
+			rarity = item.rarity
+		end
+	end
+	local lines = {}
+	local other = InventoryView.counterpart(profile, item)
+	if other ~= nil then
+		for _, row in ipairs(InventoryView.compare(item, other)) do
+			local text = row.name .. "  " .. row.yours
+			if row.delta ~= "" and row.delta ~= "0" then
+				text = text .. "  " .. row.delta
+			end
+			table.insert(lines, text)
+		end
+		local delta = InventoryView.powerOf(item) - InventoryView.powerOf(other)
+		table.insert(lines, string.format("Vs %s  power %+d", tostring(other.name or "equipped"), delta))
+	else
+		for _, line in ipairs(InventoryView.statLines(item)) do
+			table.insert(lines, line)
+		end
+		local worn = equippedUid(profile, item)
+		if type(item) == "table" and worn ~= nil and worn == item.uid then
+			table.insert(lines, "Equipped.")
+		elseif type(item) == "table" then
+			table.insert(lines, "Nothing equipped in this slot.")
+		end
+	end
+	return {
+		name = name,
+		rarity = rarity,
+		lines = lines,
+	}
+end
+
+-- A hover card beside the bag cell. It stays inside an 8px screen inset.
+function BagBoard.tipPlace(
+	cardX: number,
+	cardY: number,
+	cardW: number,
+	cardH: number,
+	screenW: number,
+	screenH: number,
+	lineCount: number
+): TipBox
+	local function finite(value: number, fallback: number): number
+		if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge then
+			return fallback
+		end
+		return value
+	end
+	local width = finite(screenW, 390)
+	local height = finite(screenH, 844)
+	local count = finite(lineCount, 1)
+	if count < 1 then
+		count = 1
+	end
+	local boxW = 220
+	local boxH = 28 + count * 18
+	local originX = finite(cardX, 8)
+	local originY = finite(cardY, 8)
+	local span = finite(cardW, 0)
+	local tall = finite(cardH, 0)
+	local x = originX + span + 8
+	local y = originY
+	if span + boxW + 16 > width then
+		x = 8
+		y = originY + tall + 8
+	elseif x + boxW > width - 8 then
+		x = originX - boxW - 8
+	end
+	if x < 8 then
+		x = 8
+	end
+	if x + boxW > width - 8 then
+		boxW = math.max(120, width - 16)
+		x = 8
+	end
+	if y + boxH > height - 8 then
+		y = height - 8 - boxH
+	end
+	if y < 8 then
+		y = 8
+	end
+	if y + boxH > height - 8 then
+		boxH = math.max(36, height - 16)
+		y = 8
+	end
+	return { x = x, y = y, w = boxW, h = boxH }
+end
+
 function BagBoard.confirm(rarity: string): string
 	return string.format(
 		"Salvage every %s weapon and armor piece that is not locked or equipped?",

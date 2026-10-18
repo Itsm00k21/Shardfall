@@ -2172,6 +2172,88 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.paintDetail(item)
 	end
 
+	function hubFn.paintCardTip(card: TextButton, item: any)
+		local tip = Instance.new("Frame")
+		tip.Name = "Tip"
+		tip.BackgroundColor3 = rgb("header")
+		tip.BorderSizePixel = 0
+		tip.Visible = false
+		tip.ZIndex = 30
+		tip.Parent = hubState.screen
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		corner.Parent = tip
+		local title = Instance.new("TextLabel")
+		title.Name = "Name"
+		title.BackgroundTransparency = 1
+		title.Position = UDim2.fromOffset(8, 6)
+		title.Size = UDim2.new(1, -16, 0, 18)
+		title.Font = headerFont()
+		title.TextSize = UiTheme.MIN_TEXT
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.TextTruncate = Enum.TextTruncate.AtEnd
+		title.ZIndex = 31
+		title.Parent = tip
+		local function fill()
+			local info = BagBoard.tip(hubState.profile, item)
+			local red, green, blue = UiTheme.rarityColor(info.rarity)
+			title.Text = info.name
+			title.TextColor3 = Color3.fromRGB(red, green, blue)
+			for _, child in ipairs(tip:GetChildren()) do
+				if child:IsA("TextLabel") and child.Name == "Line" then
+					child:Destroy()
+				end
+			end
+			for index, line in ipairs(info.lines) do
+				local row = Instance.new("TextLabel")
+				row.Name = "Line"
+				row.BackgroundTransparency = 1
+				row.Position = UDim2.fromOffset(8, 26 + (index - 1) * 18)
+				row.Size = UDim2.new(1, -16, 0, 18)
+				row.Font = bodyFont()
+				row.TextSize = UiTheme.MIN_TEXT
+				row.TextXAlignment = Enum.TextXAlignment.Left
+				row.TextTruncate = Enum.TextTruncate.AtEnd
+				row.TextColor3 = rgb("text")
+				row.Text = line
+				row.ZIndex = 31
+				row.Parent = tip
+			end
+			local screenPos = hubState.screen.AbsolutePosition
+			local screenSize = hubState.screen.AbsoluteSize
+			local cardPos = card.AbsolutePosition
+			local cardSize = card.AbsoluteSize
+			local box = BagBoard.tipPlace(
+				cardPos.X - screenPos.X,
+				cardPos.Y - screenPos.Y,
+				cardSize.X,
+				cardSize.Y,
+				screenSize.X,
+				screenSize.Y,
+				#info.lines
+			)
+			tip.Position = UDim2.fromOffset(box.x, box.y)
+			tip.Size = UDim2.fromOffset(box.w, box.h)
+		end
+		local function pinned(): boolean
+			return hubState.selectedUid ~= nil and hubState.selectedUid == item.uid
+		end
+		card.MouseEnter:Connect(function()
+			fill()
+			tip.Visible = true
+		end)
+		card.MouseLeave:Connect(function()
+			tip.Visible = pinned()
+			if tip.Visible then
+				fill()
+			end
+		end)
+		if pinned() then
+			fill()
+			tip.Visible = true
+		end
+	end
+
 	function hubFn.itemCard(
 		parent: Instance,
 		item: any,
@@ -2258,27 +2340,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			badgeCorner.CornerRadius = UDim.new(0, 6)
 			badgeCorner.Parent = badge
 		end
-		local tip = Instance.new("TextLabel")
-		tip.Name = "Tip"
-		tip.BackgroundColor3 = rgb("header")
-		tip.BackgroundTransparency = 0.05
-		tip.Position = UDim2.fromOffset(parts.tip.x, parts.tip.y)
-		tip.Size = UDim2.fromOffset(parts.tip.w, parts.tip.h)
-		tip.Font = bodyFont()
-		tip.TextSize = UiTheme.MIN_TEXT
-		tip.TextWrapped = true
-		tip.TextXAlignment = Enum.TextXAlignment.Left
-		tip.TextColor3 = rgb("text")
-		tip.Text = BagBoard.summary(hubState.profile, item)
-		tip.Visible = hubState.selectedUid ~= nil and hubState.selectedUid == item.uid
-		tip.ZIndex = 7
-		tip.Parent = card
-		card.MouseEnter:Connect(function()
-			tip.Visible = true
-		end)
-		card.MouseLeave:Connect(function()
-			tip.Visible = hubState.selectedUid ~= nil and hubState.selectedUid == item.uid
-		end)
+		hubFn.paintCardTip(card, item)
 		card.InputBegan:Connect(function(input)
 			if
 				input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -2795,6 +2857,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.paintBag()
+		for _, child in ipairs(hubState.screen:GetChildren()) do
+			if child.Name == "Tip" then
+				child:Destroy()
+			end
+		end
 		hubFn.clear(hubState.bag)
 		local items = hubFn.bagItems()
 		local shown = BagBoard.rows(items, hubState.bagFilter, hubState.seen.bagAt)
