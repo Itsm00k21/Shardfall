@@ -19,6 +19,7 @@ describe("LaunchGate", function()
 			"relicSets",
 			"forgeReroll",
 			"forgeSalvage",
+			"forgeCraft",
 			"guilds",
 			"leaderboards",
 			"extraRealms",
