@@ -15,6 +15,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CombatAnims = require(Shared:WaitForChild("CombatAnims"))
 local CombatFeel = require(Shared:WaitForChild("CombatFeel"))
+local CombatMath = require(Shared:WaitForChild("CombatMath"))
 
 local CombatStage = {}
 
@@ -23,6 +24,10 @@ local intensity = 1
 local chain = 0
 local lastSwing = 0
 local swingStart = -1
+local inRun = false
+local swingCooldown = 1
+local nextSwing = 0
+local dodge = CombatFeel.blankDodge(0)
 local weapon: BasePart? = nil
 local grip: Motor6D? = nil
 local tracks: { [string]: AnimationTrack } = {}
@@ -156,6 +161,30 @@ local function mark(name: string, seconds: number)
 	end
 end
 
+function CombatStage.setInRun(on: boolean)
+	inRun = on == true
+end
+
+function CombatStage.setProfile(profile: any)
+	local offense = CombatMath.loadout(profile)
+	if type(offense) == "table" then
+		swingCooldown = CombatMath.cooldown(offense.attackSpeed)
+	end
+end
+
+function CombatStage.noteDodgeCharges(charges: number)
+	if type(charges) ~= "number" then
+		return
+	end
+	dodge.charges = math.max(0, math.floor(charges))
+	if dodge.charges < 1 then
+		local now = os.clock()
+		if dodge.nextAt <= now then
+			dodge.nextAt = now + CombatFeel.DODGE_RECHARGE
+		end
+	end
+end
+
 function CombatStage.setBudget(nextTier: string, nextIntensity: number)
 	tier = nextTier
 	if type(nextIntensity) == "number" then
@@ -169,12 +198,19 @@ function CombatStage.bind(character: Model)
 end
 
 function CombatStage.swing(charged: boolean?)
+	if not inRun then
+		return
+	end
+	local now = os.clock()
+	if now < nextSwing or CombatFeel.iframe(dodge, now) then
+		return
+	end
 	local player = Players.LocalPlayer
 	local character = if player ~= nil then player.Character else nil
 	if character == nil then
 		return
 	end
-	local now = os.clock()
+	nextSwing = now + swingCooldown
 	local heavy = charged == true
 	local step = CombatFeel.advanceCombo(chain, lastSwing, now, heavy)
 	chain = step.chain
@@ -191,6 +227,12 @@ function CombatStage.swing(charged: boolean?)
 end
 
 function CombatStage.dodge()
+	if not inRun then
+		return
+	end
+	if not CombatFeel.tryDodge(dodge, os.clock()) then
+		return
+	end
 	local player = Players.LocalPlayer
 	local character = if player ~= nil then player.Character else nil
 	if character ~= nil then

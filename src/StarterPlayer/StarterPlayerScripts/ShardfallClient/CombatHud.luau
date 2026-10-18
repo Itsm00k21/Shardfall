@@ -760,6 +760,11 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			if charges ~= nil and callbacks.onDodgeCharges ~= nil then
 				callbacks.onDodgeCharges(charges)
 			end
+			-- A failed dodge reports 0 charges and no position. The clip
+			-- belongs to a dodge that spent a charge.
+			if charges == 0 and numberFrom(payload, "x") == nil then
+				return
+			end
 			playCue(if payload.perfect == true then "perfect" else "dodge")
 			if payload.perfect == true then
 				local x = numberFrom(payload, "x") or 0
@@ -963,6 +968,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch
 		then
+			CombatStage.swing(false)
 			CombatHud.swing(false)
 		end
 	end)

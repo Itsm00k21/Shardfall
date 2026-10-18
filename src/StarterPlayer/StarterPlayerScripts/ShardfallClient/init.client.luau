@@ -432,6 +432,7 @@ local function applyProfile(profile: any, saving: any)
 	)
 	musicController.setUiVolume(uiVolume * master)
 	CombatHud.setFeel(tier, profile.shake ~= false)
+	CombatStage.setProfile(profile)
 	local vfx = 1
 	if type(settings) == "table" and type(settings.graphics) == "table" then
 		if type(settings.graphics.vfx) == "number" then
@@ -1413,11 +1414,13 @@ ClassHud.start(remotes :: Instance, function(action: string, ...: any)
 end)
 CombatHud.start(remotes :: Instance, {
 	onDodgeCharges = function(charges: number)
+		CombatStage.noteDodgeCharges(charges)
 		if actionBar ~= nil then
 			actionBar.setDodge(charges)
 		end
 	end,
 	onRun = function(run)
+		CombatStage.setInRun(type(run) == "table" and run.active == true)
 		ui.setRun(run)
 		musicController.syncRun(run)
 		DoorHud.setRun(run)
