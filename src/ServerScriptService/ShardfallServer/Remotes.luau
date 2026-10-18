@@ -36,7 +36,10 @@ local PolicyCache = require(script.Parent.PolicyCache)
 local RollService = require(script.Parent.RollService)
 local TradeService = require(script.Parent.TradeService)
 local TravelService = require(script.Parent.TravelService)
+local GoldShop = require(ReplicatedStorage.Shared.GoldShop)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Pools = require(ReplicatedStorage.Shared.Pools)
+local Recipes = require(ReplicatedStorage.Shared.Recipes)
 local Quality = require(ReplicatedStorage.Shared.Quality)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
 local Settings = require(ReplicatedStorage.Shared.Settings)
@@ -112,6 +115,24 @@ local function respond(player: Player, action: string, result: any)
 	return result
 end
 
+-- Remote action name to the launch switch that keeps it closed.
+local PARKED_ACTION: { [string]: string } = {
+	BulkSalvage = "forgeSalvage",
+	FusePet = "petEvolution",
+	Trade = "trading",
+	Market = "market",
+	ClaimPass = "pass",
+	PremiumPass = "pass",
+	RaidQueue = "raids",
+	RaidPost = "raids",
+	RaidJoin = "raids",
+	RaidPractice = "raids",
+	RaidBuy = "raids",
+	RaidLeave = "raids",
+	RaidReady = "raids",
+	BuyTravelPass = "extraRealms",
+}
+
 local function guard(player: Player, action: string, callback: () -> any)
 	-- typeof, not type. type(player) is "userdata", so a type() check
 	-- rejects every real caller before the handler runs.
@@ -123,6 +144,10 @@ local function guard(player: Player, action: string, callback: () -> any)
 	end
 	if not RateLimiter.take(player.UserId, action) then
 		return fail(action, "Slow down a moment.")
+	end
+	local parked = PARKED_ACTION[action]
+	if parked ~= nil and not LaunchGate.on(parked) then
+		return fail(action, "That is closed.")
 	end
 	local ok, result = xpcall(callback, function(err)
 		return debug.traceback(tostring(err), 2)
@@ -318,6 +343,12 @@ function Remotes.bind()
 			if targetUid ~= nil and not validUid(targetUid) then
 				return { ok = false, error = "You do not have that item." }
 			end
+			if type(recipeId) == "string" and not LaunchGate.on("forgeReroll") then
+				local recipe = Recipes.get(recipeId)
+				if recipe ~= nil and recipe.result.kind == "reroll" then
+					return { ok = false, error = "That is closed." }
+				end
+			end
 			return CraftService.craft(player, recipeId, targetUid)
 		end)
 	end
@@ -334,6 +365,24 @@ function Remotes.bind()
 	functionRemote("BuyForgeBoost").OnServerInvoke = function(player)
 		return guard(player, "BuyForgeBoost", function()
 			return RollService.buyForgeBoost(player)
+		end)
+	end
+
+	functionRemote("BuyGoldShop").OnServerInvoke = function(player, offerId)
+		return guard(player, "BuyGoldShop", function()
+			local reason: string? = nil
+			local saved, err = DataService.mutate(player, function(data)
+				reason = GoldShop.apply(data, offerId)
+				return reason
+			end)
+			if not saved then
+				local message = if type(reason) == "string" then reason else err
+				if type(message) ~= "string" or message == "" then
+					message = "Could not buy that."
+				end
+				return { ok = false, error = message }
+			end
+			return { ok = true }
 		end)
 	end
 

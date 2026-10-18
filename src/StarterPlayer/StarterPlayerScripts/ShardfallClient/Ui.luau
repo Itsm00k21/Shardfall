@@ -36,6 +36,7 @@ local CraftingLevel = require(Shared:WaitForChild("CraftingLevel"))
 local Currencies = require(Shared:WaitForChild("Currencies"))
 local Dungeons = require(Shared:WaitForChild("Dungeons"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
+local LaunchGate = require(Shared:WaitForChild("LaunchGate"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Pools = require(Shared:WaitForChild("Pools"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
@@ -1268,6 +1269,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local salvageTabButton = makeButton(forgeTabs, "Salvage", COLORS.buttonDim, 2, 26)
 	salvageTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
 	salvageTabButton.TextSize = 13
+	salvageTabButton.Visible = LaunchGate.on("forgeSalvage")
 	local materialTabButton = makeButton(forgeTabs, "Materials", COLORS.buttonDim, 3, 26)
 	materialTabButton.Size = UDim2.new(1 / 3, -4, 1, 0)
 	materialTabButton.TextSize = 13
@@ -1538,6 +1540,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			elseif nextPool == nil then
 				nextPool = pool
 			end
+		end
+		if not LaunchGate.on("extraRealms") and #unlocked > 1 then
+			unlocked = { unlocked[1] }
 		end
 		if #unlocked <= 1 then
 			local label = new("TextLabel", {
@@ -1842,6 +1847,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 
 		for index, recipe in ipairs(Recipes.all()) do
+			if
+				not LaunchGate.on("forgeReroll")
+				and type(recipe.result) == "table"
+				and recipe.result.kind == "reroll"
+			then
+				continue
+			end
 			local card = new("Frame", {
 				BackgroundColor3 = COLORS.panel,
 				BorderSizePixel = 0,

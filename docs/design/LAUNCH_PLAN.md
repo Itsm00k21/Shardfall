@@ -1,6 +1,6 @@
 # Shardfall Launch Plan
 
-Owner: Ghost (direction). Kevin playtests and makes the money and launch calls. Status: **draft, waiting for Kevin's approval. Build nothing from this until it's approved.**
+Owner: Ghost (direction). Kevin playtests and makes the money and launch calls. Status: **approved Oct 17, 2026.**
 
 ## Rule
 One milestone at a time. Each one ends with something Kevin can play. New ideas go to the Parking Lot, not into the current build.

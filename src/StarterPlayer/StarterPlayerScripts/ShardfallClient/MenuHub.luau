@@ -36,6 +36,8 @@ local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local CrackCard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackCard"))
 local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
 local Currencies = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Currencies"))
+local GoldShop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GoldShop"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
 local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
@@ -1447,6 +1449,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.raids = hubFn.scroll(hubFn.page("raids"))
 	hubState.market = hubFn.scroll(hubFn.page("market"))
 	hubState.pass = hubFn.scroll(hubFn.page("pass"))
+	hubState.shop = hubFn.scroll(hubFn.page("shop"))
 	hubState.settingsPage = hubFn.scroll(hubFn.page("settings"))
 
 	hubState.detail = Instance.new("Frame")
@@ -1532,6 +1535,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if id == "sets" then
 			label = "Bag  /  Sets"
+		end
+		if id == "shop" then
+			label = "Shop"
 		end
 		hubState.title.Text = label
 		hubFn.paintTabs(if id == "sets" then "bag" else id)
@@ -2544,6 +2550,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pillLayout.Padding = UDim.new(0, 6)
 		pillLayout.Parent = pills
 		for index, pill in ipairs(HubStyle.pills()) do
+			if pill.id == "Relics" and not LaunchGate.on("relicSets") then
+				continue
+			end
 			local button = Instance.new("TextButton")
 			button.Name = pill.id
 			button.Size = UDim2.fromOffset(HudLayout.chipWidth(pill.label), UiTheme.TOUCH)
@@ -2646,35 +2655,39 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		actionsPad.PaddingLeft = UDim.new(0, UiTheme.PAD)
 		actionsPad.PaddingRight = UDim.new(0, UiTheme.PAD)
 		actionsPad.Parent = actions
-		hubFn.row(actions, "Sets", 2, function()
-			hubFn.apply(UiRouter.push(hubState.route, "sets"))
-		end)
+		if LaunchGate.on("relicSets") then
+			hubFn.row(actions, "Sets", 2, function()
+				hubFn.apply(UiRouter.push(hubState.route, "sets"))
+			end)
+		end
 		hubFn.row(actions, "Open full bag", 3, function()
 			hooks.onBag()
 		end)
-		if hubState.salvageArmed then
-			hubFn.line(actions, BagBoard.confirm(hubState.salvageRarity), 4, rgb("loss"))
-			hubFn.row(actions, "Confirm salvage", 5, function()
-				local rarity = hubState.salvageRarity
-				hubState.salvageArmed = false
-				task.spawn(function()
-					pcall(hooks.invoke, "BulkSalvage", rarity)
+		if LaunchGate.on("forgeSalvage") then
+			if hubState.salvageArmed then
+				hubFn.line(actions, BagBoard.confirm(hubState.salvageRarity), 4, rgb("loss"))
+				hubFn.row(actions, "Confirm salvage", 5, function()
+					local rarity = hubState.salvageRarity
+					hubState.salvageArmed = false
+					task.spawn(function()
+						pcall(hooks.invoke, "BulkSalvage", rarity)
+					end)
+					refreshBag()
 				end)
-				refreshBag()
-			end)
-			hubFn.row(actions, "Cancel", 6, function()
-				hubState.salvageArmed = false
-				refreshBag()
-			end)
-			hubFn.row(actions, "Use  " .. hubFn.nextSalvage(hubState.salvageRarity), 7, function()
-				hubState.salvageRarity = hubFn.nextSalvage(hubState.salvageRarity)
-				refreshBag()
-			end)
-		else
-			hubFn.row(actions, "Salvage  " .. hubState.salvageRarity, 4, function()
-				hubState.salvageArmed = true
-				refreshBag()
-			end)
+				hubFn.row(actions, "Cancel", 6, function()
+					hubState.salvageArmed = false
+					refreshBag()
+				end)
+				hubFn.row(actions, "Use  " .. hubFn.nextSalvage(hubState.salvageRarity), 7, function()
+					hubState.salvageRarity = hubFn.nextSalvage(hubState.salvageRarity)
+					refreshBag()
+				end)
+			else
+				hubFn.row(actions, "Salvage  " .. hubState.salvageRarity, 4, function()
+					hubState.salvageArmed = true
+					refreshBag()
+				end)
+			end
 		end
 		if #shown == 0 then
 			hubFn.emptyState(hubState.bag, "bag", "The bag is empty.", "Open full bag", function()
@@ -2778,7 +2791,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		capacity.TextColor3 = rgb("text")
 		capacity.Text = HubStyle.capacityLine(hubState.profile)
 		capacity.Parent = foot
-		hubFn.line(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, rgb("muted"))
+		if LaunchGate.on("relicSets") then
+			hubFn.line(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, rgb("muted"))
+		end
 		if hubState.detailOpen and hubState.selectedUid ~= nil then
 			local item = hubFn.findItem(hubState.selectedUid)
 			if item ~= nil then
@@ -2794,7 +2809,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.paintPets()
 		hubFn.clear(hubState.pets)
-		local slots = { nil, nil, nil }
+		local petCap = GoldShop.petCap(hubState.profile)
+		local slots = {}
+		for slotIndex = 1, petCap do
+			slots[slotIndex] = nil
+		end
 		local filled = 0
 		if
 			type(hubState.profile) == "table"
@@ -2810,14 +2829,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local following = hubFn.companions()
 		for index, companion in ipairs(following) do
-			if index > 2 then
+			if index > petCap - 1 then
 				break
 			end
 			slots[index + 1] = companion
 			filled += 1
 		end
-		hubFn.line(hubState.pets, string.format("Equipped  %d/3", filled), 1, rgb("gold"))
-		for index = 1, 3 do
+		hubFn.line(hubState.pets, string.format("Equipped  %d/%d", filled, petCap), 1, rgb("gold"))
+		for index = 1, petCap do
 			local slot = slots[index]
 			local slotName = if type(slot) == "table" then tostring(slot.name or "Pet") else "Empty"
 			hubFn.line(hubState.pets, string.format("Slot %d  %s", index, slotName), index + 1, rgb("text"))
@@ -4545,12 +4564,36 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
+	function hubFn.paintShop()
+		hubFn.clear(hubState.shop)
+		hubFn.line(hubState.shop, "Gold shop. Gold only.", 1, rgb("gold"))
+		local purse = 0
+		if type(hubState.profile) == "table" and type(hubState.profile.gold) == "number" then
+			purse = hubState.profile.gold
+		end
+		hubFn.line(hubState.shop, string.format("Gold  %d", purse), 2, rgb("text"))
+		for index, offer in ipairs(GoldShop.offers()) do
+			local offerId = offer.id
+			hubFn.row(
+				hubState.shop,
+				string.format("%s  %d Gold", offer.label, offer.price),
+				index + 2,
+				function()
+					task.spawn(function()
+						pcall(hooks.invoke, "BuyGoldShop", offerId)
+					end)
+				end
+			)
+		end
+	end
+
 	function hubFn.paint()
 		hubFn.paintHints()
 		hubFn.paintHero()
 		hubFn.paintBag()
 		hubFn.paintPets()
 		hubFn.paintRoll()
+		hubFn.paintShop()
 		hubFn.clear(hubState.raids)
 		hubFn.clear(hubState.market)
 		hubFn.clear(hubState.pass)
@@ -4961,6 +5004,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		button.BackgroundColor3 = rgb("body")
 		button.Text = ""
 		button.AutoButtonColor = false
+		button.Visible = LaunchGate.tabOpen(tab.id)
 		button.Parent = hubState.tabs
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 8)
@@ -5012,6 +5056,66 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.tabCaptions[tab.id] = caption
 		hubState.tabDots[tab.id] = dot
 	end
+	local function mountShopTab()
+		local button = Instance.new("TextButton")
+		button.Name = "shop"
+		button.LayoutOrder = 50
+		button.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		button.BackgroundColor3 = rgb("body")
+		button.Text = ""
+		button.AutoButtonColor = false
+		button.Visible = true
+		button.Parent = hubState.tabs
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 8)
+		corner.Parent = button
+		local accent = Instance.new("Frame")
+		accent.Name = "Accent"
+		accent.Size = UDim2.new(0, UiTheme.ACCENT, 1, -12)
+		accent.Position = UDim2.fromOffset(0, 6)
+		accent.BackgroundColor3 = rgb("accent")
+		accent.BorderSizePixel = 0
+		accent.Visible = false
+		accent.ZIndex = 6
+		accent.Parent = button
+		hubFn.iconOn(button, "market", 10, 11, 22)
+		local caption = Instance.new("TextLabel")
+		caption.Name = "Caption"
+		caption.BackgroundTransparency = 1
+		caption.Position = UDim2.fromOffset(36, 0)
+		caption.Size = UDim2.new(1, -40, 1, 0)
+		caption.Font = headerFont()
+		caption.TextSize = UiTheme.MIN_TEXT
+		caption.TextXAlignment = Enum.TextXAlignment.Left
+		caption.TextColor3 = rgb("text")
+		caption.Text = "Shop"
+		caption.ZIndex = 6
+		caption.Parent = button
+		hubFn.setRest(button, rgb("body"))
+		hubFn.motion(button)
+		button.Activated:Connect(function()
+			hubFn.paint()
+			hubFn.follow(UiRouter.switch(hubState.route, "shop"))
+		end)
+		local dot = Instance.new("Frame")
+		dot.Name = "Dot"
+		dot.AnchorPoint = Vector2.new(1, 0)
+		dot.Position = UDim2.new(1, -8, 0, 8)
+		dot.Size = UDim2.fromOffset(10, 10)
+		dot.BackgroundColor3 = rgb("accent")
+		dot.BorderSizePixel = 0
+		dot.Visible = false
+		dot.ZIndex = 7
+		dot.Parent = button
+		local dotCorner = Instance.new("UICorner")
+		dotCorner.CornerRadius = UDim.new(1, 0)
+		dotCorner.Parent = dot
+		hubState.tabButtons.shop = button
+		hubState.tabAccents.shop = accent
+		hubState.tabCaptions.shop = caption
+		hubState.tabDots.shop = dot
+	end
+	mountShopTab()
 	hubFn.paintHints()
 
 	hubState.backdrop.Activated:Connect(hubFn.pop)

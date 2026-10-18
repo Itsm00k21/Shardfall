@@ -144,7 +144,7 @@ describe("BannerFit", function()
 	end)
 
 	it("clears the portrait, the HP bar, the rail, the chips, and the hub close", function()
-		expect(HudLayout.RAIL_COUNT).toEqual(7)
+		expect(HudLayout.RAIL_COUNT).toEqual(6)
 		local margin = UiTheme.safeMargin()
 		for _, view in ipairs(PHONES) do
 			local vx = view[1]
