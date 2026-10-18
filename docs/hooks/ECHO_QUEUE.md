@@ -36,7 +36,7 @@ Approved in issue #15 comment 6245616667. Listed in comment 6245850348.
 
 ## E-005 — in progress
 
-Refresh the existing `docs/design/playtest_script.md` for the behavior on `b4ef5a2` (PRs #242 through #250, plus instant Equip from #241, already on that tip). Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-refresh-9721`. PR link lands in this row when the pull request is open.
+Refresh the existing `docs/design/playtest_script.md` for the behavior on `b4ef5a2` (PRs #242 through #250, plus instant Equip from #241, already on that tip). Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-refresh-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/255 into `cursor/live-build-9721`.
 
 Ten phone steps, about 15 minutes. Each step has a pass line. Feel and looks only. A Heavy tap shows the swing at once and the hit lands after about a third of a second, in front of the character. The bag tip shows the name in the rarity color, one stat per line, and stays on screen. Equip reads Equipped at once. One rail, and the hub tab column stays hidden. Settings hides Trades, Raid invites, and the raids and market hotkeys. Salvage, the dust shop, and the daily boss stay hidden. The Forge sheet scrolls an upgrade row on 390×844 and 844×390. Docs only. Schema stays 26.
 
