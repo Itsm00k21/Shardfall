@@ -42,6 +42,12 @@ describe("HubStyle", function()
 		expect(HubStyle.inPill({ kind = "Weapon" }, "Weapons")).toBeTrue()
 		expect(HubStyle.inPill({ kind = "Weapon" }, "Pets")).toBeFalse()
 		expect(HubStyle.inPill({ kind = "Pet" }, "All")).toBeTrue()
+		local vest = { kind = "Armor", slot = "chest", weaponType = "sword", name = "Woven Bark Vest" }
+		expect(HubStyle.inPill(vest, "Weapons")).toBeFalse()
+		expect(HubStyle.inPill(vest, "Armor")).toBeTrue()
+		expect(HubStyle.inPill(vest, "Items")).toBeFalse()
+		expect(HubStyle.inPill({ kind = "Consumable", name = "Tonic" }, "Items")).toBeTrue()
+		expect(HubStyle.inPill({ kind = "Weapon", slot = "chest" }, "Armor")).toBeFalse()
 		local before = 150
 		local profile = { gold = before }
 		expect(HubStyle.upgradeLabel(0)).toEqual("UPGRADE  150")

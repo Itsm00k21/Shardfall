@@ -33,15 +33,13 @@ end
 
 function BagBoard.kindOf(item: any): string
 	if type(item) ~= "table" then
-		return "item"
+		return "Item"
 	end
-	if type(item.slot) == "string" and item.slot ~= "" then
-		return item.slot
+	local kind = item.kind
+	if kind == "Weapon" or kind == "Armor" or kind == "Pet" or kind == "Relic" or kind == "Accessory" then
+		return kind
 	end
-	if type(item.kind) == "string" and item.kind ~= "" then
-		return item.kind
-	end
-	return "item"
+	return "Item"
 end
 
 function BagBoard.isNew(item: any, seenAt: number): boolean
