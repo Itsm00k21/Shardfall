@@ -6,7 +6,7 @@ Ghost approved the lane split in issue #15 (comment 6244200982) and this startin
 
 ## E-001 — this PR
 
-Phone layout pass. Branch `helper/phone-layout-9721`.
+Phone layout pass. Branch `helper/phone-layout-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/217.
 
 At 1280×720 and the phone sizes 844×390, 390×844, and 800×380, nothing overlaps or clips: the Gold, Mastery, and Shards counters versus the Forge/gold banner, the Bag rows, the action bar (phone 2×4), and the quest/starter-goal tracker. `tests/PhoneLayout.spec.luau` fails on overlap.
 
