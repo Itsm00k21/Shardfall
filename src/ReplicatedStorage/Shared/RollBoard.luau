@@ -82,10 +82,15 @@ end
 -- it. Either way the multiplier is luckFromProfile, the same call the
 -- server draw, GetOdds, and the reel use. A stored boost and vip follow
 -- that path.
-function RollBoard.oddsLines(pool: any, luck: any, boost: any, _sinceLegendary: any): { string }
-	local lines = {}
+function RollBoard.oddsRows(
+	pool: any,
+	luck: any,
+	boost: any,
+	_sinceLegendary: any
+): { { rarity: string, chance: number, text: string } }
+	local rows = {}
 	if type(pool) ~= "table" then
-		return lines
+		return rows
 	end
 	local profile = if type(luck) == "table"
 		then luck
@@ -96,7 +101,7 @@ function RollBoard.oddsLines(pool: any, luck: any, boost: any, _sinceLegendary: 
 	local multiplier = RarityConfig.luckFromProfile(profile)
 	local ok, odds = pcall(RarityConfig.disclose, pool, multiplier)
 	if not ok or type(odds) ~= "table" or type(odds.rarities) ~= "table" then
-		return lines
+		return rows
 	end
 	for _, row in ipairs(odds.rarities) do
 		if
@@ -106,8 +111,20 @@ function RollBoard.oddsLines(pool: any, luck: any, boost: any, _sinceLegendary: 
 			and type(row.oneIn) == "number"
 			and row.chance > 0
 		then
-			table.insert(lines, RarityConfig.formatLine(row))
+			table.insert(rows, {
+				rarity = row.rarity,
+				chance = row.chance,
+				text = RarityConfig.formatLine(row),
+			})
 		end
+	end
+	return rows
+end
+
+function RollBoard.oddsLines(pool: any, luck: any, boost: any, sinceLegendary: any): { string }
+	local lines = {}
+	for _, row in ipairs(RollBoard.oddsRows(pool, luck, boost, sinceLegendary)) do
+		table.insert(lines, row.text)
 	end
 	return lines
 end

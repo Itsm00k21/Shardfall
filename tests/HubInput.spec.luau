@@ -7,6 +7,7 @@ local expect = framework.expect
 
 local ActionSlots = require("../src/ReplicatedStorage/Shared/ActionSlots")
 local HubPress = require("../src/ReplicatedStorage/Shared/HubPress")
+local HubStyle = require("../src/ReplicatedStorage/Shared/HubStyle")
 local Materials = require("../src/ReplicatedStorage/Shared/Materials")
 local RollBatch = require("../src/ReplicatedStorage/Shared/RollBatch")
 local Settings = require("../src/ReplicatedStorage/Shared/Settings")
@@ -321,5 +322,58 @@ describe("HubInput", function()
 			})
 			expect(lights).toEqual(lightBefore + 1)
 		end
+	end)
+
+	it("paints the roll, bag, and pets mockup structure", function()
+		local world, hub, calls = bootHub()
+		hub.open("roll")
+		local screen = screenOf(world)
+		expect(GuiFake.findNamed(screen, "Pedestal") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "OddsBars") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "CrackRow") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "ShardCount") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "EpicBar") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "LegendaryBar") ~= nil).toBeTrue()
+		expect(labelText(screen, "Roll")).toEqual(HubStyle.CRACK_ONE)
+		expect(labelText(screen, "TimesTen")).toEqual(HubStyle.CRACK_TEN)
+		expect(labelText(screen, "ShardCount")).toEqual(HubStyle.shardCount(0))
+		for _, button in ipairs(GuiFake.buttons(screen)) do
+			expect(string.find(tostring(button.Text), "x100", 1, true)).toBeNil()
+		end
+		local before = #rolled(calls)
+		GuiFake.activate(GuiFake.findNamed(screen, "Auto"))
+		expect(labelText(screen, "Auto")).toEqual("Auto On")
+		expect(#rolled(calls)).toEqual(before + 1)
+		hub.open("bag")
+		screen = screenOf(world)
+		expect(GuiFake.findNamed(screen, "Pills") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "Slot1") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "Slot8") ~= nil).toBeTrue()
+		GuiFake.activate(GuiFake.findNamed(screen, "Card"))
+		local upgrade = false
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and string.find(child.Text, "UPGRADE", 1, true) ~= nil then
+				upgrade = true
+			end
+		end
+		expect(upgrade).toBeTrue()
+		hub.open("pets")
+		screen = screenOf(world)
+		expect(GuiFake.findNamed(screen, "PetList") ~= nil).toBeTrue()
+		expect(GuiFake.findNamed(screen, "PetDetail") ~= nil).toBeTrue()
+		local crackPet = false
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and string.find(child.Text, HubStyle.CRACK_PET, 1, true) ~= nil then
+				crackPet = true
+			end
+		end
+		expect(crackPet).toBeTrue()
+		local crackRow = false
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and string.find(child.Text, "Crack a Pet Shard", 1, true) ~= nil then
+				crackRow = true
+			end
+		end
+		expect(crackRow).toBeTrue()
 	end)
 end)
