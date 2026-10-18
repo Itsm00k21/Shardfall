@@ -6,17 +6,19 @@ Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved 
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001, E-002, and E-003 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
-## E-001 — this PR
+## E-001 — done
 
-Phone layout pass. Branch `helper/phone-layout-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/217.
+Phone layout pass. Branch `helper/phone-layout-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/217. Merged at `aa6ebac`.
 
 At 1280×720 and the phone sizes 844×390, 390×844, and 800×380, nothing overlaps or clips: the Gold, Mastery, and Shards counters versus the Forge/gold banner, the Bag rows, the action bar (phone 2×4), and the quest/starter-goal tracker. `tests/PhoneLayout.spec.luau` fails on overlap.
 
 Follows vision priorities 1 and 2 in `docs/design/vision/VISION.md`. The shots in `docs/design/vision/refs/` are reference only. No copied art, names, or paid offers. No premium currency. Nothing costs Robux.
 
-## E-002 — queued
+## E-002 — in progress
 
-Controller nav. D-pad and stick move through every MenuHub tab and button with a visible selection ring. B closes. The action bar maps to controller buttons. Extend the click harness from #213. Hold this until #217 is merged.
+Controller nav. Board row T-188. Brief `docs/hooks/T-188.md`. Branch `helper/controller-nav-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/222.
+
+While MenuHub is open, D-pad and the left stick (`Thumbstick1`, one step per deadzone exit) move a `UIStroke` named `PadRing` (4px, RGB 244,240,252, inset). Up and down follow focus order. Left and right jump to the nearest control. The list is `UiRouter.cycle()` plus Close plus the visible buttons on the open page, and it skips `Visible = false` (raids, market, and pass). Opening focuses the opened tab (`sets` uses the bag tab) and shows the ring there. Mouse, touch, and keyboard hide it. The next gamepad step shows it again. ButtonA runs the handler that button already connected, through a registry MenuHub owns. The focused Roll button goes through the #225 `InputBegan` path (`rollFromPointer`), not a direct `pressRoll()` from the pad. `Activated:Fire` is not used. ButtonA is not in the menu sink, so jump still works in the world. ButtonB keeps the #221 capture path already in `InputBegan`. A focused row inside a ScrollingFrame is scrolled into view. `PadNav` in Shared owns the next index, the deadzone, and which D-pad keys count. `PadFocus` is the client module that calls it. Schema stays 26. No new remote. The action bar is unchanged: closed-hub D-pad slots, ButtonY dodge, ButtonR1 light, and ButtonX heavy stay on the base binds. The one-tap crack guard stays (both `rollButton.Activated` and `InputBegan` still call `pressRoll`, and a pointer press does not crack a second time). The click harness covers the ring, ButtonA on Roll cracking once, ButtonB, scroll, and those closed-hub actions.
 
 ## E-003 — queued
 
