@@ -696,7 +696,7 @@ describe("HubInput", function()
 			world.userInput.InputChanged:Fire({
 				KeyCode = world.enum.KeyCode.Thumbstick1,
 				UserInputType = world.enum.UserInputType.Gamepad1,
-				Position = { X = x, Y = y, Z = 0 },
+				Position = vector.create(x, y, 0),
 			}, false)
 		end
 		local function place(button: any, x: number, y: number)
@@ -917,5 +917,64 @@ describe("HubInput", function()
 		end)
 		expect(firedOk).toEqual(false)
 		expect(#rolled(calls)).toEqual(before + 1)
+	end)
+
+	it("drops padPress and padTarget when a rebuilt list destroys its rows", function()
+		local source = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local clearAt = string.find(source, "function hubFn.clear(host: Instance)", 1, true)
+		expect(clearAt ~= nil).toBeTrue()
+		local nextFn = string.find(source, "\n\tfunction hubFn.", (clearAt :: number) + 1, true)
+		local body = string.sub(source, clearAt :: number, (nextFn :: number) - 1)
+		local pressAt = string.find(body, "hubState.padPress[node] = nil", 1, true)
+		local targetAt = string.find(body, "hubState.padTarget = nil", 1, true)
+		local descendAt = string.find(body, "GetDescendants()", 1, true)
+		local destroyAt = string.find(body, "child:Destroy()", 1, true)
+		expect(pressAt ~= nil).toBeTrue()
+		expect(targetAt ~= nil).toBeTrue()
+		expect(descendAt ~= nil).toBeTrue()
+		expect(destroyAt ~= nil).toBeTrue()
+		expect((pressAt :: number) < (destroyAt :: number)).toBeTrue()
+		expect((targetAt :: number) < (destroyAt :: number)).toBeTrue()
+		expect((descendAt :: number) < (destroyAt :: number)).toBeTrue()
+
+		local world, hub = bootHub()
+		local data = profile()
+		data.pets = {
+			ember = {
+				uid = "ember",
+				name = "Ember",
+				rarity = "Common",
+			},
+		}
+		hub.setProfile(data)
+		hub.open("pets")
+		local screen = screenOf(world)
+		local function press(key: string)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, false)
+		end
+		local ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent).toEqual(tabButton(screen, "pets"))
+		local card = nil
+		for _ = 1, 48 do
+			press("DPadDown")
+			if ring.Parent ~= nil and ring.Parent.Name == "PetCard" then
+				card = ring.Parent
+				break
+			end
+		end
+		expect(card ~= nil).toBeTrue()
+		expect(ring.Parent).toEqual(card)
+		hub.setProfile(data)
+		expect(card.Parent).toBeNil()
+		screen = screenOf(world)
+		local fresh = GuiFake.findNamed(screen, "PetCard")
+		expect(fresh ~= nil and fresh ~= card and fresh.Parent ~= nil).toBeTrue()
+		ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent ~= card).toBeTrue()
+		expect(ring.Parent).toEqual(tabButton(screen, "pets"))
 	end)
 end)

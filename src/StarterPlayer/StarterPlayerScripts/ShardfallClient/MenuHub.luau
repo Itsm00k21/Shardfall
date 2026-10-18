@@ -572,7 +572,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.padAxis(value: any, key: string): number
-		if type(value) ~= "table" and type(value) ~= "userdata" then
+		-- Thumbstick1 Position is a Vector3. type() on that value is "vector",
+		-- and X/Y index the native vector. Tables cover the GuiFake mocks.
+		local kind = type(value)
+		if kind ~= "table" and kind ~= "userdata" and kind ~= "vector" then
 			return 0
 		end
 		local component = value[key]
@@ -970,9 +973,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.clear(host: Instance)
+		local function forget(node: any)
+			hubState.padPress[node] = nil
+			if hubState.padTarget == node then
+				hubState.padTarget = nil
+			end
+		end
 		for _, child in ipairs(host:GetChildren()) do
 			if child:IsA("UIListLayout") or child:IsA("UIGridLayout") or child:IsA("UIPadding") then
 				continue
+			end
+			forget(child)
+			for _, descendant in ipairs(child:GetDescendants()) do
+				forget(descendant)
 			end
 			child:Destroy()
 		end
