@@ -342,7 +342,7 @@ describe("HubInput", function()
 		expect(GuiFake.findNamed(screen, "ShardCount") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "EpicBar") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "LegendaryBar") ~= nil).toBeTrue()
-		expect(labelText(screen, "Roll")).toEqual(HubStyle.CRACK_ONE)
+		expect(labelText(screen, "Roll")).toEqual("Earn shards")
 		expect(labelText(screen, "TimesTen")).toEqual(HubStyle.CRACK_TEN)
 		expect(labelText(screen, "ShardCount")).toEqual(HubStyle.shardCount(0))
 		for _, button in ipairs(GuiFake.buttons(screen)) do
@@ -976,5 +976,181 @@ describe("HubInput", function()
 		ring = GuiFake.findNamed(screen, "PadRing")
 		expect(ring.Parent ~= card).toBeTrue()
 		expect(ring.Parent).toEqual(tabButton(screen, "pets"))
+	end)
+
+	it("keeps the roll panel open across three cracks", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 6
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Roll")
+		local backdrop = GuiFake.findNamed(screen, "Backdrop")
+		local panel = GuiFake.findNamed(screen, "Panel")
+		local pointer = {
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			KeyCode = world.enum.KeyCode.Unknown,
+		}
+		for _ = 1, 3 do
+			button.InputBegan:Fire(pointer)
+			GuiFake.emit(backdrop, "Activated")
+			button.InputEnded:Fire(pointer)
+			GuiFake.emit(button, "Activated")
+			expect(screen.Enabled).toEqual(true)
+			expect(panel.Visible).toEqual(true)
+		end
+		expect(#rolled(calls)).toEqual(3)
+		GuiFake.emit(backdrop, "Activated")
+		expect(screen.Enabled).toEqual(false)
+		expect(panel.Visible).toEqual(false)
+	end)
+
+	it("skips a reveal without spending a second shard", function()
+		local world = GuiFake.world()
+		local MenuHub = world.load("MenuHub")
+		local calls = {}
+		local landed = profile()
+		landed.shardTokens = 36
+		local hub = MenuHub.start(world.playerGui, {
+			invoke = function(name: string, ...: any)
+				table.insert(calls, { name, ... })
+				if name == "RollShard" or name == "RollShards" then
+					return {
+						ok = true,
+						item = {
+							uid = "vine-1",
+							name = "Vinewood Sword",
+							rarity = "Rare",
+							templateId = "vinewood_sword",
+							kind = "Weapon",
+						},
+						rarity = "Rare",
+						fillerSeed = 1,
+						pity = { sinceEpic = 1, sinceLegendary = 1 },
+						currency = "shard",
+						profile = landed,
+					}
+				end
+				return { ok = true }
+			end,
+			onBag = function() end,
+			onMarket = function() end,
+			onDim = function() end,
+		})
+		local data = profile()
+		data.shardTokens = 37
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local button = GuiFake.findNamed(screen, "Roll")
+		local pointer = {
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			KeyCode = world.enum.KeyCode.Unknown,
+		}
+		button.InputBegan:Fire(pointer)
+		button.InputEnded:Fire(pointer)
+		GuiFake.emit(button, "Activated")
+		expect(#rolled(calls)).toEqual(1)
+		expect(GuiFake.findNamed(screen, "Name").Text).toEqual("")
+		expect(labelText(screen, "ShardCount")).toEqual(HubStyle.shardCount(36))
+		expect(labelText(screen, "ShardTokens")).toEqual(HubStyle.shardCount(36))
+		expect(button:GetAttribute("CrackLocked")).toEqual(true)
+		expect(screen.Enabled).toEqual(true)
+		button.InputBegan:Fire(pointer)
+		button.InputEnded:Fire(pointer)
+		GuiFake.emit(button, "Activated")
+		expect(#rolled(calls)).toEqual(1)
+		expect(GuiFake.findNamed(screen, "Name").Text).toEqual("Vinewood Sword")
+		expect(screen.Enabled).toEqual(true)
+		expect(GuiFake.findNamed(screen, "Panel").Visible).toEqual(true)
+	end)
+
+	it("keeps the last shard count when a snapshot omits the field", function()
+		local world, hub = bootHub()
+		local data = profile()
+		data.shardTokens = 37
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		expect(labelText(screen, "ShardCount")).toEqual(HubStyle.shardCount(37))
+		local dropped = profile()
+		dropped.shardTokens = nil
+		hub.setProfile(dropped)
+		screen = screenOf(world)
+		expect(labelText(screen, "ShardCount")).toEqual(HubStyle.shardCount(37))
+		expect(labelText(screen, "ShardTokens")).toEqual(HubStyle.shardCount(37))
+	end)
+
+	it("shows how to earn shards when the wallet is empty", function()
+		local world, hub, calls = bootHub()
+		local data = profile()
+		data.shardTokens = 0
+		hub.setProfile(data)
+		hub.open("roll")
+		local screen = screenOf(world)
+		local empty = GuiFake.findNamed(screen, "EmptyShards")
+		expect(empty ~= nil).toBeTrue()
+		expect(string.find(string.lower(empty.Text), "dungeon", 1, true) ~= nil).toBeTrue()
+		expect(string.find(string.lower(empty.Text), "daily", 1, true) ~= nil).toBeTrue()
+		local button = GuiFake.findNamed(screen, "Roll")
+		expect(button.Text).toEqual("Earn shards")
+		local before = #rolled(calls)
+		local pointer = {
+			UserInputType = world.enum.UserInputType.MouseButton1,
+			KeyCode = world.enum.KeyCode.Unknown,
+		}
+		button.InputBegan:Fire(pointer)
+		button.InputEnded:Fire(pointer)
+		GuiFake.emit(button, "Activated")
+		expect(#rolled(calls)).toEqual(before)
+	end)
+
+	it("places the pity count clear of the lock at phone and desktop widths", function()
+		local world, hub = bootHub()
+		local data = profile()
+		data.shardTokens = 4
+		hub.setProfile(data)
+		local function check(width: number, height: number)
+			local screen = screenOf(world)
+			screen.AbsoluteSize = { X = width, Y = height }
+			screen:GetPropertyChangedSignal("AbsoluteSize"):Fire()
+			hub.setProfile(data)
+			screen = screenOf(world)
+			local progress = GuiFake.findNamed(screen, "Progress")
+			expect(progress ~= nil).toBeTrue()
+			local meters = 0
+			for _, host in ipairs(progress:GetChildren()) do
+				if host:IsA("Frame") and (host.Name == "EpicPity" or host.Name == "LegendaryPity") then
+					meters += 1
+					local lock = host:FindFirstChild("Lock")
+					local count = host:FindFirstChild("PityCount")
+					local tier = host:FindFirstChild("Tier")
+					expect(lock ~= nil).toBeTrue()
+					expect(count ~= nil).toBeTrue()
+					expect(tier ~= nil).toBeTrue()
+					expect(string.sub(count.Text, 1, 4)).toEqual("Pity")
+					expect(count.Position.X.Offset >= lock.Position.X.Offset + lock.Size.X.Offset).toBeTrue()
+					expect(tier.Position.X.Offset + tier.Size.X.Offset <= lock.Position.X.Offset).toBeTrue()
+					expect(count.Position.X.Offset + count.Size.X.Offset <= host.Size.X.Offset).toBeTrue()
+				end
+			end
+			expect(meters).toEqual(2)
+			local odds = progress:FindFirstChild("Odds")
+			expect(odds ~= nil).toBeTrue()
+			local oddsText = ""
+			for _, child in ipairs(odds:GetChildren()) do
+				if child:IsA("TextLabel") then
+					oddsText = child.Text
+				end
+			end
+			expect(oddsText).toEqual("Odds")
+		end
+		check(1280, 800)
+		check(390, 844)
+		local screen = screenOf(world)
+		local note = GuiFake.findNamed(screen, "Rounding")
+		expect(note ~= nil).toBeTrue()
+		expect(string.find(note.Text, "rounded", 1, true) ~= nil).toBeTrue()
 	end)
 end)

@@ -106,6 +106,48 @@ function ShardBoard.caption(label: any, counter: any, goal: any, _extra: any?): 
 	return string.format("%s  %d / %d", name, math.max(0, math.floor(shown)), math.floor(target))
 end
 
+function ShardBoard.pityText(counter: any, goal: any, _extra: any?): string
+	local target = finite(goal)
+	if target == nil or target <= 0 then
+		return "Pity"
+	end
+	local shown = finite(counter)
+	if shown == nil then
+		shown = 0
+	end
+	return string.format("Pity %d/%d", math.max(0, math.floor(shown)), math.floor(target))
+end
+
+-- The counter sits on the right. The lock sits just to its left.
+-- Phone (280) and desktop (720) both keep the two apart.
+function ShardBoard.pityPlace(width: any, counter: any, goal: any, _extra: any?)
+	local span = finite(width)
+	if span == nil or span < 80 then
+		span = FALLBACK_W
+	end
+	local text = ShardBoard.pityText(counter, goal)
+	local lockW = 16
+	local gap = 6
+	local right = 8
+	local countW = math.min(span - 36, math.max(88, #text * 8))
+	local countX = span - right - countW
+	local lockX = countX - gap - lockW
+	if lockX < 8 then
+		lockX = 8
+		countX = lockX + lockW + gap
+		countW = math.max(48, span - right - countX)
+	end
+	return {
+		text = text,
+		lockX = lockX,
+		lockW = lockW,
+		lockH = 16,
+		countX = countX,
+		countW = countW,
+		w = span,
+	}
+end
+
 function ShardBoard.stack(kind: any, counters: any, width: any, _extra: any?): Stack
 	local span = finite(width)
 	if span == nil or span <= 0 then

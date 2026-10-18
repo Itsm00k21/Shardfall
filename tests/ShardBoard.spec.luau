@@ -159,6 +159,18 @@ describe("ShardBoard", function()
 		expect(ShardBoard.stack("pets", {}, "320").w).toEqual(280)
 	end)
 
+	it("keeps the pity counter clear of the lock on a phone and a desktop", function()
+		for _, width in ipairs({ 280, 390, 720, 1280 }) do
+			local place = ShardBoard.pityPlace(width, 1, 100)
+			expect(place.text).toEqual("Pity 1/100")
+			expect(place.lockX + place.lockW <= place.countX).toBeTrue()
+			expect(place.countX + place.countW <= place.w).toBeTrue()
+			expect(place.lockX >= 0).toBeTrue()
+		end
+		expect(ShardBoard.pityText(0, 1000)).toEqual("Pity 0/1000")
+		expect(ShardBoard.pityPlace(280, 1, 100, { paid = true }).text).toEqual("Pity 1/100")
+	end)
+
 	it("is what the Roll tab uses for both kinds", function()
 		local hub = fs.readFile(HUB)
 		expect(string.find(hub, "ShardBoard.stack", 1, true) ~= nil).toBeTrue()
