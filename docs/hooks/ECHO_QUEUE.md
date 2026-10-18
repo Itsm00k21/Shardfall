@@ -2,7 +2,7 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo's next row is E-009, then E-010. Do not queue new features. The phone layout recheck is E-010.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo's row in progress is E-009, then E-010. Do not queue new features. The phone layout recheck is E-010.
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-007 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
@@ -66,11 +66,15 @@ M1 economy invariants. Tests only. Branch `helper/economy-invariants-9721`. PR h
 
 Assigned in PR #269 comment 6246758342.
 
-## E-009 — next
+## E-009 — in progress
 
-M1 remote fuzz. Tests only. Out of `src/`, `TASKS.md`, `ops/`, and `tests/GuiFake.luau`. Do not start E-010 until this PR is up.
+M1 remote fuzz. Tests only. Branch `helper/remote-fuzz-9721`. PR link lands here once the PR is open. Out of `src/`, `TASKS.md`, `ops/`, and `tests/GuiFake.luau`. Do not start E-010 until this PR is up.
 
-A lune spec fuzzes every remote bound in `src/ServerScriptService/ShardfallServer/Remotes.luau` that is not a key of `PARKED_ACTION`. Each call tries nil, a wrong type, an empty string, a negative, NaN, `math.huge`, a huge string, an unknown id, and an extra argument. The handler refuses or ignores. It does not throw. The profile snapshot compares equal to the copy taken before the call. Real bugs stay pending: list `file:line` in the PR body and do not fix them. Schema stays 26. No kill-switch change. No build stamp. Product ids stay 0.
+`tests/RemoteFuzz.spec.luau` fuzzes every RemoteFunction bound in `src/ServerScriptService/ShardfallServer/Remotes.luau` that is not a key of `PARKED_ACTION`. RemoteEvents (Attack, Dodge, Steer) are skipped. Parked names are skipped: Salvage, BulkSalvage, FusePet, Trade, Market, ClaimPass, PremiumPass, StartDailyBoss, RaidQueue, RaidPost, RaidJoin, RaidPractice, RaidBuy, RaidLeave, RaidReady, BuyTravelPass, BuyDustShard, SetChestOptions, BuyChestBundle, BuyForgeBoost, BuyBoost, BuyPrism, RollPaid, BuyInventoryExpansion.
+
+Each call tries nil, a wrong type, an empty string, a negative, NaN, `math.huge`, a huge string, an unknown id, and an extra argument, as those args apply. The harness uses the same argument checks the remote runs, then the shared module that service calls. A reason or a throw puts the `Schema.deepCopy` back, which is what `DataService.mutate` does. The handler refuses or ignores. It does not throw. A refused or ignored call compares equal to the copy taken before it.
+
+Pending, and not in the committed run: SetAudio accepts a negative and writes `Audio.clampVolume`, which stores 0. `src/ServerScriptService/ShardfallServer/Remotes.luau:444` and `src/ReplicatedStorage/Shared/Audio.luau:41`. No `src/` edit. Schema stays 26. No kill-switch change. No build stamp. Product ids stay 0.
 
 ## E-010 — after E-009
 
@@ -78,7 +82,7 @@ Phone layout recheck. After E-009. On the current tip, walk `docs/design/playtes
 
 ## Next
 
-Start E-009. E-010 waits until that PR is up.
+E-009 is in progress. E-010 waits until that PR is up.
 
 ## PAUSED
 
