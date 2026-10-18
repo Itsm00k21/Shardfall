@@ -648,6 +648,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	local stats = new("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 36),
+		-- Two wrapped lines. AutomaticSize grows past 36 when the slider does.
+		AutomaticSize = Enum.AutomaticSize.Y,
 		Font = Enum.Font.BuilderSans,
 		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -720,6 +722,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local function fitLegacyText()
 		-- Shardfall panel text. A missing bannerScale is 1 inside TextFit.px.
+		-- BaseHeight is the design row height. The walk sets that height from
+		-- TextFit.px so a later scale change still fits the line.
 		for _, desc in ipairs(screen:GetDescendants()) do
 			if desc:GetAttribute("SkipTextScale") == true then
 				continue
@@ -731,6 +735,10 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 					desc:SetAttribute("BaseText", base)
 				end
 				desc.TextSize = TextFit.px(base, bannerScale)
+				local rowBase = desc:GetAttribute("BaseHeight")
+				if type(rowBase) == "number" then
+					desc.Size = UDim2.new(1, 0, 0, TextFit.px(rowBase, bannerScale))
+				end
 			end
 		end
 	end
@@ -766,6 +774,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		Visible = false,
 		LayoutOrder = 9,
 	}, panel) :: TextLabel
+	realmNext:SetAttribute("BaseHeight", 16)
 
 	local crack = makeButton(panel, "Crack a Shard", COLORS.gold, 10, 44)
 	crack.TextColor3 = COLORS.ink
@@ -1542,6 +1551,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				LayoutOrder = 1,
 			}, realmRow) :: TextLabel
 			label.Name = "RealmName"
+			label:SetAttribute("BaseHeight", 18)
 		else
 			new("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
@@ -2129,7 +2139,6 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				voucherNote ..= string.format("  ·  Pets voucher %d", profile.vouchers.pets)
 			end
 		end
-		stats.Size = UDim2.new(1, 0, 0, if voucherNote == "" then 36 else 52)
 		local luckText = tostring(profile.shardLuck or 0)
 		if (profile.luckBoost or 0) > 0 then
 			luckText ..= string.format(" +%d", profile.luckBoost)
@@ -2204,6 +2213,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				LayoutOrder = order,
 			}, oddsWrap) :: TextLabel
 			label.Name = "Heading"
+			label:SetAttribute("BaseHeight", 16)
 		end
 		local function row(text: string, rarity: string)
 			order += 1
@@ -2220,6 +2230,8 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			-- Solid rarity color. A moving rainbow made Secret read as blank
 			-- in a recording; the word stays in the string either way.
 			label.TextColor3 = rarityColor(rarity)
+			label.Name = "OddsRow"
+			label:SetAttribute("BaseHeight", 16)
 		end
 		local areaName = if selectedPool ~= nil then selectedPool.name else "Odds"
 		heading(areaName .. "  ·  totals")
