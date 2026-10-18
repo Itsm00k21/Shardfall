@@ -455,7 +455,14 @@ end
 
 local function wholeNumber(value: any, fallback: number, minimum: number): number
 	local numberValue = tonumber(value)
-	if numberValue == nil or numberValue ~= numberValue then
+	-- Positive infinity is a number. Floor keeps it, and the next save
+	-- would store inf for gold and the other wallets.
+	if
+		numberValue == nil
+		or numberValue ~= numberValue
+		or numberValue >= math.huge
+		or numberValue <= -math.huge
+	then
 		return fallback
 	end
 	local floored = math.floor(numberValue)
