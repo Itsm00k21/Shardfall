@@ -12,6 +12,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Crafting = require(ReplicatedStorage.Shared.Crafting)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
@@ -70,6 +71,9 @@ function CraftService.craft(player: Player, recipeId: any, targetUid: string?)
 end
 
 function CraftService.salvage(player: Player, targetUid: any)
+	if not LaunchGate.on("forgeSalvage") then
+		return reject("That is closed.")
+	end
 	if
 		type(targetUid) ~= "string"
 		or string.match(targetUid, "^[%w%-]+$") == nil
@@ -100,6 +104,9 @@ function CraftService.salvage(player: Player, targetUid: any)
 end
 
 function CraftService.salvageRarity(player: Player, rarity: any)
+	if not LaunchGate.on("forgeSalvage") then
+		return reject("That is closed.")
+	end
 	if type(rarity) ~= "string" or string.match(rarity, "^[%w]+$") == nil or #rarity > 32 then
 		return reject("Unknown rarity.")
 	end

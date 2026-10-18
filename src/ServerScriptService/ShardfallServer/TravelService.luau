@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataService = require(script.Parent.DataService)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local DungeonService = require(script.Parent.DungeonService)
 local PolicyCache = require(script.Parent.PolicyCache)
 local Travel = require(ReplicatedStorage.Shared.Travel)
@@ -122,6 +123,9 @@ function TravelService.go(player: Player, id: string): (boolean, string?)
 end
 
 function TravelService.buyPass(player: Player)
+	if not LaunchGate.on("extraRealms") then
+		return { ok = false, error = "That is closed." }
+	end
 	local allowed, reason, code = PolicyCache.allowPaid(player)
 	if not allowed then
 		return {
