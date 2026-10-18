@@ -116,6 +116,12 @@ From the plaza, look once more. Across this whole pass, salvage, a dust shop, an
 
 Pass: Salvage, the dust shop, and the daily boss stayed hidden.
 
+### 11. Controller rail
+
+Open the hub with a gamepad. A ring sits on the hub. Move it along the rail until it reaches Roll, then Bag, then Pets. Each page opens, and the title is easy to read. Close the hub.
+
+Pass: The ring reaches Roll, Bag, and Pets, each page opens, and the hub closes.
+
 ## Write down
 
 The build, the device, and the viewport. Whether the first crack felt inside about a minute. The words on the Forge prompt, and any Materials tab or Craft label on that sheet. The one place text was hard to read, or a purchase prompt if one appeared.
