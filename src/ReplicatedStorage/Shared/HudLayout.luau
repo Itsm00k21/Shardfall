@@ -297,10 +297,10 @@ function HudLayout.cardGrid(width: number, height: number, count: number): Grid
 	}
 end
 
-export type RailFit = { x: number, y: number, w: number, h: number, button: number }
+export type RailFit = { x: number, y: number, w: number, h: number, button: number, gap: number }
 
 -- Shrinks the icon only after the preferred size no longer fits.
--- The button never drops below `minimum` (44).
+-- The button stays at `minimum` (44) unless a tighter gap still covers the HP bar.
 function HudLayout.railFit(
 	viewportY: number,
 	margin: number,
@@ -343,19 +343,48 @@ function HudLayout.railFit(
 		end
 	end
 	-- A short landscape phone used to park that slide on the HP bar.
+	-- Sit under the bar. Tighten the gap, then the button, so 800×380
+	-- still clears the bar and stays inside the viewport.
 	if type(viewportX) == "number" and viewportX == viewportX and viewportX > 0 and viewportX < math.huge then
 		local hp = HudLayout.health(margin, viewportX)
 		local placed = { x = x, y = y, w = button, h = height }
 		if HudLayout.overlaps(placed, hp) then
-			local belowHp = hp.y + hp.h + gap
-			local endY = belowHp + height
-			if endY <= viewportY then
-				x = margin
-				y = belowHp
+			local gutter = gap
+			local belowHp = hp.y + hp.h + gutter
+			local function stack(size: number, pad: number): number
+				return safeCount * size + math.max(0, safeCount - 1) * pad
 			end
+			local room = viewportY - belowHp
+			local size = button
+			local pad = gap
+			if stack(size, pad) > room then
+				local slots = math.max(1, safeCount - 1)
+				local fitted = math.floor((room - safeCount * size) / slots)
+				if fitted < 0 then
+					fitted = 0
+				elseif fitted > pad then
+					fitted = pad
+				end
+				pad = fitted
+			end
+			if stack(size, pad) > room then
+				local inner = room - math.max(0, safeCount - 1) * pad
+				size = math.floor(inner / safeCount)
+				if size < 1 then
+					size = 1
+				end
+			end
+			if size < floorSize and stack(floorSize, pad) <= room then
+				size = floorSize
+			end
+			button = size
+			gap = pad
+			height = stack(button, gap)
+			x = margin
+			y = belowHp
 		end
 	end
-	return { x = x, y = y, w = button, h = height, button = button }
+	return { x = x, y = y, w = button, h = height, button = button, gap = gap }
 end
 
 -- Bottom-left of the safe area. Hidden on a phone unless debug is on.
