@@ -13,11 +13,41 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local MemoryStore = require("../src/ReplicatedStorage/Shared/MemoryStore")
 local ProfileLoad = require("../src/ReplicatedStorage/Shared/ProfileLoad")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local SessionLock = require("../src/ReplicatedStorage/Shared/SessionLock")
 
 describe("Profile load", function()
+	it("opens a missing key as a new profile", function()
+		local now = 1_700_000_000
+		local store = MemoryStore.new()
+		local opened = ProfileLoad.open(
+			store,
+			"Player_new",
+			now,
+			"studio-test",
+			0,
+			SessionLock.TIMEOUT_SECONDS
+		)
+		expect(opened.session).toBeFalse()
+		expect(opened.reason).toEqual("claimed")
+		expect(opened.data.onboardDone).toEqual(false)
+		expect(opened.data.onboardStep).toEqual("open")
+		expect(opened.data.firstSession.returning).toEqual(false)
+		expect(opened.data.schemaVersion).toEqual(Schema.VERSION)
+		expect(opened.data.shardTokens).toEqual(Schema.STARTER_TOKENS)
+		local held = nil
+		store:updateAsync("Player_new", function(current)
+			held = current
+			return nil
+		end)
+		expect(held.Data.onboardDone).toEqual(false)
+		expect(held.Data.onboardStep).toEqual("open")
+		expect(held.Data.firstSession.returning).toEqual(false)
+		expect(held.Data.shardTokens).toEqual(Schema.STARTER_TOKENS)
+	end)
+
 	it("migrates an older schema and falls back when the DataStore throws", function()
 		local now = 1_700_000_000
 		local stored = {

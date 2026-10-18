@@ -200,6 +200,56 @@ describe("Profile load budget", function()
 		expect(stored.Data.restCharges).toEqual(Progression.REST_CHARGES)
 	end)
 
+	it("does not save a blank profile when the claim outlives the budget", function()
+		getfenv().task = require("@lune/task")
+		local stored = document()
+		local committed = false
+		local adapter = {
+			persistent = true,
+			updateAsync = function(_self, _key, transform)
+				local updated = transform(stored)
+				if updated ~= nil then
+					stored = updated
+					committed = true
+				end
+				task.wait(0.3)
+				return stored
+			end,
+		}
+		local generation = 1
+		local callOk, outcome = CallBudget.run(0.1, function()
+			return ProfileLoad.open(adapter, KEY, NOW, "studio-server", 0, TIMEOUT, {
+				token = generation,
+				current = function()
+					return generation
+				end,
+			})
+		end)
+		expect(callOk).toBeFalse()
+		expect(outcome).toEqual("timed out")
+		expect(committed).toBeTrue()
+		expect(stored.Lock.jobId).toEqual("studio-server")
+		expect(stored.Data.gold).toEqual(80)
+		expect(ProfileLoad.maySave(true, true)).toEqual(false)
+		expect(ProfileLoad.maySave(false, false)).toEqual(false)
+		expect(ProfileLoad.maySave(true, false)).toEqual(true)
+		if ProfileLoad.maySave(true, true) then
+			stored.Data = Schema.migrate(nil)
+		end
+		expect(stored.Data.gold).toEqual(80)
+
+		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DataService.luau")
+		local writeAt = string.find(source, "local function write(record: Record, releaseLock: boolean)", 1, true)
+		local saveAt = string.find(source, "function DataService.save(player: Player)", writeAt or 1, true)
+		expect(writeAt ~= nil and saveAt ~= nil and (writeAt :: number) < (saveAt :: number)).toBeTrue()
+		local writeBody = string.sub(source, writeAt :: number, (saveAt :: number) - 1)
+		local guardAt = string.find(writeBody, "record.ephemeral == true", 1, true)
+		local updateAt = string.find(writeBody, "store:updateAsync", 1, true)
+		expect(guardAt ~= nil and updateAt ~= nil and (guardAt :: number) < (updateAt :: number)).toBeTrue()
+		expect(string.find(source, "ProfileLoad.maySave(record.loaded, record.ephemeral)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "ProfileLoad.maySave(wasLoaded, ephemeral)", 1, true) ~= nil).toBeTrue()
+	end)
+
 	it("drops the load token in DataService before the retry can yield", function()
 		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DataService.luau")
 		local loadAt = string.find(source, "local function load(player: Player)", 1, true)

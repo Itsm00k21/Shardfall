@@ -778,7 +778,9 @@ end
 ]]
 function Schema.migrate(raw: any): (ProfileData?, string?)
 	if raw == nil then
-		raw = {}
+		-- A missing key is a new player. The version walk treats nil as 0,
+		-- and the v14 step would mark the tutorial finished.
+		return Schema.template(), nil
 	elseif type(raw) ~= "table" then
 		return nil, "corrupt"
 	end

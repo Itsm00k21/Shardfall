@@ -93,6 +93,13 @@ function ProfileLoad.shutdownStillWaiting(pending: number, elapsed: number): boo
 	return pending > 0 and elapsed < ProfileLoad.SHUTDOWN_BUDGET_SECONDS
 end
 
+-- A timed-out load can still be marked loaded once the memory fallback is
+-- installed. That fallback is ephemeral. Autosave and release must not
+-- write it, because the store may already hold the real claimed profile.
+function ProfileLoad.maySave(loaded: boolean, ephemeral: boolean): boolean
+	return loaded == true and ephemeral ~= true
+end
+
 local function sessionProfile(now: number): any
 	local migrated = Schema.migrate(nil)
 	if migrated ~= nil then

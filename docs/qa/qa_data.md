@@ -4,7 +4,7 @@ G-057. Data-loss and migrate gaps in `DataService.luau`, `Schema.luau`, `Profile
 
 A normal leave writes the memory profile and clears the lock (`DataService.luau:614-623`, `SessionLock.luau:119-125`). A string or a NaN `schemaVersion` returns `"corrupt"` and the claim returns nil, so the key stays as it was (`Schema.luau:789-790`, `ProfileLoad.luau:132-135`). A `schemaVersion` above 26 returns `"newer"` and is the same kind of refusal (`Schema.luau:792-793`).
 
-Choice: a missing DataStore key should follow `Schema.template()` (`onboardDone` false, `onboardStep` `"open"`, `firstSession.returning` false). It does not today. A stored `schemaVersion` below 14 stays `onboardDone` true. That is what the v14 step is for. The v23 comment already says a new profile stays `returning` false (`Schema.luau:1145-1148`).
+Choice: a missing DataStore key should follow `Schema.template()` (`onboardDone` false, `onboardStep` `"open"`, `firstSession.returning` false). Confirmed on `81c60d8` and fixed in T-208: `Schema.migrate(nil)` returns that template, and a stored `schemaVersion` below 14 still stays `onboardDone` true. S3 was confirmed on the same tip and fixed in T-209: autosave and `release` do not write a profile that is still loading or ephemeral, so a late timeout cannot store the memory fallback over the claimed save.
 
 ## Risks
 
