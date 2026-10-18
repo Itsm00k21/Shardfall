@@ -22,6 +22,7 @@
 	streak, or change the odds. A paid roll uses the same flag as a free roll.
 ]]
 
+local LaunchGate = require("./LaunchGate")
 local Rarities = require("./Rarities")
 local RarityConfig = require("./RarityConfig")
 local RollLoop = require("./RollLoop")
@@ -45,12 +46,40 @@ export type State = {
 }
 
 local function known(tab: string): boolean
+	if tab == "shop" then
+		return true
+	end
 	for _, id in ipairs(UiRouter.TABS) do
 		if id == tab then
 			return true
 		end
 	end
 	return false
+end
+
+-- Bumper order while the parked tabs are switched off. Shop sits
+-- where the Market Board used to, ahead of Settings.
+function UiRouter.cycle(): { string }
+	local live = {}
+	local placedShop = false
+	for _, id in ipairs(LaunchGate.visibleTabs(UiRouter.TABS)) do
+		if id == "settings" and not placedShop then
+			table.insert(live, "shop")
+			placedShop = true
+		end
+		table.insert(live, id)
+		if id == "shop" then
+			placedShop = true
+		end
+	end
+	if not placedShop then
+		table.insert(live, "shop")
+	end
+	return live
+end
+
+local function openable(tab: string): boolean
+	return known(tab) and LaunchGate.tabOpen(tab)
 end
 
 local function cloneStack(stack: { string }): { string }
@@ -86,14 +115,14 @@ local function publish(previous: State, open: boolean, tab: string, stack: { str
 end
 
 function UiRouter.open(state: State, tab: string): State
-	local id = if known(tab) then tab else "hero"
+	local id = if openable(tab) then tab else "hero"
 	return publish(state, true, id, { id })
 end
 
 -- Inner tabs and the rail call this. The first click after open is enough.
 -- Nothing has to "arm" the tabs with a rail switch first.
 function UiRouter.switch(state: State, tab: string): State
-	if not known(tab) then
+	if not openable(tab) then
 		return state
 	end
 	if not state.open then
@@ -138,7 +167,7 @@ function UiRouter.rollHandoff(state: State): State
 end
 
 function UiRouter.toggle(state: State, tab: string): State
-	if not known(tab) then
+	if not openable(tab) then
 		return state
 	end
 	local root = state.stack[1] or state.tab
@@ -155,7 +184,7 @@ function UiRouter.hotkey(state: State, key: string, hotkeys: { [string]: string 
 		return state
 	end
 	local letter = string.upper(key)
-	for _, tab in ipairs(UiRouter.TABS) do
+	for _, tab in ipairs(UiRouter.cycle()) do
 		local bound = hotkeys[tab]
 		if type(bound) == "string" and string.upper(bound) == letter then
 			if state.open then
@@ -181,16 +210,17 @@ function UiRouter.shoulder(state: State, direction: number): State
 	if not state.open or direction == 0 then
 		return state
 	end
+	local tabs = UiRouter.cycle()
 	local root = state.stack[1] or state.tab
 	local index = 1
-	for cursor, tab in ipairs(UiRouter.TABS) do
+	for cursor, tab in ipairs(tabs) do
 		if tab == root then
 			index = cursor
 		end
 	end
 	local step = if direction > 0 then 1 else -1
-	local nextIndex = ((index - 1 + step) % #UiRouter.TABS) + 1
-	return UiRouter.switch(state, UiRouter.TABS[nextIndex])
+	local nextIndex = ((index - 1 + step) % #tabs) + 1
+	return UiRouter.switch(state, tabs[nextIndex])
 end
 
 function UiRouter.top(state: State): string
@@ -201,7 +231,10 @@ end
 -- mounted for the banner, and these prompts do not call them.
 function UiRouter.havenTab(kind: string, areaId: string?): string?
 	if kind == "market" then
-		return "market"
+		if LaunchGate.on("market") then
+			return "market"
+		end
+		return "shop"
 	end
 	-- The Forge prompt opens the craft panel, not a hub tab.
 	if kind == "craft" then

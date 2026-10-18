@@ -132,7 +132,7 @@ describe("Hud layout", function()
 	end)
 
 	it("owns the rail count, the toast stack, and the equip prompt", function()
-		expect(HudLayout.RAIL_COUNT).toEqual(7)
+		expect(HudLayout.RAIL_COUNT).toEqual(6)
 		expect(HudLayout.PROMPT_LABEL).toEqual(36)
 		local margin = 16
 		local gap = UiTheme.PAD

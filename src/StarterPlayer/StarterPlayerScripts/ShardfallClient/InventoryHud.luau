@@ -27,6 +27,7 @@ local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
+local LaunchGate = require(Shared:WaitForChild("LaunchGate"))
 local Materials = require(Shared:WaitForChild("Materials"))
 local Rarities = require(Shared:WaitForChild("Rarities"))
 local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
@@ -951,7 +952,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			favButton.MouseButton1Click:Connect(function()
 				callbacks.onFavorite(uid, not selected.favorite)
 			end)
-			if selected.kind == "Weapon" or selected.kind == "Armor" then
+			if
+				LaunchGate.on("forgeSalvage")
+				and (selected.kind == "Weapon" or selected.kind == "Armor")
+			then
 				local block = InventoryView.salvageBlock(profile, item)
 				local salvage = actionButton(
 					detail,
@@ -1111,7 +1115,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			label(detail, "Active", order, COLORS.ok, 14)
 		end
 
-		if query.tab == "weapons" or query.tab == "armor" then
+		if LaunchGate.on("forgeSalvage") and (query.tab == "weapons" or query.tab == "armor") then
 			label(detail, "Bulk salvage", 80, COLORS.muted, 13)
 			local bulkOrder = 81
 			for _, rarity in ipairs(Rarities.ORDER) do
@@ -1187,7 +1191,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		if not flags.rarity then
 			table.clear(query.rarities)
 		end
-		realmButton.Visible = flags.realm
+		realmButton.Visible = flags.realm and LaunchGate.on("extraRealms")
 		slotButton.Visible = flags.slot
 		socketButton.Visible = flags.sockets
 		equippedButton.Visible = flags.worn
