@@ -397,6 +397,9 @@ describe("HubInput", function()
 		expect(GuiFake.findNamed(screen, "Pedestal") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "OddsBars") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "CrackRow") ~= nil).toBeTrue()
+		local ten = GuiFake.findNamed(screen, "TimesTen")
+		expect(ten.Parent.Name).toEqual("CrackRow")
+		expect(ten.Parent.Parent.Name).toEqual("List")
 		expect(GuiFake.findNamed(screen, "ShardCount") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "EpicBar") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(screen, "LegendaryBar") ~= nil).toBeTrue()
@@ -1439,6 +1442,8 @@ describe("HubInput", function()
 			onDim = function() end,
 			onToast = function() end,
 		})
+		local hubScreen = GuiFake.findNamed(world.playerGui, "ShardfallHub")
+		expect(onboard.DisplayOrder > hubScreen.DisplayOrder).toBeTrue()
 		local data = profile()
 		data.shardTokens = 10
 		data.gold = 400
