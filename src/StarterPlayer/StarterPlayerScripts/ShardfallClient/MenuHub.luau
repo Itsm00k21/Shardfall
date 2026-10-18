@@ -546,6 +546,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if button ~= nil and button:IsA("GuiButton") then
 				if hubState.padPress[button] == nil then
 					hubState.padPress[button] = function()
+						-- ButtonA and the rail's Activated can both run
+						-- this frame. Remember the tab so toggle drops
+						-- the second one.
+						hubState.railFromPad = tabId
+						hubState.railFromPadAt = os.clock()
 						hubFn.follow(UiRouter.switch(hubState.route, tabId))
 					end
 				end
@@ -5728,6 +5733,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.toggle(id: string)
+		local fromPad = hubState.railFromPad
+		local at = hubState.railFromPadAt
+		hubState.railFromPad = nil
+		if fromPad == id and type(at) == "number" and os.clock() - at <= 0.05 then
+			return
+		end
 		hubFn.follow(UiRouter.toggle(hubState.route, id))
 	end
 

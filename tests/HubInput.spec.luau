@@ -1646,9 +1646,79 @@ describe("HubInput", function()
 		expect(hub.isOpen()).toEqual(false)
 	end)
 
-	-- E-007 same-frame rail press is not registered. On the Bag rail button,
-	-- ButtonA runs padPress → UiRouter.switch once, and a mouse Activated
-	-- in that same turn runs the HudShell rail callback once (counts 1 and
-	-- 1). The mouse path is menuHub.toggle, so the hub closes. Left out of
-	-- this run. No src/ change until Ghost picks one handler.
+	it("opens once when ButtonA and the rail click land in the same turn", function()
+		local world = GuiFake.world()
+		local MenuHub = world.load("MenuHub")
+		local calls = {}
+		local hub = MenuHub.start(world.playerGui, hooks(calls))
+		hub.setProfile(profile())
+		local toggles = { bag = 0 }
+		local HudShell = world.load("HudShell")
+		HudShell.start(world.playerGui, {
+			onHero = function()
+				hub.toggle("hero")
+			end,
+			onBag = function()
+				toggles.bag += 1
+				hub.toggle("bag")
+			end,
+			onRoll = function()
+				hub.toggle("roll")
+			end,
+			onPets = function()
+				hub.toggle("pets")
+			end,
+			onShop = function()
+				hub.toggle("shop")
+			end,
+			onSettings = function()
+				hub.toggle("settings")
+			end,
+		})
+		local function press(key: string)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, false)
+		end
+		local function rail(name: string): any
+			local host = GuiFake.findNamed(world.playerGui, "ShardfallRail")
+			return GuiFake.findNamed(host, name)
+		end
+		local bag = rail("Bag")
+		expect(bag ~= nil).toBeTrue()
+		GuiFake.activate(bag)
+		expect(toggles.bag).toEqual(1)
+		expect(hub.isOpen()).toEqual(true)
+		expect(labelText(screenOf(world), "Title")).toEqual("Bag")
+		GuiFake.activate(bag)
+		expect(toggles.bag).toEqual(2)
+		expect(hub.isOpen()).toEqual(false)
+		hub.open("hero")
+		expect(hub.isOpen()).toEqual(true)
+		expect(labelText(screenOf(world), "Title")).toEqual("Hero")
+		local function ring(): any
+			return GuiFake.findNamed(world.playerGui, "PadRing")
+		end
+		local found = nil
+		for _ = 1, 120 do
+			local stroke = ring()
+			local parent = if stroke ~= nil then stroke.Parent else nil
+			if parent ~= nil and parent.Name == "Bag" and parent.Parent ~= nil and parent.Parent.Name == "Rail" then
+				found = parent
+				break
+			end
+			press("DPadDown")
+		end
+		expect(found).toEqual(bag)
+		local before = toggles.bag
+		press("ButtonA")
+		GuiFake.activate(bag)
+		expect(toggles.bag).toEqual(before + 1)
+		expect(hub.isOpen()).toEqual(true)
+		expect(labelText(screenOf(world), "Title")).toEqual("Bag")
+		GuiFake.activate(bag)
+		expect(hub.isOpen()).toEqual(false)
+	end)
 end)
