@@ -16,11 +16,14 @@
 
 	While the hub is open, D-pad and the left stick move a UIStroke named
 	PadRing through the live tabs and the visible buttons on the open
-	page. The stroke is shown on the opened tab. Mouse, touch, and
-	keyboard hide it, and the next gamepad step shows it again. ButtonA
-	runs the handler that button already connected. The Roll button goes
-	through its InputBegan path. ButtonB still closes on the path already
-	in InputBegan. ButtonA is not in the menu sink.
+	page. A hidden tab column uses the HUD rail in UiRouter.cycle()
+	order, and those rail buttons share the tab registry. The stroke
+	is shown on the opened tab, or on Close when that tab is hidden.
+	Mouse, touch, and keyboard hide it, and the next gamepad step shows
+	it again. ButtonA runs the handler that button already connected.
+	The Roll crack button goes through its InputBegan path. ButtonB
+	still closes on the path already in InputBegan. ButtonA is not in
+	the menu sink.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -514,6 +517,45 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.padUnparent()
 	end
 
+	-- The tab column repeats the rail, and place() hides it. Gamepad
+	-- focus uses those rail buttons. ButtonA runs the tab switch
+	-- through padPress. The rail keeps the Activated hook it already
+	-- has for the mouse.
+	function hubFn.padRail(add: (any) -> ())
+		if hubState.tabs.Visible ~= false then
+			return
+		end
+		local gui = hubState.screen.Parent
+		if gui == nil then
+			return
+		end
+		local railGui = gui:FindFirstChild("ShardfallRail")
+		if railGui == nil then
+			return
+		end
+		local rail = railGui:FindFirstChild("Rail")
+		if rail == nil then
+			return
+		end
+		for _, tabId in ipairs(UiRouter.cycle()) do
+			local tabButton = hubState.tabButtons[tabId]
+			if tabButton ~= nil and hubFn.padShown(tabButton) then
+				continue
+			end
+			local label = string.upper(string.sub(tabId, 1, 1)) .. string.sub(tabId, 2)
+			local button = rail:FindFirstChild(label)
+			if button ~= nil and button:IsA("GuiButton") then
+				if hubState.padPress[button] == nil then
+					hubState.padPress[button] = function()
+						hubFn.paint()
+						hubFn.follow(UiRouter.switch(hubState.route, tabId))
+					end
+				end
+				add(button)
+			end
+		end
+	end
+
 	function hubFn.padList(): { any }
 		local list = {}
 		local function add(button: any)
@@ -567,6 +609,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		for _, tabId in ipairs(UiRouter.cycle()) do
 			add(hubState.tabButtons[tabId])
 		end
+		hubFn.padRail(add)
 		add(hubState.closeButton)
 		walk(hubState.pages[hubState.shownId])
 		walk(hubState.classModal)
@@ -632,20 +675,28 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local list = hubFn.padList()
 		local target = hubState.tabButtons[tabId]
-		local index = 1
-		if target ~= nil then
-			for cursor, button in ipairs(list) do
-				if button == target then
-					index = cursor
-					break
+		local function indexOf(button: any): number?
+			if button == nil then
+				return nil
+			end
+			for cursor, entry in ipairs(list) do
+				if entry == button then
+					return cursor
 				end
 			end
+			return nil
 		end
-		if target == nil or list[index] ~= target then
+		local found = indexOf(target)
+		if found == nil then
+			found = indexOf(hubState.closeButton)
+		end
+		if found == nil then
+			found = 1
 			target = list[1]
-			index = 1
+		else
+			target = list[found]
 		end
-		hubState.padIndex = index
+		hubState.padIndex = found
 		hubState.padTarget = target
 		hubState.padHeld = ""
 	end

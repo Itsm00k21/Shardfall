@@ -2,7 +2,7 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo's open rows are E-005 and E-006. Do not queue new features. Ghost is holding the phone layout recheck until the `-a6e7` layout lane goes quiet.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo's open row is E-006. Do not queue new features. Ghost is holding the phone layout recheck until the `-a6e7` layout lane goes quiet.
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-006 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
@@ -34,23 +34,25 @@ Clear stale `restColor` keys and unparent `PadRing` when MenuHub rebuilds a page
 
 Approved in issue #15 comment 6245616667. Listed in comment 6245850348.
 
-## E-005 — in progress
+## E-005 — done
 
-Refresh the existing `docs/design/playtest_script.md` for the behavior on `b4ef5a2` (PRs #242 through #250, plus instant Equip from #241, already on that tip). Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-refresh-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/255 into `cursor/live-build-9721`.
+Refresh the existing `docs/design/playtest_script.md` for the behavior on `b4ef5a2` (PRs #242 through #250, plus instant Equip from #241, already on that tip). Do not create `docs/qa/PLAYTEST_SCRIPT.md`. Branch `helper/playtest-refresh-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/255 into `cursor/live-build-9721`. Merged at `a27ff39`.
 
 Ten phone steps, about 15 minutes. Each step has a pass line. Feel and looks only. A Heavy tap shows the swing at once and the hit lands after about a third of a second, in front of the character. The bag tip shows the name in the rarity color, one stat per line, and stays on screen. Equip reads Equipped at once. One rail, and the hub tab column stays hidden. Settings hides Trades, Raid invites, and the raids and market hotkeys. Salvage, the dust shop, and the daily boss stay hidden. The Forge sheet scrolls an upgrade row on 390×844 and 844×390. Docs only. Schema stays 26.
 
 Assigned in issue #15 comment 6246173340.
 
-## E-006 — queued
+## E-006 — in progress
 
-Controller pass on the first-60s path. Harness cases only, plus small fixes in the controller-nav files if something is unreachable. Input stays in `Keybinds.luau`. UI goes through `UiRouter`. Check that `PadRing` reaches Roll, Bag, Forge, and Pets from Close, and that the Gold shop prompt works on a gamepad.
+Controller pass on the first-60s path. Branch `helper/controller-first60-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/262 into `cursor/live-build-9721`.
 
-Assigned in issue #15 comment 6246173340. Start after E-005.
+The click harness drives a gamepad from Close. With the hub tab column hidden, `PadRing` reaches the rail Roll, Bag, and Pets buttons, then the bag upgrade row (the in-hub Forge step). ButtonA runs the existing `padPress` registry. `UiRouter.switch` opens each rail page. The Roll crack button still cracks once through `rollFromPointer`. The Gold shop Healing Tonic and bag slot buy on ButtonA. Input stays in `Keybinds.luau`. Schema stays 26. No new remote. The plaza Forge sheet, the Chests button, and `SetChestOptions` stay on Ghost's lane.
+
+Assigned in issue #15 comment 6246173340. Cleared to start in PR #255 comment 6246379892.
 
 ## Next
 
-E-006 is next after E-005. The phone layout recheck stays with Ghost until the `-a6e7` layout lane goes quiet. Do not start that recheck from this queue.
+E-006 is in progress on `helper/controller-first60-9721`. The phone layout recheck stays with Ghost until the `-a6e7` layout lane goes quiet. Do not start that recheck from this queue.
 
 ## PAUSED
 
