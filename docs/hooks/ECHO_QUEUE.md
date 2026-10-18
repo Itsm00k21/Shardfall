@@ -68,7 +68,7 @@ Assigned in PR #269 comment 6246758342.
 
 ## E-009 — in progress
 
-M1 remote fuzz. Tests only. Branch `helper/remote-fuzz-9721`. PR link lands here once the PR is open. Out of `src/`, `TASKS.md`, `ops/`, and `tests/GuiFake.luau`. Do not start E-010 until this PR is up.
+M1 remote fuzz. Tests only. Branch `helper/remote-fuzz-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/285 into `cursor/live-build-9721`. Out of `src/`, `TASKS.md`, `ops/`, and `tests/GuiFake.luau`. Do not start E-010 until this PR is up.
 
 `tests/RemoteFuzz.spec.luau` fuzzes every RemoteFunction bound in `src/ServerScriptService/ShardfallServer/Remotes.luau` that is not a key of `PARKED_ACTION`. RemoteEvents (Attack, Dodge, Steer) are skipped. Parked names are skipped: Salvage, BulkSalvage, FusePet, Trade, Market, ClaimPass, PremiumPass, StartDailyBoss, RaidQueue, RaidPost, RaidJoin, RaidPractice, RaidBuy, RaidLeave, RaidReady, BuyTravelPass, BuyDustShard, SetChestOptions, BuyChestBundle, BuyForgeBoost, BuyBoost, BuyPrism, RollPaid, BuyInventoryExpansion.
 
