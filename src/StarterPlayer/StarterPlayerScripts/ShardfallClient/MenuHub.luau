@@ -3130,7 +3130,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				empty.LayoutOrder = 9
 			end
 		else
-			local host = hubFn.cardHost(hubState.bag, hubState.bag, #shown, 8)
+			local listH = hubState.bag.AbsoluteSize.Y
+			local listW = hubState.bag.AbsoluteSize.X
+			if listH < 80 or listW < 44 then
+				local vx, vy = hubFn.view()
+				local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+				local inner = HudLayout.hubBody(box.w, box.h)
+				if listW < 44 then
+					listW = inner.w
+				end
+				if listH < 80 then
+					listH = inner.h
+				end
+			end
+			local grid = HudLayout.cardGrid(math.max(44, listW - 16), math.max(44, listH), #shown)
+			local cardOrder = 8
+			if HudLayout.bagCardsLead(listH, grid.cellH) then
+				pills.LayoutOrder = 4
+				actions.LayoutOrder = 5
+				cardOrder = 1
+			end
+			local host = hubFn.cardHost(hubState.bag, hubState.bag, #shown, cardOrder)
 			for index, item in ipairs(shown) do
 				hubFn.itemCard(host, item, index, "item")
 			end
@@ -3437,7 +3457,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		stage.Name = "Stage"
 		stage.BackgroundTransparency = 1
 		stage.Size = UDim2.fromOffset(spec.w, spec.h)
-		stage.LayoutOrder = 2
+		stage.LayoutOrder = 3
 		stage.Parent = hubState.roll
 		local pedestal = Instance.new("Frame")
 		pedestal.Name = "Pedestal"
@@ -3517,10 +3537,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		rounding.Parent = oddsBars
 		local row = Instance.new("Frame")
 		row.Name = "CrackRow"
-		row.Position = UDim2.fromOffset(spec.row.x, spec.row.y)
 		row.Size = UDim2.fromOffset(spec.row.w, spec.row.h)
 		row.BackgroundTransparency = 1
-		row.Parent = stage
+		row.LayoutOrder = 2
+		row.Parent = hubState.roll
 		local count = Instance.new("TextLabel")
 		count.Name = "ShardCount"
 		count.Position = UDim2.fromOffset(spec.count.x, spec.count.y)
