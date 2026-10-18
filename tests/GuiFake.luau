@@ -2,7 +2,8 @@
 
 --[[
 	A test-only Roblox GUI stand-in. MenuHub and ActionBar load against
-	it, and tests fire Activated, MouseButton1Click, and InputBegan.
+	it. Activated:Fire errors, the same way a real RBXScriptSignal does.
+	GuiFake.activate and GuiFake.emit run the connected handlers.
 ]]
 
 local fs = require("@lune/fs")
@@ -149,7 +150,7 @@ function UDim2.fromScale(x: number, y: number)
 	return UDim2.new(x, 0, y, 0)
 end
 
-local function makeSignal()
+local function makeSignal(rejectFire: boolean?)
 	local rows = {}
 	local signal = {}
 	function signal:Connect(fn)
@@ -160,12 +161,18 @@ local function makeSignal()
 		table.insert(rows, { fn = fn, conn = conn })
 		return conn
 	end
-	function signal:Fire(...)
+	function signal:_emit(...)
 		for _, row in ipairs(rows) do
 			if row.conn.Connected then
 				row.fn(...)
 			end
 		end
+	end
+	function signal:Fire(...)
+		if rejectFire == true then
+			error("RBXScriptSignal:Fire is not a Roblox method", 2)
+		end
+		signal:_emit(...)
 	end
 	function signal:_count()
 		local total = 0
@@ -239,7 +246,7 @@ local function newInstance(className: string)
 	local signals = {}
 	if className == "TextButton" or className == "ImageButton" then
 		for _, eventName in ipairs(BUTTON_EVENTS) do
-			signals[eventName] = makeSignal()
+			signals[eventName] = makeSignal(eventName == "Activated")
 		end
 	elseif GUI_OBJECT[className] then
 		signals.InputBegan = makeSignal()
@@ -438,9 +445,14 @@ function GuiFake.connections(instance: any, eventName: string): number
 	return 0
 end
 
+function GuiFake.emit(button: any, eventName: string)
+	local signal = button[eventName]
+	signal:_emit()
+end
+
 function GuiFake.activate(button: any)
 	if GuiFake.connections(button, "Activated") > 0 then
-		button.Activated:Fire()
+		button.Activated:_emit()
 	end
 	if GuiFake.connections(button, "MouseButton1Click") > 0 then
 		button.MouseButton1Click:Fire()
@@ -640,7 +652,7 @@ function GuiFake.world()
 	local folder = newInstance("Folder")
 	folder.Name = "ShardfallClient"
 	local scripts = {}
-	for _, name in ipairs({ "MenuHub", "ClassHud", "MobileShell", "ActionBar" }) do
+	for _, name in ipairs({ "MenuHub", "ClassHud", "MobileShell", "ActionBar", "PadFocus" }) do
 		local moduleScript = newInstance("ModuleScript")
 		moduleScript.Name = name
 		moduleScript.Parent = folder
@@ -762,7 +774,12 @@ function GuiFake.world()
 				error("require " .. tostring(module), 2)
 			end
 			local moduleName = module.Name
-			if moduleName == "MenuHub" or moduleName == "ClassHud" or moduleName == "MobileShell" or moduleName == "ActionBar" then
+			if moduleName == "MenuHub"
+				or moduleName == "ClassHud"
+				or moduleName == "MobileShell"
+				or moduleName == "ActionBar"
+				or moduleName == "PadFocus"
+			then
 				return loadClient(moduleName)
 			end
 			return require(SHARED .. moduleName)

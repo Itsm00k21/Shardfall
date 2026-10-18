@@ -14,10 +14,11 @@
 	A close call is one beat beside the card. The client does not decide
 	the roll, and it does not advance pity.
 
-	While the hub is open, D-pad and the left stick move a frame named
-	PadRing through the tabs and the visible buttons on the open page.
-	ButtonA activates the selected button through its existing action.
-	ButtonB still closes on the path already in InputBegan.
+	While the hub is open, D-pad and the left stick move a UIStroke named
+	PadRing through the live tabs and the visible buttons on the open
+	page. The stroke stays hidden until the first gamepad step. ButtonA
+	runs the handler that button already connected, and the Roll button
+	calls pressRoll. ButtonB still closes on the path already in InputBegan.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -66,7 +67,7 @@ local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Sta
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
 local UiMotion = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiMotion"))
 local UiSfx = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSfx"))
-local PadNav = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PadNav"))
+local PadFocus = require(script.Parent:WaitForChild("PadFocus"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
@@ -446,6 +447,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.padIndex = 1
 	hubState.padHeld = ""
 	hubState.padRing = nil
+	hubState.padPress = {}
+
+	function hubFn.bindActivated(button: any, handler: any)
+		if button == nil or type(handler) ~= "function" then
+			return
+		end
+		hubState.padPress[button] = handler
+		button.Activated:Connect(handler)
+	end
 
 	function hubFn.padShown(node: any): boolean
 		local current = node
@@ -461,38 +471,34 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return true
 	end
 
-	function hubFn.padRing(): Frame
+	function hubFn.padStroke(): UIStroke
 		if hubState.padRing ~= nil then
 			return hubState.padRing
 		end
-		local ring = Instance.new("Frame")
+		local ring = Instance.new("UIStroke")
 		ring.Name = "PadRing"
-		ring.BackgroundTransparency = 1
-		ring.BorderSizePixel = 0
-		ring.Active = false
-		ring.Selectable = false
-		ring.Size = UDim2.new(1, -8, 1, -8)
-		ring.Position = UDim2.fromOffset(4, 4)
-		ring.ZIndex = 30
-		ring.Visible = false
-		local stroke = Instance.new("UIStroke")
-		stroke.Name = "Ring"
-		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		stroke.Thickness = 4
-		stroke.Color = rgb("text")
-		stroke.Parent = ring
+		ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		ring.BorderStrokePosition = Enum.BorderStrokePosition.Inner
+		ring.Thickness = 4
+		ring.Color = Color3.fromRGB(244, 240, 252)
+		ring.Enabled = false
 		hubState.padRing = ring
 		return ring
+	end
+
+	function hubFn.padHide()
+		if hubState.padRing == nil then
+			return
+		end
+		hubState.padRing.Enabled = false
+		hubState.padRing.Parent = nil
 	end
 
 	function hubFn.padClear()
 		hubState.padTarget = nil
 		hubState.padIndex = 1
 		hubState.padHeld = ""
-		if hubState.padRing ~= nil then
-			hubState.padRing.Visible = false
-			hubState.padRing.Parent = nil
-		end
+		hubFn.padHide()
 	end
 
 	function hubFn.padList(): { any }
@@ -504,16 +510,37 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if button.Name == "Backdrop" or button.Name == "PadRing" then
 				return
 			end
-			if not hubFn.padShown(button) then
+			if button.Visible == false or not hubFn.padShown(button) then
 				return
 			end
 			table.insert(list, button)
+		end
+		local function ordered(root: any): { any }
+			local rows = {}
+			for index, child in ipairs(root:GetChildren()) do
+				local order = child.LayoutOrder
+				if type(order) ~= "number" then
+					order = 0
+				end
+				table.insert(rows, { child = child, index = index, order = order })
+			end
+			table.sort(rows, function(a, b)
+				if a.order ~= b.order then
+					return a.order < b.order
+				end
+				return a.index < b.index
+			end)
+			local out = {}
+			for _, row in ipairs(rows) do
+				table.insert(out, row.child)
+			end
+			return out
 		end
 		local function walk(root: any)
 			if root == nil or not hubFn.padShown(root) then
 				return
 			end
-			for _, child in ipairs(root:GetChildren()) do
+			for _, child in ipairs(ordered(root)) do
 				if child.Name ~= "PadRing" then
 					if child:IsA("GuiButton") then
 						add(child)
@@ -524,8 +551,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 			end
 		end
-		for _, tab in ipairs(ClientChrome.TABS) do
-			add(hubState.tabButtons[tab.id])
+		for _, tabId in ipairs(UiRouter.cycle()) do
+			add(hubState.tabButtons[tabId])
 		end
 		add(hubState.closeButton)
 		walk(hubState.pages[hubState.shownId])
@@ -534,26 +561,77 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return list
 	end
 
-	function hubFn.padPlace(index: number)
-		if not hubState.route.open then
-			hubFn.padClear()
+	function hubFn.padAxis(value: any, key: string): number
+		if type(value) ~= "table" and type(value) ~= "userdata" then
+			return 0
+		end
+		local component = value[key]
+		if type(component) ~= "number" then
+			return 0
+		end
+		return component
+	end
+
+	function hubFn.padScroll(button: any)
+		local current = button.Parent
+		while current ~= nil do
+			if current:IsA("ScrollingFrame") then
+				local nextCanvas = PadFocus.canvas({
+					x = hubFn.padAxis(current.AbsolutePosition, "X"),
+					y = hubFn.padAxis(current.AbsolutePosition, "Y"),
+					w = hubFn.padAxis(current.AbsoluteSize, "X"),
+					h = hubFn.padAxis(current.AbsoluteSize, "Y"),
+					canvasX = hubFn.padAxis(current.CanvasPosition, "X"),
+					canvasY = hubFn.padAxis(current.CanvasPosition, "Y"),
+				}, {
+					x = hubFn.padAxis(button.AbsolutePosition, "X"),
+					y = hubFn.padAxis(button.AbsolutePosition, "Y"),
+					w = hubFn.padAxis(button.AbsoluteSize, "X"),
+					h = hubFn.padAxis(button.AbsoluteSize, "Y"),
+				})
+				if nextCanvas ~= nil then
+					current.CanvasPosition = Vector2.new(nextCanvas.x, nextCanvas.y)
+				end
+			end
+			current = current.Parent
+		end
+	end
+
+	function hubFn.padShow()
+		local button = hubState.padTarget
+		if button == nil then
 			return
+		end
+		local ring = hubFn.padStroke()
+		ring.Parent = button
+		ring.Enabled = true
+		hubFn.padScroll(button)
+	end
+
+	function hubFn.padAim()
+		local tabId = hubState.shownId
+		if tabId == "sets" then
+			tabId = "bag"
 		end
 		local list = hubFn.padList()
-		local count = #list
-		if count == 0 then
-			hubFn.padClear()
-			return
+		local target = hubState.tabButtons[tabId]
+		local index = 1
+		if target ~= nil then
+			for cursor, button in ipairs(list) do
+				if button == target then
+					index = cursor
+					break
+				end
+			end
 		end
-		if index < 1 or index > count then
+		if target == nil or list[index] ~= target then
+			target = list[1]
 			index = 1
 		end
-		local button = list[index]
 		hubState.padIndex = index
-		hubState.padTarget = button
-		local ring = hubFn.padRing()
-		ring.Parent = button
-		ring.Visible = true
+		hubState.padTarget = target
+		hubState.padHeld = ""
+		hubFn.padHide()
 	end
 
 	function hubFn.padSync()
@@ -561,14 +639,41 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.padClear()
 			return
 		end
-		local index = hubState.padIndex
-		if type(index) ~= "number" then
-			index = 1
+		local showing = hubState.padRing ~= nil and hubState.padRing.Parent ~= nil
+		local found = false
+		if showing and hubState.padTarget ~= nil then
+			for cursor, button in ipairs(hubFn.padList()) do
+				if button == hubState.padTarget then
+					hubState.padIndex = cursor
+					found = true
+					break
+				end
+			end
 		end
-		hubFn.padPlace(index)
+		if found then
+			hubFn.padShow()
+			return
+		end
+		hubFn.padAim()
+		if showing and hubState.padTarget ~= nil then
+			hubFn.padShow()
+		end
 	end
 
-	function hubFn.padMove(move: any)
+	function hubFn.padBoxes(list: { any }): { any }
+		local boxes = {}
+		for _, button in ipairs(list) do
+			table.insert(boxes, {
+				x = hubFn.padAxis(button.AbsolutePosition, "X"),
+				y = hubFn.padAxis(button.AbsolutePosition, "Y"),
+				w = hubFn.padAxis(button.AbsoluteSize, "X"),
+				h = hubFn.padAxis(button.AbsoluteSize, "Y"),
+			})
+		end
+		return boxes
+	end
+
+	function hubFn.padStep(direction: string)
 		if not hubState.route.open then
 			return
 		end
@@ -584,32 +689,48 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				break
 			end
 		end
-		local stepped = PadNav.next({
-			count = count,
-			index = index,
-			held = hubState.padHeld,
-		}, move)
-		hubState.padHeld = stepped.held
-		hubFn.padPlace(stepped.index)
+		local nextIndex = PadFocus.step(index, count, direction, hubFn.padBoxes(list))
+		hubState.padIndex = nextIndex
+		hubState.padTarget = list[nextIndex]
+		hubFn.padShow()
+	end
+
+	function hubFn.padMove(direction: string)
+		hubState.padHeld = ""
+		hubFn.padStep(direction)
 	end
 
 	function hubFn.padUse()
+		if not hubState.route.open then
+			return
+		end
 		if hubState.padTarget == nil or hubState.padTarget.Parent == nil then
-			hubFn.padPlace(1)
+			hubFn.padAim()
 		end
 		local button = hubState.padTarget
 		if button == nil then
 			return
 		end
-		local ring = hubFn.padRing()
-		ring.Parent = button
-		ring.Visible = true
-		button.Activated:Fire()
+		if button == hubState.rollButton then
+			hubFn.pressRoll()
+		else
+			local handler = hubState.padPress[button]
+			if type(handler) == "function" then
+				handler()
+			end
+		end
 		if not hubState.route.open then
 			hubFn.padClear()
-			return
 		end
-		hubFn.padSync()
+	end
+
+	function hubFn.padPointer(input: InputObject): boolean
+		local kind = input.UserInputType
+		return kind == Enum.UserInputType.Keyboard
+			or kind == Enum.UserInputType.Touch
+			or kind == Enum.UserInputType.MouseButton1
+			or kind == Enum.UserInputType.MouseButton2
+			or kind == Enum.UserInputType.MouseButton3
 	end
 
 	-- Modal on the backdrop stops the mouse from steering the camera.
@@ -623,6 +744,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				table.insert(codes, code)
 			end
 		end
+		table.insert(codes, Enum.KeyCode.ButtonA)
 		ContextActionService:BindActionAtPriority(
 			"ShardfallMenuSink",
 			hubFn.sink,
@@ -1653,7 +1775,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.setRest(button, rgb("header"))
 		hubFn.motion(button)
 		if fn ~= nil then
-			button.Activated:Connect(fn)
+			hubFn.bindActivated(button, fn)
 		end
 		return button
 	end
@@ -2029,7 +2151,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local uid = item.uid
 		if type(uid) == "string" then
 			local itemUid = uid
-			card.Activated:Connect(function()
+			hubFn.bindActivated(card, function()
 				hubFn.openItem(itemUid)
 			end)
 			local equip = Instance.new("TextButton")
@@ -2050,7 +2172,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			equipCorner.Parent = equip
 			hubFn.setRest(equip, rgb("header"))
 			hubFn.motion(equip)
-			equip.Activated:Connect(function()
+			hubFn.bindActivated(equip, function()
 				hubFn.equipUid(itemUid)
 			end)
 			local lock = Instance.new("TextButton")
@@ -2072,7 +2194,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.setRest(lock, rgb("header"))
 			hubFn.motion(lock)
 			local locked = item.locked == true
-			lock.Activated:Connect(function()
+			hubFn.bindActivated(lock, function()
 				task.spawn(function()
 					pcall(hooks.invoke, "SetItemLock", itemUid, not locked)
 				end)
@@ -2130,7 +2252,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		buttonCorner.Parent = button
 		hubFn.setRest(button, rgb("button"))
 		hubFn.motion(button)
-		button.Activated:Connect(fn)
+		hubFn.bindActivated(button, fn)
 	end
 
 	function hubFn.bagItems(): { any }
@@ -2236,7 +2358,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.setRest(choose, rgb("button"))
 			hubFn.motion(choose)
 			local classId = entry.id
-			choose.Activated:Connect(function()
+			hubFn.bindActivated(choose, function()
 				hubState.classDismissed = true
 				if UiRouter.top(hubState.route) == "class" then
 					hubFn.apply(UiRouter.pop(hubState.route))
@@ -2441,7 +2563,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			chooseCorner.Parent = choose
 			hubFn.setRest(choose, rgb("button"))
 			hubFn.motion(choose)
-			choose.Activated:Connect(function()
+			hubFn.bindActivated(choose, function()
 				hubFn.showClassPrompt(true)
 			end)
 			classCard.Size = UDim2.new(1, 0, 0, 128)
@@ -2576,7 +2698,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.setRest(button, rgb(tone))
 			hubFn.motion(button)
 			local pillId = pill.id
-			button.Activated:Connect(function()
+			hubFn.bindActivated(button, function()
 				hubState.bagPill = pillId
 				hubFn.paintBag()
 				hubFn.show("bag")
@@ -2614,7 +2736,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			corner.Parent = button
 			hubFn.setRest(button, rgb("header"))
 			hubFn.motion(button)
-			button.Activated:Connect(fn)
+			hubFn.bindActivated(button, fn)
 		end
 		local function refreshBag()
 			hubFn.paintBag()
@@ -2751,7 +2873,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local slotCorner = Instance.new("UICorner")
 			slotCorner.CornerRadius = UDim.new(0, 6)
 			slotCorner.Parent = slotButton
-			slotButton.Activated:Connect(function() end)
+			hubFn.bindActivated(slotButton, function() end)
 		end
 		local foot = Instance.new("Frame")
 		foot.Name = "BagFoot"
@@ -2778,7 +2900,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		equipBestCorner.Parent = equipBest
 		hubFn.setRest(equipBest, rgb("equip"))
 		hubFn.motion(equipBest)
-		equipBest.Activated:Connect(function()
+		hubFn.bindActivated(equipBest, function()
 			local before = hubState.profile
 			for _, uid in ipairs(HubStyle.bestGear(before)) do
 				hubFn.equipUid(uid)
@@ -2905,7 +3027,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			cardName.Text = tostring(pet.name or "Pet")
 			cardName.Parent = card
 			local pick = index
-			card.Activated:Connect(function()
+			hubFn.bindActivated(card, function()
 				hubState.petPick = pick
 				hubFn.paintPets()
 				hubFn.show("pets")
@@ -3163,7 +3285,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.setRest(button, rgb(tone))
 				hubFn.motion(button)
 				local spotId = spot.id
-				button.Activated:Connect(function()
+				hubFn.bindActivated(button, function()
 					hubFn.applyControl(spotId)
 				end)
 			end
@@ -3305,7 +3427,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.setRest(button, if chosen then rgb("button") else rgb("header"))
 			hubFn.motion(button)
 			local spotId = spot.id
-			button.Activated:Connect(function()
+			hubFn.bindActivated(button, function()
 				hubFn.applyControl(spotId)
 			end)
 		end
@@ -3337,7 +3459,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			corner.Parent = button
 			hubFn.setRest(button, if on then rgb("button") else rgb("header"))
 			hubFn.motion(button)
-			button.Activated:Connect(function()
+			hubFn.bindActivated(button, function()
 				hubFn.applyControl(button.Name)
 			end)
 		end
@@ -3374,7 +3496,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			corner.Parent = button
 			hubFn.setRest(button, rgb("header"))
 			hubFn.motion(button)
-			button.Activated:Connect(function()
+			hubFn.bindActivated(button, function()
 				hubFn.applyControl(button.Name)
 			end)
 		end
@@ -4421,7 +4543,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.holdingRoll = false
 		end
 	end)
-	hubState.revealEquip.Activated:Connect(function()
+	hubFn.bindActivated(hubState.revealEquip, function()
 		local uid = hubState.revealEquip:GetAttribute("Uid")
 		if type(uid) ~= "string" or uid == "" then
 			return
@@ -4973,10 +5095,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.panel.Visible = state.open
 		if not state.open then
 			hubFn.padClear()
-		elseif not wasOpen then
-			hubState.padTarget = nil
-			hubState.padIndex = 1
-			hubState.padHeld = ""
 		end
 		hubState.classModal.Visible = state.open and UiRouter.top(state) == "class"
 		if state.open then
@@ -5073,7 +5191,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.setRest(button, rgb("body"))
 		hubFn.motion(button)
 		local tabId = tab.id
-		button.Activated:Connect(function()
+		hubFn.bindActivated(button, function()
 			hubFn.paint()
 			hubFn.follow(UiRouter.switch(hubState.route, tabId))
 		end)
@@ -5132,7 +5250,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		caption.Parent = button
 		hubFn.setRest(button, rgb("body"))
 		hubFn.motion(button)
-		button.Activated:Connect(function()
+		hubFn.bindActivated(button, function()
 			hubFn.paint()
 			hubFn.follow(UiRouter.switch(hubState.route, "shop"))
 		end)
@@ -5157,13 +5275,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	mountShopTab()
 	hubFn.paintHints()
 
-	hubState.backdrop.Activated:Connect(hubFn.pop)
-	hubState.closeButton.Activated:Connect(hubFn.pop)
-	hubState.classClose.Activated:Connect(function()
+	hubFn.bindActivated(hubState.backdrop, hubFn.pop)
+	hubFn.bindActivated(hubState.closeButton, hubFn.pop)
+	hubFn.bindActivated(hubState.classClose, function()
 		hubState.classDismissed = true
 		hubFn.pop()
 	end)
-	hubState.detailBack.Activated:Connect(function()
+	hubFn.bindActivated(hubState.detailBack, function()
 		hubState.detailOpen = false
 		hubState.detail.Visible = false
 	end)
@@ -5189,6 +5307,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		if hubState.capturing ~= nil and input.UserInputType == Enum.UserInputType.Keyboard then
+			hubFn.padHide()
 			local key = input.KeyCode.Name
 			if string.match(key, "^%a$") ~= nil or #key == 1 then
 				local letter = string.upper(string.sub(key, 1, 1))
@@ -5212,6 +5331,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			return
 		end
+		if hubState.route.open then
+			local keyName = input.KeyCode.Name
+			local direction = PadFocus.direction(keyName)
+			if direction ~= nil then
+				hubFn.padMove(direction)
+				return
+			end
+			if keyName == "ButtonA" then
+				hubFn.padUse()
+				return
+			end
+			if hubFn.padPointer(input) then
+				hubFn.padHide()
+			end
+		end
 		if processed then
 			return
 		end
@@ -5232,16 +5366,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		if hubState.route.open then
-			local keyName = input.KeyCode.Name
-			if PadNav.counts(keyName) then
-				hubFn.padMove(keyName)
-				return
-			end
-			if keyName == "ButtonA" then
-				hubFn.padUse()
-				return
-			end
-			local nextState = UiRouter.key(hubState.route, keyName, hubState.draft.controls.hotkeys)
+			local nextState = UiRouter.key(hubState.route, input.KeyCode.Name, hubState.draft.controls.hotkeys)
 			if nextState.generation ~= hubState.route.generation then
 				hubFn.follow(nextState)
 			end
@@ -5261,21 +5386,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if not hubState.route.open then
 			return
 		end
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseMovement or kind == Enum.UserInputType.Touch then
+			hubFn.padHide()
+			return
+		end
 		if input.KeyCode.Name ~= "Thumbstick1" then
 			return
 		end
 		local position = input.Position
-		local x = 0
-		local y = 0
-		if type(position) == "table" then
-			if type(position.X) == "number" then
-				x = position.X
-			end
-			if type(position.Y) == "number" then
-				y = position.Y
-			end
+		local stepped = PadFocus.stick(hubFn.padAxis(position, "X"), hubFn.padAxis(position, "Y"), hubState.padHeld)
+		hubState.padHeld = stepped.held
+		if stepped.direction ~= nil then
+			hubFn.padStep(stepped.direction)
 		end
-		hubFn.padMove({ x = x, y = y })
 	end)
 
 	-- Combat pins Humanoid.Health to MaxHealth, so Died never fires on a
