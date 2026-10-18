@@ -1,88 +1,85 @@
 # Playtest script
 
-G-035. One 30-minute session, a watch list, and a feedback form. This file does not change code.
+E-003. One fresh profile. The path is spawn, the plaza, the first dungeon, the first loot, and the first crack, inside about a minute. This file does not change code.
 
-Choice: one fresh account, one device, Normal Rootvault. The clock follows the live rooms in `Dungeons.luau`, not the unused Heartwood-at-20 text. Suggested XP from G-030 is a pace note. A pass or fail uses the live column. Skip and a finished cold open both count. The first pet stays unminted.
+Feel and looks only. Readability, phone feel, and that first-run path. Leave gold totals, odds math, and damage out of the notes.
 
-Do not spend Robux. `Loops.PREMIUM_ENABLED` stays false. If a buy button appears, stop and write the label.
+Run the path on PC, on a phone (touch), and with a controller where a step says so. Write the build, the device, and the viewport. On a phone, rotate once if you can.
 
-## Setup
+Do not spend Robux. If a purchase prompt appears, stop and write the label.
 
-| check | live | cite |
-|---|---|---|
-| Kit on skip or finish | 250 gold, 40 Shard Keys, 1 Rare chest, 1 Uncommon chest, 3 Healing Tonics | `Onboarding.luau:52-63` |
-| Shard Tokens | 25 | `Schema.luau:37` |
-| Classes | Warden, Tidecaller, Forgeborn, Frostblade, Voidcaster | `Classes.luau:79`, `Classes.luau:144`, `Classes.luau:220`, `Classes.luau:274`, `Classes.luau:328` |
-| Rootvault Normal | account level 1 | `Rootvault.luau:14` |
-| Rooms, in order | Choked Thicket, Spore Canopy, Brute Den, Gnarl's Heart | `Dungeons.luau:297-315` |
-| First forge from +0 | 150 gold | `Economy.luau:28-29` |
-| Manual clear, before Gold Find | 360 gold, 3 tokens, 40 account XP | `Dungeons.luau:318-322` |
-| First Rootvault clear today | that 40 XP becomes 120, plus 1 Rare chest | `DungeonService.luau:1323-1329` |
-| Guild Hall | "The Guild Hall is coming soon." | `Haven.luau:134-141` |
-| Market district | "The daily shop is not open yet." | `Haven.luau:125-131` |
+Raids, Trading, the Market Board, pet evolution, boss pets, and Shard Pass stay out of this pass. If one of those shows up, that step says it must stay hidden.
 
-Write the build you joined, the device, and the viewport. On a phone, also note 390 wide and 844 wide if you can rotate.
+The shots in `docs/design/vision/refs/` are reference only. Do not look for their art, their names, or a paid offer. There is no premium currency.
 
 ## Steps
 
-| min | do this | pass | write it down if |
-|---|---|---|---|
-| 0 | Join. Read the cold open, or skip. | Haven, with the kit row above | The kit differs |
-| 1 | Pick any of the five pedestals. | One class is set. The other four were visible | A pedestal is missing or blank |
-| 2–3 | Swing saplings until the lesson advances. | The third hit is the lesson | You are stuck with no hint |
-| 4–5 | Step out of a red mark. | The dodge lesson advances | The mark gives no time to move |
-| 6 | Look at both doors, then take one. | Both doors are safe choices | One door is a trap with no tell |
-| 7–8 | Open the Uncommon chest, then the Rare chest. | Both open into the bag | A chest spends keys or Robux |
-| 9 | Claim the login chest once. Claim it again. | First claim pays. Second says "Daily login is already claimed." Streak shows 1 | The second claim pays again |
-| 10–12 | At the Forge, upgrade one piece from +0. | Gold falls by 150 and stays at 0 or more | The price is not 150, or gold goes negative |
-| 13 | Open Pets. | An empty slot is fine | A pet was minted for you |
-| 14–16 | On the Roll tab, crack 3 Shard Tokens. Read the Odds list, then open the odds info. | Tokens go from 25 to 22. Each crack gives an item. Epic on both lines is about 0.4, not 4.0 | A refusal paints a Miss streak. Epic prints as 4.0. Legendary, Mythic, or Secret prints as 0.0 |
-| 17 | Open Pass, Market, Raids, and Settings. | Premium says the track is not for sale. No price button takes Robux | A product id prompts a purchase |
-| 18 | Read the Rootvault gate and enter Normal. | Normal starts at level 1 | Hard or Nightmare starts instead |
-| 19–27 | Clear the four rooms. Take any door you understand. | You can name the room you are in | A door is blank, or you cannot leave a room |
-| 28 | Beat Grandmother Gnarl. | The clear pays. First boss today can add an Epic chest. First boss this week can also add a Legendary chest | The clear pays nothing, and this was not Practice |
-| 29 | Read the reward line. | 360 gold and 3 tokens, or you wrote the line you saw. Account XP 120 if this was the day's first clear | Gold and tokens are both missing |
-| 30 | Open the loop list. Walk to the Guild Hall and the Market district. | Daily boss reads resting, because Gnarl already fell. Both districts show the soon lines | The daily button starts a second paid Gnarl, or a district is an empty error |
+### 1. Spawn
 
-Practice Grove is a separate door. If you enter it, loot should be "Practice Grove. No loot." That is a pass for Practice, and it does not replace the Normal clear.
+Waiting on T-227.
 
-Heartwood is out of this half hour. Level 15 and a party of 4 are the later bar.
+You join on a new profile. Read the cold open, or tap Skip intro, so you are standing in the plaza with time left for the rest of the minute. The line you read is short, and Skip intro is easy to see.
 
-## What to watch
+You can read two counters, Gold and Shards. Shards shows 10. The portrait, the HP bar, and those counters sit apart. Nothing on the screen asks for Robux.
 
-| watch | fail looks like | cite |
-|---|---|---|
-| Red marks | Damage lands with no time to step out | `Rootvault.luau:21` |
-| Gnarl's rest | A new red square opens on top of the last slam | `Dungeons.luau:263-266` |
-| Refused roll | Tokens stay, and the streak still breaks or the card says Miss | `MenuHub.luau:3205-3206` |
-| Odds honesty | The Odds list or the info line prints Legendary, Mythic, or Secret as 0.0, or Epic as 4.0 | `RollBoard.luau:112-120`, `MenuHub.luau:2811-2823`, `MenuHub.luau:2656-2662` |
-| Login once | A second claim on the same day pays another chest | `ChestConfig.luau:435-436` |
-| Daily Gnarl | After this clear, Start Daily Boss still starts a fight | `DungeonService.luau:2498-2499` |
-| Phone top | The gold banner covers the portrait or the HP bar | banner lane, viewports 390×844 and 844×390 |
-| Robux | Any prompt. Stop the session | `Loops.luau:21` |
-| Pet | A cute starter pet appears on its own | Shardjaw hold is still on |
+### 2. Plaza
 
-The Echo chip and the raid Leave button have their own QA rows. If either is off the screen, write the viewport and keep going.
+You stand where you spawned and look.
 
-## Feedback form
+The Rootvault gate is readable from there. The portrait, the HP bar, the goal tracker, and the action bar do not cover each other. On a phone the counters stay off the portrait and the banner, and the action buttons are easy to tap. On PC the same chrome is readable in a normal window.
 
-Scores are 1 (stuck or unhappy) to 5 (clear and fun). One session, one form.
+The rail reads Hero, Bag, Pets, Roll, Shop, and Settings. Raids, Trading, the Market Board, pet evolution, boss pets, and Shard Pass stay off the rail and out of the hub. If a control for one of those appears, it must stay hidden. Stop and write what you saw.
 
-| id | prompt | answer |
-|---|---|---|
-| F1 | Device and viewport | |
-| F2 | Skip or full cold open | |
-| F3 | Class picked | |
-| F4 | Fun, 1–5 | |
-| F5 | You knew the next step, 1–5 | |
-| F6 | Red marks felt fair, 1–5 | |
-| F7 | Where you got stuck, one sentence | |
-| F8 | The odds line for Epic, copied from the screen | |
-| F9 | A refused action, and the exact sentence | |
-| F10 | Did anything ask for Robux | |
-| F11 | One thing to keep | |
-| F12 | One thing to change | |
+Other gates may stand nearby. You take Rootvault. A raid screen must stay hidden.
 
-## Flags
+### 3. First dungeon
 
-None. Room names and class names are the live ones.
+You walk to Rootvault and go in. You swing, and you dodge.
+
+The gate name was clear before you entered. The first room reads as a fight: you can see what to hit. On PC the mouse and the keys answer. On a phone, attack, dodge, and jump are reachable and do not cover the enemy. On a controller, with the hub closed, attack and dodge still answer.
+
+### 4. First loot
+
+You fight until something drops, and you read it.
+
+The name and the rarity color are readable. You can tell what you picked up. The card does not cover the fight, and on a phone it does not cover the action buttons. Nothing about the drop asks for Robux.
+
+### 5. First crack
+
+Waiting on T-222, T-224, and T-226.
+
+You open Roll from the rail. From the moment you could move, this first result should land inside about a minute.
+
+The panel is readable: a crack button, a shard count, a pity line, and odds lines in one clear format. You crack once. The shard shakes, a crack spreads, then the result bursts in and the name is readable. If reduced motion is on, that reveal stays short. A tap during the motion skips to the result and does not spend a second shard.
+
+The Roll panel stays open. You crack two more times. It stays open the whole time. A tap on the dark backdrop from the same press that cracked does not close it. A later tap on the backdrop still closes it.
+
+The pity line stays readable on a phone and on PC. It reads Pity and a count, sitting to the right, with the lock beside it. The middle of the row does not cover either one.
+
+After each crack, the shard number on the panel is the same number as the Shards counter on the HUD.
+
+### 6. Controller hub
+
+Waiting on T-222 for the panel staying open after a pad crack.
+
+You open the hub with a controller.
+
+A light ring, PadRing, sits on the open tab. The D-pad and the left stick move that ring through the hub tabs and the buttons on the page. ButtonA activates the highlighted control. ButtonA on the crack button cracks once, and the panel stays up. ButtonB closes the hub, and the ring is gone.
+
+A mouse move or a touch hides the ring. The next pad move shows it again. The ring never sits on a hidden tab. Raids, the Market Board, and Shard Pass stay hidden here too.
+
+### 7. Phone hub
+
+On a phone, you open Bag, Pets, and Roll by touch, then close each one.
+
+Text is readable. Buttons are easy to tap. Nothing clips off the screen or covers Close. Bag shows the loot from this run. Pets does not offer evolution or a boss pet. If either of those appears, it must stay hidden. Touch does not leave a selection ring on the screen.
+
+### 8. Gold shop
+
+You open Shop from the rail, read the offers, and close it.
+
+It reads as a Gold shop: potions, a bag slot, and a pet slot, with prices in Gold. No price asks for Robux, and no purchase prompt appears. The Market Board stays hidden.
+
+## Write down
+
+The build, the device, and the viewport. Whether the first crack felt inside about a minute. The one place text was hard to read, or a purchase prompt if one appeared.
