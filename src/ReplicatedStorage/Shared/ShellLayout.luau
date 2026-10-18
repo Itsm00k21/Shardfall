@@ -9,6 +9,8 @@
 	does not shrink on a short window.
 ]]
 
+local ActionSlots = require("./ActionSlots")
+
 local ShellLayout = {}
 
 -- Zone names are stud-sized, so they shrink with distance, and they drop
@@ -57,7 +59,18 @@ function ShellLayout.inventory(viewportX: number, viewportY: number, mobile: boo
 	local loop = ShellLayout.loopRect(viewportX, viewportY)
 	local top = ShellLayout.petRect().y + ShellLayout.petRect().h + 8
 	local maxW = math.max(0, loop.x - 8 - margin)
-	local maxH = math.max(0, bar.y - 8 - top)
+	local limitY = bar.y
+	if mobile == true then
+		-- The phone bag is a sheet in the safe area, above the 2x4 bar.
+		-- It does not sit in the leftover strip beside the loop panel.
+		maxW = math.max(0, viewportX - 32)
+		top = 16
+	end
+	local cluster = ActionSlots.placement(viewportX, viewportY, mobile == true)
+	if cluster.y < limitY then
+		limitY = cluster.y
+	end
+	local maxH = math.max(0, limitY - 8 - top)
 	local w = math.min(if mobile then maxW else 960, maxW)
 	local h = math.min(if mobile then maxH else 680, maxH)
 	return { w = w, h = h }

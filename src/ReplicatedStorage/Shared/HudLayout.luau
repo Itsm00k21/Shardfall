@@ -29,19 +29,78 @@ function HudLayout.portrait(margin: number): Rect
 	return rect(margin, margin, 56, 56)
 end
 
-function HudLayout.health(margin: number): Rect
+function HudLayout.health(margin: number, viewportX: number?): Rect
 	local portrait = HudLayout.portrait(margin)
-	return rect(portrait.x + portrait.w + 8, margin, 220, 56)
+	local width = 220
+	-- A portrait phone keeps a 108px counter column on the right.
+	-- The HP bar stops 8px before that column. Wide screens stay 220.
+	if
+		type(viewportX) == "number"
+		and viewportX == viewportX
+		and viewportX > 0
+		and viewportX < 500
+	then
+		local start = portrait.x + portrait.w + 8
+		local limit = viewportX - margin - 108 - 8
+		local room = math.floor(limit - start)
+		if room < width then
+			width = room
+		end
+		if width < 0 then
+			width = 0
+		end
+	end
+	return rect(portrait.x + portrait.w + 8, margin, width, 56)
+end
+
+-- Gold, Mastery, and Shards. 108px each, plus the 8px gaps.
+local PILL_W = 108
+local PILL_GAP = 8
+local PILL_COUNT = 3
+
+local function axisWidth(viewportX: number): number
+	if type(viewportX) ~= "number" or viewportX ~= viewportX then
+		return 0
+	end
+	if viewportX == math.huge or viewportX == -math.huge or viewportX < 0 then
+		return 0
+	end
+	return viewportX
 end
 
 function HudLayout.pills(viewportX: number, margin: number): Rect
-	-- Gold, Mastery, and Shards. 108px each, plus the 8px gaps.
-	local width = 340
-	local room = viewportX - margin * 2
-	if width > room then
-		width = math.max(44, math.floor(room))
+	local vx = axisWidth(viewportX)
+	local span = PILL_COUNT * PILL_W + (PILL_COUNT - 1) * PILL_GAP
+	local room = vx - margin * 2
+	local function fitWidth(want: number): number
+		if want > room then
+			return math.max(44, math.floor(math.max(0, room)))
+		end
+		return want
 	end
-	return rect(math.max(margin, viewportX - margin - width), margin + 36, width, 36)
+	-- Portrait phone: one column, clear of the centered toast host.
+	if vx > 0 and vx < 500 then
+		local width = fitWidth(PILL_W)
+		local height = PILL_COUNT * 32 + (PILL_COUNT - 1) * PILL_GAP
+		return rect(math.max(margin, vx - margin - width), margin, width, height)
+	end
+	local width = fitWidth(span)
+	local x = math.max(margin, vx - margin - width)
+	local y = margin + 36
+	local height = 36
+	local strip = rect(x, y, width, height)
+	local toast = HudLayout.toast(vx, margin)
+	-- Landscape phones: the 36px strip crosses the toast. Sit in the
+	-- band under a 1.4 banner and on the toast's top edge.
+	if toast.h > 0 and HudLayout.overlaps(strip, toast) then
+		y = margin + 32
+		height = toast.y - y
+		if height < 0 then
+			height = 0
+		end
+		strip = rect(x, y, width, height)
+	end
+	return strip
 end
 
 function HudLayout.counters(gold: number, mastery: number, shards: number): { string }
@@ -72,7 +131,29 @@ end
 
 function HudLayout.toast(viewportX: number, margin: number): Rect
 	local width = math.min(420, math.max(160, viewportX - 240))
+	local left = math.min(margin, math.max(0, viewportX))
+	local right = viewportX - left
+	-- Leave the counter column (108) plus an 8px gutter.
+	if type(viewportX) == "number" and viewportX > 0 and viewportX < 500 then
+		right = viewportX - margin - 108 - 8
+	end
+	if right < left then
+		right = left
+	end
+	local room = math.max(0, right - left)
+	if width > room then
+		width = math.floor(room)
+	end
+	if width < 0 then
+		width = 0
+	end
 	local x = math.floor((viewportX - width) / 2)
+	if x < left then
+		x = left
+	end
+	if x + width > right then
+		x = math.max(left, right - width)
+	end
 	return rect(x, margin + 64, width, 36)
 end
 
@@ -200,11 +281,11 @@ function HudLayout.cardGrid(width: number, height: number, count: number): Grid
 		cellW = minCell
 		columns = 1
 	end
-	-- Icon, name, Equip, and Lock need this much. A short viewport
-	-- scrolls; it does not squash the cell and spill the buttons.
-	local cellH = math.max(188, math.min(220, cellW + 48))
+	-- Icon, name, tip, Lock, and Equip. 228 keeps Lock under the tip.
+	-- A short viewport scrolls; it does not squash the cell.
+	local cellH = math.max(228, math.min(240, cellW + 48))
 	if type(height) ~= "number" then
-		cellH = 188
+		cellH = 228
 	end
 	local rows = math.max(1, math.ceil(math.max(count, 1) / columns))
 	return {
@@ -285,6 +366,121 @@ function HudLayout.breakpoint(width: number, height: number): string
 		return "console"
 	end
 	return "pc"
+end
+
+-- The live action bar. Phone is the 2x4 cluster. Desktop is one row of 8.
+function HudLayout.actionCluster(viewportX: number, viewportY: number): Rect
+	local ActionSlots = require("./ActionSlots")
+	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"
+	local place = ActionSlots.placement(viewportX, viewportY, phone)
+	return rect(place.x, place.y, place.w, place.h)
+end
+
+function HudLayout.chipWidth(label: string): number
+	local text = if type(label) == "string" then label else ""
+	return math.max(UiTheme.TOUCH, #text * 8 + 20)
+end
+
+export type ChipRow = {
+	chips: { Rect },
+	width: number,
+	height: number,
+}
+
+-- One horizontal row. A short host scrolls; the chips stay full width.
+function HudLayout.filterRow(labels: { string }): ChipRow
+	local gap = UiTheme.PAD
+	local height = UiTheme.TOUCH
+	local x = 0
+	local chips: { Rect } = {}
+	for _, label in ipairs(labels) do
+		local width = HudLayout.chipWidth(label)
+		table.insert(chips, rect(x, 0, width, height))
+		x += width + gap
+	end
+	if x > 0 then
+		x -= gap
+	end
+	return { chips = chips, width = x, height = height }
+end
+
+export type BagCard = {
+	icon: Rect,
+	name: Rect,
+	tip: Rect,
+	lock: Rect,
+	equip: Rect,
+	badge: Rect,
+}
+
+-- Parts of a hub bag card. Lock sits under the tip. Equip sits under Lock.
+function HudLayout.bagCard(cellW: number, cellH: number): BagCard
+	local pad = 8
+	local touch = UiTheme.TOUCH
+	local textW = math.max(0, cellW - pad * 2)
+	return {
+		icon = rect(pad, pad, 36, 36),
+		name = rect(pad, 48, textW, 36),
+		tip = rect(pad, 86, textW, 32),
+		lock = rect(cellW - pad - touch, cellH - 56 - touch, touch, touch),
+		equip = rect(pad, cellH - pad - touch, textW, touch),
+		badge = rect(cellW - pad - touch, pad, touch, 22),
+	}
+end
+
+export type InventoryCard = {
+	name: Rect,
+	marks: Rect,
+}
+
+-- Name above the marks line. The two boxes do not share a pixel.
+function HudLayout.inventoryCard(cellW: number, cellH: number): InventoryCard
+	local pad = 8
+	local marksH = 16
+	local marksY = math.max(pad, cellH - 6 - marksH)
+	local nameH = math.max(UiTheme.MIN_TEXT, marksY - pad - 4)
+	return {
+		name = rect(pad, pad, math.max(0, cellW - pad * 2), nameH),
+		marks = rect(pad, marksY, math.max(0, cellW - pad * 2), marksH),
+	}
+end
+
+export type BagChrome = {
+	header: Rect,
+	tabs: Rect,
+	filters: Rect,
+	body: Rect,
+}
+
+-- Header, tabs, and filters stack. Each row stays tall enough for a 44px button.
+-- The body is whatever remains and scrolls.
+function HudLayout.bagChrome(width: number, height: number): BagChrome
+	local pad = 8
+	local innerW = math.max(0, width - pad * 2)
+	local budget = height - pad * 2 - pad * 3
+	if budget < 0 then
+		budget = 0
+	end
+	local rowH = 44
+	local bodyH = budget - rowH * 3
+	if bodyH < 0 then
+		bodyH = 0
+		rowH = math.max(36, math.floor(budget / 3))
+	end
+	local y = pad
+	local header = rect(pad, y, innerW, rowH)
+	y += rowH + pad
+	local tabs = rect(pad, y, innerW, rowH)
+	y += rowH + pad
+	local filters = rect(pad, y, innerW, rowH)
+	y += rowH + pad
+	local body = rect(pad, y, innerW, math.max(0, height - pad - y))
+	return {
+		header = header,
+		tabs = tabs,
+		filters = filters,
+		body = body,
+	}
 end
 
 function HudLayout.overlaps(a: Rect, b: Rect): boolean

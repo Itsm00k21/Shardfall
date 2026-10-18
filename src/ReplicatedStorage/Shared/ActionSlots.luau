@@ -593,7 +593,9 @@ function ActionSlots.placement(viewportX: number, viewportY: number, mobile: boo
 		local columns = 4
 		local rows = 2
 		local available = width - 140 - margin * 2
-		local slot = fitSlot(available, columns, gap, 56, 44)
+		-- A short phone uses the 44px floor so the bag still has a row above the bar.
+		local prefer = if height < 500 then 44 else 56
+		local slot = fitSlot(available, columns, gap, prefer, 44)
 		local barW = columns * slot + (columns - 1) * gap
 		local barH = rows * slot + (rows - 1) * gap + 36
 		local x = width - margin - barW
@@ -688,9 +690,10 @@ end
 
 function ActionSlots.prompts(place: Place, viewportX: number, viewportY: number): { dodge: Rect, interact: Rect }
 	local size = if place.mobile then 52 else 44
+	local edge = 16
 	local dodgeX = place.x - size - 8
 	local dodgeY = place.y + place.h - size
-	if dodgeX < 8 or (place.mobile and dodgeX < 140) then
+	if dodgeX < edge or (place.mobile and dodgeX < 140) then
 		dodgeX = place.x
 		dodgeY = place.y - size - 8
 	end
@@ -699,12 +702,30 @@ function ActionSlots.prompts(place: Place, viewportX: number, viewportY: number)
 	end
 	local interactX = place.x + place.w + 8
 	local interactY = dodgeY
-	if interactX + size > viewportX - 8 then
-		interactX = math.max(8, viewportX - 8 - size)
+	if interactX + size > viewportX - edge then
+		interactX = math.max(edge, viewportX - edge - size)
 		interactY = math.max(160, place.y - size - 8)
 	end
-	if interactY + size > viewportY - 8 then
-		interactY = viewportY - 8 - size
+	if interactY + size > viewportY - edge then
+		interactY = viewportY - edge - size
+	end
+	local function hitsBar(x: number, y: number): boolean
+		return x < place.x + place.w
+			and place.x < x + size
+			and y < place.y + place.h
+			and place.y < y + size
+	end
+	if hitsBar(interactX, interactY) then
+		local above = place.y - size - 8
+		if above >= edge then
+			interactY = above
+		end
+	end
+	if hitsBar(dodgeX, dodgeY) then
+		local above = place.y - size - 8
+		if above >= edge then
+			dodgeY = above
+		end
 	end
 	return {
 		dodge = { x = dodgeX, y = dodgeY, w = size, h = size },

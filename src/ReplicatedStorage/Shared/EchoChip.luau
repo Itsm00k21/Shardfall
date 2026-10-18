@@ -13,8 +13,10 @@
 	row (y = margin), under the HP bar (HudLayout.health), and under
 	the gold pills (HudLayout.pills). The gap under a blocker is 8.
 	The first slot that stays inside the margin and misses the
-	portrait, the HP bar, and the pills is the one returned. If none
-	do, the under-pills slot is returned anyway.
+	portrait, the HP bar, the pills, the toast host, the equip
+	prompt, the gold banner, and the action bar is the one returned.
+	A 128px chip that would cross a blocker tries 108, 88, 64, then
+	44. If none do, the under-pills slot is returned anyway.
 
 	A missing or bad size is 390 by 844. That includes nil, a string,
 	NaN, infinity, and any side under 200. A third argument, including
@@ -23,6 +25,7 @@
 	HudLayout and UiTheme. Nothing here costs Robux.
 ]]
 
+local BannerFit = require("./BannerFit")
 local HudLayout = require("./HudLayout")
 local UiTheme = require("./UiTheme")
 
@@ -81,27 +84,60 @@ local function inside(slot: Rect, vx: number, vy: number, margin: number): boole
 		and slot.y + slot.h <= vy - margin
 end
 
-local function blocked(slot: Rect, vx: number, margin: number): boolean
-	return HudLayout.overlaps(slot, HudLayout.portrait(margin))
-		or HudLayout.overlaps(slot, HudLayout.health(margin))
-		or HudLayout.overlaps(slot, HudLayout.pills(vx, margin))
+local WIDTHS = { PREFERRED_W, 108, 88, 64, MIN_W }
+
+local function obstacles(vx: number, vy: number, margin: number): { Rect }
+	local banner = BannerFit.fit(vx, vy, 1.4)
+	return {
+		HudLayout.portrait(margin),
+		HudLayout.health(margin),
+		HudLayout.pills(vx, margin),
+		HudLayout.toastHost(vx, margin),
+		HudLayout.equipPrompt(vx, margin),
+		{ x = banner.x, y = banner.y, w = banner.w, h = banner.h },
+		HudLayout.actionCluster(vx, vy),
+	}
+end
+
+local function blocked(slot: Rect, list: { Rect }): boolean
+	for _, obstacle in ipairs(list) do
+		if HudLayout.overlaps(slot, obstacle) then
+			return true
+		end
+	end
+	return false
 end
 
 function EchoChip.place(viewportX: any, viewportY: any, _extra: any?): Rect
 	local vx, vy = viewportOf(viewportX, viewportY)
 	local margin = UiTheme.safeMargin()
-	local w = chipWidth(vx, margin)
-	local x = vx - margin - w
 	local health = HudLayout.health(margin)
 	local pills = HudLayout.pills(vx, margin)
-	local order = { margin, health.y + health.h + GAP, pills.y + pills.h + GAP }
+	local toast = HudLayout.toastHost(vx, margin)
+	local prompt = HudLayout.equipPrompt(vx, margin)
+	local order = {
+		margin,
+		health.y + health.h + GAP,
+		pills.y + pills.h + GAP,
+		toast.y + toast.h + GAP,
+		prompt.y + prompt.h + GAP,
+	}
+	local list = obstacles(vx, vy, margin)
+	local room = vx - margin * 2
 	for _, y in ipairs(order) do
-		local slot = rect(x, y, w, CHIP_H)
-		if inside(slot, vx, vy, margin) and not blocked(slot, vx, margin) then
-			return slot
+		for _, want in ipairs(WIDTHS) do
+			local w = want
+			if w > room then
+				w = math.max(MIN_W, room)
+			end
+			local slot = rect(vx - margin - w, y, w, CHIP_H)
+			if inside(slot, vx, vy, margin) and not blocked(slot, list) then
+				return slot
+			end
 		end
 	end
-	return rect(x, pills.y + pills.h + GAP, w, CHIP_H)
+	local w = chipWidth(vx, margin)
+	return rect(vx - margin - w, pills.y + pills.h + GAP, w, CHIP_H)
 end
 
 return EchoChip

@@ -1672,7 +1672,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		wash.Parent = card
 		hubFn.setRest(card, rgb("body"))
 		hubFn.motion(card)
-		hubFn.iconOn(card, iconName, 8, 8, 36)
+		local cellW = 228
+		local cellH = 228
+		local gridLayout = parent:FindFirstChildOfClass("UIGridLayout")
+		if gridLayout ~= nil then
+			if gridLayout.CellSize.X.Offset >= 44 then
+				cellW = gridLayout.CellSize.X.Offset
+			end
+			if gridLayout.CellSize.Y.Offset >= 44 then
+				cellH = gridLayout.CellSize.Y.Offset
+			end
+		end
+		local parts = HudLayout.bagCard(cellW, cellH)
+		hubFn.iconOn(card, iconName, parts.icon.x, parts.icon.y, parts.icon.w)
 		local pip = Instance.new("Frame")
 		pip.Name = "Pip"
 		pip.Position = UDim2.fromOffset(50, 16)
@@ -1685,8 +1697,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pipCorner.Parent = pip
 		local name = Instance.new("TextLabel")
 		name.BackgroundTransparency = 1
-		name.Position = UDim2.fromOffset(8, 48)
-		name.Size = UDim2.new(1, -16, 0, 36)
+		name.Position = UDim2.fromOffset(parts.name.x, parts.name.y)
+		name.Size = UDim2.fromOffset(parts.name.w, parts.name.h)
 		name.Font = bodyFont()
 		name.TextSize = UiTheme.MIN_TEXT
 		name.TextXAlignment = Enum.TextXAlignment.Left
@@ -1698,9 +1710,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if BagBoard.isNew(item, hubState.seen.bagAt) then
 			local badge = Instance.new("TextLabel")
 			badge.Name = "New"
-			badge.AnchorPoint = Vector2.new(1, 0)
-			badge.Position = UDim2.new(1, -8, 0, 8)
-			badge.Size = UDim2.fromOffset(44, 22)
+			badge.AnchorPoint = Vector2.new(0, 0)
+			badge.Position = UDim2.fromOffset(parts.badge.x, parts.badge.y)
+			badge.Size = UDim2.fromOffset(parts.badge.w, parts.badge.h)
 			badge.BackgroundColor3 = rgb("accent")
 			badge.Font = headerFont()
 			badge.TextSize = UiTheme.MIN_TEXT
@@ -1716,8 +1728,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tip.Name = "Tip"
 		tip.BackgroundColor3 = rgb("header")
 		tip.BackgroundTransparency = 0.05
-		tip.Position = UDim2.fromOffset(8, 86)
-		tip.Size = UDim2.new(1, -16, 0, 32)
+		tip.Position = UDim2.fromOffset(parts.tip.x, parts.tip.y)
+		tip.Size = UDim2.fromOffset(parts.tip.w, parts.tip.h)
 		tip.Font = bodyFont()
 		tip.TextSize = UiTheme.MIN_TEXT
 		tip.TextWrapped = true
@@ -1753,9 +1765,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 			local equip = Instance.new("TextButton")
 			equip.Name = "Equip"
-			equip.AnchorPoint = Vector2.new(0, 1)
-			equip.Position = UDim2.new(0, 8, 1, -8)
-			equip.Size = UDim2.new(1, -16, 0, UiTheme.TOUCH)
+			equip.AnchorPoint = Vector2.new(0, 0)
+			equip.Position = UDim2.fromOffset(parts.equip.x, parts.equip.y)
+			equip.Size = UDim2.fromOffset(parts.equip.w, parts.equip.h)
 			equip.BackgroundColor3 = rgb("header")
 			equip.Font = headerFont()
 			equip.TextSize = UiTheme.MIN_TEXT
@@ -1774,9 +1786,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 			local lock = Instance.new("TextButton")
 			lock.Name = "Lock"
-			lock.AnchorPoint = Vector2.new(1, 1)
-			lock.Position = UDim2.new(1, -8, 1, -56)
-			lock.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
+			lock.AnchorPoint = Vector2.new(0, 0)
+			lock.Position = UDim2.fromOffset(parts.lock.x, parts.lock.y)
+			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
 			lock.BackgroundColor3 = rgb("header")
 			lock.Font = headerFont()
 			lock.TextSize = UiTheme.MIN_TEXT
@@ -2247,10 +2259,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.clear(hubState.bag)
 		local items = hubFn.bagItems()
 		local shown = BagBoard.rows(items, hubState.bagFilter, hubState.seen.bagAt)
-		local bar = Instance.new("Frame")
+		local bar = Instance.new("ScrollingFrame")
 		bar.Name = "Filters"
 		bar.BackgroundTransparency = 1
 		bar.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		bar.BorderSizePixel = 0
+		bar.ScrollBarThickness = 4
+		bar.ScrollingEnabled = true
+		bar.AutomaticCanvasSize = Enum.AutomaticSize.X
+		bar.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
+		bar.ScrollingDirection = Enum.ScrollingDirection.X
+		bar.ClipsDescendants = true
 		bar.LayoutOrder = 1
 		bar.Parent = hubState.bag
 		local barLayout = Instance.new("UIListLayout")
@@ -2259,7 +2278,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		barLayout.Parent = bar
 		local function chip(label: string, fn: () -> ())
 			local button = Instance.new("TextButton")
-			button.Size = UDim2.new(0.25, -6, 1, 0)
+			button.Size = UDim2.fromOffset(HudLayout.chipWidth(label), UiTheme.TOUCH)
 			button.BackgroundColor3 = rgb("header")
 			button.Font = headerFont()
 			button.TextSize = UiTheme.MIN_TEXT
