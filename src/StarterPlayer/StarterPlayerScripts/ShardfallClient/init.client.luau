@@ -26,6 +26,7 @@ local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local LegacyChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LegacyChrome"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local ForeignScripts =
@@ -696,9 +697,10 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onChests = function()
-		if inventory ~= nil then
-			inventory.openTab("chests")
+		if not LaunchGate.on("chests") or inventory == nil then
+			return
 		end
+		inventory.openTab("chests")
 	end,
 	onGraphics = function()
 		cycleGraphics()

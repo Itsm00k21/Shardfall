@@ -23,6 +23,8 @@ LaunchGate.SHOW = {
 	leaderboards = false,
 	extraRealms = false,
 	extraCurrencies = false,
+	chests = false,
+	paid = false,
 }
 
 local PARKED_TAB = {
