@@ -681,7 +681,14 @@ function Remotes.bind()
 		if not RateLimiter.take(player.UserId, "Dodge") then
 			return
 		end
-		CombatService.dodge(player)
+		local ok, err = xpcall(function()
+			CombatService.dodge(player)
+		end, function(message)
+			return debug.traceback(tostring(message), 2)
+		end)
+		if not ok then
+			warn("[Shardfall] Dodge:", err)
+		end
 	end)
 
 	eventRemote("Steer").OnServerEvent:Connect(function(player, moving)

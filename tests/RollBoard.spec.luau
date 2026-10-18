@@ -36,6 +36,9 @@ describe("RollBoard", function()
 		expect(RollBoard.shouldRollAgain(true, "Off", "Legendary", 3)).toEqual(true)
 		expect(RollBoard.shouldRollAgain(false, "Off", "Common", 3)).toEqual(false)
 		expect(RollBoard.shouldRollAgain(true, "Rare", "Common", 0)).toEqual(false)
+		expect(RollBoard.shouldRollAgain(true, "mythic", "Legendary", 3)).toEqual(false)
+		expect(RollBoard.shouldRollAgain(true, "nope", "Common", 3)).toEqual(false)
+		expect(RollBoard.shouldRollAgain(true, "", "Common", 3)).toEqual(true)
 		local items = {}
 		for index = 1, 12 do
 			table.insert(

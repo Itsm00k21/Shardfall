@@ -380,4 +380,91 @@ describe("HubInput", function()
 		end
 		expect(crackRow).toBeTrue()
 	end)
+
+	it("says why a crack with no shards does nothing", function()
+		local world, hub, calls = bootHub()
+		hub.open("roll")
+		local screen = screenOf(world)
+		local before = #rolled(calls)
+		GuiFake.activate(GuiFake.findNamed(screen, "Roll"))
+		expect(#rolled(calls)).toEqual(before)
+		expect(hasText(screen, "You need a Shard Token to crack a shard.")).toBeTrue()
+		expect(labelText(screen, "Milestone")).toEqual("You need a Shard Token to crack a shard.")
+	end)
+
+	it("opens Market from the market tab and keeps pets off the bag", function()
+		local world, hub = bootHub()
+		hub.open("market")
+		local screen = screenOf(world)
+		expect(labelText(screen, "Title")).toEqual("Market")
+		local body = GuiFake.findNamed(screen, "Body")
+		expect(body:FindFirstChild("market").Visible).toBeTrue()
+		expect(body:FindFirstChild("pass").Visible).toBeFalse()
+		hub.open("pets")
+		screen = screenOf(world)
+		expect(body:FindFirstChild("pets").Visible).toBeTrue()
+		expect(body:FindFirstChild("bag").Visible).toBeFalse()
+		expect(body:FindFirstChild("roll").Visible).toBeFalse()
+		expect(hasText(screen, "Crack a Fire Shard")).toBeFalse()
+		local function shownText(text: string): boolean
+			for _, child in ipairs(screen:GetDescendants()) do
+				if not (child:IsA("TextLabel") or child:IsA("TextButton")) then
+					continue
+				end
+				if string.find(child.Text, text, 1, true) == nil then
+					continue
+				end
+				local node = child
+				local visible = true
+				while node ~= nil do
+					if node.Visible == false or node.Enabled == false then
+						visible = false
+						break
+					end
+					node = node.Parent
+				end
+				if visible then
+					return true
+				end
+			end
+			return false
+		end
+		expect(shownText("Practice Blade")).toBeFalse()
+		expect(shownText("Salvage  Common")).toBeFalse()
+		expect(shownText("Crack a Pet Shard")).toBeTrue()
+	end)
+
+	it("keeps Equip and Lock inside the bag card", function()
+		local world, hub = bootHub()
+		hub.open("bag")
+		local screen = screenOf(world)
+		local card = GuiFake.findNamed(screen, "Card")
+		local equip = card:FindFirstChild("Equip")
+		local lock = card:FindFirstChild("Lock")
+		expect(equip ~= nil and equip.Parent == card).toBeTrue()
+		expect(lock ~= nil and lock.Parent == card).toBeTrue()
+		local function box(node)
+			local pos = node.AbsolutePosition
+			local size = node.AbsoluteSize
+			return pos.X, pos.Y, size.X, size.Y
+		end
+		local ex, ey, ew, eh = box(equip)
+		local lx, ly, lw, lh = box(lock)
+		local overlaps = ex < lx + lw and lx < ex + ew and ey < ly + lh and ly < ey + eh
+		expect(overlaps).toEqual(false)
+		local styled = false
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child:IsA("TextButton") and string.find(child.Text, "Open full bag", 1, true) ~= nil then
+				expect(child:FindFirstChildOfClass("UICorner") ~= nil).toBeTrue()
+				styled = true
+			end
+		end
+		expect(styled).toBeTrue()
+		for _, tab in ipairs({ "hero", "bag", "pets", "roll", "market" }) do
+			hub.open(tab)
+			expect(labelText(screenOf(world), "Title") ~= "").toBeTrue()
+			local page = GuiFake.findNamed(screenOf(world), "Body"):FindFirstChild(tab)
+			expect(page.Visible).toBeTrue()
+		end
+	end)
 end)
