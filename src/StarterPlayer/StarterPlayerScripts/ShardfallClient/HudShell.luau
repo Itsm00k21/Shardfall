@@ -17,6 +17,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Build = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Build"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
+local IconAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("IconAssets"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
@@ -291,20 +292,29 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
 		icon.AnchorPoint = Vector2.new(0.5, 0)
-		icon.Position = UDim2.new(0.5, 0, 0, 4)
-		icon.Size = UDim2.fromOffset(20, 20)
 		icon.BackgroundTransparency = 1
 		icon.ScaleType = Enum.ScaleType.Fit
-		icon.Image = UiIcons.get(entry.icon)
-		local red, green, blue = UiIcons.tintOf(entry.icon)
-		icon.ImageColor3 = Color3.fromRGB(red, green, blue)
+		local art = IconAssets[entry.id]
+		if art ~= nil then
+			-- Painted art carries its own colour; keep it untinted and larger.
+			icon.Position = UDim2.new(0.5, 0, 0, 1)
+			icon.Size = UDim2.new(1, -12, 1, -16)
+			icon.Image = art
+			icon.ImageColor3 = Color3.new(1, 1, 1)
+		else
+			icon.Position = UDim2.new(0.5, 0, 0, 4)
+			icon.Size = UDim2.fromOffset(20, 20)
+			icon.Image = UiIcons.get(entry.icon)
+			local red, green, blue = UiIcons.tintOf(entry.icon)
+			icon.ImageColor3 = Color3.fromRGB(red, green, blue)
+		end
 		icon.ZIndex = 2
 		icon.Parent = button
 		local caption = Instance.new("TextLabel")
 		caption.Name = "Caption"
 		caption.BackgroundTransparency = 1
-		caption.AnchorPoint = Vector2.new(0.5, 0)
-		caption.Position = UDim2.new(0.5, 0, 0, 27)
+		caption.AnchorPoint = Vector2.new(0.5, 1)
+		caption.Position = UDim2.new(0.5, 0, 1, -1)
 		caption.Size = UDim2.new(1, -4, 0, UiTheme.MIN_TEXT)
 		caption.Font = Enum.Font.BuilderSansBold
 		caption.TextSize = UiTheme.MIN_TEXT
