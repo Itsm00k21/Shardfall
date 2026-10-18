@@ -32,6 +32,21 @@ describe("Hud shell", function()
 		expect(GuiFake.findNamed(screen, "Market")).toBeNil()
 		expect(GuiFake.findNamed(screen, "Pass")).toBeNil()
 		expect(GuiFake.findNamed(screen, "Raids")).toBeNil()
+		local rail = GuiFake.findNamed(screen, "Rail")
+		expect(rail ~= nil).toBeTrue()
+		local names = {}
+		for _, child in ipairs(rail:GetChildren()) do
+			if child:IsA("TextButton") then
+				table.insert(names, child.Name)
+				expect(child.Name ~= "Market").toBeTrue()
+				expect(child.Name ~= "Pass").toBeTrue()
+				local caption = child:FindFirstChild("Caption")
+				expect(caption ~= nil).toBeTrue()
+				expect(string.find(caption.Text, "Market", 1, true)).toBeNil()
+				expect(string.find(caption.Text, "Pass", 1, true)).toBeNil()
+			end
+		end
+		expect(names).toEqual({ "Hero", "Bag", "Pets", "Roll", "Shop", "Settings" })
 		local mastery = GuiFake.findNamed(screen, "Mastery")
 		expect(mastery ~= nil).toBeTrue()
 		expect(mastery.Visible).toEqual(false)
