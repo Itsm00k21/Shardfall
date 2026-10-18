@@ -6,7 +6,8 @@
 	Simple parts, themed colors, and a low count. The crystal's shards orbit
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
 	the existing panel. The Rootvault arch is an EnterPad. The Heartwood arch
-	starts the Story raid queue and is not an EnterPad. Milestone 2 dresses
+	is decor while raids are closed. Finder and Practice appear only when
+	LaunchGate.raids is on. It is not an EnterPad. Milestone 2 dresses
 	each arch and its name plate. Milestone 3 puts one shadowless light in
 	each mouth, a quiet emitter under the forge rate cap, and a flat court
 	ring. An open mouth pulses. A sealed mouth stays dim until someone
@@ -29,6 +30,7 @@ local RunService = game:GetService("RunService")
 
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local SavedWorld = require(ReplicatedStorage.Shared.SavedWorld)
 local HavenLife = require(ReplicatedStorage.Shared.HavenLife)
 local ShellLayout = require(ReplicatedStorage.Shared.ShellLayout)
@@ -1765,16 +1767,19 @@ local function buildPortals(parent: Instance)
 			promptOn(fill, "Enter", portal.name, "rootvault", nil, nil, reach)
 			promptOn(leftPier, "Waves", "Solo", "waves", nil, nil, Haven.PIER_REACH)
 		elseif portal.id == "heartwood" then
-			promptOn(fill, "Finder", portal.message or portal.name, "heartwood", portal.message, nil, reach)
-			promptOn(
-				leftPier,
-				"Practice",
-				"Solo",
-				"practice",
-				"Practice Grove is the solo path.",
-				nil,
-				Haven.PIER_REACH
-			)
+			-- The arch stays. Finder and Practice are the raid doors.
+			if LaunchGate.on("raids") then
+				promptOn(fill, "Finder", portal.message or portal.name, "heartwood", portal.message, nil, reach)
+				promptOn(
+					leftPier,
+					"Practice",
+					"Solo",
+					"practice",
+					"Practice Grove is the solo path.",
+					nil,
+					Haven.PIER_REACH
+				)
+			end
 		else
 			promptOn(fill, "Sealed", portal.message or portal.name, "soon", portal.message, nil, reach)
 		end
@@ -2595,6 +2600,9 @@ function HavenBuilder.build(parent: Instance): number
 					return
 				end
 				if type(action) ~= "string" then
+					return
+				end
+				if (action == "heartwood" or action == "practice") and not LaunchGate.on("raids") then
 					return
 				end
 				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
