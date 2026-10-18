@@ -2,7 +2,7 @@
 
 Echo edits this file freely. Ids are E-001 up. Ghost keeps combat, raids core, server, schema, remotes, data, merging, and TASKS.md.
 
-Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo is holding after E-007. Do not queue new features. Ghost is holding the phone layout recheck until the `-a6e7` layout lane goes quiet.
+Feature freeze until soft launch (issue #15, comment 6244316960; Kevin approved `docs/design/LAUNCH_PLAN.md` in comment 6244422751). Echo is holding after E-008 until Ghost posts the next item. Do not queue new features. The phone layout recheck stays with Ghost while the `-a6e7` layout lane is active.
 
 Launch scope: [docs/design/LAUNCH_PLAN.md](../design/LAUNCH_PLAN.md). E-001 through E-007 map to M2 (plaza restyle) and M5 (first 60 seconds and playtest). Work only on systems that plan keeps. Leave PARKED systems alone.
 
@@ -58,9 +58,17 @@ One controller step in the existing `docs/design/playtest_script.md`. Do not cre
 
 Assigned in PR #262 comment 6246600489.
 
+## E-008 — done
+
+M1 economy invariants. Tests only. Branch `helper/economy-invariants-9721`. PR https://github.com/Itsm00k21/Shardfall/pull/275 into `cursor/live-build-9721`. Merged in #275. Cut from tip `5e2e70e`, then brought onto the base after #270 through #274.
+
+`tests/EconomyInvariants.spec.luau` drives RollShard, BuyGoldShop, and UpgradeGear the way those remotes spend. The harness calls the shared modules, then puts a deep copy back when the mutator returns a reason, which is what `DataService.mutate` does. Gold and Shards stay at or above 0 through a same-frame RollShard burst, a drain past an empty wallet, Gold-shop buys, and Forge upgrades. A refused call compares equal to the profile copied before it. Pity counts up and resets as the Roll panel PityCount prints it (`Pity N/N`, Epic /100, Legendary /1000). Forge gold, the Gnarl's Seed on +8 through +10, and the `Name +N` result match the upgrade table. A new profile from `Schema.template`, `Schema.migrate(nil)`, and an empty reconcile starts with 10 Shards. All five invariants pass. Nothing is pending. Schema stays 26. No remote, no `src/`, no `TASKS.md`, no kill-switch change, no build stamp.
+
+Assigned in PR #269 comment 6246758342.
+
 ## Next
 
-Hold after E-007 until Ghost posts the next item. The phone layout recheck stays with Ghost until the `-a6e7` layout lane goes quiet. Do not start that recheck from this queue.
+Hold after E-008 until Ghost posts the next item. The phone layout recheck stays with Ghost while the `-a6e7` layout lane is active. Do not start that recheck from this queue.
 
 ## PAUSED
 
