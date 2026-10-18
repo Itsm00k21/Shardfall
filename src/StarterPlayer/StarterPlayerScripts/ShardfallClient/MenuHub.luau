@@ -980,8 +980,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	function hubFn.clear(host: Instance)
 		local function forget(node: any)
 			hubState.padPress[node] = nil
+			hubState.restColor[node] = nil
 			if hubState.padTarget == node then
 				hubState.padTarget = nil
+			end
+		end
+		-- PadRing is one stroke reused across rows. Unparent it before
+		-- Destroy when this row holds it, or the stroke dies with the row
+		-- and the next gamepad step cannot show it again.
+		local function releaseRing(node: any)
+			local ring = hubState.padRing
+			if ring == nil then
+				return
+			end
+			local current = ring.Parent
+			while current ~= nil do
+				if current == node then
+					hubFn.padUnparent()
+					return
+				end
+				current = current.Parent
 			end
 		end
 		for _, child in ipairs(host:GetChildren()) do
@@ -992,6 +1010,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			for _, descendant in ipairs(child:GetDescendants()) do
 				forget(descendant)
 			end
+			releaseRing(child)
 			child:Destroy()
 		end
 	end

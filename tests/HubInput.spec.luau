@@ -981,6 +981,134 @@ describe("HubInput", function()
 		expect(ring.Parent.Name).toEqual("Close")
 	end)
 
+	it("clears restColor and keeps PadRing when a rebuilt page drops its rows", function()
+		local source = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local clearAt = string.find(source, "function hubFn.clear(host: Instance)", 1, true)
+		expect(clearAt ~= nil).toBeTrue()
+		local nextFn = string.find(source, "\n\tfunction hubFn.", (clearAt :: number) + 1, true)
+		local body = string.sub(source, clearAt :: number, (nextFn :: number) - 1)
+		local colorAt = string.find(body, "hubState.restColor[node] = nil", 1, true)
+		local releaseAt = string.find(body, "hubFn.padUnparent()", 1, true)
+		local destroyAt = string.find(body, "child:Destroy()", 1, true)
+		expect(colorAt ~= nil).toBeTrue()
+		expect(releaseAt ~= nil).toBeTrue()
+		expect(destroyAt ~= nil).toBeTrue()
+		expect((colorAt :: number) < (destroyAt :: number)).toBeTrue()
+		expect((releaseAt :: number) < (destroyAt :: number)).toBeTrue()
+
+		local world, hub = bootHub()
+		local data = profile()
+		hub.setProfile(data)
+		hub.open("bag")
+		local screen = screenOf(world)
+		local function press(key: string)
+			world.userInput.InputBegan:Fire({
+				KeyCode = world.enum.KeyCode[key],
+				UserInputType = world.enum.UserInputType.Gamepad1,
+				Position = { X = 0, Y = 0, Z = 0 },
+			}, false)
+		end
+		local function inside(root: any, node: any): boolean
+			local current = node
+			while current ~= nil do
+				if current == root then
+					return true
+				end
+				current = current.Parent
+			end
+			return false
+		end
+		local function ringCount(root: any): number
+			local total = 0
+			for _, child in ipairs(root:GetDescendants()) do
+				if child.Name == "PadRing" then
+					total += 1
+				end
+			end
+			return total
+		end
+		local bag = GuiFake.findNamed(screen, "Body"):FindFirstChild("bag", false)
+		local equip = bag:FindFirstChild("Equip", true)
+		local close = GuiFake.findNamed(screen, "Header"):FindFirstChild("Close", false)
+		expect(equip ~= nil).toBeTrue()
+		expect(close ~= nil).toBeTrue()
+		equip.BackgroundColor3 = { R = 1, G = 2, B = 3 }
+		GuiFake.emit(equip, "MouseLeave")
+		expect(sameColor(equip.BackgroundColor3, "header")).toBeTrue()
+		close.BackgroundColor3 = { R = 1, G = 2, B = 3 }
+		GuiFake.emit(close, "MouseLeave")
+		expect(sameColor(close.BackgroundColor3, "close")).toBeTrue()
+
+		local ring = GuiFake.findNamed(screen, "PadRing")
+		expect(ring.Parent.Name).toEqual("Close")
+		local card = nil
+		for _ = 1, 48 do
+			press("DPadDown")
+			if ring.Parent ~= nil and inside(bag, ring.Parent) then
+				card = ring.Parent
+				break
+			end
+		end
+		expect(card ~= nil).toBeTrue()
+		expect(ring.Parent).toEqual(card)
+		expect(ring.Enabled).toEqual(true)
+		local nested = nil
+		for _, child in ipairs(card:GetChildren()) do
+			if child ~= ring then
+				nested = child
+				break
+			end
+		end
+		expect(nested ~= nil).toBeTrue()
+		local destroyed = false
+		local destroy = ring.Destroy
+		rawset(ring, "Destroy", function(self)
+			destroyed = true
+			destroy(self)
+		end)
+		equip.BackgroundColor3 = { R = 1, G = 2, B = 3 }
+		hub.setProfile(data)
+		expect(card.Parent).toBeNil()
+		local cardOk = pcall(function()
+			card.Parent = screen
+		end)
+		expect(cardOk).toEqual(false)
+		expect(card.Parent).toBeNil()
+		expect(nested.Parent).toBeNil()
+		local nestedOk = pcall(function()
+			nested.Parent = card
+		end)
+		expect(nestedOk).toEqual(false)
+		expect(nested.Parent).toBeNil()
+		expect(destroyed).toEqual(false)
+		expect(GuiFake.findNamed(card, "PadRing")).toBeNil()
+		GuiFake.emit(equip, "MouseLeave")
+		expect(sameColor(equip.BackgroundColor3, "body")).toBeTrue()
+		expect(sameColor(equip.BackgroundColor3, "header")).toEqual(false)
+		screen = screenOf(world)
+		close = GuiFake.findNamed(screen, "Header"):FindFirstChild("Close", false)
+		close.BackgroundColor3 = { R = 1, G = 2, B = 3 }
+		GuiFake.emit(close, "MouseLeave")
+		expect(sameColor(close.BackgroundColor3, "close")).toBeTrue()
+		local found = {}
+		for _, child in ipairs(screen:GetDescendants()) do
+			if child.Name == "PadRing" then
+				table.insert(found, child)
+			end
+		end
+		expect(#found).toEqual(1)
+		expect(found[1]).toEqual(ring)
+		expect(ring.Parent ~= nil and ring.Parent ~= card).toBeTrue()
+		expect(inside(screen, ring)).toBeTrue()
+		expect(ringCount(card)).toEqual(0)
+		press("DPadDown")
+		expect(ring.Enabled).toEqual(true)
+		expect(ring.Parent ~= nil and ring.Parent ~= card).toBeTrue()
+		expect(inside(screen, ring.Parent)).toBeTrue()
+		expect(GuiFake.findNamed(screen, "PadRing")).toEqual(ring)
+		expect(ringCount(screen)).toEqual(1)
+	end)
+
 	it("keeps the roll panel open across three cracks", function()
 		local world, hub, calls = bootHub()
 		local data = profile()

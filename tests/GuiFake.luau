@@ -267,11 +267,17 @@ local function newInstance(className: string)
 		_signals = signals,
 		_parent = nil,
 		_attributes = {},
+		_destroyed = false,
 	}, instanceMeta)
 	return object
 end
 
 function methods:_adopt(parent)
+	if rawget(self, "_destroyed") == true then
+		local props = rawget(self, "_props")
+		local name = if type(props) == "table" then props.Name else "Instance"
+		error("The Parent property of " .. tostring(name) .. " is locked", 2)
+	end
 	local previous = rawget(self, "_parent")
 	if previous ~= nil then
 		local kids = rawget(previous, "_children")
@@ -375,10 +381,14 @@ function methods:GetAttribute(name: string): any
 end
 
 function methods:Destroy()
+	if rawget(self, "_destroyed") == true then
+		return
+	end
 	for _, child in ipairs(self:GetChildren()) do
 		child:Destroy()
 	end
 	self.Parent = nil
+	rawset(self, "_destroyed", true)
 end
 
 function methods:Play() end
