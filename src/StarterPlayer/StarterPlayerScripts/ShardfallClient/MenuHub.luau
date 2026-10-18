@@ -351,6 +351,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.holdingRoll = false
 	hubState.rollFromPointer = false
 	hubState.rollPointerAt = 0
+	hubState.swallowBackdrop = false
+	hubState.shownTokens = nil
+	hubState.crackLocked = false
 	hubState.shopNote = ""
 	hubState.rollBusy = false
 	hubState.playerAlive = true
@@ -745,6 +748,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.holdingRoll = true
 			hubState.rollFromPointer = true
 			hubState.rollPointerAt = os.clock()
+			hubState.swallowBackdrop = true
 			hubState.rollButton.BackgroundColor3 = rgb("press")
 			hubFn.pressRoll()
 		else
@@ -1065,6 +1069,29 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tween:Play()
 	end
 
+	-- One label for the crack button. A reveal keeps it locked. Zero shards
+	-- say how to earn more. Active stays true so a tap during a reveal skips.
+	function hubFn.paintCrackButton()
+		if hubState.rollButton == nil then
+			return
+		end
+		local tokens = hubState.shownTokens
+		if type(tokens) ~= "number" or tokens ~= tokens then
+			tokens = 0
+		end
+		local locked = hubState.crackLocked == true or hubState.activeReveal ~= nil
+		local button = hubState.rollButton
+		if tokens < 1 and not locked then
+			button.Text = "Earn shards"
+			button.BackgroundColor3 = rgb("header")
+		else
+			button.Text = HubStyle.CRACK_ONE
+			button.BackgroundColor3 = if locked then rgb("header") else rgb("button")
+		end
+		button:SetAttribute("CrackLocked", locked)
+		button.Active = true
+	end
+
 	hubFn.restShard = function() end
 
 	function hubFn.stopRollChain()
@@ -1080,7 +1107,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.crackSounded = false
 		hubState.loop = RollLoop.idle()
 		hubState.rollBusy = false
+		hubState.crackLocked = false
 		hubFn.setPulse(true)
+		hubFn.paintCrackButton()
 		hubFn.hideCloseBeat()
 		hubFn.restShard()
 		hubFn.paintReelIdle("Roll")
@@ -3264,6 +3293,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		title.Text = "ODDS"
 		title.LayoutOrder = 1
 		title.Parent = oddsBars
+		local rounding = Instance.new("TextLabel")
+		rounding.Name = "Rounding"
+		rounding.BackgroundTransparency = 1
+		rounding.Size = UDim2.fromOffset(math.max(40, spec.odds.w - 16), 36)
+		rounding.Font = bodyFont()
+		rounding.TextSize = UiTheme.MIN_TEXT
+		rounding.TextWrapped = true
+		rounding.TextXAlignment = Enum.TextXAlignment.Left
+		rounding.TextYAlignment = Enum.TextYAlignment.Top
+		rounding.TextColor3 = rgb("muted")
+		rounding.Text = RarityConfig.ROUNDING_NOTE
+		rounding.LayoutOrder = 2
+		rounding.Parent = oddsBars
 		local row = Instance.new("Frame")
 		row.Name = "CrackRow"
 		row.Position = UDim2.fromOffset(spec.row.x, spec.row.y)
@@ -3340,7 +3382,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			bar.Name = row.rarity
 			bar.BackgroundTransparency = 1
 			bar.Size = UDim2.fromOffset(math.max(40, host.Size.X.Offset - 16), 18)
-			bar.LayoutOrder = 1 + index
+			bar.LayoutOrder = 10 + index
 			bar.Parent = host
 			local caption = Instance.new("TextLabel")
 			caption.BackgroundTransparency = 1
@@ -3413,19 +3455,41 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubState.pityTweens = {}
 		hubFn.setPulse(hubState.loop.phase == "idle" and not hubState.rollBusy)
-		local tokens = 0
+		local tokens = hubState.shownTokens
+		if type(tokens) ~= "number" or tokens ~= tokens then
+			tokens = nil
+		end
 		local goldHeld = 0
 		if type(hubState.profile) == "table" then
-			if type(hubState.profile.shardTokens) == "number" then
-				tokens = hubState.profile.shardTokens
+			local raw = hubState.profile.shardTokens
+			if type(raw) == "number" and raw == raw and raw > -math.huge and raw < math.huge then
+				tokens = math.max(0, math.floor(raw))
+				hubState.shownTokens = tokens
 			end
 			if type(hubState.profile.gold) == "number" then
 				goldHeld = hubState.profile.gold
 			end
 		end
+		if type(tokens) ~= "number" then
+			tokens = 0
+		end
 		hubState.walletTokens.Text = HubStyle.shardCount(tokens)
 		hubState.walletGold.Text = string.format("Gold  %d", goldHeld)
-		hubState.rollButton.Text = HubStyle.CRACK_ONE
+		if tokens < 1 then
+			local empty = Instance.new("TextLabel")
+			empty.Name = "EmptyShards"
+			empty.BackgroundTransparency = 1
+			empty.Size = UDim2.new(1, 0, 0, 36)
+			empty.Font = bodyFont()
+			empty.TextSize = UiTheme.MIN_TEXT
+			empty.TextWrapped = true
+			empty.TextXAlignment = Enum.TextXAlignment.Left
+			empty.TextYAlignment = Enum.TextYAlignment.Top
+			empty.TextColor3 = rgb("text")
+			empty.Text = "No shards yet. Clear a dungeon or claim the daily login."
+			empty.LayoutOrder = 0
+			empty.Parent = hubState.roll
+		end
 
 		local band = RollSpot.place(hubFn.rollRowWidth())
 		local kindRow = Instance.new("Frame")
@@ -3660,7 +3724,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		-- side by side, and 14px text stays on one line.
 		local function meter(
 			name: string,
-			caption: string,
+			tier: string,
+			counter: number,
+			goal: number,
 			fill: number,
 			order: number,
 			fromFill: number,
@@ -3734,31 +3800,71 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					)
 				)
 			end
-			local label = Instance.new("TextLabel")
-			label.BackgroundTransparency = 1
-			label.Position = UDim2.fromOffset(8, 0)
-			label.Size = UDim2.new(1, -16, 1, 0)
-			label.Font = bodyFont()
-			label.TextSize = UiTheme.MIN_TEXT
-			label.TextXAlignment = Enum.TextXAlignment.Left
-			label.TextTruncate = Enum.TextTruncate.AtEnd
-			label.TextColor3 = rgb("text")
-			label.TextStrokeColor3 = rgb("ink")
-			label.TextStrokeTransparency = 0.4
-			label.Text = caption
-			label.ZIndex = 2
-			label.Parent = host
-		end
-		local function pityCaption(label: string, meterRow: RollHype.Meter, reset: boolean): string
-			if meterRow.ok ~= true or type(meterRow.goal) ~= "number" then
-				return label .. " pity"
-			end
-			local shown = math.floor(meterRow.counter)
-			local goal = math.floor(meterRow.goal)
-			if reset then
-				return string.format("%s reset  %d / %d", label, shown, goal)
-			end
-			return string.format("%s  %d / %d", label, shown, goal)
+			local place = ShardBoard.pityPlace(progress.w, counter, goal)
+			local tierLabel = Instance.new("TextLabel")
+			tierLabel.Name = "Tier"
+			tierLabel.BackgroundTransparency = 1
+			tierLabel.Position = UDim2.fromOffset(8, 0)
+			tierLabel.Size = UDim2.fromOffset(math.max(24, place.lockX - 12), row.h)
+			tierLabel.Font = bodyFont()
+			tierLabel.TextSize = UiTheme.MIN_TEXT
+			tierLabel.TextXAlignment = Enum.TextXAlignment.Left
+			tierLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			tierLabel.TextColor3 = rgb("text")
+			tierLabel.Text = tier
+			tierLabel.ZIndex = 3
+			tierLabel.Parent = host
+			local backing = Instance.new("Frame")
+			backing.Name = "CountBack"
+			backing.BackgroundColor3 = rgb("header")
+			backing.BorderSizePixel = 0
+			backing.Position = UDim2.fromOffset(math.max(0, place.lockX - 4), 0)
+			backing.Size = UDim2.new(1, -math.max(0, place.lockX - 4), 1, 0)
+			backing.ZIndex = 2
+			backing.Parent = host
+			local lock = Instance.new("Frame")
+			lock.Name = "Lock"
+			lock.BackgroundTransparency = 1
+			lock.Position = UDim2.fromOffset(place.lockX, math.max(0, math.floor((row.h - place.lockH) / 2)))
+			lock.Size = UDim2.fromOffset(place.lockW, place.lockH)
+			lock.ZIndex = 3
+			lock.Parent = host
+			local shackle = Instance.new("Frame")
+			shackle.Name = "Shackle"
+			shackle.BackgroundTransparency = 1
+			shackle.Position = UDim2.fromOffset(3, 0)
+			shackle.Size = UDim2.fromOffset(10, 8)
+			shackle.Parent = lock
+			local shackleStroke = Instance.new("UIStroke")
+			shackleStroke.Color = rgb("text")
+			shackleStroke.Thickness = 2
+			shackleStroke.Parent = shackle
+			local shackleCorner = Instance.new("UICorner")
+			shackleCorner.CornerRadius = UDim.new(1, 0)
+			shackleCorner.Parent = shackle
+			local body = Instance.new("Frame")
+			body.Name = "Body"
+			body.BackgroundColor3 = rgb("text")
+			body.BorderSizePixel = 0
+			body.Position = UDim2.fromOffset(2, 6)
+			body.Size = UDim2.fromOffset(12, 10)
+			body.Parent = lock
+			local bodyCorner = Instance.new("UICorner")
+			bodyCorner.CornerRadius = UDim.new(0, 2)
+			bodyCorner.Parent = body
+			local count = Instance.new("TextLabel")
+			count.Name = "PityCount"
+			count.BackgroundTransparency = 1
+			count.Position = UDim2.fromOffset(place.countX, 0)
+			count.Size = UDim2.fromOffset(place.countW, row.h)
+			count.Font = bodyFont()
+			count.TextSize = UiTheme.MIN_TEXT
+			count.TextXAlignment = Enum.TextXAlignment.Right
+			count.TextTruncate = Enum.TextTruncate.AtEnd
+			count.TextColor3 = rgb("text")
+			count.Text = place.text
+			count.ZIndex = 3
+			count.Parent = host
 		end
 		local function armPayoff(shownRoll: number, on: boolean): (boolean, number)
 			if not on then
@@ -3788,7 +3894,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			local flash, nextSeen = armPayoff(shownRoll, reset)
 			local animate = if flash then "flash" elseif pulse then "pulse" else "none"
-			meter(name, pityCaption(label, meterRow, reset), fill, order, fromFill, reset, animate)
+			local counter = 0
+			local goal = 0
+			if meterRow.ok == true and type(meterRow.goal) == "number" then
+				counter = meterRow.counter
+				goal = meterRow.goal
+			end
+			local tier = if reset then label .. " reset" else label
+			meter(name, tier, counter, goal, fill, order, fromFill, reset, animate)
 			return fill, nextSeen
 		end
 		-- stylua: ignore
@@ -3943,6 +4056,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.slideHistory = false
 		hubFn.fitRoll()
 		hubFn.applyTextScale()
+		hubFn.paintCrackButton()
 	end
 
 	function hubFn.applyControl(id: string)
@@ -4009,8 +4123,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.activeUpgrade = false
 
 	function hubFn.tokenCount(): number
-		if type(hubState.profile) == "table" and type(hubState.profile.shardTokens) == "number" then
-			return hubState.profile.shardTokens
+		if type(hubState.profile) == "table" then
+			local raw = hubState.profile.shardTokens
+			if type(raw) == "number" and raw == raw and raw > -math.huge and raw < math.huge then
+				return math.max(0, math.floor(raw))
+			end
+		end
+		if type(hubState.shownTokens) == "number" and hubState.shownTokens == hubState.shownTokens then
+			return hubState.shownTokens
 		end
 		return 0
 	end
@@ -4184,6 +4304,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	hubFn.finishReveal = function()
 		hubState.activeReveal = nil
+		hubState.crackLocked = false
 		hubFn.restShard()
 		if #hubState.batchLeft > 0 then
 			local nextCrack = table.remove(hubState.batchLeft, 1)
@@ -4217,6 +4338,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubState.loop = RollLoop.idle()
 		hubFn.setPulse(true)
+		hubFn.paintCrackButton()
+	end
+
+	hubFn.takeServerProfile = function(result: any)
+		if type(result) ~= "table" or type(result.profile) ~= "table" then
+			return
+		end
+		local tokens = result.profile.shardTokens
+		if
+			type(tokens) == "number"
+			and tokens == tokens
+			and tokens > -math.huge
+			and tokens < math.huge
+		then
+			hubState.profile = result.profile
+			hubState.shownTokens = math.max(0, math.floor(tokens))
+		end
 	end
 
 	hubFn.beginRoll = function()
@@ -4224,7 +4362,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		hubState.rollBusy = true
+		hubState.crackLocked = true
 		hubFn.setPulse(false)
+		hubFn.paintCrackButton()
 		hubState.revealToken += 1
 		hubFn.bumpCardGeneration()
 		-- Cancel leaves a flash or drip where it was. Snap them off so the
@@ -4249,10 +4389,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 				if generation ~= hubState.revealToken then
 					hubState.rollBusy = false
+					hubState.crackLocked = false
 					return
 				end
 				if RollFocus.chain(hubState.windowFocused) ~= true then
 					hubState.rollBusy = false
+					hubState.crackLocked = false
 					hubState.loop = RollLoop.idle()
 					hubFn.setPulse(true)
 					return
@@ -4263,6 +4405,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					local batchOk, batch = pcall(hooks.invoke, "RollShards", poolId, count)
 					if generation ~= hubState.revealToken then
 						hubState.rollBusy = false
+						hubState.crackLocked = false
 						return
 					end
 					if
@@ -4286,6 +4429,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 							pity = first.pity,
 							quick = true,
 							currency = batch.currency,
+							profile = batch.profile,
 						}
 						ok = true
 					else
@@ -4299,9 +4443,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			if generation ~= hubState.revealToken then
 				hubState.rollBusy = false
+				hubState.crackLocked = false
 				return
 			end
 			hubState.rollBusy = false
+			hubFn.takeServerProfile(result)
 			local record = if ok then RollReveal.capture(result) else nil
 			local paid = type(result) == "table"
 				and (result.currency == "prism" or result.paid == true)
@@ -4348,6 +4494,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					hubFn.hideCloseBeat()
 				end
 				hubState.loop = RollLoop.idle()
+				hubState.crackLocked = false
 				hubFn.blankReveal()
 				hubState.reelMilestone.Visible = false
 				hubFn.setPulse(true)
@@ -4371,6 +4518,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local close = closeFor(record.rarity, true)
 			if noted.ok ~= true or noted.rarity == nil then
 				hubState.loop = RollLoop.idle()
+				hubState.crackLocked = false
 				hubFn.blankReveal()
 				hubFn.setPulse(true)
 				hubFn.hideCloseBeat()
@@ -4385,6 +4533,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local card = UiRouter.rollCard(noted, item)
 			if card == nil then
 				hubState.loop = RollLoop.idle()
+				hubState.crackLocked = false
 				hubFn.blankReveal()
 				hubFn.setPulse(true)
 				hubFn.hideCloseBeat()
@@ -4427,6 +4576,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			})
 			if duration == nil then
 				hubState.loop = RollLoop.idle()
+				hubState.crackLocked = false
 				hubFn.blankReveal()
 				hubFn.setPulse(true)
 				hubFn.hideCloseBeat()
@@ -4526,7 +4676,28 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			or input.KeyCode == Enum.KeyCode.ButtonA
 	end
 
+	hubFn.skipReveal = function()
+		if hubState.activeReveal == nil then
+			return
+		end
+		if not hubState.crackNamed and type(hubState.pendingFace) == "table" then
+			hubState.crackNamed = true
+			local face = hubState.pendingFace
+			hubFn.paintResult(face.item, face.record, face.isNew, face.upgrade)
+		end
+		hubState.holdingRoll = false
+		hubState.loop = RollLoop.idle()
+		hubFn.finishReveal()
+	end
+
 	function hubFn.pressRoll()
+		if hubState.activeReveal ~= nil then
+			hubFn.skipReveal()
+			return
+		end
+		if hubState.rollBusy or hubState.crackLocked then
+			return
+		end
 		hubFn.playUi("click")
 		hubFn.squash()
 		hubFn.hapticTick()
@@ -4576,6 +4747,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	UserInputService.InputEnded:Connect(function(input)
 		if hubFn.pointerDown(input) then
 			hubState.holdingRoll = false
+			-- Activated on the backdrop runs before this defer, so the
+			-- crack release is swallowed and the next real tap still closes.
+			task.defer(function()
+				hubState.swallowBackdrop = false
+			end)
 		end
 	end)
 	hubFn.bindActivated(hubState.revealEquip, function()
@@ -5310,7 +5486,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	mountShopTab()
 	hubFn.paintHints()
 
-	hubFn.bindActivated(hubState.backdrop, hubFn.pop)
+	hubFn.bindActivated(hubState.backdrop, function()
+		-- A crack press can release on this full-screen button after the
+		-- shard button scales down. Swallow that release. A later tap,
+		-- with no crack press behind it, still closes the panel.
+		if hubState.swallowBackdrop == true then
+			hubState.swallowBackdrop = false
+			return
+		end
+		hubFn.pop()
+	end)
 	hubFn.bindActivated(hubState.closeButton, hubFn.pop)
 	hubFn.bindActivated(hubState.classClose, function()
 		hubState.classDismissed = true
