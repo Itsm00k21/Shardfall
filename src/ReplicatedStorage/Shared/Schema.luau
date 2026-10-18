@@ -167,7 +167,7 @@ function Schema.applyGrove(saved: any, result: any)
 end
 
 Schema.VERSION = 26
-Schema.STARTER_TOKENS = 25
+Schema.STARTER_TOKENS = 10
 Schema.INVENTORY_CAP = 100
 
 export type Trait = {

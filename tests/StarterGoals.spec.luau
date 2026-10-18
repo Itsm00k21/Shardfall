@@ -107,7 +107,7 @@ describe("StarterGoals tracker", function()
 		expect(StarterGoals.fresh({}).state).toEqual(opened.state)
 		expect(StarterGoals.fresh({ returning = false }).state).toEqual(opened.state)
 
-		expect(StarterGoals.ORDER).toEqual({ "forge", "rootvault", "rolls", "level", "guild" })
+		expect(StarterGoals.ORDER).toEqual({ "rolls", "forge", "rootvault", "level", "guild" })
 		expect(CONFIG.visible).toEqual(3)
 		expect(CONFIG.shardKeys).toEqual(10)
 		expect(CONFIG.currency).toEqual("shardKeys")
@@ -119,13 +119,13 @@ describe("StarterGoals tracker", function()
 			table.insert(goals, StarterGoals.GOALS[index].goal)
 		end
 		expect(texts).toEqual({
+			"Roll 10 shards",
 			"Craft your first item at the Forge",
 			"Clear Rootvault",
-			"Roll 10 shards",
 			"Reach Lv 5",
 			"Join or browse a guild",
 		})
-		expect(goals).toEqual({ 1, 1, 10, 5, 1 })
+		expect(goals).toEqual({ 10, 1, 1, 5, 1 })
 
 		local state = opened.state
 		local counts = progress()
@@ -135,6 +135,13 @@ describe("StarterGoals tracker", function()
 		local shown = StarterGoals.show(state, counts)
 		expect(shown.ok).toEqual(true)
 		expect(shown.goals).toEqual({
+			{
+				id = "rolls",
+				text = "Roll 10 shards",
+				goal = 10,
+				progress = 0,
+				met = false,
+			},
 			{
 				id = "forge",
 				text = "Craft your first item at the Forge",
@@ -146,13 +153,6 @@ describe("StarterGoals tracker", function()
 				id = "rootvault",
 				text = "Clear Rootvault",
 				goal = 1,
-				progress = 0,
-				met = false,
-			},
-			{
-				id = "rolls",
-				text = "Roll 10 shards",
-				goal = 10,
 				progress = 0,
 				met = false,
 			},
@@ -177,19 +177,24 @@ describe("StarterGoals tracker", function()
 		})
 		local shown = StarterGoals.show(state, counts)
 		expect(shown.goals[1]).toEqual({
+			id = "rolls",
+			text = "Roll 10 shards",
+			goal = 10,
+			progress = 9,
+			met = false,
+		})
+		expect(shown.goals[2]).toEqual({
 			id = "forge",
 			text = "Craft your first item at the Forge",
 			goal = 1,
 			progress = 1,
 			met = true,
 		})
-		expect(shown.goals[2].progress).toEqual(0)
-		expect(shown.goals[2].met).toEqual(false)
 		expect(shown.goals[3]).toEqual({
-			id = "rolls",
-			text = "Roll 10 shards",
-			goal = 10,
-			progress = 9,
+			id = "rootvault",
+			text = "Clear Rootvault",
+			goal = 1,
+			progress = 0,
 			met = false,
 		})
 		expect(#shown.goals).toEqual(3)
@@ -202,8 +207,8 @@ describe("StarterGoals tracker", function()
 		expect(hidden.visible).toEqual(false)
 		expect(hidden.payout).toBeNil()
 		expect(hidden.state.granted.level).toEqual(false)
-		expect(hidden.goals[1].id).toEqual("forge")
-		expect(hidden.goals[3].id).toEqual("rolls")
+		expect(hidden.goals[1].id).toEqual("rolls")
+		expect(hidden.goals[3].id).toEqual("rootvault")
 		expect(state.granted.level).toEqual(false)
 
 		local guild = StarterGoals.grant(state, "guild", counts)
@@ -241,10 +246,10 @@ describe("StarterGoals grant", function()
 		expect(granted.state.granted.rolls).toEqual(false)
 		expect(granted.state.granted.level).toEqual(false)
 		expect(granted.state.granted.guild).toEqual(false)
-		expect(granted.goals[1].id).toEqual("rootvault")
-		expect(granted.goals[2].id).toEqual("rolls")
-		expect(granted.goals[2].progress).toEqual(10)
-		expect(granted.goals[2].met).toEqual(true)
+		expect(granted.goals[1].id).toEqual("rolls")
+		expect(granted.goals[1].progress).toEqual(10)
+		expect(granted.goals[1].met).toEqual(true)
+		expect(granted.goals[2].id).toEqual("rootvault")
 		expect(granted.goals[3].id).toEqual("level")
 		expect(granted.goals[3].met).toEqual(true)
 		expect(granted.goals[3].progress).toEqual(5)
@@ -297,8 +302,8 @@ describe("StarterGoals grant", function()
 		expect(cleared.state.granted.rootvault).toEqual(true)
 		expect(cleared.state.granted.forge).toEqual(false)
 		expect(cleared.state.granted.level).toEqual(false)
-		expect(cleared.goals[1].id).toEqual("forge")
-		expect(cleared.goals[2].id).toEqual("rolls")
+		expect(cleared.goals[1].id).toEqual("rolls")
+		expect(cleared.goals[2].id).toEqual("forge")
 		expect(cleared.goals[3].id).toEqual("level")
 		expect(cleared.goals[3].met).toEqual(true)
 		expect(state.granted.rootvault).toEqual(false)
@@ -454,7 +459,7 @@ describe("StarterGoals paid", function()
 		local shownPaid = StarterGoals.show(state, counts(true))
 		local shownFree = StarterGoals.show(state, counts(false))
 		expect(shownPaid).toEqual(shownFree)
-		expect(shownPaid.goals[1].id).toEqual("forge")
+		expect(shownPaid.goals[1].id).toEqual("rolls")
 	end)
 
 	it("refuses a paid skip and grants nothing", function()

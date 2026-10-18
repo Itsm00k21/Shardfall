@@ -4,9 +4,9 @@
 	Starter goals after the first five minutes. Pure rules.
 
 	Five one-time goals, in this order:
+	  rolls: Roll 10 shards (10)
 	  forge: Craft your first item at the Forge (1)
 	  rootvault: Clear Rootvault (1)
-	  rolls: Roll 10 shards (10)
 	  level: Reach Lv 5 (5)
 	  guild: Join or browse a guild (1)
 
@@ -55,9 +55,9 @@ local function goalRow(id: string, text: string, goal: number)
 end
 
 StarterGoals.GOALS = table.freeze({
+	goalRow("rolls", "Roll 10 shards", 10),
 	goalRow("forge", "Craft your first item at the Forge", 1),
 	goalRow("rootvault", "Clear Rootvault", 1),
-	goalRow("rolls", "Roll 10 shards", 10),
 	goalRow("level", "Reach Lv 5", 5),
 	goalRow("guild", "Join or browse a guild", 1),
 })
@@ -138,11 +138,11 @@ type Counts = {
 local ERRORS = StarterGoals.ERRORS
 local CONFIG = StarterGoals.CONFIG
 
-local EXPECTED_GOAL = { 1, 1, 10, 5, 1 }
+local EXPECTED_GOAL = { 10, 1, 1, 5, 1 }
 local EXPECTED_TEXT = {
+	"Roll 10 shards",
 	"Craft your first item at the Forge",
 	"Clear Rootvault",
-	"Roll 10 shards",
 	"Reach Lv 5",
 	"Join or browse a guild",
 }
