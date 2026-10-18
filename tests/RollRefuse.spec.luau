@@ -56,6 +56,11 @@ describe("RollRefuse", function()
 		expect(RollRefuse.classify(true, { ok = true, error = "   " })).toEqual("miss")
 	end)
 
+	it("treats an empty batch as a refusal", function()
+		expect(RollRefuse.classify(true, { ok = true, items = {} })).toEqual("refuse")
+		expect(RollRefuse.classify(true, { ok = true, items = {}, error = "" })).toEqual("refuse")
+	end)
+
 	it("treats an error on an accepted roll as a refusal", function()
 		local cracked = { ok = true, error = "Could not crack that shard." }
 		expect(RollRefuse.classify(true, cracked)).toEqual("refuse")
