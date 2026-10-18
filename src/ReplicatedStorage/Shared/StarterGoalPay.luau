@@ -145,6 +145,42 @@ function StarterGoalPay.tracker(data: any)
 	return StarterGoals.show(stateOf(record), progressOf(profile, record, nil))
 end
 
+-- Pays every visible goal that is already at its count. A hidden goal stays
+-- unpaid. A second pass pays nothing for a goal that already cleared.
+function StarterGoalPay.collect(data: any): number
+	if type(data) ~= "table" then
+		return 0
+	end
+	local paid = 0
+	for _ = 1, #StarterGoals.ORDER do
+		local shown = StarterGoalPay.tracker(data)
+		local goals = if type(shown) == "table" then shown.goals else nil
+		if type(goals) ~= "table" then
+			break
+		end
+		local target = nil
+		for _, goal in ipairs(goals) do
+			if type(goal) == "table" and goal.met == true then
+				target = goal.id
+				break
+			end
+		end
+		if target == nil then
+			break
+		end
+		local noted = StarterGoalPay.grant(data, target, nil)
+		if type(noted) ~= "table" or noted.accepted ~= true then
+			break
+		end
+		local keys = 0
+		if type(noted.keys) == "number" then
+			keys = noted.keys
+		end
+		paid += keys
+	end
+	return paid
+end
+
 local function refused(reason: string)
 	return {
 		ok = false,

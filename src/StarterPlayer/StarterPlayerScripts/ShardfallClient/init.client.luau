@@ -454,6 +454,14 @@ local function applyResult(result: any)
 	if type(result.profile) == "table" then
 		applyProfile(result.profile, result.saving)
 	end
+	if type(result.starterGoalTracker) == "table" then
+		if type(latestProfile) ~= "table" then
+			latestProfile = {}
+		end
+		latestProfile.starterGoalTracker = result.starterGoalTracker
+		local shown = latestProfile
+		presentStarterGoals(shown)
+	end
 	if type(result.policy) == "table" then
 		ui.setPolicy(result.policy)
 	end
