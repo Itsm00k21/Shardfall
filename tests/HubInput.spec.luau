@@ -32,7 +32,14 @@ local function profile()
 		shardTokens = 0,
 		gold = 0,
 		shardRolls = 0,
-		inventory = {},
+		inventory = {
+			sword = {
+				uid = "sword",
+				name = "Practice Blade",
+				rarity = "Common",
+				kind = "Weapon",
+			},
+		},
 		pets = {},
 		equipped = {},
 		consumables = { [Materials.TONIC_ID] = 1 },
@@ -124,6 +131,36 @@ describe("HubInput", function()
 			end
 			expect(dead).toEqual({})
 		end
+	end)
+
+	it("keeps each bag card's equip and lock inside the card", function()
+		local world, hub = bootHub()
+		hub.open("bag")
+		local screen = screenOf(world)
+		expect(HubPress.blocker(GuiFake.covers(screen))).toEqual(nil)
+		local bag = GuiFake.findNamed(screen, "Body"):FindFirstChild("bag", false)
+		local actions = bag:FindFirstChild("Actions", true)
+		expect(actions ~= nil).toBeTrue()
+		expect(actions.BackgroundTransparency < 1).toBeTrue()
+		local card = bag:FindFirstChild("Card", true)
+		expect(card ~= nil).toBeTrue()
+		expect(card.ClipsDescendants).toBeTrue()
+		expect(card:FindFirstChild("Equip", false) ~= nil).toBeTrue()
+		expect(card:FindFirstChild("Lock", false) ~= nil).toBeTrue()
+		local named = false
+		local icon = false
+		for _, child in ipairs(card:GetChildren()) do
+			if child:IsA("TextLabel") and child.Text == "Practice Blade" then
+				named = true
+			end
+			if child:IsA("ImageLabel") then
+				icon = true
+			end
+		end
+		expect(named).toBeTrue()
+		expect(icon).toBeTrue()
+		local layout = bag:FindFirstChild("Cards", true):FindFirstChildOfClass("UIGridLayout")
+		expect(layout.CellSize.Y.Offset >= 188).toBeTrue()
 	end)
 
 	it("keeps each roll control on its own action", function()

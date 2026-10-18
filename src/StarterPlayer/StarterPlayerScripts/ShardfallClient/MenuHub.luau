@@ -1650,6 +1650,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		card.Name = "Card"
 		card.BackgroundColor3 = rgb("body")
 		card.BorderSizePixel = 0
+		card.ClipsDescendants = true
 		card.Text = ""
 		card.AutoButtonColor = false
 		card.LayoutOrder = order
@@ -2293,15 +2294,37 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.bagFilter.sort = BagBoard.nextSort(hubState.bagFilter.sort)
 			refreshBag()
 		end)
-		hubFn.row(hubState.bag, "Sets", 2, function()
+		local actions = Instance.new("Frame")
+		actions.Name = "Actions"
+		actions.BackgroundColor3 = rgb("header")
+		actions.BackgroundTransparency = 0
+		actions.BorderSizePixel = 0
+		actions.Size = UDim2.fromScale(1, 0)
+		actions.AutomaticSize = Enum.AutomaticSize.Y
+		actions.LayoutOrder = 2
+		actions.Parent = hubState.bag
+		local actionsCorner = Instance.new("UICorner")
+		actionsCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		actionsCorner.Parent = actions
+		local actionsList = Instance.new("UIListLayout")
+		actionsList.Padding = UDim.new(0, UiTheme.PAD)
+		actionsList.SortOrder = Enum.SortOrder.LayoutOrder
+		actionsList.Parent = actions
+		local actionsPad = Instance.new("UIPadding")
+		actionsPad.PaddingTop = UDim.new(0, UiTheme.PAD)
+		actionsPad.PaddingBottom = UDim.new(0, UiTheme.PAD)
+		actionsPad.PaddingLeft = UDim.new(0, UiTheme.PAD)
+		actionsPad.PaddingRight = UDim.new(0, UiTheme.PAD)
+		actionsPad.Parent = actions
+		hubFn.row(actions, "Sets", 2, function()
 			hubFn.apply(UiRouter.push(hubState.route, "sets"))
 		end)
-		hubFn.row(hubState.bag, "Open full bag", 3, function()
+		hubFn.row(actions, "Open full bag", 3, function()
 			hooks.onBag()
 		end)
 		if hubState.salvageArmed then
-			hubFn.line(hubState.bag, BagBoard.confirm(hubState.salvageRarity), 4, rgb("loss"))
-			hubFn.row(hubState.bag, "Confirm salvage", 5, function()
+			hubFn.line(actions, BagBoard.confirm(hubState.salvageRarity), 4, rgb("loss"))
+			hubFn.row(actions, "Confirm salvage", 5, function()
 				local rarity = hubState.salvageRarity
 				hubState.salvageArmed = false
 				task.spawn(function()
@@ -2309,16 +2332,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 				refreshBag()
 			end)
-			hubFn.row(hubState.bag, "Cancel", 6, function()
+			hubFn.row(actions, "Cancel", 6, function()
 				hubState.salvageArmed = false
 				refreshBag()
 			end)
-			hubFn.row(hubState.bag, "Use  " .. hubFn.nextSalvage(hubState.salvageRarity), 7, function()
+			hubFn.row(actions, "Use  " .. hubFn.nextSalvage(hubState.salvageRarity), 7, function()
 				hubState.salvageRarity = hubFn.nextSalvage(hubState.salvageRarity)
 				refreshBag()
 			end)
 		else
-			hubFn.row(hubState.bag, "Salvage  " .. hubState.salvageRarity, 4, function()
+			hubFn.row(actions, "Salvage  " .. hubState.salvageRarity, 4, function()
 				hubState.salvageArmed = true
 				refreshBag()
 			end)

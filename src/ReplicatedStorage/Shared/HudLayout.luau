@@ -200,9 +200,11 @@ function HudLayout.cardGrid(width: number, height: number, count: number): Grid
 		cellW = minCell
 		columns = 1
 	end
-	local cellH = math.max(120, math.min(168, cellW + 48))
-	if height >= 120 and height < cellH then
-		cellH = math.floor(height)
+	-- Icon, name, Equip, and Lock need this much. A short viewport
+	-- scrolls; it does not squash the cell and spill the buttons.
+	local cellH = math.max(188, math.min(220, cellW + 48))
+	if type(height) ~= "number" then
+		cellH = 188
 	end
 	local rows = math.max(1, math.ceil(math.max(count, 1) / columns))
 	return {

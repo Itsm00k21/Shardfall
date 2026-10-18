@@ -15,10 +15,10 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build fcae09b+ client` in Output.
+	still leaves `[Shardfall] build 945b123+ client` in Output.
 ]]
 
-print("[Shardfall] build fcae09b+ client")
+print("[Shardfall] build 945b123+ client")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1292,16 +1292,25 @@ end
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)
+		if ClassHud.holdsChoice() then
+			return
+		end
+		if kind == "craft" then
+			closePanels("craft")
+			ui.openPanel("craft")
+			if hudShell ~= nil then
+				hudShell.toast("Forge. Craft, upgrade, and reroll.")
+			end
+			return
+		end
 		local tab = UiRouter.havenTab(kind, areaId)
-		if tab == nil or menuHub == nil or ClassHud.holdsChoice() then
+		if tab == nil or menuHub == nil then
 			return
 		end
 		closePanels("menu")
 		menuHub.open(tab)
 		if kind == "market" then
 			ui.setStatus("Haven Market. Browse, sell, and trade.", "info")
-		elseif kind == "craft" then
-			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")
 		elseif areaId == "pets" then
 			ui.setStatus("Pet Garden. Companions.", "info")
 		else
