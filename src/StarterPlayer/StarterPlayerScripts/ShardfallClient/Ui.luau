@@ -43,6 +43,7 @@ local RarityConfig = require(Shared:WaitForChild("RarityConfig"))
 local Recipes = require(Shared:WaitForChild("Recipes"))
 local RollMath = require(Shared:WaitForChild("RollMath"))
 local Stats = require(Shared:WaitForChild("Stats"))
+local TextFit = require(Shared:WaitForChild("TextFit"))
 
 local Ui = {}
 
@@ -717,12 +718,30 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 	end
 
+	local function fitLegacyText()
+		-- Shardfall panel text. A missing bannerScale is 1 inside TextFit.px.
+		for _, desc in ipairs(screen:GetDescendants()) do
+			if desc:GetAttribute("SkipTextScale") == true then
+				continue
+			end
+			if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+				local base = desc:GetAttribute("BaseText")
+				if type(base) ~= "number" then
+					base = desc.TextSize
+					desc:SetAttribute("BaseText", base)
+				end
+				desc.TextSize = TextFit.px(base, bannerScale)
+			end
+		end
+	end
+
 	local function paintChips()
 		for _, chip in ipairs(chips) do
 			local active = selectedArea ~= nil and chip.area.id == selectedArea.id
 			chip.button.BackgroundColor3 = if active then COLORS.gold else COLORS.buttonDim
 			chip.button.TextColor3 = if active then COLORS.ink else COLORS.text
 		end
+		fitLegacyText()
 	end
 
 	local realmRow = new("Frame", {
@@ -1494,6 +1513,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			ratio = math.clamp(legendary / RarityConfig.LEGENDARY_PITY, 0, 1)
 		end
 		pityFill.Size = UDim2.fromScale(ratio, 1)
+		fitLegacyText()
 	end
 
 	local function paintRealms()
@@ -1565,6 +1585,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			realmNext.Text = ""
 		end
 		applyPage()
+		fitLegacyText()
 	end
 
 	local function highestUnlocked(area: any): any
@@ -2061,6 +2082,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 			}, materialList)
 			row.Name = materialId
 		end
+		fitLegacyText()
 	end
 
 	local function showForgeTab(name: string)
@@ -2150,6 +2172,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		bannerScale = nextScale
 		applyBannerFit()
+		fitLegacyText()
 	end
 
 	function controller.setPolicy(policy: any)
@@ -2228,6 +2251,9 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 				)
 			end
 		end
+		-- applyProfile refreshes odds after setProfile, so this rebuild
+		-- has to fit the new rows or they stay at the design size.
+		fitLegacyText()
 	end
 
 	function controller.showRoll(result: any)
