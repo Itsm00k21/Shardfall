@@ -48,6 +48,7 @@ local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local RollSpot = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSpot"))
+local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShardBoard"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
@@ -475,6 +476,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	hubFn.fitRoll = function() end
+	hubFn.applyTextScale = function() end
 
 	function hubFn.place()
 		local vx, vy = hubFn.view()
@@ -498,6 +500,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.classGrid.CellSize = UDim2.fromOffset(grid.cellW, grid.cellH)
 		hubState.classGrid.CellPadding = UDim2.fromOffset(grid.gap, grid.gap)
 		hubFn.fitRoll()
+		hubFn.applyTextScale()
 	end
 	hubFn.place()
 	hubState.screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(hubFn.place)
@@ -1007,10 +1010,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.cardRoom = 112
 	hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
 	hubState.shardStone.Size = UDim2.fromOffset(28, 36)
-	hubState.shardStone.BackgroundColor3 = Color3.fromRGB(198, 206, 214)
 	hubState.shardStone.BackgroundTransparency = 0
 	hubState.shardStone.BorderSizePixel = 0
 	hubState.shardStone.ZIndex = 8
+	hubState.shardStone.ClipsDescendants = true
 	hubState.shardStone.Parent = hubState.reelHost
 	hubState.shardCorner = Instance.new("UICorner")
 	hubState.shardCorner.CornerRadius = UDim.new(0, 6)
@@ -1020,17 +1023,34 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.crackLine.AnchorPoint = Vector2.new(0.5, 0)
 	hubState.crackLine.Position = UDim2.fromScale(0.5, 0.12)
 	hubState.crackLine.Size = UDim2.fromOffset(2, 0)
-	hubState.crackLine.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 	hubState.crackLine.BorderSizePixel = 0
 	hubState.crackLine.ZIndex = 9
 	hubState.crackLine.Parent = hubState.shardStone
-	hubState.stoneRest = Color3.fromRGB(198, 206, 214)
 	hubFn.restShard = function()
 		hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
 		hubState.shardStone.BackgroundColor3 = hubState.stoneRest
-		hubState.crackLine.Size = UDim2.fromOffset(2, 0)
+		hubState.crackLine.BackgroundColor3 = hubState.crackRest
+		local crack = hubState.crackH
+		if type(crack) ~= "number" then
+			crack = 14
+		end
+		local stoneH = hubState.shardStone.Size.Y.Offset
+		if stoneH > 4 and crack > stoneH - 4 then
+			crack = math.max(2, stoneH - 4)
+		end
+		hubState.crackLine.Size = UDim2.fromOffset(2, crack)
 		hubState.reelHost.BackgroundColor3 = rgb("header")
 	end
+	hubFn.applyCrystal = function(kind: string, live: boolean)
+		local crystal = ShardBoard.visual(kind)
+		hubState.stoneRest = Color3.fromRGB(crystal.fill[1], crystal.fill[2], crystal.fill[3])
+		hubState.crackRest = Color3.fromRGB(crystal.crack[1], crystal.crack[2], crystal.crack[3])
+		hubState.crackH = crystal.crackH
+		if live then
+			hubFn.restShard()
+		end
+	end
+	hubFn.applyCrystal("gear", true)
 
 	function hubFn.rarityColor3(name: string): Color3
 		local row = Rarities.COLOR[name]
@@ -2706,8 +2726,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local infoPool = if hubState.rollKind == "pets"
 				then Pools.get(hubFn.rollPoolId())
 				else Pools.get("verdant_armory")
-			local infoOdds =
-				RollBoard.oddsLines(infoPool, hubState.profile, 0, UiRouter.oddsSince(legendaryCount))
+			-- stylua: ignore
+			local infoOdds = RollBoard.oddsLines(infoPool, hubState.profile, 0, UiRouter.oddsSince(legendaryCount))
 			for index, text in ipairs(infoOdds) do
 				hubFn.line(info, text, 3 + index, rgb("text"))
 			end
@@ -2716,6 +2736,35 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local function playPity(tween: Tween)
 			table.insert(hubState.pityTweens, tween)
 			tween:Play()
+		end
+		-- One host, absolute rows. A collapsed list cannot pile Epic,
+		-- Legendary, and Odds on top of each other when the kind switches.
+		local progress = ShardBoard.stack(hubState.rollKind, {
+			Epic = {
+				counter = if epicMeter.ok == true then epicMeter.counter else sinceEpic,
+				goal = RarityConfig.EPIC_PITY,
+			},
+			Legendary = {
+				counter = if pityMeter.ok == true then pityMeter.counter else sinceLegendary,
+				goal = pityGoal,
+			},
+			Relic = { counter = 0, goal = nil },
+			Mythic = { counter = 0, goal = nil },
+		}, hubFn.rollRowWidth())
+		local progressHost = Instance.new("Frame")
+		progressHost.Name = "Progress"
+		progressHost.BackgroundTransparency = 1
+		progressHost.Size = UDim2.fromOffset(progress.w, progress.h)
+		progressHost.LayoutOrder = 4
+		progressHost.Parent = hubState.roll
+		hubFn.applyCrystal(hubState.rollKind, not hubState.rollBusy)
+		local function progressRow(id: string)
+			for _, row in ipairs(progress.rows) do
+				if row.id == id then
+					return row
+				end
+			end
+			return nil
 		end
 		-- Full-width rows. A phone hub is too narrow for two counters
 		-- side by side, and 14px text stays on one line.
@@ -2728,14 +2777,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold: boolean,
 			animate: string
 		)
+			local rowId = if name == "EpicPity"
+				then "Epic"
+				elseif name == "LegendaryPity" then "Legendary"
+				else name
+			local row = progressRow(rowId)
+			if row == nil or row.bar ~= true then
+				return
+			end
 			local host = Instance.new("Frame")
 			host.Name = name
 			host.BackgroundColor3 = rgb("header")
-			host.Size = UDim2.new(1, 0, 0, 36)
+			host.Position = UDim2.fromOffset(0, row.y)
+			host.Size = UDim2.fromOffset(progress.w, row.h)
 			host.BorderSizePixel = 0
 			host.ClipsDescendants = true
 			host.LayoutOrder = order
-			host.Parent = hubState.roll
+			host.Parent = progressHost
 			local corner = Instance.new("UICorner")
 			corner.CornerRadius = UDim.new(0, 6)
 			corner.Parent = host
@@ -2843,8 +2901,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			meter(name, pityCaption(label, meterRow, reset), fill, order, fromFill, reset, animate)
 			return fill, nextSeen
 		end
-		local nextEpicFill, nextEpicSeen =
-			paintPity("EpicPity", "Epic", epicMeter, "Epic", 4, hubState.epicFillShown, hubState.epicFlashRoll)
+		-- stylua: ignore
+		local nextEpicFill, nextEpicSeen = paintPity("EpicPity", "Epic", epicMeter, "Epic", 4, hubState.epicFillShown, hubState.epicFlashRoll)
 		hubState.epicFillShown = nextEpicFill
 		hubState.epicFlashRoll = nextEpicSeen
 		local nextLegendaryFill, nextLegendarySeen = paintPity(
@@ -2858,18 +2916,53 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		hubState.legendaryFillShown = nextLegendaryFill
 		hubState.legendaryFlashRoll = nextLegendarySeen
-		hubFn.line(hubState.roll, "Odds", 12, rgb("gold"))
+		local oddsRow = progressRow("Odds")
+		if oddsRow ~= nil then
+			local oddsHost = Instance.new("Frame")
+			oddsHost.Name = "Odds"
+			oddsHost.BackgroundColor3 = rgb("header")
+			oddsHost.BorderSizePixel = 0
+			oddsHost.Position = UDim2.fromOffset(0, oddsRow.y)
+			oddsHost.Size = UDim2.fromOffset(progress.w, oddsRow.h)
+			oddsHost.Parent = progressHost
+			local oddsCorner = Instance.new("UICorner")
+			oddsCorner.CornerRadius = UDim.new(0, 6)
+			oddsCorner.Parent = oddsHost
+			local oddsLabel = Instance.new("TextLabel")
+			oddsLabel.BackgroundTransparency = 1
+			oddsLabel.Position = UDim2.fromOffset(8, 0)
+			oddsLabel.Size = UDim2.new(1, -16, 1, 0)
+			oddsLabel.Font = bodyFont()
+			oddsLabel.TextSize = UiTheme.MIN_TEXT
+			oddsLabel.TextXAlignment = Enum.TextXAlignment.Left
+			oddsLabel.TextColor3 = rgb("gold")
+			oddsLabel.Text = oddsRow.text
+			oddsLabel.Parent = oddsHost
+		end
 		local oddsSince =
 			UiRouter.oddsSince(if type(sinceLegendary) == "number" then sinceLegendary else 0)
+		-- stylua: ignore
 		local odds = RollBoard.oddsLines(Pools.get("verdant_armory"), hubState.profile, 0, oddsSince)
 		if hubState.rollKind == "pets" then
+			-- stylua: ignore
 			odds = RollBoard.oddsLines(Pools.get(hubFn.rollPoolId()), hubState.profile, 0, oddsSince)
 		end
+		local oddsLines = Instance.new("Frame")
+		oddsLines.Name = "OddsLines"
+		oddsLines.BackgroundTransparency = 1
+		oddsLines.Size = UDim2.fromScale(1, 0)
+		oddsLines.AutomaticSize = Enum.AutomaticSize.Y
+		oddsLines.LayoutOrder = 13
+		oddsLines.Parent = hubState.roll
+		local oddsLayout = Instance.new("UIListLayout")
+		oddsLayout.Padding = UDim.new(0, 4)
+		oddsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		oddsLayout.Parent = oddsLines
 		if #odds == 0 then
-			hubFn.line(hubState.roll, "Odds are unavailable.", 13, rgb("muted"))
+			hubFn.line(oddsLines, "Odds are unavailable.", 1, rgb("muted"))
 		else
 			for index, text in ipairs(odds) do
-				hubFn.line(hubState.roll, text, 13 + index, rgb("text"))
+				hubFn.line(oddsLines, text, index, rgb("text"))
 			end
 		end
 
@@ -2955,6 +3048,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubState.slideHistory = false
 		hubFn.fitRoll()
+		hubFn.applyTextScale()
 	end
 
 	hubState.activeItem = nil
