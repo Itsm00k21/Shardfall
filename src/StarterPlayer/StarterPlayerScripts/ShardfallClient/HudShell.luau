@@ -242,10 +242,17 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	mastery.Visible = LaunchGate.on("extraCurrencies")
 	local shards = pill("Shards", "Shards 0")
 
+	local railGui = Instance.new("ScreenGui")
+	railGui.Name = "ShardfallRail"
+	railGui.ResetOnSpawn = false
+	railGui.DisplayOrder = 85
+	railGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	railGui.IgnoreGuiInset = false
+	railGui.Parent = playerGui
 	local rail = Instance.new("Frame")
 	rail.Name = "Rail"
 	rail.BackgroundTransparency = 1
-	rail.Parent = chrome
+	rail.Parent = railGui
 	local railLayout = Instance.new("UIListLayout")
 	railLayout.FillDirection = Enum.FillDirection.Vertical
 	railLayout.Padding = UDim.new(0, UiTheme.PAD)
