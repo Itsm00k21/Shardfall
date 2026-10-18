@@ -16,3 +16,6 @@ sourcemap.json
 .DS_Store
 Thumbs.db
 *.swp
+
+# Local smoke / agent state
+ops/state.sqlite*
