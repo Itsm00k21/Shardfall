@@ -542,8 +542,10 @@ function HudLayout.bagCardCompact(cellW: number, cellH: number): CompactCard
 		then math.max(HudLayout.COMPACT_CARD_H, cellH)
 		else HudLayout.COMPACT_CARD_H
 	return {
-		icon = rect(pad, pad, 44, 44),
-		name = rect(pad + 44 + pad, pad, math.max(0, w - pad * 3 - 44), 44),
+		-- Name gets its own full-width line under the icon: beside a 44 px icon
+		-- it only had ~49 px at 390 and broke words mid-way.
+		icon = rect(pad, pad, 30, 30),
+		name = rect(pad, pad + 30 + 4, math.max(0, w - pad * 2), 24),
 		equip = rect(pad, h - pad - touch, math.max(0, w - pad * 2), touch),
 	}
 end
