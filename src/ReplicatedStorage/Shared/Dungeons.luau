@@ -710,6 +710,15 @@ function Dungeons.waveKinds(wave: number): { string }
 	return kinds
 end
 
+-- One line on the wave banner the first time the Far Glade joins. Empty
+-- on every other wave so the banner stays "Rootvault Waves · Wave N".
+function Dungeons.waveNote(wave: number): string
+	if wholeWave(wave) == Dungeons.GLADE_FROM_WAVE then
+		return ". Far Glade beasts join. Purple: step out."
+	end
+	return ""
+end
+
 function Dungeons.waveReward(wave: number): ClearReward
 	local n = wholeWave(wave)
 	local materials: { [string]: number } = { wood = 1 }

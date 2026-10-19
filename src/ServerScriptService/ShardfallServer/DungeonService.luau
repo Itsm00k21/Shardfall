@@ -1019,6 +1019,7 @@ local function spawnWave(player: Player, run: Run)
 	if Dungeons.isBossWave(run.wave) then
 		text ..= ". Boss wave. Slam, then the sunbeam at half HP."
 	end
+	text ..= Dungeons.waveNote(run.wave)
 	pushRun(player, text)
 	publishCues(player)
 end

@@ -173,3 +173,17 @@ describe("Far Glade lobbers", function()
 		expect(purple ~= nil).toBeTrue()
 	end)
 end)
+
+describe("Far Glade wave note", function()
+	it("adds one banner line on the first glade wave only", function()
+		expect(Dungeons.waveNote(Dungeons.GLADE_FROM_WAVE)).toEqual(
+			". Far Glade beasts join. Purple: step out."
+		)
+		for _, wave in ipairs({ 1, 2, 4, 5, 10 }) do
+			expect(Dungeons.waveNote(wave)).toEqual("")
+		end
+		expect(Dungeons.isBossWave(Dungeons.GLADE_FROM_WAVE)).toEqual(false)
+		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		expect(string.find(source, "text ..= Dungeons.waveNote(run.wave)", 1, true) ~= nil).toBeTrue()
+	end)
+end)
