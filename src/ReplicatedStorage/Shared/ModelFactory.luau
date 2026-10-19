@@ -59,6 +59,8 @@ ModelFactory.MONSTERS = {
 	"thorn_sprite",
 	"grandmother_gnarl",
 }
+-- Far Glade field rigs. Kept out of MONSTERS, which mirrors the Rootvault rooms.
+ModelFactory.FIELD_MONSTERS = { "mud_tusk", "hedge_lurker", "seed_flinger" }
 
 ModelFactory.TREES = { "tree_giant", "tree_pine", "tree_mushroom", "tree_willow" }
 
@@ -69,6 +71,9 @@ local SCALE: { [string]: number } = {
 	root_brute = 1.45,
 	thorn_sprite = 1.15,
 	grandmother_gnarl = 5,
+	mud_tusk = 1.2,
+	hedge_lurker = 1,
+	seed_flinger = 1.05,
 }
 
 local MOSS = { 86, 150, 78 }
@@ -82,6 +87,10 @@ local GLOW = { 170, 255, 176 }
 local CAP = { 168, 92, 86 }
 local STONE = { 122, 116, 108 }
 local WATER = { 64, 168, 156 }
+local MUD = { 104, 78, 54 }
+local MUD_DARK = { 70, 52, 38 }
+local OLIVE = { 120, 128, 60 }
+local TUSK = { 196, 176, 132 }
 
 local function piece(
 	name: string,
@@ -545,6 +554,48 @@ local RECIPES: { [string]: { Piece } } = {
 			nil,
 			0.42
 		),
+	},
+	-- Far Glade. Muted per the doc: only the Lurker's eyes and the Flinger's
+	-- sap glint, no body glow.
+	mud_tusk = {
+		block("Body", 2.6, 1.6, 3.4, 0, 1.45, 0.2, MUD, "Mud", "large", "body"),
+		block("Hump", 2, 0.6, 1.6, 0, 2.45, -0.3, MUD_DARK, "Mud", "large", "body"),
+		block("Head", 1.6, 1.2, 1.3, 0, 1.35, -2.05, MUD_DARK, "Mud", "large", "body"),
+		wedge("Tusk", 0.25, 0.8, 0.25, 0.55, 1.05, -2.8, -60, 0, 0, TUSK, "Wood", "small", nil),
+		wedge("Tusk", 0.25, 0.8, 0.25, -0.55, 1.05, -2.8, -60, 0, 0, TUSK, "Wood", "small", nil),
+		ball("Eye", 0.22, 0.45, 1.6, -2.72, BARK_DARK, "Wood", "small", false, nil),
+		ball("Eye", 0.22, -0.45, 1.6, -2.72, BARK_DARK, "Wood", "small", false, nil),
+		block("Leg", 0.5, 0.8, 0.5, 0.9, 0.4, -1, MUD_DARK, "Mud", "small", "leg"),
+		block("Leg", 0.5, 0.8, 0.5, -0.9, 0.4, -1, MUD_DARK, "Mud", "small", "leg"),
+		block("Leg", 0.5, 0.8, 0.5, 0.9, 0.4, 1.4, MUD_DARK, "Mud", "small", "leg"),
+		block("Leg", 0.5, 0.8, 0.5, -0.9, 0.4, 1.4, MUD_DARK, "Mud", "small", "leg"),
+	},
+	hedge_lurker = {
+		block("Body", 1.3, 0.9, 2.6, 0, 1.05, 0.2, MOSS_DARK, "Grass", "large", "body"),
+		ball("Head", 1.1, 0, 1.35, -1.5, MOSS_DARK, "Grass", "large", nil, "body"),
+		wedge("Ear", 0.3, 0.55, 0.3, 0.32, 1.95, -1.5, 0, 0, 12, BARK, "Wood", "small", nil),
+		wedge("Ear", 0.3, 0.55, 0.3, -0.32, 1.95, -1.5, 0, 0, -12, BARK, "Wood", "small", nil),
+		ball("Eye", 0.2, 0.25, 1.45, -2.02, GLOW, "Neon", "small", false, nil),
+		ball("Eye", 0.2, -0.25, 1.45, -2.02, GLOW, "Neon", "small", false, nil),
+		block("Tail", 0.25, 0.25, 1.6, 0, 1.45, 2.1, BARK_DARK, "Wood", "small", nil),
+		block("Twig", 0.15, 0.6, 0.15, 0.3, 1.7, 0.4, BARK, "Wood", "small", nil),
+		block("Twig", 0.15, 0.6, 0.15, -0.3, 1.7, 0.9, BARK, "Wood", "small", nil),
+		block("Leg", 0.3, 0.6, 0.3, 0.5, 0.3, -0.8, BARK_DARK, "Wood", "small", "leg"),
+		block("Leg", 0.3, 0.6, 0.3, -0.5, 0.3, -0.8, BARK_DARK, "Wood", "small", "leg"),
+		block("Leg", 0.3, 0.6, 0.3, 0.5, 0.3, 1.1, BARK_DARK, "Wood", "small", "leg"),
+		block("Leg", 0.3, 0.6, 0.3, -0.5, 0.3, 1.1, BARK_DARK, "Wood", "small", "leg"),
+	},
+	seed_flinger = {
+		ball("Body", 2.2, 0, 1.4, 0, OLIVE, "Grass", "large", nil, "body"),
+		ball("Sack", 1.3, 0, 2.15, 0.95, BARK, "Fabric", "large", nil, "body"),
+		ball("Pod", 0.45, 0.4, 2.7, 0.9, BARK_DARK, "Wood", "small", nil, nil),
+		ball("Pod", 0.45, -0.35, 2.65, 1.2, BARK_DARK, "Wood", "small", nil, nil),
+		wedge("Leaf", 0.9, 0.2, 1.2, 0.9, 2.35, -0.2, 0, 0, 30, MOSS, "Grass", "small", nil),
+		wedge("Leaf", 0.9, 0.2, 1.2, -0.9, 2.35, -0.2, 0, 0, -30, MOSS, "Grass", "small", nil),
+		ball("Eye", 0.24, 0.35, 1.65, -1.0, AMBER, "Wood", "small", false, nil),
+		ball("Eye", 0.24, -0.35, 1.65, -1.0, AMBER, "Wood", "small", false, nil),
+		block("Root", 0.4, 0.5, 0.4, 0.6, 0.25, 0, BARK_DARK, "Wood", "small", "leg"),
+		block("Root", 0.4, 0.5, 0.4, -0.6, 0.25, 0, BARK_DARK, "Wood", "small", "leg"),
 	},
 	root_ring = {
 		block("Root", 1.4, 0.45, 0.55, 0, 0.28, 0, BARK_DARK, "Wood", "large", nil),

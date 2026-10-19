@@ -71,6 +71,9 @@ Drops.ENEMIES = {
 	moss_crawler = { realm = "verdant", role = "normal" },
 	thorn_sprite = { realm = "verdant", role = "elite" },
 	grandmother_gnarl = { realm = "verdant", role = "boss" },
+	mud_tusk = { realm = "verdant", role = "normal" },
+	hedge_lurker = { realm = "verdant", role = "normal" },
+	seed_flinger = { realm = "verdant", role = "normal" },
 } :: { [string]: EnemyDrop }
 
 -- Extra forage on top of the realm bundle. Living Vine is a Vine Crawler
@@ -91,6 +94,15 @@ local BONUS: { [string]: { Entry } } = {
 	},
 	thorn_sprite = {
 		row("vine", 1, 1, 1),
+	},
+	mud_tusk = {
+		row("wood", 1, 1, 2),
+	},
+	hedge_lurker = {
+		row("vine", 1, 1, 1),
+	},
+	seed_flinger = {
+		row("spore", 0.6, 1, 1),
 	},
 }
 
