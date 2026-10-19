@@ -251,6 +251,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		glyphStroke.Color = Color3.fromRGB(10, 6, 28)
 		glyphStroke.Parent = glyph
 		glyph.Parent = button
+		local art = Instance.new("ImageLabel")
+		art.Name = "Art"
+		art.BackgroundTransparency = 1
+		art.AnchorPoint = Vector2.new(0.5, 0.5)
+		art.Position = UDim2.fromScale(0.5, 0.54)
+		art.Size = UDim2.fromScale(0.62, 0.62)
+		art.ScaleType = Enum.ScaleType.Fit
+		art.Visible = false
+		art.ZIndex = 2
+		art.Parent = button
 		local bind = Instance.new("TextLabel")
 		bind.Name = "Bind"
 		-- Cyan number badge, top centre.
@@ -613,8 +623,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local tint = button:FindFirstChild("Tint")
 			local letter, color = ActionSlots.glyph(id, slot)
 			local liftedR, liftedG, liftedB = UiTheme.lift(color[1], color[2], color[3])
+			local artKey = ActionSlots.art(id, slot)
+			local artId = if artKey ~= nil then IconAssets[artKey] else nil
+			local art = button:FindFirstChild("Art")
+			if art ~= nil and art:IsA("ImageLabel") then
+				art.Image = artId or ""
+				art.Visible = artId ~= nil
+			end
 			if glyph ~= nil and glyph:IsA("TextLabel") then
-				glyph.Text = letter
+				-- Painted art replaces the letter; the letter stays as fallback.
+				glyph.Text = if artId ~= nil then "" else letter
 				glyph.TextColor3 = Color3.fromRGB(liftedR, liftedG, liftedB)
 			end
 			local hexGlow = button:FindFirstChild("HexGlow")

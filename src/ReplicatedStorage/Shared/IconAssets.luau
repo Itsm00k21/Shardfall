@@ -22,6 +22,12 @@ local IconAssets: { [string]: string } = {
 	ItemAccessory = "rbxassetid://100999400794230",
 	ItemConsumable = "rbxassetid://79399086531671",
 	ItemMisc = "rbxassetid://96247818299080",
+	-- Hotbar skill art by role (batch 7).
+	SkillAttack = "rbxassetid://92863817891102",
+	SkillHeavy = "rbxassetid://124061473120636",
+	SkillDodge = "rbxassetid://109683826876277",
+	SkillSpell = "rbxassetid://70429026066280",
+	SkillUlt = "rbxassetid://105106458529178",
 	-- Action bar frames (purple hex style).
 	HexSlot = "rbxassetid://113386067760930",
 	HexSlotGlow = "rbxassetid://138707130263385",
