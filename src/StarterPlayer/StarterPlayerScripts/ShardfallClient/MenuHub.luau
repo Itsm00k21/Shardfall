@@ -3440,6 +3440,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.rollKind = "pets"
 			hubFn.show("roll")
 		end)
+		hubFn.hexify(hubState.pets)
 		hubFn.hold("pets")
 	end
 
