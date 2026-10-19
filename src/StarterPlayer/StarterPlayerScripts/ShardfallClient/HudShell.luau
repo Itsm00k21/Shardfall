@@ -88,7 +88,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	portraitCorner.Parent = portrait
 	local portraitStroke = Instance.new("UIStroke")
 	portraitStroke.Thickness = UiTheme.STROKE
-	portraitStroke.Color = rgb("gold")
+	portraitStroke.Color = Color3.fromRGB(150, 92, 255)
 	portraitStroke.Parent = portrait
 	local initial = Instance.new("TextLabel")
 	initial.Name = "Initial"
@@ -133,16 +133,16 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	local health = Instance.new("Frame")
 	health.Name = "Health"
-	health.BackgroundColor3 = rgb("panel")
-	health.BackgroundTransparency = 0.08
+	health.BackgroundColor3 = Color3.fromRGB(20, 18, 50)
+	health.BackgroundTransparency = 0.05
 	health.BorderSizePixel = 0
 	health.Parent = chrome
 	local healthCorner = Instance.new("UICorner")
 	healthCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	healthCorner.Parent = health
 	local healthStroke = Instance.new("UIStroke")
-	healthStroke.Thickness = UiTheme.STROKE
-	healthStroke.Color = rgb("buttonDim")
+	healthStroke.Thickness = 2
+	healthStroke.Color = Color3.fromRGB(150, 92, 255)
 	healthStroke.Parent = health
 	local levelLabel = Instance.new("TextLabel")
 	levelLabel.Name = "Level"
@@ -152,14 +152,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	levelLabel.Font = Enum.Font.BuilderSansBold
 	levelLabel.TextSize = UiTheme.MIN_TEXT
 	levelLabel.TextXAlignment = Enum.TextXAlignment.Left
-	levelLabel.TextColor3 = rgb("text")
+	levelLabel.TextColor3 = Color3.fromRGB(150, 235, 255)
 	levelLabel.Text = "Lv 1"
 	levelLabel.Parent = health
 	local hpBack = Instance.new("Frame")
 	hpBack.Name = "Track"
 	hpBack.Position = UDim2.fromOffset(8, 20)
 	hpBack.Size = UDim2.new(1, -16, 0, 10)
-	hpBack.BackgroundColor3 = rgb("buttonDim")
+	hpBack.BackgroundColor3 = Color3.fromRGB(44, 36, 88)
 	hpBack.BorderSizePixel = 0
 	hpBack.Parent = health
 	local hpFill = Instance.new("Frame")
@@ -196,13 +196,13 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	xpBack.Name = "XpTrack"
 	xpBack.Position = UDim2.fromOffset(8, 46)
 	xpBack.Size = UDim2.new(1, -16, 0, 6)
-	xpBack.BackgroundColor3 = rgb("buttonDim")
+	xpBack.BackgroundColor3 = Color3.fromRGB(44, 36, 88)
 	xpBack.BorderSizePixel = 0
 	xpBack.Parent = health
 	local xpFill = Instance.new("Frame")
 	xpFill.Name = "Fill"
 	xpFill.Size = UDim2.fromScale(0, 1)
-	xpFill.BackgroundColor3 = rgb("gold")
+	xpFill.BackgroundColor3 = Color3.fromRGB(64, 206, 255)
 	xpFill.BorderSizePixel = 0
 	xpFill.Parent = xpBack
 
@@ -219,8 +219,8 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local label = Instance.new("TextLabel")
 		label.Name = name
 		label.Size = UDim2.fromOffset(108, 32)
-		label.BackgroundColor3 = rgb("panel")
-		label.BackgroundTransparency = 0.2
+		label.BackgroundColor3 = Color3.fromRGB(20, 18, 50)
+		label.BackgroundTransparency = 0.05
 		label.Font = Enum.Font.BuilderSansBold
 		label.TextSize = UiTheme.MIN_TEXT
 		label.TextColor3 = rgb("text")
@@ -233,9 +233,28 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		corner.CornerRadius = UDim.new(0, 8)
 		corner.Parent = label
 		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = UiTheme.STROKE
-		stroke.Color = rgb("ink")
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Thickness = 2
+		stroke.Color = Color3.fromRGB(150, 92, 255)
 		stroke.Parent = label
+		-- Hex currency chip: painted coin/shard icon on the left.
+		local art = IconAssets[name]
+		if art ~= nil then
+			local pad = Instance.new("UIPadding")
+			pad.PaddingLeft = UDim.new(0, 26)
+			pad.PaddingRight = UDim.new(0, 4)
+			pad.Parent = label
+			local icon = Instance.new("ImageLabel")
+			icon.Name = "Icon"
+			icon.AnchorPoint = Vector2.new(0, 0.5)
+			icon.Position = UDim2.new(0, -22, 0.5, 0)
+			icon.Size = UDim2.fromOffset(22, 22)
+			icon.BackgroundTransparency = 1
+			icon.ScaleType = Enum.ScaleType.Fit
+			icon.Image = art
+			icon.ZIndex = 2
+			icon.Parent = label
+		end
 		return label
 	end
 	local gold = pill("Gold", "Gold 0")
