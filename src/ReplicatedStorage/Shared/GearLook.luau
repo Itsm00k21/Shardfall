@@ -73,7 +73,9 @@ function GearLook.forProfile(data: any): Look
 	end
 	local weapon = owned(data, data.equipped.weapon)
 	if weapon ~= nil and weapon.kind == "Weapon" then
-		local hold = HOLDS[weapon.weaponType or ""]
+		-- Unknown or missing types fight as a sword (CombatMath.STYLES), so
+		-- they wear the sword look too instead of the grey placeholder.
+		local hold = HOLDS[weapon.weaponType or ""] or HOLDS.sword
 		if hold ~= nil then
 			look.weapon = hold.kind
 			look.weaponScale = hold.length

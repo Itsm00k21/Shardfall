@@ -7,6 +7,7 @@ local expect = framework.expect
 
 local GearLook = require("../src/ReplicatedStorage/Shared/GearLook")
 local PropAssets = require("../src/ReplicatedStorage/Shared/PropAssets")
+local Stats = require("../src/ReplicatedStorage/Shared/Stats")
 
 local function profile(weaponType: string?, helm: boolean, chest: boolean)
 	local inventory = {
@@ -52,8 +53,17 @@ describe("GearLook", function()
 		expect(GearLook.forProfile(profile("hammer", false, false)).weapon).toEqual("CrystalHammer")
 	end)
 
-	it("leaves weapon types without a crystal look on the placeholder", function()
-		expect(GearLook.forProfile(profile("wand", false, false)).weapon).toBeNil()
+	it("dresses unknown weapon types as the sword they fight as", function()
+		local odd = GearLook.forProfile(profile("wand", false, false))
+		expect(odd.weapon).toEqual("CrystalSword")
+		expect(odd.weaponPose).toEqual("forward")
+		expect(odd.weaponScale).toEqual(GearLook.HOLDS.sword.length)
+	end)
+
+	it("covers every weapon type in Stats with its own hold", function()
+		for _, kind in ipairs(Stats.WEAPON_TYPES) do
+			expect(GearLook.HOLDS[kind] ~= nil).toBeTrue()
+		end
 	end)
 
 	it("keeps every hold's mesh registered and its grip inside the mesh", function()
