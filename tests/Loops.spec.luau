@@ -342,6 +342,7 @@ describe("Loops", function()
 			{ id = "hatch", text = "Hatch an egg", goal = 1 },
 			{ id = "forge", text = "Upgrade a piece of gear", goal = 1 },
 			{ id = "pet", text = "Pet or feed a companion", goal = 1 },
+			{ id = "glade", text = "Defeat 4 Far Glade beasts in Waves", goal = 4 },
 		})
 		local dailies = Loops.rollDailies(8, 0)
 		expect(#dailies).toEqual(3)

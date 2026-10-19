@@ -1,5 +1,6 @@
 --!strict
 
+local fs = require("@lune/fs")
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -7,6 +8,7 @@ local expect = framework.expect
 
 local Drops = require("../src/ReplicatedStorage/Shared/Drops")
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
+local Loops = require("../src/ReplicatedStorage/Shared/Loops")
 local ModelFactory = require("../src/ReplicatedStorage/Shared/ModelFactory")
 
 describe("Far Glade enemies", function()
@@ -95,5 +97,39 @@ describe("Far Glade in Waves", function()
 		local kinds = Dungeons.waveKinds(10)
 		expect(kinds[1]).toEqual("grandmother_gnarl")
 		expect(#kinds).toEqual(3)
+	end)
+end)
+
+describe("Far Glade daily", function()
+	it("rolls as a daily and finishes after four glade kills", function()
+		local dailies = Loops.rollDailies(8, 4)
+		local glade = nil
+		for _, quest in ipairs(dailies) do
+			if quest.id == "glade" then
+				glade = quest
+			end
+		end
+		assert(glade ~= nil)
+		expect(glade.goal).toEqual(4)
+		local data = { dailies = dailies }
+		expect(Loops.apply(data, "glade", 3)).toEqual(0)
+		expect(Loops.apply(data, "glade", 1)).toEqual(1)
+		expect(glade.done).toEqual(true)
+		expect(Loops.apply(data, "glade", 1)).toEqual(0)
+	end)
+
+	it("stays out of the weekly list", function()
+		for _, row in ipairs(Loops.WEEKLY) do
+			expect(row.id ~= "glade").toBeTrue()
+		end
+	end)
+
+	it("counts only paying Far Glade kills on the server", function()
+		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		local at = string.find(source, 'LoopService.progress(player, "glade", 1)', 1, true)
+		assert(at ~= nil)
+		local guard = string.sub(source, at - 200, at)
+		expect(string.find(guard, "PracticeLoot.pays", 1, true) ~= nil).toBeTrue()
+		expect(string.find(guard, "Dungeons.FAR_GLADE", 1, true) ~= nil).toBeTrue()
 	end)
 end)

@@ -1840,6 +1840,13 @@ function DungeonService.damageEnemy(
 		else
 			warn("[Shardfall] Drop failed:", saveErr)
 		end
+		-- Far Glade daily. Paying kills only, like the drops above.
+		if
+			PracticeLoot.pays(run.practice == true)
+			and table.find(Dungeons.FAR_GLADE, enemy.kind) ~= nil
+		then
+			LoopService.progress(player, "glade", 1)
+		end
 		pcall(ModelFactory.dissolve, enemy.part)
 		enemy.part.Name = "Remains"
 		enemy.part:SetAttribute("ShardfallName", "")
