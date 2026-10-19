@@ -34,6 +34,7 @@ local CodexCues = require(cueModule.CodexCues)
 local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
+local DungeonConfig = require(ReplicatedStorage.Shared.DungeonConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
@@ -1606,12 +1607,16 @@ local function beginAdvance(player: Player, run: Run, text: string)
 	end
 	if run.dungeon.endless ~= true and run.roomIndex < #run.dungeon.rooms then
 		run.offer = Rootvault.offer(run.roomIndex, #run.dungeon.rooms, math.random(1, 5))
-		run.advanceAt = nil
-		pushRun(player, text .. " Two doors.")
+		-- Kevin's playtest: cleared rooms sat still and he walked the empty
+		-- room. Count down and take the first door unless one is picked.
+		run.advanceAt = os.clock() + DungeonConfig.ROOM_CLEAR_SECONDS
+		run.advanceShown = DungeonConfig.ROOM_CLEAR_SECONDS
+		pushRun(player, text .. " Pick a door or wait.")
 		if farmOn[player] == true then
 			task.delay(1.2, function()
-				if runs[player] == run and run.offer ~= nil and run.offer[1] ~= nil then
-					DungeonService.chooseDoor(player, run.offer[1].id)
+				local door = if runs[player] == run then DungeonConfig.autoDoor(run.offer) else nil
+				if door ~= nil then
+					DungeonService.chooseDoor(player, door)
 				end
 			end)
 		end
@@ -1904,7 +1909,7 @@ function DungeonService.damageEnemy(
 				beginAdvance(
 					player,
 					run,
-					string.format("Room clear. Next room in %ds.", Dungeons.ADVANCE_SECONDS)
+					DungeonConfig.roomClearText()
 				)
 			end
 		end
@@ -2313,7 +2318,16 @@ local function tickAdvance(player: Player, run: Run, now: number)
 	end
 	if now >= run.advanceAt then
 		run.advanceAt = nil
-		DungeonService.advance(player)
+		local door = DungeonConfig.autoDoor(run.offer)
+		if door ~= nil then
+			DungeonService.chooseDoor(player, door)
+		elseif run.offer ~= nil then
+			-- Only paid doors are open: skip them, the player keeps the keys.
+			run.offer = nil
+			DungeonService.advance(player)
+		else
+			DungeonService.advance(player)
+		end
 	end
 end
 
