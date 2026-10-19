@@ -26,7 +26,7 @@ end
 
 describe("HubStyle", function()
 	it("gives the rail's tabs the rail's painted art in the hub column", function()
-		for _, id in ipairs({ "hero", "bag", "pets", "roll", "shop", "settings" }) do
+		for _, id in ipairs({ "hero", "bag", "pets", "roll", "shop", "settings", "raids", "market", "pass" }) do
 			local key = HubStyle.TAB_ART[id]
 			expect(string.sub(IconAssets[key] or "", 1, 13)).toEqual("rbxassetid://")
 		end

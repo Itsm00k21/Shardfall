@@ -92,6 +92,9 @@ HubStyle.TAB_ART = table.freeze({
 	roll = "Roll",
 	shop = "Shop",
 	settings = "Settings",
+	raids = "TabRaids",
+	market = "TabMarket",
+	pass = "TabPass",
 })
 
 function HubStyle.itemArt(item: any): string
