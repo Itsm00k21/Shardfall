@@ -2921,8 +2921,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		): TextLabel
 			local node = Instance.new("TextLabel")
 			node.BackgroundTransparency = 1
-			node.Position = UDim2.fromOffset(x, y)
-			node.Size = UDim2.fromOffset(math.max(0, w), h)
+			-- Negative x anchors from the right edge; w <= 0 is "parent width + w".
+			node.Position = if x < 0 then UDim2.new(1, x, 0, y) else UDim2.fromOffset(x, y)
+			node.Size = if w <= 0 then UDim2.new(1, w, 0, h) else UDim2.fromOffset(w, h)
 			node.Font = font
 			node.TextSize = size
 			node.TextXAlignment = Enum.TextXAlignment.Left
@@ -2958,7 +2959,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local power = HeroBoard.power(profile)
 		local powerW = if sheet.wide then 120 else 0
 		local tx = 12 + sheet.crest + 12
-		local textW = width - tx - sheet.avatarW - powerW - 16
+		local textW = -(tx + sheet.avatarW + powerW + 16)
 		local big = UiTheme.MIN_TEXT + (if sheet.wide then 10 else 6)
 		label(
 			header,
@@ -3000,8 +3001,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		track.BackgroundColor3 = Color3.fromRGB(14, 12, 34)
 		track.BorderSizePixel = 0
 		track.Position = UDim2.fromOffset(tx, sheet.headerH - 34)
-		track.Size =
-			UDim2.fromOffset(math.max(0, if sheet.wide then textW else width - tx - 12), 20)
+		track.Size = UDim2.new(1, if sheet.wide then textW else -(tx + 12), 0, 20)
 		track.Parent = header
 		framed(track, 6, 1, rgb("accent"))
 		local fill = Instance.new("Frame")
@@ -3020,7 +3020,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				else "XP Max",
 			0,
 			0,
-			track.Size.X.Offset,
+			0,
 			20,
 			UiTheme.MIN_TEXT,
 			rgb("text"),
@@ -3029,7 +3029,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		xpText.TextXAlignment = Enum.TextXAlignment.Center
 		xpText.ZIndex = 3
 		if sheet.wide then
-			local px = width - sheet.avatarW - powerW - 8
+			local px = -(sheet.avatarW + powerW + 8)
 			label(
 				header,
 				"Power",
@@ -3102,7 +3102,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		stats.LayoutOrder = 1
 		stats.Parent = hubState.hero
 		local grid = Instance.new("UIGridLayout")
-		grid.CellSize = UDim2.fromOffset(sheet.tileW, sheet.tileH)
+		grid.CellSize = UDim2.new(
+			1 / sheet.statCols,
+			-math.ceil(HeroBoard.GAP * (sheet.statCols - 1) / sheet.statCols),
+			0,
+			sheet.tileH
+		)
 		grid.CellPadding = UDim2.fromOffset(HeroBoard.GAP, HeroBoard.GAP)
 		grid.SortOrder = Enum.SortOrder.LayoutOrder
 		grid.Parent = stats
@@ -3124,24 +3129,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if hubFn.artOn(cell, tile.art, 10, 14, 36) == nil then
 				hubFn.iconOn(cell, "class", 10, 14, 36)
 			end
-			label(
-				cell,
-				tile.label,
-				52,
-				8,
-				sheet.tileW - 58,
-				20,
-				UiTheme.MIN_TEXT,
-				rgb("muted"),
-				headerFont()
-			).Name =
+			label(cell, tile.label, 52, 8, -58, 20, UiTheme.MIN_TEXT, rgb("muted"), headerFont()).Name =
 				"Caption"
 			label(
 				cell,
 				tile.value,
 				52,
 				28,
-				sheet.tileW - 58,
+				-58,
 				28,
 				UiTheme.MIN_TEXT + 8,
 				rgb("text"),
@@ -3210,7 +3205,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			skillGrid.LayoutOrder = 10
 			skillGrid.Parent = hubState.hero
 			local skillLayout = Instance.new("UIGridLayout")
-			skillLayout.CellSize = UDim2.fromOffset(sheet.skillW, sheet.skillH)
+			skillLayout.CellSize = UDim2.new(
+				1 / sheet.skillCols,
+				-math.ceil(HeroBoard.GAP * (sheet.skillCols - 1) / sheet.skillCols),
+				0,
+				sheet.skillH
+			)
 			skillLayout.CellPadding = UDim2.fromOffset(HeroBoard.GAP, HeroBoard.GAP)
 			skillLayout.SortOrder = Enum.SortOrder.LayoutOrder
 			skillLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -3228,17 +3228,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				framed(button, 14, 2, if ult then rgb("gold") else Color3.fromRGB(150, 92, 255))
 				local icon = sheet.skillH - 44
 				local art = if ult then "SkillUlt" else ActionSlots.SKILL_ART[skill.kind]
-				if
-					hubFn.artOn(button, art, math.floor((sheet.skillW - icon) / 2), 8, icon) == nil
-				then
-					hubFn.iconOn(button, "class", math.floor((sheet.skillW - icon) / 2), 8, icon)
+				local skillIcon = hubFn.artOn(button, art, 0, 8, icon)
+				if skillIcon ~= nil then
+					skillIcon.Position = UDim2.new(0.5, -math.floor(icon / 2), 0, 8)
+				else
+					hubFn.iconOn(button, "class", 8, 8, icon)
 				end
 				local name = label(
 					button,
 					tostring(skill.name or "Skill"),
 					4,
 					sheet.skillH - 34,
-					sheet.skillW - 8,
+					-8,
 					16,
 					UiTheme.MIN_TEXT,
 					rgb("text"),
@@ -3250,7 +3251,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					Classes.cooldownText(skill),
 					4,
 					sheet.skillH - 18,
-					sheet.skillW - 8,
+					-8,
 					14,
 					UiTheme.MIN_TEXT - 2,
 					rgb("muted"),
