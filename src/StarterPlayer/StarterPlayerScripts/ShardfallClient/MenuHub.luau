@@ -2902,12 +2902,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local classId = if type(profile) == "table" then profile.classId else ""
 		local classDef = Classes.get(classId)
 		-- A1 redesign: identity header, hex stat tiles, skill grid.
-		local width = hubState.hero.AbsoluteSize.X - 12
-		if width < 44 then
-			local vx, vy = hubFn.view()
-			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
-			width = box.w - 28
-		end
+		-- Width from the live hub box: the page can still hold a stale
+		-- measure from an earlier layout on its first paint.
+		local heroVx, heroVy = hubFn.view()
+		local heroBox = HudLayout.hub(heroVx, heroVy, UiTheme.safeMargin(), hubFn.pillsShown())
+		local width = heroBox.w - 32
 		local sheet = HeroBoard.sheet(width)
 		local function label(
 			parent: Instance,
