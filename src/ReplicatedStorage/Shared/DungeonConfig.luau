@@ -45,7 +45,7 @@ DungeonConfig.BOSS_FIGHT_MAX = 45
 -- Share of the fight spent swinging (the rest is dodging red squares).
 DungeonConfig.BOSS_UPTIME = 0.8
 -- Skills and pets on top of weapon swings.
-DungeonConfig.BOSS_EXTRA_DAMAGE = 1.25
+DungeonConfig.BOSS_EXTRA_DAMAGE = 1.5
 -- Mirrors Gnarl's phase 1: armour lets this fraction through, except in the
 -- weak window (weakSeconds out of each slam cycle).
 DungeonConfig.BOSS_ARMORED = 0.45
