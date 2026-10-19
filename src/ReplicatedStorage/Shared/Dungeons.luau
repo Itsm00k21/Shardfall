@@ -101,6 +101,7 @@ Dungeons.WAVE_MAX_COUNT = 8
 Dungeons.WAVE_BOSS_EVERY = 5
 Dungeons.WAVE_BOSS_HP = 1.35
 Dungeons.WAVE_BOSS_DAMAGE = 1.15
+Dungeons.GLADE_FROM_WAVE = 3
 -- Negative room index so the arena sits on the other side of the hub.
 Dungeons.WAVES_ROOM_INDEX = -1
 
@@ -635,6 +636,18 @@ function Dungeons.waveKinds(wave: number): { string }
 		return { "grandmother_gnarl", "vine_crawler", "spore_bat" }
 	end
 	local pool = { "vine_crawler", "spore_bat", "root_brute" }
+	-- From wave 3 the Far Glade trio joins the rotation. One brute per six
+	-- picks instead of one per three, so the harder melee doesn't stack.
+	if n >= Dungeons.GLADE_FROM_WAVE then
+		pool = {
+			"vine_crawler",
+			"mud_tusk",
+			"spore_bat",
+			"hedge_lurker",
+			"seed_flinger",
+			"root_brute",
+		}
+	end
 	local kinds = {}
 	local count = Dungeons.waveCount(n)
 	for index = 1, count do

@@ -61,3 +61,39 @@ describe("Far Glade enemies", function()
 		end
 	end)
 end)
+
+describe("Far Glade in Waves", function()
+	it("keeps waves 1-2 on the Rootvault trio and rotates the glade in from wave 3", function()
+		local rootTrio = { vine_crawler = true, spore_bat = true, root_brute = true }
+		for wave = 1, Dungeons.GLADE_FROM_WAVE - 1 do
+			for _, kind in ipairs(Dungeons.waveKinds(wave)) do
+				expect(rootTrio[kind]).toEqual(true)
+			end
+		end
+		local seen: { [string]: boolean } = {}
+		for wave = Dungeons.GLADE_FROM_WAVE, 12 do
+			if not Dungeons.isBossWave(wave) then
+				local kinds = Dungeons.waveKinds(wave)
+				expect(#kinds).toEqual(Dungeons.waveCount(wave))
+				local brutes = 0
+				for _, kind in ipairs(kinds) do
+					expect(Dungeons.enemy(kind) ~= nil).toBeTrue()
+					seen[kind] = true
+					if kind == "root_brute" then
+						brutes += 1
+					end
+				end
+				expect(brutes <= math.ceil(#kinds / 6)).toBeTrue()
+			end
+		end
+		for _, kind in ipairs(Dungeons.FAR_GLADE) do
+			expect(seen[kind]).toEqual(true)
+		end
+	end)
+
+	it("leaves boss waves as Gnarl plus two adds", function()
+		local kinds = Dungeons.waveKinds(10)
+		expect(kinds[1]).toEqual("grandmother_gnarl")
+		expect(#kinds).toEqual(3)
+	end)
+end)
