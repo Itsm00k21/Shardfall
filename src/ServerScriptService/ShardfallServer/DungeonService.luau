@@ -138,6 +138,10 @@ type Run = {
 	-- tuneRaid moved this member off a wing. No kill mark was written.
 	-- They do not hold the shared reset for the room they left.
 	echoJumped: boolean?,
+	-- Run owner's weapon DPS and level, read when a room or wave spawns.
+	-- Bosses size their health from these (DungeonConfig.bossHealth).
+	bossDps: number?,
+	bossLevel: number?,
 }
 
 type Restart = {
@@ -827,6 +831,9 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 		health, damage =
 			Dungeons.waveStats(definition.maxHealth, definition.damage, wave, definition.boss)
 	end
+	if definition.boss == true and run.bossDps ~= nil then
+		health = DungeonConfig.bossHealth(health, run.bossDps, run.bossLevel)
+	end
 	health, damage = Rootvault.scale(run.difficulty, health, damage)
 	local fog = definition.fogDamage
 	if fog > 0 and wave ~= nil then
@@ -990,7 +997,14 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	return enemy
 end
 
+local function readBossPower(player: Player, run: Run)
+	local profile = DataService.get(player)
+	run.bossDps = DungeonConfig.playerDps((CombatMath.loadout(profile)))
+	run.bossLevel = if type(profile) == "table" then profile.level else nil
+end
+
 local function spawnRoom(player: Player, run: Run)
+	readBossPower(player, run)
 	CombatService.clearShots(player)
 	clearEnemies(run)
 	run.cleared = false
@@ -1012,7 +1026,7 @@ local function spawnRoom(player: Player, run: Run)
 	end
 	local text = string.format("%s  ·  %s", run.dungeon.name, room.name)
 	if bossRoom then
-		text ..= ". Slam, then hit the gold weak spot. At half HP, stand in the sunbeam."
+		text ..= ". After each slam, strike the gold weak spot. Below half HP, stand in the sunbeam."
 	end
 	if strayed then
 		text ..= ". " .. Dungeons.STRAY_NOTE
@@ -1022,6 +1036,7 @@ local function spawnRoom(player: Player, run: Run)
 end
 
 local function spawnWave(player: Player, run: Run)
+	readBossPower(player, run)
 	CombatService.clearShots(player)
 	clearEnemies(run)
 	run.cleared = false
@@ -1033,7 +1048,7 @@ local function spawnWave(player: Player, run: Run)
 	end
 	local text = string.format("%s  ·  Wave %d", run.dungeon.name, run.wave)
 	if Dungeons.isBossWave(run.wave) then
-		text ..= ". Boss wave. Slam, then the sunbeam at half HP."
+		text ..= ". Boss wave. Strike the gold weak spot after each slam. Below half HP, stand in the sunbeam."
 	end
 	text ..= Dungeons.waveNote(run.wave)
 	pushRun(player, text)
