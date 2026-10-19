@@ -137,6 +137,11 @@ Dungeons.RIM = {
 }
 
 -- Field enemies that are not in a Rootvault room. Waves pulls them in.
+-- Lobbers (enemies.md: Pod Toss, Sap Glob). They mark a purple circle on
+-- the player and the shot lands there when the telegraph ends: step out,
+-- don't outrun a bolt. Other projectile enemies still fire a real shot.
+Dungeons.LOBS = { seed_flinger = true, sap_mouth = true }
+
 Dungeons.FAR_GLADE = { "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud" }
 
 Dungeons.ENEMIES = {

@@ -138,3 +138,38 @@ describe("Far Glade daily", function()
 		expect(string.find(guard, "Dungeons.FAR_GLADE", 1, true) ~= nil).toBeTrue()
 	end)
 end)
+
+describe("Far Glade lobbers", function()
+	it("marks only the doc's lobbers, all of them projectile Far Glade kinds", function()
+		local count = 0
+		for kind, on in pairs(Dungeons.LOBS) do
+			expect(on).toEqual(true)
+			expect(table.find(Dungeons.FAR_GLADE, kind) ~= nil).toBeTrue()
+			local definition = Dungeons.enemy(kind)
+			assert(definition ~= nil, kind)
+			expect(definition.style).toEqual("projectile")
+			count += 1
+		end
+		expect(count).toEqual(2)
+		expect(Dungeons.LOBS.spore_bat).toBeNil()
+	end)
+
+	it("lands a lob on the purple mark instead of firing a shot", function()
+		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		expect(
+			string.find(
+				source,
+				'enemy.style == "projectile" and Dungeons.LOBS[enemy.kind] ~= true',
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
+		local purple = string.find(
+			source,
+			'elseif Dungeons.LOBS[enemy.kind] == true then\n\t\tcolorName = "purple"',
+			1,
+			true
+		)
+		expect(purple ~= nil).toBeTrue()
+	end)
+end)
