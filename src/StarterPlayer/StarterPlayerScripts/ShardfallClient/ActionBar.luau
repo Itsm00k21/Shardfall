@@ -149,6 +149,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local rollStroke = Instance.new("UIStroke")
 	rollStroke.Parent = rollKey
 	applyFace(rollKey, rollStroke)
+	-- Purple hex tabs to match the slots.
+	local function hexTab(gui: TextButton, stroke: UIStroke)
+		gui.BackgroundColor3 = Color3.fromRGB(24, 20, 58)
+		gui.TextColor3 = Color3.fromRGB(150, 235, 255)
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Color = Color3.fromRGB(150, 92, 255)
+		stroke.Thickness = 2
+	end
+	hexTab(lock, lockStroke)
+	hexTab(rollKey, rollStroke)
 	rollKey.Activated:Connect(function()
 		local open = callbacks.onRoll
 		if open ~= nil then
@@ -221,6 +231,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		)
 		skillGlow.Transparency = 0.15
 		skillGlow.Enabled = false
+		if IconAssets.HexSlot ~= nil then
+			-- The hex glow frame draws the cue; the stroke only keeps its timing.
+			skillGlow.Thickness = 0
+		end
 		skillGlow.Parent = button
 		local glyph = Instance.new("TextLabel")
 		glyph.Name = "Glyph"
@@ -496,6 +510,23 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	dodgePulse.Transparency = 0.1
 	dodgePulse.Enabled = false
 	dodgePulse.Parent = dodge
+	local hexPulse: ImageLabel? = nil
+	if IconAssets.HexButton ~= nil then
+		dodgePulse.Thickness = 0
+		local pulse = Instance.new("ImageLabel")
+		pulse.Name = "HexPulse"
+		pulse.AnchorPoint = Vector2.new(0.5, 0.5)
+		pulse.Position = UDim2.fromScale(0.5, 0.5)
+		pulse.Size = UDim2.fromScale(1.22, 1.22)
+		pulse.BackgroundTransparency = 1
+		pulse.ScaleType = Enum.ScaleType.Fit
+		pulse.Image = IconAssets.HexButton
+		pulse.ImageColor3 = Color3.fromRGB(90, 230, 255)
+		pulse.Visible = false
+		pulse.ZIndex = 0
+		pulse.Parent = dodge
+		hexPulse = pulse
+	end
 	local dodgeHint = Instance.new("TextLabel")
 	dodgeHint.Name = "DodgeHint"
 	dodgeHint.BackgroundColor3 = theme("panel")
@@ -588,7 +619,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			local hexGlow = button:FindFirstChild("HexGlow")
 			if hexGlow ~= nil and hexGlow:IsA("ImageLabel") then
-				hexGlow.Visible = index == picked
+				local cue = skillsCue and slot.kind == "skill"
+				hexGlow.Visible = index == picked or cue
+				if not cue then
+					hexGlow.ImageTransparency = 0
+				end
 			end
 			local hexFrame = button:FindFirstChild("HexFrame")
 			if hexFrame ~= nil and hexFrame:IsA("ImageLabel") then
@@ -1096,11 +1131,19 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local skillGlow = button:FindFirstChild("SkillGlow")
 			if skillGlow ~= nil and skillGlow:IsA("UIStroke") and skillGlow.Enabled then
 				skillGlow.Transparency = 0.1 + 0.25 * (0.5 + 0.5 * math.sin(now * 6))
+				local hexGlow = button:FindFirstChild("HexGlow")
+				if hexGlow ~= nil and hexGlow:IsA("ImageLabel") then
+					hexGlow.ImageTransparency = skillGlow.Transparency
+				end
 			end
 		end
 		dodgePulse.Enabled = dodgeCue
 		if dodgeCue then
 			dodgePulse.Transparency = 0.05 + 0.3 * (0.5 + 0.5 * math.sin(now * 8))
+		end
+		if hexPulse ~= nil then
+			hexPulse.Visible = dodgeCue
+			hexPulse.ImageTransparency = dodgePulse.Transparency
 		end
 	end)
 
