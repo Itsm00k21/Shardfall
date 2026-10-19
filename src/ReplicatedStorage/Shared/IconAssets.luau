@@ -28,6 +28,9 @@ local IconAssets: { [string]: string } = {
 	SkillDodge = "rbxassetid://109683826876277",
 	SkillSpell = "rbxassetid://70429026066280",
 	SkillUlt = "rbxassetid://105106458529178",
+	-- Ward (guard/shield) and heal skill art (batch 8).
+	SkillWard = "rbxassetid://123199356319791",
+	SkillHeal = "rbxassetid://79061239163478",
 	-- Action bar frames (purple hex style).
 	HexSlot = "rbxassetid://113386067760930",
 	HexSlotGlow = "rbxassetid://138707130263385",

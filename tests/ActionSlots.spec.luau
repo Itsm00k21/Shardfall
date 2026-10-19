@@ -50,6 +50,25 @@ describe("Action slots", function()
 		expect(ActionSlots.art("", { kind = "empty", id = "" })).toBeNil()
 	end)
 
+	it("paints ward and heal skills with their own art", function()
+		expect(ActionSlots.SKILL_ART.guard).toEqual("SkillWard")
+		expect(ActionSlots.SKILL_ART.shield).toEqual("SkillWard")
+		expect(ActionSlots.SKILL_ART.heal).toEqual("SkillHeal")
+		expect(ActionSlots.SKILL_ART.bolt).toEqual("SkillSpell")
+		local IconAssets = require("../src/ReplicatedStorage/Shared/IconAssets")
+		expect(string.sub(IconAssets.SkillWard, 1, 13)).toEqual("rbxassetid://")
+		expect(string.sub(IconAssets.SkillHeal, 1, 13)).toEqual("rbxassetid://")
+		expect(IconAssets.SkillWard ~= IconAssets.SkillSpell).toBeTrue()
+		expect(IconAssets.SkillHeal ~= IconAssets.SkillSpell).toBeTrue()
+		-- Tidecaller's bar (bolt, heal, shield, circle, ult) now has no repeated art.
+		local seen = {}
+		for _, kind in ipairs({ "bolt", "heal", "shield", "circle", "ult" }) do
+			local key = ActionSlots.SKILL_ART[kind]
+			expect(seen[key]).toBeNil()
+			seen[key] = true
+		end
+	end)
+
 	it("fills a new class bar with skills, a tonic, and two empty slots", function()
 		local bar = ActionSlots.defaults("tidecaller")
 		expect(bar.locked).toEqual(false)
