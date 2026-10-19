@@ -37,6 +37,9 @@ local HOLDS: { [string]: Hold } = {
 	greatsword = { kind = "CrystalSword", length = 4.4, pose = "forward", grip = 0.1, yaw = 0 },
 	dagger = { kind = "CrystalSword", length = 2.2, pose = "forward", grip = 0.1, yaw = 0 },
 	staff = { kind = "CrystalStaff", length = 5.2, pose = "upright", grip = 0.36, yaw = 0 },
+	-- The bow is carried upright at its centre grip, limbs fore and aft.
+	bow = { kind = "CrystalBow", length = 3.8, pose = "upright", grip = 0.5, yaw = 90 },
+	hammer = { kind = "CrystalHammer", length = 4.2, pose = "upright", grip = 0.14, yaw = 0 },
 }
 for _, hold in pairs(HOLDS) do
 	table.freeze(hold)
