@@ -148,7 +148,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	hubState.panel = Instance.new("Frame")
 	hubState.panel.Name = "Panel"
-	hubState.panel.BackgroundColor3 = rgb("panel")
+	-- Purple hex chrome: white base so the navy gradient reads true.
+	hubState.panel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	hubState.panel.BackgroundTransparency = 0
 	hubState.panel.BorderSizePixel = 0
 	hubState.panel.ClipsDescendants = true
@@ -164,17 +165,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.panelCorner.Parent = hubState.panel
 	hubState.panelStroke = Instance.new("UIStroke")
 	hubState.panelStroke.Thickness = UiTheme.STROKE
-	hubState.panelStroke.Color = rgb("accent")
+	hubState.panelStroke.Color = Color3.fromRGB(150, 92, 255)
 	hubState.panelStroke.Parent = hubState.panel
 	hubState.gradient = Instance.new("UIGradient")
 	hubState.gradient.Rotation = 90
-	hubState.gradient.Color = ColorSequence.new(rgb("header"), rgb("body"))
+	hubState.gradient.Color = ColorSequence.new(Color3.fromRGB(30, 26, 66), Color3.fromRGB(16, 14, 38))
 	hubState.gradient.Parent = hubState.panel
 
 	hubState.header = Instance.new("Frame")
 	hubState.header.Name = "Header"
 	hubState.header.Size = UDim2.new(1, 0, 0, UiTheme.HEADER + UiTheme.PAD)
-	hubState.header.BackgroundColor3 = rgb("header")
+	hubState.header.BackgroundColor3 = Color3.fromRGB(28, 24, 62)
 	hubState.header.BackgroundTransparency = 0
 	hubState.header.BorderSizePixel = 0
 	hubState.header.ZIndex = 4
@@ -184,7 +185,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.headerRule.AnchorPoint = Vector2.new(0, 1)
 	hubState.headerRule.Position = UDim2.fromScale(0, 1)
 	hubState.headerRule.Size = UDim2.new(1, 0, 0, 1)
-	hubState.headerRule.BackgroundColor3 = rgb("divider")
+	hubState.headerRule.BackgroundColor3 = Color3.fromRGB(150, 92, 255)
 	hubState.headerRule.BorderSizePixel = 0
 	hubState.headerRule.Parent = hubState.header
 
@@ -1788,9 +1789,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	function hubFn.paintTabs(current: string)
 		for id, button in pairs(hubState.tabButtons) do
 			local on = id == current
-			hubFn.setRest(button, if on then rgb("header") else rgb("body"))
+			hubFn.setRest(button, if on then Color3.fromRGB(44, 34, 100) else Color3.fromRGB(20, 18, 50))
 			local accent = hubState.tabAccents[id]
 			if accent ~= nil then
+				accent.BackgroundColor3 = Color3.fromRGB(64, 206, 255)
 				accent.Visible = on
 			end
 		end
