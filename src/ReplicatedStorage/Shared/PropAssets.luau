@@ -35,6 +35,22 @@ local PropAssets: { [string]: Prop } = {
 		texture = "rbxassetid://118429274949949",
 		glow = { 64, 206, 255 },
 	},
+	-- Starter crystal gear (worn pieces, see GearLook).
+	CrystalSword = {
+		mesh = "rbxassetid://76592850671373",
+		texture = "rbxassetid://97340433005770",
+		glow = { 64, 206, 255 },
+	},
+	CrystalHelm = {
+		mesh = "rbxassetid://130436477055805",
+		texture = "rbxassetid://87486345241393",
+		glow = { 150, 92, 255 },
+	},
+	CrystalChest = {
+		mesh = "rbxassetid://117847447724611",
+		texture = "rbxassetid://135956593000493",
+		glow = { 150, 92, 255 },
+	},
 	CrystalPair = {
 		mesh = "rbxassetid://122152631902431",
 		texture = "rbxassetid://106727684664470",
