@@ -374,7 +374,12 @@ function HudLayout.railFit(
 	-- A short landscape phone used to park that slide on the HP bar.
 	-- Sit under the bar, inside the 16px inset. Tighten the gap, then
 	-- the button. The button stays at the 44px floor when that still fits.
-	if type(viewportX) == "number" and viewportX == viewportX and viewportX > 0 and viewportX < math.huge then
+	if
+		type(viewportX) == "number"
+		and viewportX == viewportX
+		and viewportX > 0
+		and viewportX < math.huge
+	then
 		local hp = HudLayout.health(margin, viewportX)
 		local placed = { x = x, y = y, w = button, h = height }
 		if HudLayout.overlaps(placed, hp) then
@@ -511,17 +516,27 @@ export type BagCard = {
 	lock: Rect,
 	equip: Rect,
 	badge: Rect,
+	gem: Rect,
+	glow: Rect,
 }
 
--- Parts of a hub bag card. Lock sits under the tip. Equip sits under Lock.
+HudLayout.BAG_ICON = 56
+
+-- Parts of a hub bag card (A2 tile look): a rarity gem top-left, the icon
+-- centred on a rarity glow, the name centred under it, the tip left of Lock,
+-- Equip along the bottom. The glow sits behind the icon and may overlap it.
 function HudLayout.bagCard(cellW: number, cellH: number): BagCard
 	local pad = 8
 	local touch = UiTheme.TOUCH
 	local textW = math.max(0, cellW - pad * 2)
+	local icon = HudLayout.BAG_ICON
+	local glow = icon + 28
 	return {
-		icon = rect(pad, pad, 36, 36),
-		name = rect(pad, 48, textW, 36),
-		tip = rect(pad, 86, textW, 32),
+		icon = rect(math.floor((cellW - icon) / 2), 34, icon, icon),
+		glow = rect(math.floor((cellW - glow) / 2), 20, glow, glow),
+		gem = rect(pad + 2, pad + 4, 12, 12),
+		name = rect(pad, 94, textW, 34),
+		tip = rect(pad, 130, math.max(0, textW - touch - 4), 32),
 		lock = rect(cellW - pad - touch, cellH - 56 - touch, touch, touch),
 		equip = rect(pad, cellH - pad - touch, textW, touch),
 		badge = rect(cellW - pad - touch, pad, touch, 22),
@@ -537,7 +552,9 @@ export type CompactCard = { icon: Rect, name: Rect, equip: Rect }
 function HudLayout.bagCardCompact(cellW: number, cellH: number): CompactCard
 	local pad = 8
 	local touch = UiTheme.TOUCH
-	local w = if type(cellW) == "number" and cellW == cellW then math.max(touch + pad * 2, cellW) else 120
+	local w = if type(cellW) == "number" and cellW == cellW
+		then math.max(touch + pad * 2, cellW)
+		else 120
 	local h = if type(cellH) == "number" and cellH == cellH
 		then math.max(HudLayout.COMPACT_CARD_H, cellH)
 		else HudLayout.COMPACT_CARD_H
@@ -554,13 +571,7 @@ end
 function HudLayout.bagChromeAboveCards(): number
 	local action = UiTheme.PAD + UiTheme.TOUCH + UiTheme.PAD
 	local filters = UiTheme.TOUCH
-	return UiTheme.PAD
-		+ UiTheme.TOUCH
-		+ UiTheme.GAP
-		+ filters
-		+ UiTheme.GAP
-		+ action
-		+ UiTheme.GAP
+	return UiTheme.PAD + UiTheme.TOUCH + UiTheme.GAP + filters + UiTheme.GAP + action + UiTheme.GAP
 end
 
 -- Distance from the top of the bag list to the centre of the first Equip.
