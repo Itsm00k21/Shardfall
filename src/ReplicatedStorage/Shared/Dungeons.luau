@@ -875,4 +875,18 @@ table.freeze(WAVES)
 table.freeze(TIDECRYPT)
 table.freeze(LIST)
 
+-- Rootvault's Elite Fight door: the elite is a Far Glade stray that followed
+-- the player in, on top of the room's own enemies. Rotates by room so a run
+-- meets different strays. The room lists and the boss room never change.
+Dungeons.STRAYS = { "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth" }
+Dungeons.STRAY_NOTE = "A Far Glade stray followed you in. It's the elite."
+
+function Dungeons.stray(roomIndex: number): string
+	local n = math.floor(roomIndex)
+	if n ~= n or n < 1 then
+		n = 1
+	end
+	return Dungeons.STRAYS[((n - 1) % #Dungeons.STRAYS) + 1]
+end
+
 return Dungeons

@@ -993,14 +993,24 @@ local function spawnRoom(player: Player, run: Run)
 	if room == nil then
 		return
 	end
+	local bossRoom = run.roomIndex == #run.dungeon.rooms
+	-- Elite Fight door: spawn the stray first so it takes the elite buff.
+	-- Slot 6 is a side spawn; rooms use 1-3 and slot 8 sits on the portal.
+	local strayed = false
+	if run.eliteNext and not bossRoom and run.dungeon.id == Dungeons.ROOTVAULT_ID then
+		spawnEnemy(run, Dungeons.stray(run.roomIndex), SPAWNS[6])
+		strayed = true
+	end
 	for index, kind in ipairs(room.enemies) do
 		local offset = SPAWNS[((index - 1) % #SPAWNS) + 1]
 		spawnEnemy(run, kind, offset)
 	end
-	local bossRoom = run.roomIndex == #run.dungeon.rooms
 	local text = string.format("%s  ·  %s", run.dungeon.name, room.name)
 	if bossRoom then
 		text ..= ". Slam, then hit the gold weak spot. At half HP, stand in the sunbeam."
+	end
+	if strayed then
+		text ..= ". " .. Dungeons.STRAY_NOTE
 	end
 	pushRun(player, text)
 	publishCues(player)
