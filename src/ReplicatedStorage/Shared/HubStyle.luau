@@ -84,6 +84,16 @@ HubStyle.PILL_ART = table.freeze({
 	Pets = "Pets",
 })
 
+-- Hub tab column art: the same painted icons as the HUD rail.
+HubStyle.TAB_ART = table.freeze({
+	hero = "Hero",
+	bag = "Bag",
+	pets = "Pets",
+	roll = "Roll",
+	shop = "Shop",
+	settings = "Settings",
+})
+
 function HubStyle.itemArt(item: any): string
 	if type(item) ~= "table" then
 		return "ItemMisc"

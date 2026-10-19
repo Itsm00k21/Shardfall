@@ -25,6 +25,13 @@ local function inside(rect, width, height)
 end
 
 describe("HubStyle", function()
+	it("gives the rail's tabs the rail's painted art in the hub column", function()
+		for _, id in ipairs({ "hero", "bag", "pets", "roll", "shop", "settings" }) do
+			local key = HubStyle.TAB_ART[id]
+			expect(string.sub(IconAssets[key] or "", 1, 13)).toEqual("rbxassetid://")
+		end
+	end)
+
 	it("keeps every Bag pill and the hub title visible on a 390 px phone", function()
 		local box = HudLayout.hub(390, 844, UiTheme.safeMargin())
 		local bodyW = box.w - 16

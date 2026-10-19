@@ -5917,7 +5917,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		accent.Visible = false
 		accent.ZIndex = 6
 		accent.Parent = button
-		hubFn.iconOn(button, tab.id, 10, 11, 22)
+		if hubFn.artOn(button, HubStyle.TAB_ART[tab.id], 8, 9, 26) == nil then
+			hubFn.iconOn(button, tab.id, 10, 11, 22)
+		end
 		local caption = Instance.new("TextLabel")
 		caption.Name = "Caption"
 		caption.BackgroundTransparency = 1
@@ -5976,7 +5978,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		accent.Visible = false
 		accent.ZIndex = 6
 		accent.Parent = button
-		hubFn.iconOn(button, "market", 10, 11, 22)
+		if hubFn.artOn(button, HubStyle.TAB_ART.shop, 8, 9, 26) == nil then
+			hubFn.iconOn(button, "market", 10, 11, 22)
+		end
 		local caption = Instance.new("TextLabel")
 		caption.Name = "Caption"
 		caption.BackgroundTransparency = 1
