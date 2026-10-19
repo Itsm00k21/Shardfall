@@ -82,14 +82,14 @@ describe("MenuClear", function()
 			for _, id in ipairs({ "damage", "health", "defense" }) do
 				local host = sheet:FindFirstChild(id)
 				expect(host ~= nil).toBeTrue()
+				-- A1 hero tiles: the caption sits above the value, both inside the tile.
 				local caption = host:FindFirstChild("Caption")
-				local track = host:FindFirstChild("Track")
-				local fill = track:FindFirstChild("Fill")
-				expect(caption ~= nil and track ~= nil and fill ~= nil).toBeTrue()
-				expect(fill.Parent == track).toBeTrue()
+				local value = host:FindFirstChild("Value")
+				expect(caption ~= nil and value ~= nil).toBeTrue()
 				expect(caption.Parent == host).toBeTrue()
 				local captionBottom = caption.Position.Y.Offset + caption.Size.Y.Offset
-				expect(track.Position.Y.Offset >= captionBottom).toBeTrue()
+				expect(value.Position.Y.Offset >= captionBottom).toBeTrue()
+				expect(value.Position.Y.Offset + value.Size.Y.Offset <= 64).toBeTrue()
 			end
 			expect(shownText(screen, "Gold shop. Gold only.")).toBeFalse()
 		end
