@@ -1932,6 +1932,38 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return button
 	end
 
+	-- Purple hex pass: slate chrome becomes navy with violet edges.
+	-- Only the stock header/panel/divider colors change, so state colors
+	-- (equip, claim, close, rarity) keep their meaning.
+	function hubFn.hexify(host: Instance)
+		local navy = Color3.fromRGB(28, 24, 62)
+		local deep = Color3.fromRGB(20, 18, 50)
+		local violet = Color3.fromRGB(150, 92, 255)
+		local header, panel, divider = rgb("header"), rgb("panel"), rgb("divider")
+		local function same(a: Color3?, b: Color3?): boolean
+			if a == nil or b == nil then
+				return false
+			end
+			return math.abs(a.R - b.R) + math.abs(a.G - b.G) + math.abs(a.B - b.B) < 0.01
+		end
+		for _, node in ipairs(host:GetDescendants()) do
+			if node:IsA("GuiButton") then
+				if same(node.BackgroundColor3, header) or same(node.BackgroundColor3, panel) then
+					hubFn.setRest(node, navy)
+				end
+			elseif node:IsA("Frame") then
+				if same(node.BackgroundColor3, header) or same(node.BackgroundColor3, panel) then
+					node.BackgroundColor3 = deep
+				end
+			elseif node:IsA("UIStroke") then
+				if same(node.Color, divider) then
+					node.Color = violet
+					node.Thickness = math.max(node.Thickness, 1.5)
+				end
+			end
+		end
+	end
+
 	function hubFn.line(parent: Instance, text: string, order: number, color: Color3)
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
@@ -5203,6 +5235,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end
 			)
 		end
+		hubFn.hexify(hubState.shop)
 		hubFn.hold("shop")
 	end
 
