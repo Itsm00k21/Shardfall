@@ -9,6 +9,7 @@ local expect = framework.expect
 
 local Economy = require("../src/ReplicatedStorage/Shared/Economy")
 local HubStyle = require("../src/ReplicatedStorage/Shared/HubStyle")
+local IconAssets = require("../src/ReplicatedStorage/Shared/IconAssets")
 local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
 local HUB = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau"
@@ -23,6 +24,31 @@ local function inside(rect, width, height)
 end
 
 describe("HubStyle", function()
+	it("gives each Bag pill and item kind painted art that exists", function()
+		for _, pill in ipairs(HubStyle.pills()) do
+			local key = HubStyle.PILL_ART[pill.id]
+			expect(key ~= nil).toBeTrue()
+			expect(string.sub(IconAssets[key] or "", 1, 13)).toEqual("rbxassetid://")
+		end
+		local cases = {
+			{ { kind = "Weapon" }, "ItemWeapon" },
+			{ { kind = "Armor" }, "ItemArmor" },
+			{ { kind = "Relic" }, "ItemRelic" },
+			{ { kind = "item", relic = true }, "ItemRelic" },
+			{ { kind = "Pet" }, "Pets" },
+			{ { species = "Mossback" }, "Pets" },
+			{ { kind = "Accessory" }, "ItemAccessory" },
+			{ { kind = "consumable" }, "ItemConsumable" },
+			{ { kind = "item" }, "ItemMisc" },
+			{ "junk", "ItemMisc" },
+		}
+		for _, case in ipairs(cases) do
+			local key = HubStyle.itemArt(case[1])
+			expect(key).toEqual(case[2])
+			expect(string.sub(IconAssets[key] or "", 1, 13)).toEqual("rbxassetid://")
+		end
+	end)
+
 	it("names the mockup labels and keeps x1 and x10", function()
 		expect(HubStyle.CLOSE).toEqual("CLOSE")
 		expect(HubStyle.EQUIP).toEqual("EQUIP")

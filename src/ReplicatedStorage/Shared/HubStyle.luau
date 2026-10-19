@@ -74,6 +74,37 @@ local function grouped(amount: number): string
 	return out
 end
 
+-- Painted art (IconAssets keys) for the Bag filter pills and item cards.
+-- All and Pets reuse the rail's Bag and Pets art.
+HubStyle.PILL_ART = table.freeze({
+	All = "Bag",
+	Weapons = "ItemWeapon",
+	Armor = "ItemArmor",
+	Relics = "ItemRelic",
+	Pets = "Pets",
+})
+
+function HubStyle.itemArt(item: any): string
+	if type(item) ~= "table" then
+		return "ItemMisc"
+	end
+	local kind = if type(item.kind) == "string" then item.kind else ""
+	if kind == "Weapon" then
+		return "ItemWeapon"
+	elseif kind == "Armor" then
+		return "ItemArmor"
+	elseif kind == "Relic" or item.relic == true then
+		return "ItemRelic"
+	elseif kind == "Pet" or type(item.species) == "string" then
+		return "Pets"
+	elseif kind == "Accessory" then
+		return "ItemAccessory"
+	elseif kind == "consumable" then
+		return "ItemConsumable"
+	end
+	return "ItemMisc"
+end
+
 function HubStyle.pills(): { { id: string, label: string, icon: string } }
 	local copy = {}
 	for _, pill in ipairs(PILLS) do
