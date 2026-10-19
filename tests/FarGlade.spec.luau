@@ -242,5 +242,37 @@ describe("Far Glade lungers", function()
 		expect(string.find(source, "lungeEnemy(enemy, run, now)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(source, "if now < (enemy.dashUntil or 0) then", 1, true) ~= nil).toBeTrue()
 		expect(string.find(source, "(Dungeons.LUNGES[enemy.kind] or enemy.range)", 1, true) ~= nil).toBeTrue()
+describe("Far Glade strays", function()
+	it("rotates a Far Glade stray per room for the Elite Fight door", function()
+		local seen: { [string]: boolean } = {}
+		for room = 1, #Dungeons.STRAYS do
+			local kind = Dungeons.stray(room)
+			expect(table.find(Dungeons.FAR_GLADE, kind) ~= nil).toBeTrue()
+			seen[kind] = true
+		end
+		expect(Dungeons.stray(1)).toEqual(Dungeons.stray(1 + #Dungeons.STRAYS))
+		expect(Dungeons.stray(0)).toEqual(Dungeons.stray(1))
+		expect(Dungeons.stray(0 / 0)).toEqual(Dungeons.stray(1))
+		local count = 0
+		for _ in pairs(seen) do
+			count += 1
+		end
+		expect(count).toEqual(#Dungeons.STRAYS)
+	end)
+
+	it("spawns the stray before the room so it takes the elite buff, Rootvault only", function()
+		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		local stray = string.find(
+			source,
+			"spawnEnemy(run, Dungeons.stray(run.roomIndex), SPAWNS[#SPAWNS])",
+			1,
+			true
+		)
+		local roomLoop = string.find(source, "for index, kind in ipairs(room.enemies) do", 1, true)
+		assert(stray ~= nil and roomLoop ~= nil)
+		expect(stray < roomLoop).toBeTrue()
+		local guard = string.sub(source, stray - 160, stray)
+		expect(string.find(guard, "run.eliteNext and not bossRoom", 1, true) ~= nil).toBeTrue()
+		expect(string.find(guard, "Dungeons.ROOTVAULT_ID", 1, true) ~= nil).toBeTrue()
 	end)
 end)
