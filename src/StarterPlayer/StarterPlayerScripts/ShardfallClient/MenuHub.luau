@@ -3762,15 +3762,50 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			filled += 1
 		end
 		hubFn.line(hubState.pets, string.format("Equipped  %d/%d", filled, petCap), 1, rgb("gold"))
+		-- A4 redesign: equipped slots are hex sockets (lit when filled).
+		local sockets = Instance.new("Frame")
+		sockets.Name = "Sockets"
+		sockets.BackgroundTransparency = 1
+		sockets.Size = UDim2.new(1, 0, 0, 92)
+		sockets.LayoutOrder = 2
+		sockets.Parent = hubState.pets
+		local socketRow = Instance.new("UIListLayout")
+		socketRow.FillDirection = Enum.FillDirection.Horizontal
+		socketRow.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		socketRow.Padding = UDim.new(0, 12)
+		socketRow.SortOrder = Enum.SortOrder.LayoutOrder
+		socketRow.Parent = sockets
 		for index = 1, petCap do
 			local slot = slots[index]
 			local slotName = if type(slot) == "table" then tostring(slot.name or "Pet") else "Empty"
-			hubFn.line(
-				hubState.pets,
-				string.format("Slot %d  %s", index, slotName),
-				index + 1,
-				rgb("text")
-			)
+			local socket = Instance.new("Frame")
+			socket.Name = "Socket" .. index
+			socket.BackgroundTransparency = 1
+			socket.Size = UDim2.fromOffset(84, 92)
+			socket.LayoutOrder = index
+			socket.Parent = sockets
+			local frame =
+				hubFn.artOn(socket, if slot ~= nil then "HexSlotGlow" else "HexSlot", 10, 0, 64)
+			if frame ~= nil then
+				frame.ZIndex = 3
+			end
+			if slot ~= nil then
+				local inner = hubFn.artOn(socket, "Pets", 24, 14, 36)
+				if inner ~= nil then
+					inner.ZIndex = 7
+				end
+			end
+			local caption = Instance.new("TextLabel")
+			caption.Name = "Caption"
+			caption.BackgroundTransparency = 1
+			caption.Position = UDim2.fromOffset(0, 68)
+			caption.Size = UDim2.fromOffset(84, 20)
+			caption.Font = headerFont()
+			caption.TextSize = UiTheme.MIN_TEXT
+			caption.TextTruncate = Enum.TextTruncate.AtEnd
+			caption.TextColor3 = if slot ~= nil then rgb("text") else rgb("muted")
+			caption.Text = string.format("Slot %d  %s", index, slotName)
+			caption.Parent = socket
 		end
 		hubFn.divider(hubState.pets, 6)
 		local cards = {}
@@ -3816,10 +3851,30 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local cardCorner = Instance.new("UICorner")
 			cardCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 			cardCorner.Parent = card
+			local petR, petG, petB = RarityConfig.color(tostring(pet.rarity or "Common"))
+			local cardStroke = Instance.new("UIStroke")
+			cardStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			cardStroke.Thickness = 2
+			cardStroke.Color = Color3.fromRGB(petR, petG, petB)
+			cardStroke.Parent = card
+			if hubFn.artOn(card, "Pets", 8, 8, 40) == nil then
+				hubFn.iconOn(card, "pets", 8, 8, 40)
+			end
+			local cardRarity = Instance.new("TextLabel")
+			cardRarity.Name = "Rarity"
+			cardRarity.BackgroundTransparency = 1
+			cardRarity.Position = UDim2.fromOffset(56, 30)
+			cardRarity.Size = UDim2.new(1, -62, 0, 18)
+			cardRarity.Font = bodyFont()
+			cardRarity.TextSize = UiTheme.MIN_TEXT
+			cardRarity.TextXAlignment = Enum.TextXAlignment.Left
+			cardRarity.TextColor3 = Color3.fromRGB(petR, petG, petB)
+			cardRarity.Text = tostring(pet.rarity or "Common")
+			cardRarity.Parent = card
 			local cardName = Instance.new("TextLabel")
 			cardName.BackgroundTransparency = 1
-			cardName.Position = UDim2.fromOffset(8, 0)
-			cardName.Size = UDim2.new(1, -12, 1, 0)
+			cardName.Position = UDim2.fromOffset(56, 6)
+			cardName.Size = UDim2.new(1, -62, 0, 24)
 			cardName.Font = headerFont()
 			cardName.TextSize = UiTheme.MIN_TEXT
 			cardName.TextXAlignment = Enum.TextXAlignment.Left
@@ -3847,7 +3902,22 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local petDetailCorner = Instance.new("UICorner")
 		petDetailCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		petDetailCorner.Parent = petDetail
+		local petDetailStroke = Instance.new("UIStroke")
+		petDetailStroke.Thickness = 2
+		petDetailStroke.Color = Color3.fromRGB(150, 92, 255)
+		petDetailStroke.Parent = petDetail
+		local petDetailPad = Instance.new("UIPadding")
+		petDetailPad.PaddingLeft = UDim.new(0, 10)
+		petDetailPad.PaddingRight = UDim.new(0, 10)
+		petDetailPad.PaddingTop = UDim.new(0, 8)
+		petDetailPad.Parent = petDetail
+		local petArt = hubFn.artOn(petDetail, "Pets", 0, 0, 72)
+		if petArt ~= nil then
+			petArt.Name = "PetArt"
+			petArt.LayoutOrder = 0
+		end
 		local petDetailList = Instance.new("UIListLayout")
+		petDetailList.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		petDetailList.Padding = UDim.new(0, 4)
 		petDetailList.SortOrder = Enum.SortOrder.LayoutOrder
 		petDetailList.Parent = petDetail
@@ -3865,11 +3935,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.equipUid(petUid)
 			end)
 		end
-		hubFn.row(hubState.pets, "Crack a Pet Shard", 20, function()
+		local crack = hubFn.row(hubState.pets, "Crack a Pet Shard", 20, function()
 			hubState.rollKind = "pets"
 			hubFn.show("roll")
 		end)
 		hubFn.hexify(hubState.pets)
+		-- The crack action reads as the page's one call to action.
+		crack.Name = "Crack"
+		crack.TextColor3 = Color3.fromRGB(8, 24, 40)
+		crack.Font = headerFont()
+		crack.TextXAlignment = Enum.TextXAlignment.Center
+		hubFn.setRest(crack, Color3.fromRGB(64, 200, 255))
 		hubFn.hold("pets")
 	end
 
