@@ -2714,7 +2714,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			wash.Rotation = 90
 			wash.Color = ColorSequence.new(Color3.fromRGB(tone[1], tone[2], tone[3]), rgb("body"))
 			wash.Parent = card
-			hubFn.iconOn(card, "class", 8, 8, 28)
+			if hubFn.artOn(card, HubStyle.classArt(entry.id), 6, 6, 32) == nil then
+				hubFn.iconOn(card, "class", 8, 8, 28)
+			end
 			local name = Instance.new("TextLabel")
 			name.BackgroundTransparency = 1
 			name.Position = UDim2.fromOffset(40, 8)
@@ -2928,7 +2930,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		classCardStroke.Thickness = UiTheme.STROKE_BOLD
 		classCardStroke.Color = rgb("accent")
 		classCardStroke.Parent = classCard
-		hubFn.iconOn(classCard, "class", 12, 12, 32)
+		if hubFn.artOn(classCard, HubStyle.classArt(classId), 8, 8, 40) == nil then
+			hubFn.iconOn(classCard, "class", 12, 12, 32)
+		end
 		local classTitle = Instance.new("TextLabel")
 		classTitle.BackgroundTransparency = 1
 		classTitle.Position = UDim2.fromOffset(52, 12)

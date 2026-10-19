@@ -25,6 +25,27 @@ local function inside(rect, width, height)
 end
 
 describe("HubStyle", function()
+	it("gives every class its own crest and falls back for unknown ids", function()
+		local Classes = require("../src/ReplicatedStorage/Shared/Classes")
+		local seen = {}
+		local count = 0
+		for _, def in ipairs(Classes.all()) do
+			local key = HubStyle.classArt(def.id)
+			expect(key ~= nil).toBeTrue()
+			expect(string.sub(IconAssets[key :: string] or "", 1, 13)).toEqual("rbxassetid://")
+			expect(seen[IconAssets[key :: string]]).toBeNil()
+			seen[IconAssets[key :: string]] = true
+			count += 1
+		end
+		expect(count).toEqual(5)
+		expect(HubStyle.classArt("")).toBeNil()
+		expect(HubStyle.classArt(nil)).toBeNil()
+		expect(HubStyle.classArt("nobody")).toBeNil()
+		local hub = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		expect(string.find(hub, "HubStyle.classArt(entry.id)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "HubStyle.classArt(classId)", 1, true) ~= nil).toBeTrue()
+	end)
+
 	it("gives the rail's tabs the rail's painted art in the hub column", function()
 		for _, id in ipairs({ "hero", "bag", "pets", "roll", "shop", "settings", "raids", "market", "pass" }) do
 			local key = HubStyle.TAB_ART[id]

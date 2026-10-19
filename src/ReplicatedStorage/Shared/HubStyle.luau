@@ -97,6 +97,23 @@ HubStyle.TAB_ART = table.freeze({
 	pass = "TabPass",
 })
 
+-- Class crest art by class id; unknown or empty ids return nil so callers fall
+-- back to the "class" glyph.
+HubStyle.CLASS_ART = table.freeze({
+	warden = "ClassWarden",
+	tidecaller = "ClassTidecaller",
+	forgeborn = "ClassForgeborn",
+	frostblade = "ClassFrostblade",
+	voidcaster = "ClassVoidcaster",
+})
+
+function HubStyle.classArt(classId: any): string?
+	if type(classId) ~= "string" then
+		return nil
+	end
+	return HubStyle.CLASS_ART[classId]
+end
+
 function HubStyle.itemArt(item: any): string
 	if type(item) ~= "table" then
 		return "ItemMisc"

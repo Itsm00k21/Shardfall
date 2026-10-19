@@ -37,6 +37,12 @@ local IconAssets: { [string]: string } = {
 	TabRaids = "rbxassetid://91914133075036",
 	TabMarket = "rbxassetid://92350744248602",
 	TabPass = "rbxassetid://82029671467441",
+	-- Class crests for the class picker and Hero class card (batch 8).
+	ClassWarden = "rbxassetid://84480573554280",
+	ClassTidecaller = "rbxassetid://71642045376579",
+	ClassForgeborn = "rbxassetid://109739537920971",
+	ClassFrostblade = "rbxassetid://121545835326350",
+	ClassVoidcaster = "rbxassetid://109064272249374",
 }
 
 return table.freeze(IconAssets)
