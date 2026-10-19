@@ -409,6 +409,33 @@ Dungeons.ENEMIES = {
 		color = { 176, 196, 72 },
 		size = { 2.4, 1.8, 2.4 },
 	},
+	-- Far Glade mini-boss (bosses.md: Mireoak). A Waves boss here, not the
+	-- field spawn: no Heartwood, no first-kill cosmetic, elite drops only.
+	-- Same kit as Gnarl (amber knot weak spot, fog + sunbeam at half),
+	-- a touch tougher and slower to match the wide oak.
+	mireoak = {
+		id = "mireoak",
+		name = "Mireoak",
+		maxHealth = 240,
+		damage = 11,
+		defense = 1,
+		attackSpeed = 0.2,
+		moveSpeed = 5,
+		range = 16,
+		style = "melee",
+		minDot = -1,
+		projectileSpeed = 0,
+		hover = 0,
+		boss = true,
+		phase2At = 0.5,
+		weakSeconds = 1.8,
+		armoredMultiplier = 0.45,
+		fogInterval = 7,
+		fogDamage = 8,
+		safeRadius = 8,
+		color = { 104, 78, 54 },
+		size = { 9, 8, 8 },
+	},
 } :: { [string]: EnemyDef }
 
 local ROOTVAULT: DungeonDef = {
@@ -684,6 +711,11 @@ end
 function Dungeons.waveKinds(wave: number): { string }
 	local n = wholeWave(wave)
 	if Dungeons.isBossWave(n) then
+		-- Boss waves alternate: Gnarl on 5, 15, 25...; Mireoak and two
+		-- Far Glade adds on 10, 20, 30...
+		if n % (Dungeons.WAVE_BOSS_EVERY * 2) == 0 then
+			return { "mireoak", "mud_tusk", "seed_flinger" }
+		end
 		return { "grandmother_gnarl", "vine_crawler", "spore_bat" }
 	end
 	local pool = { "vine_crawler", "spore_bat", "root_brute" }

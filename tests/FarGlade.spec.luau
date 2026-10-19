@@ -39,6 +39,30 @@ describe("Far Glade enemies", function()
 		end
 	end)
 
+	it("keeps Mireoak a Waves mini-boss on Gnarl's kit with elite drops", function()
+		local oak = Dungeons.enemy("mireoak")
+		local gnarl = Dungeons.enemy("grandmother_gnarl")
+		assert(oak ~= nil and gnarl ~= nil)
+		expect(oak.boss).toEqual(true)
+		expect(oak.phase2At).toEqual(gnarl.phase2At)
+		expect(oak.safeRadius).toEqual(gnarl.safeRadius)
+		expect(oak.maxHealth > gnarl.maxHealth and oak.maxHealth <= gnarl.maxHealth * 1.2).toBeTrue()
+		expect(oak.damage <= gnarl.damage + 1).toBeTrue()
+		expect(Drops.ENEMIES.mireoak.role).toEqual("elite")
+		expect(table.find(Dungeons.FAR_GLADE, "mireoak")).toBeNil()
+		expect(table.find(ModelFactory.FIELD_MONSTERS, "mireoak") ~= nil).toBeTrue()
+		expect(ModelFactory.partCount("mireoak") <= ModelFactory.MONSTER_BUDGET).toBeTrue()
+		local recipe = ModelFactory.recipe("mireoak")
+		assert(recipe ~= nil)
+		local weak = false
+		for _, piece in ipairs(recipe) do
+			if piece.name == "WeakSpot" then
+				weak = true
+			end
+		end
+		expect(weak).toEqual(true)
+	end)
+
 	it("sits between the Rootvault normals and the elite brute", function()
 		local bat = Dungeons.enemy("spore_bat")
 		local brute = Dungeons.enemy("root_brute")
@@ -98,10 +122,15 @@ describe("Far Glade in Waves", function()
 		end
 	end)
 
-	it("leaves boss waves as Gnarl plus two adds", function()
-		local kinds = Dungeons.waveKinds(10)
-		expect(kinds[1]).toEqual("grandmother_gnarl")
-		expect(#kinds).toEqual(3)
+	it("alternates boss waves: Gnarl on odd fives, Mireoak on tens", function()
+		for _, wave in ipairs({ 5, 15, 25 }) do
+			local kinds = Dungeons.waveKinds(wave)
+			expect(kinds[1]).toEqual("grandmother_gnarl")
+			expect(#kinds).toEqual(3)
+		end
+		for _, wave in ipairs({ 10, 20, 30 }) do
+			expect(Dungeons.waveKinds(wave)).toEqual({ "mireoak", "mud_tusk", "seed_flinger" })
+		end
 	end)
 end)
 
