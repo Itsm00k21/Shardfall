@@ -12,6 +12,7 @@
 ]]
 
 local Rarities = require("./Rarities")
+local RollConfig = require("./RollConfig")
 
 local RarityConfig = {}
 
@@ -26,23 +27,25 @@ RarityConfig.MIN_TAP = 60
 RarityConfig.REEL_SLOTS = 10
 RarityConfig.TOPIC = "ShardfallMythic"
 
-RarityConfig.COOLDOWN = 0.6
-RarityConfig.QUICK_COOLDOWN = 1.0
-RarityConfig.BOUNCE = 0.15
-RarityConfig.REEL = 1.45
-RarityConfig.LAND = 0.4
-RarityConfig.CARD = 0.6
-RarityConfig.EPIC_EXTRA = 0.5
-RarityConfig.QUICK_POP = 0.25
-RarityConfig.LEGENDARY_SCENE = 1.5
-RarityConfig.MYTHIC_SCENE = 3
-RarityConfig.SKIP_AFTER = 1
-RarityConfig.SHAKE = 0.3
-RarityConfig.AUTO_DISMISS = 1.5
+-- Timings and pity live in RollConfig (one config for every roll number).
+-- These aliases keep the old names readable for existing callers.
+RarityConfig.COOLDOWN = RollConfig.COOLDOWN
+RarityConfig.QUICK_COOLDOWN = RollConfig.QUICK_COOLDOWN
+RarityConfig.BOUNCE = RollConfig.BOUNCE
+RarityConfig.REEL = RollConfig.REEL
+RarityConfig.LAND = RollConfig.LAND
+RarityConfig.CARD = RollConfig.CARD
+RarityConfig.EPIC_EXTRA = RollConfig.EPIC_EXTRA
+RarityConfig.QUICK_POP = RollConfig.QUICK_POP
+RarityConfig.LEGENDARY_SCENE = RollConfig.LEGENDARY_SCENE
+RarityConfig.MYTHIC_SCENE = RollConfig.MYTHIC_SCENE
+RarityConfig.SKIP_AFTER = RollConfig.SKIP_AFTER
+RarityConfig.SHAKE = RollConfig.SHAKE
+RarityConfig.AUTO_DISMISS = RollConfig.AUTO_DISMISS
 
-RarityConfig.BONUS_EVERY = 10
-RarityConfig.EPIC_PITY = 100
-RarityConfig.LEGENDARY_PITY = 1000
+RarityConfig.BONUS_EVERY = RollConfig.BONUS_EVERY
+RarityConfig.EPIC_PITY = RollConfig.EPIC_PITY
+RarityConfig.LEGENDARY_PITY = RollConfig.LEGENDARY_PITY
 RarityConfig.ROUNDING_NOTE =
 	"Probabilities are rounded; total of displayed individual probabilities may not equal 100%."
 
@@ -410,7 +413,7 @@ function RarityConfig.formatPercent(chance: number): string
 	return text
 end
 
-function RarityConfig.disclose(pool: any, luck: number)
+function RarityConfig.disclose(pool: any, luck: number, sinceEpic: any?)
 	local multiplier = luck
 	if type(multiplier) ~= "number" or multiplier ~= multiplier or multiplier < 1 then
 		multiplier = 1
@@ -463,14 +466,20 @@ function RarityConfig.disclose(pool: any, luck: number)
 			})
 		end
 	end
+	local guarantee = if sinceEpic ~= nil
+		then RollConfig.pityText(sinceEpic) .. " (free pity, never sold). "
+		else ""
 	return {
 		notice = string.format(
-			"Luck x%.2f. Every 10th roll is x2. Epic+ at %d, Legendary+ at %d. %s",
+			"Luck x%.2f. Every %dth roll is x2. Epic+ at %d, Legendary+ at %d. %s%s",
 			multiplier,
+			RarityConfig.BONUS_EVERY,
 			RarityConfig.EPIC_PITY,
 			RarityConfig.LEGENDARY_PITY,
+			guarantee,
 			RarityConfig.ROUNDING_NOTE
 		),
+		pityLeft = if sinceEpic ~= nil then RollConfig.pityLeft(sinceEpic) else nil,
 		luck = multiplier,
 		rarities = rarities,
 		entries = rows,

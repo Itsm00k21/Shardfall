@@ -202,7 +202,7 @@ function Remotes.bind()
 			local luck = RarityConfig.luckFromProfile(data)
 			return {
 				ok = true,
-				odds = RarityConfig.disclose(pool, luck),
+				odds = RarityConfig.disclose(pool, luck, if data ~= nil then data.sinceEpic else nil),
 			}
 		end)
 	end

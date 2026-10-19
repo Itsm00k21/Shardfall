@@ -8,7 +8,7 @@
 	pressing either of them closes Info and selects that kind.
 	x10, Quick, Stop, Auto, and the junk controls never change kind.
 
-	x10 with fewer than 10 tokens says Need 10 shards and does not
+	x10 with fewer tokens than RollConfig.cost(10) says Need 9 shards and does not
 	crack once. A click on Auto counts as focus, so a stale unfocused
 	flag cannot swallow it.
 
