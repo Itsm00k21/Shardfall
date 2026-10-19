@@ -68,6 +68,7 @@ local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
+local IconAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("IconAssets"))
 local UiMotion = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiMotion"))
 local UiSfx = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSfx"))
 local PadFocus = require(script.Parent:WaitForChild("PadFocus"))
@@ -1002,6 +1003,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		image.Image = UiIcons.get(name)
 		local red, green, blue = UiIcons.tintOf(name)
 		image.ImageColor3 = Color3.fromRGB(red, green, blue)
+		image.ZIndex = 6
+		image.Parent = parent
+		return image
+	end
+
+	-- Painted art from IconAssets, untinted. Returns nil when the key has no
+	-- art yet so the caller can fall back to the UiIcons glyph.
+	function hubFn.artOn(parent: Instance, key: string?, px: number, py: number, size: number): ImageLabel?
+		local id = if type(key) == "string" then IconAssets[key] else nil
+		if id == nil then
+			return nil
+		end
+		local image = Instance.new("ImageLabel")
+		image.Name = "Icon"
+		image.BackgroundTransparency = 1
+		image.Position = UDim2.fromOffset(px, py)
+		image.Size = UDim2.fromOffset(size, size)
+		image.ScaleType = Enum.ScaleType.Fit
+		image.Image = id
 		image.ZIndex = 6
 		image.Parent = parent
 		return image
@@ -2453,7 +2473,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		local parts = HudLayout.bagCard(cellW, cellH)
-		hubFn.iconOn(card, iconName, parts.icon.x, parts.icon.y, parts.icon.w)
+		if hubFn.artOn(card, HubStyle.itemArt(item), parts.icon.x, parts.icon.y, parts.icon.w) == nil then
+			hubFn.iconOn(card, iconName, parts.icon.x, parts.icon.y, parts.icon.w)
+		end
 		local pip = Instance.new("Frame")
 		pip.Name = "Pip"
 		pip.Position = UDim2.fromOffset(50, 16)
@@ -3081,7 +3103,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local pillPad = Instance.new("UIPadding")
 			pillPad.PaddingRight = UDim.new(0, 14)
 			pillPad.Parent = button
-			if type(pill.icon) == "string" then
+			if hubFn.artOn(button, HubStyle.PILL_ART[pill.id], 4, 9, 26) == nil and type(pill.icon) == "string" then
 				hubFn.iconOn(button, pill.icon, 6, 8, 20)
 			end
 			local pillCorner = Instance.new("UICorner")

@@ -15,6 +15,13 @@ local IconAssets: { [string]: string } = {
 	Travel = "rbxassetid://127191414778578",
 	Gold = "rbxassetid://114051544747464",
 	Shards = "rbxassetid://132524313343787",
+	-- Bag pill and item-card category art (crystal-glass style, 2026-10-18 batch 6).
+	ItemWeapon = "rbxassetid://130645589830545",
+	ItemArmor = "rbxassetid://95811175040993",
+	ItemRelic = "rbxassetid://119274506194028",
+	ItemAccessory = "rbxassetid://100999400794230",
+	ItemConsumable = "rbxassetid://79399086531671",
+	ItemMisc = "rbxassetid://96247818299080",
 	-- Action bar frames (purple hex style).
 	HexSlot = "rbxassetid://113386067760930",
 	HexSlotGlow = "rbxassetid://138707130263385",
