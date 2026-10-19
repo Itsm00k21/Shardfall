@@ -264,7 +264,7 @@ describe("Far Glade strays", function()
 		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
 		local stray = string.find(
 			source,
-			"spawnEnemy(run, Dungeons.stray(run.roomIndex), SPAWNS[#SPAWNS])",
+			"spawnEnemy(run, Dungeons.stray(run.roomIndex), SPAWNS[6])",
 			1,
 			true
 		)
