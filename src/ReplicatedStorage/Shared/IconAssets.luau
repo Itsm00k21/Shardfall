@@ -33,6 +33,10 @@ local IconAssets: { [string]: string } = {
 	HexSlotGlow = "rbxassetid://138707130263385",
 	HexButton = "rbxassetid://120968264740024",
 	EventBanner = "rbxassetid://92031233226706",
+	-- Hub tabs parked behind launch flags, and their empty states (batch 7).
+	TabRaids = "rbxassetid://91914133075036",
+	TabMarket = "rbxassetid://92350744248602",
+	TabPass = "rbxassetid://82029671467441",
 }
 
 return table.freeze(IconAssets)

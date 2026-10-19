@@ -2623,7 +2623,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		stroke.Thickness = UiTheme.STROKE
 		stroke.Color = rgb("divider")
 		stroke.Parent = block
-		hubFn.iconOn(block, iconName, 16, 16, 36)
+		if hubFn.artOn(block, HubStyle.TAB_ART[iconName], 12, 12, 44) == nil then
+			hubFn.iconOn(block, iconName, 16, 16, 36)
+		end
 		local copyLabel = Instance.new("TextLabel")
 		copyLabel.BackgroundTransparency = 1
 		copyLabel.Position = UDim2.fromOffset(16, 60)
