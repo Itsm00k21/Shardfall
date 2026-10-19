@@ -281,6 +281,32 @@ describe("PhoneLayout", function()
 		end
 	end)
 
+	it("parks the portrait hub under the currency pills and leaves desktop alone", function()
+		local margin = UiTheme.safeMargin()
+		for _, size in ipairs({ { 390, 844 }, { 388, 762 }, { 375, 667 }, { 430, 932 } }) do
+			for _, shown in ipairs({ 2, 3 }) do
+				local hub = HudLayout.hub(size[1], size[2], margin, shown)
+				local pills = HudLayout.pills(size[1], margin)
+				local column = { x = pills.x, y = pills.y, w = pills.w, h = HudLayout.pillColumnHeight(shown) }
+				expect(HudLayout.overlaps(hub, column)).toBeFalse()
+				expect(hub.y + hub.h <= size[2] - margin).toBeTrue()
+				expect(hub.h >= 160).toBeTrue()
+			end
+		end
+		-- Desktop and landscape boxes do not move.
+		for _, size in ipairs({ { 1482, 751 }, { 1920, 1080 }, { 1024, 751 }, { 844, 390 } }) do
+			local before = HudLayout.hub(size[1], size[2], margin)
+			local after = HudLayout.hub(size[1], size[2], margin, 2)
+			expect(after.x).toEqual(before.x)
+			expect(after.y).toEqual(before.y)
+			expect(after.h).toEqual(before.h)
+		end
+		expect(HudLayout.pillColumnHeight(2)).toEqual(72)
+		expect(HudLayout.pillColumnHeight(nil)).toEqual(112)
+		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		expect(string.find(hub, "UiTheme.safeMargin())", 1, true)).toBeNil()
+	end)
+
 	it("scrolls the bag filter row on a 390 px phone instead of clipping it", function()
 		local labels = { "Rarity  All", "Type  All", "New", "Sort  power" }
 		-- 390x844 hub body is 264 wide; the list row is 248 after padding.

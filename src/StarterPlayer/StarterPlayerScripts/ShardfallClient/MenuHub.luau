@@ -393,6 +393,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.cardGeneration = 0
 	hubState.cardTweens = {}
 
+	-- Currency pills visible in the HUD (Mastery sits behind a launch flag).
+	-- The portrait hub parks its top under exactly that many.
+	function hubFn.pillsShown(): number
+		return if LaunchGate.on("extraCurrencies") then 3 else 2
+	end
+
 	function hubFn.bumpCardGeneration()
 		hubState.cardGeneration += 1
 		local pending = hubState.cardTweens
@@ -890,7 +896,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.place()
 		local vx, vy = hubFn.view()
-		local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+		local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 		hubState.panel.Position = UDim2.fromOffset(box.x, box.y)
 		hubState.panel.Size = UDim2.fromOffset(box.w, box.h)
 		hubState.shadow.Position = UDim2.fromOffset(box.x + 4, box.y + 6)
@@ -1111,7 +1117,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local height = host.AbsoluteSize.Y
 		if width < 44 then
 			local vx, vy = hubFn.view()
-			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 			local inner = HudLayout.hubBody(box.w, box.h)
 			width = inner.w
 			height = inner.h
@@ -1693,7 +1699,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local height = hubState.rollPage.AbsoluteSize.Y
 		if height < 80 then
 			local vx, vy = hubFn.view()
-			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 			local inner = HudLayout.hubBody(box.w, box.h)
 			height = inner.h
 		end
@@ -3036,7 +3042,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local height = measure.AbsoluteSize.Y
 		if width < 44 then
 			local vx, vy = hubFn.view()
-			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 			local inner = HudLayout.hubBody(box.w, box.h)
 			width = inner.w
 			height = inner.h
@@ -3100,7 +3106,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		local viewX, viewY = hubFn.view()
-		local pillBox = HudLayout.hub(viewX, viewY, UiTheme.safeMargin())
+		local pillBox = HudLayout.hub(viewX, viewY, UiTheme.safeMargin(), hubFn.pillsShown())
 		local compactPills = rowW > pillBox.w - 16
 		for index, pill in ipairs(HubStyle.pills()) do
 			if pill.id == "Relics" and not LaunchGate.on("relicSets") then
@@ -3274,7 +3280,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local listW = hubState.bag.AbsoluteSize.X
 			if listH < 80 or listW < 44 then
 				local vx, vy = hubFn.view()
-				local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+				local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 				local inner = HudLayout.hubBody(box.w, box.h)
 				if listW < 44 then
 					listW = inner.w
@@ -3297,7 +3303,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		local vx, vy = hubFn.view()
-		local hubBox = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+		local hubBox = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 		local hubInner = HudLayout.hubBody(hubBox.w, hubBox.h)
 		local slotGap = 4
 		local slotBudget = hubInner.w - slotGap * (ActionSlots.COUNT - 1)
@@ -3570,7 +3576,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if pageW < 80 then
 			local vx, vy = hubFn.view()
-			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin())
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
 			local inner = HudLayout.hubBody(box.w, box.h)
 			pageW = inner.w
 		end
