@@ -268,7 +268,9 @@ function Materials.lootHint(lines: { string }, enemyName: string?): string
 	if #kept == 0 then
 		return ""
 	end
-	return "+ " .. table.concat(kept, ", ")
+	-- "Loot: Spore Cap x2". The old "+ " lead read as a stray "1" in the
+	-- small toast font (Kevin's Oct 19 playtest). CombatFeel.LOOT_PREFIX.
+	return "Loot: " .. table.concat(kept, ", ")
 end
 
 function Materials.realmForAscension(ascension: any): string
