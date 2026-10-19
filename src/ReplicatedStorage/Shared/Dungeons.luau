@@ -142,6 +142,15 @@ Dungeons.RIM = {
 -- don't outrun a bolt. Other projectile enemies still fire a real shot.
 Dungeons.LOBS = { seed_flinger = true, sap_mouth = true }
 
+-- Sap Glob leaves a purple puddle where it lands (enemies.md: "Step out").
+-- A small tick for standing in it, after the landing hit itself.
+Dungeons.PUDDLE = { kind = "sap_mouth", seconds = 3, every = 1, damage = 3, half = 3 }
+
+-- Ticks a puddle owes at `now`: one per `every` while it lasts. Pure.
+function Dungeons.puddleDue(nextTick: number, untilAt: number, now: number): boolean
+	return now >= nextTick and nextTick < untilAt
+end
+
 -- Lungers (enemies.md: Tusk Rush, Hedge Pounce). Studs of reach: they
 -- open a red mark on the player from this far, then dash onto it when the
 -- telegraph ends. Stepping off the mark is the dodge, as with any red.

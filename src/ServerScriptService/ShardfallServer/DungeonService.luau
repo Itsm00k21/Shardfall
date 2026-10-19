@@ -118,6 +118,8 @@ type Run = {
 	difficulty: string,
 	offer: { any }?,
 	eliteNext: boolean,
+	-- Sap Mouth puddles: { x, z, untilAt, nextTick }. Cleared with the enemies.
+	puddles: { { x: number, z: number, untilAt: number, nextTick: number } }?,
 	shrine: string,
 	startedAt: number,
 	-- Server-minted. Marks for a boss in this run use this id once.
@@ -777,6 +779,7 @@ local function enemyBar(part: BasePart, name: string, color: Color3, lift: numbe
 end
 
 local function clearEnemies(run: Run)
+	run.puddles = nil
 	for _, enemy in pairs(run.enemies) do
 		local model = enemy.part.Parent
 		if model ~= nil and model:IsA("Model") then
@@ -2051,6 +2054,57 @@ local function moveEnemy(
 	end
 end
 
+-- Sap Glob landing. One small purple pool per glob; the tick is in tickPuddles.
+local puddleCount = 0
+local function dropPuddle(run: Run, x: number, z: number, now: number)
+	local rule = Dungeons.PUDDLE
+	local list = run.puddles or {}
+	table.insert(list, { x = x, z = z, untilAt = now + rule.seconds, nextTick = now + rule.every })
+	run.puddles = list
+	puddleCount += 1
+	marker(
+		run,
+		"SapPuddle" .. tostring(puddleCount % 8),
+		Vector3.new(rule.half * 2, 0.15, rule.half * 2),
+		Vector3.new(x, 0.25, z),
+		Color3.fromRGB(176, 120, 255),
+		rule.seconds,
+		nil
+	)
+end
+
+local function tickPuddles(player: Player, run: Run, hrp: BasePart, now: number)
+	local list = run.puddles
+	if list == nil then
+		return
+	end
+	local rule = Dungeons.PUDDLE
+	local keep = {}
+	for _, pool in ipairs(list) do
+		if Dungeons.puddleDue(pool.nextTick, pool.untilAt, now) then
+			pool.nextTick += rule.every
+			if
+				CombatFeel.insideMarker(hrp.Position.X, hrp.Position.Z, pool.x, pool.z, rule.half)
+			then
+				CombatService.damagePlayer(
+					player,
+					rule.damage,
+					hrp.Position.X,
+					hrp.Position.Y,
+					hrp.Position.Z
+				)
+				if runs[player] == nil then
+					return
+				end
+			end
+		end
+		if now < pool.untilAt then
+			table.insert(keep, pool)
+		end
+	end
+	run.puddles = if #keep > 0 then keep else nil
+end
+
 -- Tusk Rush / Hedge Pounce. A short tween onto the red mark; tickEnemy
 -- skips movement until it lands so moveEnemy does not fight the tween.
 local function lungeEnemy(enemy: Enemy, run: Run, now: number)
@@ -2178,6 +2232,9 @@ local function tickEnemy(
 		else
 			if Dungeons.LUNGES[enemy.kind] ~= nil then
 				lungeEnemy(enemy, run, now)
+			end
+			if Dungeons.LOBS[enemy.kind] == true and enemy.kind == Dungeons.PUDDLE.kind then
+				dropPuddle(run, enemy.markX, enemy.markZ, now)
 			end
 			if not struck then
 				return
@@ -2345,6 +2402,9 @@ local function tickOne(player: Player, run: Run, step: number, now: number)
 			break
 		end
 		tickEnemy(player, run, enemy, hrp, step, now)
+	end
+	if runs[player] ~= nil and not run.resolving and not run.cleared then
+		tickPuddles(player, run, hrp, now)
 	end
 	if runs[player] ~= nil and not run.resolving and not run.cleared then
 		CombatService.companionTick(player)
