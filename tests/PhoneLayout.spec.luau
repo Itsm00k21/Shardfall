@@ -293,6 +293,9 @@ describe("PhoneLayout", function()
 			expect(hits(card.icon, card.equip)).toBeFalse()
 			expect(hits(card.name, card.equip)).toBeFalse()
 			expect(card.equip.h).toEqual(UiTheme.TOUCH)
+			-- The name spans the card on its own line, so words don't break.
+			expect(card.name.w).toEqual(cellW - 16)
+			expect(card.name.y >= card.icon.y + card.icon.h).toBeTrue()
 		end
 		-- Full cards stay as they were.
 		expect(HudLayout.COMPACT_CARD_H < 228).toBeTrue()

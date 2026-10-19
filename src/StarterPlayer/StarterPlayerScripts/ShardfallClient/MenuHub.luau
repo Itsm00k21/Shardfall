@@ -2531,7 +2531,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		name.TextSize = UiTheme.MIN_TEXT
 		name.TextXAlignment = Enum.TextXAlignment.Left
 		name.TextYAlignment = if compact then Enum.TextYAlignment.Center else Enum.TextYAlignment.Top
-		name.TextWrapped = true
+		name.TextWrapped = not compact
 		name.TextTruncate = if compact then Enum.TextTruncate.AtEnd else Enum.TextTruncate.None
 		name.TextColor3 = rgb("text")
 		name.Text = tostring(item.name or "Item")
