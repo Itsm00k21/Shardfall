@@ -2954,6 +2954,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hooks.onClassSheet()
 			end
 		end)
+		hubFn.hexify(hubState.hero)
 		hubFn.hold("hero")
 	end
 
