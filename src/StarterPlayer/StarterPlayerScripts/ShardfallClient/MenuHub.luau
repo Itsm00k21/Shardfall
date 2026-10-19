@@ -3149,10 +3149,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local bar = Instance.new("ScrollingFrame")
 		bar.Name = "Filters"
 		bar.BackgroundTransparency = 1
-		bar.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		-- Taller than the chips so the scroll bar sits under them, not on them.
+		bar.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH + HudLayout.FILTER_BAR_GAP)
 		bar.BorderSizePixel = 0
 		bar.ScrollBarThickness = 4
+		bar.ScrollBarImageColor3 = rgb("accent")
+		bar.ScrollBarImageTransparency = 0.35
+		bar.HorizontalScrollBarInset = Enum.ScrollBarInset.None
 		bar.ScrollingEnabled = true
+		bar.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 		bar.AutomaticCanvasSize = Enum.AutomaticSize.X
 		bar.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
 		bar.ScrollingDirection = Enum.ScrollingDirection.X
