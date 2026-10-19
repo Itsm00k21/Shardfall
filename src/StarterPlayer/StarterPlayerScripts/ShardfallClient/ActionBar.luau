@@ -631,8 +631,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				art.Visible = artId ~= nil
 			end
 			if glyph ~= nil and glyph:IsA("TextLabel") then
-				-- Painted art replaces the letter; the letter stays as fallback.
-				glyph.Text = if artId ~= nil then "" else letter
+				-- With painted art, a skill keeps its letter as a small corner
+				-- badge (roles share art, so two slots can look alike); tonics
+				-- and items drop the letter. Without art the big letter stays.
+				local badge = artId ~= nil and slot.kind == "skill"
+				glyph.Text = if artId ~= nil and not badge then "" else letter
+				glyph.TextSize = if badge then 14 else 22
+				glyph.Position = if badge then UDim2.fromScale(0.5, 0.64) else UDim2.fromScale(0, 0.26)
+				glyph.Size = if badge then UDim2.fromScale(0.36, 0.26) else UDim2.fromScale(1, 0.62)
+				glyph.TextXAlignment = if badge then Enum.TextXAlignment.Right else Enum.TextXAlignment.Center
+				glyph.ZIndex = if badge then 3 else 2
 				glyph.TextColor3 = Color3.fromRGB(liftedR, liftedG, liftedB)
 			end
 			local hexGlow = button:FindFirstChild("HexGlow")
