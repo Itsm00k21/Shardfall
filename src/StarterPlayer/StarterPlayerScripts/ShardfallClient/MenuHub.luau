@@ -3054,6 +3054,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pills.Parent = hubState.bag
 		local pillLayout = Instance.new("UIListLayout")
 		pillLayout.FillDirection = Enum.FillDirection.Horizontal
+		pillLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		pillLayout.Padding = UDim.new(0, 6)
 		pillLayout.Parent = pills
 		for index, pill in ipairs(HubStyle.pills()) do
@@ -3062,15 +3063,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			local button = Instance.new("TextButton")
 			button.Name = pill.id
-			button.Size = UDim2.fromOffset(HudLayout.chipWidth(pill.label), UiTheme.TOUCH)
+			button.LayoutOrder = index
+			-- Room for the 20 px icon at x 6; the label sits right of it.
+			button.Size = UDim2.fromOffset(HudLayout.chipWidth(pill.label) + 24, UiTheme.TOUCH)
 			local tone = if hubState.bagPill == pill.id then HubStyle.chipTone(index) else "header"
 			button.BackgroundColor3 = rgb(tone)
 			button.Font = headerFont()
 			button.TextSize = UiTheme.MIN_TEXT
 			button.TextColor3 = rgb("text")
-			button.Text = "   " .. pill.label
+			button.Text = pill.label
+			button.TextXAlignment = Enum.TextXAlignment.Right
 			button.AutoButtonColor = false
 			button.Parent = pills
+			local pillPad = Instance.new("UIPadding")
+			pillPad.PaddingRight = UDim.new(0, 14)
+			pillPad.Parent = button
 			if type(pill.icon) == "string" then
 				hubFn.iconOn(button, pill.icon, 6, 8, 20)
 			end
