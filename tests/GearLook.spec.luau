@@ -34,7 +34,16 @@ describe("GearLook", function()
 		expect(bare.weapon).toBeNil()
 		expect(bare.helm).toBeNil()
 		expect(bare.chest).toBeNil()
-		expect(GearLook.forProfile(profile("bow", false, false)).weapon).toBeNil()
+		local staff = GearLook.forProfile(profile("staff", false, false))
+		expect(staff.weapon).toEqual("CrystalStaff")
+		expect(staff.weaponPose).toEqual("upright")
+		expect(staff.weaponGrip).toBeGreaterThan(0.2)
+		expect(GearLook.forProfile(profile("sword", false, false)).weaponPose).toEqual("forward")
+		for _, hold in pairs(GearLook.HOLDS) do
+			expect(PropAssets[hold.kind] ~= nil).toBeTrue()
+			expect(hold.grip).toBeGreaterThan(0)
+			expect(hold.grip).toBeLessThan(1)
+		end
 		expect(GearLook.forProfile(nil).weapon).toBeNil()
 		for _, kind in ipairs({ "CrystalSword", "CrystalHelm", "CrystalChest" }) do
 			expect(PropAssets[kind] ~= nil).toBeTrue()

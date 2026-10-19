@@ -41,6 +41,11 @@ local PropAssets: { [string]: Prop } = {
 		texture = "rbxassetid://97340433005770",
 		glow = { 64, 206, 255 },
 	},
+	CrystalStaff = {
+		mesh = "rbxassetid://132906202608313",
+		texture = "rbxassetid://81373311879921",
+		glow = { 150, 92, 255 },
+	},
 	CrystalHelm = {
 		mesh = "rbxassetid://130436477055805",
 		texture = "rbxassetid://87486345241393",

@@ -15,6 +15,11 @@
 export type Look = {
 	weapon: string?,
 	weaponScale: number,
+	-- How the weapon sits in the hand: "forward" (blade along the hand's -Z,
+	-- like CombatStage REST_GRIP) or "upright" (shaft along the arm, top up).
+	weaponPose: string,
+	weaponGrip: number,
+	weaponYaw: number,
 	helm: string?,
 	chest: string?,
 }
@@ -23,12 +28,20 @@ export type Vec = { x: number, y: number, z: number }
 
 local GearLook = {}
 
--- Blade length in studs per weapon type, before body scale.
-GearLook.SWORD_LENGTH = table.freeze({
-	sword = 3.4,
-	greatsword = 4.4,
-	dagger = 2.2,
-})
+export type Hold = { kind: string, length: number, pose: string, grip: number, yaw: number }
+
+-- Mesh, length in studs (before body scale), pose and grip per weapon type.
+-- grip is where the hand closes, as a fraction of the mesh height from the bottom.
+local HOLDS: { [string]: Hold } = {
+	sword = { kind = "CrystalSword", length = 3.4, pose = "forward", grip = 0.1, yaw = 0 },
+	greatsword = { kind = "CrystalSword", length = 4.4, pose = "forward", grip = 0.1, yaw = 0 },
+	dagger = { kind = "CrystalSword", length = 2.2, pose = "forward", grip = 0.1, yaw = 0 },
+	staff = { kind = "CrystalStaff", length = 5.2, pose = "upright", grip = 0.36, yaw = 0 },
+}
+for _, hold in pairs(HOLDS) do
+	table.freeze(hold)
+end
+GearLook.HOLDS = table.freeze(HOLDS)
 
 -- Matches CombatStage REST_GRIP: grip 0.2 below the hand centre, blade forward.
 GearLook.GRIP = table.freeze({ x = 0, y = -0.2, z = 0 })
@@ -43,16 +56,27 @@ local function owned(data: any, uid: any): any
 end
 
 function GearLook.forProfile(data: any): Look
-	local look: Look = { weapon = nil, weaponScale = 1, helm = nil, chest = nil }
+	local look: Look = {
+		weapon = nil,
+		weaponScale = 1,
+		weaponPose = "forward",
+		weaponGrip = GearLook.GRIP_FRACTION,
+		weaponYaw = 0,
+		helm = nil,
+		chest = nil,
+	}
 	if type(data) ~= "table" or type(data.equipped) ~= "table" then
 		return look
 	end
 	local weapon = owned(data, data.equipped.weapon)
 	if weapon ~= nil and weapon.kind == "Weapon" then
-		local length = GearLook.SWORD_LENGTH[weapon.weaponType or ""]
-		if length ~= nil then
-			look.weapon = "CrystalSword"
-			look.weaponScale = length
+		local hold = HOLDS[weapon.weaponType or ""]
+		if hold ~= nil then
+			look.weapon = hold.kind
+			look.weaponScale = hold.length
+			look.weaponPose = hold.pose
+			look.weaponGrip = hold.grip
+			look.weaponYaw = hold.yaw
 		end
 	end
 	local armor = data.equipped.armor
@@ -91,10 +115,10 @@ function GearLook.chestFit(torso: Vec, _mesh: Vec): (Vec, Vec)
 end
 
 -- Sword: uniform scale to the blade length (scaled by the rig), grip offset.
-function GearLook.swordFit(mesh: Vec, length: number, rigScale: number): (Vec, number)
+function GearLook.swordFit(mesh: Vec, length: number, rigScale: number, grip: number?): (Vec, number)
 	local s = length * rigScale / mesh.y
 	local size = { x = mesh.x * s, y = mesh.y * s, z = mesh.z * s }
-	local gripY = -size.y / 2 + size.y * GearLook.GRIP_FRACTION
+	local gripY = -size.y / 2 + size.y * (grip or GearLook.GRIP_FRACTION)
 	return size, gripY
 end
 
