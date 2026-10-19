@@ -42,9 +42,11 @@ Loops.POOL = {
 	{ id = "hatch", text = "Hatch an egg", goal = 1 },
 	{ id = "forge", text = "Upgrade a piece of gear", goal = 1 },
 	{ id = "pet", text = "Pet or feed a companion", goal = 1 },
+	-- Far Glade beasts join Waves from wave 3 (Dungeons.GLADE_FROM_WAVE).
+	{ id = "glade", text = "Defeat 4 Far Glade beasts in Waves", goal = 4 },
 }
 
--- Same five ids LoopService.progress already reports. The sentence matches
+-- The first five daily ids (the Far Glade daily stays daily-only). The sentence matches
 -- the goal. rollWeekly reads this table and does not multiply again.
 Loops.WEEKLY = table.freeze({
 	table.freeze({ id = "rooms", text = "Clear 6 Rootvault rooms", goal = 6 }),
