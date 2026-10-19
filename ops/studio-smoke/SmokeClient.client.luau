@@ -249,7 +249,27 @@ local GuiService = game:GetService("GuiService")
 
 -- What sits on top of the button's centre. A real click lands on the
 -- topmost Active object, so an overlay here means the click never arrives.
+-- A player scrolls a list to reach a button before clicking it. Do the same,
+-- so a button that is only scrolled out of its list is not reported BLOCKED?.
+local function scrollIntoView(btn)
+	local frame = btn:FindFirstAncestorWhichIsA("ScrollingFrame")
+	while frame ~= nil do
+		local top = frame.AbsolutePosition.Y
+		local bottom = top + frame.AbsoluteWindowSize.Y
+		local mid = btn.AbsolutePosition.Y + btn.AbsoluteSize.Y / 2
+		if mid < top or mid > bottom then
+			local shift = mid - (top + frame.AbsoluteWindowSize.Y / 2)
+			local maxY = math.max(0, frame.AbsoluteCanvasSize.Y - frame.AbsoluteWindowSize.Y)
+			frame.CanvasPosition =
+				Vector2.new(frame.CanvasPosition.X, math.clamp(frame.CanvasPosition.Y + shift, 0, maxY))
+			task.wait(0.15)
+		end
+		frame = frame:FindFirstAncestorWhichIsA("ScrollingFrame")
+	end
+end
+
 local function blockerFor(btn)
+	scrollIntoView(btn)
 	local c = btn.AbsolutePosition + btn.AbsoluteSize / 2
 	local inset = GuiService:GetGuiInset()
 	for _, offset in ipairs({ Vector2.zero, inset }) do
