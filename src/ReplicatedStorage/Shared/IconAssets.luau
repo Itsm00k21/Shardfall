@@ -12,6 +12,7 @@ local IconAssets: { [string]: string } = {
 	Roll = "rbxassetid://87702529872973",
 	Shop = "rbxassetid://133793955425261",
 	Settings = "rbxassetid://71449180287649",
+	Travel = "rbxassetid://127191414778578",
 	-- Action bar frames (purple hex style).
 	HexSlot = "rbxassetid://113386067760930",
 	HexSlotGlow = "rbxassetid://138707130263385",
