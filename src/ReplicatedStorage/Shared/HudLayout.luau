@@ -468,6 +468,23 @@ function HudLayout.filterRow(labels: { string }): ChipRow
 	return { chips = chips, width = x, height = height }
 end
 
+-- The bag's filter scroller: a horizontal strip whose scroll bar sits under
+-- the chips, so a narrow host (390 px phone) scrolls instead of clipping
+-- the last chips or shaving their bottoms.
+HudLayout.FILTER_BAR_GAP = 8
+
+export type FilterBar = { height: number, canvasW: number, scrolls: boolean }
+
+function HudLayout.filterBar(hostW: number, labels: { string }): FilterBar
+	local row = HudLayout.filterRow(labels)
+	local w = if type(hostW) == "number" and hostW == hostW and hostW > 0 then hostW else 0
+	return {
+		height = row.height + HudLayout.FILTER_BAR_GAP,
+		canvasW = row.width,
+		scrolls = row.width > w,
+	}
+end
+
 export type BagCard = {
 	icon: Rect,
 	name: Rect,

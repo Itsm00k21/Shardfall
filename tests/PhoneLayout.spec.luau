@@ -281,6 +281,25 @@ describe("PhoneLayout", function()
 		end
 	end)
 
+	it("scrolls the bag filter row on a 390 px phone instead of clipping it", function()
+		local labels = { "Rarity  All", "Type  All", "New", "Sort  power" }
+		-- 390x844 hub body is 264 wide; the list row is 248 after padding.
+		local bar = HudLayout.filterBar(248, labels)
+		expect(bar.scrolls).toBeTrue()
+		expect(bar.canvasW).toEqual(HudLayout.filterRow(labels).width)
+		expect(bar.height).toEqual(UiTheme.TOUCH + HudLayout.FILTER_BAR_GAP)
+		-- Every chip, New included, sits fully inside the scroll canvas.
+		for _, chip in ipairs(HudLayout.filterRow(labels).chips) do
+			expect(chip.x + chip.w <= bar.canvasW).toBeTrue()
+			expect(chip.h + 4 <= bar.height).toBeTrue()
+		end
+		expect(HudLayout.filterBar(900, labels).scrolls).toBeFalse()
+		expect(HudLayout.filterBar(0 / 0, labels).scrolls).toBeTrue()
+		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		expect(string.find(hub, "UiTheme.TOUCH + HudLayout.FILTER_BAR_GAP", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "Enum.ScrollingDirection.X", 1, true) ~= nil).toBeTrue()
+	end)
+
 	it("keeps bag filter chips and inventory marks apart", function()
 		local row = HudLayout.filterRow(FILTERS)
 		expect(#row.chips).toEqual(#FILTERS)
