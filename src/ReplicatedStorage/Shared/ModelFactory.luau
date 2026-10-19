@@ -87,8 +87,8 @@ local GLOW = { 170, 255, 176 }
 local CAP = { 168, 92, 86 }
 local STONE = { 122, 116, 108 }
 local WATER = { 64, 168, 156 }
-local MUD = { 104, 78, 54 }
-local MUD_DARK = { 70, 52, 38 }
+local MUD = { 138, 102, 68 }
+local MUD_DARK = { 98, 72, 50 }
 local OLIVE = { 120, 128, 60 }
 local TUSK = { 196, 176, 132 }
 
@@ -561,8 +561,8 @@ local RECIPES: { [string]: { Piece } } = {
 		block("Body", 2.6, 1.6, 3.4, 0, 1.45, 0.2, MUD, "Mud", "large", "body"),
 		block("Hump", 2, 0.6, 1.6, 0, 2.45, -0.3, MUD_DARK, "Mud", "large", "body"),
 		block("Head", 1.6, 1.2, 1.3, 0, 1.35, -2.05, MUD_DARK, "Mud", "large", "body"),
-		wedge("Tusk", 0.25, 0.8, 0.25, 0.55, 1.05, -2.8, -60, 0, 0, TUSK, "Wood", "small", nil),
-		wedge("Tusk", 0.25, 0.8, 0.25, -0.55, 1.05, -2.8, -60, 0, 0, TUSK, "Wood", "small", nil),
+		wedge("Tusk", 0.35, 1.2, 0.35, 0.6, 1.0, -2.95, -60, 0, 0, TUSK, "Wood", "small", nil),
+		wedge("Tusk", 0.35, 1.2, 0.35, -0.6, 1.0, -2.95, -60, 0, 0, TUSK, "Wood", "small", nil),
 		ball("Eye", 0.22, 0.45, 1.6, -2.72, BARK_DARK, "Wood", "small", false, nil),
 		ball("Eye", 0.22, -0.45, 1.6, -2.72, BARK_DARK, "Wood", "small", false, nil),
 		block("Leg", 0.5, 0.8, 0.5, 0.9, 0.4, -1, MUD_DARK, "Mud", "small", "leg"),
