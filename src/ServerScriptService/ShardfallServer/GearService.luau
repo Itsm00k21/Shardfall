@@ -97,12 +97,17 @@ function GearService.dress(character: Model, look: GearLook.Look)
 	if look.weapon ~= nil and hand ~= nil and hand:IsA("BasePart") then
 		local sword = PropService.load(look.weapon)
 		if sword ~= nil then
-			local size, gripY = GearLook.swordFit(vec(sword.Size), look.weaponScale, rigScale(character))
+			local size, gripY =
+				GearLook.swordFit(vec(sword.Size), look.weaponScale, rigScale(character), look.weaponGrip)
 			sword.Size = v3(size)
 			sword.Name = "GearWeapon"
 			local grip = GearLook.GRIP
-			-- Blade (+Y on the mesh) points forward (-Z) from the hand, like REST_GRIP.
-			local offset = CFrame.new(grip.x, grip.y, grip.z) * CFrame.Angles(math.rad(-90), 0, 0) * CFrame.new(0, -gripY, 0)
+			-- forward: the mesh top (+Y) points along the hand's -Z, like REST_GRIP.
+			-- upright: the mesh top stays up along the arm, like a carried staff.
+			local tilt = if look.weaponPose == "upright" then 0 else math.rad(-90)
+			local offset = CFrame.new(grip.x, grip.y, grip.z)
+				* CFrame.Angles(tilt, math.rad(look.weaponYaw), 0)
+				* CFrame.new(0, -gripY, 0)
 			weld(sword, hand, offset, folder)
 		end
 	end
