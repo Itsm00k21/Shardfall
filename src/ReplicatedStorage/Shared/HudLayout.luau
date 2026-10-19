@@ -208,11 +208,30 @@ function HudLayout.skills(
 	return slots
 end
 
-function HudLayout.hub(viewportX: number, viewportY: number, margin: number): Rect
+-- Height of the portrait pill column when `shown` pills are visible.
+function HudLayout.pillColumnHeight(shown: number?): number
+	local count = math.clamp(math.floor(tonumber(shown) or PILL_COUNT), 0, PILL_COUNT)
+	if count == 0 then
+		return 0
+	end
+	return count * 32 + (count - 1) * PILL_GAP
+end
+
+-- shown is how many currency pills are visible (defaults to all of them).
+-- On a portrait phone the hub's top sits under that pill column.
+function HudLayout.hub(viewportX: number, viewportY: number, margin: number, shown: number?): Rect
 	local w = math.floor(math.clamp(viewportX * 0.72, 280, 860))
 	local h = math.floor(math.clamp(viewportY * 0.78, 220, 640))
 	local x = math.floor((viewportX - w) / 2)
 	local y = math.max(margin, math.floor((viewportY - h) / 2))
+	local vx = axisWidth(viewportX)
+	if vx > 0 and vx < 500 then
+		local column = HudLayout.pillColumnHeight(shown)
+		local floor = if column > 0 then margin + column + PILL_GAP else 0
+		if y < floor then
+			y = floor
+		end
+	end
 	if y + h > viewportY - margin then
 		h = math.max(160, viewportY - margin - y)
 	end
