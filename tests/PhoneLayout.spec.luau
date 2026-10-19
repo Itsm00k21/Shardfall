@@ -305,6 +305,13 @@ describe("PhoneLayout", function()
 		expect(HudLayout.pillColumnHeight(nil)).toEqual(112)
 		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		expect(string.find(hub, "UiTheme.safeMargin())", 1, true)).toBeNil()
+		-- The bag grid never measures wider than the body place() sets, and two cells fit it.
+		expect(string.find(hub, "elseif width > box.w - 16 then", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "math.abs(measure.AbsoluteSize.X - paintedW) < 2", 1, true) ~= nil).toBeTrue()
+		local phone = HudLayout.hub(390, 844, margin, 2)
+		local grid = HudLayout.cardGrid(phone.w - 16 - 16, phone.h, 34)
+		expect(grid.columns).toEqual(2)
+		expect(grid.columns * grid.cellW + (grid.columns - 1) * grid.gap <= phone.w - 32).toBeTrue()
 	end)
 
 	it("scrolls the bag filter row on a 390 px phone instead of clipping it", function()
