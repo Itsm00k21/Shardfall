@@ -528,6 +528,26 @@ function HudLayout.bagCard(cellW: number, cellH: number): BagCard
 	}
 end
 
+-- Compact bag card (task 18, option 1): icon, name and Equip only. Used
+-- while the item detail pane is open, when full cards would be cut off.
+HudLayout.COMPACT_CARD_H = 120
+
+export type CompactCard = { icon: Rect, name: Rect, equip: Rect }
+
+function HudLayout.bagCardCompact(cellW: number, cellH: number): CompactCard
+	local pad = 8
+	local touch = UiTheme.TOUCH
+	local w = if type(cellW) == "number" and cellW == cellW then math.max(touch + pad * 2, cellW) else 120
+	local h = if type(cellH) == "number" and cellH == cellH
+		then math.max(HudLayout.COMPACT_CARD_H, cellH)
+		else HudLayout.COMPACT_CARD_H
+	return {
+		icon = rect(pad, pad, 44, 44),
+		name = rect(pad + 44 + pad, pad, math.max(0, w - pad * 3 - 44), 44),
+		equip = rect(pad, h - pad - touch, math.max(0, w - pad * 2), touch),
+	}
+end
+
 -- Pills, filters, the action row, and the gaps that sit above the bag cards.
 function HudLayout.bagChromeAboveCards(): number
 	local action = UiTheme.PAD + UiTheme.TOUCH + UiTheme.PAD
