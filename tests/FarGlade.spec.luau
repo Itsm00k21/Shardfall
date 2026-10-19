@@ -164,12 +164,7 @@ describe("Far Glade lobbers", function()
 				true
 			) ~= nil
 		).toBeTrue()
-		local purple = string.find(
-			source,
-			'elseif Dungeons.LOBS[enemy.kind] == true then\n\t\tcolorName = "purple"',
-			1,
-			true
-		)
+		local purple = string.find(source, "or Dungeons.LOBS[enemy.kind] == true then", 1, true)
 		expect(purple ~= nil).toBeTrue()
 	end)
 end)

@@ -2160,12 +2160,11 @@ local function tickEnemy(
 	local colorName = "red"
 	if enemy.boss and enemy.phase >= 3 then
 		colorName = "blue"
-	elseif enemy.boss and enemy.phase >= 2 then
+	elseif (enemy.boss and enemy.phase >= 2) or Dungeons.LOBS[enemy.kind] == true then
+		-- Boss phase 2, and the Far Glade lobbers' landing mark.
 		colorName = "purple"
 	elseif enemy.kind == "thorn_sprite" then
 		colorName = "red"
-	elseif Dungeons.LOBS[enemy.kind] == true then
-		colorName = "purple"
 	end
 	local cue = CombatFeel.telegraph(colorName, "normal", if enemy.boss then "boss" else nil)
 	enemy.telegraphColor = cue.color
