@@ -2563,6 +2563,24 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			}
 			else full
 		card:SetAttribute("Compact", compact)
+		if not compact then
+			-- A2: two stacked rarity discs fake a radial glow behind the icon.
+			for ring = 1, 2 do
+				local inset = (ring - 1) * 12
+				local glow = Instance.new("Frame")
+				glow.Name = "Glow" .. ring
+				glow.BorderSizePixel = 0
+				glow.BackgroundColor3 = Color3.fromRGB(liftR, liftG, liftB)
+				glow.BackgroundTransparency = if ring == 1 then 0.82 else 0.7
+				glow.Position = UDim2.fromOffset(full.glow.x + inset, full.glow.y + inset)
+				glow.Size = UDim2.fromOffset(full.glow.w - inset * 2, full.glow.h - inset * 2)
+				glow.ZIndex = 2
+				glow.Parent = card
+				local glowCorner = Instance.new("UICorner")
+				glowCorner.CornerRadius = UDim.new(1, 0)
+				glowCorner.Parent = glow
+			end
+		end
 		if
 			hubFn.artOn(card, HubStyle.itemArt(item), parts.icon.x, parts.icon.y, parts.icon.w)
 			== nil
@@ -2572,13 +2590,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local pip = Instance.new("Frame")
 		pip.Visible = not compact
 		pip.Name = "Pip"
-		pip.Position = UDim2.fromOffset(50, 16)
-		pip.Size = UDim2.fromOffset(12, 12)
+		pip.Position = UDim2.fromOffset(full.gem.x, full.gem.y)
+		pip.Size = UDim2.fromOffset(full.gem.w, full.gem.h)
+		pip.Rotation = 45
 		pip.BackgroundColor3 = Color3.fromRGB(red, green, blue)
 		pip.BorderSizePixel = 0
 		pip.Parent = card
 		local pipCorner = Instance.new("UICorner")
-		pipCorner.CornerRadius = UDim.new(1, 0)
+		pipCorner.CornerRadius = UDim.new(0, 3)
 		pipCorner.Parent = pip
 		local name = Instance.new("TextLabel")
 		name.BackgroundTransparency = 1
@@ -2586,7 +2605,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		name.Size = UDim2.fromOffset(parts.name.w, parts.name.h)
 		name.Font = bodyFont()
 		name.TextSize = UiTheme.MIN_TEXT
-		name.TextXAlignment = Enum.TextXAlignment.Left
+		name.TextXAlignment = if compact
+			then Enum.TextXAlignment.Left
+			else Enum.TextXAlignment.Center
 		name.TextYAlignment = if compact
 			then Enum.TextYAlignment.Center
 			else Enum.TextYAlignment.Top

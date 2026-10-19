@@ -170,7 +170,10 @@ local function assertClear(rows: { Named })
 			local a = rows[left]
 			local b = rows[right]
 			if hits(a.box, b.box) then
-				error(a.name .. " overlaps " .. b.name .. " " .. show(a.box) .. " " .. show(b.box), 2)
+				error(
+					a.name .. " overlaps " .. b.name .. " " .. show(a.box) .. " " .. show(b.box),
+					2
+				)
 			end
 		end
 	end
@@ -271,13 +274,17 @@ describe("PhoneLayout", function()
 			expect(grid.cellH).toBeGreaterThan(227)
 			local card = HudLayout.bagCard(grid.cellW, grid.cellH)
 			local cell = { x = 0, y = 0, w = grid.cellW, h = grid.cellH }
-			local innards = { card.icon, card.name, card.tip, card.lock, card.equip, card.badge }
+			local innards =
+				{ card.icon, card.name, card.tip, card.lock, card.equip, card.badge, card.gem }
 			for index, part in ipairs(innards) do
 				expect(contains(cell, part)).toBeTrue()
 				for other = index + 1, #innards do
 					expect(hits(part, innards[other])).toBeFalse()
 				end
 			end
+			-- A2: the glow is centred on the icon and stays inside the card.
+			expect(contains(cell, card.glow)).toBeTrue()
+			expect(math.abs((card.glow.x + card.glow.w / 2) - (card.icon.x + card.icon.w / 2)) <= 1).toBeTrue()
 		end
 	end)
 
@@ -299,15 +306,25 @@ describe("PhoneLayout", function()
 		end
 		-- Full cards stay as they were.
 		expect(HudLayout.COMPACT_CARD_H < 228).toBeTrue()
-		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local hub = require("@lune/fs").readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau"
+		)
 		local gate = string.match(hub, "function hubFn%.bagCompact%(%).-\n%s*end") or ""
 		expect(string.find(gate, "hubState.detail.Visible", 1, true) ~= nil).toBeTrue()
-		expect(string.find(gate, "\"bag\"", 1, true) ~= nil).toBeTrue()
-		expect(string.find(hub, "if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else spec.cellH", 1, true) ~= nil).toBeTrue()
+		expect(string.find(gate, '"bag"', 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(
+				hub,
+				"if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else spec.cellH",
+				1,
+				true
+			) ~= nil
+		).toBeTrue()
 		expect(string.find(hub, "hubState.bagCompactPainted ~= hubFn.bagCompact()", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "lock.Visible = not compact", 1, true) ~= nil).toBeTrue()
 		-- Back keeps the pane shut through the compact-to-full repaint.
-		local back = string.match(hub, "bindActivated%(hubState%.detailBack, function%(%).-end%)") or ""
+		local back = string.match(hub, "bindActivated%(hubState%.detailBack, function%(%).-end%)")
+			or ""
 		expect(string.find(back, "hubState.detailHidden = true", 1, true) ~= nil).toBeTrue()
 		expect(select(2, string.gsub(hub, "and hubState.detailHidden ~= true", ""))).toEqual(2)
 		local open = string.match(hub, "function hubFn%.openItem%(uid: string%).-\n\tend") or ""
@@ -320,7 +337,8 @@ describe("PhoneLayout", function()
 			for _, shown in ipairs({ 2, 3 }) do
 				local hub = HudLayout.hub(size[1], size[2], margin, shown)
 				local pills = HudLayout.pills(size[1], margin)
-				local column = { x = pills.x, y = pills.y, w = pills.w, h = HudLayout.pillColumnHeight(shown) }
+				local column =
+					{ x = pills.x, y = pills.y, w = pills.w, h = HudLayout.pillColumnHeight(shown) }
 				expect(HudLayout.overlaps(hub, column)).toBeFalse()
 				expect(hub.y + hub.h <= size[2] - margin).toBeTrue()
 				expect(hub.h >= 160).toBeTrue()
@@ -336,7 +354,9 @@ describe("PhoneLayout", function()
 		end
 		expect(HudLayout.pillColumnHeight(2)).toEqual(72)
 		expect(HudLayout.pillColumnHeight(nil)).toEqual(112)
-		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local hub = require("@lune/fs").readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau"
+		)
 		expect(string.find(hub, "UiTheme.safeMargin())", 1, true)).toBeNil()
 		-- The bag grid never measures wider than the body place() sets, and two cells fit it.
 		expect(string.find(hub, "elseif width > box.w - 16 then", 1, true) ~= nil).toBeTrue()
@@ -361,7 +381,9 @@ describe("PhoneLayout", function()
 		end
 		expect(HudLayout.filterBar(900, labels).scrolls).toBeFalse()
 		expect(HudLayout.filterBar(0 / 0, labels).scrolls).toBeTrue()
-		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local hub = require("@lune/fs").readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau"
+		)
 		expect(string.find(hub, "UiTheme.TOUCH + HudLayout.FILTER_BAR_GAP", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "Enum.ScrollingDirection.X", 1, true) ~= nil).toBeTrue()
 	end)
