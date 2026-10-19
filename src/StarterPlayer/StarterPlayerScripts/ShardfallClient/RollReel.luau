@@ -46,6 +46,8 @@ export type Hooks = {
 
 local ROW = 32
 local TAP = RarityConfig.MIN_TAP
+-- Result card: two button rows (Equip/Keep, Roll Again) under the name.
+local CARD_H = 132 + TAP + 8 + TAP + 16
 
 local function color3(rarity: string): Color3
 	local red, green, blue = RarityConfig.color(rarity)
@@ -298,8 +300,9 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	card.Name = "Result"
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
 	card.Position = UDim2.fromScale(0.5, 0.42)
-	card.Size = UDim2.fromOffset(320, 210)
-	card.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
+	card.Size = UDim2.fromOffset(320, CARD_H)
+	card.BackgroundColor3 = Color3.fromRGB(20, 18, 50)
+	card.ClipsDescendants = true
 	card.BorderSizePixel = 0
 	card.Visible = false
 	card.ZIndex = 6
@@ -313,13 +316,16 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	cardStroke.Thickness = 2
 	cardStroke.Parent = card
 
+	-- Rarity banner: a full-width strip in the rarity colour.
 	local cardRarity = Instance.new("TextLabel")
-	cardRarity.BackgroundTransparency = 1
-	cardRarity.Position = UDim2.fromOffset(16, 14)
-	cardRarity.Size = UDim2.new(1, -32, 0, 22)
+	cardRarity.Name = "RarityBanner"
+	cardRarity.BackgroundTransparency = 0
+	cardRarity.BorderSizePixel = 0
+	cardRarity.Position = UDim2.fromOffset(0, 0)
+	cardRarity.Size = UDim2.new(1, 0, 0, 30)
 	cardRarity.Font = Enum.Font.BuilderSansBold
-	cardRarity.TextSize = 14
-	cardRarity.TextXAlignment = Enum.TextXAlignment.Left
+	cardRarity.TextSize = 16
+	cardRarity.TextXAlignment = Enum.TextXAlignment.Center
 	cardRarity.Text = ""
 	cardRarity.ZIndex = 7
 	cardRarity.Parent = card
@@ -356,8 +362,23 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 
 	local equipButton = cardButton("Equip", "Equip", 16)
 	local keepButton = cardButton("Keep", "Keep", 164)
-	keepButton.BackgroundColor3 = Color3.fromRGB(54, 48, 72)
+	keepButton.BackgroundColor3 = Color3.fromRGB(28, 24, 62)
 	keepButton.TextColor3 = Color3.fromRGB(236, 232, 244)
+	equipButton.BackgroundColor3 = Color3.fromRGB(108, 62, 220)
+	equipButton.TextColor3 = Color3.fromRGB(235, 250, 255)
+	-- Roll Again: the same free roll as the Roll button (request(false)).
+	local againButton = cardButton("RollAgain", "Roll Again", 16)
+	againButton.Position = UDim2.fromOffset(16, 132 + TAP + 8)
+	againButton.Size = UDim2.new(1, -32, 0, TAP)
+	againButton.BackgroundColor3 = Color3.fromRGB(40, 150, 210)
+	againButton.TextColor3 = Color3.fromRGB(10, 14, 36)
+	for _, button in ipairs({ equipButton, keepButton, againButton }) do
+		local edge = Instance.new("UIStroke")
+		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		edge.Thickness = 1.5
+		edge.Color = Color3.fromRGB(150, 92, 255)
+		edge.Parent = button
+	end
 
 	local skipButton = Instance.new("TextButton")
 	skipButton.Name = "Skip"
@@ -685,7 +706,8 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		local token = generation
 		local rarity = tostring(item.rarity)
 		cardRarity.Text = string.upper(rarity)
-		cardRarity.TextColor3 = color3(rarity)
+		cardRarity.BackgroundColor3 = color3(rarity)
+		cardRarity.TextColor3 = Color3.fromRGB(14, 10, 30)
 		cardName.Text = tostring(item.name)
 		cardStroke.Color = color3(rarity)
 		card.Visible = true
@@ -708,7 +730,7 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 		local healthBottom = name.y
 		card.AnchorPoint = Vector2.new(0.5, 0)
 		card.Position = UDim2.fromOffset(math.floor(vx / 2), math.max(8, healthBottom - 40))
-		card.Size = UDim2.fromOffset(math.min(320, name.w), 210)
+		card.Size = UDim2.fromOffset(math.min(320, name.w), CARD_H)
 	end
 
 	local function showResolved(record: RollReveal.Record)
@@ -942,6 +964,11 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	keepButton.MouseButton1Click:Connect(function()
 		card.Visible = false
 		generation += 1
+	end)
+	againButton.MouseButton1Click:Connect(function()
+		card.Visible = false
+		generation += 1
+		request(false)
 	end)
 
 	UserInputService.WindowFocusReleased:Connect(function()
