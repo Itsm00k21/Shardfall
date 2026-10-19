@@ -34,24 +34,36 @@ describe("GearLook", function()
 		expect(bare.weapon).toBeNil()
 		expect(bare.helm).toBeNil()
 		expect(bare.chest).toBeNil()
-		local staff = GearLook.forProfile(profile("staff", false, false))
-		expect(staff.weapon).toEqual("CrystalStaff")
-		expect(staff.weaponPose).toEqual("upright")
-		expect(staff.weaponGrip).toBeGreaterThan(0.2)
-		expect(GearLook.forProfile(profile("sword", false, false)).weaponPose).toEqual("forward")
-		expect(GearLook.forProfile(profile("bow", false, false)).weapon).toEqual("CrystalBow")
-		expect(GearLook.forProfile(profile("hammer", false, false)).weapon).toEqual("CrystalHammer")
-		expect(GearLook.forProfile(profile("wand", false, false)).weapon).toBeNil()
-		for _, hold in pairs(GearLook.HOLDS) do
-			expect(PropAssets[hold.kind] ~= nil).toBeTrue()
-			expect(hold.grip).toBeGreaterThan(0)
-			expect(hold.grip).toBeLessThan(1)
-		end
 		expect(GearLook.forProfile(nil).weapon).toBeNil()
 		for _, kind in ipairs({ "CrystalSword", "CrystalHelm", "CrystalChest" }) do
 			expect(PropAssets[kind] ~= nil).toBeTrue()
 		end
 	end)
+	it("holds the staff upright and the sword forward", function()
+		local staff = GearLook.forProfile(profile("staff", false, false))
+		expect(staff.weapon).toEqual("CrystalStaff")
+		expect(staff.weaponPose).toEqual("upright")
+		expect(staff.weaponGrip).toBeGreaterThan(0.2)
+		expect(GearLook.forProfile(profile("sword", false, false)).weaponPose).toEqual("forward")
+	end)
+
+	it("maps the bow and hammer to their crystal meshes", function()
+		expect(GearLook.forProfile(profile("bow", false, false)).weapon).toEqual("CrystalBow")
+		expect(GearLook.forProfile(profile("hammer", false, false)).weapon).toEqual("CrystalHammer")
+	end)
+
+	it("leaves weapon types without a crystal look on the placeholder", function()
+		expect(GearLook.forProfile(profile("wand", false, false)).weapon).toBeNil()
+	end)
+
+	it("keeps every hold's mesh registered and its grip inside the mesh", function()
+		for _, hold in pairs(GearLook.HOLDS) do
+			expect(PropAssets[hold.kind] ~= nil).toBeTrue()
+			expect(hold.grip).toBeGreaterThan(0)
+			expect(hold.grip).toBeLessThan(1)
+		end
+	end)
+
 	it("ignores an equipped uid that is not in the inventory or sits in the wrong slot", function()
 		local data = profile("sword", true, true)
 		data.equipped.weapon = "missing"
