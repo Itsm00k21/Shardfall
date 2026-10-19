@@ -137,7 +137,7 @@ Dungeons.RIM = {
 }
 
 -- Field enemies that are not in a Rootvault room. Waves pulls them in.
-Dungeons.FAR_GLADE = { "mud_tusk", "hedge_lurker", "seed_flinger" }
+Dungeons.FAR_GLADE = { "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud" }
 
 Dungeons.ENEMIES = {
 	vine_crawler = {
@@ -357,6 +357,52 @@ Dungeons.ENEMIES = {
 		safeRadius = 0,
 		color = { 120, 128, 60 },
 		size = { 2.6, 2.8, 2.6 },
+	},
+	sap_mouth = {
+		id = "sap_mouth",
+		name = "Sap Mouth",
+		maxHealth = 40,
+		damage = 12,
+		defense = 2,
+		attackSpeed = 0.45,
+		moveSpeed = 6,
+		range = 26,
+		style = "projectile",
+		minDot = -1,
+		projectileSpeed = 22,
+		hover = 0,
+		boss = false,
+		phase2At = 0,
+		weakSeconds = 0,
+		armoredMultiplier = 1,
+		fogInterval = 0,
+		fogDamage = 0,
+		safeRadius = 0,
+		color = { 150, 112, 64 },
+		size = { 2.6, 2.6, 2.6 },
+	},
+	mite_cloud = {
+		id = "mite_cloud",
+		name = "Mite Cloud",
+		maxHealth = 22,
+		damage = 5,
+		defense = 0,
+		attackSpeed = 1.2,
+		moveSpeed = 17,
+		range = 5,
+		style = "melee",
+		minDot = 0.1,
+		projectileSpeed = 0,
+		hover = 1.2,
+		boss = false,
+		phase2At = 0,
+		weakSeconds = 0,
+		armoredMultiplier = 1,
+		fogInterval = 0,
+		fogDamage = 0,
+		safeRadius = 0,
+		color = { 176, 196, 72 },
+		size = { 2.4, 1.8, 2.4 },
 	},
 } :: { [string]: EnemyDef }
 
@@ -636,7 +682,7 @@ function Dungeons.waveKinds(wave: number): { string }
 		return { "grandmother_gnarl", "vine_crawler", "spore_bat" }
 	end
 	local pool = { "vine_crawler", "spore_bat", "root_brute" }
-	-- From wave 3 the Far Glade trio joins the rotation. One brute per six
+	-- From wave 3 the Far Glade trio joins the rotation. One brute per eight
 	-- picks instead of one per three, so the harder melee doesn't stack.
 	if n >= Dungeons.GLADE_FROM_WAVE then
 		pool = {
@@ -644,7 +690,9 @@ function Dungeons.waveKinds(wave: number): { string }
 			"mud_tusk",
 			"spore_bat",
 			"hedge_lurker",
+			"sap_mouth",
 			"seed_flinger",
+			"mite_cloud",
 			"root_brute",
 		}
 	end
