@@ -6,7 +6,7 @@ Read against `docs/design/shardfall_loops.md` and `Loops.luau`. A template is a 
 
 | rule | live |
 |---|---|
-| Dailies | `Loops.POOL` has 5 rows. `rollDailies` keeps 3. They last `Loops.DAILY_LIFE_DAYS` (3). One free reroll a day. |
+| Dailies | `Loops.POOL` has 6 rows (the 6th, `glade`, "Defeat 4 Far Glade beasts in Waves", is fed by paying Far Glade kills in `DungeonService`). `rollDailies` keeps 3. They last `Loops.DAILY_LIFE_DAYS` (3). One free reroll a day. |
 | Weeklies | `Loops.WEEKLY` has 5 rows. `rollWeekly` keeps 5, so the table is the whole week. |
 | Track | `Loops.apply` finishes a row only when `quest.id` equals the id passed to `LoopService.progress`. |
 | Calls | `rooms` from a paying dungeon advance. `dodge` from `CombatService`. `hatch` and `pet` from `PetService`. `forge` from `CraftService.upgrade` only. |

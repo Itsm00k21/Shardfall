@@ -46,6 +46,20 @@ Choice: regular enemies do not use the blue interrupt. That color stays on the w
 | `seam_caster` | Seam Caster | Rift Margin | caster | Seam Bolt. A violet crack on the ground, then the bolt. | A floating crack, violet edges, dark center, soft seam glow. |
 | `glass_mites` | Glass Mites | Rift Margin | swarm | Mite Flicker. The specks blink, then take a short red line. | Tiny gray-violet glass specks, faint glints, no single body. |
 
+## Live (2026-10-19)
+
+The Far Glade five are in code. `Dungeons.FAR_GLADE`, rigs in `ModelFactory.FIELD_MONSTERS`, verdant `Drops` rows (all `normal`).
+
+| id | where | how the move plays |
+|---|---|---|
+| `mud_tusk` | Waves from wave 3, the Elite Fight stray, a Mireoak add | Tusk Rush: red mark from 16 studs, then a 0.2 s lunge onto it (`Dungeons.LUNGES`). |
+| `hedge_lurker` | Waves from wave 3, the Elite Fight stray | Hedge Pounce: same lunge, 11 studs. |
+| `seed_flinger` | Waves from wave 3, the Elite Fight stray, a Mireoak add | Pod Toss: purple mark, and the pod lands there (`Dungeons.LOBS`). No bolt. |
+| `sap_mouth` | Waves from wave 3, the Elite Fight stray | Sap Glob: the same purple landing. No lingering puddle yet. |
+| `mite_cloud` | Waves from wave 3 | Cloud Nip: a fast, low-HP melee. No pack split yet. |
+
+They're still not open-world spawns: Far Glade as a zone isn't built. The Waves banner on wave 3 says "Far Glade beasts join. Purple: step out." The daily `glade` (defeat 4 in Waves) counts paying kills only.
+
 Left unused: Vine Crawler, Spore Bat, Root Brute, Moss Crawler, Thorn Sprite, and the raid trash names Leafling, Sapling, and Treant. Charger, caster, shielder, and mender stay role words in Rootvault, not names here.
 
 Flags: Gull Ray is not Gull Recurve. Tide Bell is not Winter Bell or Lantern Jelly. Pressure Wisp is not Pollen Wisp or Soot Wisp. Coal Runt is not Coal Newt. Hoar Prowler is not Aeon Wolf, Dawnbloom Wolf, or Leafmane Wolf. Glaze Caster is not Glaze Lark. Pane Tosser is not Pane Strider. No other game's creature is named. No gore.

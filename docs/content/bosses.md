@@ -36,6 +36,8 @@ Repeat drops, suggested: Mireoak and the Verdant field pay Verdant Bark. Glassho
 
 ## Mireoak
 
+Live (2026-10-19) as a Waves mini-boss only: boss waves 10, 20, 30… (Gnarl keeps 5, 15, 25). It's Gnarl's boss kit with the amber knot as the WeakSpot: 240 HP, 11 dmg, plus Waves boss scaling. `Drops` role is `elite`, so it pays the realm rare, not a boss material. Boss chests follow the normal `ChestConfig.bossKill`. There's no Heartwood, no first-kill cosmetic and no field spawn; the field version below is still the plan.
+
 Far Glade. Arena: Mireoak's Bowl. Verdant realm boss for this field.
 
 | phase | suggested HP | name | what you do | telegraph |
