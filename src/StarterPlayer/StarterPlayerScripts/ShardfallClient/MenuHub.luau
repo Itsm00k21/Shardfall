@@ -1154,6 +1154,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.rollButton.AutoButtonColor = false
 	hubState.rollButton.ZIndex = 6
 	hubState.rollButton.Parent = hubState.rollPage
+	do
+		-- A5: crystal-cut Roll button. The gradient tints whatever rest, hover,
+		-- or press colour the button already uses.
+		local rollStroke = Instance.new("UIStroke")
+		rollStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		rollStroke.Thickness = 2
+		rollStroke.Color = Color3.fromRGB(96, 210, 255)
+		rollStroke.Parent = hubState.rollButton
+		local rollWash = Instance.new("UIGradient")
+		rollWash.Rotation = 90
+		rollWash.Color =
+			ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(150, 120, 230))
+		rollWash.Parent = hubState.rollButton
+	end
 	hubState.rollCorner = Instance.new("UICorner")
 	hubState.rollCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	hubState.rollCorner.Parent = hubState.rollButton
@@ -4024,6 +4038,30 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local pedestalCorner = Instance.new("UICorner")
 		pedestalCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		pedestalCorner.Parent = pedestal
+		-- A5 altar look: violet frame, a cyan halo behind the crystal.
+		local pedestalStroke = Instance.new("UIStroke")
+		pedestalStroke.Thickness = 2
+		pedestalStroke.Color = Color3.fromRGB(150, 92, 255)
+		pedestalStroke.Parent = pedestal
+		local halo = Instance.new("Frame")
+		halo.Name = "Halo"
+		halo.AnchorPoint = Vector2.new(0.5, 0.5)
+		halo.Position = UDim2.new(0.5, 0, 0.5, -10)
+		local haloSize = math.max(64, math.floor(math.min(spec.pedestal.w, spec.pedestal.h) * 0.78))
+		halo.Size = UDim2.fromOffset(haloSize, haloSize)
+		halo.BackgroundColor3 = Color3.fromRGB(56, 190, 255)
+		halo.BackgroundTransparency = 0.84
+		halo.BorderSizePixel = 0
+		halo.ZIndex = 0
+		halo.Parent = pedestal
+		local haloCorner = Instance.new("UICorner")
+		haloCorner.CornerRadius = UDim.new(1, 0)
+		haloCorner.Parent = halo
+		local haloRing = Instance.new("UIStroke")
+		haloRing.Thickness = 2
+		haloRing.Color = Color3.fromRGB(96, 210, 255)
+		haloRing.Transparency = 0.4
+		haloRing.Parent = halo
 		local base = Instance.new("Frame")
 		base.Name = "Base"
 		base.AnchorPoint = Vector2.new(0.5, 1)
@@ -4057,6 +4095,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local oddsCorner = Instance.new("UICorner")
 		oddsCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		oddsCorner.Parent = oddsBars
+		local oddsStroke = Instance.new("UIStroke")
+		oddsStroke.Thickness = 1.5
+		oddsStroke.Color = Color3.fromRGB(150, 92, 255)
+		oddsStroke.Parent = oddsBars
 		local oddsList = Instance.new("UIListLayout")
 		oddsList.Padding = UDim.new(0, 4)
 		oddsList.SortOrder = Enum.SortOrder.LayoutOrder
