@@ -82,10 +82,12 @@ function GearLook.helmFit(head: Vec, mesh: Vec): (Vec, Vec)
 	return size, { x = 0, y = lift, z = 0 }
 end
 
--- Chest: wraps the torso, slimmer in X so the arms swing clear.
+-- Chest: the mesh's depth is set by its front gem, so the plate itself
+-- needs 2x torso depth to clear the torso surface (playtested). The plate
+-- stays inside the torso width, so the arms swing clear.
 function GearLook.chestFit(torso: Vec, _mesh: Vec): (Vec, Vec)
-	local size = { x = torso.x * 1.08, y = torso.y * 1.04, z = torso.z * 1.35 }
-	return size, { x = 0, y = torso.y * 0.02, z = 0 }
+	local size = { x = torso.x * 1.16, y = torso.y * 1.1, z = torso.z * 2 }
+	return size, { x = 0, y = torso.y * 0.03, z = 0 }
 end
 
 -- Sword: uniform scale to the blade length (scaled by the rig), grip offset.

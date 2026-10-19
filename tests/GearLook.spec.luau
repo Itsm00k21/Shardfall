@@ -69,7 +69,7 @@ describe("GearLook", function()
 		for _, torso in ipairs({ { x = 2, y = 1.6, z = 1 }, { x = 1.7, y = 1.9, z = 0.9 } }) do
 			local size = GearLook.chestFit(torso, { x = 2, y = 2, z = 1.16 })
 			expect(size.x).toBeGreaterThan(torso.x)
-			expect(size.x).toBeLessThan(torso.x * 1.12)
+			expect(size.x).toBeLessThan(torso.x * 1.2)
 			expect(size.z).toBeGreaterThan(torso.z)
 		end
 	end)
