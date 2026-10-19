@@ -75,10 +75,10 @@ local function weld(piece: BasePart, body: BasePart, offset: CFrame, folder: Ins
 end
 
 local function rigScale(character: Model): number
-	local hand = character:FindFirstChild("RightHand")
-	if hand ~= nil and hand:IsA("BasePart") then
-		-- A default R15 hand is about 1 stud tall.
-		return math.clamp(hand.Size.Y / 1, 0.6, 1.6)
+	-- A default R15 UpperTorso is about 1.7 studs tall; Rthro runs taller.
+	local torso = character:FindFirstChild("UpperTorso")
+	if torso ~= nil and torso:IsA("BasePart") then
+		return math.clamp(torso.Size.Y / 1.7, 0.7, 1.5)
 	end
 	return 1
 end
