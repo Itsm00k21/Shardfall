@@ -3160,7 +3160,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				else "Choose a class to take a kit.",
 			12,
 			6,
-			width - 24,
+			-24,
 			40,
 			UiTheme.MIN_TEXT,
 			rgb("muted"),
