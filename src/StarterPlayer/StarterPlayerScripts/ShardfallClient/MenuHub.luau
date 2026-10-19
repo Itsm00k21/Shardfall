@@ -1855,7 +1855,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if id ~= "roll" then
 			hubState.holdingRoll = false
 		end
-		hubState.detail.Visible = id == "bag" or id == "sets"
+		-- Back keeps the pane shut (and the full cards up) until another page.
+		if hubState.shownId ~= id then
+			hubState.detailHidden = false
+		end
+		hubState.detail.Visible = (id == "bag" or id == "sets") and hubState.detailHidden ~= true
 		hubFn.fitBagList()
 		if hooks.onTab ~= nil then
 			hooks.onTab(if id == "sets" then "bag" else id)
@@ -1876,6 +1880,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local leftRoll = hubState.shownId == "roll" and id ~= "roll"
 		hubState.shownId = id
+		-- shownId is set now, so the bag can pick compact or full cards.
+		hubFn.fitBagList()
 		hubFn.noteView(id)
 		if leftRoll then
 			hubFn.stopRollChain()
@@ -2198,10 +2204,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	-- The detail pane sits over part of the bag page (bagStage). Shrink the
 	-- card list to the grid area while the pane shows, so no card row hides
 	-- under it, and give the full page back when it hides.
+	-- Bag cards go compact while the detail pane is open (task 18, option 1).
+	function hubFn.bagCompact(): boolean
+		return hubState.detail ~= nil and hubState.detail.Visible and hubState.shownId == "bag"
+	end
+
 	function hubFn.fitBagList()
 		local list = hubState.bag
 		if list == nil or hubState.detail == nil then
 			return
+		end
+		if
+			hubState.bagCompactPainted ~= nil
+			and hubState.bagCompactPainted ~= hubFn.bagCompact()
+			and hubState.shownId == "bag"
+		then
+			hubState.bagCompactPainted = hubFn.bagCompact()
+			task.defer(hubFn.paintBag)
 		end
 		if not hubState.detail.Visible then
 			list.Size = UDim2.fromScale(1, 1)
@@ -2227,7 +2246,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.mountWorn(hubState.detailList)
 		hubFn.line(hubState.detailList, "Equipped", 2, rgb("text"))
 		hubFn.placeDetail()
-		hubState.detail.Visible = hubState.shownId == "bag" or hubState.shownId == "sets"
+		hubState.detail.Visible = (hubState.shownId == "bag" or hubState.shownId == "sets")
+			and hubState.detailHidden ~= true
 		hubFn.fitBagList()
 	end
 
@@ -2340,6 +2360,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.openItem(uid: string)
 		hubState.selectedUid = uid
+		hubState.detailHidden = false
 		local item = hubFn.findItem(uid)
 		if item == nil then
 			return
@@ -2481,11 +2502,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				cellH = gridLayout.CellSize.Y.Offset
 			end
 		end
-		local parts = HudLayout.bagCard(cellW, cellH)
+		local compact = cellH <= HudLayout.COMPACT_CARD_H
+		local full = HudLayout.bagCard(cellW, cellH)
+		local slim = HudLayout.bagCardCompact(cellW, cellH)
+		local parts = if compact
+			then { icon = slim.icon, name = slim.name, equip = slim.equip, tip = full.tip, lock = full.lock, badge = full.badge }
+			else full
+		card:SetAttribute("Compact", compact)
 		if hubFn.artOn(card, HubStyle.itemArt(item), parts.icon.x, parts.icon.y, parts.icon.w) == nil then
 			hubFn.iconOn(card, iconName, parts.icon.x, parts.icon.y, parts.icon.w)
 		end
 		local pip = Instance.new("Frame")
+		pip.Visible = not compact
 		pip.Name = "Pip"
 		pip.Position = UDim2.fromOffset(50, 16)
 		pip.Size = UDim2.fromOffset(12, 12)
@@ -2502,12 +2530,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		name.Font = bodyFont()
 		name.TextSize = UiTheme.MIN_TEXT
 		name.TextXAlignment = Enum.TextXAlignment.Left
-		name.TextYAlignment = Enum.TextYAlignment.Top
+		name.TextYAlignment = if compact then Enum.TextYAlignment.Center else Enum.TextYAlignment.Top
 		name.TextWrapped = true
+		name.TextTruncate = if compact then Enum.TextTruncate.AtEnd else Enum.TextTruncate.None
 		name.TextColor3 = rgb("text")
 		name.Text = tostring(item.name or "Item")
 		name.Parent = card
-		if BagBoard.isNew(item, hubState.seen.bagAt) then
+		if not compact and BagBoard.isNew(item, hubState.seen.bagAt) then
 			local badge = Instance.new("TextLabel")
 			badge.Name = "New"
 			badge.AnchorPoint = Vector2.new(0, 0)
@@ -2524,7 +2553,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			badgeCorner.CornerRadius = UDim.new(0, 6)
 			badgeCorner.Parent = badge
 		end
-		hubFn.paintCardTip(card, item)
+		if not compact then
+			hubFn.paintCardTip(card, item)
+		end
 		card.InputBegan:Connect(function(input)
 			if
 				input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -2576,6 +2607,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 			local lock = Instance.new("TextButton")
 			lock.Name = "Lock"
+			lock.Visible = not compact
 			lock.AnchorPoint = Vector2.new(0, 0)
 			lock.Position = UDim2.fromOffset(parts.lock.x, parts.lock.y)
 			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
@@ -3054,10 +3086,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			width = math.max(44, box.w - 16)
 		end
 		local spec = HudLayout.cardGrid(math.max(44, width - 16), math.max(44, height), count)
-		layout.CellSize = UDim2.fromOffset(spec.cellW, spec.cellH)
+		local cellH = if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else spec.cellH
+		layout.CellSize = UDim2.fromOffset(spec.cellW, cellH)
 		layout.CellPadding = UDim2.fromOffset(spec.gap, spec.gap)
 		local rows = spec.rows
-		host.Size = UDim2.new(1, 0, 0, rows * spec.cellH + math.max(0, rows - 1) * spec.gap)
+		host.Size = UDim2.new(1, 0, 0, rows * cellH + math.max(0, rows - 1) * spec.gap)
 		-- The first paint can run before place() resizes a panel left at the
 		-- last layout's size. If the list settles at another width, repaint
 		-- once so cells (and the parts inside them) match the real width.
@@ -3092,6 +3125,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.paintBag()
+		hubState.bagCompactPainted = hubFn.bagCompact()
 		for _, child in ipairs(hubState.screen:GetChildren()) do
 			if child.Name == "Tip" then
 				child:Destroy()
@@ -3319,7 +3353,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			local grid = HudLayout.cardGrid(math.max(44, listW - 16), math.max(44, listH), #shown)
 			local cardOrder = 8
-			if HudLayout.bagCardsLead(listH, grid.cellH) then
+			if HudLayout.bagCardsLead(listH, if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else grid.cellH) then
 				bar.LayoutOrder = 3
 				pills.LayoutOrder = 4
 				actions.LayoutOrder = 5
@@ -6081,6 +6115,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 	hubFn.bindActivated(hubState.detailBack, function()
 		hubState.detailOpen = false
+		hubState.detailHidden = true
 		hubState.detail.Visible = false
 		hubFn.fitBagList()
 	end)

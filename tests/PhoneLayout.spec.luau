@@ -281,6 +281,36 @@ describe("PhoneLayout", function()
 		end
 	end)
 
+	it("uses compact bag cards (icon, name, Equip) only while the detail pane is open", function()
+		expect(HudLayout.COMPACT_CARD_H).toEqual(120)
+		for _, cellW in ipairs({ 104, 120, 228 }) do
+			local card = HudLayout.bagCardCompact(cellW, HudLayout.COMPACT_CARD_H)
+			local cell = { x = 0, y = 0, w = cellW, h = HudLayout.COMPACT_CARD_H }
+			for _, part in ipairs({ card.icon, card.name, card.equip }) do
+				expect(contains(cell, part)).toBeTrue()
+			end
+			expect(hits(card.icon, card.name)).toBeFalse()
+			expect(hits(card.icon, card.equip)).toBeFalse()
+			expect(hits(card.name, card.equip)).toBeFalse()
+			expect(card.equip.h).toEqual(UiTheme.TOUCH)
+		end
+		-- Full cards stay as they were.
+		expect(HudLayout.COMPACT_CARD_H < 228).toBeTrue()
+		local hub = require("@lune/fs").readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local gate = string.match(hub, "function hubFn%.bagCompact%(%).-\n%s*end") or ""
+		expect(string.find(gate, "hubState.detail.Visible", 1, true) ~= nil).toBeTrue()
+		expect(string.find(gate, "\"bag\"", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else spec.cellH", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "hubState.bagCompactPainted ~= hubFn.bagCompact()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "lock.Visible = not compact", 1, true) ~= nil).toBeTrue()
+		-- Back keeps the pane shut through the compact-to-full repaint.
+		local back = string.match(hub, "bindActivated%(hubState%.detailBack, function%(%).-end%)") or ""
+		expect(string.find(back, "hubState.detailHidden = true", 1, true) ~= nil).toBeTrue()
+		expect(select(2, string.gsub(hub, "and hubState.detailHidden ~= true", ""))).toEqual(2)
+		local open = string.match(hub, "function hubFn%.openItem%(uid: string%).-\n\tend") or ""
+		expect(string.find(open, "hubState.detailHidden = false", 1, true) ~= nil).toBeTrue()
+	end)
+
 	it("parks the portrait hub under the currency pills and leaves desktop alone", function()
 		local margin = UiTheme.safeMargin()
 		for _, size in ipairs({ { 390, 844 }, { 388, 762 }, { 375, 667 }, { 430, 932 } }) do
