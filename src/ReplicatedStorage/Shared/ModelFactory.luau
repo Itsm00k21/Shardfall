@@ -61,7 +61,7 @@ ModelFactory.MONSTERS = {
 }
 -- Far Glade field rigs. Kept out of MONSTERS, which mirrors the Rootvault rooms.
 ModelFactory.FIELD_MONSTERS =
-	{ "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud" }
+	{ "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud", "mireoak" }
 
 ModelFactory.TREES = { "tree_giant", "tree_pine", "tree_mushroom", "tree_willow" }
 
@@ -77,6 +77,7 @@ local SCALE: { [string]: number } = {
 	seed_flinger = 1.05,
 	sap_mouth = 1.1,
 	mite_cloud = 1,
+	mireoak = 4,
 }
 
 local MOSS = { 86, 150, 78 }
@@ -626,6 +627,24 @@ local RECIPES: { [string]: { Piece } } = {
 		ball("Mite", 0.3, -0.2, 2.2, 0.3, MITE, "Grass", "small", nil, "float"),
 		ball("Eye", 0.18, 0.12, 1.35, -0.24, AMBER, "Neon", "small", false, "float"),
 	},
+	-- Wide walking oak, mud-brown bark, short root legs, one amber knot.
+	mireoak = {
+		block("Trunk", 2.6, 2.6, 2.2, 0, 2.1, 0, MUD, "Wood", "large", "body"),
+		block("Brow", 2.9, 0.5, 2.4, 0, 3.55, 0, MUD_DARK, "Wood", "large", "body"),
+		ball("Crown", 2.4, 0.7, 4.4, 0.2, MOSS_DARK, "Grass", "large", nil, "body"),
+		ball("Crown", 2.1, -0.9, 4.2, -0.1, MOSS, "Grass", "large", nil, "body"),
+		ball("Eye", 0.32, 0.5, 3.1, -1.12, AMBER, "Neon", "small", true, nil),
+		ball("Eye", 0.32, -0.5, 3.1, -1.12, AMBER, "Neon", "small", true, nil),
+		block("WeakSpot", 0.8, 0.8, 0.3, 0, 2.1, -1.15, AMBER, "Neon", "large", nil),
+		block("Arm", 0.55, 1.8, 0.55, 1.65, 2.4, 0, MUD_DARK, "Wood", "large", "arm"),
+		block("Arm", 0.55, 1.8, 0.55, -1.65, 2.4, 0, MUD_DARK, "Wood", "large", "arm"),
+		ball("Fist", 0.8, 1.65, 1.4, -0.2, MUD, "Wood", "large", nil, "fist"),
+		ball("Fist", 0.8, -1.65, 1.4, -0.2, MUD, "Wood", "large", nil, "fist"),
+		block("Root", 0.7, 0.8, 0.9, 0.85, 0.4, -0.5, MUD_DARK, "Wood", "small", "leg"),
+		block("Root", 0.7, 0.8, 0.9, -0.85, 0.4, -0.5, MUD_DARK, "Wood", "small", "leg"),
+		block("Root", 0.7, 0.8, 0.9, 0.85, 0.4, 0.7, MUD_DARK, "Wood", "small", "leg"),
+		block("Root", 0.7, 0.8, 0.9, -0.85, 0.4, 0.7, MUD_DARK, "Wood", "small", "leg"),
+	},
 	root_ring = {
 		block("Root", 1.4, 0.45, 0.55, 0, 0.28, 0, BARK_DARK, "Wood", "large", nil),
 		wedge("Spike", 0.45, 0.9, 0.45, 0.35, 0.7, 0, 12, 0, 18, BARK, "Wood", "small", nil),
@@ -652,6 +671,9 @@ end
 function ModelFactory.barLift(kind: string): number
 	if kind == "grandmother_gnarl" then
 		return 26
+	end
+	if kind == "mireoak" then
+		return 22
 	end
 	if kind == "root_brute" then
 		return 8
@@ -956,13 +978,17 @@ function ModelFactory.buildEnemy(
 		visual.CanTouch = false
 	end
 	root:SetAttribute("ShardfallPieces", #laid)
-	local roleLight = if kind == "grandmother_gnarl"
+	local roleLight = if kind == "grandmother_gnarl" or kind == "mireoak"
 		then 22
 		elseif kind == "root_brute" or kind == "thorn_sprite" then 12
 		elseif kind == "spore_bat" then 8
 		else 0
 	if roleLight > 0 then
-		attachLight(root, if kind == "grandmother_gnarl" then AMBER else CYAN, roleLight)
+		attachLight(
+			root,
+			if kind == "grandmother_gnarl" or kind == "mireoak" then AMBER else CYAN,
+			roleLight
+		)
 	end
 	root.Anchored = true
 	root.CanCollide = false

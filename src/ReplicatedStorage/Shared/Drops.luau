@@ -76,6 +76,8 @@ Drops.ENEMIES = {
 	seed_flinger = { realm = "verdant", role = "normal" },
 	sap_mouth = { realm = "verdant", role = "normal" },
 	mite_cloud = { realm = "verdant", role = "normal" },
+	-- Elite, not boss: the Waves Mireoak pays the realm rare, not a boss part.
+	mireoak = { realm = "verdant", role = "elite" },
 } :: { [string]: EnemyDrop }
 
 -- Extra forage on top of the realm bundle. Living Vine is a Vine Crawler
