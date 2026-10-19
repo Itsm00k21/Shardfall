@@ -36,6 +36,7 @@ local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
 local CombatCluster = require(Shared:WaitForChild("CombatCluster"))
 local HeavyChip = require(Shared:WaitForChild("HeavyChip"))
+local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local PadLight = require(Shared:WaitForChild("PadLight"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
@@ -186,6 +187,29 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		stroke.Thickness = contrast.thickness
 		stroke.Color = Color3.fromRGB(contrast.stroke[1], contrast.stroke[2], contrast.stroke[3])
 		stroke.Parent = button
+		-- Purple hex skin: the painted frame carries the fill and border.
+		local hexArt = IconAssets.HexSlot
+		if hexArt ~= nil then
+			button.BackgroundTransparency = 1
+			stroke.Enabled = false
+			local hexFrame = Instance.new("ImageLabel")
+			hexFrame.Name = "HexFrame"
+			hexFrame.BackgroundTransparency = 1
+			hexFrame.Size = UDim2.fromScale(1, 1)
+			hexFrame.ScaleType = Enum.ScaleType.Stretch
+			hexFrame.Image = hexArt
+			hexFrame.ZIndex = 1
+			hexFrame.Parent = button
+			local hexGlow = Instance.new("ImageLabel")
+			hexGlow.Name = "HexGlow"
+			hexGlow.BackgroundTransparency = 1
+			hexGlow.Size = UDim2.fromScale(1, 1)
+			hexGlow.ScaleType = Enum.ScaleType.Stretch
+			hexGlow.Image = IconAssets.HexSlotGlow or hexArt
+			hexGlow.Visible = false
+			hexGlow.ZIndex = 1
+			hexGlow.Parent = button
+		end
 		local skillGlow = Instance.new("UIStroke")
 		skillGlow.Name = "SkillGlow"
 		skillGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -201,30 +225,41 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local glyph = Instance.new("TextLabel")
 		glyph.Name = "Glyph"
 		glyph.BackgroundTransparency = 1
-		glyph.Size = UDim2.fromScale(1, 0.7)
-		glyph.Position = UDim2.fromScale(0, 0.06)
+		glyph.Size = UDim2.fromScale(1, 0.62)
+		glyph.Position = UDim2.fromScale(0, 0.26)
 		glyph.Font = Enum.Font.BuilderSansBold
 		glyph.TextSize = 22
 		glyph.TextColor3 = theme("text")
 		glyph.Text = ""
 		glyph.ZIndex = 2
+		local glyphStroke = Instance.new("UIStroke")
+		glyphStroke.Thickness = 1.5
+		glyphStroke.Color = Color3.fromRGB(10, 6, 28)
+		glyphStroke.Parent = glyph
 		glyph.Parent = button
 		local bind = Instance.new("TextLabel")
 		bind.Name = "Bind"
-		bind.AnchorPoint = Vector2.new(0, 0)
-		bind.Position = UDim2.fromOffset(3, 1)
-		bind.Size = UDim2.fromOffset(16, 14)
-		bind.BackgroundTransparency = 1
+		-- Cyan number badge, top centre.
+		bind.AnchorPoint = Vector2.new(0.5, 0)
+		bind.Position = UDim2.new(0.5, 0, 0, 3)
+		bind.Size = UDim2.fromOffset(16, 16)
+		bind.BackgroundTransparency = 0
+		bind.BackgroundColor3 = Color3.fromRGB(64, 206, 255)
+		bind.BorderSizePixel = 0
 		bind.Font = Enum.Font.BuilderSansBold
 		bind.TextSize = 11
-		bind.TextXAlignment = Enum.TextXAlignment.Left
-		bind.TextColor3 = Color3.fromRGB(255, 248, 230)
+		bind.TextXAlignment = Enum.TextXAlignment.Center
+		bind.TextColor3 = Color3.fromRGB(10, 14, 36)
 		bind.Text = ActionSlots.keyLabel(index)
 		bind.ZIndex = 6
 		bind.Parent = button
+		local bindCorner = Instance.new("UICorner")
+		bindCorner.CornerRadius = UDim.new(1, 0)
+		bindCorner.Parent = bind
 		local bindStroke = Instance.new("UIStroke")
+		bindStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		bindStroke.Thickness = 1
-		bindStroke.Color = Color3.fromRGB(12, 8, 20)
+		bindStroke.Color = Color3.fromRGB(190, 240, 255)
 		bindStroke.Parent = bind
 		local pad = Instance.new("TextLabel")
 		pad.Name = "PadGlyph"
@@ -275,7 +310,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		lockText.Parent = button
 		local tint = Instance.new("Frame")
 		tint.Name = "Tint"
-		tint.Size = UDim2.fromScale(1, 1)
+		tint.Size = UDim2.fromScale(0.84, 0.84)
+		tint.AnchorPoint = Vector2.new(0.5, 0.5)
+		tint.Position = UDim2.fromScale(0.5, 0.5)
 		tint.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
 		tint.BackgroundTransparency = 1
 		tint.BorderSizePixel = 0
@@ -284,7 +321,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		tint.Parent = button
 		local flash = Instance.new("Frame")
 		flash.Name = "Flash"
-		flash.Size = UDim2.fromScale(1, 1)
+		flash.Size = UDim2.fromScale(0.84, 0.84)
+		flash.AnchorPoint = Vector2.new(0.5, 0.5)
+		flash.Position = UDim2.fromScale(0.5, 0.5)
 		flash.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		flash.BackgroundTransparency = 1
 		flash.BorderSizePixel = 0
@@ -293,7 +332,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		flash.Parent = button
 		local radial = Instance.new("Frame")
 		radial.Name = "Radial"
-		radial.Size = UDim2.fromScale(1, 1)
+		radial.Size = UDim2.fromScale(0.84, 0.84)
+		radial.AnchorPoint = Vector2.new(0.5, 0.5)
+		radial.Position = UDim2.fromScale(0.5, 0.5)
 		radial.BackgroundColor3 = Color3.new(0, 0, 0)
 		radial.BackgroundTransparency = 0.35
 		radial.BorderSizePixel = 0
@@ -407,6 +448,20 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		stroke.Thickness = UiTheme.STROKE_BOLD
 		stroke.Color = theme("accent")
 		stroke.Parent = button
+		local hexArt = IconAssets.HexButton
+		if hexArt ~= nil then
+			button.BackgroundTransparency = 1
+			button.TextTransparency = 1
+			stroke.Enabled = false
+			local face = Instance.new("ImageLabel")
+			face.Name = "HexFace"
+			face.BackgroundTransparency = 1
+			face.Size = UDim2.fromScale(1, 1)
+			face.ScaleType = Enum.ScaleType.Fit
+			face.Image = hexArt
+			face.ZIndex = 1
+			face.Parent = button
+		end
 		local key = Instance.new("TextLabel")
 		key.Name = "Bind"
 		key.BackgroundTransparency = 1
@@ -415,6 +470,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		key.TextSize = 14
 		key.TextColor3 = Color3.fromRGB(255, 248, 230)
 		key.Text = text
+		key.ZIndex = 2
 		key.Parent = button
 		local keyStroke = Instance.new("UIStroke")
 		keyStroke.Thickness = 1
@@ -529,6 +585,24 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			if glyph ~= nil and glyph:IsA("TextLabel") then
 				glyph.Text = letter
 				glyph.TextColor3 = Color3.fromRGB(liftedR, liftedG, liftedB)
+			end
+			local hexGlow = button:FindFirstChild("HexGlow")
+			if hexGlow ~= nil and hexGlow:IsA("ImageLabel") then
+				hexGlow.Visible = index == picked
+			end
+			local hexFrame = button:FindFirstChild("HexFrame")
+			if hexFrame ~= nil and hexFrame:IsA("ImageLabel") then
+				-- Items and consumables keep a soft rarity tint on the frame.
+				if slot.kind == "item" or slot.kind == "consumable" then
+					local row = ActionSlots.border(slot, profile)
+					hexFrame.ImageColor3 = Color3.fromRGB(
+						math.floor(255 + (row[1] - 255) * 0.45),
+						math.floor(255 + (row[2] - 255) * 0.45),
+						math.floor(255 + (row[3] - 255) * 0.45)
+					)
+				else
+					hexFrame.ImageColor3 = Color3.new(1, 1, 1)
+				end
 			end
 			if border ~= nil and border:IsA("UIStroke") then
 				if index == picked then
