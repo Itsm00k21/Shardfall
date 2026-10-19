@@ -63,6 +63,8 @@ local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local RollSpot = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSpot"))
+local RollScreen = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollScreen"))
+local RollConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollConfig"))
 local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShardBoard"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
 local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
@@ -1175,6 +1177,68 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.rollCorner = Instance.new("UICorner")
 	hubState.rollCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	hubState.rollCorner.Parent = hubState.rollButton
+	-- Roll A/D: the CRACK button shows its shard cost on a chip, sits on a
+	-- blue-shifted drop shadow, and shares one outline weight with x10 and
+	-- AUTO. The x10 / AUTO / ODDS siblings and the meters live in two
+	-- page-level hosts that fitRoll pins to the bottom thumb zone.
+	do
+		local chip = Instance.new("Frame")
+		chip.Name = "Cost"
+		chip.AnchorPoint = Vector2.new(1, 0.5)
+		chip.Position = UDim2.new(1, -12, 0.5, 0)
+		chip.Size = UDim2.fromOffset(60, 32)
+		chip.BackgroundColor3 = Color3.fromRGB(24, 14, 52)
+		chip.BackgroundTransparency = 0.25
+		chip.BorderSizePixel = 0
+		chip.ZIndex = 7
+		chip.Parent = hubState.rollButton
+		local chipCorner = Instance.new("UICorner")
+		chipCorner.CornerRadius = UDim.new(1, 0)
+		chipCorner.Parent = chip
+		local gem = hubFn.artOn(chip, "Shards", 4, 4, 24)
+		if gem ~= nil then
+			gem.ZIndex = 8
+		end
+		local costText = Instance.new("TextLabel")
+		costText.Name = "CostText"
+		costText.BackgroundTransparency = 1
+		costText.Position = UDim2.fromOffset(30, 0)
+		costText.Size = UDim2.new(1, -34, 1, 0)
+		costText.Font = headerFont()
+		costText.TextSize = 18
+		costText.TextColor3 = rgb("text")
+		costText.Text = RollScreen.costText(1)
+		costText.ZIndex = 8
+		costText.Parent = chip
+	end
+	hubState.rollShadow = Instance.new("Frame")
+	hubState.rollShadow.Name = "CrackShadow"
+	hubState.rollShadow.BackgroundColor3 = Color3.fromRGB(14, 10, 48)
+	hubState.rollShadow.BackgroundTransparency = 0.35
+	hubState.rollShadow.BorderSizePixel = 0
+	hubState.rollShadow.ZIndex = 5
+	hubState.rollShadow.Parent = hubState.rollPage
+	do
+		local shadowCorner = Instance.new("UICorner")
+		shadowCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		shadowCorner.Parent = hubState.rollShadow
+	end
+	hubState.rollButton:GetPropertyChangedSignal("Visible"):Connect(function()
+		hubState.rollShadow.Visible = hubState.rollButton.Visible
+	end)
+	hubState.ctaRow = Instance.new("Frame")
+	hubState.ctaRow.Name = "CrackRow"
+	hubState.ctaRow.BackgroundTransparency = 1
+	hubState.ctaRow.Size = UDim2.fromScale(1, 1)
+	hubState.ctaRow.Active = false
+	hubState.ctaRow.ZIndex = 6
+	hubState.ctaRow.Parent = hubState.rollPage
+	hubState.meterRow = Instance.new("Frame")
+	hubState.meterRow.Name = "Meters"
+	hubState.meterRow.BackgroundTransparency = 1
+	hubState.meterRow.Active = false
+	hubState.meterRow.ZIndex = 6
+	hubState.meterRow.Parent = hubState.rollPage
 	hubState.rollStroke = Instance.new("UIStroke")
 	hubState.rollStroke.Thickness = UiTheme.STROKE_BOLD
 	hubState.rollStroke.Color = rgb("accent")
@@ -1218,12 +1282,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local locked = hubState.crackLocked == true or hubState.activeReveal ~= nil
 		local button = hubState.rollButton
+		local cost = button:FindFirstChild("Cost")
 		if tokens < 1 and not locked then
 			button.Text = "Earn shards"
 			button.BackgroundColor3 = rgb("header")
 		else
 			button.Text = HubStyle.CRACK_ONE
 			button.BackgroundColor3 = if locked then rgb("header") else rgb("button")
+		end
+		if cost ~= nil and cost:IsA("GuiObject") then
+			cost.Visible = tokens >= 1 or locked
 		end
 		button:SetAttribute("CrackLocked", locked)
 		button.Active = true
@@ -1418,8 +1486,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	hubState.wallet = Instance.new("Frame")
 	hubState.wallet.Name = "Wallet"
-	hubState.wallet.Position = UDim2.fromOffset(UiTheme.PAD, UiTheme.PAD)
-	hubState.wallet.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, 28)
+	hubState.wallet.AnchorPoint = Vector2.new(1, 0)
+	hubState.wallet.Position = UDim2.new(1, -UiTheme.PAD, 0, UiTheme.PAD)
+	hubState.wallet.Size = UDim2.fromOffset(136, 28)
 	hubState.wallet.BackgroundColor3 = rgb("header")
 	hubState.wallet.BackgroundTransparency = 0
 	hubState.wallet.BorderSizePixel = 0
@@ -1431,8 +1500,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.walletTokens = Instance.new("TextLabel")
 	hubState.walletTokens.Name = "ShardTokens"
 	hubState.walletTokens.BackgroundTransparency = 1
-	hubState.walletTokens.Position = UDim2.fromOffset(10, 0)
-	hubState.walletTokens.Size = UDim2.new(1, -20, 1, 0)
+	hubState.walletTokens.Position = UDim2.fromOffset(32, 0)
+	hubState.walletTokens.Size = UDim2.new(1, -40, 1, 0)
 	hubState.walletTokens.Font = headerFont()
 	hubState.walletTokens.TextSize = UiTheme.MIN_TEXT
 	hubState.walletTokens.TextXAlignment = Enum.TextXAlignment.Left
@@ -1453,6 +1522,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.walletGold.Visible = false
 	hubState.walletGold.ZIndex = 7
 	hubState.walletGold.Parent = hubState.wallet
+	do
+		local walletStroke = Instance.new("UIStroke")
+		walletStroke.Thickness = UiTheme.STROKE_BOLD
+		walletStroke.Color = Color3.fromRGB(96, 210, 255)
+		walletStroke.Parent = hubState.wallet
+		local walletGem = hubFn.artOn(hubState.wallet, "Shards", 4, 2, 24)
+		if walletGem ~= nil then
+			walletGem.ZIndex = 7
+		end
+	end
 
 	hubState.reelHost = Instance.new("Frame")
 	hubState.reelHost.Name = "Reel"
@@ -1741,6 +1820,49 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 	end
 
+	-- Roll A/D geometry for the current page size (RollScreen + RollConfig).
+	function hubFn.rollScreen(height: number?)
+		local pageW = hubState.rollPage.AbsoluteSize.X
+		local pageH = height or hubState.rollPage.AbsoluteSize.Y
+		if pageW < 80 or pageH < 80 then
+			local vx, vy = hubFn.view()
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
+			local inner = HudLayout.hubBody(box.w, box.h)
+			if pageW < 80 then
+				pageW = inner.w
+			end
+			if pageH < 80 then
+				pageH = inner.h
+			end
+		end
+		return RollScreen.layout(pageW, pageH)
+	end
+
+	-- Moves the x10 / AUTO / ODDS buttons (and their shadows) to the rects
+	-- RollScreen gives; paintCta builds them, fitRoll re-places them.
+	function hubFn.placeCta(screen: any)
+		local spots = { TimesTen = screen.ten, Auto = screen.auto, Info = screen.odds }
+		for _, id in ipairs({ "TimesTen", "Auto", "Info" }) do
+			local spot = spots[id]
+			local button = hubState.ctaRow:FindFirstChild(id)
+			local shadow = hubState.ctaRow:FindFirstChild(id .. "Shadow")
+			if button ~= nil and button:IsA("GuiObject") then
+				button.Visible = spot ~= nil
+				if spot ~= nil then
+					button.Position = UDim2.fromOffset(spot.x, spot.y)
+					button.Size = UDim2.fromOffset(spot.w, spot.h)
+				end
+			end
+			if shadow ~= nil and shadow:IsA("GuiObject") then
+				shadow.Visible = spot ~= nil
+				if spot ~= nil then
+					shadow.Position = UDim2.fromOffset(spot.x, spot.y + 4)
+					shadow.Size = UDim2.fromOffset(spot.w, spot.h)
+				end
+			end
+		end
+	end
+
 	hubFn.fitRoll = function()
 		local height = hubState.rollPage.AbsoluteSize.Y
 		if height < 80 then
@@ -1758,7 +1880,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		then
 			kindH = kindRow.Size.Y.Offset
 		end
+		local screen = hubFn.rollScreen(height)
 		local layout = CrackCard.layout(height, kindH)
+		-- Roll A/D: the CTA stack and meters take more than the old single
+		-- button, so lay the reel and card out in the height above them.
+		local lift = screen.reserved - (layout.button + UiTheme.PAD)
+		if lift > 0 then
+			layout = CrackCard.layout(math.max(80, height - lift), kindH)
+		end
 		local stage = layout.reel.h
 		hubState.reelHost.Position = UDim2.fromOffset(UiTheme.PAD, layout.reel.y)
 		hubState.reelHost.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, stage)
@@ -1775,12 +1904,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.stoneY = layout.stone.y
 		hubState.shardStone.Size = UDim2.fromOffset(layout.stone.w, layout.stone.h)
 		hubState.shardStone.Position = UDim2.fromScale(0.5, hubState.stoneY)
-		hubState.rollButton.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, layout.button)
-		local buttonText = if layout.button < 56 then 20 else 28
+		hubState.rollButton.AnchorPoint = Vector2.new(0, 0)
+		hubState.rollButton.Position = UDim2.fromOffset(screen.crack.x, screen.crack.y)
+		hubState.rollButton.Size = UDim2.fromOffset(screen.crack.w, screen.crack.h)
+		hubState.rollShadow.Position = UDim2.fromOffset(screen.crack.x, screen.crack.y + 4)
+		hubState.rollShadow.Size = UDim2.fromOffset(screen.crack.w, screen.crack.h)
+		local buttonText = if screen.phone then 22 else 24
 		hubState.rollButton.TextSize = buttonText
 		hubState.rollButton:SetAttribute("BaseText", buttonText)
+		hubState.meterRow.Position = UDim2.fromOffset(screen.meter.x, screen.meter.y)
+		hubState.meterRow.Size = UDim2.fromOffset(screen.meter.w, screen.meter.h)
+		hubFn.placeCta(screen)
 		hubState.roll.Position = UDim2.fromOffset(0, layout.listTop)
-		hubState.roll.Size = UDim2.new(1, 0, 1, -(layout.listTop + layout.button + UiTheme.PAD))
+		hubState.roll.Size = UDim2.new(1, 0, 1, -(layout.listTop + screen.reserved))
 		hubState.cardRoom = layout.card.h
 		hubState.revealCard.Size = UDim2.new(1, -24, 0, layout.card.h)
 		hubState.revealCard.Position = UDim2.new(0.5, 0, 0, layout.card.y + layout.card.h)
@@ -4024,12 +4160,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		}
 	end
 
-	function hubFn.mountRollStage(tokens: number): Frame
-		local spec = HubStyle.rollStage(hubFn.rollRowWidth(), 320)
+	function hubFn.mountRollStage(_tokens: number): Frame
+		-- Roll A: crystal on its plinth left, slim odds panel right. Roll D
+		-- (phone): the crystal takes the full width and ODDS moves to the CTA
+		-- row. The CTA row itself is pinned by fitRoll, outside this list.
+		local phone = RollScreen.isPhone(hubFn.rollRowWidth() + UiTheme.PAD * 2)
+		local spec = HubStyle.rollStage(hubFn.rollRowWidth(), if phone then 260 else 320)
+		if phone then
+			spec.pedestal = { x = 0, y = 0, w = spec.w, h = spec.pedestal.h }
+		end
 		local stage = Instance.new("Frame")
 		stage.Name = "Stage"
 		stage.BackgroundTransparency = 1
-		stage.Size = UDim2.fromOffset(spec.w, spec.h)
+		stage.Size = UDim2.fromOffset(spec.w, spec.pedestal.h)
 		stage.LayoutOrder = 3
 		stage.Parent = hubState.roll
 		local pedestal = Instance.new("Frame")
@@ -4044,7 +4187,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pedestalCorner.Parent = pedestal
 		-- A5 altar look: violet frame, a cyan halo behind the crystal.
 		local pedestalStroke = Instance.new("UIStroke")
-		pedestalStroke.Thickness = 2
+		pedestalStroke.Thickness = UiTheme.STROKE_BOLD
 		pedestalStroke.Color = Color3.fromRGB(150, 92, 255)
 		pedestalStroke.Parent = pedestal
 		local halo = Instance.new("Frame")
@@ -4078,29 +4221,51 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		baseCorner.CornerRadius = UDim.new(1, 0)
 		baseCorner.Parent = base
 		local crystal = ShardBoard.visual(hubState.rollKind)
-		local shard = Instance.new("Frame")
-		shard.Name = "Crystal"
-		shard.AnchorPoint = Vector2.new(0.5, 1)
-		shard.Position = UDim2.new(0.5, 0, 1, -28)
-		shard.Size = UDim2.fromOffset(crystal.w, crystal.h)
-		shard.BackgroundColor3 = Color3.fromRGB(crystal.fill[1], crystal.fill[2], crystal.fill[3])
-		shard.BorderSizePixel = 0
-		shard.Parent = pedestal
-		local shardCorner = Instance.new("UICorner")
-		shardCorner.CornerRadius = UDim.new(0, 10)
-		shardCorner.Parent = shard
+		local crystalArt = IconAssets.RollCrystal
+		if crystalArt ~= nil then
+			-- The painted crystal carries its own rune plinth.
+			base.Visible = false
+			local art = Instance.new("ImageLabel")
+			art.Name = "Crystal"
+			art.BackgroundTransparency = 1
+			art.AnchorPoint = Vector2.new(0.5, 1)
+			art.Position = UDim2.new(0.5, 0, 1, -6)
+			local artSize = math.max(64, math.floor(math.min(spec.pedestal.w * 0.9, spec.pedestal.h - 12)))
+			art.Size = UDim2.fromOffset(artSize, artSize)
+			art.ScaleType = Enum.ScaleType.Fit
+			art.Image = crystalArt
+			-- Pet shards read as the cyan crystal; gear keeps the amethyst.
+			art.ImageColor3 = if hubState.rollKind == "pets"
+				then Color3.fromRGB(150, 230, 255)
+				else Color3.fromRGB(255, 255, 255)
+			art.ZIndex = 2
+			art.Parent = pedestal
+		else
+			local shard = Instance.new("Frame")
+			shard.Name = "Crystal"
+			shard.AnchorPoint = Vector2.new(0.5, 1)
+			shard.Position = UDim2.new(0.5, 0, 1, -28)
+			shard.Size = UDim2.fromOffset(crystal.w, crystal.h)
+			shard.BackgroundColor3 = Color3.fromRGB(crystal.fill[1], crystal.fill[2], crystal.fill[3])
+			shard.BorderSizePixel = 0
+			shard.Parent = pedestal
+			local shardCorner = Instance.new("UICorner")
+			shardCorner.CornerRadius = UDim.new(0, 10)
+			shardCorner.Parent = shard
+		end
 		local oddsBars = Instance.new("Frame")
 		oddsBars.Name = "OddsBars"
 		oddsBars.Position = UDim2.fromOffset(spec.odds.x, spec.odds.y)
 		oddsBars.Size = UDim2.fromOffset(spec.odds.w, spec.odds.h)
 		oddsBars.BackgroundColor3 = rgb("body")
 		oddsBars.BorderSizePixel = 0
+		oddsBars.Visible = not phone
 		oddsBars.Parent = stage
 		local oddsCorner = Instance.new("UICorner")
 		oddsCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		oddsCorner.Parent = oddsBars
 		local oddsStroke = Instance.new("UIStroke")
-		oddsStroke.Thickness = 1.5
+		oddsStroke.Thickness = UiTheme.STROKE_BOLD
 		oddsStroke.Color = Color3.fromRGB(150, 92, 255)
 		oddsStroke.Parent = oddsBars
 		local oddsList = Instance.new("UIListLayout")
@@ -4136,73 +4301,223 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		rounding.Text = RarityConfig.ROUNDING_NOTE
 		rounding.LayoutOrder = 2
 		rounding.Parent = oddsBars
-		local row = Instance.new("Frame")
-		row.Name = "CrackRow"
-		row.Size = UDim2.fromOffset(spec.row.w, spec.row.h)
-		row.BackgroundTransparency = 1
-		row.LayoutOrder = 2
-		row.Parent = hubState.roll
-		local count = Instance.new("TextLabel")
-		count.Name = "ShardCount"
-		count.Position = UDim2.fromOffset(spec.count.x, spec.count.y)
-		count.Size = UDim2.fromOffset(spec.count.w, spec.count.h)
-		count.BackgroundColor3 = rgb("header")
-		count.Font = headerFont()
-		count.TextSize = UiTheme.MIN_TEXT
-		count.TextColor3 = rgb("text")
-		count.Text = HubStyle.shardCount(tokens)
-		count.TextTruncate = Enum.TextTruncate.AtEnd
-		count.Parent = row
-		local countCorner = Instance.new("UICorner")
-		countCorner.CornerRadius = UDim.new(0, 8)
-		countCorner.Parent = count
-		for _, spot in ipairs(spec.buttons) do
-			if spot.id ~= "Roll" then
-				local on = false
-				if spot.id == "Auto" then
-					on = hubState.autoOn == true
-				elseif spot.id == "Info" then
-					on = hubState.infoOpen == true
-				elseif spot.id == "TimesTen" then
-					on = hubState.pendingCount > 1 or hubState.batching == true
-				end
-				local tone = "header"
-				if on then
-					tone = "button"
-				elseif spot.id == "TimesTen" then
-					tone = "claim"
-				end
-				local label = spot.label
-				if spot.id == "Auto" and on then
-					label = "Auto On"
-				end
-				local button = Instance.new("TextButton")
-				button.Name = spot.id
-				button.Position = UDim2.fromOffset(spot.x, spot.y)
-				button.Size = UDim2.fromOffset(spot.w, spot.h)
-				button.BackgroundColor3 = rgb(tone)
-				button.Font = headerFont()
-				button.TextSize = UiTheme.MIN_TEXT
-				button.TextColor3 = rgb("text")
-				button.Text = label
-				button.TextTruncate = Enum.TextTruncate.AtEnd
-				button.AutoButtonColor = false
-				button.Parent = row
-				local corner = Instance.new("UICorner")
-				corner.CornerRadius = UDim.new(0, 8)
-				corner.Parent = button
-				hubFn.setRest(button, rgb(tone))
-				hubFn.motion(button)
-				local spotId = spot.id
-				hubFn.bindActivated(button, function()
-					hubFn.applyControl(spotId)
-				end)
-			end
+		if not phone then
+			-- Odds stay one labelled tap away: Details opens the full list.
+			local details = Instance.new("TextButton")
+			details.Name = "Info"
+			details.Size = UDim2.fromOffset(math.max(40, spec.odds.w - 16), 32)
+			details.BackgroundColor3 = if hubState.infoOpen == true then rgb("button") else rgb("header")
+			details.Font = headerFont()
+			details.TextSize = UiTheme.MIN_TEXT
+			details.TextColor3 = rgb("text")
+			details.Text = RollScreen.DETAILS_LABEL
+			details.AutoButtonColor = false
+			details.LayoutOrder = 90
+			details.Parent = oddsBars
+			local detailsCorner = Instance.new("UICorner")
+			detailsCorner.CornerRadius = UDim.new(0, 8)
+			detailsCorner.Parent = details
+			local detailsStroke = Instance.new("UIStroke")
+			detailsStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			detailsStroke.Thickness = UiTheme.STROKE_BOLD
+			detailsStroke.Color = Color3.fromRGB(150, 92, 255)
+			detailsStroke.Parent = details
+			hubFn.setRest(details, details.BackgroundColor3)
+			hubFn.motion(details)
+			hubFn.bindActivated(details, function()
+				hubFn.applyControl("Info")
+			end)
 		end
 		return oddsBars
 	end
 
-	function hubFn.paintOddsBars(host: Frame, epicFill: number, legendaryFill: number)
+	-- Roll A/D CTA siblings and meters. CRACK x1 is hubState.rollButton;
+	-- x10 (cost chip + -10% tag), AUTO, and on phones ODDS are rebuilt here,
+	-- then fitRoll/placeCta pins them. All copy and numbers come from
+	-- RollScreen / RollConfig.
+	function hubFn.ctaButton(id: string, label: string, tone: string): TextButton
+		local shadow = Instance.new("Frame")
+		shadow.Name = id .. "Shadow"
+		shadow.BackgroundColor3 = Color3.fromRGB(14, 10, 48)
+		shadow.BackgroundTransparency = 0.35
+		shadow.BorderSizePixel = 0
+		shadow.ZIndex = 5
+		shadow.Parent = hubState.ctaRow
+		local shadowCorner = Instance.new("UICorner")
+		shadowCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		shadowCorner.Parent = shadow
+		local button = Instance.new("TextButton")
+		button.Name = id
+		button.BackgroundColor3 = rgb(tone)
+		button.Font = headerFont()
+		button.TextSize = 18
+		button.TextColor3 = rgb("text")
+		button.TextStrokeTransparency = 0.6
+		button.Text = label
+		button.TextTruncate = Enum.TextTruncate.AtEnd
+		button.AutoButtonColor = false
+		button.ZIndex = 6
+		button.Parent = hubState.ctaRow
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		corner.Parent = button
+		local stroke = Instance.new("UIStroke")
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Thickness = UiTheme.STROKE_BOLD
+		stroke.Color = Color3.fromRGB(96, 210, 255)
+		stroke.Parent = button
+		local wash = Instance.new("UIGradient")
+		wash.Rotation = 90
+		wash.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 196, 235))
+		wash.Parent = button
+		hubFn.setRest(button, rgb(tone))
+		hubFn.motion(button)
+		hubFn.bindActivated(button, function()
+			hubFn.applyControl(id)
+		end)
+		return button
+	end
+
+	function hubFn.paintCta(sinceEpic: number)
+		for _, child in ipairs(hubState.ctaRow:GetChildren()) do
+			child:Destroy()
+		end
+		for _, child in ipairs(hubState.meterRow:GetChildren()) do
+			child:Destroy()
+		end
+		local screen = hubFn.rollScreen()
+		local tenOn = hubState.pendingCount > 1 or hubState.batching == true
+		local ten = hubFn.ctaButton("TimesTen", RollScreen.TEN_LABEL, if tenOn then "button" else "claim")
+		ten.TextXAlignment = Enum.TextXAlignment.Left
+		local tenPad = Instance.new("UIPadding")
+		tenPad.PaddingLeft = UDim.new(0, 10)
+		tenPad.Parent = ten
+		local chip = Instance.new("Frame")
+		chip.Name = "Cost"
+		chip.AnchorPoint = Vector2.new(1, 1)
+		chip.Position = UDim2.new(1, -6, 1, -6)
+		chip.Size = UDim2.fromOffset(46, 24)
+		chip.BackgroundColor3 = Color3.fromRGB(24, 14, 52)
+		chip.BackgroundTransparency = 0.25
+		chip.BorderSizePixel = 0
+		chip.ZIndex = 7
+		chip.Parent = ten
+		local chipCorner = Instance.new("UICorner")
+		chipCorner.CornerRadius = UDim.new(1, 0)
+		chipCorner.Parent = chip
+		local gem = hubFn.artOn(chip, "Shards", 2, 2, 20)
+		if gem ~= nil then
+			gem.ZIndex = 8
+		end
+		local costText = Instance.new("TextLabel")
+		costText.Name = "CostText"
+		costText.BackgroundTransparency = 1
+		costText.Position = UDim2.fromOffset(22, 0)
+		costText.Size = UDim2.new(1, -24, 1, 0)
+		costText.Font = headerFont()
+		costText.TextSize = UiTheme.MIN_TEXT
+		costText.TextColor3 = rgb("text")
+		costText.Text = RollScreen.costText(RollConfig.MULTI_COUNT)
+		costText.ZIndex = 8
+		costText.Parent = chip
+		local tag = Instance.new("TextLabel")
+		tag.Name = "Discount"
+		tag.AnchorPoint = Vector2.new(1, 0)
+		tag.Position = UDim2.new(1, 4, 0, -8)
+		tag.Size = UDim2.fromOffset(44, 20)
+		tag.BackgroundColor3 = Color3.fromRGB(255, 196, 64)
+		tag.BorderSizePixel = 0
+		tag.Font = headerFont()
+		tag.TextSize = UiTheme.MIN_TEXT
+		tag.TextColor3 = Color3.fromRGB(40, 22, 6)
+		tag.Text = RollConfig.discountTag()
+		tag.ZIndex = 9
+		tag.Parent = ten
+		local tagCorner = Instance.new("UICorner")
+		tagCorner.CornerRadius = UDim.new(1, 0)
+		tagCorner.Parent = tag
+		local autoOn = hubState.autoOn == true
+		hubFn.ctaButton("Auto", RollScreen.autoLabel(autoOn), if autoOn then "button" else "header")
+		if screen.phone then
+			hubFn.ctaButton("Info", RollScreen.ODDS_LABEL, if hubState.infoOpen == true then "button" else "header")
+		end
+
+		-- Meters: tenth-crack luck pips (left / top) and free pity (right /
+		-- bottom). Pity is never sold; it only counts cracks.
+		local lit, luckText = RollScreen.luckPips(
+			if type(hubState.profile) == "table" then hubState.profile.shardRolls else 0
+		)
+		local luck = Instance.new("Frame")
+		luck.Name = "LuckMeter"
+		luck.BackgroundTransparency = 1
+		luck.Position = UDim2.fromOffset(screen.luck.x, screen.luck.y)
+		luck.Size = UDim2.fromOffset(screen.luck.w, screen.luck.h)
+		luck.Parent = hubState.meterRow
+		local pip = math.max(8, math.min(14, math.floor(screen.luck.h * 0.5)))
+		for index = 1, RarityConfig.BONUS_EVERY do
+			local dot = Instance.new("Frame")
+			dot.Name = "Pip" .. index
+			dot.AnchorPoint = Vector2.new(0, 0.5)
+			dot.Position = UDim2.new(0, (index - 1) * (pip + 3), 0.5, 0)
+			dot.Size = UDim2.fromOffset(pip, pip)
+			dot.Rotation = 45
+			dot.BackgroundColor3 = if index <= lit then Color3.fromRGB(96, 210, 255) else rgb("header")
+			dot.BorderSizePixel = 0
+			dot.ZIndex = 6
+			dot.Parent = luck
+		end
+		local luckLabel = Instance.new("TextLabel")
+		luckLabel.Name = "LuckText"
+		luckLabel.BackgroundTransparency = 1
+		local pipsW = RarityConfig.BONUS_EVERY * (pip + 3) + 4
+		luckLabel.Position = UDim2.fromOffset(pipsW, 0)
+		luckLabel.Size = UDim2.new(1, -pipsW, 1, 0)
+		luckLabel.Font = headerFont()
+		luckLabel.TextSize = UiTheme.MIN_TEXT
+		luckLabel.TextXAlignment = Enum.TextXAlignment.Left
+		luckLabel.TextColor3 = rgb("text")
+		luckLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		luckLabel.Text = luckText
+		luckLabel.ZIndex = 6
+		luckLabel.Parent = luck
+		local pity = Instance.new("Frame")
+		pity.Name = "PityMeter"
+		pity.Position = UDim2.fromOffset(screen.pity.x, screen.pity.y)
+		pity.Size = UDim2.fromOffset(screen.pity.w, screen.pity.h)
+		pity.BackgroundColor3 = rgb("header")
+		pity.BorderSizePixel = 0
+		pity.ClipsDescendants = true
+		pity.ZIndex = 6
+		pity.Parent = hubState.meterRow
+		local pityCorner = Instance.new("UICorner")
+		pityCorner.CornerRadius = UDim.new(0, 8)
+		pityCorner.Parent = pity
+		local pityFill = Instance.new("Frame")
+		pityFill.Name = "Fill"
+		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceEpic), 1)
+		pityFill.BackgroundColor3 = Color3.fromRGB(150, 92, 255)
+		pityFill.BorderSizePixel = 0
+		pityFill.ZIndex = 6
+		pityFill.Parent = pity
+		local pityFillCorner = Instance.new("UICorner")
+		pityFillCorner.CornerRadius = UDim.new(0, 8)
+		pityFillCorner.Parent = pityFill
+		local pityLabel = Instance.new("TextLabel")
+		pityLabel.Name = "PityText"
+		pityLabel.BackgroundTransparency = 1
+		pityLabel.Size = UDim2.fromScale(1, 1)
+		pityLabel.Font = headerFont()
+		pityLabel.TextSize = UiTheme.MIN_TEXT
+		pityLabel.TextColor3 = rgb("text")
+		pityLabel.TextStrokeTransparency = 0.5
+		pityLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		pityLabel.Text = RollConfig.pityText(sinceEpic)
+		pityLabel.ZIndex = 7
+		pityLabel.Parent = pity
+		hubFn.placeCta(screen)
+	end
+
+	function hubFn.paintOddsBars(host: Frame, _epicFill: number, _legendaryFill: number)
 		local pool = if hubState.rollKind == "pets"
 			then Pools.get(hubFn.rollPoolId())
 			else Pools.get("verdant_armory")
@@ -4238,45 +4553,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			fill.Size = UDim2.fromScale(HubStyle.barScale(row.chance), 1)
 			fill.Parent = track
 		end
-		local function pityBar(name: string, captionText: string, fillAmount: number, order: number)
-			local scale = fillAmount
-			if type(scale) ~= "number" or scale ~= scale or scale < 0 then
-				scale = 0
-			elseif scale > 1 then
-				scale = 1
-			end
-			local bar = Instance.new("Frame")
-			bar.Name = name
-			bar.BackgroundTransparency = 1
-			bar.Size = UDim2.fromOffset(math.max(40, host.Size.X.Offset - 16), 18)
-			bar.LayoutOrder = order
-			bar.Parent = host
-			local label = Instance.new("TextLabel")
-			label.BackgroundTransparency = 1
-			label.Size = UDim2.fromOffset(math.floor(bar.Size.X.Offset * 0.42), 18)
-			label.Font = bodyFont()
-			label.TextSize = UiTheme.MIN_TEXT
-			label.TextXAlignment = Enum.TextXAlignment.Left
-			label.TextColor3 = rgb("muted")
-			label.Text = captionText
-			label.Parent = bar
-			local track = Instance.new("Frame")
-			track.Name = "Track"
-			track.BackgroundColor3 = rgb("header")
-			track.BorderSizePixel = 0
-			track.Position = UDim2.fromOffset(label.Size.X.Offset + 4, 5)
-			track.Size =
-				UDim2.fromOffset(math.max(8, bar.Size.X.Offset - label.Size.X.Offset - 4), 8)
-			track.Parent = bar
-			local fill = Instance.new("Frame")
-			fill.Name = "Fill"
-			fill.BackgroundColor3 = rgb("accent")
-			fill.BorderSizePixel = 0
-			fill.Size = UDim2.fromScale(scale, 1)
-			fill.Parent = track
-		end
-		pityBar("EpicBar", "Epic pity", epicFill, 40)
-		pityBar("LegendaryBar", "Legendary pity", legendaryFill, 41)
+		-- Pity lives in the meter row above the CTA (RollConfig.pityText).
 	end
 
 	function hubFn.paintRoll()
@@ -4802,6 +5079,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		hubFn.paintOddsBars(oddsPane, nextEpicFill, nextLegendaryFill)
+		hubFn.paintCta(sinceEpic)
 
 		local recent = if #hubState.sessionRolls > 0
 			then hubState.sessionRolls

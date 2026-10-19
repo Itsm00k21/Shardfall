@@ -56,6 +56,17 @@ RollConfig.SKIP_AFTER = 1
 RollConfig.SHAKE = 0.3
 RollConfig.AUTO_DISMISS = 1.5
 
+-- Roll screen layout (pixels). A and D in Kevin's Oct 19 build.
+RollConfig.PHONE_PAGE_W = 420 -- page width at or under this uses the D stack
+RollConfig.CTA_H = 64 -- desktop CRACK row height
+RollConfig.PHONE_CRACK_H = 60 -- phone full-width CRACK
+RollConfig.PHONE_ROW_H = 44 -- phone x10 / AUTO / ODDS row (touch minimum)
+RollConfig.CRACK_SHARE = 0.56 -- desktop CRACK share of the row
+RollConfig.TEN_SHARE = 0.24 -- desktop x10 share of the row
+RollConfig.METER_H = 26 -- one meter line
+RollConfig.EDGE = 8 -- page padding
+RollConfig.GAP = 8 -- gap between CTA pieces
+
 local function whole(value: any): number
 	if type(value) ~= "number" or value ~= value or value == math.huge or value == -math.huge then
 		return 0

@@ -46,6 +46,8 @@ local IconAssets: { [string]: string } = {
 	ClassForgeborn = "rbxassetid://109739537920971",
 	ClassFrostblade = "rbxassetid://121545835326350",
 	ClassVoidcaster = "rbxassetid://109064272249374",
+	-- Roll A crystal on its hex rune plinth (Oct 19 roll screen build).
+	RollCrystal = "rbxassetid://110851514413079",
 }
 
 return table.freeze(IconAssets)
