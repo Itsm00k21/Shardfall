@@ -55,7 +55,7 @@ The Far Glade five are in code. `Dungeons.FAR_GLADE`, rigs in `ModelFactory.FIEL
 | `mud_tusk` | Waves from wave 3, the Elite Fight stray, a Mireoak add | Tusk Rush: red mark from 16 studs, then a 0.2 s lunge onto it (`Dungeons.LUNGES`). |
 | `hedge_lurker` | Waves from wave 3, the Elite Fight stray | Hedge Pounce: same lunge, 11 studs. |
 | `seed_flinger` | Waves from wave 3, the Elite Fight stray, a Mireoak add | Pod Toss: purple mark, and the pod lands there (`Dungeons.LOBS`). No bolt. |
-| `sap_mouth` | Waves from wave 3, the Elite Fight stray | Sap Glob: the same purple landing. No lingering puddle yet. |
+| `sap_mouth` | Waves from wave 3, the Elite Fight stray | Sap Glob: the same purple landing, then a 6x6 purple puddle for 3 s (3 damage a second while you stand in it). |
 | `mite_cloud` | Waves from wave 3 | Cloud Nip: a fast, low-HP melee. No pack split yet. |
 
 They're still not open-world spawns: Far Glade as a zone isn't built. The Waves banner on wave 3 says "Far Glade beasts join. Purple: step out." The daily `glade` (defeat 4 in Waves) counts paying kills only.
