@@ -1827,6 +1827,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.holdingRoll = false
 		end
 		hubState.detail.Visible = id == "bag" or id == "sets"
+		hubFn.fitBagList()
 		if hooks.onTab ~= nil then
 			hooks.onTab(if id == "sets" then "bag" else id)
 		end
@@ -2162,6 +2163,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 	end
 
+	-- The detail pane sits over part of the bag page (bagStage). Shrink the
+	-- card list to the grid area while the pane shows, so no card row hides
+	-- under it, and give the full page back when it hides.
+	function hubFn.fitBagList()
+		local list = hubState.bag
+		if list == nil or hubState.detail == nil then
+			return
+		end
+		if not hubState.detail.Visible then
+			list.Size = UDim2.fromScale(1, 1)
+			return
+		end
+		local box = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
+		local gap = 8
+		if box.detail.x > 0 then
+			list.Size = UDim2.new(0, math.max(80, box.detail.x - gap), 1, 0)
+		else
+			list.Size = UDim2.new(1, 0, 0, math.max(80, box.detail.y - gap))
+		end
+	end
+
 	function hubFn.placeDetail()
 		local detailBox = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
 		hubState.detail.Position = UDim2.fromOffset(detailBox.detail.x, detailBox.detail.y)
@@ -2174,6 +2196,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.line(hubState.detailList, "Equipped", 2, rgb("text"))
 		hubFn.placeDetail()
 		hubState.detail.Visible = hubState.shownId == "bag" or hubState.shownId == "sets"
+		hubFn.fitBagList()
 	end
 
 	function hubFn.paintDetail(item: any)
@@ -2279,6 +2302,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubFn.placeDetail()
 		hubState.detail.Visible = true
+		hubFn.fitBagList()
 		hubState.detailOpen = true
 	end
 
@@ -5955,6 +5979,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubFn.bindActivated(hubState.detailBack, function()
 		hubState.detailOpen = false
 		hubState.detail.Visible = false
+		hubFn.fitBagList()
 	end)
 
 	UserInputService.WindowFocusReleased:Connect(function()
