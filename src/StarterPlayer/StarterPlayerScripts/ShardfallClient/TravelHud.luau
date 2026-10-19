@@ -10,8 +10,11 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Quality = require(Shared:WaitForChild("Quality"))
+local HudLayout = require(Shared:WaitForChild("HudLayout"))
+local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local Travel = require(Shared:WaitForChild("Travel"))
+local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local TravelHud = {}
@@ -23,14 +26,16 @@ export type Callbacks = {
 }
 
 local COLORS = {
-	background = Color3.fromRGB(16, 14, 24),
-	panel = Color3.fromRGB(28, 24, 40),
+	background = Color3.fromRGB(14, 16, 38),
+	panel = Color3.fromRGB(24, 22, 56),
+	frame = Color3.fromRGB(150, 92, 255),
+	cyan = Color3.fromRGB(110, 225, 255),
 	text = Color3.fromRGB(240, 236, 248),
 	muted = Color3.fromRGB(150, 146, 168),
 	gold = Color3.fromRGB(255, 196, 80),
 	button = Color3.fromRGB(108, 78, 196),
 	locked = Color3.fromRGB(54, 52, 64),
-	open = Color3.fromRGB(72, 52, 120),
+	open = Color3.fromRGB(28, 24, 62),
 	dot = Color3.fromRGB(186, 140, 255),
 }
 
@@ -69,6 +74,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 20,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 	}, playerGui) :: ScreenGui
 	MobileShell.mount(screen)
 
@@ -76,17 +82,43 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "OpenTravel",
 		AnchorPoint = Vector2.new(0, 0),
 		Position = UDim2.fromOffset(16, 104),
-		Size = UDim2.fromOffset(132, Quality.MIN_TAP),
-		Visible = false,
-		BackgroundColor3 = COLORS.button,
+		Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH),
+		Visible = true,
+		BackgroundColor3 = COLORS.open,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 15,
 		TextColor3 = COLORS.text,
-		Text = "Travel",
+		Text = "",
 		AutoButtonColor = true,
 	}, screen) :: TextButton
 	corner(openButton, 8)
+	-- Portal button: sits beside the bottom of the left rail (the rail column
+	-- has no room for a 7th 44px button on landscape phones).
+	new("UIStroke", { Thickness = 2, Color = COLORS.frame, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, openButton)
+	new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 1),
+		Size = UDim2.new(1, -12, 1, -16),
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Image = IconAssets.Travel or "",
+		ZIndex = 2,
+	}, openButton)
+	local portalCaption = new("TextLabel", {
+		Name = "Caption",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -1),
+		Size = UDim2.new(1, -4, 0, UiTheme.MIN_TEXT),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = UiTheme.MIN_TEXT,
+		TextColor3 = COLORS.text,
+		Text = "Travel",
+		ZIndex = 3,
+	}, openButton)
+	portalCaption:SetAttribute("SkipTextScale", true)
 
 	local root = new("ScrollingFrame", {
 		Name = "TravelMap",
@@ -104,11 +136,16 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		CanvasSize = UDim2.new(),
 	}, screen) :: ScrollingFrame
 	corner(root, 12)
+	new("UIStroke", { Thickness = 2, Color = COLORS.frame, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, root)
 	local function place()
 		local vx, vy = MobileShell.view(screen)
 		local box = ShellLayout.travelRect(vx, vy)
 		root.Position = UDim2.fromOffset(box.x, box.y)
 		root.Size = UDim2.fromOffset(box.w, box.h)
+		local side = HudLayout.railFit(vy, UiTheme.safeMargin(), HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
+		local button = side.button
+		openButton.Size = UDim2.fromOffset(button, button)
+		openButton.Position = UDim2.fromOffset(side.x + side.w + side.gap + 4, side.y + side.h - button)
 	end
 	place()
 	local placeCamera = workspace.CurrentCamera
@@ -129,7 +166,7 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Font = Enum.Font.BuilderSansBold,
 		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = COLORS.text,
+		TextColor3 = COLORS.cyan,
 		Text = "Travel",
 	}, root) :: TextLabel
 
@@ -230,11 +267,34 @@ function TravelHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = COLORS.text,
-			Text = "  " .. dest.name,
+			Text = "    " .. dest.name,
 			AutoButtonColor = true,
 			LayoutOrder = index,
 		}, list) :: TextButton
-		corner(row, 4)
+		corner(row, 6)
+		-- Location card: purple hex edge, cyan crystal tab, and its gate tag.
+		new("UIStroke", { Thickness = 1.5, Color = COLORS.frame, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, row)
+		new("Frame", {
+			Name = "Crystal",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.fromOffset(4, 22),
+			BackgroundColor3 = COLORS.cyan,
+			BorderSizePixel = 0,
+		}, row)
+		new("TextLabel", {
+			Name = "Gate",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(80, 18),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.BuilderSansBold,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextColor3 = COLORS.cyan,
+			-- Every Haven stand is open from the first session (Travel.luau).
+			Text = "Open",
+		}, row)
 		rows[dest.id] = row
 		row.MouseButton1Click:Connect(function()
 			callbacks.onTravel(dest.id)
