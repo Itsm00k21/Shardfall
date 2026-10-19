@@ -1926,6 +1926,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local stroke = Instance.new("UIStroke")
 		stroke.Thickness = UiTheme.STROKE
 		stroke.Color = rgb("divider")
+		-- Edge the row, not the glyphs: hexify turns this stroke violet, and
+		-- on the text it smeared Shop/Settings labels into low contrast.
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		stroke.Parent = button
 		hubFn.setRest(button, rgb("header"))
 		hubFn.motion(button)
