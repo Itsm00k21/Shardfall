@@ -1,0 +1,44 @@
+--!strict
+--[[
+	Generated 3D props (Studio generate_mesh, 2026-10-18). Each entry is a
+	published mesh plus its baked texture. The server loads them with
+	AssetService:CreateMeshPartAsync, so the hub stays code-built and
+	Rojo-tracked. A prop that fails to load falls back to Neon parts.
+	Blender twins of the crystals live in ~/ShardfallAudit/meshes on the Mac.
+]]
+
+export type Prop = {
+	mesh: string,
+	texture: string,
+	glow: { number },
+}
+
+local PropAssets: { [string]: Prop } = {
+	CrystalCluster = {
+		mesh = "rbxassetid://115433302928240",
+		texture = "rbxassetid://114503506891169",
+		glow = { 150, 92, 255 },
+	},
+	CrystalBed = {
+		mesh = "rbxassetid://132592454855430",
+		texture = "rbxassetid://137982651648336",
+		glow = { 64, 206, 255 },
+	},
+	CrystalSpire = {
+		mesh = "rbxassetid://122042626358125",
+		texture = "rbxassetid://97648419184205",
+		glow = { 120, 140, 255 },
+	},
+	CrystalPair = {
+		mesh = "rbxassetid://122152631902431",
+		texture = "rbxassetid://106727684664470",
+		glow = { 170, 96, 255 },
+	},
+}
+
+for _, prop in pairs(PropAssets) do
+	table.freeze(prop.glow)
+	table.freeze(prop)
+end
+
+return table.freeze(PropAssets)
