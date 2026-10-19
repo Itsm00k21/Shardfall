@@ -491,9 +491,9 @@ ActionSlots.SKILL_ART = table.freeze({
 	vent = "SkillHeavy",
 	dash = "SkillDodge",
 	bolt = "SkillSpell",
-	guard = "SkillSpell",
-	shield = "SkillSpell",
-	heal = "SkillSpell",
+	guard = "SkillWard",
+	shield = "SkillWard",
+	heal = "SkillHeal",
 	ult = "SkillUlt",
 })
 
