@@ -40,6 +40,7 @@ local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local PadLight = require(Shared:WaitForChild("PadLight"))
 local SkillTip = require(Shared:WaitForChild("SkillTip"))
+local CooldownNudge = require(Shared:WaitForChild("CooldownNudge"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 
 local ActionBar = {}
@@ -786,6 +787,59 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end)
 	end
 
+	-- One purple-hex chip over the pressed slot for "On cooldown" and the
+	-- ultimate still charging, instead of a grey toast per key press.
+	local nudgeState = { index = nil :: number?, at = nil :: number?, token = 0 }
+	local nudgeChip = Instance.new("TextLabel")
+	nudgeChip.Name = "CooldownNudge"
+	nudgeChip.BackgroundColor3 = Color3.fromRGB(30, 18, 60)
+	nudgeChip.BackgroundTransparency = 0.04
+	nudgeChip.BorderSizePixel = 0
+	nudgeChip.Size = UDim2.fromOffset(CooldownNudge.WIDTH, CooldownNudge.HEIGHT)
+	nudgeChip.AnchorPoint = Vector2.new(0.5, 1)
+	nudgeChip.Font = Enum.Font.BuilderSansExtraBold
+	nudgeChip.TextSize = UiTheme.MIN_TEXT
+	nudgeChip.TextColor3 = Color3.fromRGB(226, 208, 255)
+	nudgeChip.Visible = false
+	nudgeChip.Active = false
+	nudgeChip.ZIndex = 19
+	nudgeChip.Parent = screen
+	do
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+		corner.Parent = nudgeChip
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = UiTheme.STROKE_BOLD
+		stroke.Color = Color3.fromRGB(150, 92, 255)
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = nudgeChip
+	end
+
+	local function nudge(index: number, kind: string)
+		local now = os.clock()
+		nudgeChip.Text = CooldownNudge.text(kind, (readyAt[index] or now) - now)
+		if not CooldownNudge.fresh(nudgeState.index, nudgeState.at, index, now) then
+			return
+		end
+		nudgeState.index = index
+		nudgeState.at = now
+		nudgeState.token += 1
+		local token = nudgeState.token
+		local button = buttons[index]
+		if button ~= nil then
+			nudgeChip.Position = UDim2.fromOffset(
+				button.AbsolutePosition.X - screen.AbsolutePosition.X + button.AbsoluteSize.X / 2,
+				button.AbsolutePosition.Y - screen.AbsolutePosition.Y - 6
+			)
+		end
+		nudgeChip.Visible = true
+		task.delay(CooldownNudge.SHOW_SECONDS, function()
+			if nudgeState.token == token then
+				nudgeChip.Visible = false
+			end
+		end)
+	end
+
 	local function useSlot(index: number)
 		picked = index
 		flashUntil[index] = os.clock() + 0.12
@@ -800,6 +854,12 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		local cooling = (readyAt[index] or 0) > os.clock()
 		local reason = ActionSlots.block(classId(), slot, profile, cooling, true)
+		local nudgeKind = CooldownNudge.kind(reason)
+		if nudgeKind ~= nil then
+			nudge(index, nudgeKind)
+			paint()
+			return
+		end
 		if reason ~= nil then
 			callbacks.onToast(reason)
 			paint()
@@ -824,7 +884,12 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				local message = if type(result.error) == "string"
 					then result.error
 					else "Could not use that."
-				callbacks.onToast(message)
+				local serverKind = CooldownNudge.kind(message)
+				if serverKind ~= nil then
+					nudge(index, serverKind)
+				else
+					callbacks.onToast(message)
+				end
 				paint()
 				return
 			end
