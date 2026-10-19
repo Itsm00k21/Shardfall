@@ -1825,14 +1825,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local pageW = hubState.rollPage.AbsoluteSize.X
 		local pageH = height or hubState.rollPage.AbsoluteSize.Y
 		if pageW < 80 or pageH < 80 then
+			-- Same body box hubFn.place gives (the rail replaces the tabs).
 			local vx, vy = hubFn.view()
 			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
-			local inner = HudLayout.hubBody(box.w, box.h)
 			if pageW < 80 then
-				pageW = inner.w
+				pageW = math.max(44, box.w - 16)
 			end
 			if pageH < 80 then
-				pageH = inner.h
+				pageH = math.max(44, box.h - (UiTheme.HEADER + UiTheme.PAD) - 8)
 			end
 		end
 		return RollScreen.layout(pageW, pageH)
@@ -1841,6 +1841,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	-- Moves the x10 / AUTO / ODDS buttons (and their shadows) to the rects
 	-- RollScreen gives; paintCta builds them, fitRoll re-places them.
 	function hubFn.placeCta(screen: any)
+		for name, spot in pairs({ LuckMeter = screen.luck, PityMeter = screen.pity }) do
+			local meter = hubState.meterRow:FindFirstChild(name)
+			if meter ~= nil and meter:IsA("GuiObject") then
+				meter.Position = UDim2.fromOffset(spot.x, spot.y)
+				meter.Size = UDim2.fromOffset(spot.w, spot.h)
+			end
+		end
 		local spots = { TimesTen = screen.ten, Auto = screen.auto, Info = screen.odds }
 		for _, id in ipairs({ "TimesTen", "Auto", "Info" }) do
 			local spot = spots[id]
