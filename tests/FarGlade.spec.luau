@@ -242,6 +242,9 @@ describe("Far Glade lungers", function()
 		expect(string.find(source, "lungeEnemy(enemy, run, now)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(source, "if now < (enemy.dashUntil or 0) then", 1, true) ~= nil).toBeTrue()
 		expect(string.find(source, "(Dungeons.LUNGES[enemy.kind] or enemy.range)", 1, true) ~= nil).toBeTrue()
+	end)
+end)
+
 describe("Far Glade strays", function()
 	it("rotates a Far Glade stray per room for the Elite Fight door", function()
 		local seen: { [string]: boolean } = {}
