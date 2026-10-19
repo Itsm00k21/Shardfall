@@ -142,6 +142,25 @@ Dungeons.RIM = {
 -- don't outrun a bolt. Other projectile enemies still fire a real shot.
 Dungeons.LOBS = { seed_flinger = true, sap_mouth = true }
 
+-- Lungers (enemies.md: Tusk Rush, Hedge Pounce). Studs of reach: they
+-- open a red mark on the player from this far, then dash onto it when the
+-- telegraph ends. Stepping off the mark is the dodge, as with any red.
+Dungeons.LUNGES = { mud_tusk = 16, hedge_lurker = 11 }
+Dungeons.LUNGE_SECONDS = 0.2
+Dungeons.LUNGE_STOP_SHORT = 1.5
+
+-- Where a lunge ends: on the line to the mark, LUNGE_STOP_SHORT before it,
+-- and never behind the start.
+function Dungeons.lungeEnd(fromX: number, fromZ: number, toX: number, toZ: number): (number, number)
+	local dx, dz = toX - fromX, toZ - fromZ
+	local length = math.sqrt(dx * dx + dz * dz)
+	if length <= Dungeons.LUNGE_STOP_SHORT or length ~= length then
+		return fromX, fromZ
+	end
+	local travel = (length - Dungeons.LUNGE_STOP_SHORT) / length
+	return fromX + dx * travel, fromZ + dz * travel
+end
+
 Dungeons.FAR_GLADE = { "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud" }
 
 Dungeons.ENEMIES = {

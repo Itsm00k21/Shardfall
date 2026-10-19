@@ -87,6 +87,7 @@ type Enemy = {
 	nextAttack: number,
 	stagger: number,
 	stunUntil: number,
+	dashUntil: number?,
 	telegraphUntil: number,
 	telegraphColor: string,
 	markX: number,
@@ -2040,6 +2041,30 @@ local function moveEnemy(
 	end
 end
 
+-- Tusk Rush / Hedge Pounce. A short tween onto the red mark; tickEnemy
+-- skips movement until it lands so moveEnemy does not fight the tween.
+local function lungeEnemy(enemy: Enemy, run: Run, now: number)
+	local position = enemy.part.Position
+	local endX, endZ = Dungeons.lungeEnd(position.X, position.Z, enemy.markX, enemy.markZ)
+	local originX, _, originZ = Dungeons.roomOrigin(run.placeIndex)
+	local limit = run.dungeon.floorSize / 2 - 4
+	endX = math.clamp(endX, originX - limit, originX + limit)
+	endZ = math.clamp(endZ, originZ - limit, originZ + limit)
+	local landing = Vector3.new(endX, position.Y, endZ)
+	if (landing - position).Magnitude < 0.5 then
+		return
+	end
+	enemy.dashUntil = now + Dungeons.LUNGE_SECONDS
+	local facing = CFrame.lookAt(landing, landing + (landing - position).Unit)
+	pcall(function()
+		TweenService:Create(
+			enemy.part,
+			TweenInfo.new(Dungeons.LUNGE_SECONDS, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ CFrame = facing }
+		):Play()
+	end)
+end
+
 local function tickEnemy(
 	player: Player,
 	run: Run,
@@ -2052,6 +2077,12 @@ local function tickEnemy(
 		return
 	end
 	if now < enemy.stunUntil then
+		return
+	end
+	if now < (enemy.dashUntil or 0) then
+		-- Visual pieces are anchored apart from the root; step them so the
+		-- rig rides the lunge tween instead of snapping at the end.
+		pcall(ModelFactory.step, enemy.part, now, true)
 		return
 	end
 	moveEnemy(enemy, hrp.Position, dt, run.placeIndex, run.dungeon.floorSize)
@@ -2134,7 +2165,13 @@ local function tickEnemy(
 				enemy.projectileSpeed,
 				enemy.range
 			)
-		elseif struck then
+		else
+			if Dungeons.LUNGES[enemy.kind] ~= nil then
+				lungeEnemy(enemy, run, now)
+			end
+			if not struck then
+				return
+			end
 			CombatService.damagePlayer(
 				player,
 				enemy.damage,
@@ -2154,7 +2191,7 @@ local function tickEnemy(
 	local position = enemy.part.Position
 	local distance =
 		CombatMath.planarDistance(position.X, position.Z, hrp.Position.X, hrp.Position.Z)
-	if distance > enemy.range then
+	if distance > (Dungeons.LUNGES[enemy.kind] or enemy.range) then
 		return
 	end
 	local colorName = "red"
