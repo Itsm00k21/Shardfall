@@ -29,7 +29,7 @@ local PILLS = {
 	{ id = "Weapons", label = "Weapons", icon = "attack" },
 	{ id = "Armor", label = "Armor", icon = "class" },
 	{ id = "Relics", label = "Relics", icon = "ult" },
-	{ id = "Pets", label = "Pets", icon = "pet" },
+	{ id = "Pets", label = "Pets", icon = "pets" },
 }
 
 local CHIP = { "equip", "claim", "close", "button" }
