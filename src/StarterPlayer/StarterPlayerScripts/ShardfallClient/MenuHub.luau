@@ -5690,6 +5690,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 			end)
 		end
+		hubFn.hexify(hubState.settingsPage)
 		hubFn.hold("settings")
 		hubFn.hold("raids")
 		hubFn.hold("market")
