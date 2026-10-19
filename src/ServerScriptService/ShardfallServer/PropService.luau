@@ -154,6 +154,17 @@ local function standPortal(parent: Instance, ignore: { Instance })
 	prompt.Parent = host
 end
 
+-- The hub landmark shrine. Decor only: no prompt, no attributes.
+local function standLandmark(parent: Instance, ignore: { Instance })
+	local spot = HavenProps.LANDMARK
+	local ground = groundAt(spot.x, spot.z, ignore)
+	if ground == nil then
+		return
+	end
+	local shrine = PropService.place(parent, spot.kind, ground, spot.height, spot.yaw)
+	shrine.Name = "HubShrine"
+end
+
 function PropService.start()
 	task.spawn(function()
 		local haven = workspace:WaitForChild("Haven", 30)
@@ -174,6 +185,10 @@ function PropService.start()
 		local stood, portalErr = pcall(standPortal, folder, players)
 		if not stood then
 			warn("[Shardfall] Travel portal failed: " .. tostring(portalErr))
+		end
+		local shrined, shrineErr = pcall(standLandmark, folder, players)
+		if not shrined then
+			warn("[Shardfall] Hub shrine failed: " .. tostring(shrineErr))
 		end
 		for _, spot in ipairs(HavenProps.SPOTS) do
 			local ground = groundAt(spot.x, spot.z, players)

@@ -71,6 +71,13 @@ local PropAssets: { [string]: Prop } = {
 		texture = "rbxassetid://106727684664470",
 		glow = { 170, 96, 255 },
 	},
+	-- Hub landmark (batch 8): a slate hex plinth with a violet crystal
+	-- cluster and four cyan-capped corner posts. Decor only.
+	CrystalShrine = {
+		mesh = "rbxassetid://108888611918006",
+		texture = "rbxassetid://137788277546065",
+		glow = { 150, 92, 255 },
+	},
 }
 
 for _, prop in pairs(PropAssets) do
