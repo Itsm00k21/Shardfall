@@ -29,6 +29,10 @@ for _, spot in ipairs(SPOTS) do
 end
 HavenProps.SPOTS = table.freeze(SPOTS)
 
+-- The Quick Travel portal stands west of the spawn pad, facing it.
+-- Its prompt carries HavenAction "travel", which opens the Travel panel.
+HavenProps.PORTAL = table.freeze({ kind = "CrystalPortal", x = -15, z = 27, height = 11, yaw = -90 } :: Spot)
+
 -- Uniform scale that makes a mesh of this size the target height.
 function HavenProps.scaleFor(size: { X: number, Y: number, Z: number }, height: number): number
 	if size.Y <= 0 then

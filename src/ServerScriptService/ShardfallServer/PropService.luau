@@ -129,6 +129,31 @@ function PropService.place(parent: Instance, kind: string, ground: CFrame, heigh
 	return mesh
 end
 
+-- The Quick Travel portal: a prop plus a prompt the client routes to Travel.
+local function standPortal(parent: Instance, ignore: { Instance })
+	local spot = HavenProps.PORTAL
+	local ground = groundAt(spot.x, spot.z, ignore)
+	if ground == nil then
+		return
+	end
+	local portal = PropService.place(parent, spot.kind, ground, spot.height, spot.yaw)
+	portal.Name = "QuickTravelPortal"
+	local host: BasePart? = if portal:IsA("BasePart")
+		then portal
+		else portal:FindFirstChildWhichIsA("BasePart", true)
+	if host == nil then
+		return
+	end
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "TravelPrompt"
+	prompt.ObjectText = "Quick Travel"
+	prompt.ActionText = "Travel"
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt:SetAttribute("HavenAction", "travel")
+	prompt.Parent = host
+end
+
 function PropService.start()
 	task.spawn(function()
 		local haven = workspace:WaitForChild("Haven", 30)
@@ -145,6 +170,10 @@ function PropService.start()
 			if player.Character ~= nil then
 				table.insert(players, player.Character)
 			end
+		end
+		local stood, portalErr = pcall(standPortal, folder, players)
+		if not stood then
+			warn("[Shardfall] Travel portal failed: " .. tostring(portalErr))
 		end
 		for _, spot in ipairs(HavenProps.SPOTS) do
 			local ground = groundAt(spot.x, spot.z, players)

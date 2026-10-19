@@ -49,6 +49,16 @@ describe("HavenProps", function()
 			end
 		end
 	end)
+	it("stands the Quick Travel portal beside the spawn pad, clear of it and the grove", function()
+		local portal = HavenProps.PORTAL
+		expect(PropAssets[portal.kind] ~= nil).toBeTrue()
+		expect(far(portal, Haven.SPAWN.x, Haven.SPAWN.z, 12)).toBeTrue()
+		expect(far(portal, Haven.SPAWN.x, Haven.SPAWN.z, 20)).toBeFalse()
+		expect(far(portal, Haven.GROVE.x, Haven.GROVE.z, 12)).toBeTrue()
+		for _, spot in ipairs(HavenProps.SPOTS) do
+			expect(far(portal, spot.x, spot.z, 10)).toBeTrue()
+		end
+	end)
 	it("scales a mesh to the target height", function()
 		expect(HavenProps.scaleFor({ X = 2, Y = 4, Z = 2 }, 10)).toBeCloseTo(2.5)
 		expect(HavenProps.scaleFor({ X = 2, Y = 0, Z = 2 }, 10)).toEqual(1)

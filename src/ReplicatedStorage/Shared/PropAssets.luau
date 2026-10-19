@@ -29,6 +29,12 @@ local PropAssets: { [string]: Prop } = {
 		texture = "rbxassetid://97648419184205",
 		glow = { 120, 140, 255 },
 	},
+	-- Quick Travel portal. A violet crystal ring with a cyan disc.
+	CrystalPortal = {
+		mesh = "rbxassetid://140354824566054",
+		texture = "rbxassetid://118429274949949",
+		glow = { 64, 206, 255 },
+	},
 	CrystalPair = {
 		mesh = "rbxassetid://122152631902431",
 		texture = "rbxassetid://106727684664470",

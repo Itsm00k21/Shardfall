@@ -22,6 +22,7 @@ local HavenClient = {}
 export type Callbacks = {
 	onPanel: (kind: string, areaId: string?) -> (),
 	onSoon: (message: string) -> (),
+	onTravel: (() -> ())?,
 }
 
 local function dispatch(callbacks: Callbacks, action: any, objectText: any, message: any)
@@ -51,6 +52,10 @@ local function dispatch(callbacks: Callbacks, action: any, objectText: any, mess
 		callbacks.onPanel("craft", nil)
 	elseif name == "market" then
 		callbacks.onPanel("market", nil)
+	elseif name == "travel" then
+		if callbacks.onTravel ~= nil then
+			callbacks.onTravel()
+		end
 	elseif name == "soon" then
 		callbacks.onSoon(if type(message) == "string" then message else "Coming soon.")
 	end
