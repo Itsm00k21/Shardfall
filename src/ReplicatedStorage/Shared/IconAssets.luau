@@ -16,6 +16,7 @@ local IconAssets: { [string]: string } = {
 	HexSlot = "rbxassetid://113386067760930",
 	HexSlotGlow = "rbxassetid://138707130263385",
 	HexButton = "rbxassetid://120968264740024",
+	EventBanner = "rbxassetid://92031233226706",
 }
 
 return table.freeze(IconAssets)

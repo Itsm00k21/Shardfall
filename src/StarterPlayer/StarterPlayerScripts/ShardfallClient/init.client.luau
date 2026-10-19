@@ -40,6 +40,7 @@ local DebugHud = require(script.DebugHud)
 local DoorHud = require(script.DoorHud)
 local HavenClient = require(script.HavenClient)
 local HudShell = require(script.HudShell)
+local EventBanner = require(script.EventBanner)
 local MenuHub = require(script.MenuHub)
 local InventoryHud = require(script.InventoryHud)
 local LoadingHud = require(script.LoadingHud)
@@ -213,6 +214,7 @@ local inventory
 local travel
 local actionBar
 local hudShell
+local eventBanner: { setProfile: (any) -> () }? = nil
 local menuHub
 local latestProfile: any = nil
 local graphicsTier = "med"
@@ -389,6 +391,9 @@ local function applyProfile(profile: any, saving: any)
 	if hudShell ~= nil then
 		hudShell.setProfile(profile)
 		hudShell.noteDevice(deviceIsTouch())
+	end
+	if eventBanner ~= nil then
+		eventBanner.setProfile(profile)
 	end
 	if actionBar ~= nil then
 		actionBar.setProfile(profile)
@@ -1296,6 +1301,7 @@ hudShell = HudShell.start(playerGui, {
 		openHub("settings")
 	end,
 })
+eventBanner = EventBanner.start(playerGui)
 -- After the shell, so the rows can sit on ShardfallHud. The frame stays
 -- hidden until present. A new ScreenGui here would be removed on ChildAdded.
 StarterGoalHud.start(playerGui)
