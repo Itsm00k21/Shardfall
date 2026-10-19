@@ -6106,13 +6106,86 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		)
 
+		-- A6 layout: gold section headers between groups (order // 10) and
+		-- a cyan value pill on the right of each row. Rows keep every action.
+		local SECTIONS = {
+			[0] = "Graphics",
+			[1] = "Rolls",
+			[2] = "Camera",
+			[3] = "Audio",
+			[4] = "HUD",
+			[5] = "Hotkeys",
+			[6] = "Controls",
+			[7] = "Social",
+			[8] = "Access",
+		}
+		local seen: { [number]: boolean } = {}
+		local function section(group: number)
+			local title = SECTIONS[group]
+			if title == nil or seen[group] then
+				return
+			end
+			seen[group] = true
+			local head = Instance.new("Frame")
+			head.Name = "Section_" .. title
+			head.BackgroundTransparency = 1
+			head.Size = UDim2.new(1, 0, 0, 30)
+			head.LayoutOrder = group * 20
+			head.Parent = hubState.settingsPage
+			for side = 0, 1 do
+				local rule = Instance.new("Frame")
+				rule.BorderSizePixel = 0
+				rule.BackgroundColor3 = rgb("gold")
+				rule.BackgroundTransparency = 0.55
+				rule.AnchorPoint = Vector2.new(side, 0.5)
+				rule.Position = UDim2.fromScale(side, 0.5)
+				rule.Size = UDim2.new(0.5, -70, 0, 1)
+				rule.Parent = head
+			end
+			local text = Instance.new("TextLabel")
+			text.BackgroundTransparency = 1
+			text.Size = UDim2.new(0, 132, 1, 0)
+			text.AnchorPoint = Vector2.new(0.5, 0)
+			text.Position = UDim2.fromScale(0.5, 0)
+			text.Font = Enum.Font.GothamBold
+			text.TextSize = UiTheme.MIN_TEXT
+			text.TextColor3 = rgb("gold")
+			text.Text = "\u{25C6}  " .. string.upper(title) .. "  \u{25C6}"
+			text.Parent = head
+		end
 		local function cycle(label: string, order: number, step: () -> ())
-			hubFn.row(hubState.settingsPage, label, order, function()
+			section(order // 10)
+			local cut = string.find(label, "  ", 1, true)
+			local name = if cut ~= nil then string.sub(label, 1, cut - 1) else label
+			local value = if cut ~= nil then string.sub(label, cut + 2) else nil
+			local button = hubFn.row(hubState.settingsPage, name, order * 2 + 1, function()
 				step()
 				hubFn.save()
 				hubFn.paint()
 				hubFn.show("settings")
 			end)
+			if value ~= nil then
+				local pill = Instance.new("TextLabel")
+				pill.Name = "Value"
+				pill.AnchorPoint = Vector2.new(1, 0.5)
+				pill.Position = UDim2.new(1, -6, 0.5, 0)
+				pill.Size = UDim2.new(0.42, 0, 1, -10)
+				pill.BackgroundColor3 = Color3.fromRGB(22, 78, 120)
+				pill.BorderSizePixel = 0
+				pill.Font = Enum.Font.GothamBold
+				pill.TextSize = UiTheme.MIN_TEXT
+				pill.TextColor3 = Color3.fromRGB(225, 245, 255)
+				pill.TextTruncate = Enum.TextTruncate.AtEnd
+				pill.Text = value .. "  \u{00BB}"
+				pill.Parent = button
+				local round = Instance.new("UICorner")
+				round.CornerRadius = UDim.new(0, UiTheme.CORNER)
+				round.Parent = pill
+				local edge = Instance.new("UIStroke")
+				edge.Color = Color3.fromRGB(96, 210, 255)
+				edge.Transparency = 0.35
+				edge.Parent = pill
+			end
 		end
 		cycle("Graphics  " .. hubState.draft.graphics.quality, 1, function()
 			local order = { "auto", "low", "med", "high" }
@@ -6405,7 +6478,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			}
 			for index, action in ipairs(actions) do
 				local name = action
-				hubFn.row(hubState.settingsPage, "Debug  " .. name, 100 + index, function()
+				hubFn.row(hubState.settingsPage, "Debug  " .. name, 300 + index, function()
 					task.spawn(function()
 						pcall(hooks.invoke, "Debug", name)
 					end)
@@ -6424,13 +6497,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			}
 			for index, pair in ipairs(grants) do
 				local kind = pair[1]
-				hubFn.row(hubState.settingsPage, "Grant  " .. pair[2], 120 + index, function()
+				hubFn.row(hubState.settingsPage, "Grant  " .. pair[2], 320 + index, function()
 					task.spawn(function()
 						pcall(hooks.invoke, "DevGrant", kind)
 					end)
 				end)
 			end
-			hubFn.row(hubState.settingsPage, "Debug  Boss", 140, function()
+			hubFn.row(hubState.settingsPage, "Debug  Boss", 340, function()
 				task.spawn(function()
 					pcall(hooks.invoke, "Dungeon", "skip")
 				end)
