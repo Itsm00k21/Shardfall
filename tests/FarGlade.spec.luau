@@ -279,3 +279,37 @@ describe("Far Glade strays", function()
 		expect(string.find(guard, "Dungeons.ROOTVAULT_ID", 1, true) ~= nil).toBeTrue()
 	end)
 end)
+
+describe("Sap Mouth puddle", function()
+	it("is a short, small tick that belongs to the Sap Mouth lobber", function()
+		local rule = Dungeons.PUDDLE
+		expect(rule.kind).toEqual("sap_mouth")
+		expect(Dungeons.LOBS[rule.kind]).toEqual(true)
+		local sap = Dungeons.enemy("sap_mouth")
+		assert(sap ~= nil)
+		local ticks = math.floor(rule.seconds / rule.every)
+		expect(ticks * rule.damage < sap.damage).toBeTrue()
+		expect(rule.half <= 4).toBeTrue()
+	end)
+
+	it("ticks once per beat while it lasts and never after", function()
+		expect(Dungeons.puddleDue(1, 3, 0.5)).toEqual(false)
+		expect(Dungeons.puddleDue(1, 3, 1)).toEqual(true)
+		expect(Dungeons.puddleDue(3, 3, 3.2)).toEqual(false)
+	end)
+
+	it("drops on the lob landing and ticks inside the live room loop", function()
+		local source = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		expect(
+			string.find(source, "dropPuddle(run, enemy.markX, enemy.markZ, now)", 1, true) ~= nil
+		).toBeTrue()
+		expect(string.find(source, "tickPuddles(player, run, hrp, now)", 1, true) ~= nil).toBeTrue()
+		local clear = string.find(
+			source,
+			"local function clearEnemies(run: Run)\n\trun.puddles = nil",
+			1,
+			true
+		)
+		expect(clear ~= nil).toBeTrue()
+	end)
+end)
