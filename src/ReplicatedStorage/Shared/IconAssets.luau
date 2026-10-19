@@ -1,7 +1,7 @@
 --!strict
 --[[
 	Painted rail icons, uploaded through the Studio MCP on 2026-10-18.
-	Keyed by the rail entry id in HudShell. A missing entry falls back to
+	Keyed by the rail entry id in HudShell; the Hex* frames dress ActionBar. A missing entry falls back to
 	the UiIcons glyph, so the rail never shows a blank button.
 ]]
 
@@ -12,6 +12,10 @@ local IconAssets: { [string]: string } = {
 	Roll = "rbxassetid://87702529872973",
 	Shop = "rbxassetid://133793955425261",
 	Settings = "rbxassetid://71449180287649",
+	-- Action bar frames (purple hex style).
+	HexSlot = "rbxassetid://113386067760930",
+	HexSlotGlow = "rbxassetid://138707130263385",
+	HexButton = "rbxassetid://120968264740024",
 }
 
 return table.freeze(IconAssets)
