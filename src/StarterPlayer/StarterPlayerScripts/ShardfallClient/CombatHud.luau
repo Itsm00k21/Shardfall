@@ -28,6 +28,9 @@ local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local CombatStage = require(script.Parent:WaitForChild("CombatStage"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local MobileShell = require(script.Parent.MobileShell)
+local ResultsGrid = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ResultsGrid"))
+local Materials = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Materials"))
+local IconAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("IconAssets"))
 
 local CombatHud = {}
 
@@ -523,11 +526,98 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	dismiss.TextSize = 15
 	dismiss.TextColor3 = Color3.fromRGB(240, 236, 248)
 	dismiss.Text = "Continue"
-	dismiss.LayoutOrder = 3
+	dismiss.LayoutOrder = 4
 	dismiss.Parent = card
 	local dismissCorner = Instance.new("UICorner")
 	dismissCorner.CornerRadius = UDim.new(0, 8)
 	dismissCorner.Parent = dismiss
+
+	-- Loot tiles between the totals and Continue. Never more than
+	-- ResultsGrid.MAX_ROWS rows, so Continue stays on the card.
+	local lootGrid = Instance.new("Frame")
+	lootGrid.Name = "LootGrid"
+	lootGrid.BackgroundTransparency = 1
+	lootGrid.Size = UDim2.fromScale(1, 0)
+	lootGrid.Visible = false
+	lootGrid.LayoutOrder = 3
+	lootGrid.Parent = card
+	local materialColor: { [string]: { number } } = {}
+	for _, id in ipairs(Materials.ORDER) do
+		local def = Materials.DEFS[id]
+		if def ~= nil then
+			materialColor[Materials.displayName(id)] = def.color
+		end
+	end
+	local function paintLoot(rows: any)
+		lootGrid:ClearAllChildren()
+		local tiles = ResultsGrid.merge(rows, function(name: string)
+			return materialColor[name]
+		end)
+		local inner = card.AbsoluteSize.X - 32
+		if inner < 120 then
+			inner = 308
+		end
+		local place = ResultsGrid.layout(inner, #tiles)
+		lootGrid.Visible = place.shown > 0
+		lootGrid.Size = UDim2.new(1, 0, 0, place.height)
+		local function tileAt(slot: number, name: string, countText: string, color: { number }?)
+			local col = (slot - 1) % place.cols
+			local row = math.floor((slot - 1) / place.cols)
+			local cell = Instance.new("Frame")
+			cell.Name = "Tile" .. slot
+			cell.BackgroundColor3 = Color3.fromRGB(38, 24, 72)
+			cell.BorderSizePixel = 0
+			cell.Position = UDim2.fromOffset(
+				col * (place.tile + ResultsGrid.GAP),
+				row * (place.tile + ResultsGrid.LABEL_H + ResultsGrid.GAP)
+			)
+			cell.Size = UDim2.fromOffset(place.tile, place.tile + ResultsGrid.LABEL_H)
+			cell.Parent = lootGrid
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = cell
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(150, 92, 255)
+			stroke.Thickness = 1.5
+			stroke.Parent = cell
+			local art = Instance.new("ImageLabel")
+			art.BackgroundTransparency = 1
+			art.Image = IconAssets.ItemMisc
+			art.ImageColor3 = if color ~= nil
+				then Color3.fromRGB(color[1], color[2], color[3]):Lerp(Color3.new(1, 1, 1), 0.35)
+				else Color3.new(1, 1, 1)
+			art.Size = UDim2.fromOffset(place.tile - 12, place.tile - 12)
+			art.Position = UDim2.fromOffset(6, 4)
+			art.Parent = cell
+			local count = Instance.new("TextLabel")
+			count.BackgroundTransparency = 1
+			count.Font = Enum.Font.BuilderSansExtraBold
+			count.TextSize = 14
+			count.TextColor3 = Color3.fromRGB(255, 220, 120)
+			count.TextXAlignment = Enum.TextXAlignment.Right
+			count.Text = countText
+			count.Size = UDim2.fromOffset(place.tile - 4, 14)
+			count.Position = UDim2.fromOffset(0, place.tile - 16)
+			count.Parent = cell
+			local label = Instance.new("TextLabel")
+			label.BackgroundTransparency = 1
+			label.Font = Enum.Font.BuilderSansBold
+			label.TextSize = 14
+			label.TextColor3 = Color3.fromRGB(226, 208, 255)
+			label.TextTruncate = Enum.TextTruncate.AtEnd
+			label.Text = name
+			label.Size = UDim2.fromOffset(place.tile - 4, ResultsGrid.LABEL_H - 6)
+			label.Position = UDim2.fromOffset(2, place.tile + 2)
+			label.Parent = cell
+		end
+		for slot = 1, place.shown do
+			local tile = tiles[slot]
+			tileAt(slot, tile.name, ResultsGrid.countText(tile.count), tile.color)
+		end
+		if place.more > 0 then
+			tileAt(place.shown + 1, "More", string.format("+%d", place.more), nil)
+		end
+	end
 
 	local cardGeneration = 0
 	local function hideCard()
@@ -545,6 +635,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		cardTitle.Text = title
 		cardTitle.TextColor3 = titleColor
 		cardBody.Text = body
+		lootGrid.Visible = false
 		card.Visible = true
 		local seconds = hold
 		if seconds == nil or seconds <= 0 then
@@ -571,32 +662,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			string.format("Shard tokens  %d", numberFrom(payload, "shardTokens") or 0)
 		)
 		table.insert(lines, string.format("XP  %d", numberFrom(payload, "xp") or 0))
-		if type(payload.materials) == "table" then
-			local shown = {}
-			for _, row in ipairs(payload.materials) do
-				if type(row) == "string" then
-					table.insert(shown, row)
-				elseif type(row) == "table" and type(row.name) == "string" then
-					local count = tonumber(row.count)
-					if count ~= nil and count > 0 then
-						table.insert(shown, string.format("%s x%d", row.name, count))
-					end
-				end
-			end
-			if #shown > 0 then
-				table.insert(lines, "Materials")
-				for _, line in ipairs(shown) do
-					table.insert(lines, line)
-				end
-			end
-		end
-		if payload.voucher == "armory" then
-			table.insert(lines, "Voucher  one free Armory crack")
-		elseif payload.voucher == "pets" then
-			table.insert(lines, "Voucher  one free Pets crack")
-		else
-			table.insert(lines, "No roll voucher this clear.")
-		end
+		table.insert(lines, ResultsGrid.voucherLine(payload.voucher))
 		return table.concat(lines, "\n")
 	end
 
@@ -843,6 +909,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				Color3.fromRGB(255, 196, 64),
 				numberFrom(payload, "dismissIn")
 			)
+			paintLoot(payload.materials)
 			callbacks.onRun({ active = false })
 		elseif payload.kind == "defeat" then
 			local text = if type(payload.text) == "string" then payload.text else "Defeated."
