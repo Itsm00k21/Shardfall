@@ -5680,24 +5680,136 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if type(hubState.profile) == "table" and type(hubState.profile.gold) == "number" then
 			purse = hubState.profile.gold
 		end
-		hubFn.line(hubState.shop, string.format("Gold  %d", purse), 2, rgb("text"))
+		-- A3 redesign: a purse banner and one card per gold offer. Offers and
+		-- prices come straight from GoldShop; only the layout changed.
+		local function text(
+			parent: Instance,
+			value: string,
+			y: number,
+			h: number,
+			size: number,
+			color: Color3
+		): TextLabel
+			local node = Instance.new("TextLabel")
+			node.BackgroundTransparency = 1
+			node.Position = UDim2.fromOffset(8, y)
+			node.Size = UDim2.new(1, -16, 0, h)
+			node.Font = headerFont()
+			node.TextSize = size
+			node.TextColor3 = color
+			node.TextTruncate = Enum.TextTruncate.AtEnd
+			node.Text = value
+			node.ZIndex = 4
+			node.Parent = parent
+			return node
+		end
+		local banner = Instance.new("Frame")
+		banner.Name = "Purse"
+		banner.BackgroundColor3 = Color3.fromRGB(30, 22, 70)
+		banner.BorderSizePixel = 0
+		banner.Size = UDim2.new(1, 0, 0, 52)
+		banner.LayoutOrder = 1
+		banner.Parent = hubState.shop
+		local bannerCorner = Instance.new("UICorner")
+		bannerCorner.CornerRadius = UDim.new(0, 14)
+		bannerCorner.Parent = banner
+		local bannerStroke = Instance.new("UIStroke")
+		bannerStroke.Thickness = 2
+		bannerStroke.Color = Color3.fromRGB(150, 92, 255)
+		bannerStroke.Parent = banner
+		local coin = hubFn.artOn(banner, "Gold", 0, 8, 36)
+		if coin ~= nil then
+			coin.Position = UDim2.new(0.5, -84, 0, 8)
+		end
+		local purseText =
+			text(banner, string.format("Gold  %d", purse), 0, 52, UiTheme.MIN_TEXT + 6, rgb("gold"))
+		purseText.Name = "PurseText"
 		local noteOrder = 2
 		if type(hubState.shopNote) == "string" and hubState.shopNote ~= "" then
 			noteOrder = 3
 			hubFn.line(hubState.shop, hubState.shopNote, noteOrder, rgb("gold"))
 		end
-		for index, offer in ipairs(GoldShop.offers()) do
+		local offers = GoldShop.offers()
+		local cols = 2
+		local gap = 12
+		local cardH = 204
+		local rows = math.ceil(#offers / cols)
+		local grid = Instance.new("Frame")
+		grid.Name = "Offers"
+		grid.BackgroundTransparency = 1
+		grid.Size = UDim2.new(1, 0, 0, rows * cardH + (rows - 1) * gap)
+		grid.LayoutOrder = noteOrder + 1
+		grid.Parent = hubState.shop
+		local layout = Instance.new("UIGridLayout")
+		layout.CellSize = UDim2.new(1 / cols, -math.ceil(gap * (cols - 1) / cols), 0, cardH)
+		layout.CellPadding = UDim2.fromOffset(gap, gap)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Parent = grid
+		for index, offer in ipairs(offers) do
 			local offerId = offer.id
-			hubFn.row(
-				hubState.shop,
-				string.format("%s  %d Gold", offer.label, offer.price),
-				index + noteOrder,
-				function()
-					task.spawn(function()
-						hubFn.buyOffer(offerId)
-					end)
-				end
-			)
+			local card = Instance.new("Frame")
+			card.Name = "Offer_" .. tostring(offerId)
+			card.LayoutOrder = index
+			card.BackgroundColor3 = Color3.fromRGB(26, 20, 60)
+			card.BorderSizePixel = 0
+			card.Parent = grid
+			local cardCorner = Instance.new("UICorner")
+			cardCorner.CornerRadius = UDim.new(0, 14)
+			cardCorner.Parent = card
+			local cardStroke = Instance.new("UIStroke")
+			cardStroke.Thickness = 2
+			cardStroke.Color = Color3.fromRGB(150, 92, 255)
+			cardStroke.Parent = card
+			local glow = Instance.new("Frame")
+			glow.Name = "Glow"
+			glow.BorderSizePixel = 0
+			glow.BackgroundColor3 = Color3.fromRGB(56, 190, 255)
+			glow.BackgroundTransparency = 0.82
+			glow.Position = UDim2.new(0.5, -50, 0, 40)
+			glow.Size = UDim2.fromOffset(100, 100)
+			glow.ZIndex = 2
+			glow.Parent = card
+			local glowCorner = Instance.new("UICorner")
+			glowCorner.CornerRadius = UDim.new(1, 0)
+			glowCorner.Parent = glow
+			text(card, offer.label, 10, 24, UiTheme.MIN_TEXT + 2, rgb("text")).Name = "Name"
+			local art = if offerId == "tonic"
+				then "ItemConsumable"
+				elseif offerId == "bag" then "Bag"
+				else "ItemMisc"
+			local icon = hubFn.artOn(card, art, 0, 50, 80)
+			if icon ~= nil then
+				icon.Position = UDim2.new(0.5, -40, 0, 50)
+			else
+				hubFn.iconOn(card, "shop", 12, 50, 80)
+			end
+			local buy = Instance.new("TextButton")
+			buy.Name = "Buy"
+			buy.Position = UDim2.new(0, 10, 1, -54)
+			buy.Size = UDim2.new(1, -20, 0, UiTheme.TOUCH)
+			buy.BackgroundColor3 = Color3.fromRGB(232, 178, 52)
+			buy.Font = headerFont()
+			buy.TextSize = UiTheme.MIN_TEXT + 4
+			buy.TextColor3 = Color3.fromRGB(40, 26, 8)
+			buy.Text = string.format("%d Gold", offer.price)
+			buy.AutoButtonColor = false
+			buy.ZIndex = 4
+			buy.Parent = card
+			local buyCorner = Instance.new("UICorner")
+			buyCorner.CornerRadius = UDim.new(0, 10)
+			buyCorner.Parent = buy
+			local buyStroke = Instance.new("UIStroke")
+			buyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			buyStroke.Thickness = 1.5
+			buyStroke.Color = Color3.fromRGB(255, 226, 140)
+			buyStroke.Parent = buy
+			hubFn.setRest(buy, buy.BackgroundColor3)
+			hubFn.motion(buy)
+			hubFn.bindActivated(buy, function()
+				task.spawn(function()
+					hubFn.buyOffer(offerId)
+				end)
+			end)
 		end
 		hubFn.hexify(hubState.shop)
 		hubFn.hold("shop")

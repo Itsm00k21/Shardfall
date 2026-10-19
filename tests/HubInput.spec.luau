@@ -235,8 +235,8 @@ describe("HubInput", function()
 		expect(tabButton(screen, "market").Visible).toBeFalse()
 		expect(tabButton(screen, "pass").Visible).toBeFalse()
 		GuiFake.activate(tabButton(screen, "shop"))
-		expect(hasText(screen, "  Healing Tonic  40 Gold")).toBeTrue()
-		expect(hasText(screen, "  Bag slot  250 Gold")).toBeTrue()
+		expect(hasText(screen, "40 Gold")).toBeTrue()
+		expect(hasText(screen, "250 Gold")).toBeTrue()
 		expect(hasText(screen, "  Pet slot  400 Gold")).toBeFalse()
 		expect(hasText(screen, "Robux")).toBeFalse()
 	end)
@@ -562,7 +562,7 @@ describe("HubInput", function()
 		local screen = screenOf(world)
 		local broke = nil
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and child.Text == "  Bag slot  250 Gold" then
+			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_bag" then
 				broke = child
 			end
 		end
@@ -574,7 +574,7 @@ describe("HubInput", function()
 		expect(calls[#calls][2]).toEqual("You need more Gold.")
 		local tonic = nil
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and child.Text == "  Healing Tonic  40 Gold" then
+			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_tonic" then
 				tonic = child
 			end
 		end
@@ -582,7 +582,7 @@ describe("HubInput", function()
 		GuiFake.activate(tonic)
 		expect(hasText(screen, "Gold  0")).toBeTrue()
 		expect(hasText(screen, "You need more Gold.")).toBeFalse()
-		expect(hasText(screen, "  Healing Tonic  40 Gold")).toBeTrue()
+		expect(hasText(screen, "40 Gold")).toBeTrue()
 	end)
 
 	it("toasts a fixed sentence when a shop buy throws", function()
@@ -608,7 +608,7 @@ describe("HubInput", function()
 		local screen = screenOf(world)
 		local bag = nil
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and child.Text == "  Bag slot  250 Gold" then
+			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_bag" then
 				bag = child
 			end
 		end
@@ -1499,7 +1499,7 @@ describe("HubInput", function()
 		hub.open("shop")
 		local tonic = nil
 		for _, child in ipairs(screenOf(world):GetDescendants()) do
-			if child:IsA("TextButton") and child.Text == "  Healing Tonic  40 Gold" then
+			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_tonic" then
 				tonic = child
 			end
 		end
@@ -1659,15 +1659,15 @@ describe("HubInput", function()
 		press("ButtonA")
 		expect(labelText(screenOf(world), "Title")).toEqual("Shop")
 		expect(countOf("BuyGoldShop")).toEqual(0)
-		expect(hasText(screenOf(world), "  Healing Tonic  40 Gold")).toBeTrue()
-		expect(hasText(screenOf(world), "  Bag slot  250 Gold")).toBeTrue()
+		expect(hasText(screenOf(world), "40 Gold")).toBeTrue()
+		expect(hasText(screenOf(world), "250 Gold")).toBeTrue()
 		local tonic = seek(function(button)
-			return button:IsA("TextButton") and button.Text == "  Healing Tonic  40 Gold"
+			return button:IsA("TextButton") and button.Name == "Buy" and button.Parent ~= nil and button.Parent.Name == "Offer_tonic"
 		end)
 		expect(tonic ~= nil).toBeTrue()
 		press("ButtonA")
 		local slot = seek(function(button)
-			return button:IsA("TextButton") and button.Text == "  Bag slot  250 Gold"
+			return button:IsA("TextButton") and button.Text == "250 Gold"
 		end)
 		expect(slot ~= nil).toBeTrue()
 		press("ButtonA")
