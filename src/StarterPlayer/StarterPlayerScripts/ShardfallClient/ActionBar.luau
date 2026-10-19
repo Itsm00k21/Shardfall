@@ -251,6 +251,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		glyphStroke.Color = Color3.fromRGB(10, 6, 28)
 		glyphStroke.Parent = glyph
 		glyph.Parent = button
+		local art = Instance.new("ImageLabel")
+		art.Name = "Art"
+		art.BackgroundTransparency = 1
+		art.AnchorPoint = Vector2.new(0.5, 0.5)
+		art.Position = UDim2.fromScale(0.5, 0.54)
+		art.Size = UDim2.fromScale(0.62, 0.62)
+		art.ScaleType = Enum.ScaleType.Fit
+		art.Visible = false
+		art.ZIndex = 2
+		art.Parent = button
 		local bind = Instance.new("TextLabel")
 		bind.Name = "Bind"
 		-- Cyan number badge, top centre.
@@ -613,8 +623,24 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local tint = button:FindFirstChild("Tint")
 			local letter, color = ActionSlots.glyph(id, slot)
 			local liftedR, liftedG, liftedB = UiTheme.lift(color[1], color[2], color[3])
+			local artKey = ActionSlots.art(id, slot)
+			local artId = if artKey ~= nil then IconAssets[artKey] else nil
+			local art = button:FindFirstChild("Art")
+			if art ~= nil and art:IsA("ImageLabel") then
+				art.Image = artId or ""
+				art.Visible = artId ~= nil
+			end
 			if glyph ~= nil and glyph:IsA("TextLabel") then
-				glyph.Text = letter
+				-- With painted art, a skill keeps its letter as a small corner
+				-- badge (roles share art, so two slots can look alike); tonics
+				-- and items drop the letter. Without art the big letter stays.
+				local badge = artId ~= nil and slot.kind == "skill"
+				glyph.Text = if artId ~= nil and not badge then "" else letter
+				glyph.TextSize = if badge then 14 else 22
+				glyph.Position = if badge then UDim2.fromScale(0.5, 0.64) else UDim2.fromScale(0, 0.26)
+				glyph.Size = if badge then UDim2.fromScale(0.36, 0.26) else UDim2.fromScale(1, 0.62)
+				glyph.TextXAlignment = if badge then Enum.TextXAlignment.Right else Enum.TextXAlignment.Center
+				glyph.ZIndex = if badge then 3 else 2
 				glyph.TextColor3 = Color3.fromRGB(liftedR, liftedG, liftedB)
 			end
 			local hexGlow = button:FindFirstChild("HexGlow")

@@ -482,6 +482,41 @@ function ActionSlots.glyph(classId: string, slot: Slot): (string, { number })
 	return "", { 244, 240, 252 }
 end
 
+-- Painted hotbar art (IconAssets key) by skill role; nil keeps the glyph.
+-- Ten skill kinds share five icons: attack, heavy, dodge, spell, ult.
+ActionSlots.SKILL_ART = table.freeze({
+	strike = "SkillAttack",
+	cone = "SkillAttack",
+	circle = "SkillHeavy",
+	vent = "SkillHeavy",
+	dash = "SkillDodge",
+	bolt = "SkillSpell",
+	guard = "SkillSpell",
+	shield = "SkillSpell",
+	heal = "SkillSpell",
+	ult = "SkillUlt",
+})
+
+function ActionSlots.art(classId: string, slot: Slot): string?
+	if slot.kind == "skill" then
+		local skill, index = listed(classId, slot.id)
+		if skill == nil then
+			return nil
+		end
+		if index == 5 then
+			return "SkillUlt"
+		end
+		return ActionSlots.SKILL_ART[skill.kind]
+	end
+	if slot.kind == "consumable" then
+		return "ItemConsumable"
+	end
+	if slot.kind == "item" then
+		return "ItemMisc"
+	end
+	return nil
+end
+
 function ActionSlots.describe(classId: string, slot: Slot, profile: any): (string, string)
 	if slot.kind == "skill" then
 		local skill = listed(classId, slot.id)

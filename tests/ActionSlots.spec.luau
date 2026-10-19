@@ -9,6 +9,8 @@ local expect = framework.expect
 
 local ActionSlots = require("../src/ReplicatedStorage/Shared/ActionSlots")
 local Keybinds = require("../src/ReplicatedStorage/Shared/Keybinds")
+local Classes = require("../src/ReplicatedStorage/Shared/Classes")
+local IconAssets = require("../src/ReplicatedStorage/Shared/IconAssets")
 
 local function levelTwo(): any
 	return {
@@ -29,6 +31,25 @@ local function copySlots(bar: ActionSlots.Bar): { ActionSlots.Slot }
 end
 
 describe("Action slots", function()
+	it("gives every class skill and ultimate painted hotbar art", function()
+		local ids = {}
+		for _, def in ipairs(Classes.all()) do
+			table.insert(ids, def.id)
+		end
+		expect(#ids > 0).toBeTrue()
+		for _, id in ipairs(ids) do
+			local def = Classes.get(id) :: any
+			for _, skill in ipairs(def.skills) do
+				local key = ActionSlots.art(id, { kind = "skill", id = skill.id })
+				expect(key ~= nil).toBeTrue()
+				expect(string.sub(IconAssets[key :: string] or "", 1, 13)).toEqual("rbxassetid://")
+			end
+			expect(ActionSlots.art(id, { kind = "skill", id = def.ultimate.id })).toEqual("SkillUlt")
+		end
+		expect(ActionSlots.art("", { kind = "consumable", id = "tonic" })).toEqual("ItemConsumable")
+		expect(ActionSlots.art("", { kind = "empty", id = "" })).toBeNil()
+	end)
+
 	it("fills a new class bar with skills, a tonic, and two empty slots", function()
 		local bar = ActionSlots.defaults("tidecaller")
 		expect(bar.locked).toEqual(false)
