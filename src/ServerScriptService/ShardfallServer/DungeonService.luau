@@ -2124,7 +2124,7 @@ local function tickEnemy(
 			enemy.markZ,
 			CombatFeel.MARKER_HALF
 		)
-		if enemy.style == "projectile" then
+		if enemy.style == "projectile" and Dungeons.LOBS[enemy.kind] ~= true then
 			CombatService.launchEnemyShot(
 				player,
 				position,
@@ -2163,6 +2163,8 @@ local function tickEnemy(
 		colorName = "purple"
 	elseif enemy.kind == "thorn_sprite" then
 		colorName = "red"
+	elseif Dungeons.LOBS[enemy.kind] == true then
+		colorName = "purple"
 	end
 	local cue = CombatFeel.telegraph(colorName, "normal", if enemy.boss then "boss" else nil)
 	enemy.telegraphColor = cue.color
