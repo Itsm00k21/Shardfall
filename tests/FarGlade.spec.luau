@@ -13,9 +13,14 @@ local ModelFactory = require("../src/ReplicatedStorage/Shared/ModelFactory")
 
 describe("Far Glade enemies", function()
 	it("defines each field enemy with a rig, drops, and a doc name", function()
-		local names =
-			{ mud_tusk = "Mud Tusk", hedge_lurker = "Hedge Lurker", seed_flinger = "Seed Flinger" }
-		expect(#Dungeons.FAR_GLADE).toEqual(3)
+		local names = {
+			mud_tusk = "Mud Tusk",
+			hedge_lurker = "Hedge Lurker",
+			seed_flinger = "Seed Flinger",
+			sap_mouth = "Sap Mouth",
+			mite_cloud = "Mite Cloud",
+		}
+		expect(#Dungeons.FAR_GLADE).toEqual(5)
 		for index, kind in ipairs(Dungeons.FAR_GLADE) do
 			expect(ModelFactory.FIELD_MONSTERS[index]).toEqual(kind)
 			local definition = Dungeons.enemy(kind)
@@ -73,7 +78,7 @@ describe("Far Glade in Waves", function()
 			end
 		end
 		local seen: { [string]: boolean } = {}
-		for wave = Dungeons.GLADE_FROM_WAVE, 12 do
+		for wave = Dungeons.GLADE_FROM_WAVE, 16 do
 			if not Dungeons.isBossWave(wave) then
 				local kinds = Dungeons.waveKinds(wave)
 				expect(#kinds).toEqual(Dungeons.waveCount(wave))
@@ -85,7 +90,7 @@ describe("Far Glade in Waves", function()
 						brutes += 1
 					end
 				end
-				expect(brutes <= math.ceil(#kinds / 6)).toBeTrue()
+				expect(brutes <= math.ceil(#kinds / 8)).toBeTrue()
 			end
 		end
 		for _, kind in ipairs(Dungeons.FAR_GLADE) do

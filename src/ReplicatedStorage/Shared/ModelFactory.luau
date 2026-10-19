@@ -60,7 +60,8 @@ ModelFactory.MONSTERS = {
 	"grandmother_gnarl",
 }
 -- Far Glade field rigs. Kept out of MONSTERS, which mirrors the Rootvault rooms.
-ModelFactory.FIELD_MONSTERS = { "mud_tusk", "hedge_lurker", "seed_flinger" }
+ModelFactory.FIELD_MONSTERS =
+	{ "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud" }
 
 ModelFactory.TREES = { "tree_giant", "tree_pine", "tree_mushroom", "tree_willow" }
 
@@ -74,6 +75,8 @@ local SCALE: { [string]: number } = {
 	mud_tusk = 1.2,
 	hedge_lurker = 1,
 	seed_flinger = 1.05,
+	sap_mouth = 1.1,
+	mite_cloud = 1,
 }
 
 local MOSS = { 86, 150, 78 }
@@ -91,6 +94,8 @@ local MUD = { 138, 102, 68 }
 local MUD_DARK = { 98, 72, 50 }
 local OLIVE = { 120, 128, 60 }
 local TUSK = { 196, 176, 132 }
+local SAP = { 255, 186, 82 }
+local MITE = { 176, 196, 72 }
 
 local function piece(
 	name: string,
@@ -596,6 +601,30 @@ local RECIPES: { [string]: { Piece } } = {
 		ball("Eye", 0.24, -0.35, 1.65, -1.0, AMBER, "Wood", "small", false, nil),
 		block("Root", 0.4, 0.5, 0.4, 0.6, 0.25, 0, BARK_DARK, "Wood", "small", "leg"),
 		block("Root", 0.4, 0.5, 0.4, -0.6, 0.25, 0, BARK_DARK, "Wood", "small", "leg"),
+	},
+	sap_mouth = {
+		block("Stump", 1.8, 1.8, 1.8, 0, 0.9, 0, BARK, "Wood", "large", "body"),
+		block("Rim", 2, 0.35, 2, 0, 1.9, 0, BARK_DARK, "Wood", "large", "body"),
+		block("Knot", 0.9, 0.9, 0.3, 0, 1.1, -0.95, BARK_DARK, "Wood", "small", nil),
+		ball("Lamp", 0.6, 0, 1.1, -1.05, SAP, "Neon", "small", true, nil),
+		ball("Eye", 0.2, 0.35, 1.6, -0.92, BARK_DARK, "Wood", "small", false, nil),
+		ball("Eye", 0.2, -0.35, 1.6, -0.92, BARK_DARK, "Wood", "small", false, nil),
+		wedge("Sprout", 0.5, 0.2, 0.8, 0.4, 2.2, 0.2, 0, 0, 25, MOSS, "Grass", "small", nil),
+		block("Root", 0.4, 0.4, 0.9, 0.8, 0.2, -0.6, BARK_DARK, "Wood", "small", "leg"),
+		block("Root", 0.4, 0.4, 0.9, -0.8, 0.2, 0.6, BARK_DARK, "Wood", "small", "leg"),
+	},
+	-- No single body: a loose ball of leaf mites on the float limb.
+	mite_cloud = {
+		ball("Mite", 0.45, 0, 1.3, 0, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.4, 0.7, 1.6, 0.3, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.4, -0.65, 1.5, -0.35, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.35, 0.35, 2.0, -0.5, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.35, -0.4, 1.0, 0.55, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.3, 0.8, 1.1, -0.6, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.3, -0.85, 1.9, 0.4, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.35, 0.1, 0.85, -0.75, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.3, -0.2, 2.2, 0.3, MITE, "Grass", "small", nil, "float"),
+		ball("Eye", 0.18, 0.12, 1.35, -0.24, AMBER, "Neon", "small", false, "float"),
 	},
 	root_ring = {
 		block("Root", 1.4, 0.45, 0.55, 0, 0.28, 0, BARK_DARK, "Wood", "large", nil),
