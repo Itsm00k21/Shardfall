@@ -1126,7 +1126,9 @@ describe("HubInput", function()
 		expect(close ~= nil).toBeTrue()
 		equip.BackgroundColor3 = { R = 1, G = 2, B = 3 }
 		GuiFake.emit(equip, "MouseLeave")
-		expect(sameColor(equip.BackgroundColor3, "header")).toBeTrue()
+		-- Bag cards use the purple hex Equip face (violet rest colour).
+		local rest = equip.BackgroundColor3
+		expect(rest.R == 108 and rest.G == 62 and rest.B == 220).toBeTrue()
 		close.BackgroundColor3 = { R = 1, G = 2, B = 3 }
 		GuiFake.emit(close, "MouseLeave")
 		expect(sameColor(close.BackgroundColor3, "close")).toBeTrue()

@@ -2348,9 +2348,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	): TextButton
 		local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
 		local red, green, blue = UiTheme.rarityColor(rarity)
+		-- Purple hex bag card: navy face, lifted rarity border, violet Equip.
+		local navy = Color3.fromRGB(20, 18, 50)
+		local violet = Color3.fromRGB(108, 62, 220)
+		local liftR, liftG, liftB = UiTheme.lift(red, green, blue)
 		local card = Instance.new("TextButton")
 		card.Name = "Card"
-		card.BackgroundColor3 = rgb("body")
+		card.BackgroundColor3 = navy
 		card.BorderSizePixel = 0
 		card.ClipsDescendants = true
 		card.Text = ""
@@ -2361,18 +2365,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		corner.Parent = card
 		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = UiTheme.STROKE_BOLD
-		stroke.Color = Color3.fromRGB(red, green, blue)
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Thickness = math.max(UiTheme.STROKE_BOLD, 2.5)
+		stroke.Color = Color3.fromRGB(liftR, liftG, liftB)
 		stroke.Parent = card
 		local wash = Instance.new("UIGradient")
 		wash.Rotation = 90
-		wash.Color = ColorSequence.new(Color3.fromRGB(red, green, blue), rgb("body"))
+		wash.Color = ColorSequence.new(Color3.fromRGB(red, green, blue), navy)
 		wash.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.45),
-			NumberSequenceKeypoint.new(1, 0.05),
+			NumberSequenceKeypoint.new(0, 0.6),
+			NumberSequenceKeypoint.new(0.45, 0),
+			NumberSequenceKeypoint.new(1, 0),
 		})
 		wash.Parent = card
-		hubFn.setRest(card, rgb("body"))
+		hubFn.setRest(card, navy)
 		hubFn.motion(card)
 		local cellW = 228
 		local cellH = 228
@@ -2450,10 +2456,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			equip.AnchorPoint = Vector2.new(0, 0)
 			equip.Position = UDim2.fromOffset(parts.equip.x, parts.equip.y)
 			equip.Size = UDim2.fromOffset(parts.equip.w, parts.equip.h)
-			equip.BackgroundColor3 = rgb("header")
+			equip.BackgroundColor3 = violet
 			equip.Font = headerFont()
 			equip.TextSize = UiTheme.MIN_TEXT
-			equip.TextColor3 = rgb("text")
+			equip.TextColor3 = Color3.fromRGB(235, 250, 255)
 			equip.Text = if hubFn.itemWorn(itemUid) then "Equipped" else "Equip"
 			equip.AutoButtonColor = false
 			equip.ZIndex = 7
@@ -2461,7 +2467,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local equipCorner = Instance.new("UICorner")
 			equipCorner.CornerRadius = UDim.new(0, 8)
 			equipCorner.Parent = equip
-			hubFn.setRest(equip, rgb("header"))
+			local equipStroke = Instance.new("UIStroke")
+			equipStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			equipStroke.Thickness = 1.5
+			equipStroke.Color = Color3.fromRGB(110, 225, 255)
+			equipStroke.Parent = equip
+			hubFn.setRest(equip, violet)
 			hubFn.motion(equip)
 			hubFn.bindActivated(equip, function()
 				if equip:GetAttribute("Equipping") == true then
@@ -2476,7 +2487,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lock.AnchorPoint = Vector2.new(0, 0)
 			lock.Position = UDim2.fromOffset(parts.lock.x, parts.lock.y)
 			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
-			lock.BackgroundColor3 = rgb("header")
+			lock.BackgroundColor3 = navy
 			lock.Font = headerFont()
 			lock.TextSize = UiTheme.MIN_TEXT
 			lock.TextColor3 = rgb("text")
@@ -2487,7 +2498,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local lockCorner = Instance.new("UICorner")
 			lockCorner.CornerRadius = UDim.new(0, 8)
 			lockCorner.Parent = lock
-			hubFn.setRest(lock, rgb("header"))
+			local lockStroke = Instance.new("UIStroke")
+			lockStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			lockStroke.Thickness = 1.5
+			lockStroke.Color = Color3.fromRGB(150, 92, 255)
+			lockStroke.Parent = lock
+			hubFn.setRest(lock, navy)
 			hubFn.motion(lock)
 			local locked = item.locked == true
 			hubFn.bindActivated(lock, function()
