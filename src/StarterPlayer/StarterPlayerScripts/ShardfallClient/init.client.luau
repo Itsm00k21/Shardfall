@@ -1380,6 +1380,13 @@ HavenClient.start({
 	onSoon = function(message: string)
 		ui.setStatus(message, "info")
 	end,
+	onTravel = function()
+		if travel == nil or ClassHud.holdsChoice() then
+			return
+		end
+		closePanels("travel")
+		travel.open()
+	end,
 })
 
 VerdantLod.start()
