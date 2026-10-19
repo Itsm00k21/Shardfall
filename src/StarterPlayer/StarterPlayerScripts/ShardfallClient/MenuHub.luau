@@ -38,7 +38,6 @@ local ActionSlots = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChil
 local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagBoard"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
-local CombatMath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CombatMath"))
 local CrackCard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackCard"))
 local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
 local Currencies = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Currencies"))
@@ -170,7 +169,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.panelStroke.Parent = hubState.panel
 	hubState.gradient = Instance.new("UIGradient")
 	hubState.gradient.Rotation = 90
-	hubState.gradient.Color = ColorSequence.new(Color3.fromRGB(30, 26, 66), Color3.fromRGB(16, 14, 38))
+	hubState.gradient.Color =
+		ColorSequence.new(Color3.fromRGB(30, 26, 66), Color3.fromRGB(16, 14, 38))
 	hubState.gradient.Parent = hubState.panel
 
 	hubState.header = Instance.new("Frame")
@@ -1019,7 +1019,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	-- Painted art from IconAssets, untinted. Returns nil when the key has no
 	-- art yet so the caller can fall back to the UiIcons glyph.
-	function hubFn.artOn(parent: Instance, key: string?, px: number, py: number, size: number): ImageLabel?
+	function hubFn.artOn(
+		parent: Instance,
+		key: string?,
+		px: number,
+		py: number,
+		size: number
+	): ImageLabel?
 		local id = if type(key) == "string" then IconAssets[key] else nil
 		if id == nil then
 			return nil
@@ -1612,21 +1618,42 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if wide then
 			hubState.reelLeft.Visible = false
 			hubState.reelRight.Visible = false
-			hubState.reelCenter.Position =
-				UDim2.new(0, 4, hubState.reelCenter.Position.Y.Scale, hubState.reelCenter.Position.Y.Offset)
-			hubState.reelCenter.Size = UDim2.new(1, -8, hubState.reelCenter.Size.Y.Scale, hubState.reelCenter.Size.Y.Offset)
+			hubState.reelCenter.Position = UDim2.new(
+				0,
+				4,
+				hubState.reelCenter.Position.Y.Scale,
+				hubState.reelCenter.Position.Y.Offset
+			)
+			hubState.reelCenter.Size = UDim2.new(
+				1,
+				-8,
+				hubState.reelCenter.Size.Y.Scale,
+				hubState.reelCenter.Size.Y.Offset
+			)
 			return
 		end
 		hubState.reelLeft.Visible = true
 		hubState.reelRight.Visible = true
-		hubState.reelLeft.Position = UDim2.new(0, 4, hubState.reelLeft.Position.Y.Scale, hubState.reelLeft.Position.Y.Offset)
-		hubState.reelLeft.Size = UDim2.new(0.28, -8, hubState.reelLeft.Size.Y.Scale, hubState.reelLeft.Size.Y.Offset)
-		hubState.reelCenter.Position =
-			UDim2.new(0.28, 4, hubState.reelCenter.Position.Y.Scale, hubState.reelCenter.Position.Y.Offset)
-		hubState.reelCenter.Size = UDim2.new(0.44, -8, hubState.reelCenter.Size.Y.Scale, hubState.reelCenter.Size.Y.Offset)
-		hubState.reelRight.Position =
-			UDim2.new(0.72, 4, hubState.reelRight.Position.Y.Scale, hubState.reelRight.Position.Y.Offset)
-		hubState.reelRight.Size = UDim2.new(0.28, -8, hubState.reelRight.Size.Y.Scale, hubState.reelRight.Size.Y.Offset)
+		hubState.reelLeft.Position =
+			UDim2.new(0, 4, hubState.reelLeft.Position.Y.Scale, hubState.reelLeft.Position.Y.Offset)
+		hubState.reelLeft.Size =
+			UDim2.new(0.28, -8, hubState.reelLeft.Size.Y.Scale, hubState.reelLeft.Size.Y.Offset)
+		hubState.reelCenter.Position = UDim2.new(
+			0.28,
+			4,
+			hubState.reelCenter.Position.Y.Scale,
+			hubState.reelCenter.Position.Y.Offset
+		)
+		hubState.reelCenter.Size =
+			UDim2.new(0.44, -8, hubState.reelCenter.Size.Y.Scale, hubState.reelCenter.Size.Y.Offset)
+		hubState.reelRight.Position = UDim2.new(
+			0.72,
+			4,
+			hubState.reelRight.Position.Y.Scale,
+			hubState.reelRight.Position.Y.Offset
+		)
+		hubState.reelRight.Size =
+			UDim2.new(0.28, -8, hubState.reelRight.Size.Y.Scale, hubState.reelRight.Size.Y.Offset)
 	end
 
 	function hubFn.paintReel(slots: { UiRouter.ReelSlot }?, index: number)
@@ -1651,7 +1678,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	hubFn.paintReelIdle = function(caption: string)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
-		hubState.reelStreak.TextColor3 = rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
+		hubState.reelStreak.TextColor3 =
+			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
 		local wide = caption ~= "Roll" and caption ~= "Miss"
 		hubState.shardStone.Visible = not wide
 		hubFn.placeReelWindows(wide)
@@ -1705,7 +1733,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local kindH = UiTheme.TOUCH
 		local kindRow = hubState.roll:FindFirstChild("ShardKind")
-		if kindRow ~= nil and kindRow:IsA("GuiObject") and kindRow.Size.Y.Offset >= UiTheme.TOUCH then
+		if
+			kindRow ~= nil
+			and kindRow:IsA("GuiObject")
+			and kindRow.Size.Y.Offset >= UiTheme.TOUCH
+		then
 			kindH = kindRow.Size.Y.Offset
 		end
 		local layout = CrackCard.layout(height, kindH)
@@ -1746,7 +1778,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if not layout.showEquip then
 			hubState.revealEquip.Visible = false
 		end
-		hubState.revealEquip.Size = UDim2.fromOffset(if layout.card.h >= 88 then 120 else 88, layout.equipH)
+		hubState.revealEquip.Size =
+			UDim2.fromOffset(if layout.card.h >= 88 then 120 else 88, layout.equipH)
 	end
 	hubFn.fitRoll()
 	hubFn.paintReelIdle("Roll")
@@ -1818,7 +1851,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	function hubFn.paintTabs(current: string)
 		for id, button in pairs(hubState.tabButtons) do
 			local on = id == current
-			hubFn.setRest(button, if on then Color3.fromRGB(44, 34, 100) else Color3.fromRGB(20, 18, 50))
+			hubFn.setRest(
+				button,
+				if on then Color3.fromRGB(44, 34, 100) else Color3.fromRGB(20, 18, 50)
+			)
 			local accent = hubState.tabAccents[id]
 			if accent ~= nil then
 				accent.BackgroundColor3 = Color3.fromRGB(64, 206, 255)
@@ -1826,8 +1862,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 	end
-
-
 
 	function hubFn.show(id: string)
 		for pageId, frame in pairs(hubState.pages) do
@@ -2079,7 +2113,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.itemWorn(uid: string): boolean
 		local profile = hubState.profile
-		if type(profile) ~= "table" or type(profile.equipped) ~= "table" or type(uid) ~= "string" then
+		if
+			type(profile) ~= "table"
+			or type(profile.equipped) ~= "table"
+			or type(uid) ~= "string"
+		then
 			return false
 		end
 		local equipped = profile.equipped
@@ -2113,9 +2151,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if type(profile.equipped) == "table" then
 				backup = {}
 				for key, value in pairs(profile.equipped) do
-				if type(value) == "table" then
-					backup[key] = table.clone(value)
-				else
+					if type(value) == "table" then
+						backup[key] = table.clone(value)
+					else
 						backup[key] = value
 					end
 				end
@@ -2177,7 +2215,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		task.spawn(function()
 			local localPlayer = Players.LocalPlayer
 			local character = if localPlayer ~= nil then localPlayer.Character else nil
-			local humanoid = if character ~= nil then character:FindFirstChildOfClass("Humanoid") else nil
+			local humanoid = if character ~= nil
+				then character:FindFirstChildOfClass("Humanoid")
+				else nil
 			if humanoid == nil then
 				return
 			end
@@ -2188,7 +2228,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				return
 			end
 			local rigName = HeroView.rig(humanoid.RigType.Name)
-			local rigType = if rigName == "R6" then Enum.HumanoidRigType.R6 else Enum.HumanoidRigType.R15
+			local rigType = if rigName == "R6"
+				then Enum.HumanoidRigType.R6
+				else Enum.HumanoidRigType.R15
 			local built, model = pcall(function()
 				return Players:CreateHumanoidModelFromDescription(description, rigType)
 			end)
@@ -2343,11 +2385,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				equip.TextColor3 = rgb("text")
 				hubFn.setRest(equip, rgb("equip"))
 			end
-			local upgrade = hubFn.row(hubState.detailList, HubStyle.upgradeLabel(item.upgrade), 91, function()
-				task.spawn(function()
-					pcall(hooks.invoke, "UpgradeGear", uid)
-				end)
-			end)
+			local upgrade = hubFn.row(
+				hubState.detailList,
+				HubStyle.upgradeLabel(item.upgrade),
+				91,
+				function()
+					task.spawn(function()
+						pcall(hooks.invoke, "UpgradeGear", uid)
+					end)
+				end
+			)
 			upgrade.BackgroundColor3 = rgb("gold")
 			upgrade.TextColor3 = rgb("ink")
 			hubFn.setRest(upgrade, rgb("gold"))
@@ -2506,10 +2553,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local full = HudLayout.bagCard(cellW, cellH)
 		local slim = HudLayout.bagCardCompact(cellW, cellH)
 		local parts = if compact
-			then { icon = slim.icon, name = slim.name, equip = slim.equip, tip = full.tip, lock = full.lock, badge = full.badge }
+			then {
+				icon = slim.icon,
+				name = slim.name,
+				equip = slim.equip,
+				tip = full.tip,
+				lock = full.lock,
+				badge = full.badge,
+			}
 			else full
 		card:SetAttribute("Compact", compact)
-		if hubFn.artOn(card, HubStyle.itemArt(item), parts.icon.x, parts.icon.y, parts.icon.w) == nil then
+		if
+			hubFn.artOn(card, HubStyle.itemArt(item), parts.icon.x, parts.icon.y, parts.icon.w)
+			== nil
+		then
 			hubFn.iconOn(card, iconName, parts.icon.x, parts.icon.y, parts.icon.w)
 		end
 		local pip = Instance.new("Frame")
@@ -2530,7 +2587,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		name.Font = bodyFont()
 		name.TextSize = UiTheme.MIN_TEXT
 		name.TextXAlignment = Enum.TextXAlignment.Left
-		name.TextYAlignment = if compact then Enum.TextYAlignment.Center else Enum.TextYAlignment.Top
+		name.TextYAlignment = if compact
+			then Enum.TextYAlignment.Center
+			else Enum.TextYAlignment.Top
 		name.TextWrapped = not compact
 		name.TextTruncate = if compact then Enum.TextTruncate.AtEnd else Enum.TextTruncate.None
 		name.TextColor3 = rgb("text")
@@ -2838,85 +2897,165 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.paintHero()
 		hubFn.clear(hubState.hero)
-		local level = if type(hubState.profile) == "table" then hubState.profile.level or 1 else 1
-		local classId = if type(hubState.profile) == "table" then hubState.profile.classId else ""
+		local profile = hubState.profile
+		local level = if type(profile) == "table" then profile.level or 1 else 1
+		local classId = if type(profile) == "table" then profile.classId else ""
 		local classDef = Classes.get(classId)
-		local sheet = Instance.new("Frame")
-		sheet.Name = "Stats"
-		sheet.BackgroundColor3 = rgb("header")
-		sheet.BackgroundTransparency = 0.08
-		sheet.Size = UDim2.fromScale(1, 0)
-		sheet.AutomaticSize = Enum.AutomaticSize.Y
-		sheet.BorderSizePixel = 0
-		sheet.LayoutOrder = 1
-		sheet.Parent = hubState.hero
-		local sheetCorner = Instance.new("UICorner")
-		sheetCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
-		sheetCorner.Parent = sheet
-		local sheetStroke = Instance.new("UIStroke")
-		sheetStroke.Thickness = UiTheme.STROKE
-		sheetStroke.Color = rgb("divider")
-		sheetStroke.Parent = sheet
-		local sheetList = Instance.new("UIListLayout")
-		sheetList.Padding = UDim.new(0, 2)
-		sheetList.SortOrder = Enum.SortOrder.LayoutOrder
-		sheetList.Parent = sheet
-		local sheetPad = Instance.new("UIPadding")
-		sheetPad.PaddingTop = UDim.new(0, UiTheme.PAD)
-		sheetPad.PaddingBottom = UDim.new(0, UiTheme.PAD)
-		sheetPad.PaddingLeft = UDim.new(0, UiTheme.GAP)
-		sheetPad.PaddingRight = UDim.new(0, UiTheme.GAP)
-		sheetPad.Parent = sheet
-		hubFn.line(sheet, "Stat sheet", 1, rgb("gold"))
-		hubFn.divider(sheet, 2)
-		local offense, _, goldFind = CombatMath.loadout(hubState.profile)
-		hubFn.line(sheet, string.format("Level  %d", level), 3, rgb("text"))
-		hubFn.line(sheet, string.format("Attack speed  %.2f", offense.attackSpeed), 5, rgb("text"))
-		hubFn.line(sheet, string.format("Crit  %.0f%%", offense.critChance * 100), 6, rgb("text"))
-		hubFn.line(sheet, string.format("Crit damage  %.2f", offense.critDamage), 7, rgb("text"))
-		hubFn.line(sheet, string.format("Gold find  %.0f%%", goldFind * 100), 10, rgb("text"))
-		hubFn.line(sheet, string.format("Power  %d", HeroBoard.power(hubState.profile)), 11, rgb("gold"))
-		local barOrder = 12
-		for _, bar in ipairs(HeroBoard.bars(hubState.profile)) do
-			local host = Instance.new("Frame")
-			host.Name = bar.id
-			host.BackgroundTransparency = 1
-			host.Size = UDim2.new(1, 0, 0, 28)
-			host.BorderSizePixel = 0
-			host.LayoutOrder = barOrder
-			host.Parent = sheet
-			local caption = Instance.new("TextLabel")
-			caption.Name = "Caption"
-			caption.BackgroundTransparency = 1
-			caption.Position = UDim2.fromOffset(0, 0)
-			caption.Size = UDim2.new(1, 0, 0, 16)
-			caption.Font = bodyFont()
-			caption.TextSize = UiTheme.MIN_TEXT
-			caption.TextXAlignment = Enum.TextXAlignment.Left
-			caption.TextColor3 = rgb("text")
-			caption.Text = bar.label
-			caption.Parent = host
-			local track = Instance.new("Frame")
-			track.Name = "Track"
-			track.BackgroundColor3 = rgb("body")
-			track.BorderSizePixel = 0
-			track.Position = UDim2.fromOffset(0, 18)
-			track.Size = UDim2.new(1, 0, 0, 6)
-			track.Parent = host
-			local fill = Instance.new("Frame")
-			fill.Name = "Fill"
-			fill.Size = UDim2.fromScale(bar.fill, 1)
-			fill.BackgroundColor3 = rgb("accent")
-			fill.BorderSizePixel = 0
-			fill.Parent = track
-			barOrder += 1
+		-- A1 redesign: identity header, hex stat tiles, skill grid.
+		-- Width from the live hub box: the page can still hold a stale
+		-- measure from an earlier layout on its first paint.
+		local heroVx, heroVy = hubFn.view()
+		local heroBox = HudLayout.hub(heroVx, heroVy, UiTheme.safeMargin(), hubFn.pillsShown())
+		local width = heroBox.w - 32
+		local sheet = HeroBoard.sheet(width)
+		local function label(
+			parent: Instance,
+			text: string,
+			x: number,
+			y: number,
+			w: number,
+			h: number,
+			size: number,
+			color: Color3,
+			font: Enum.Font
+		): TextLabel
+			local node = Instance.new("TextLabel")
+			node.BackgroundTransparency = 1
+			-- Negative x anchors from the right edge; w <= 0 is "parent width + w".
+			node.Position = if x < 0 then UDim2.new(1, x, 0, y) else UDim2.fromOffset(x, y)
+			node.Size = if w <= 0 then UDim2.new(1, w, 0, h) else UDim2.fromOffset(w, h)
+			node.Font = font
+			node.TextSize = size
+			node.TextXAlignment = Enum.TextXAlignment.Left
+			node.TextTruncate = Enum.TextTruncate.AtEnd
+			node.TextColor3 = color
+			node.Text = text
+			node.Parent = parent
+			return node
+		end
+		local function framed(node: GuiObject, radius: number, stroke: number, color: Color3)
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, radius)
+			corner.Parent = node
+			local line = Instance.new("UIStroke")
+			line.Thickness = stroke
+			line.Color = color
+			line.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			line.Parent = node
+		end
+
+		local header = Instance.new("Frame")
+		header.Name = "Identity"
+		header.BackgroundColor3 = rgb("header")
+		header.BackgroundTransparency = 0.04
+		header.BorderSizePixel = 0
+		header.Size = UDim2.new(1, 0, 0, sheet.headerH)
+		header.LayoutOrder = 0
+		header.Parent = hubState.hero
+		framed(header, UiTheme.CORNER, UiTheme.STROKE_BOLD, rgb("accent"))
+		if hubFn.artOn(header, HubStyle.classArt(classId), 12, 12, sheet.crest) == nil then
+			hubFn.iconOn(header, "class", 12, 12, sheet.crest)
+		end
+		local power = HeroBoard.power(profile)
+		local powerW = if sheet.wide then 120 else 0
+		local tx = 12 + sheet.crest + 12
+		local textW = -(tx + sheet.avatarW + powerW + 16)
+		local big = UiTheme.MIN_TEXT + (if sheet.wide then 10 else 6)
+		label(
+			header,
+			if classDef ~= nil then classDef.name else "No class",
+			tx,
+			12,
+			textW,
+			big + 4,
+			big,
+			rgb("text"),
+			headerFont()
+		).Name =
+			"ClassName"
+		label(
+			header,
+			if classDef ~= nil then classDef.role else "Choose a class",
+			tx,
+			16 + big,
+			textW,
+			20,
+			UiTheme.MIN_TEXT,
+			rgb("gold"),
+			headerFont()
+		).Name =
+			"Role"
+		local levelText = if sheet.wide
+			then string.format("Level %d", level)
+			else string.format("Lv %d  ·  Power %d", level, power)
+		label(header, levelText, tx, 40 + big, textW, 20, UiTheme.MIN_TEXT, rgb("text"), bodyFont()).Name =
+			"Level"
+		local xp = if type(profile) == "table" and type(profile.xp) == "number"
+			then profile.xp
+			else 0
+		local xpNext = if type(profile) == "table" and type(profile.xpToNext) == "number"
+			then profile.xpToNext
+			else 0
+		local track = Instance.new("Frame")
+		track.Name = "XpTrack"
+		track.BackgroundColor3 = Color3.fromRGB(14, 12, 34)
+		track.BorderSizePixel = 0
+		track.Position = UDim2.fromOffset(tx, sheet.headerH - 34)
+		track.Size = UDim2.new(1, if sheet.wide then textW else -(tx + 12), 0, 20)
+		track.Parent = header
+		framed(track, 6, 1, rgb("accent"))
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.BorderSizePixel = 0
+		fill.BackgroundColor3 = Color3.fromRGB(56, 150, 255)
+		fill.Size = UDim2.fromScale(if xpNext > 0 then math.clamp(xp / xpNext, 0, 1) else 1, 1)
+		fill.Parent = track
+		local fillCorner = Instance.new("UICorner")
+		fillCorner.CornerRadius = UDim.new(0, 6)
+		fillCorner.Parent = fill
+		local xpText = label(
+			track,
+			if xpNext > 0
+				then string.format("XP %d / %d", math.floor(xp), math.floor(xpNext))
+				else "XP Max",
+			0,
+			0,
+			0,
+			20,
+			UiTheme.MIN_TEXT,
+			rgb("text"),
+			headerFont()
+		)
+		xpText.TextXAlignment = Enum.TextXAlignment.Center
+		xpText.ZIndex = 3
+		if sheet.wide then
+			local px = -(sheet.avatarW + powerW + 8)
+			label(
+				header,
+				"Power",
+				px,
+				22,
+				powerW,
+				24,
+				UiTheme.MIN_TEXT + 4,
+				rgb("text"),
+				headerFont()
+			).TextXAlignment =
+				Enum.TextXAlignment.Center
+			local value =
+				label(header, tostring(power), px, 46, powerW, 56, 48, rgb("gold"), headerFont())
+			value.Name = "Power"
+			value.TextXAlignment = Enum.TextXAlignment.Center
 		end
 		local viewport = Instance.new("ViewportFrame")
 		viewport.Name = "Avatar"
-		viewport.BackgroundColor3 = rgb("header")
-		viewport.Size = UDim2.new(1, 0, 0, 180)
-		viewport.LayoutOrder = 0
-		viewport.Parent = hubState.hero
+		viewport.BackgroundTransparency = 1
+		viewport.Position = UDim2.new(1, -sheet.avatarW - 8, 0, 8)
+		viewport.Size = UDim2.fromOffset(
+			sheet.avatarW,
+			if sheet.wide then sheet.headerH - 16 else sheet.headerH - 48
+		)
+		viewport.Parent = header
 		local world = Instance.new("WorldModel")
 		world.Name = "World"
 		world.Parent = viewport
@@ -2954,45 +3093,81 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end)
 
+		local tiles = HeroBoard.tiles(profile)
+		local rows = math.ceil(#tiles / sheet.statCols)
+		local stats = Instance.new("Frame")
+		stats.Name = "Stats"
+		stats.BackgroundTransparency = 1
+		stats.Size = UDim2.new(1, 0, 0, rows * sheet.tileH + (rows - 1) * HeroBoard.GAP)
+		stats.LayoutOrder = 1
+		stats.Parent = hubState.hero
+		local grid = Instance.new("UIGridLayout")
+		grid.CellSize = UDim2.new(
+			1 / sheet.statCols,
+			-math.ceil(HeroBoard.GAP * (sheet.statCols - 1) / sheet.statCols),
+			0,
+			sheet.tileH
+		)
+		grid.CellPadding = UDim2.fromOffset(HeroBoard.GAP, HeroBoard.GAP)
+		grid.SortOrder = Enum.SortOrder.LayoutOrder
+		grid.Parent = stats
+		for index, tile in ipairs(tiles) do
+			local cell = Instance.new("Frame")
+			cell.Name = tile.id
+			cell.LayoutOrder = index
+			cell.BackgroundColor3 = Color3.fromRGB(22, 18, 54)
+			cell.BorderSizePixel = 0
+			cell.Parent = stats
+			framed(
+				cell,
+				12,
+				2,
+				if index % 2 == 0
+					then Color3.fromRGB(96, 150, 255)
+					else Color3.fromRGB(150, 92, 255)
+			)
+			if hubFn.artOn(cell, tile.art, 10, 14, 36) == nil then
+				hubFn.iconOn(cell, "class", 10, 14, 36)
+			end
+			label(cell, tile.label, 52, 8, -58, 20, UiTheme.MIN_TEXT, rgb("muted"), headerFont()).Name =
+				"Caption"
+			label(
+				cell,
+				tile.value,
+				52,
+				28,
+				-58,
+				28,
+				UiTheme.MIN_TEXT + 8,
+				rgb("text"),
+				headerFont()
+			).Name =
+				"Value"
+		end
+
 		local classCard = Instance.new("Frame")
 		classCard.Name = "ClassCard"
 		classCard.BackgroundColor3 = rgb("body")
-		classCard.Size = UDim2.new(1, 0, 0, 120)
+		classCard.Size = UDim2.new(1, 0, 0, if classDef ~= nil then 52 else 128)
 		classCard.BorderSizePixel = 0
 		classCard.LayoutOrder = 2
 		classCard.Parent = hubState.hero
-		local classCardCorner = Instance.new("UICorner")
-		classCardCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
-		classCardCorner.Parent = classCard
-		local classCardStroke = Instance.new("UIStroke")
-		classCardStroke.Thickness = UiTheme.STROKE_BOLD
-		classCardStroke.Color = rgb("accent")
-		classCardStroke.Parent = classCard
-		if hubFn.artOn(classCard, HubStyle.classArt(classId), 8, 8, 40) == nil then
-			hubFn.iconOn(classCard, "class", 12, 12, 32)
-		end
-		local classTitle = Instance.new("TextLabel")
-		classTitle.BackgroundTransparency = 1
-		classTitle.Position = UDim2.fromOffset(52, 12)
-		classTitle.Size = UDim2.new(1, -64, 0, 22)
-		classTitle.Font = headerFont()
-		classTitle.TextSize = UiTheme.MIN_TEXT
-		classTitle.TextXAlignment = Enum.TextXAlignment.Left
-		classTitle.TextColor3 = rgb("text")
-		classTitle.Text = if classDef ~= nil then classDef.name else "No class"
-		classTitle.Parent = classCard
-		local classNote = Instance.new("TextLabel")
-		classNote.BackgroundTransparency = 1
-		classNote.Position = UDim2.fromOffset(12, 48)
-		classNote.Size = UDim2.new(1, -24, 0, 22)
-		classNote.Font = bodyFont()
-		classNote.TextSize = UiTheme.MIN_TEXT
-		classNote.TextXAlignment = Enum.TextXAlignment.Left
-		classNote.TextColor3 = rgb("muted")
-		classNote.Text = if classDef ~= nil
-			then classDef.role .. "  ·  " .. classDef.passiveNote
-			else "Choose a class to take a kit."
-		classNote.Parent = classCard
+		framed(classCard, UiTheme.CORNER, UiTheme.STROKE, rgb("divider"))
+		local classNote = label(
+			classCard,
+			if classDef ~= nil
+				then "Passive  ·  " .. classDef.passiveNote
+				else "Choose a class to take a kit.",
+			12,
+			6,
+			-24,
+			40,
+			UiTheme.MIN_TEXT,
+			rgb("muted"),
+			bodyFont()
+		)
+		classNote.TextWrapped = true
+		classNote.TextTruncate = Enum.TextTruncate.AtEnd
 		if classDef == nil then
 			local choose = Instance.new("TextButton")
 			choose.Name = "ChooseClass"
@@ -3013,16 +3188,78 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.bindActivated(choose, function()
 				hubFn.showClassPrompt(true)
 			end)
-			classCard.Size = UDim2.new(1, 0, 0, 128)
 		end
 
 		hubFn.line(hubState.hero, "Skills", 3, rgb("gold"))
 		hubFn.divider(hubState.hero, 4)
 		hubFn.line(hubState.hero, "Drag a skill onto the bar.", 5, rgb("muted"))
 		if classDef ~= nil then
-			for index, skill in ipairs(classDef.skills) do
+			local kit = table.clone(classDef.skills)
+			table.insert(kit, classDef.ultimate)
+			local skillRows = math.ceil(#kit / sheet.skillCols)
+			local skillGrid = Instance.new("Frame")
+			skillGrid.Name = "SkillGrid"
+			skillGrid.BackgroundTransparency = 1
+			skillGrid.Size =
+				UDim2.new(1, 0, 0, skillRows * sheet.skillH + (skillRows - 1) * HeroBoard.GAP)
+			skillGrid.LayoutOrder = 10
+			skillGrid.Parent = hubState.hero
+			local skillLayout = Instance.new("UIGridLayout")
+			skillLayout.CellSize = UDim2.new(
+				1 / sheet.skillCols,
+				-math.ceil(HeroBoard.GAP * (sheet.skillCols - 1) / sheet.skillCols),
+				0,
+				sheet.skillH
+			)
+			skillLayout.CellPadding = UDim2.fromOffset(HeroBoard.GAP, HeroBoard.GAP)
+			skillLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			skillLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			skillLayout.Parent = skillGrid
+			for index, skill in ipairs(kit) do
 				local skillId = skill.id
-				local button = hubFn.row(hubState.hero, Classes.skillLine(skill), 10 + index, nil)
+				local ult = index == #kit
+				local button = Instance.new("TextButton")
+				button.Name = "Skill_" .. tostring(skillId)
+				button.LayoutOrder = index
+				button.Text = ""
+				button.AutoButtonColor = false
+				button.BackgroundColor3 = Color3.fromRGB(26, 20, 60)
+				button.Parent = skillGrid
+				framed(button, 14, 2, if ult then rgb("gold") else Color3.fromRGB(150, 92, 255))
+				local icon = sheet.skillH - 44
+				local art = if ult then "SkillUlt" else ActionSlots.SKILL_ART[skill.kind]
+				local skillIcon = hubFn.artOn(button, art, 0, 8, icon)
+				if skillIcon ~= nil then
+					skillIcon.Position = UDim2.new(0.5, -math.floor(icon / 2), 0, 8)
+				else
+					hubFn.iconOn(button, "class", 8, 8, icon)
+				end
+				local name = label(
+					button,
+					tostring(skill.name or "Skill"),
+					4,
+					sheet.skillH - 34,
+					-8,
+					16,
+					UiTheme.MIN_TEXT,
+					rgb("text"),
+					headerFont()
+				)
+				name.TextXAlignment = Enum.TextXAlignment.Center
+				local cool = label(
+					button,
+					Classes.cooldownText(skill),
+					4,
+					sheet.skillH - 18,
+					-8,
+					14,
+					UiTheme.MIN_TEXT - 2,
+					rgb("muted"),
+					bodyFont()
+				)
+				cool.TextXAlignment = Enum.TextXAlignment.Center
+				hubFn.setRest(button, button.BackgroundColor3)
+				hubFn.motion(button)
 				button.InputBegan:Connect(function(input)
 					if
 						input.UserInputType == Enum.UserInputType.MouseButton1
@@ -3032,16 +3269,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					end
 				end)
 			end
-			local ultId = classDef.ultimate.id
-			local ultButton = hubFn.row(hubState.hero, Classes.skillLine(classDef.ultimate), 20, nil)
-			ultButton.InputBegan:Connect(function(input)
-				if
-					input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
-					ActionDrag.begin({ kind = "skill", id = ultId })
-				end
-			end)
 		else
 			hubFn.line(hubState.hero, "No skills until a class is chosen.", 10, rgb("muted"))
 		end
@@ -3262,7 +3489,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			refreshBag()
 		end)
 		chip("Type  " .. hubState.bagFilter.kind, function()
-			hubState.bagFilter.kind = BagBoard.nextKind(hubState.bagFilter.kind, BagBoard.kinds(items))
+			hubState.bagFilter.kind =
+				BagBoard.nextKind(hubState.bagFilter.kind, BagBoard.kinds(items))
 			refreshBag()
 		end)
 		chip(if hubState.bagFilter.onlyNew then "New  On" else "New", function()
@@ -3318,10 +3546,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					hubState.salvageArmed = false
 					refreshBag()
 				end)
-				hubFn.row(actions, "Use  " .. hubFn.nextSalvage(hubState.salvageRarity), 7, function()
-					hubState.salvageRarity = hubFn.nextSalvage(hubState.salvageRarity)
-					refreshBag()
-				end)
+				hubFn.row(
+					actions,
+					"Use  " .. hubFn.nextSalvage(hubState.salvageRarity),
+					7,
+					function()
+						hubState.salvageRarity = hubFn.nextSalvage(hubState.salvageRarity)
+						refreshBag()
+					end
+				)
 			else
 				hubFn.row(actions, "Salvage  " .. hubState.salvageRarity, 4, function()
 					hubState.salvageArmed = true
@@ -3353,7 +3586,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			local grid = HudLayout.cardGrid(math.max(44, listW - 16), math.max(44, listH), #shown)
 			local cardOrder = 8
-			if HudLayout.bagCardsLead(listH, if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else grid.cellH) then
+			if
+				HudLayout.bagCardsLead(
+					listH,
+					if hubFn.bagCompact() then HudLayout.COMPACT_CARD_H else grid.cellH
+				)
+			then
 				bar.LayoutOrder = 3
 				pills.LayoutOrder = 4
 				actions.LayoutOrder = 5
@@ -3453,7 +3691,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		capacity.Text = HubStyle.capacityLine(hubState.profile)
 		capacity.Parent = foot
 		if LaunchGate.on("relicSets") then
-			hubFn.line(hubState.sets, "Relic sets equip from the bag. Pieces stay raid drops.", 1, rgb("muted"))
+			hubFn.line(
+				hubState.sets,
+				"Relic sets equip from the bag. Pieces stay raid drops.",
+				1,
+				rgb("muted")
+			)
 		end
 		if hubState.detailOpen and hubState.selectedUid ~= nil then
 			local item = hubFn.findItem(hubState.selectedUid)
@@ -3501,7 +3744,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		for index = 1, petCap do
 			local slot = slots[index]
 			local slotName = if type(slot) == "table" then tostring(slot.name or "Pet") else "Empty"
-			hubFn.line(hubState.pets, string.format("Slot %d  %s", index, slotName), index + 1, rgb("text"))
+			hubFn.line(
+				hubState.pets,
+				string.format("Slot %d  %s", index, slotName),
+				index + 1,
+				rgb("text")
+			)
 		end
 		hubFn.divider(hubState.pets, 6)
 		local cards = {}
@@ -3607,7 +3855,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	function hubFn.rollPoolId(): string
 		if hubState.rollKind == "pets" then
 			local ascension = 0
-			if type(hubState.profile) == "table" and type(hubState.profile.ascension) == "number" then
+			if
+				type(hubState.profile) == "table"
+				and type(hubState.profile.ascension) == "number"
+			then
 				ascension = hubState.profile.ascension
 			end
 			local picked = "verdant_pets"
@@ -3627,9 +3878,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		return poolId
 	end
-
-
-
 
 	function hubFn.rollRowWidth(): number
 		local pageW = 0
@@ -3874,7 +4122,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			track.BackgroundColor3 = rgb("header")
 			track.BorderSizePixel = 0
 			track.Position = UDim2.fromOffset(label.Size.X.Offset + 4, 5)
-			track.Size = UDim2.fromOffset(math.max(8, bar.Size.X.Offset - label.Size.X.Offset - 4), 8)
+			track.Size =
+				UDim2.fromOffset(math.max(8, bar.Size.X.Offset - label.Size.X.Offset - 4), 8)
 			track.Parent = bar
 			local fill = Instance.new("Frame")
 			fill.Name = "Fill"
@@ -4054,7 +4303,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local epicMeter = RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)
 		local pityMeter = RollHype.pity(sinceLegendary, pityGoal)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
-		hubState.reelStreak.TextColor3 = rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
+		hubState.reelStreak.TextColor3 =
+			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
 		hubFn.line(
 			hubState.roll,
 			UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
@@ -4264,7 +4514,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local lock = Instance.new("Frame")
 			lock.Name = "Lock"
 			lock.BackgroundTransparency = 1
-			lock.Position = UDim2.fromOffset(place.lockX, math.max(0, math.floor((row.h - place.lockH) / 2)))
+			lock.Position =
+				UDim2.fromOffset(place.lockX, math.max(0, math.floor((row.h - place.lockH) / 2)))
 			lock.Size = UDim2.fromOffset(place.lockW, place.lockH)
 			lock.ZIndex = 3
 			lock.Parent = host
@@ -4569,7 +4820,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				return math.max(0, math.floor(raw))
 			end
 		end
-		if type(hubState.shownTokens) == "number" and hubState.shownTokens == hubState.shownTokens then
+		if
+			type(hubState.shownTokens) == "number"
+			and hubState.shownTokens == hubState.shownTokens
+		then
 			return hubState.shownTokens
 		end
 		return 0
@@ -4581,7 +4835,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if type(pool) == "table" and type(hubState.profile) == "table" then
 			local area = (pool :: any).area
 			local vouchers = hubState.profile.vouchers
-			if type(area) == "string" and type(vouchers) == "table" and type(vouchers[area]) == "number" then
+			if
+				type(area) == "string"
+				and type(vouchers) == "table"
+				and type(vouchers[area]) == "number"
+			then
 				voucher = vouchers[area]
 			end
 		end
@@ -4674,8 +4932,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				)
 			)
 		end
-		local junk =
-			RollLoop.resolve(record.rarity, hubState.draft.rolls.junkBelow, hubState.draft.rolls.autoJunk, upgrade)
+		local junk = RollLoop.resolve(
+			record.rarity,
+			hubState.draft.rolls.junkBelow,
+			hubState.draft.rolls.autoJunk,
+			upgrade
+		)
 		hubState.revealEquip.Visible = junk == "equip" and hubState.cardRoom >= 72
 		if type(item.uid) == "string" then
 			hubState.revealEquip:SetAttribute("Uid", item.uid)
@@ -4691,9 +4953,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if RollFocus.chain(hubState.windowFocused) ~= true then
 			return false
 		end
-		local pending = if type(hubState.activeItem) == "table" then hubState.activeItem.uid else nil
+		local pending = if type(hubState.activeItem) == "table"
+			then hubState.activeItem.uid
+			else nil
 		local rarity = "Common"
-		if type(hubState.activeItem) == "table" and type(hubState.activeItem.rarity) == "string" then
+		if
+			type(hubState.activeItem) == "table"
+			and type(hubState.activeItem.rarity) == "string"
+		then
 			rarity = hubState.activeItem.rarity
 		end
 		return RollLoop.canChain({
@@ -5060,7 +5327,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			applyClose(close)
 			local color = hubFn.rarityColor3(card.rarity)
 			local pop = UiRouter.rollPop(pace.tier, reduced)
-			local plan = CrackReveal.plan(card.rarity, hubFn.crackMode(card.rarity, quick or hubState.batching))
+			local plan = CrackReveal.plan(
+				card.rarity,
+				hubFn.crackMode(card.rarity, quick or hubState.batching)
+			)
 			duration = plan.seconds
 			if duration <= 0 then
 				hubFn.paintReel(slots, #slots)
@@ -5075,7 +5345,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						)
 					)
 				end
-				if RollLoop.flash(card.rarity, reduced, hubState.draft.camera.flash == "reduced") then
+				if
+					RollLoop.flash(card.rarity, reduced, hubState.draft.camera.flash == "reduced")
+				then
 					hubState.flashCover.BackgroundColor3 = color
 					hubState.flashCover.BackgroundTransparency = 0.45
 					hubFn.playCardTween(
@@ -5218,7 +5490,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				offset = math.sin(os.clock() * 46) * (2 + shake * 7)
 			end
 			hubState.shardStone.Position = UDim2.new(0.5, offset, hubState.stoneY, 0)
-			hubState.crackLine.Size = UDim2.new(0, 2 + math.floor(sample.crack * 8), sample.crack * 0.76, 0)
+			hubState.crackLine.Size =
+				UDim2.new(0, 2 + math.floor(sample.crack * 8), sample.crack * 0.76, 0)
 			if sample.burst > 0 then
 				hubState.shardStone.BackgroundColor3 = color
 				hubState.reelHost.BackgroundColor3 = color:Lerp(rgb("header"), 1 - sample.burst)
@@ -5252,9 +5525,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.crackSounded = true
 				hubFn.playUi(sample.sound)
 			end
-			if sample.showName and not hubState.crackNamed and type(hubState.pendingFace) == "table" then
+			if
+				sample.showName
+				and not hubState.crackNamed
+				and type(hubState.pendingFace) == "table"
+			then
 				hubState.crackNamed = true
-				hubFn.paintResult(hubState.pendingFace.item, hubState.pendingFace.record, hubState.pendingFace.isNew, hubState.pendingFace.upgrade)
+				hubFn.paintResult(
+					hubState.pendingFace.item,
+					hubState.pendingFace.record,
+					hubState.pendingFace.isNew,
+					hubState.pendingFace.upgrade
+				)
 			end
 			if elapsed >= active.duration then
 				if not hubState.crackNamed and type(hubState.pendingFace) == "table" then
@@ -5543,13 +5825,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.clear(hubState.market)
 		hubFn.clear(hubState.pass)
 		hubFn.clear(hubState.settingsPage)
-		local marks = if type(hubState.profile) == "table" then hubState.profile.raidMarks or 0 else 0
+		local marks = if type(hubState.profile) == "table"
+			then hubState.profile.raidMarks or 0
+			else 0
 		hubFn.emptyState(hubState.raids, "raids", "No raid is forming.", "Open finder", function()
 			hubFn.line(hubState.raids, string.format("Marks  %d", marks), 2, rgb("gold"))
 		end)
-		hubFn.emptyState(hubState.market, "market", "Nothing is listed yet.", "Open board", function()
-			hooks.onMarket()
-		end)
+		hubFn.emptyState(
+			hubState.market,
+			"market",
+			"Nothing is listed yet.",
+			"Open board",
+			function()
+				hooks.onMarket()
+			end
+		)
 		local tier = if type(hubState.profile) == "table" then hubState.profile.passTier or 0 else 0
 		hubFn.emptyState(
 			hubState.pass,
@@ -5579,12 +5869,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			hubState.draft.graphics.quality = nextId
 		end)
-		cycle(string.format("VFX  %d%%", math.floor(hubState.draft.graphics.vfx * 100 + 0.5)), 2, function()
-			hubState.draft.graphics.vfx = (math.floor(hubState.draft.graphics.vfx * 4 + 1) % 5) / 4
-		end)
-		cycle("Shadows  " .. (if hubState.draft.graphics.shadows then "On" else "Off"), 3, function()
-			hubState.draft.graphics.shadows = not hubState.draft.graphics.shadows
-		end)
+		cycle(
+			string.format("VFX  %d%%", math.floor(hubState.draft.graphics.vfx * 100 + 0.5)),
+			2,
+			function()
+				hubState.draft.graphics.vfx = (math.floor(hubState.draft.graphics.vfx * 4 + 1) % 5)
+					/ 4
+			end
+		)
+		cycle(
+			"Shadows  " .. (if hubState.draft.graphics.shadows then "On" else "Off"),
+			3,
+			function()
+				hubState.draft.graphics.shadows = not hubState.draft.graphics.shadows
+			end
+		)
 		cycle(string.format("FPS cap  %d", hubState.draft.graphics.fpsCap), 4, function()
 			hubState.draft.graphics.fpsCap = if hubState.draft.graphics.fpsCap == 30
 				then 60
@@ -5617,10 +5916,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			function()
 				hubState.draft.rolls.autoConfirm = not hubState.draft.rolls.autoConfirm
 				hubState.focusCut = false
-				hubState.autoOn = RollFocus.keep(
-					hubState.windowFocused,
-					hubState.draft.rolls.autoConfirm
-				)
+				hubState.autoOn =
+					RollFocus.keep(hubState.windowFocused, hubState.draft.rolls.autoConfirm)
 			end
 		)
 		cycle("Junk  " .. hubState.draft.rolls.autoJunk, 13, function()
@@ -5646,38 +5943,53 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			hubState.draft.rolls.junkBelow = nextId
 		end)
-		cycle("Camera shake  " .. (if hubState.draft.camera.shake then "On" else "Off"), 20, function()
-			hubState.draft.camera.shake = not hubState.draft.camera.shake
-		end)
+		cycle(
+			"Camera shake  " .. (if hubState.draft.camera.shake then "On" else "Off"),
+			20,
+			function()
+				hubState.draft.camera.shake = not hubState.draft.camera.shake
+			end
+		)
 		cycle("Screen flash  " .. hubState.draft.camera.flash, 21, function()
-			hubState.draft.camera.flash = if hubState.draft.camera.flash == "normal" then "reduced" else "normal"
+			hubState.draft.camera.flash = if hubState.draft.camera.flash == "normal"
+				then "reduced"
+				else "normal"
 		end)
 		cycle(string.format("Sensitivity  %.1f", hubState.draft.camera.sensitivity), 22, function()
-			hubState.draft.camera.sensitivity = math.clamp(hubState.draft.camera.sensitivity + 0.2, 0.4, 2)
+			hubState.draft.camera.sensitivity =
+				math.clamp(hubState.draft.camera.sensitivity + 0.2, 0.4, 2)
 			if hubState.draft.camera.sensitivity >= 2 then
 				hubState.draft.camera.sensitivity = 0.4
 			end
 		end)
 		cycle(string.format("FOV  %d", math.floor(hubState.draft.camera.fov + 0.5)), 23, function()
-			hubState.draft.camera.fov = if hubState.draft.camera.fov >= 90 then 50 else hubState.draft.camera.fov + 10
+			hubState.draft.camera.fov = if hubState.draft.camera.fov >= 90
+				then 50
+				else hubState.draft.camera.fov + 10
 		end)
 		cycle(
 			string.format("Master  %d%%", math.floor(hubState.draft.audio.master * 100 + 0.5)),
 			30,
 			function()
-				hubState.draft.audio.master = (math.floor(hubState.draft.audio.master * 4 + 1) % 5) / 4
+				hubState.draft.audio.master = (math.floor(hubState.draft.audio.master * 4 + 1) % 5)
+					/ 4
 			end
 		)
 		cycle(
 			string.format("Music  %d%%", math.floor(hubState.draft.audio.music * 100 + 0.5)),
 			31,
 			function()
-				hubState.draft.audio.music = (math.floor(hubState.draft.audio.music * 4 + 1) % 5) / 4
+				hubState.draft.audio.music = (math.floor(hubState.draft.audio.music * 4 + 1) % 5)
+					/ 4
 			end
 		)
-		cycle(string.format("SFX  %d%%", math.floor(hubState.draft.audio.sfx * 100 + 0.5)), 32, function()
-			hubState.draft.audio.sfx = (math.floor(hubState.draft.audio.sfx * 4 + 1) % 5) / 4
-		end)
+		cycle(
+			string.format("SFX  %d%%", math.floor(hubState.draft.audio.sfx * 100 + 0.5)),
+			32,
+			function()
+				hubState.draft.audio.sfx = (math.floor(hubState.draft.audio.sfx * 4 + 1) % 5) / 4
+			end
+		)
 		cycle(
 			string.format("UI audio  %d%%", math.floor(hubState.draft.audio.ui * 100 + 0.5)),
 			33,
@@ -5707,12 +6019,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.draft.hud.damageNumbers = not hubState.draft.hud.damageNumbers
 			end
 		)
-		cycle("Other players' VFX  " .. (if hubState.draft.hud.otherVfx then "On" else "Off"), 43, function()
-			hubState.draft.hud.otherVfx = not hubState.draft.hud.otherVfx
-		end)
-		cycle("Nameplates  " .. (if hubState.draft.hud.nameplates then "On" else "Off"), 44, function()
-			hubState.draft.hud.nameplates = not hubState.draft.hud.nameplates
-		end)
+		cycle(
+			"Other players' VFX  " .. (if hubState.draft.hud.otherVfx then "On" else "Off"),
+			43,
+			function()
+				hubState.draft.hud.otherVfx = not hubState.draft.hud.otherVfx
+			end
+		)
+		cycle(
+			"Nameplates  " .. (if hubState.draft.hud.nameplates then "On" else "Off"),
+			44,
+			function()
+				hubState.draft.hud.nameplates = not hubState.draft.hud.nameplates
+			end
+		)
 		local keys = hubState.draft.controls.hotkeys
 		local keyOrder = 50
 		for _, field in ipairs(Keybinds.MENU_ORDER) do
@@ -5750,9 +6070,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.draft.controls.mobileScale = nextScale
 			end
 		)
-		cycle("Layout edit  " .. (if hubState.draft.controls.layoutEdit then "On" else "Off"), 61, function()
-			hubState.draft.controls.layoutEdit = not hubState.draft.controls.layoutEdit
-		end)
+		cycle(
+			"Layout edit  " .. (if hubState.draft.controls.layoutEdit then "On" else "Off"),
+			61,
+			function()
+				hubState.draft.controls.layoutEdit = not hubState.draft.controls.layoutEdit
+			end
+		)
 		if LaunchGate.on("trading") then
 			cycle("Trades  " .. hubState.draft.social.trades, 70, function()
 				local order = { "everyone", "friends", "off" }
@@ -5766,9 +6090,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 		end
 		if LaunchGate.on("raids") then
-			cycle("Raid invites  " .. (if hubState.draft.social.raidInvites then "On" else "Off"), 71, function()
-				hubState.draft.social.raidInvites = not hubState.draft.social.raidInvites
-			end)
+			cycle(
+				"Raid invites  " .. (if hubState.draft.social.raidInvites then "On" else "Off"),
+				71,
+				function()
+					hubState.draft.social.raidInvites = not hubState.draft.social.raidInvites
+				end
+			)
 		end
 		cycle("Chat filter  " .. hubState.draft.social.chatFilter, 72, function()
 			local order = { "default", "strict", "off" }
@@ -5788,7 +6116,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		)
 		cycle(
-			string.format("Text size  %d%%", math.floor(hubState.draft.access.textScale * 100 + 0.5)),
+			string.format(
+				"Text size  %d%%",
+				math.floor(hubState.draft.access.textScale * 100 + 0.5)
+			),
 			81,
 			function()
 				hubState.draft.access.textScale = if hubState.draft.access.textScale >= 1.4
@@ -5953,7 +6284,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local prompt = nextState.open
 			and nextState.tab == "hero"
 			and UiRouter.top(nextState) == "hero"
-			and not (hubState.route.open and hubState.route.tab == "hero" and UiRouter.top(hubState.route) == "hero")
+			and not (
+				hubState.route.open
+				and hubState.route.tab == "hero"
+				and UiRouter.top(hubState.route) == "hero"
+			)
 		hubFn.apply(nextState)
 		if prompt then
 			hubFn.showClassPrompt(true)
@@ -6200,7 +6535,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		if hubState.route.open then
-			local nextState = UiRouter.key(hubState.route, input.KeyCode.Name, hubState.draft.controls.hotkeys)
+			local nextState =
+				UiRouter.key(hubState.route, input.KeyCode.Name, hubState.draft.controls.hotkeys)
 			if nextState.generation ~= hubState.route.generation then
 				hubFn.follow(nextState)
 			end
@@ -6209,7 +6545,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
 			return
 		end
-		local nextState = UiRouter.key(hubState.route, input.KeyCode.Name, hubState.draft.controls.hotkeys)
+		local nextState =
+			UiRouter.key(hubState.route, input.KeyCode.Name, hubState.draft.controls.hotkeys)
 		hubFn.follow(nextState)
 	end)
 
@@ -6226,7 +6563,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		local position = input.Position
-		local stepped = PadFocus.stick(hubFn.padAxis(position, "X"), hubFn.padAxis(position, "Y"), hubState.padHeld)
+		local stepped = PadFocus.stick(
+			hubFn.padAxis(position, "X"),
+			hubFn.padAxis(position, "Y"),
+			hubState.padHeld
+		)
 		hubState.padHeld = stepped.held
 		if stepped.direction ~= nil then
 			hubFn.padStep(stepped.direction)
