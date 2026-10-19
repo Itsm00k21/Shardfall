@@ -904,7 +904,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.body.Position = UDim2.fromOffset(pad, headerH)
 		hubState.body.Size = UDim2.fromOffset(bodyW, bodyH)
 		hubState.title.Position = UDim2.fromOffset(pad, 8)
-		hubState.title.Size = UDim2.fromOffset(math.max(44, bodyW - 8), 32)
+		-- End the title before the 96 px Close so a long name truncates
+		-- instead of running under it on a 390 px phone.
+		hubState.title.Size = UDim2.fromOffset(math.max(44, box.w - pad * 2 - 96 - 8), 32)
+		hubState.title.TextTruncate = Enum.TextTruncate.AtEnd
 		hubState.classPanel.Position = UDim2.fromOffset(box.x + pad, box.y + headerH)
 		hubState.classPanel.Size = UDim2.fromOffset(bodyW, bodyH)
 		local grid = HudLayout.cardGrid(math.max(44, bodyW - 8), bodyH, 4)
@@ -3082,6 +3085,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pillLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		pillLayout.Padding = UDim.new(0, 6)
 		pillLayout.Parent = pills
+		-- Narrow phones: when the labelled row would overflow the body, fall
+		-- back to icon-only chips (painted art) so every filter stays visible.
+		local rowW = 0
+		for _, pill in ipairs(HubStyle.pills()) do
+			if pill.id ~= "Relics" or LaunchGate.on("relicSets") then
+				rowW += HudLayout.chipWidth(pill.label) + 24 + 6
+			end
+		end
+		local viewX, viewY = hubFn.view()
+		local pillBox = HudLayout.hub(viewX, viewY, UiTheme.safeMargin())
+		local compactPills = rowW > pillBox.w - 16
 		for index, pill in ipairs(HubStyle.pills()) do
 			if pill.id == "Relics" and not LaunchGate.on("relicSets") then
 				continue
@@ -3090,7 +3104,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			button.Name = pill.id
 			button.LayoutOrder = index
 			-- Room for the 20 px icon at x 6; the label sits right of it.
-			button.Size = UDim2.fromOffset(HudLayout.chipWidth(pill.label) + 24, UiTheme.TOUCH)
+			button.Size = UDim2.fromOffset(
+				if compactPills then UiTheme.TOUCH else HudLayout.chipWidth(pill.label) + 24,
+				UiTheme.TOUCH
+			)
 			local tone = if hubState.bagPill == pill.id then HubStyle.chipTone(index) else "header"
 			button.BackgroundColor3 = rgb(tone)
 			button.Font = headerFont()
@@ -3103,8 +3120,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local pillPad = Instance.new("UIPadding")
 			pillPad.PaddingRight = UDim.new(0, 14)
 			pillPad.Parent = button
-			if hubFn.artOn(button, HubStyle.PILL_ART[pill.id], 4, 9, 26) == nil and type(pill.icon) == "string" then
+			local iconX = if compactPills then math.floor((UiTheme.TOUCH - 26) / 2) else 4
+			local art = hubFn.artOn(button, HubStyle.PILL_ART[pill.id], iconX, 9, 26)
+			if art == nil and type(pill.icon) == "string" then
 				hubFn.iconOn(button, pill.icon, 6, 8, 20)
+			end
+			if compactPills and art ~= nil then
+				button.Text = ""
 			end
 			local pillCorner = Instance.new("UICorner")
 			pillCorner.CornerRadius = UDim.new(1, 0)

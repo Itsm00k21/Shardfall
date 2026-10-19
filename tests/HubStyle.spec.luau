@@ -9,6 +9,7 @@ local expect = framework.expect
 
 local Economy = require("../src/ReplicatedStorage/Shared/Economy")
 local HubStyle = require("../src/ReplicatedStorage/Shared/HubStyle")
+local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
 local IconAssets = require("../src/ReplicatedStorage/Shared/IconAssets")
 local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
 
@@ -24,6 +25,21 @@ local function inside(rect, width, height)
 end
 
 describe("HubStyle", function()
+	it("keeps every Bag pill and the hub title visible on a 390 px phone", function()
+		local box = HudLayout.hub(390, 844, UiTheme.safeMargin())
+		local bodyW = box.w - 16
+		local labelled, compact = 0, 0
+		for _, pill in ipairs(HubStyle.pills()) do
+			labelled += HudLayout.chipWidth(pill.label) + 24 + 6
+			compact += UiTheme.TOUCH + 6
+		end
+		-- Labelled chips overflow here, so MenuHub switches to icon-only art.
+		expect(labelled > bodyW).toBeTrue()
+		expect(compact - 6 <= bodyW).toBeTrue()
+		-- Title (x 8, width box.w - 16 - 104) ends before the 96 px Close.
+		expect(8 + (box.w - 16 - 104) <= box.w - 8 - 96).toBeTrue()
+	end)
+
 	it("gives each Bag pill and item kind painted art that exists", function()
 		for _, pill in ipairs(HubStyle.pills()) do
 			local key = HubStyle.PILL_ART[pill.id]
