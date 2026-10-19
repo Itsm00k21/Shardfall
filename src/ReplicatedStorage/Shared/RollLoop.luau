@@ -16,6 +16,7 @@ local InventoryView = require("./InventoryView")
 local ItemBases = require("./ItemBases")
 local Rarities = require("./Rarities")
 local RarityConfig = require("./RarityConfig")
+local RollConfig = require("./RollConfig")
 local RollBoard = require("./RollBoard")
 local RollReveal = require("./RollReveal")
 local Schema = require("./Schema")
@@ -118,7 +119,7 @@ end
 
 function RollLoop.nearGuarantee(sinceEpic: any): boolean
 	local left = RollLoop.nextEpic(sinceEpic)
-	return left <= math.floor(RarityConfig.EPIC_PITY * 0.1)
+	return left <= math.floor(RarityConfig.EPIC_PITY * RollConfig.NEAR_SHARE)
 end
 
 function RollLoop.tint(elapsed: number, duration: number, rarity: string): string?

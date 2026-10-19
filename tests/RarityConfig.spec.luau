@@ -182,10 +182,10 @@ describe("RarityConfig", function()
 		expect(RarityConfig.bonusLabel(8)).toEqual("x2 Luck in 2")
 		expect(RarityConfig.bonusLabel(9)).toEqual("x2 Luck Ready")
 		expect(RarityConfig.bonusLabel(19)).toEqual("x2 Luck Ready")
-		expect(RarityConfig.pityLine(4, 20)).toEqual("Epic 4/100 · Legendary 20/1000")
+		expect(RarityConfig.pityLine(4, 20)).toEqual("Epic 4/50 · Legendary 20/1000")
 	end)
 
-	it("forces Epic+ at 100 and Legendary+ at 1000, rarest-first otherwise", function()
+	it("forces Epic+ at 50 and Legendary+ at 1000, rarest-first otherwise", function()
 		local pool = ladderPool()
 		local miss = scripted(0.5)
 		local common, triggered =
@@ -194,11 +194,11 @@ describe("RarityConfig", function()
 		expect(triggered).toEqual(false)
 
 		local dry =
-			RarityConfig.pick(pool, 1, { sinceEpic = 49, sinceLegendary = 49 }, scripted(0.5))
+			RarityConfig.pick(pool, 1, { sinceEpic = 48, sinceLegendary = 48 }, scripted(0.5))
 		expect(dry).toEqual("Common")
 
 		local epic =
-			RarityConfig.pick(pool, 1, { sinceEpic = 99, sinceLegendary = 0 }, scripted(0.5))
+			RarityConfig.pick(pool, 1, { sinceEpic = 49, sinceLegendary = 0 }, scripted(0.5))
 		expect(epic).toEqual("Epic")
 
 		local legendary =
@@ -206,7 +206,7 @@ describe("RarityConfig", function()
 		expect(legendary).toEqual("Legendary")
 
 		local secret =
-			RarityConfig.pick(pool, 1, { sinceEpic = 99, sinceLegendary = 0 }, scripted(0))
+			RarityConfig.pick(pool, 1, { sinceEpic = 49, sinceLegendary = 0 }, scripted(0))
 		expect(secret).toEqual("Secret")
 	end)
 
@@ -220,16 +220,16 @@ describe("RarityConfig", function()
 			shardRolls = 9,
 		})
 		local _, early, earlyFloor =
-			RarityConfig.pick(pool, huge, { sinceEpic = 98, sinceLegendary = 998 }, scripted(0.5))
+			RarityConfig.pick(pool, huge, { sinceEpic = 48, sinceLegendary = 998 }, scripted(0.5))
 		expect(early).toEqual(false)
 		expect(earlyFloor).toBeNil()
 		local atEpic, epicOn, epicFloor =
-			RarityConfig.pick(pool, huge, { sinceEpic = 99, sinceLegendary = 0 }, scripted(0.5))
+			RarityConfig.pick(pool, huge, { sinceEpic = 49, sinceLegendary = 0 }, scripted(0.5))
 		expect(epicOn).toEqual(true)
 		expect(epicFloor).toEqual("Epic")
 		expect(Rarities.INDEX[atEpic] >= Rarities.INDEX.Epic).toBeTrue()
 		local atLegend, legendOn, legendFloor =
-			RarityConfig.pick(pool, 1, { sinceEpic = 50, sinceLegendary = 999 }, scripted(0.5))
+			RarityConfig.pick(pool, 1, { sinceEpic = 30, sinceLegendary = 999 }, scripted(0.5))
 		expect(atLegend).toEqual("Legendary")
 		expect(legendOn).toEqual(true)
 		expect(legendFloor).toEqual("Legendary")

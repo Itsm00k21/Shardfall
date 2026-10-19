@@ -25,6 +25,8 @@ local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
+local Rarities = require(ReplicatedStorage.Shared.Rarities)
+local RollConfig = require(ReplicatedStorage.Shared.RollConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
@@ -157,6 +159,47 @@ local function poolFromClient(poolId: any)
 	return pool
 end
 
+-- One draw on an already-paid crack: pick a rarity with pity, mint the
+-- item, save it and move the counters. The caller has spent the tokens
+-- and checked the Bag. Returns the capture, or nil and a reason.
+local function drawInto(data: any, pool: any, rng: any): (any?, string?)
+	local luck = RarityConfig.luckFromProfile(data)
+	local counters = {
+		sinceEpic = data.sinceEpic,
+		sinceLegendary = data.sinceLegendary,
+	}
+	local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
+	local entry = RarityConfig.chooseEntry(pool, rarity, rng)
+	if type(entry) ~= "table" or type(entry.templateId) ~= "string" then
+		return nil, "That shard has nothing to roll."
+	end
+	local fillerSeed = rng:nextInteger(1, 2147483646)
+	local item = RollMath.mint(entry.templateId, {
+		uid = HttpService:GenerateGUID(false),
+		now = os.time(),
+		poolId = pool.id,
+	}, rng)
+	Schema.insertItem(data, item)
+	RarityConfig.advance(counters, item.rarity, floor)
+	data.sinceEpic = counters.sinceEpic
+	data.sinceLegendary = counters.sinceLegendary
+	data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
+	StarterGoalPay.grant(data, "rolls", nil)
+	-- The per-pool pity bucket is an old save field. The live counters
+	-- are sinceEpic and sinceLegendary. Do not increment the bucket.
+	return {
+		item = item,
+		pityTriggered = pityTriggered,
+		rarity = item.rarity,
+		fillerSeed = fillerSeed,
+		luck = luck,
+		rollIndex = data.shardRolls,
+		sinceEpic = data.sinceEpic,
+		sinceLegendary = data.sinceLegendary,
+		tracker = StarterGoalPay.tracker(data),
+	}
+end
+
 local function crack(player: Player, poolId: any, currency: string, skip: boolean, ignoreCooldown: boolean?)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
@@ -203,6 +246,10 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 		if not Pools.isUnlocked(pool, data.ascension) then
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
 		end
+		-- Bag room is checked before anything is spent.
+		if Schema.countItems(data) >= Schema.inventoryCap(data) then
+			return "Inventory is full."
+		end
 		-- A dungeon voucher cracks that area once and does not spend a token.
 		-- It is an earned clear, so it never pays for a Prism roll.
 		local usedVoucher = false
@@ -222,45 +269,11 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 				return spendError or "You cannot pay for that crack."
 			end
 		end
-		if Schema.countItems(data) >= Schema.inventoryCap(data) then
-			return "Inventory is full."
+		local drawn, drawError = drawInto(data, pool, serverRng())
+		if drawn == nil then
+			return drawError
 		end
-		local rng = serverRng()
-		local luck = RarityConfig.luckFromProfile(data)
-		local counters = {
-			sinceEpic = data.sinceEpic,
-			sinceLegendary = data.sinceLegendary,
-		}
-		local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
-		local entry = RarityConfig.chooseEntry(pool, rarity, rng)
-		if type(entry) ~= "table" or type(entry.templateId) ~= "string" then
-			return "That shard has nothing to roll."
-		end
-		local fillerSeed = rng:nextInteger(1, 2147483646)
-		local item = RollMath.mint(entry.templateId, {
-			uid = HttpService:GenerateGUID(false),
-			now = os.time(),
-			poolId = pool.id,
-		}, rng)
-		Schema.insertItem(data, item)
-		RarityConfig.advance(counters, item.rarity, floor)
-		data.sinceEpic = counters.sinceEpic
-		data.sinceLegendary = counters.sinceLegendary
-		data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
-		StarterGoalPay.grant(data, "rolls", nil)
-		-- The per-pool pity bucket is an old save field. The live counters
-		-- are sinceEpic and sinceLegendary. Do not increment the bucket.
-		captured = {
-			item = item,
-			pityTriggered = pityTriggered,
-			rarity = item.rarity,
-			fillerSeed = fillerSeed,
-			luck = luck,
-			rollIndex = data.shardRolls,
-			sinceEpic = data.sinceEpic,
-			sinceLegendary = data.sinceLegendary,
-			tracker = StarterGoalPay.tracker(data),
-		}
+		captured = drawn
 		return nil
 	end)
 	if not ok or captured == nil then
@@ -295,6 +308,7 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 			epicAt = RarityConfig.EPIC_PITY,
 			legendaryAt = RarityConfig.LEGENDARY_PITY,
 			shardRolls = captured.rollIndex,
+			left = RollConfig.pityLeft(captured.sinceEpic),
 		},
 		currency = currency,
 		starterGoalTracker = captured.tracker,
@@ -305,17 +319,114 @@ function RollService.rollFree(player: Player, poolId: any, skip: any)
 	return crack(player, poolId, Currencies.SHARD, skip == true)
 end
 
--- One request, up to ten cracks. Each crack spends the same way a single
--- Roll does: a voucher covers one, then a Shard Token. A later crack that
--- cannot pay keeps the ones already saved.
+local function pityView(drawn: any)
+	return {
+		sinceEpic = drawn.sinceEpic,
+		sinceLegendary = drawn.sinceLegendary,
+		epicAt = RarityConfig.EPIC_PITY,
+		legendaryAt = RarityConfig.LEGENDARY_PITY,
+		shardRolls = drawn.rollIndex,
+		left = RollConfig.pityLeft(drawn.sinceEpic),
+	}
+end
+
+-- x10: one press, one discounted charge (RollConfig.cost), ten draws, all
+-- inside one profile mutate. The price and the Bag room are checked before
+-- anything is spent, and if any draw fails the whole batch rolls back, so
+-- the player never pays for cracks that did not land. Vouchers stay for
+-- single cracks. The server decides every result here; the client only
+-- plays the reveal, and skipping it never changes what was granted.
+local function crackBatch(player: Player, poolId: any, total: number)
+	local pool = poolFromClient(poolId)
+	if pool == nil then
+		return reject("Unknown shard.")
+	end
+	if DataService.get(player) == nil then
+		return reject("Profile is still loading.")
+	end
+	local price = RollConfig.cost(total)
+	local captures: { any } = {}
+	local ok, err = DataService.mutate(player, function(data)
+		if not Pools.isUnlocked(pool, data.ascension) then
+			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
+		end
+		local free = Schema.inventoryCap(data) - Schema.countItems(data)
+		local blocked = RollConfig.batchBlock(data.shardTokens, free, total)
+		if blocked ~= nil then
+			return blocked
+		end
+		data.shardTokens -= price
+		local rng = serverRng()
+		for _ = 1, total do
+			local drawn, drawError = drawInto(data, pool, rng)
+			if drawn == nil then
+				return drawError or "Could not crack that shard."
+			end
+			table.insert(captures, drawn)
+		end
+		return nil
+	end)
+	if not ok or #captures ~= total then
+		return reject(err or "Could not crack that shard.")
+	end
+	local items = {}
+	local best = 1
+	for index, drawn in ipairs(captures) do
+		table.insert(items, {
+			item = drawn.item,
+			rollId = drawn.item.uid,
+			rarity = drawn.rarity,
+			fillerSeed = drawn.fillerSeed,
+			pityTriggered = drawn.pityTriggered,
+			pity = pityView(drawn),
+		})
+		if Rarities.rank(drawn.rarity) > Rarities.rank(captures[best].rarity) then
+			best = index
+		end
+		local reveal = RarityConfig.reveal(drawn.rarity, true)
+		if reveal.announce then
+			broadcast(player.Name, drawn.item.name, drawn.rarity, false)
+		end
+		if reveal.crossServer then
+			publishMythic(player.Name, drawn.item.name, drawn.rarity)
+		end
+	end
+	local last = captures[#captures]
+	lastRoll[player.UserId] = {
+		at = os.clock(),
+		rarity = if type(last.rarity) == "string" then last.rarity else "",
+		quick = true,
+	}
+	local tracker = last.tracker
+	return {
+		ok = true,
+		items = items,
+		count = #items,
+		best = best,
+		cost = price,
+		saved = RollConfig.savings(total),
+		pity = pityView(last),
+		stopped = nil,
+		currency = Currencies.SHARD,
+		starterGoalTracker = tracker,
+	}
+end
+
+-- One request, up to ten cracks. Exactly RollConfig.MULTI_COUNT is the
+-- discounted x10 batch above. Any other count cracks one at a time, each
+-- spending the way a single Roll does: a voucher covers one, then a Shard
+-- Token. A later crack that cannot pay keeps the ones already saved.
 function RollService.rollMany(player: Player, poolId: any, count: any)
 	local total = count
 	if type(total) ~= "number" or total ~= total or total == math.huge then
 		return reject("Roll 1 to 10 shards.")
 	end
 	total = math.floor(total)
-	if total < 1 or total > 10 then
+	if total < 1 or total > RollConfig.MAX_BATCH then
 		return reject("Roll 1 to 10 shards.")
+	end
+	if total == RollConfig.MULTI_COUNT then
+		return crackBatch(player, poolId, total)
 	end
 	local items = {}
 	local stopped: string? = nil

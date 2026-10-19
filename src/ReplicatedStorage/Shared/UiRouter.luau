@@ -12,7 +12,7 @@
 	server already rolled. It does not roll, and it does not invent a
 	rarity. 	The live legendary guarantee is profile sinceLegendary against
 	RarityConfig.LEGENDARY_PITY (1000). Epic pity is the other profile
-	counter against EPIC_PITY (100). The per-pool pity bucket is an old
+	counter against EPIC_PITY (50, RollConfig). The per-pool pity bucket is an old
 	save field. The crack does not write it, and it is not this guarantee.
 	totalRolls is not pity.
 

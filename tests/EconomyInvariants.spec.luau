@@ -570,7 +570,7 @@ describe("M1 economy invariants", function()
 		local data = Schema.template()
 		data.shardTokens = RarityConfig.LEGENDARY_PITY
 		data.inventoryBonus = RarityConfig.LEGENDARY_PITY
-		expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/100")
+		expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
 		local openedSince, openedGoal = UiRouter.legendaryPity(data, nil)
 		expect(openedSince).toEqual(0)
 		expect(openedGoal).toEqual(RarityConfig.LEGENDARY_PITY)
@@ -623,16 +623,18 @@ describe("M1 economy invariants", function()
 			)
 			expect(panelPity(since, goal)).toEqual(pityLine(data.sinceLegendary, goal))
 			expect(data.pity).toEqual({})
-			if data.shardRolls == 50 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 50/100")
+			if data.shardRolls == 49 then
+				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 49/50")
+			elseif data.shardRolls == 50 then
+				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
 				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 50/1000")
 			elseif data.shardRolls == 99 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 99/100")
+				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 49/50")
 			elseif data.shardRolls == 100 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/100")
+				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
 				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 100/1000")
 			elseif data.shardRolls == 999 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 99/100")
+				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 49/50")
 				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 999/1000")
 			end
 		end
@@ -640,7 +642,7 @@ describe("M1 economy invariants", function()
 		expect(data.shardRolls).toEqual(RarityConfig.LEGENDARY_PITY)
 		expect(data.sinceEpic).toEqual(0)
 		expect(data.sinceLegendary).toEqual(0)
-		expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/100")
+		expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
 		expect(panelPity(data.sinceLegendary, RarityConfig.LEGENDARY_PITY)).toEqual("Pity 0/1000")
 		refuses(data, function()
 			local result = rollShard(data, POOL, now + 5, last, draw, false)
@@ -657,7 +659,7 @@ describe("M1 economy invariants", function()
 		expect(Rarities.rank(dropped.item.rarity) >= Rarities.rank("Legendary")).toBeTrue()
 		expect(secret.sinceEpic).toEqual(0)
 		expect(secret.sinceLegendary).toEqual(0)
-		expect(panelPity(dropped.pity.sinceEpic, dropped.pity.epicAt)).toEqual("Pity 0/100")
+		expect(panelPity(dropped.pity.sinceEpic, dropped.pity.epicAt)).toEqual("Pity 0/50")
 		expect(panelPity(dropped.pity.sinceLegendary, dropped.pity.legendaryAt)).toEqual(
 			"Pity 0/1000"
 		)
