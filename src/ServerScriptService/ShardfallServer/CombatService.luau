@@ -40,6 +40,8 @@ export type EnemyView = {
 	x: number,
 	y: number,
 	z: number,
+	-- Ground-plane radius; melee reach is measured to this edge.
+	radius: number?,
 }
 
 type Hooks = {
@@ -765,7 +767,8 @@ local function releaseSwing(
 				enemy.x,
 				enemy.z,
 				offense.range,
-				offense.minDot
+				offense.minDot,
+				enemy.radius
 			)
 		then
 			local distance =

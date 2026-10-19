@@ -24,6 +24,8 @@
 	only stored.
 ]]
 
+local MeleeConfig = require("./MeleeConfig")
+
 local CombatMath = {}
 
 export type StatLine = {
@@ -92,8 +94,8 @@ CombatMath.UNARMED = {
 	attackSpeed = 1,
 	critChance = 0.02,
 	critDamage = 1.5,
-	range = 6,
-	minDot = 0.2,
+	range = MeleeConfig.reach("unarmed"),
+	minDot = MeleeConfig.minDot("unarmed"),
 	projectileSpeed = 0,
 	lifesteal = 0,
 	unarmed = true,
@@ -102,10 +104,16 @@ CombatMath.UNARMED = {
 -- Studs. Melee is a swing in front of the player. Bows and staffs spawn a
 -- server-side part that flies `range` studs at `projectileSpeed` studs/sec.
 CombatMath.STYLES = {
-	sword = { style = "melee", range = 8, minDot = 0.25, projectileSpeed = 0 },
-	greatsword = { style = "melee", range = 10, minDot = 0.35, projectileSpeed = 0 },
-	dagger = { style = "melee", range = 6, minDot = 0.05, projectileSpeed = 0 },
-	hammer = { style = "melee", range = 11, minDot = 0.45, projectileSpeed = 0 },
+	-- Melee reach and cone live in MeleeConfig (reach is to the target edge).
+	sword = { style = "melee", range = MeleeConfig.reach("sword"), minDot = MeleeConfig.minDot("sword"), projectileSpeed = 0 },
+	greatsword = {
+		style = "melee",
+		range = MeleeConfig.reach("greatsword"),
+		minDot = MeleeConfig.minDot("greatsword"),
+		projectileSpeed = 0,
+	},
+	dagger = { style = "melee", range = MeleeConfig.reach("dagger"), minDot = MeleeConfig.minDot("dagger"), projectileSpeed = 0 },
+	hammer = { style = "melee", range = MeleeConfig.reach("hammer"), minDot = MeleeConfig.minDot("hammer"), projectileSpeed = 0 },
 	bow = { style = "projectile", range = 80, minDot = -1, projectileSpeed = 95 },
 	staff = { style = "projectile", range = 62, minDot = -1, projectileSpeed = 64 },
 } :: { [string]: Style }
@@ -466,6 +474,7 @@ function CombatMath.nearestInRange(
 	for _, point in ipairs(points) do
 		if type(point) == "table" and type(point.x) == "number" and type(point.z) == "number" then
 			local distance = CombatMath.planarDistance(originX, originZ, point.x, point.z)
+				- (if type(point.radius) == "number" then MeleeConfig.targetRadius(point.radius * 2, 0) else 0)
 			if distance <= range and distance < bestDistance then
 				best = point
 				bestDistance = distance
@@ -491,13 +500,20 @@ function CombatMath.hitsMelee(
 	targetX: number,
 	targetZ: number,
 	range: number,
-	minDot: number
+	minDot: number,
+	targetRadius: number?
 ): boolean
 	local dx = targetX - originX
 	local dz = targetZ - originZ
 	local distance = math.sqrt(dx * dx + dz * dz)
-	if distance > range or distance < 1e-4 then
+	local radius = if type(targetRadius) == "number" then MeleeConfig.targetRadius(targetRadius * 2, 0) else 0
+	local gap = distance - radius
+	if gap > range then
 		return false
+	end
+	-- Hugging the target always connects (MeleeConfig.CLOSE_STUDS).
+	if gap <= MeleeConfig.CLOSE_STUDS or distance < 1e-4 then
+		return true
 	end
 	local lookLength = math.sqrt(lookX * lookX + lookZ * lookZ)
 	if lookLength < 1e-4 then

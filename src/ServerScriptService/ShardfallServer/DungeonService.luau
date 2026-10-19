@@ -33,6 +33,7 @@ local cueModule = ReplicatedStorage.Shared
 local CodexCues = require(cueModule.CodexCues)
 local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
+local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
@@ -1932,6 +1933,7 @@ function DungeonService.enemyViews(player: Player): { CombatService.EnemyView }
 				x = position.X,
 				y = position.Y,
 				z = position.Z,
+				radius = MeleeConfig.targetRadius(enemy.part.Size.X, enemy.part.Size.Z),
 			})
 		end
 	end
