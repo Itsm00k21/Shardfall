@@ -75,6 +75,27 @@ local function holdWeapon(character: Model)
 	motor.Parent = limb
 	grip = motor
 	weapon = blade
+	-- A worn Crystal Sword (GearService) replaces the placeholder blade.
+	local function sync()
+		if blade.Parent == nil then
+			return
+		end
+		local gear = character:FindFirstChild("ShardfallGear")
+		local worn = gear ~= nil and gear:FindFirstChild("GearWeapon") ~= nil
+		blade.LocalTransparencyModifier = if worn then 1 else 0
+		blade.Transparency = if worn then 1 else 0
+	end
+	sync()
+	character.DescendantAdded:Connect(function(added)
+		if added.Name == "GearWeapon" or added.Name == "ShardfallGear" then
+			sync()
+		end
+	end)
+	character.DescendantRemoving:Connect(function(removed)
+		if removed.Name == "GearWeapon" or removed.Name == "ShardfallGear" then
+			task.defer(sync)
+		end
+	end)
 end
 
 local function playClip(character: Model, name: string): boolean
