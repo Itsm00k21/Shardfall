@@ -33,6 +33,12 @@ HavenProps.SPOTS = table.freeze(SPOTS)
 -- Its prompt carries HavenAction "travel", which opens the Travel panel.
 HavenProps.PORTAL = table.freeze({ kind = "CrystalPortal", x = -15, z = 27, height = 11, yaw = -90 } :: Spot)
 
+-- The hub landmark: a small crystal shrine east of the spawn pad, between
+-- the 20 and 72 degree bridge lanes. Visual only: no prompt, no shop.
+-- footprint is its rough radius in studs, for the clearance spec.
+HavenProps.LANDMARK = table.freeze({ kind = "CrystalShrine", x = 18, z = 22, height = 8.5, yaw = 225 } :: Spot)
+HavenProps.LANDMARK_FOOTPRINT = 6
+
 -- Uniform scale that makes a mesh of this size the target height.
 function HavenProps.scaleFor(size: { X: number, Y: number, Z: number }, height: number): number
 	if size.Y <= 0 then
