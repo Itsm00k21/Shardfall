@@ -1162,11 +1162,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		rollStroke.Thickness = 2
 		rollStroke.Color = Color3.fromRGB(96, 210, 255)
 		rollStroke.Parent = hubState.rollButton
+		-- A UIGradient also tints the label, so keep the wash light and give
+		-- the text a dark edge (the first Play read the label as washed out).
 		local rollWash = Instance.new("UIGradient")
 		rollWash.Rotation = 90
 		rollWash.Color =
-			ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(150, 120, 230))
+			ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(214, 200, 255))
 		rollWash.Parent = hubState.rollButton
+		hubState.rollButton.TextStrokeColor3 = Color3.fromRGB(24, 14, 52)
+		hubState.rollButton.TextStrokeTransparency = 0.25
 	end
 	hubState.rollCorner = Instance.new("UICorner")
 	hubState.rollCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
