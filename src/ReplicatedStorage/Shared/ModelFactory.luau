@@ -410,7 +410,9 @@ local RECIPES: { [string]: { Piece } } = {
 		ball("Canopy", 2.6, 0, 5.3, 0, MOSS_DARK, "Grass", "large", nil, "body"),
 		ball("Eye", 0.38, 0.38, 3.5, -0.72, AMBER, "Neon", "small", true, nil),
 		ball("Eye", 0.38, -0.38, 3.5, -0.72, AMBER, "Neon", "small", true, nil),
-		block("WeakSpot", 0.7, 0.7, 0.25, 0, 2.6, -0.85, GOLD, "Neon", "large", nil),
+		-- Lowered from y 2.6 and enlarged so it sits at a player's chest
+		-- (Kevin's playtest: too high to read as reachable).
+		block("WeakSpot", 1.0, 1.0, 0.25, 0, 1.5, -0.85, GOLD, "Neon", "large", nil),
 		block("Arm", 0.45, 2.2, 0.45, 1.35, 3.4, 0, BARK, "Wood", "large", "arm"),
 		block("Arm", 0.45, 2.2, 0.45, -1.35, 3.4, 0, BARK, "Wood", "large", "arm"),
 		ball("Fist", 0.7, 1.7, 2.1, -0.2, BARK_DARK, "Wood", "large", nil, "fist"),

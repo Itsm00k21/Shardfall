@@ -543,8 +543,11 @@ local function strikeEnemy(
 		lifesteal
 	)
 	local amount = hit.amount
+	local tag: string? = nil
 	if enemy.boss then
 		amount = CombatMath.bossTaken(amount, enemy.phase, enemy.weak, enemy.armoredMultiplier)
+		-- Kevin's playtest: body hits looked like they did nothing. Say so.
+		tag = CombatMath.bossTag(enemy.phase, enemy.weak, enemy.armoredMultiplier)
 		if lifesteal > 0 then
 			hit.healed = math.floor(amount * lifesteal + 0.5)
 		end
@@ -564,6 +567,7 @@ local function strikeEnemy(
 		shake = CombatFeel.shakeAllowed(tier, shakeOn, juice),
 		particles = CombatFeel.particlesFor(tier, juice),
 		combo = state.combo,
+		tag = tag,
 		x = enemy.x,
 		y = enemy.y + 2,
 		z = enemy.z,
