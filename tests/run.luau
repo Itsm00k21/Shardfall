@@ -192,5 +192,6 @@ require("./Stars.spec")
 require("./Trading.spec")
 require("./AuditExploit.spec")
 require("./LocalLimit.spec")
+require("./ConfigIndex.spec")
 
 process.exit(framework.run())
