@@ -6401,18 +6401,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if hubFn.fresh(page) then
 			return
 		end
+		local painter = nil
 		if page == "hero" then
-			hubFn.paintHero()
+			painter = hubFn.paintHero
 		elseif page == "bag" then
-			hubFn.paintBag()
+			painter = hubFn.paintBag
 		elseif page == "pets" then
-			hubFn.paintPets()
+			painter = hubFn.paintPets
 		elseif page == "roll" then
-			hubFn.paintRoll()
+			painter = hubFn.paintRoll
 		elseif page == "shop" then
-			hubFn.paintShop()
+			painter = hubFn.paintShop
 		elseif page == "settings" or page == "raids" or page == "market" or page == "pass" then
-			hubFn.paintSettings()
+			painter = hubFn.paintSettings
+		end
+		if painter == nil then
+			return
+		end
+		-- A page that fails to build must say so, not open to nothing.
+		local ok, err = pcall(painter)
+		if not ok then
+			warn(string.format("[MenuHub] page %s failed to build: %s", page, tostring(err)))
 		end
 	end
 

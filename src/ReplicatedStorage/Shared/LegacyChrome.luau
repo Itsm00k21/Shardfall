@@ -55,6 +55,15 @@ function LegacyChrome.isPlaceCopy(name: string, inStarterGui: boolean): boolean
 	return inStarterGui and ROBLOX[name] ~= true
 end
 
+-- The legacy text check ("Pity 0/50", "Items Collected", ...) is for
+-- guis this repo did not make. Our own guis are never text-scanned: the
+-- live Roll page shows "Pity 0/50" for the Epic meter, and the scan used
+-- to destroy the whole ShardfallHub at join (Settings and every hub page
+-- then opened to nothing; Kevin, Oct 22).
+function LegacyChrome.textScanned(name: string): boolean
+	return not ClientChrome.shouldClear(name)
+end
+
 function LegacyChrome.shouldDestroy(name: string): boolean
 	return not LegacyChrome.allowed(name)
 end
