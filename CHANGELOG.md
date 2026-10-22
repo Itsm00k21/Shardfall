@@ -24,6 +24,8 @@ its tag to merged and add the merge commit.
   broken cross-references. [#374] (merged, d37b2f1)
 
 ### Changed
+- Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
+  Damookie21) in `DevAccess.OWNER_IDS`. (open)
 - Docs: replaced the roadmap with the locked V1 roadmap (Phases 0-7, Phase S,
   Parking Lot) and the salvage map. [#366] (merged, 6248bb9)
 - Phase 0.1: off-plan systems are parked behind LaunchGate flags (classes,

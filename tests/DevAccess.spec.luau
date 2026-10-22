@@ -56,6 +56,15 @@ describe("DevAccess rules", function()
 		end
 	end)
 
+	it("allows Kevin (10427235156) and denies other ids", function()
+		local KEVIN = 10427235156
+		expect(table.find(DevAccess.OWNER_IDS, KEVIN) ~= nil).toEqual(true)
+		expect(DevAccess.allowed(KEVIN, true, 999999999, false)).toEqual(true)
+		expect(DevAccess.allowed(123456789, true, 999999999, false)).toEqual(false)
+		expect(DevAccess.allowed(123456789, false, 999999999, false)).toEqual(false)
+		expect(DevAccess.allowed(123456789, false, 0, true)).toEqual(false)
+	end)
+
 	it("honours OWNER_IDS when the list has entries", function()
 		for _, id in ipairs(DevAccess.OWNER_IDS) do
 			expect(DevAccess.allowed(id, true, 999999999, false)).toEqual(true)
