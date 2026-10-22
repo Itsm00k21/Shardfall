@@ -39,6 +39,7 @@ local HeavyChip = require(Shared:WaitForChild("HeavyChip"))
 local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local Keybinds = require(Shared:WaitForChild("Keybinds"))
 local PadLight = require(Shared:WaitForChild("PadLight"))
+local SkillTip = require(Shared:WaitForChild("SkillTip"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 
 local ActionBar = {}
@@ -405,6 +406,17 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		dotCorner.CornerRadius = UDim.new(1, 0)
 		dotCorner.Parent = dot
 		buttons[index] = button
+		-- Desktop hover shows the skill card; phones use the long press below.
+		button.MouseEnter:Connect(function()
+			if dragFrom == nil then
+				showTip(index)
+			end
+		end)
+		button.MouseLeave:Connect(function()
+			if not heldTip then
+				hideTip()
+			end
+		end)
 		button.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton2 then
 				heldTip = true
@@ -433,24 +445,56 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end)
 	end
 
-	local tooltip = Instance.new("TextLabel")
+	-- Purple-hex skill card: name, what it does, effect, cooldown, unlock.
+	-- Text comes from SkillTip (skill rows in Classes.luau).
+	local tooltip = Instance.new("Frame")
 	tooltip.Name = "Tooltip"
-	tooltip.BackgroundColor3 = theme("panel")
-	tooltip.BackgroundTransparency = 0
-	tooltip.Font = Enum.Font.BuilderSansBold
-	tooltip.TextSize = UiTheme.MIN_TEXT
-	tooltip.TextColor3 = theme("text")
-	tooltip.TextWrapped = true
-	tooltip.Text = ""
+	tooltip.BackgroundColor3 = Color3.fromRGB(30, 18, 60)
+	tooltip.BackgroundTransparency = 0.04
+	tooltip.BorderSizePixel = 0
 	tooltip.Visible = false
-	tooltip.ZIndex = 8
+	tooltip.Active = false
+	tooltip.ZIndex = 20
 	tooltip.Parent = screen
 	local tipCorner = Instance.new("UICorner")
-	tipCorner.CornerRadius = UDim.new(0, 8)
+	tipCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	tipCorner.Parent = tooltip
 	local tipStroke = Instance.new("UIStroke")
-	tipStroke.Color = theme("accent")
+	tipStroke.Thickness = UiTheme.STROKE_BOLD
+	tipStroke.Color = Color3.fromRGB(150, 92, 255)
 	tipStroke.Parent = tooltip
+	local tipWash = Instance.new("UIGradient")
+	tipWash.Rotation = 90
+	tipWash.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 190, 240))
+	tipWash.Parent = tooltip
+	local tipTitle = Instance.new("TextLabel")
+	tipTitle.Name = "Title"
+	tipTitle.BackgroundTransparency = 1
+	tipTitle.Position = UDim2.fromOffset(SkillTip.PAD + 2, SkillTip.PAD)
+	tipTitle.Size = UDim2.new(1, -(SkillTip.PAD + 2) * 2, 0, SkillTip.TITLE)
+	tipTitle.Font = Enum.Font.BuilderSansExtraBold
+	tipTitle.TextSize = 18
+	tipTitle.TextXAlignment = Enum.TextXAlignment.Left
+	tipTitle.TextColor3 = Color3.fromRGB(255, 220, 120)
+	tipTitle.TextTruncate = Enum.TextTruncate.AtEnd
+	tipTitle.Text = ""
+	tipTitle.ZIndex = 21
+	tipTitle.Parent = tooltip
+	local tipBody = Instance.new("TextLabel")
+	tipBody.Name = "Body"
+	tipBody.BackgroundTransparency = 1
+	tipBody.Position = UDim2.fromOffset(SkillTip.PAD + 2, SkillTip.PAD + SkillTip.TITLE)
+	tipBody.Size = UDim2.new(1, -(SkillTip.PAD + 2) * 2, 1, -(SkillTip.PAD * 2 + SkillTip.TITLE))
+	tipBody.Font = Enum.Font.BuilderSansBold
+	tipBody.TextSize = UiTheme.MIN_TEXT
+	tipBody.LineHeight = SkillTip.LINE / UiTheme.MIN_TEXT * 0.92
+	tipBody.TextXAlignment = Enum.TextXAlignment.Left
+	tipBody.TextYAlignment = Enum.TextYAlignment.Top
+	tipBody.TextColor3 = theme("text")
+	tipBody.TextTruncate = Enum.TextTruncate.AtEnd
+	tipBody.Text = ""
+	tipBody.ZIndex = 21
+	tipBody.Parent = tooltip
 
 	local function promptButton(name: string, text: string): TextButton
 		local button = Instance.new("TextButton")
@@ -593,12 +637,22 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			tooltip.Visible = false
 			return
 		end
-		local name, note = ActionSlots.describe(classId(), slot, profile)
-		tooltip.Text = name .. "\n" .. note
+		local tip = SkillTip.tip(classId(), slot, profile)
+		if tip.title == "" then
+			tooltip.Visible = false
+			return
+		end
+		tipTitle.Text = tip.title
+		tipBody.Text = table.concat(SkillTip.lines(tip), "\n")
 		local button = buttons[index]
-		tooltip.Size = UDim2.fromOffset(180, 48)
+		local tipH = SkillTip.height(tip)
+		tooltip.Size = UDim2.fromOffset(SkillTip.WIDTH, tipH)
+		local screenW = screen.AbsoluteSize.X
 		local tipX = button.AbsolutePosition.X - screen.AbsolutePosition.X
-		local tipY = button.AbsolutePosition.Y - screen.AbsolutePosition.Y - 52
+		if screenW > SkillTip.WIDTH then
+			tipX = math.clamp(tipX, 8, screenW - SkillTip.WIDTH - 8)
+		end
+		local tipY = button.AbsolutePosition.Y - screen.AbsolutePosition.Y - tipH - 8
 		tooltip.Position = UDim2.fromOffset(tipX, tipY)
 		tooltip.Visible = true
 	end
