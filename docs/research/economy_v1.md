@@ -1,7 +1,7 @@
 # Shardfall Economy v1 (Phase 4 sheet)
 
-Status: **draft for review**. Docs only. Nothing in `src/` changes from this file.
-Author: Echo (support lane), Oct 21, 2026 (PT). Spec: issue #15 comment 6333741405, item 3.
+Status: **draft for review, revision 2** (Kevin-approved revision, Oct 21, 2026 PT). Docs only. Nothing in `src/` changes from this file.
+Author: Echo (support lane). Spec: issue #15 comment 6333741405, item 3. PR #369.
 Base: `cursor/live-build-9721`. Roadmap: `docs/ROADMAP.md` Phase 4.
 
 ## How to read this sheet
@@ -10,9 +10,18 @@ Base: `cursor/live-build-9721`. Roadmap: `docs/ROADMAP.md` Phase 4.
 - **Proposed** = a new number from this sheet. It is not in the repo. Ghost decides whether it goes into config.
 - **Missing** = the repo has no value for this. A proposal is given.
 
-Paths: `S/` = `src/ReplicatedStorage/Shared/`. The roadmap says all numbers will live in `src/shared/Config/` (ROADMAP ground rule 6, milestone 0.3). That folder does not exist on the base branch yet. The only file there is `WaveArenaConfig.luau` on draft PR #368. Proposed config paths below use `src/shared/Config/` to match the roadmap.
+Paths: `S/` = `src/ReplicatedStorage/Shared/`. The roadmap says all numbers will live in `src/shared/Config/` (ROADMAP ground rule 6, milestone 0.3). That folder doesn't exist on the base branch yet. The only file there is `WaveArenaConfig.luau` on draft PR #368. Proposed config paths below use `src/shared/Config/` to match the roadmap.
 
 Free-to-play rule for every row: nothing here costs Robux and nothing is pay-to-win. Roll Tokens and Fragments are earn-only. Pity is free and never sold (`S/RollConfig.luau` header). The paid kill switch stays off (`S/RarityConfig.luau` `PAID_LUCK_ENABLED = false`).
+
+### What changed in revision 2
+
+1. Five difficulties (Normal, **Medium**, Hard, Nightmare, **Insane**) with multipliers, level gates and enemy scaling.
+2. Pay is judged **per minute**, with Proposed run lengths. Each tier strictly beats the one below it.
+3. Boss wave pays 5. A Normal clear is now **11** tokens. Everything downstream was recomputed.
+4. The sim models the roadmap's **5-tier** target, and keeps the current 7-tier ladder as a comparison.
+5. Legendary pace: Proposed **hard pity 150 with soft pity from roll 100**. First Legendary drops from ~6 h to ~30 min.
+6. Token split across the 4 tabs. 7. Bag space. 8. Gold keep-or-cut call. 9. Fragment shop check against pity. 10. Run-length caveat. 11. Sim committed as `tools/econ_sim.py` (seed 42).
 
 ---
 
@@ -22,29 +31,38 @@ The roadmap reshapes the six live currencies into **Roll Tokens + Fragments** (+
 
 | Currency | Job | Live name today | Status |
 |---|---|---|---|
-| Roll Tokens | Pay for rolls. 1 token = 1 roll. | Shard Tokens, `shardTokens` (`S/Currencies.luau` `SHARD`, `S/Schema.luau`) | Current wallet, renamed in Phase 4 (**Proposed** rename only, field id stays `shardTokens` so saves don't migrate) |
-| Fragments | Bad-luck protection. Duplicates turn into Fragments, and Fragments buy progress. | Closest is Shard Dust, `shardDust` (`S/ChestConfig.luau` `DUST`) | **Missing** as a V1 wallet. Shard Dust / dup merging is in the Parking Lot and "needs Kevin's OK" (ROADMAP Parking Lot). Proposed below; needs Kevin's OK before build. |
-| Gold | Everyday money | `gold` (`S/Economy.luau`) | Current. Only kept if Phase 2+ needs it. Not part of this loop. |
+| Roll Tokens | Pay for rolls. 1 token = 1 roll. One wallet for all 4 tabs. | Shard Tokens, `shardTokens` (`S/Currencies.luau` `SHARD`, `S/Schema.luau`) | Current wallet. **Proposed** rename in UI only. Field id stays `shardTokens` so saves don't migrate. |
+| Fragments | Bad-luck protection. Duplicates turn into Fragments, and Fragments buy progress. | Closest is Shard Dust, `shardDust` (`S/ChestConfig.luau` `DUST`) | **Missing** as a V1 wallet. Shard Dust / dup merging is in the Parking Lot and "needs Kevin's OK" (ROADMAP Parking Lot). Proposed below. Needs Kevin's OK before build. |
+| Gold | Everyday money | `gold` (`S/Economy.luau`) | Current. **Recommendation: cut from the V1 loop** (see section 1a). |
 | Prism Tokens | Robux roll wallet | `prismTokens` (`S/Currencies.luau`) | Current but **off** (`PAID_LUCK_ENABLED = false`). Not part of V1. Stays off. |
 
 **Roll Tokens**
-- Sources (current): new profile `Schema.STARTER_TOKENS = 10` (`S/Schema.luau:170`); Rootvault clear 3 (`S/Dungeons.luau` ROOTVAULT `rewards.shardTokens`); Heartwood clear 4 (same file); old Waves mode 1 token every 3rd wave, 2 every 5th (`Dungeons.waveReward`); a clear voucher at 40% Rootvault / 20% Heartwood (`voucherChance`).
+- Sources (current): new profile `Schema.STARTER_TOKENS = 10` (`S/Schema.luau`). Rootvault clear 3 and Heartwood clear 4 (`S/Dungeons.luau` `rewards.shardTokens`). Old Waves mode pays 1 token every 3rd wave and 2 every 5th (`Dungeons.waveReward`). A clear voucher drops at 40% (Rootvault) or 20% (Heartwood) (`voucherChance`).
 - Sources (**Proposed** for V1): wave arena waves (section 2), dailies and weekly (section 7), 3 free first rolls (section 3).
 - Sinks (current): 1 per single roll, 9 per x10 (`RollConfig.SINGLE_COST = 1`, `RollConfig.cost(10)`).
-- Cap: **Missing** in profile reconcile (economy_audit.md says "none in reconcile; Studio grant stops at 9999"). **Proposed** cap 9,999.
+- Cap: **Missing** in profile reconcile (economy_audit.md: "none in reconcile; Studio grant stops at 9999"). **Proposed** cap 9,999.
 
 **Fragments**
-- Sources (**Proposed**): duplicates from rolls (section 5). Nothing else in V1.
-- Sinks (**Proposed**): buy a chosen Epic or Legendary from the current tab's pool, and later gear upgrades (section 6).
-- Cap: **Proposed** 99,999. (Live Shard Dust cap is 999,999 in `S/ChestConfig.luau` / `S/Schema.luau`.)
+- Sources (**Proposed**): duplicates from rolls only (section 5).
+- Sinks (**Proposed**): a chosen Epic or Legendary from a tab's pool, and later gear upgrades (section 6).
+- Cap: **Proposed** 99,999. (The live Shard Dust cap is 999,999 in `S/ChestConfig.luau` / `S/Schema.luau`.)
+
+### 1a. Gold: keep or cut?
+
+**Recommendation: cut Gold from the V1 loop.** Keep the `gold` save field untouched, but don't show it, pay it, or spend it until a phase needs it.
+- The V1 loop is roll → equip → run → tokens → roll (ROADMAP one-line plan). Gold has no job in it.
+- Every live gold sink is parked: Forge (`forgeCraft` flags), the market and trading (`market`, `trading`), eggs, and the gold shop (`goldShop`) (ROADMAP salvage map, PARK).
+- A faucet with no sink is the inflation case in `docs/design/shardfall_economy.md`, and economy_audit.md flags F1/F3 already show gold is out of balance.
+- Fewer currencies passes the "explain each in one sentence" rule (`shardfall_economy.md` principle 2).
+- Revisit at the Checkpoint gate if upgrades come back. Section 6 proposes Fragments for upgrades instead, so Gold may never be needed.
 
 ---
 
 ## 2. Income per run (wave arena)
 
-Wave layout is current on draft PR #368: waves of 6, 8, 10, 12, then 1 boss with 4 adds (`src/shared/Config/WaveArenaConfig.luau` `waves`). The arena has **no reward fields**. All token numbers below are **Proposed**.
+Wave layout is current on draft PR #368: waves of 6, 8, 10 and 12, then 1 boss with 4 adds (`src/shared/Config/WaveArenaConfig.luau` `waves`). The arena has **no reward fields**. All token numbers below are **Proposed**.
 
-The closest live numbers are the old Waves mode (`Dungeons.waveReward`: 0, 0, 1, 0, 2 tokens for waves 1–5 = 3) and a Rootvault clear (3 tokens + 40% voucher). At 3 tokens a run, one run buys 3 singles and an x10 takes 3 runs. The roadmap target is "about 1 run = a few rolls" (ROADMAP 4.4), and the loop needs a run to feel like it paid. So the proposal pays more.
+The closest live numbers are the old Waves mode (`Dungeons.waveReward`: 0, 0, 1, 0, 2 tokens for waves 1–5, total 3) and a Rootvault clear (3 tokens plus a 40% voucher). That's 3 rolls a run, which misses the roadmap target "about 1 run = a few rolls" (ROADMAP 4.4).
 
 | Wave | Enemies (current, #368) | Roll Tokens, Normal (**Proposed**) |
 |---|---|---|
@@ -52,20 +70,47 @@ The closest live numbers are the old Waves mode (`Dungeons.waveReward`: 0, 0, 1,
 | 2 | 8 | 1 |
 | 3 | 10 | 2 |
 | 4 | 12 | 2 |
-| 5 boss | 1 boss + 4 adds | 3 |
-| **Full clear** | | **9** (= one x10 roll) |
+| 5 boss | 1 boss + 4 adds | 5 |
+| **Full clear** | | **11** (one x10 plus 2 singles) |
 
-- **Difficulty multiplier (Proposed):** Normal x1.0, Hard x1.5, Nightmare x2.0, applied to the run total and rounded half up. The live Rootvault difficulties already use 1 / 1.5 / 2 for enemy HP and damage (`S/Rootvault.luau` `DIFFICULTIES`), so pay tracks danger. Live rows have **no** reward multiplier, only chest tier (Common / Uncommon / Rare). Hard and Nightmare are Phase 5 (ROADMAP 5.4, 5.5); level gates live at 10 and 15 (`S/Rootvault.luau`).
-- **First clear of the day (Proposed):** +5 tokens once a day. Live first clear of the day pays x3 XP + a Rare chest (`S/Loops.luau` `firstClear`); chests are parked, so tokens replace the chest.
-- **First-ever clear (Proposed):** +10 tokens once per difficulty. Gives a new player a second x10 right after their first win.
-- **Failed or left run:** keep tokens from every cleared wave, no clear bonuses (ROADMAP 3.7 "Leave anytime, keep loot from cleared waves"; live text in `S/Dungeons.luau` "Rewards from cleared waves are still yours"). Dying on the boss pays 6 of 9 on Normal.
-- **Fragments from runs (Proposed):** none. Fragments come only from duplicates, so runs feed rolls and rolls feed Fragments (ROADMAP scope rule 6).
+The boss pays almost half the run, so finishing matters more than farming the early waves.
 
-| Difficulty | Full clear | Failed on boss (waves 1–4) | First of day | First ever |
-|---|---|---|---|---|
-| Normal | 9 | 6 | +5 | +10 |
-| Hard | 14 (13.5 rounded) | 9 | +5 | +10 |
-| Nightmare | 18 | 12 | +5 | +10 |
+### Five difficulties (all multipliers and run lengths Proposed)
+
+| Tier | Level gate | Enemy HP / damage | Token multiplier | Run length (min) | Full clear | Failed on boss (waves 1–4) |
+|---|---|---|---|---|---|---|
+| Normal | 1 (current, `S/Rootvault.luau`) | x1 (current) | x1.00 | 5.0 | 11 | 6 |
+| **Medium** (new) | 5 (**Proposed**) | x1.25 (**Proposed**) | x1.25 | 5.5 | 14 | 8 |
+| Hard | 10 (current) | x1.5 (current) | x1.50 | 6.0 | 17 | 9 |
+| Nightmare | 15 (current) | x2 (current) | x2.00 | 7.0 | 22 | 12 |
+| **Insane** (new) | 20 (**Proposed**) | x3 (**Proposed**) | x3.00 | 9.0 | 33 | 18 |
+
+- Current rows: Normal, Hard and Nightmare HP, damage and level gates come from `S/Rootvault.luau` `DIFFICULTIES`. Live rows have **no** reward multiplier, only a chest tier. Hard and Nightmare as modes are Phase 5 (ROADMAP 5.4, 5.5). Medium and Insane are new.
+- Medium gate L5 sits where pacing.md puts the player at ~0.37 h. Insane gate L20 sits at ~16.8 h (`docs/design/pacing.md` level hours).
+- Rounding: totals are rounded half up (13.75 → 14, 16.5 → 17).
+
+### Pay per minute (Proposed run lengths)
+
+| Tier | Tokens / min | Rolls / min (spent on x10) | Beats tier below by |
+|---|---|---|---|
+| Normal | 2.20 | 2.44 | — |
+| Medium | 2.55 | 2.83 | +16% |
+| Hard | 2.83 | 3.15 | +11% |
+| Nightmare | 3.14 | 3.49 | +11% |
+| Insane | 3.67 | 4.07 | +17% |
+
+Each tier strictly beats the one below on tokens per minute (the sim asserts this). The edge is small on purpose (11–17%), because harder runs also take longer and fail more. If playtests show Hard clears taking more than ~7 min, Hard drops below Medium per minute. Raise its multiplier, don't shorten the run.
+
+### Other run rules
+
+- **First clear of the day (Proposed):** +5 tokens once a day. Live first clear of the day pays x3 XP and a Rare chest (`S/Loops.luau` `firstClear`). Chests are parked, so tokens replace the chest.
+- **First-ever clear (Proposed):** +10 tokens once per difficulty.
+- **Failed or left run:** keep tokens from every cleared wave, but no clear bonuses (ROADMAP 3.7: "Leave anytime, keep loot from cleared waves". Live text in `S/Dungeons.luau`: "Rewards from cleared waves are still yours"). Dying on the boss pays 6 of 11 on Normal.
+- **Fragments from runs (Proposed):** none. Fragments come only from duplicates.
+
+### Run length is an assumption
+
+The 5-minute Normal run comes from ROADMAP Phase 3 ("Kevin can clear solo in about 5 minutes"). It hasn't been measured. Ghost's #15 comment 6334230802 (Kevin's Rootvault playtest, 11:19 PM PT) lists loot, boss and camera fixes, but **gives no run timing**. **Verify all five run lengths against Kevin's timed arena playtests**, then re-run `tools/econ_sim.py`. Pay per minute is the number to protect, not pay per run.
 
 ---
 
@@ -77,66 +122,109 @@ The closest live numbers are the old Waves mode (`Dungeons.waveReward`: 0, 0, 1,
 | x10 roll | 9 tokens (10% off) | Current, `RollConfig.MULTI_COUNT = 10`, `MULTI_DISCOUNT = 0.10`, `RollConfig.cost` |
 | Batch rule | x10 needs 10 free bag slots and 9 tokens before anything is spent | Current, `RollConfig.batchBlock` |
 | Epic+ pity | 50 rolls | Current, `RollConfig.EPIC_PITY = 50` |
-| Legendary+ pity | 1000 rolls | Current, `RollConfig.LEGENDARY_PITY = 1000` |
+| Legendary+ pity | 1000 rolls | Current, `RollConfig.LEGENDARY_PITY = 1000`. **Proposed: 150 with soft pity, see 3a** |
 | x2 luck roll | every 10th roll | Current, `RollConfig.BONUS_EVERY = 10`, `RarityConfig.luckMultiplier` |
-| 3 free first rolls | 3 rolls, no token | **Missing** as a count. Roadmap 1.5 asks for it. Live gives 10 starter tokens (`Schema.STARTER_TOKENS`) and one floored first roll (`FirstSession.CONFIG.rollFloor = "Rare"`). **Proposed:** `freeRolls = 3`, first one keeps the Rare floor. Keep the 10 starter tokens so the first x10 is one run away. |
+| 3 free first rolls | 3 rolls, no token | **Missing** as a count. Roadmap 1.5 asks for it. Live gives 10 starter tokens (`Schema.STARTER_TOKENS`) and one floored first roll (`FirstSession.CONFIG.rollFloor = "Rare"`). **Proposed:** `freeRolls = 3`, with the first keeping the Rare floor. Keep the 10 starter tokens. |
 
-**When pity resets (current):** any Epic or better, natural or forced, resets the Epic counter. Legendary+ resets both (`RarityConfig.advance`). Saved as `sinceEpic` / `sinceLegendary`.
+**When pity resets (current):** any Epic or better, natural or forced, resets the Epic counter. A Legendary or better resets both counters (`RarityConfig.advance`). They're saved as `sinceEpic` / `sinceLegendary`.
 
-**Does x10 count as 10?** Yes, current. A batch is 10 server rolls in a row, each advancing pity (`S/RollBatch.luau`, `RollService`). Pity can fire on any roll inside the batch. 50 = exactly five x10s (`RollConfig` header).
+**Does x10 count as 10?** Yes, current. A batch is 10 server rolls in a row, each advancing pity (`S/RollBatch.luau`, `RollService`). 50 is exactly five x10s.
 
-**Odds (current, 7 tiers):** Common 1/2, Uncommon 1/5, Rare 1/25, Epic 1/250, Legendary 1/2500, Mythic 1/25000, Secret 1/100000 (`S/RarityConfig.luau` `ONE_IN`). Roadmap 1.3 moves to 5 tiers; that collapse is not done yet, so this sheet keeps 7.
+### 3a. Rarity ladder: 7 tiers now, 5 tiers planned
+
+**Current, 7 tiers** (`S/RarityConfig.luau` `ONE_IN`): Common 1/2, Uncommon 1/5, Rare 1/25, Epic 1/250, Legendary 1/2500, Mythic 1/25000, Secret 1/100000.
+
+**Roadmap target:** ROADMAP 1.3 says "5 rarity tiers + pity meter", and the salvage map says "7 tiers → 5 in config. Keep IDs stable, migrate saves." The roadmap gives **no tier names and no 1-in-N values**. The Notion roadmap wasn't checked for this revision (Echo's run uses the repo copy, which says it mirrors Notion).
+
+**Proposed 5 tiers:** Common, Uncommon, Rare, Epic, Legendary. Mythic and Secret fold into Legendary in V1 and stay reserved IDs for Phase 8 content.
+
+| Tier | Proposed 1-in-N (checked rarest first; Common absorbs the rest) | Why |
+|---|---|---|
+| Common | 1/2 (remainder) | same as now |
+| Uncommon | 1/4 | slightly more often than 1/5 so early rolls feel varied |
+| Rare | 1/15 | ~1 per x10 plus change |
+| Epic | 1/100 | natural Epic sometimes beats the 50 pity, so the meter isn't the only way |
+| Legendary | 1/1000 | the chase tier, with soft and hard pity below |
+
+**Legendary pity (Proposed):** hard pity **150** (down from 1000). **Soft pity** starts after roll 100: each roll past 100 adds +2% absolute Legendary chance (roll 101 ≈ 2.1%, roll 125 ≈ 50%, roll 150 is guaranteed). Same reset rules as now. It stays free and never sold.
+
+Result (sim, section 9): first Legendary at a **median of ~30 min** (p90 ~35 min) on Normal, down from ~6 h on the current ladder. A 15-minute fun test reliably sees an Epic (by ~5 min) and about 40 rolls toward the Legendary meter. The first Legendary lands in the player's second or third session block. Hitting Legendary inside 15 minutes would need pity ≈ 40, which makes Legendary the new Epic, so it isn't proposed.
+
+**Odds disclosure** must update with the ladder (`RarityConfig.disclose`, the paid-random rule in the RarityConfig header). Soft pity has to appear in the odds text.
 
 ---
 
 ## 4. Pacing targets
 
-Run length target is about 5 minutes (ROADMAP Phase 3 "done when"). Rolls per run = tokens x 10 / 9 when spent on x10s.
+Rolls per run = tokens × 10 / 9 when spent on x10s. Run lengths are Proposed (section 2).
 
-| Difficulty | Tokens / run (**Proposed**) | Rolls / 5-min run | Runs to 50 pity | Minutes to pity | 15-min session | 1-hour session |
-|---|---|---|---|---|---|---|
-| Normal | 9 | 10 | 5 | 25 | 3 runs, 27 tokens, 30 rolls | 12 runs, 108 tokens, 120 rolls (+16 daily, +5 first clear) |
-| Hard | 14 | ~15.5 | 3.2 | ~16 | 42 tokens, ~46 rolls | 168 tokens, ~186 rolls |
-| Nightmare | 18 | 20 | 2.5 | ~13 | 54 tokens, 60 rolls | 216 tokens, 240 rolls |
+| Tier | Tokens / run | Rolls / run | Run (min) | Runs to 50 Epic pity | Minutes to Epic pity (worst case) | Minutes to Legendary hard pity 150 (worst case) | 15-min session | 1-hour session |
+|---|---|---|---|---|---|---|---|---|
+| Normal | 11 | 12.2 | 5.0 | 4.1 | 20 | 61 | 3 runs, 33 tokens, ~37 rolls | 12 runs, 132 tokens, ~147 rolls |
+| Medium | 14 | 15.6 | 5.5 | 3.2 | 18 | 53 | ~2.7 runs, 38 tokens, ~42 rolls | ~11 runs, 153 tokens, ~170 rolls |
+| Hard | 17 | 18.9 | 6.0 | 2.6 | 16 | 48 | 2.5 runs, 43 tokens, ~47 rolls | 10 runs, 170 tokens, ~189 rolls |
+| Nightmare | 22 | 24.4 | 7.0 | 2.0 | 14 | 43 | ~2.1 runs, 47 tokens, ~52 rolls | ~8.6 runs, 189 tokens, ~210 rolls |
+| Insane | 33 | 36.7 | 9.0 | 1.4 | 12 | 37 | ~1.7 runs, 55 tokens, ~61 rolls | ~6.7 runs, 220 tokens, ~244 rolls |
 
-**Time to first item at each rarity (Normal, from the sim in section 9, median):**
-Uncommon ~4 min, Rare ~5 min, Epic ~10 min (pity carries this; natural Epic+ is ~0.44%/roll per `RollConfig` header), Legendary ~7.6 h (mostly the 1000 pity), Mythic and Secret are rare chase items (under 6% and 2% of players in 10 h).
+Session numbers exclude dailies. Add ~28 tokens a day (section 7).
 
-What a session feels like (Proposed target):
-- **15 minutes:** 3 runs, three x10s, at least one Epic (pity fires around roll 50 if luck doesn't). Matches the Checkpoint fun test (ROADMAP: "Kevin wants to keep playing after 15 min").
-- **1 hour:** 12 runs, ~130 rolls with dailies, 2–3 Epics, a full pity bar every 25 min.
+**Time to first item at each rarity (sim, Normal only, median; times rounded up to the run end):**
+
+| Rarity | Proposed 5-tier | Current 7-tier |
+|---|---|---|
+| Uncommon | < 1 min (free rolls) | ~2 min |
+| Rare | ~5 min | ~5 min |
+| Epic | ~5 min | ~5 min |
+| Legendary | **~30 min** | ~6.1 h |
+| Mythic / Secret | n/a (folded) | ~7% / ~1% of players in 10 h |
+
+What a session feels like (Proposed target, 5-tier):
+- **15 minutes:** 3 Normal runs, three x10s, an Epic, and a Legendary meter about a quarter full. That fits the Checkpoint ("Kevin wants to keep playing after 15 min").
+- **1 hour:** 12 runs, ~150 rolls, several Epics, and usually one Legendary.
 
 ---
 
 ## 5. Duplicates
 
-V1 Fragments are **Proposed** (Parking Lot item, needs Kevin's OK). Live Shard Dust per duplicate is current in `S/ChestConfig.luau` `DUST`. Proposed Fragments are live Dust / 5, so the numbers stay readable at roll volume.
+V1 Fragments are **Proposed** (Parking Lot item, needs Kevin's OK). Live Shard Dust per duplicate is current in `S/ChestConfig.luau` `DUST`. Proposed Fragments are live Dust ÷ 5.
 
-| Rarity | Live Shard Dust per dup (current) | Fragments per dup (**Proposed**) |
+| Rarity | Live Shard Dust per dup (current) | Fragments per dup (**Proposed**, 5-tier) |
 |---|---|---|
 | Common | 5 | 1 |
 | Uncommon | 15 | 3 |
 | Rare | 50 | 10 |
 | Epic | 200 | 40 |
 | Legendary | 1000 | 200 |
-| Mythic | 5000 | 1000 |
-| Secret | none listed | 1000 |
+| Mythic (current 7-tier only) | 5000 | 1000 (comparison sim only) |
+
+**Proposed:** duplicates convert to Fragments automatically and never take a bag slot (see section 7a).
 
 What Fragments buy (**Proposed**):
-- Chosen Epic from the tab's pool: 400 (live Dust price 2000, `ChestConfig.DUST_EPIC`, / 5).
-- Chosen Legendary: 2000 (live 10000, `ChestConfig.DUST_LEGENDARY`, / 5).
-- Mythic and Secret are never sold for Fragments (matches live rule that Dust can't buy Mythic, `ChestConfig.buyDustShard`).
-- Gear upgrades, section 6.
+- A chosen Epic from a tab's pool: **400**
+- A chosen Legendary: **2000**
+- Gear upgrades (section 6)
 
-Alternative live path: `S/Stars.luau` feeds a duplicate into the kept item (+8% stats per star, max 5). It is parked under the `stars` flag. If Kevin prefers stars over Fragments, the dup table above becomes "star progress" and section 6 shrinks.
+### 5a. Fragment shop check against pity
+
+Rule: a chosen Legendary must not come faster than pity, or pity stops mattering.
+
+| Tier | Fragments / hour (sim, 5-tier) | Hours to 2000 (chosen Legendary) | Worst-case Legendary pity (hard 150) | OK? |
+|---|---|---|---|---|
+| Normal | ~580 | ~3.5 h | ~1.0 h | Yes, 3.4x slower |
+| Ladder (Normal → Nightmare) | ~770 | ~2.6 h | ~0.7–1.0 h | Yes |
+| Insane (estimated ~1.7x Normal rolls/min) | ~980 (est.) | ~2.0 h | ~0.6 h | Yes |
+
+| Epic check | Fragments 400 at ~580/h ≈ 41 min | Epic pity 50 ≈ 20 min worst case on Normal | Yes |
+
+**Prices are kept at 400 / 2000.** The shop is a "pick the exact one you want" tool, not a faster route. If the Legendary pity is cut further, re-check this table. The Legendary price must stay above ~2x the Fragments earned in one worst-case pity window.
 
 ---
 
 ## 6. Gear sinks
 
-Gear upgrading is **out of scope for Phase 2** (ROADMAP Phase 2: "Upgrading gear, fusing, salvaging, Shard Dust"). So V1 launches with no gear sink. This section reserves the budget so it doesn't fight rolling later.
+Gear upgrading is **out of scope for Phase 2** (ROADMAP Phase 2: "Upgrading gear, fusing, salvaging, Shard Dust"). V1 launches with no gear sink. This reserves the budget.
 
-Live Forge (parked, `forgeCraft` flags): +0→+10, paid in Gold. +1 = 150, +2 = 300, then `floor(500 * 1.6^level + 0.5)`; 1 boss material from level 7 (`S/Economy.luau` `upgradeCost`, `UPGRADE_MAX = 10`).
+Live Forge (parked, `forgeCraft` flags): +0→+10, paid in Gold. +1 = 150, +2 = 300, then `floor(500 * 1.6^level + 0.5)`, and 1 material from level 7 (`S/Economy.luau` `upgradeCost`, `UPGRADE_MAX = 10`). Under the Gold-cut recommendation (1a), that forge would move to Fragments if it ever comes back.
 
 **Proposed** Fragment upgrade path (+1 to +5 only, post-Checkpoint):
 
@@ -148,25 +236,46 @@ Live Forge (parked, `forgeCraft` flags): +0→+10, paid in Gold. +1 = 150, +2 = 
 | +3→+4 | 160 | 300 |
 | +4→+5 | 320 | 620 |
 
-Budget check (sim, Normal): a player earns ~300 Fragments/hour. One item to +5 = ~2 h of dups. A full 5-slot loadout to +5 = 3,100 = ~10 h. A chosen Epic (400) competes with ~1.3 upgrades, which is the intended choice. Upgrades never destroy items (`S/Economy.luau` header).
+Budget check (sim, 5-tier Normal, ~580 Fragments/h): one item to +5 takes ~1.1 h. A full 5-slot loadout (3,100) takes ~5.4 h. A chosen Legendary (2000) costs about 3 items' worth of upgrades, which is the intended trade-off. Upgrades never destroy items (`S/Economy.luau` header).
 
 ---
 
 ## 7. Daily and weekly rewards
 
-Live dailies: 3 a day from a pool, each lasts 3 days, one reroll (`S/Loops.luau` `POOL`, `DAILY_LIFE_DAYS = 3`). Live payout is 40 gold + 1 Shard Key per daily (economy_audit.md, `LoopService.luau`). Login streak pauses, never resets (`Loops.login`). Weekly = 5 quests (`Loops.WEEKLY`). Most live daily texts point at parked systems (eggs, forge, pets), so ROADMAP 6.7 rewrites them for rolling and dungeons.
+Live dailies: 3 a day from a pool, each lasting 3 days, with one reroll (`S/Loops.luau` `POOL`, `DAILY_LIFE_DAYS = 3`). Live payout is 40 gold + 1 Shard Key per daily (economy_audit.md, `LoopService.luau`). The login streak pauses and never resets (`Loops.login`). Weekly is 5 quests (`Loops.WEEKLY`). Most live daily texts point at parked systems, so ROADMAP 6.7 rewrites them.
 
-**Proposed V1 token payout:**
+**Proposed V1 token payout** (unchanged from revision 1):
 
 | Source | Tokens | Notes |
 |---|---|---|
 | Login (once a day) | 2 | streak never resets |
-| Each daily (x3) | 3 | e.g. "Clear 3 waves", "Roll 20 times", "Clear a run" |
+| Each daily (x3) | 3 | e.g. "Clear 3 waves", "Roll 20 times", "Clear a Medium run" |
 | All 3 dailies bonus | 5 | |
 | First clear of the day | 5 | section 2 |
-| Each weekly (x5) | 10 | 50 a week ≈ 7/day |
+| Each weekly (x5) | 10 | 50 a week ≈ 7 a day |
 
-**Typical day (Normal, 45 minutes = 9 runs):** runs 81 + login 2 + dailies 9 + all-3 bonus 5 + first clear 5 + weekly share ~7 = **~109 tokens ≈ 121 rolls**. Dailies are ~25% of a light day and ~10% of a 2-hour day, so they reward coming back without replacing play.
+**Typical day (45 minutes = 9 Normal runs):** runs 99 + login 2 + dailies 9 + all-3 5 + first clear 5 + weekly share ~7 = **~127 tokens ≈ 141 rolls**. On Hard (7.5 runs): ~128 + 28 = ~156 tokens. Dailies are ~22% of a light Normal day and ~10% of a 2-hour day.
+
+### 7a. Bag space
+
+- **Current bag size:** `Schema.INVENTORY_CAP = 100` (`S/Schema.luau`). A planned paid +10 expansion is off (`S/Currencies.luau` `INVENTORY_EXPAND_SLOTS = 10`, `INVENTORY_EXPAND_ROBUX = 80`, "Not for sale yet"). **Keep it off.** Selling bag space would gate rolling behind Robux.
+- **Current rule:** an x10 needs 10 free slots before tokens are spent (`RollConfig.batchBlock`).
+- **Pacing effect:** at ~147 rolls/hour, a bag that keeps every roll fills in **under 1 hour**, and every x10 after that stalls on a "Bag needs 10 free slots" message. The current-ladder sim keeps only uniques and still reaches ~134 uniques (with its assumed pool sizes), so **100% of players get blocked**.
+- **Proposed fix:** duplicates auto-convert to Fragments and never use a slot. Commons and Uncommons below the player's equipped item can also auto-convert (opt-in toggle). With 5 tiers and 20 items per tab (80 total, an assumption), the sim bag tops out at ~78/100, and **0% of players are blocked**.
+- Bag space is then a soft sink that nudges players to equip, not a wall.
+
+### 7b. Token split across tabs
+
+One wallet pays for all 4 tabs (Weapons, Armor, Pets, Skills; ROADMAP 1.6). **Proposed typical spread**, used in the sim:
+
+| Tab | Share of rolls | Rolls per Normal hour (~147) | Why |
+|---|---|---|---|
+| Weapons | 40% | ~59 | biggest power jump, Ember damage scaling |
+| Armor | 25% | ~37 | survival for Hard and up |
+| Pets | 20% | ~29 | one slot, visible flex |
+| Skills | 15% | ~22 | two slots, fewer items |
+
+Implications: a Skills Legendary takes longer to get from luck alone. Pity is per player, not per tab (current `sinceEpic` is one field), so a forced Legendary lands in whichever tab is being rolled. **Proposed:** keep pity global. Log the tab split (section 10). If Skills drops under 10%, add a Skills-only daily.
 
 ---
 
@@ -174,49 +283,89 @@ Live dailies: 3 a day from a pool, each lasts 3 days, one reroll (`S/Loops.luau`
 
 | Risk | Why | Mitigation (**Proposed**) |
 |---|---|---|
-| Farming the easiest difficulty | If Normal tokens/min beats Hard, players sit on Normal | Hard pays x1.5 for x1.5 enemy HP. Watch clear time: if Hard takes >1.5x Normal's time, raise Hard to x1.75. Log clear times (section 10). Harder runs also get better shard odds in Phase 5 (ROADMAP 5.6). |
-| Hoarding | Players bank tokens for a "luck" moment | Pity is per player and doesn't care when you roll. Token cap 9,999 ≈ 92 h of Normal. |
-| Inflation | Tokens only enter, rolls only remove; Fragments can pile up | Every token has one sink (rolls). Fragments get two sinks (chosen shard, upgrades). Event tokens stay off until a shop exists (economy_audit F6). |
-| New vs veteran gap | Veterans have 1000s of rolls; new players feel behind | Power comes from rarity, not count. Fragments cap progress with rising costs. Comeback boost (section 11). No trading in V1 (parked), so veterans can't funnel. |
-| Element pick | One element best → everyone rolls one tab | ROADMAP balance rule: Ember / Frost / Void stay close. Log element mix. |
-| Bots / AFK | Free token farm | Anti-AFK in Phase 6 (6.3). Live auto-farm pays 40% for 2 h max (`S/Economy.luau` `FARM_RATE`, `FARM_SECONDS`). |
+| Farming the easiest tier | If Normal tokens/min beats harder tiers, players sit on Normal | Tokens/min rises strictly by tier (2.20 → 2.55 → 2.83 → 3.14 → 3.67). Log clear times. If a tier's real run length makes it lose to the one below, raise its multiplier. Phase 5 adds better odds on harder runs (ROADMAP 5.6). |
+| Medium becoming the comfort tier | Medium is only +16% over Normal at low risk | Fine for L5–L10. Hard is +11% over Medium, which should pull L10+ players up. Watch the mode mix. |
+| Insane too generous | x3 pay on a 9-minute run could flood veterans | Only +17% per minute over Nightmare, gated at L20 (~17 h). If clear rates top 80%, lower it to x2.75. |
+| Hoarding | Players bank tokens for a "luck" moment | Pity is per player and time-blind. Token cap 9,999 ≈ 75 h of Normal. |
+| Inflation | Tokens only enter, and rolls only remove; Fragments can pile up | Each currency has a sink. Gold is cut (1a). Event tokens stay off until a shop exists. |
+| New vs veteran gap | Veterans earn 3.67/min on Insane vs 2.20 on Normal | That's a 1.67x gap, not 3x, because runs are longer. Power comes from rarity, and the 5-tier ladder hits a ceiling sooner. Comeback boost (section 11). No trading in V1. |
+| Legendary too common | Hard pity 150 means about 1 an hour | Legendary is the V1 top tier. Phase 8 can add Mythic back for the chase. Watch the "Legendary feels special" playtest answer. |
+| Bag wall | x10 blocked by 10-slot rule | Auto-convert dups (7a). |
+| Element / tab skew | One element or tab dominates | ROADMAP balance rule. Log element and tab mix. |
+| Bots / AFK | Free token farm | Anti-AFK in Phase 6 (6.3). The live auto-farm pays 40% for 2 h max (`S/Economy.luau`). |
 
 ---
 
 ## 9. Simulation
 
-**Design.** 1,000 simulated players x 10 hours each. Each player starts with 10 tokens (current `STARTER_TOKENS`) and 3 free rolls (proposed). Runs take 5 minutes; 10% of runs fail at a random wave and keep cleared-wave tokens. Tokens are spent on x10 as soon as 9 are held. Each roll uses the current 7-tier `ONE_IN` odds, x2 luck every 10th roll, Epic pity 50 and Legendary pity 1000 with the live reset rules. Daily income is added every 2 hours of play (one "day"). Duplicates assume proposed pool sizes per tab: Common 12, Uncommon 10, Rare 8, Epic 6, Legendary 4, Mythic 2, Secret 1.
+**Script:** `tools/econ_sim.py` (committed with this revision). Python 3, standard library only, deterministic with seed 42. Run it with `python3 tools/econ_sim.py`.
 
-Two profiles: **Normal only**, and **Ladder** (Normal until 2.5 h, Hard until ~7.8 h, then Nightmare, matching level-10 / level-15 gate times in `docs/design/pacing.md`).
+**Design.** 1,000 simulated players × 10 hours each, per scenario.
+- Start: 10 tokens (current `STARTER_TOKENS`) plus 3 free rolls (proposed).
+- Runs use the section 2 table. 10% of runs fail at a random wave and keep cleared-wave tokens.
+- Tokens are spent on x10s as soon as 9 are held. Each x10 goes to a tab picked by the 7b spread.
+- Each roll applies x2 luck every 10th roll, Epic pity 50, and the scenario's Legendary pity with the live reset rules.
+- Dailies (28 tokens) are added every 2 hours of play.
+- Duplicates become Fragments and don't use bag slots.
+- Profiles: **Normal only**, and **Ladder** (moves up a tier when the pacing.md level hours allow: Medium at 0.37 h, Hard at 2.58 h, Nightmare at 7.77 h. Insane, at 16.8 h, isn't reached in 10 h).
+- Scenarios: **proposed5** (section 3a: 5 tiers, Legendary 1/1000, hard pity 150, soft from 100, 20 items per tab) and **current7** (current `ONE_IN`, Legendary pity 1000, no soft pity; pool sizes per tab assumed C12/U10/R8/E6/L4/M2/S1).
 
-Script: Python, run on Echo's box with seed 42. Not committed (docs only). Can be added as `tools/econ_sim.py` if wanted.
-
-**Sim output from those inputs** (current odds and pity, proposed income):
+**Sim output from those inputs** (proposed income, both rarity models):
 
 ```
-== profile normal: 1000 players x 10 h
-rolls in 10h: median 1303.0, p10 1293, p90 1313
-fragments in 10h: median 3071.5
-  Common: 100.0% reached; median first at 0 min
-  Uncommon: 100.0% reached; median first at 4 min
-  Rare: 100.0% reached; median first at 5 min
-  Epic: 100.0% reached; median first at 10 min
-  Legendary: 97.8% reached; median first at 458 min
-  Mythic: 5.6% reached; median first at 250 min
-  Secret: 1.4% reached; median first at 462 min
-== profile ladder: 1000 players x 10 h
-rolls in 10h: median 1903.0, p10 1883, p90 1923
-fragments in 10h: median 4688.0
-  Common: 100.0% reached; median first at 0 min
-  Uncommon: 100.0% reached; median first at 2 min
-  Rare: 100.0% reached; median first at 5 min
-  Epic: 100.0% reached; median first at 10 min
-  Legendary: 99.6% reached; median first at 356 min
-  Mythic: 7.5% reached; median first at 402 min
-  Secret: 2.0% reached; median first at 325 min
+== tokens per minute (PROPOSED income / PROPOSED run length)
+normal     gate L1  x1.0   5.0 min  clear 11  fail-on-boss  6  2.20 tok/min  12.2 rolls/run
+medium     gate L5  x1.25  5.5 min  clear 14  fail-on-boss  8  2.55 tok/min  15.6 rolls/run
+hard       gate L10 x1.5   6.0 min  clear 17  fail-on-boss  9  2.83 tok/min  18.9 rolls/run
+nightmare  gate L15 x2.0   7.0 min  clear 22  fail-on-boss 12  3.14 tok/min  24.4 rolls/run
+insane     gate L20 x3.0   9.0 min  clear 33  fail-on-boss 18  3.67 tok/min  36.7 rolls/run
+== proposed5 / normal: 1000 players x 10 h, seed 42
+rolls/10h median 1593 (p10 1583, p90 1613); fragments/10h median 5792
+unique items in bag median 78 of 100; players whose bag blocks x10: 0.0%
+tab share of rolls: Weapons 40%, Armor 25%, Pets 20%, Skills 15%
+  Common: 100.0% reached, median first at 0 min, p90 0 min
+  Uncommon: 100.0% reached, median first at 0 min, p90 5 min
+  Rare: 100.0% reached, median first at 5 min, p90 5 min
+  Epic: 100.0% reached, median first at 5 min, p90 5 min
+  Legendary: 100.0% reached, median first at 30 min, p90 35 min
+== proposed5 / ladder: 1000 players x 10 h, seed 42
+rolls/10h median 2003 (p10 1983, p90 2023); fragments/10h median 7678
+unique items in bag median 79 of 100; players whose bag blocks x10: 0.0%
+tab share of rolls: Weapons 40%, Armor 25%, Pets 20%, Skills 15%
+  Common: 100.0% reached, median first at 0 min, p90 0 min
+  Uncommon: 100.0% reached, median first at 0 min, p90 5 min
+  Rare: 100.0% reached, median first at 5 min, p90 5 min
+  Epic: 100.0% reached, median first at 5 min, p90 5 min
+  Legendary: 100.0% reached, median first at 30 min, p90 35 min
+== current7 / normal: 1000 players x 10 h, seed 42
+rolls/10h median 1593 (p10 1583, p90 1613); fragments/10h median 3062
+unique items in bag median 134 of 100; players whose bag blocks x10: 100.0%
+tab share of rolls: Weapons 40%, Armor 25%, Pets 20%, Skills 15%
+  Common: 100.0% reached, median first at 0 min, p90 0 min
+  Uncommon: 100.0% reached, median first at 2 min, p90 5 min
+  Rare: 100.0% reached, median first at 5 min, p90 5 min
+  Epic: 100.0% reached, median first at 5 min, p90 6 min
+  Legendary: 99.3% reached, median first at 366 min, p90 370 min
+  Mythic: 6.8% reached, median first at 266 min, p90 514 min
+  Secret: 1.3% reached, median first at 401 min, p90 486 min
+== current7 / ladder: 1000 players x 10 h, seed 42
+rolls/10h median 2003 (p10 1983, p90 2023); fragments/10h median 4054
+unique items in bag median 138 of 100; players whose bag blocks x10: 100.0%
+tab share of rolls: Weapons 40%, Armor 25%, Pets 20%, Skills 15%
+  Common: 100.0% reached, median first at 0 min, p90 0 min
+  Uncommon: 100.0% reached, median first at 0 min, p90 5 min
+  Rare: 100.0% reached, median first at 5 min, p90 10 min
+  Epic: 100.0% reached, median first at 5 min, p90 6 min
+  Legendary: 99.9% reached, median first at 311 min, p90 319 min
+  Mythic: 8.6% reached, median first at 347 min, p90 566 min
+  Secret: 2.4% reached, median first at 249 min, p90 561 min
 ```
 
-Read: Normal gives ~130 rolls/hour. Every player hits Epic by ~10 min. Legendary arrives by ~6–7.5 h for almost everyone, mostly via the 1000 pity. Mythic and Secret stay true chase items. Fragments ~300/h Normal, ~470/h Ladder.
+Read:
+- Tokens per minute rise strictly by tier.
+- Proposed 5-tier: every player gets a Legendary in 30–35 minutes, and nobody hits the bag wall.
+- Current 7-tier at the same income: first Legendary takes ~5–6 h, Mythic and Secret stay under 10% of players, and with these pool sizes every player outgrows 100 slots.
+- Fragments: ~580/h Normal and ~770/h Ladder (5-tier). That feeds the section 5a check.
 
 ---
 
@@ -224,22 +373,23 @@ Read: Normal gives ~130 rolls/hour. Every player hits Epic by ~10 min. Legendary
 
 Server-side only (ROADMAP "Analytics to add early", milestone 0.8).
 
-- **Economy source events:** `tokens_earned {source: wave|clear_bonus|first_clear|login|daily|weekly|free_roll, amount, difficulty, balance}`; `fragments_earned {rarity, amount, balance}`.
-- **Economy sink events:** `tokens_spent {kind: single|x10, amount, balance}`; `fragments_spent {kind: chosen_shard|upgrade, amount}`.
-- **Roll events:** rolls per session, x10 vs x1 share, auto-roll use (ROADMAP Phase 1 metrics), `pity_fired {tier, roll_index}`, natural vs forced Epic share.
-- **Run events:** run start, wave reached, run end (cleared / left / died), death wave, run length, difficulty (ROADMAP Phase 3 metrics), Run Again rate (Phase 4).
-- **Balance:** tokens per minute by difficulty, median token balance (hoarding), top 1% balance, time to first Epic and first Legendary.
-- **Funnel step 7:** "Second roll with earned tokens" (ROADMAP funnel).
+- **Economy sources:** `tokens_earned {source: wave|clear_bonus|first_clear|login|daily|weekly|free_roll|comeback, amount, difficulty, balance}`, `fragments_earned {rarity, tab, amount, balance}`.
+- **Economy sinks:** `tokens_spent {kind: single|x10, tab, amount, balance}`, `fragments_spent {kind: chosen_shard|upgrade, amount}`.
+- **Rolls:** rolls per session, x10 vs x1 share, auto-roll use (ROADMAP Phase 1 metrics), `pity_fired {tier, roll_index, soft|hard}`, natural vs forced Epic and Legendary share, **tab split**.
+- **Bag:** `roll_blocked_bag {free_slots}` count, and bag fill at session end.
+- **Runs:** run start, wave reached, run end (cleared / left / died), death wave, **run length per difficulty**, difficulty chosen (ROADMAP Phase 3 and Phase 5 metrics), Run Again rate.
+- **Balance:** tokens per minute by difficulty (checks the strict ladder), median and top-1% token balance, time to first Epic and first Legendary.
+- **Funnel step 7:** "Second roll with earned tokens".
 
 ---
 
 ## 11. Notes for later phases
 
-- **Phase 5 (twists):** Hard / Nightmare pay x1.5 / x2 here; ROADMAP 5.6 adds better shard odds on harder runs. Chests may come back for Hard / Nightmare (`chests` flag). Keep chest value out of token math.
-- **Pets (Phase 2 basic, evolution parked):** pets roll on their own tab with the same tokens. No pet currency.
-- **Events (Phase 8):** event tokens only with an event shop, expire or convert at the end (`docs/design/shardfall_economy.md`). Event rewards are cosmetic or extra rolls, never exclusive power.
-- **Season pass:** stays **off** (`Loops.PREMIUM_ENABLED = false`, `pass` flag off). If it ever turns on, the paid track is cosmetic only, matching the live premium track rule ("Cosmetics and the Gem refund only. No gold, keys, dust, or stats", `S/Loops.luau`). Free track may pay tokens.
-- **Comeback boost (Proposed):** a player away 7+ days gets x2 run tokens for their next 5 runs (about 45 extra tokens = 5 x10s). Streak already pauses instead of resetting (`Loops.login`).
+- **Phase 5:** Medium, Hard, Nightmare and Insane become playable modes. Better odds on harder runs (ROADMAP 5.6) stack on the multipliers, so re-check per-minute pay. Chests may come back (`chests` flag). Keep chest value out of token math.
+- **Pets:** pets roll on their own tab with the same tokens. No pet currency.
+- **Events (Phase 8):** event tokens only with an event shop, and they expire or convert at the end (`docs/design/shardfall_economy.md`). Event rewards are cosmetics or extra rolls, never exclusive power. Mythic can return as a Phase 8 tier above Legendary.
+- **Season pass:** stays **off** (`Loops.PREMIUM_ENABLED = false`, `pass` flag off). If it ever turns on, the paid track is cosmetic only, matching the live rule ("Cosmetics and the Gem refund only. No gold, keys, dust, or stats", `S/Loops.luau`).
+- **Comeback boost (Proposed):** a player away 7+ days gets x2 run tokens for their next 5 runs (~55 extra tokens on Normal, about six x10s). The streak already pauses instead of resetting (`Loops.login`).
 
 ---
 
@@ -248,34 +398,44 @@ Server-side only (ROADMAP "Analytics to add early", milestone 0.8).
 | Key | Value | Status | Config path |
 |---|---|---|---|
 | Single roll cost | 1 | Current | `S/RollConfig.luau` `SINGLE_COST` |
-| x10 count | 10 | Current | `S/RollConfig.luau` `MULTI_COUNT` |
-| x10 discount | 0.10 (9 tokens) | Current | `S/RollConfig.luau` `MULTI_DISCOUNT` |
+| x10 count / discount | 10 / 0.10 (9 tokens) | Current | `S/RollConfig.luau` `MULTI_COUNT`, `MULTI_DISCOUNT` |
 | Max batch | 10 | Current | `S/RollConfig.luau` `MAX_BATCH` |
 | Epic pity | 50 | Current | `S/RollConfig.luau` `EPIC_PITY` |
 | Legendary pity | 1000 | Current | `S/RollConfig.luau` `LEGENDARY_PITY` |
+| Legendary hard pity | 150 | Proposed | `S/RollConfig.luau` `LEGENDARY_PITY` (new value) |
+| Legendary soft pity | from roll 100, +2%/roll | Proposed | `S/RollConfig.luau` `LEGENDARY_SOFT_FROM`, `LEGENDARY_SOFT_STEP` |
 | x2 luck every | 10 | Current | `S/RollConfig.luau` `BONUS_EVERY` |
-| Odds 1-in (C/U/R/E/L/M/S) | 2/5/25/250/2500/25000/100000 | Current | `S/RarityConfig.luau` `ONE_IN` |
+| Odds 1-in, 7 tiers (C/U/R/E/L/M/S) | 2/5/25/250/2500/25000/100000 | Current | `S/RarityConfig.luau` `ONE_IN` |
+| Odds 1-in, 5 tiers (C/U/R/E/L) | 2/4/15/100/1000 | Proposed | `src/shared/Config/Rarities.luau` |
 | Starter tokens | 10 | Current | `S/Schema.luau` `STARTER_TOKENS` |
 | Free first rolls | 3 | Proposed | `src/shared/Config/Economy.luau` `freeRolls` |
 | First roll floor | Rare | Current | `S/FirstSession.luau` `CONFIG.rollFloor` |
-| Wave tokens (1–4, boss) | 1, 1, 2, 2, 3 | Proposed | `src/shared/Config/Rewards.luau` `waveTokens` |
-| Difficulty multiplier N/H/NM | 1.0 / 1.5 / 2.0 | Proposed | `src/shared/Config/Rewards.luau` `difficultyMult` |
+| Wave tokens (1–4, boss) | 1, 1, 2, 2, 5 (Normal clear 11) | Proposed | `src/shared/Config/Rewards.luau` `waveTokens` |
+| Token multiplier N/M/H/NM/I | 1 / 1.25 / 1.5 / 2 / 3 | Proposed | `src/shared/Config/Rewards.luau` `difficultyMult` |
+| Run length N/M/H/NM/I (min) | 5 / 5.5 / 6 / 7 / 9 | Proposed (assumption, verify in playtest) | sim input only, `tools/econ_sim.py` `DIFFS` |
 | Enemy HP/dmg N/H/NM | 1 / 1.5 / 2 | Current | `S/Rootvault.luau` `DIFFICULTIES` |
-| Hard / Nightmare level gate | 10 / 15 | Current | `S/Rootvault.luau` `DIFFICULTIES` |
+| Enemy HP/dmg Medium / Insane | 1.25 / 3 | Proposed | `src/shared/Config/Dungeons.luau` `difficulties` |
+| Level gate N/H/NM | 1 / 10 / 15 | Current | `S/Rootvault.luau` `DIFFICULTIES` |
+| Level gate Medium / Insane | 5 / 20 | Proposed | `src/shared/Config/Dungeons.luau` `difficulties` |
 | First clear of day | +5 tokens | Proposed | `src/shared/Config/Rewards.luau` `firstClearDaily` |
-| First-ever clear | +10 tokens | Proposed | `src/shared/Config/Rewards.luau` `firstClearEver` |
+| First-ever clear | +10 tokens per difficulty | Proposed | `src/shared/Config/Rewards.luau` `firstClearEver` |
 | Failed run keeps | cleared waves | Current rule | ROADMAP 3.7; `S/Dungeons.luau` |
 | Old Waves token rule | 1 per 3rd wave, 2 per 5th | Current (to retire) | `S/Dungeons.luau` `waveReward` |
 | Rootvault clear tokens | 3 (+40% voucher) | Current (to retire) | `S/Dungeons.luau` ROOTVAULT `rewards` |
-| Arena waves | 6/8/10/12 + boss w/ 4 adds | Current (draft #368) | `src/shared/Config/WaveArenaConfig.luau` `waves` |
+| Arena waves | 6/8/10/12 + boss with 4 adds | Current (draft #368) | `src/shared/Config/WaveArenaConfig.luau` `waves` |
+| Bag size | 100 | Current | `S/Schema.luau` `INVENTORY_CAP` |
+| Paid bag expansion | +10 for 80 Robux, not for sale | Current (keep off) | `S/Currencies.luau` `INVENTORY_EXPAND_*` |
+| Dups auto-convert, no slot | on | Proposed | `src/shared/Config/Economy.luau` `dupAutoConvert` |
+| Tab spread W/A/P/S | 40 / 25 / 20 / 15% | Proposed (sim assumption) | sim input only, `tools/econ_sim.py` `TABS` |
 | Token cap | 9,999 | Proposed | `src/shared/Config/Economy.luau` `tokenCap` |
 | Fragment cap | 99,999 | Proposed | `src/shared/Config/Economy.luau` `fragmentCap` |
-| Fragments per dup C/U/R/E/L/M/S | 1/3/10/40/200/1000/1000 | Proposed | `src/shared/Config/Economy.luau` `dupFragments` |
+| Fragments per dup C/U/R/E/L | 1/3/10/40/200 | Proposed | `src/shared/Config/Economy.luau` `dupFragments` |
 | Live Dust per dup | 5/15/50/200/1000/5000 | Current (parked) | `S/ChestConfig.luau` `DUST` |
-| Chosen Epic / Legendary | 400 / 2000 Fragments | Proposed | `src/shared/Config/Economy.luau` `fragmentShop` |
+| Chosen Epic / Legendary | 400 / 2000 Fragments (checked vs pity, 5a) | Proposed | `src/shared/Config/Economy.luau` `fragmentShop` |
 | Live Dust Epic / Legendary | 2000 / 10000 | Current (parked) | `S/ChestConfig.luau` `DUST_EPIC`, `DUST_LEGENDARY` |
 | Gear +1..+5 Fragments | 20/40/80/160/320 | Proposed | `src/shared/Config/Economy.luau` `upgradeFragments` |
 | Live Forge gold | 150, 300, then 500×1.6^lvl | Current (parked) | `S/Economy.luau` `upgradeCost` |
+| Gold in V1 loop | cut (field kept, not shown or paid) | Proposed | n/a |
 | Login tokens | 2 | Proposed | `src/shared/Config/Rewards.luau` `loginTokens` |
 | Daily tokens / all-3 bonus | 3 each / 5 | Proposed | `src/shared/Config/Rewards.luau` `dailyTokens` |
 | Weekly tokens | 10 each (x5) | Proposed | `src/shared/Config/Rewards.luau` `weeklyTokens` |
