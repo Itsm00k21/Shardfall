@@ -409,6 +409,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			tween:Cancel()
 		end
 		hubState.activeReveal = nil
+		if hubFn.syncRevealLock ~= nil then
+			hubFn.syncRevealLock()
+		end
 	end
 
 	function hubFn.playCardTween(tween: Tween)
@@ -905,7 +908,22 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.worldModeFor(state: UiRouter.State): string
 		local gamepad = Keybinds.usesGamepad(UserInputService:GetLastInputType().Name)
-		return Keybinds.worldMode(state.open, UiRouter.top(state), gamepad)
+		return Keybinds.worldMode(
+			state.open,
+			UiRouter.top(state),
+			gamepad,
+			hubState.activeReveal ~= nil
+		)
+	end
+
+	-- A reveal locks the hub while it plays; recompute when it starts and
+	-- when it ends, is skipped or blanked. A closed hub always stays free.
+	function hubFn.syncRevealLock()
+		local route = hubState.route
+		if route == nil then
+			return
+		end
+		hubFn.setWorldInput(hubFn.worldModeFor(route))
 	end
 	-- Picking up a pad with a walk page open locks it (the stick drives pad
 	-- focus); going back to mouse or keys releases it again.
@@ -1331,6 +1349,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealToken += 1
 		hubState.holdingRoll = false
 		hubState.activeReveal = nil
+		hubFn.syncRevealLock()
 		hubState.replayResult = nil
 		hubState.batchLeft = {}
 		hubState.batching = false
@@ -1470,6 +1489,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local face = RollReveal.face(nil)
 		hubFn.bumpCardGeneration()
 		hubState.activeReveal = nil
+		hubFn.syncRevealLock()
 		hubState.revealCard.Visible = face.visible
 		hubState.revealTitle.Text = face.name
 		hubState.revealRarity.Text = face.rarity
@@ -5467,6 +5487,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	hubFn.finishReveal = function()
 		hubState.activeReveal = nil
+		hubFn.syncRevealLock()
 		hubState.crackLocked = false
 		hubFn.restShard()
 		if #hubState.batchLeft > 0 then
@@ -5835,6 +5856,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				generation = hubState.cardGeneration,
 				plan = plan,
 			}
+			hubFn.syncRevealLock()
 		end)
 	end
 

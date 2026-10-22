@@ -365,17 +365,18 @@ function Keybinds.sinkNames(): { string }
 end
 
 -- Which hub pages stop the character (Kevin, Oct 21). The Hero, Bag,
--- Pets, Shop and Settings pages share the same centred panel and leave
--- the world playable, so the player can walk with them open. The Roll
--- screen and the class picker are full takeovers and lock movement. A
--- page that is not listed locks, so a new screen is safe by default.
+-- Pets, Shop, Settings and Roll pages leave the world playable, so the
+-- player can walk with them open (Kevin, Oct 22: browsing Roll walks too).
+-- Only full-screen moments lock: the class picker, and a roll reveal while
+-- it plays (see worldMode's revealing arg). A page that is not listed
+-- locks, so a new screen is safe by default.
 Keybinds.LOCK_MOVEMENT = table.freeze({
 	hero = false,
 	bag = false,
 	pets = false,
 	shop = false,
 	settings = false,
-	roll = true,
+	roll = false,
 	class = true,
 })
 
@@ -389,11 +390,13 @@ end
 -- "free" (hub closed), "walk" (movement keys and controls stay live; only
 -- combat keys are sunk), or "lock" (the full sink and controls off). A
 -- gamepad always locks an open hub: the stick drives pad focus there.
-function Keybinds.worldMode(open: boolean, page: any, gamepad: boolean): string
+-- revealing (optional) is true while a roll reveal plays; it locks the
+-- open hub until the reveal ends, is skipped or the hub closes.
+function Keybinds.worldMode(open: boolean, page: any, gamepad: boolean, revealing: boolean?): string
 	if not open then
 		return "free"
 	end
-	if gamepad or Keybinds.locksMovement(page) then
+	if gamepad or revealing == true or Keybinds.locksMovement(page) then
 		return "lock"
 	end
 	return "walk"
