@@ -51,6 +51,13 @@ local PARKED_PROMPT: { [string]: string } = {
 	practice = "raids",
 }
 
+-- Dungeon id to the switch that keeps the Dungeon remote from entering it.
+-- The Haven prompt and RaidService already check raids; this closes the
+-- direct Dungeon("enter", "heartwood") call.
+local PARKED_DUNGEON: { [string]: string } = {
+	heartwood = "raids",
+}
+
 local PARKED_TAB = {
 	raids = "raids",
 	market = "market",
@@ -65,6 +72,19 @@ end
 -- only when its switch is on.
 function LaunchGate.tabOpen(id: string): boolean
 	local flag = PARKED_TAB[id]
+	if flag == nil then
+		return true
+	end
+	return LaunchGate.on(flag)
+end
+
+-- A dungeon id the Dungeon remote may enter. Unknown ids pass here and
+-- DungeonService.enter refuses them.
+function LaunchGate.dungeonOpen(id: any): boolean
+	if type(id) ~= "string" then
+		return true
+	end
+	local flag = PARKED_DUNGEON[id]
 	if flag == nil then
 		return true
 	end
