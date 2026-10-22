@@ -180,6 +180,25 @@ local function validUid(uid: any): boolean
 		and string.match(uid, "^[%w%-]+$") ~= nil
 end
 
+-- Phase 0.7 audit. A number from the client must be a real number:
+-- NaN slips past both sides of a range check and inf floors to inf.
+local function finite(value: any): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+-- Companion uids are looked up, never parsed, so only the size is capped.
+local function validKey(value: any): boolean
+	return type(value) == "string" and #value > 0 and #value <= 64
+end
+
+-- Pet paint is saved as-is, so a color is a short plain id.
+local function validColor(value: any): boolean
+	return type(value) == "string"
+		and #value > 0
+		and #value <= 32
+		and string.match(value, "^[%w_]+$") ~= nil
+end
+
 function Remotes.bind()
 	functionRemote("GetProfile").OnServerInvoke = function(player)
 		return guard(player, "GetProfile", function()
@@ -238,12 +257,18 @@ function Remotes.bind()
 
 	functionRemote("OpenChest").OnServerInvoke = function(player, tier, count)
 		return guard(player, "OpenChest", function()
+			if type(count) == "number" and not finite(count) then
+				return { ok = false, error = "Pick how many chests to open." }
+			end
 			return ChestService.open(player, tier, count)
 		end)
 	end
 
 	functionRemote("ChooseChest").OnServerInvoke = function(player, index)
 		return guard(player, "ChooseChest", function()
+			if not finite(index) then
+				return { ok = false, error = "Pick one of the three cards." }
+			end
 			return ChestService.choose(player, index)
 		end)
 	end
@@ -348,6 +373,9 @@ function Remotes.bind()
 		return guard(player, "Dungeon", function()
 			if type(action) ~= "string" then
 				return { ok = false, error = "Unknown dungeon action." }
+			end
+			if action == "enter" and not LaunchGate.dungeonOpen(dungeonId) then
+				return { ok = false, error = "That is closed." }
 			end
 			return DungeonService.action(player, action, dungeonId, extra)
 		end)
@@ -580,6 +608,9 @@ function Remotes.bind()
 
 	functionRemote("UseActionSlot").OnServerInvoke = function(player, index)
 		return guard(player, "UseActionSlot", function()
+			if not finite(index) then
+				return { ok = false, error = "That slot is empty." }
+			end
 			return ActionBarService.use(player, index)
 		end)
 	end
@@ -618,6 +649,9 @@ function Remotes.bind()
 	end
 	functionRemote("PetCare").OnServerInvoke = function(player, uid, kind)
 		return guard(player, "PetCare", function()
+			if not validKey(uid) then
+				return { ok = false, error = "Pet or feed a companion." }
+			end
 			return PetService.care(player, uid, kind)
 		end)
 	end
@@ -628,11 +662,23 @@ function Remotes.bind()
 	end
 	functionRemote("PaintPet").OnServerInvoke = function(player, uid, primary, secondary, glow)
 		return guard(player, "PaintPet", function()
+			if not validKey(uid) or not validColor(primary) then
+				return { ok = false, error = "Pick a color." }
+			end
+			if
+				(type(secondary) == "string" and not validColor(secondary))
+				or (type(glow) == "string" and not validColor(glow))
+			then
+				return { ok = false, error = "Pick a color." }
+			end
 			return PetService.paint(player, uid, primary, secondary, glow)
 		end)
 	end
 	functionRemote("FavoritePet").OnServerInvoke = function(player, uid, locked)
 		return guard(player, "FavoritePet", function()
+			if not validKey(uid) then
+				return { ok = false, error = "Pick a companion." }
+			end
 			return PetService.favorite(player, uid, locked)
 		end)
 	end
@@ -663,6 +709,9 @@ function Remotes.bind()
 	end
 	functionRemote("RerollDaily").OnServerInvoke = function(player, index)
 		return guard(player, "RerollDaily", function()
+			if not finite(index) then
+				return { ok = false, error = "Pick a daily." }
+			end
 			return LoopService.reroll(player, index)
 		end)
 	end
@@ -719,6 +768,9 @@ function Remotes.bind()
 
 	functionRemote("UpgradeGear").OnServerInvoke = function(player, uid)
 		return guard(player, "UpgradeGear", function()
+			if not validUid(uid) then
+				return { ok = false, error = "Pick a piece of gear." }
+			end
 			return CraftService.upgrade(player, uid)
 		end)
 	end
@@ -746,6 +798,9 @@ function Remotes.bind()
 
 	functionRemote("UseSkill").OnServerInvoke = function(player, slot)
 		return guard(player, "UseSkill", function()
+			if type(slot) == "number" and not finite(slot) then
+				return { ok = false, error = "That skill slot is empty." }
+			end
 			return ClassService.cast(player, slot)
 		end)
 	end
