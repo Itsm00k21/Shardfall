@@ -431,7 +431,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.worldBlocked = false
 	hubState.controls = nil
 
-	function hubFn.sink(): Enum.ContextActionResult
+	-- Slot keys (1-8) fall through to the action bar, which sinks them
+	-- too but tells the player to close the menu instead of going quiet.
+	function hubFn.sink(_name: string?, _state: any, input: any): Enum.ContextActionResult
+		local key = if input ~= nil and input.KeyCode ~= nil then input.KeyCode.Name else nil
+		if type(key) == "string" and ActionSlots.indexForKey(key) ~= nil then
+			return Enum.ContextActionResult.Pass
+		end
 		return Enum.ContextActionResult.Sink
 	end
 
@@ -7428,8 +7434,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		close = hubFn.close,
 		toggle = hubFn.toggle,
 		handoffRoll = hubFn.handoffRoll,
+		-- Open means open and on screen: a route that says open while the
+		-- hub is hidden must not hold combat input.
 		isOpen = function(): boolean
-			return hubState.route.open
+			return hubState.route.open and hubState.screen.Enabled
 		end,
 		current = function(): string
 			return hubFn.pageFor(hubState.route)
