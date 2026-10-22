@@ -38,6 +38,7 @@ LaunchGate.SHOW = {
 	doors = false, -- old Rootvault room doors
 	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
+	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 }
 
 -- World prompt action to the switch that keeps it from being built.
@@ -48,6 +49,13 @@ local PARKED_PROMPT: { [string]: string } = {
 	craft = "forgeCraft",
 	heartwood = "raids",
 	practice = "raids",
+}
+
+-- Dungeon id to the switch that keeps the Dungeon remote from entering it.
+-- The Haven prompt and RaidService already check raids; this closes the
+-- direct Dungeon("enter", "heartwood") call.
+local PARKED_DUNGEON: { [string]: string } = {
+	heartwood = "raids",
 }
 
 local PARKED_TAB = {
@@ -64,6 +72,19 @@ end
 -- only when its switch is on.
 function LaunchGate.tabOpen(id: string): boolean
 	local flag = PARKED_TAB[id]
+	if flag == nil then
+		return true
+	end
+	return LaunchGate.on(flag)
+end
+
+-- A dungeon id the Dungeon remote may enter. Unknown ids pass here and
+-- DungeonService.enter refuses them.
+function LaunchGate.dungeonOpen(id: any): boolean
+	if type(id) ~= "string" then
+		return true
+	end
+	local flag = PARKED_DUNGEON[id]
 	if flag == nil then
 		return true
 	end
