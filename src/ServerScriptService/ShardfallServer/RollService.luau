@@ -19,11 +19,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
+local DebugTools = require(ReplicatedStorage.Shared.DebugTools)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
+local DevTools = require(ReplicatedStorage.Shared.DevTools)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
-local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
-local Materials = require(ReplicatedStorage.Shared.Materials)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local RarityConfig = require(ReplicatedStorage.Shared.RarityConfig)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
@@ -537,6 +537,9 @@ function RollService.buyInventoryExpansion(player: Player)
 	return paidStub(player, Currencies.inventoryPitch(bonus))
 end
 
+-- Owner-only Dev Tools grants. The profile change and its toast line
+-- live in DebugTools.grant; a kind whose system is parked is refused
+-- with DevTools.offMessage instead of changing a hidden balance.
 function RollService.devGrant(player: Player, kind: any)
 	if not RunService:IsStudio() then
 		return reject("Dev tools only work in Studio.")
@@ -544,35 +547,12 @@ function RollService.devGrant(player: Player, kind: any)
 	if not DevAccess.player(player) then
 		return reject(DevAccess.DENIED)
 	end
-	if kind == "tokens" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.shardTokens = math.min(9999, data.shardTokens + 5)
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant tokens.")
-		end
-		return { ok = true }
+	if type(kind) ~= "string" then
+		return reject("Unknown dev grant.")
 	end
-	if kind == "prisms" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.prismTokens = math.min(9999, data.prismTokens + 5)
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant Prism Tokens.")
-		end
-		return { ok = true }
-	end
-	if kind == "boost" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.luckBoost = Currencies.LUCK_BOOST
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant a Luck Boost.")
-		end
-		return { ok = true }
+	local off = DevTools.blocked("DevGrant", kind)
+	if off ~= nil then
+		return reject(off)
 	end
 	if kind == "restrict" then
 		local view = PolicyCache.public(player)
@@ -580,99 +560,27 @@ function RollService.devGrant(player: Player, kind: any)
 		if not PolicyCache.setSimulatedRestriction(player, nextRestricted) then
 			return reject("Dev tools only work in Studio.")
 		end
-		return { ok = true, simulated = nextRestricted }
+		return {
+			ok = true,
+			simulated = nextRestricted,
+			message = if nextRestricted
+				then "Region lock simulated ON (restricted-region rules apply)."
+				else "Region lock simulated OFF.",
+		}
 	end
-	if kind == "luck" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.shardLuck = math.min(500, data.shardLuck + 25)
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant luck.")
+	local message = ""
+	local ok, err = DataService.mutate(player, function(data)
+		local applied, text = DebugTools.grant(data, kind, os.time())
+		if not applied then
+			return text
 		end
-		return { ok = true }
+		message = text
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not grant that.")
 	end
-	if kind == "forgeboost" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.forgeBoostUntil = os.time() + Currencies.FORGE_BOOST_SECONDS
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant a Forge Boost.")
-		end
-		return { ok = true }
-	end
-	if kind == "materials" then
-		local ok, err = DataService.mutate(player, function(data)
-			local bundle = {
-				wood = 8,
-				vine = 8,
-				spore = 6,
-				bark = 4,
-				heartwood = 2,
-				verdant_bark = 12,
-				gnarl_seed = 1,
-				scroll_thornbound = 1,
-			}
-			for materialId, count in pairs(bundle) do
-				Materials.add(data.materials, materialId, count)
-			end
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant materials.")
-		end
-		return { ok = true }
-	end
-	if kind == "chests" then
-		local ok, err = DataService.mutate(player, function(data)
-			ChestConfig.ensure(data)
-			for _, tier in ipairs(ChestConfig.TIERS) do
-				data.chests[tier] = math.min(999, data.chests[tier] + 5)
-			end
-			data.shardKeys = math.min(99999, data.shardKeys + 1000)
-			data.shardDust = math.min(999999, data.shardDust + 20000)
-			data.materials.verdant_bark = (data.materials.verdant_bark or 0) + 20
-			data.materials.heartwood = (data.materials.heartwood or 0) + 20
-			data.materials.gnarl_seed = (data.materials.gnarl_seed or 0) + 6
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not grant chests.")
-		end
-		return { ok = true }
-	end
-	if kind == "quick" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.quickRoll = data.quickRoll ~= true
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not toggle Quick Roll.")
-		end
-		return { ok = true }
-	end
-	if kind == "vip" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.vip = data.vip ~= true
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not toggle VIP.")
-		end
-		return { ok = true }
-	end
-	if kind == "ascension" then
-		local ok, err = DataService.mutate(player, function(data)
-			data.ascension = math.min(Pools.MAX_ASCENSION, data.ascension + 1)
-			return nil
-		end)
-		if not ok then
-			return reject(err or "Could not raise ascension.")
-		end
-		return { ok = true }
-	end
-	return reject("Unknown dev grant.")
+	return { ok = true, message = message }
 end
 
 return RollService

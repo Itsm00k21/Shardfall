@@ -51,6 +51,13 @@ its tag to merged and add the merge commit.
   behind `LaunchGate.petCare` for a future pets update. Debug, DevGrant and
   the boss skip work only for the game owner (`Shared/DevAccess`), so Team
   Test guests can no longer use them. [#377] (open)
+- Dev tools left Settings for their own owner-only Dev Tools panel (the
+  "Dev" button under the Gold / Mastery / Shards pills), with collapsible
+  Currency, Progress, Run / Dungeon and Testing sections. Every press toasts
+  what changed ("+1000 Gold (now 1547).") and prints a `[Dev]` line in
+  Output; buttons for switched-off systems (chests, raids, paid Prisms,
+  Shard Pass Gems, event tokens) are hidden and the server refuses them with
+  a clear "is off" line. [#377] (open)
 
 ### Fixed
 - Gnarl's weak spot sits at chest height, and every boss hit says Guarded or

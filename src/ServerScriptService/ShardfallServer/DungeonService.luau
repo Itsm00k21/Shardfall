@@ -2880,7 +2880,7 @@ function DungeonService.skipToBoss(player: Player)
 	run.wave = 0
 	teleport(player, roomSpawn(run.placeIndex))
 	spawnRoom(player, run)
-	return { ok = true, run = publicRun(player) }
+	return { ok = true, run = publicRun(player), message = "Skipped to the boss room." }
 end
 
 function DungeonService.chooseDoor(player: Player, doorId: any)

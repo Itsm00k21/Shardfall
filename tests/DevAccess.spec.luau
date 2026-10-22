@@ -90,15 +90,11 @@ describe("DevAccess wiring", function()
 	end)
 
 	it("hides the dev rows from everyone else", function()
+		-- Settings has no dev rows at all now: they moved to the Dev Tools panel.
 		local hub = fs.readFile(client .. "MenuHub.luau")
-		expect(
-			string.find(
-				hub,
-				"if RunService:IsStudio() and DevAccess.player(Players.LocalPlayer) then",
-				1,
-				true
-			) ~= nil
-		).toEqual(true)
+		expect(string.find(hub, '"Debug  "', 1, true)).toBeNil()
+		expect(string.find(hub, '"Grant  "', 1, true)).toBeNil()
+		expect(string.find(hub, 'hooks.invoke, "DevGrant"', 1, true)).toBeNil()
 		local hud = fs.readFile(client .. "DebugHud.luau")
 		expect(after(hud, "function DebugHud.start", "DevAccess.player(player)")).toEqual(true)
 	end)

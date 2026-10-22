@@ -1467,16 +1467,25 @@ RaidHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
 setHubChrome(false)
+-- Owner-only Dev Tools panel (Oct 22). Every press toasts its result.
 DebugHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
-end)
+end, {
+	toast = function(message: string)
+		if hudShell ~= nil then
+			hudShell.toast(message)
+		end
+	end,
+	apply = function(result: any)
+		applyResult(result)
+	end,
+})
 local function retireChrome(name: string)
 	local gui = playerGui:FindFirstChild(name)
 	if gui ~= nil and gui:IsA("ScreenGui") then
 		gui.Enabled = false
 	end
 end
-retireChrome("ShardfallDebug")
 retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
