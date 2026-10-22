@@ -185,5 +185,6 @@ require("./Stars.spec")
 require("./Trading.spec")
 require("./AuditExploit.spec")
 require("./LocalLimit.spec")
+require("./WaveArena.spec")
 
 process.exit(framework.run())
