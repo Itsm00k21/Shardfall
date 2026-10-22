@@ -1483,7 +1483,8 @@ CombatHud.start(remotes :: Instance, {
 	end,
 	onHint = function(text)
 		ui.setStatus(text, "info")
-		if hudShell ~= nil and string.sub(text, 1, 1) == "+" then
+		-- Loot lines ("Loot: Spore Cap x2", CombatFeel.LOOT_PREFIX) toast.
+		if hudShell ~= nil and string.sub(text, 1, 6) == "Loot: " then
 			hudShell.toast(text)
 		end
 	end,

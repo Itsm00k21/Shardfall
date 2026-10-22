@@ -456,6 +456,13 @@ end
 
 -- Room and wave lines stay on the banner. Combat hints and loot lines do
 -- not: those used to sit on the top-center toast stack.
+-- Loot lines from Materials.lootHint start with this; they go to the
+-- loot toast, not the gold banner.
+CombatFeel.LOOT_PREFIX = "Loot: "
+function CombatFeel.isLootLine(text: any): boolean
+	return type(text) == "string" and string.sub(text, 1, #CombatFeel.LOOT_PREFIX) == CombatFeel.LOOT_PREFIX
+end
+
 function CombatFeel.hintOnBanner(text: string): boolean
 	if type(text) ~= "string" then
 		return false
@@ -467,7 +474,7 @@ function CombatFeel.hintOnBanner(text: string): boolean
 	if trimmed == "No target in range." then
 		return false
 	end
-	if string.sub(trimmed, 1, 1) == "+" then
+	if string.sub(trimmed, 1, 1) == "+" or CombatFeel.isLootLine(trimmed) then
 		return false
 	end
 	if string.sub(trimmed, 1, 10) == "Picked up " then
