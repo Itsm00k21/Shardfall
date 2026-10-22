@@ -186,5 +186,6 @@ require("./Stars.spec")
 require("./Trading.spec")
 require("./AuditExploit.spec")
 require("./LocalLimit.spec")
+require("./SkillPress.spec")
 
 process.exit(framework.run())

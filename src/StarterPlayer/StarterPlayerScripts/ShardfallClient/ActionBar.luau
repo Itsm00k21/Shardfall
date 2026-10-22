@@ -68,6 +68,12 @@ local function theme(name: string): Color3
 	return Color3.fromRGB(row[1], row[2], row[3])
 end
 
+-- Seconds a slot press waits on UseActionSlot before it says so.
+local INVOKE_WAIT = 4
+-- Shown when a slot key or click lands while the hub menu is open.
+ActionBar.MENU_OPEN_TEXT = "Close the menu to use skills."
+local MENU_OPEN_TEXT = ActionBar.MENU_OPEN_TEXT
+
 function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local profile: any = nil
 	local override: ActionSlots.Bar? = nil
@@ -89,6 +95,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local payloadOrigin = Vector2.zero
 	local showTip: (number) -> ()
 	local hideTip: () -> ()
+	-- The slot the card was painted for, so a stale card never sits on
+	-- another slot (Kevin: slot 1 showed Bubble Ward, then Tidal Bolt).
+	local tipIndex: number? = nil
 
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallActions"
@@ -408,13 +417,19 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		dotCorner.Parent = dot
 		buttons[index] = button
 		-- Desktop hover shows the skill card; phones use the long press below.
+		-- The card always follows the slot under the pointer. A drag hides a
+		-- card that belongs to another slot instead of leaving it up.
 		button.MouseEnter:Connect(function()
 			if dragFrom == nil then
 				showTip(index)
+			elseif tipIndex ~= index then
+				hideTip()
 			end
 		end)
+		-- Leaving only hides this slot's own card, so a late MouseLeave from
+		-- the previous slot cannot hide the card the next slot just showed.
 		button.MouseLeave:Connect(function()
-			if not heldTip then
+			if tipIndex == index and not heldTip then
 				hideTip()
 			end
 		end)
@@ -636,11 +651,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local slot = bar.slots[index]
 		if slot == nil or slot.kind == "empty" then
 			tooltip.Visible = false
+			tipIndex = nil
 			return
 		end
 		local tip = SkillTip.tip(classId(), slot, profile)
 		if tip.title == "" then
 			tooltip.Visible = false
+			tipIndex = nil
 			return
 		end
 		tipTitle.Text = tip.title
@@ -649,17 +666,23 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		local tipH = SkillTip.height(tip)
 		tooltip.Size = UDim2.fromOffset(SkillTip.WIDTH, tipH)
 		local screenW = screen.AbsoluteSize.X
-		local tipX = button.AbsolutePosition.X - screen.AbsolutePosition.X
+		-- Centred over its own slot, so the card reads as that slot's.
+		local tipX = button.AbsolutePosition.X
+			- screen.AbsolutePosition.X
+			+ button.AbsoluteSize.X / 2
+			- SkillTip.WIDTH / 2
 		if screenW > SkillTip.WIDTH then
 			tipX = math.clamp(tipX, 8, screenW - SkillTip.WIDTH - 8)
 		end
 		local tipY = button.AbsolutePosition.Y - screen.AbsolutePosition.Y - tipH - 8
 		tooltip.Position = UDim2.fromOffset(tipX, tipY)
 		tooltip.Visible = true
+		tipIndex = index
 	end
 
 	hideTip = function()
 		tooltip.Visible = false
+		tipIndex = nil
 	end
 
 	local function paint()
@@ -840,7 +863,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end)
 	end
 
-	local function useSlot(index: number)
+	local function runSlot(index: number)
 		picked = index
 		flashUntil[index] = os.clock() + 0.12
 		local bar = currentBar()
@@ -869,10 +892,22 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			callbacks.onSkill()
 		end
 		task.spawn(function()
+			-- A press must never end in silence: if the server has not
+			-- answered after INVOKE_WAIT seconds, say so.
+			local answered = false
+			task.delay(INVOKE_WAIT, function()
+				if not answered then
+					callbacks.onToast("No reply from the server. Try again.")
+				end
+			end)
 			local ok, result = pcall(function()
 				return callbacks.invoke("UseActionSlot", index)
 			end)
+			answered = true
 			if not ok or type(result) ~= "table" then
+				if not ok then
+					warn("[ActionBar] UseActionSlot failed: " .. tostring(result))
+				end
 				callbacks.onToast("Could not use that.")
 				return
 			end
@@ -895,6 +930,21 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			callbacks.onResult(result)
 		end)
+	end
+
+	-- Every press ends in a cast, a cooldown chip, or a message. A Lua
+	-- error inside the press (paint, a callback) is reported, not swallowed.
+	local function useSlot(index: number)
+		local ok, err = pcall(runSlot, index)
+		if not ok then
+			warn("[ActionBar] slot " .. tostring(index) .. " press failed: " .. tostring(err))
+			pcall(callbacks.onToast, "Could not use that.")
+		end
+	end
+
+	-- A slot press while a menu is open does not cast. Say why.
+	local function menuBlocked()
+		callbacks.onToast(MENU_OPEN_TEXT)
 	end
 
 	lock.Activated:Connect(function()
@@ -1028,8 +1078,12 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			heldTip = false
 			return
-		elseif from ~= nil and not heldTip and target == from and not callbacks.menuOpen() then
-			useSlot(from)
+		elseif from ~= nil and not heldTip and target == from then
+			if callbacks.menuOpen() then
+				menuBlocked()
+			else
+				useSlot(from)
+			end
 		end
 		heldTip = false
 		local payload = ActionDrag.peek()
@@ -1058,6 +1112,16 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			return
 		end
 		publish(checked)
+	end
+
+	-- Hide the card a press left up, but not one a later hover showed.
+	local function hideTipLater()
+		local shown = tipIndex
+		task.delay(1.2, function()
+			if tipIndex == shown then
+				hideTip()
+			end
+		end)
 	end
 
 	UserInputService.InputBegan:Connect(function(input)
@@ -1095,7 +1159,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			and input.UserInputType ~= Enum.UserInputType.Touch
 		then
 			if input.UserInputType == Enum.UserInputType.MouseButton2 then
-				task.delay(1.2, hideTip)
+				hideTipLater()
 			end
 			return
 		end
@@ -1103,7 +1167,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			return
 		end
 		finishDrag(input.Position.X, input.Position.Y)
-		task.delay(1.2, hideTip)
+		hideTipLater()
 	end)
 
 	local function applyFaces(inputTypeName: string)
@@ -1149,12 +1213,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		if state ~= Enum.UserInputState.Begin then
 			return Enum.ContextActionResult.Pass
 		end
-		if callbacks.menuOpen() then
-			return Enum.ContextActionResult.Pass
-		end
 		local index = ActionSlots.indexForKey(input.KeyCode.Name)
 		if index == nil then
 			return Enum.ContextActionResult.Pass
+		end
+		if callbacks.menuOpen() then
+			menuBlocked()
+			return Enum.ContextActionResult.Sink
 		end
 		useSlot(index)
 		return Enum.ContextActionResult.Sink
