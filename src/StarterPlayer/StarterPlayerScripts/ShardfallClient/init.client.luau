@@ -108,6 +108,23 @@ CombatStage.watchCamera()
 
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- A mouse or touch click must not leave a HUD button selected: a held
+-- GuiService.SelectedObject turns WASD into UI navigation. Gamepad keeps it.
+do
+	local GuiService = game:GetService("GuiService")
+	local UiSelection = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSelection"))
+	local function dropSelection()
+		local lastInput = UserInputService:GetLastInputType().Name
+		if UiSelection.shouldClear(lastInput, GuiService.SelectedObject ~= nil) then
+			GuiService.SelectedObject = nil
+		end
+	end
+	GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+		task.defer(dropSelection)
+	end)
+	UserInputService.LastInputTypeChanged:Connect(dropSelection)
+end
+
 local function scriptNames(instance: Instance): { string }
 	local names = { instance.Name }
 	local cursor: Instance? = instance.Parent
