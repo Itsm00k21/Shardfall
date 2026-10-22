@@ -24,11 +24,8 @@
 
 local DevAccess = {}
 
--- TODO(Kevin): add your Roblox user id here (roblox.com/users/<id>/profile)
--- so dev tools also work if the place moves to a group. No id was found
--- in the repo on Oct 22 2026; until then the place creator check covers a
--- user-owned place.
-DevAccess.OWNER_IDS = table.freeze({} :: { number })
+-- Kevin (Roblox display name Damookie21), confirmed Oct 22 2026.
+DevAccess.OWNER_IDS = table.freeze({ 10427235156 } :: { number })
 
 DevAccess.DENIED = "Dev tools are for the game owner only."
 
