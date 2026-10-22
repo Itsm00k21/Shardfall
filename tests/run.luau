@@ -193,5 +193,6 @@ require("./Trading.spec")
 require("./AuditExploit.spec")
 require("./LocalLimit.spec")
 require("./ConfigIndex.spec")
+require("./ConfigValidation.spec")
 
 process.exit(framework.run())
