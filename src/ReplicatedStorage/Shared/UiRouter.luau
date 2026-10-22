@@ -11,8 +11,8 @@
 	The roll route also decides how the Roll screen presents a result the
 	server already rolled. It does not roll, and it does not invent a
 	rarity. 	The live legendary guarantee is profile sinceLegendary against
-	RarityConfig.LEGENDARY_PITY (1000). Epic pity is the other profile
-	counter against EPIC_PITY (50, RollConfig). The per-pool pity bucket is an old
+	RarityConfig.LEGENDARY_PITY (150). There is no Epic pity (Phase 1.3).
+	The per-pool pity bucket is an old
 	save field. The crack does not write it, and it is not this guarantee.
 	totalRolls is not pity.
 

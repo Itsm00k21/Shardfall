@@ -18,7 +18,6 @@ RollBoard.HISTORY = 10
 RollBoard.STOPS = { "Off", "Uncommon", "Rare", "Epic", "Legendary" }
 
 export type Bars = {
-	epic: number,
 	legendary: number,
 }
 
@@ -61,14 +60,11 @@ function RollBoard.payoff(shown: any, landed: any, floor: string): boolean
 end
 
 function RollBoard.bars(profile: any): Bars
-	local epic = 0
 	local legendary = 0
 	if type(profile) == "table" then
-		epic = profile.sinceEpic or 0
 		legendary = profile.sinceLegendary or 0
 	end
 	return {
-		epic = RollBoard.fill(epic, RarityConfig.EPIC_PITY),
 		legendary = RollBoard.fill(legendary, RarityConfig.LEGENDARY_PITY),
 	}
 end
@@ -76,7 +72,7 @@ end
 -- The draw is RarityConfig.pick / disclose, not the pool-weight table.
 -- sinceLegendary stays in the signature so a pity counter cannot change
 -- these lines. The hub and the reel both print RarityConfig.formatLine,
--- which prints one 1-in and one percent from that same disclosed chance.
+-- which prints the real percent from that same disclosed chance.
 -- disclose already gives the last rarity whatever remains, so the chances
 -- sum to 100%. luck is a profile, or a shardLuck number with boost beside
 -- it. Either way the multiplier is luckFromProfile, the same call the

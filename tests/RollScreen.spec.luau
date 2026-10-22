@@ -139,7 +139,7 @@ describe("Roll A/D wiring in MenuHub", function()
 
 	it("pins the CTA row and meters with RollScreen and shows pity text", function()
 		expect(string.find(hub, "RollScreen.layout(pageW, pageH)", 1, true) ~= nil).toBeTrue()
-		expect(string.find(hub, "RollConfig.pityText(sinceEpic)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(hub, "RollConfig.pityText(sinceLegendary)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "RollConfig.discountTag()", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "RollScreen.costText(RollConfig.MULTI_COUNT)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "IconAssets.RollCrystal", 1, true) ~= nil).toBeTrue()

@@ -24,6 +24,16 @@ its tag to merged and add the merge commit.
   broken cross-references. [#374] (merged, d37b2f1)
 
 ### Changed
+- Phase 1.1-1.3, 1.7: rolls core. The live roll now uses the 5-tier Rev 2
+  ladder from `Config/Rarities` (1/2, 1/4, 1/15, 1/100, 1/1000, checked
+  rarest first: Common 69%, Uncommon 23%, Rare 6.6%, Epic 1.00%, Legendary
+  0.10%). One free Legendary pity at 150 (saved in `sinceLegendary`, soft
+  pity +2%/roll from roll 101) with its meter; Epic pity removed (old
+  `sinceEpic` is kept in saves and ignored). Odds list and reveal show real
+  %. Mythic/Secret parked behind `LaunchGate.SHOW.extraTiers` (owned items
+  still load). New `tests/RollOdds.spec.luau` (100k seeded rolls + pity
+  150). Dev Tools: Rolls / Pity rows (+100 Shards, Set pity 149/120, Reset
+  pity). Branch `phase1/rolls-core`. (open)
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
   Damookie21) in `DevAccess.OWNER_IDS`. (open)
 - Docs: replaced the roadmap with the locked V1 roadmap (Phases 0-7, Phase S,

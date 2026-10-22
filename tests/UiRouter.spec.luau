@@ -247,7 +247,7 @@ describe("UiRouter", function()
 		})
 		expect(counter).toEqual(0)
 		expect(goal).toEqual(RarityConfig.LEGENDARY_PITY)
-		expect(goal).toEqual(1000)
+		expect(goal).toEqual(150)
 		local fromProfile = UiRouter.legendaryPity({
 			sinceLegendary = 12,
 			rollsSinceLegendary = 49,
@@ -261,14 +261,14 @@ describe("UiRouter", function()
 		expect(fromProfile).toEqual(12)
 		local empty, emptyGoal = UiRouter.legendaryPity(nil, nil)
 		expect(empty).toEqual(0)
-		expect(emptyGoal).toEqual(1000)
+		expect(emptyGoal).toEqual(150)
 	end)
 
 	it("keeps natural odds until the live guarantee is the next roll", function()
 		expect(UiRouter.oddsSince(49)).toEqual(0)
 		expect(UiRouter.oddsSince(0)).toEqual(0)
 		expect(UiRouter.oddsSince(nil)).toEqual(0)
-		expect(UiRouter.oddsSince(RarityConfig.LEGENDARY_PITY - 1)).toEqual(999)
+		expect(UiRouter.oddsSince(RarityConfig.LEGENDARY_PITY - 1)).toEqual(149)
 		expect(UiRouter.oddsSince(math.huge)).toEqual(0)
 	end)
 
@@ -448,7 +448,7 @@ describe("UiRouter", function()
 			profile = { sinceLegendary = 0, sinceEpic = 99, totalRolls = 900 },
 			result = {
 				pity = {
-					sinceLegendary = 999,
+					sinceLegendary = 149,
 					sinceEpic = 99,
 					totalRolls = 5000,
 					rollsSinceLegendary = 49,
@@ -461,7 +461,7 @@ describe("UiRouter", function()
 			rarity = "Epic",
 			landed = true,
 			paid = false,
-			result = { pity = { sinceLegendary = 999 } },
+			result = { pity = { sinceLegendary = 149 } },
 		})
 		expect(pity.nearMiss).toEqual(true)
 		expect(pity.rarity).toEqual("Epic")
@@ -471,7 +471,7 @@ describe("UiRouter", function()
 			stopAt = "Off",
 			rarity = "Epic",
 			landed = true,
-			result = { pity = { sinceLegendary = 998 } },
+			result = { pity = { sinceLegendary = 148 } },
 		}).nearMiss).toEqual(false)
 		expect(UiRouter.closeCall({
 			stopAt = "Off",
@@ -493,14 +493,14 @@ describe("UiRouter", function()
 			rarity = "Epic",
 			landed = true,
 			paid = true,
-			result = { pity = { sinceLegendary = 999, sinceEpic = 99 } },
+			result = { pity = { sinceLegendary = 149, sinceEpic = 99 } },
 		})
 		local bothFree = UiRouter.closeCall({
 			stopAt = "Legendary",
 			rarity = "Epic",
 			landed = true,
 			paid = nil,
-			result = { pity = { sinceLegendary = 999, sinceEpic = 99 } },
+			result = { pity = { sinceLegendary = 149, sinceEpic = 99 } },
 		})
 		expect(both.nearMiss).toEqual(true)
 		expect(both.rarity).toEqual("Epic")
@@ -513,7 +513,7 @@ describe("UiRouter", function()
 			rarity = "Epic",
 			landed = false,
 			paid = true,
-			result = { pity = { sinceLegendary = 999 } },
+			result = { pity = { sinceLegendary = 149 } },
 		})
 		expect(missed.nearMiss).toEqual(false)
 		expect(missed.rarity).toBeNil()
@@ -522,7 +522,7 @@ describe("UiRouter", function()
 			stopAt = "Off",
 			rarity = "Rare",
 			landed = true,
-			profile = { sinceLegendary = 999, totalRolls = 40 },
+			profile = { sinceLegendary = 149, totalRolls = 40 },
 			result = { pity = { sinceEpic = 99, pityLegendaryAt = 50 } },
 		})
 		expect(fromProfile.nearMiss).toEqual(true)
@@ -530,7 +530,7 @@ describe("UiRouter", function()
 
 		local result = {
 			pity = {
-				sinceLegendary = 999,
+				sinceLegendary = 149,
 				sinceEpic = 99,
 				pityLegendaryAt = 50,
 			},
@@ -546,7 +546,7 @@ describe("UiRouter", function()
 		})
 		expect(frozen.nearMiss).toEqual(true)
 		expect(frozen.rarity).toEqual("Epic")
-		expect(result.pity.sinceLegendary).toEqual(999)
+		expect(result.pity.sinceLegendary).toEqual(149)
 
 		expect(UiRouter.closeCall(nil).nearMiss).toEqual(false)
 		expect(UiRouter.closeCall({
@@ -559,13 +559,13 @@ describe("UiRouter", function()
 			stopAt = "Off",
 			rarity = "Epic",
 			landed = true,
-			result = { pity = { sinceLegendary = "999" } },
+			result = { pity = { sinceLegendary = "149" } },
 		}).nearMiss).toEqual(false)
 		expect(UiRouter.closeCall({
 			stopAt = "Legendary",
 			rarity = "Godly",
 			landed = true,
-			result = { pity = { sinceLegendary = 999 } },
+			result = { pity = { sinceLegendary = 149 } },
 		}).nearMiss).toEqual(false)
 
 		local slots = UiRouter.honestSlots({

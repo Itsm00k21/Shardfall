@@ -379,12 +379,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.revealToken = 0
 	hubState.lastCrack = 0
 	hubState.pityTweens = {}
-	hubState.epicFillShown = 0
 	hubState.legendaryFillShown = 0
-	hubState.epicFlashRoll = -1
 	hubState.legendaryFlashRoll = -1
 	hubState.serverSince = nil
-	hubState.serverEpic = nil
 	hubState.lastMissed = false
 	hubState.lastLanded = nil
 	hubState.toastToken = 0
@@ -4440,7 +4437,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return button
 	end
 
-	function hubFn.paintCta(sinceEpic: number)
+	function hubFn.paintCta(sinceLegendary: number)
 		for _, child in ipairs(hubState.ctaRow:GetChildren()) do
 			child:Destroy()
 		end
@@ -4504,8 +4501,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.ctaButton("Info", RollScreen.ODDS_LABEL, if hubState.infoOpen == true then "button" else "header")
 		end
 
-		-- Meters: tenth-crack luck pips (left / top) and free pity (right /
-		-- bottom). Pity is never sold; it only counts cracks.
+		-- Meters: tenth-crack luck pips (left / top) and the free Legendary
+		-- pity (right / bottom). Pity is never sold; it only counts cracks.
 		local lit, luckText = RollScreen.luckPips(
 			if type(hubState.profile) == "table" then hubState.profile.shardRolls else 0
 		)
@@ -4556,8 +4553,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pityCorner.Parent = pity
 		local pityFill = Instance.new("Frame")
 		pityFill.Name = "Fill"
-		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceEpic), 1)
-		pityFill.BackgroundColor3 = Color3.fromRGB(150, 92, 255)
+		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceLegendary), 1)
+		pityFill.BackgroundColor3 = hubFn.rarityColor3("Legendary")
 		pityFill.BorderSizePixel = 0
 		pityFill.ZIndex = 6
 		pityFill.Parent = pity
@@ -4573,7 +4570,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pityLabel.TextColor3 = rgb("text")
 		pityLabel.TextStrokeTransparency = 0.5
 		pityLabel.TextTruncate = Enum.TextTruncate.AtEnd
-		pityLabel.Text = RollConfig.pityText(sinceEpic)
+		pityLabel.Text = RollConfig.pityText(sinceLegendary)
 		pityLabel.ZIndex = 7
 		pityLabel.Parent = pity
 		hubFn.placeCta(screen)
@@ -4774,15 +4771,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		junkButton("JunkMode", "Junk  " .. hubState.draft.rolls.autoJunk)
 		junkButton("JunkBelow", "Below  " .. hubState.draft.rolls.junkBelow)
 
-		local sinceEpic = if hubState.serverEpic ~= nil
-			then hubState.serverEpic
-			elseif type(hubState.profile) == "table" then hubState.profile.sinceEpic or 0
-			else 0
 		local pityResult = if hubState.serverSince ~= nil
 			then { pity = { sinceLegendary = hubState.serverSince } }
 			else nil
 		local sinceLegendary, pityGoal = UiRouter.legendaryPity(hubState.profile, pityResult)
-		local epicMeter = RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)
 		local pityMeter = RollHype.pity(sinceLegendary, pityGoal)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
@@ -4847,7 +4839,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.line(info, string.format("Luck  %d", luck + boost), 1, rgb("gold"))
 			hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
 			local legendaryCount = if type(sinceLegendary) == "number" then sinceLegendary else 0
-			hubFn.line(info, RarityConfig.pityLine(sinceEpic, legendaryCount), 3, rgb("text"))
+			hubFn.line(info, RarityConfig.pityLine(legendaryCount), 3, rgb("text"))
 			local infoPool = if hubState.rollKind == "pets"
 				then Pools.get(hubFn.rollPoolId())
 				else Pools.get("verdant_armory")
@@ -4862,13 +4854,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			table.insert(hubState.pityTweens, tween)
 			tween:Play()
 		end
-		-- One host, absolute rows. A collapsed list cannot pile Epic,
-		-- Legendary, and Odds on top of each other when the kind switches.
+		-- One host, absolute rows. A collapsed list cannot pile Legendary
+		-- and Odds on top of each other when the kind switches. There is
+		-- no Epic pity row (Phase 1.3: Legendary pity only).
 		local progress = ShardBoard.stack(hubState.rollKind, {
-			Epic = {
-				counter = if epicMeter.ok == true then epicMeter.counter else sinceEpic,
-				goal = RarityConfig.EPIC_PITY,
-			},
 			Legendary = {
 				counter = if pityMeter.ok == true then pityMeter.counter else sinceLegendary,
 				goal = pityGoal,
@@ -4904,10 +4893,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold: boolean,
 			animate: string
 		)
-			local rowId = if name == "EpicPity"
-				then "Epic"
-				elseif name == "LegendaryPity" then "Legendary"
-				else name
+			local rowId = if name == "LegendaryPity" then "Legendary" else name
 			local row = progressRow(rowId)
 			if row == nil or row.bar ~= true then
 				return
@@ -5076,10 +5062,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			meter(name, tier, counter, goal, fill, order, fromFill, reset, animate)
 			return fill, nextSeen
 		end
-		-- stylua: ignore
-		local nextEpicFill, nextEpicSeen = paintPity("EpicPity", "Epic", epicMeter, "Epic", 4, hubState.epicFillShown, hubState.epicFlashRoll)
-		hubState.epicFillShown = nextEpicFill
-		hubState.epicFlashRoll = nextEpicSeen
 		local nextLegendaryFill, nextLegendarySeen = paintPity(
 			"LegendaryPity",
 			"Legendary",
@@ -5140,8 +5122,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.line(oddsLines, text, index, rgb("text"))
 			end
 		end
-		hubFn.paintOddsBars(oddsPane, nextEpicFill, nextLegendaryFill)
-		hubFn.paintCta(sinceEpic)
+		hubFn.paintOddsBars(oddsPane, 0, nextLegendaryFill)
+		hubFn.paintCta(if type(sinceLegendary) == "number" then sinceLegendary else 0)
 
 		local recent = if #hubState.sessionRolls > 0
 			then hubState.sessionRolls
@@ -5393,7 +5375,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	)
 		hubState.revealCard.Visible = true
 		hubState.revealTitle.Text = record.name
-		hubState.revealRarity.Text = record.rarity
+		-- Tier color plus the real base chance, e.g. "Rare · 6.6%".
+		hubState.revealRarity.Text = RarityConfig.revealText(record.rarity)
 		local color = hubFn.rarityColor3(record.rarity)
 		hubState.revealRarity.TextColor3 = color
 		hubState.revealStroke.Color = color
@@ -5749,9 +5732,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			hubState.slideHistory = true
 			if type(result.pity) == "table" then
-				if type(result.pity.sinceEpic) == "number" then
-					hubState.serverEpic = result.pity.sinceEpic
-				end
 				if type(result.pity.sinceLegendary) == "number" then
 					hubState.serverSince = result.pity.sinceLegendary
 				end
@@ -6324,7 +6304,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold = profile.gold,
 			shardTokens = profile.shardTokens,
 			shardRolls = profile.shardRolls,
-			sinceEpic = profile.sinceEpic,
 			sinceLegendary = profile.sinceLegendary,
 			ascension = profile.ascension,
 			inventory = profile.inventory,
@@ -6369,7 +6348,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			extra.junk = if type(rolls) == "table" then rolls.autoJunk else nil
 			extra.below = if type(rolls) == "table" then rolls.junkBelow else nil
 			extra.anim = if type(rolls) == "table" then rolls.animation else nil
-			extra.epic = hubState.serverEpic
 			extra.since = hubState.serverSince
 			extra.rolls = if type(hubState.hype) == "table" then hubState.hype.rolls else 0
 			extra.streak = if type(hubState.hype) == "table" then hubState.hype.streak else 0
@@ -7419,7 +7397,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		setProfile = function(nextProfile: any)
 			hubState.profile = nextProfile
 			hubState.serverSince = nil
-			hubState.serverEpic = nil
 			if type(nextProfile) == "table" and type(nextProfile.uiSettings) == "table" then
 				hubState.draft = Settings.normalize(nextProfile.uiSettings)
 				hubState.uiScale.Scale = hubState.draft.hud.scale

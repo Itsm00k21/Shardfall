@@ -1363,7 +1363,9 @@ describe("HubInput", function()
 					expect(count.Position.X.Offset + count.Size.X.Offset <= host.Size.X.Offset).toBeTrue()
 				end
 			end
-			expect(meters).toEqual(2)
+			-- Legendary pity is the only meter (Epic pity removed).
+			expect(meters).toEqual(1)
+			expect(progress:FindFirstChild("EpicPity")).toBeNil()
 			local odds = progress:FindFirstChild("Odds")
 			expect(odds ~= nil).toBeTrue()
 			local oddsText = ""

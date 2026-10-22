@@ -35,77 +35,88 @@ local function scripted(value: number)
 end
 
 describe("RarityConfig", function()
-	it("lists every rarity as 1 in N and the percents sum to 1", function()
+	it("rolls only the 5 V1 tiers and the percents sum to 1", function()
 		local odds = RarityConfig.disclose(ladderPool(), 1)
 		local sum = 0
-		local mythic = nil
-		local secret = nil
+		local seen = {}
 		for _, row in ipairs(odds.rarities) do
 			sum += row.chance
+			seen[row.rarity] = row
 			local line = RarityConfig.formatLine(row)
-			expect(string.find(line, "  1 in ", 1, true) ~= nil).toBeTrue()
-			expect(string.find(line, "%)", 1, true) ~= nil).toBeTrue()
-			if row.rarity == "Mythic" then
-				mythic = row
-			end
-			if row.rarity == "Secret" then
-				secret = row
-			end
+			expect(string.find(line, "1 in", 1, true)).toBeNil()
+			expect(string.find(line, "%", 1, true) ~= nil).toBeTrue()
 		end
 		expect(math.abs(sum - 1) < 1e-9).toBeTrue()
-		assert(mythic ~= nil)
-		assert(secret ~= nil)
-		expect(mythic.oneIn).toEqual(25000)
-		expect(secret.oneIn).toEqual(100000)
-		for _, row in ipairs(odds.rarities) do
-			if row.rarity == "Common" then
-				expect(row.oneIn).toEqual(2)
-			end
-		end
-		expect(math.abs(mythic.chance - ((1 - 1 / 100000) * (1 / 25000))) < 1e-12).toBeTrue()
+		-- Mythic and Secret are parked (LaunchGate.extraTiers off).
+		expect(seen.Mythic).toBeNil()
+		expect(seen.Secret).toBeNil()
+		expect(#odds.rarities).toEqual(5)
+		expect(seen.Common.oneIn).toEqual(2)
+		expect(seen.Legendary.oneIn).toEqual(1000)
+		-- Rarest first: Legendary 1/1000, Epic 1/100 of the rest, ...
+		expect(math.abs(seen.Legendary.chance - 0.001) < 1e-12).toBeTrue()
+		expect(math.abs(seen.Epic.chance - 0.999 * 0.01) < 1e-12).toBeTrue()
+		expect(math.abs(seen.Rare.chance - 0.999 * 0.99 / 15) < 1e-12).toBeTrue()
+		expect(math.abs(seen.Uncommon.chance - 0.999 * 0.99 * (14 / 15) / 4) < 1e-12).toBeTrue()
+		expect(math.abs(seen.Common.chance - 0.999 * 0.99 * (14 / 15) * 0.75) < 1e-12).toBeTrue()
 		expect(string.find(odds.notice, RarityConfig.ROUNDING_NOTE, 1, true) ~= nil).toBeTrue()
+		expect(string.find(odds.notice, "Epic", 1, true)).toBeNil()
 	end)
 
-	it("prints one 1-in and one percent from the disclosed chance", function()
-		expect(RarityConfig.formatLine({ rarity = "Rare", chance = 0.02, oneIn = 10 })).toEqual(
-			"Rare  1 in 50  (2%)"
-		)
+	it("prints the real percent from the disclosed chance", function()
+		expect(RarityConfig.formatLine({ rarity = "Rare", chance = 0.02, oneIn = 10 })).toEqual("Rare  2%")
 		local odds = RarityConfig.disclose(ladderPool(), 1)
+		local shown = {}
 		local shownSum = 0
 		for _, row in ipairs(odds.rarities) do
 			local line = RarityConfig.formatLine(row)
-			local rarity, oneInText, percentText =
-				string.match(line, "^(%S+)  1 in (%d+)  %(([%d%.]+)%%%)")
+			local rarity, percentText = string.match(line, "^(%S+)  ([%d%.]+)%%$")
 			expect(rarity).toEqual(row.rarity)
-			local oneIn = tonumber(oneInText)
 			local percent = tonumber(percentText)
-			assert(oneIn ~= nil and percent ~= nil)
+			assert(percent ~= nil)
 			shownSum += percent
+			shown[row.rarity] = line
 			expect(math.abs(percent - row.chance * 100) <= 0.55).toBeTrue()
-			expect(oneIn).toEqual(math.max(1, math.floor((100 / percent) + 0.5)))
 		end
 		expect(math.abs(shownSum - 100) <= 1).toBeTrue()
+		expect(shown.Common).toEqual("Common  69%")
+		expect(shown.Uncommon).toEqual("Uncommon  23%")
+		expect(shown.Rare).toEqual("Rare  6.6%")
+		expect(shown.Epic).toEqual("Epic  1.00%")
+		expect(shown.Legendary).toEqual("Legendary  0.10%")
 		local live = RarityConfig.disclose(Pools.get("verdant_armory"), 1)
 		local liveSum = 0
 		for _, row in ipairs(live.rarities) do
-			local _, _, percentText = string.match(
-				RarityConfig.formatLine(row),
-				"^(%S+)  1 in (%d+)  %(([%d%.]+)%%%)"
-			)
+			local _, percentText = string.match(RarityConfig.formatLine(row), "^(%S+)  ([%d%.]+)%%$")
 			expect(percentText ~= nil).toBeTrue()
 			liveSum += tonumber(percentText) or 0
 		end
 		expect(math.abs(liveSum - 100) <= 1).toBeTrue()
 	end)
 
+	it("shows the real percent on the reveal, and a parked tier by name only", function()
+		expect(RarityConfig.revealText("Rare")).toEqual("Rare · 6.6%")
+		expect(RarityConfig.revealText("Legendary")).toEqual("Legendary · 0.10%")
+		expect(RarityConfig.revealText("Common")).toEqual("Common · 69%")
+		expect(RarityConfig.revealText("Mythic")).toEqual("Mythic")
+		expect(RarityConfig.revealText("Secret")).toEqual("Secret")
+		expect(RarityConfig.rolls("Mythic")).toEqual(false)
+		expect(RarityConfig.rolls("Legendary")).toEqual(true)
+		local total = 0
+		for _, id in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary" }) do
+			total += RarityConfig.tierChance(id) or 0
+		end
+		expect(math.abs(total - 1) < 1e-12).toBeTrue()
+	end)
+
 	it("halves the 1-in thresholds when luck is x2", function()
 		local odds = RarityConfig.disclose(ladderPool(), 2)
 		for _, row in ipairs(odds.rarities) do
-			if row.rarity == "Mythic" then
-				expect(row.oneIn).toEqual(12500)
+			if row.rarity == "Epic" then
+				expect(row.oneIn).toEqual(50)
 			end
 			if row.rarity == "Legendary" then
-				expect(row.oneIn).toEqual(1250)
+				expect(row.oneIn).toEqual(500)
 			end
 		end
 	end)
@@ -177,37 +188,45 @@ describe("RarityConfig", function()
 		)
 	end)
 
-	it("shows x2 luck on the 10th roll and pity counters", function()
+	it("shows x2 luck on the 10th roll and the Legendary pity counter", function()
 		expect(RarityConfig.bonusLabel(0)).toEqual("x2 Luck in 10")
 		expect(RarityConfig.bonusLabel(8)).toEqual("x2 Luck in 2")
 		expect(RarityConfig.bonusLabel(9)).toEqual("x2 Luck Ready")
 		expect(RarityConfig.bonusLabel(19)).toEqual("x2 Luck Ready")
-		expect(RarityConfig.pityLine(4, 20)).toEqual("Epic 4/50 · Legendary 20/1000")
+		expect(RarityConfig.pityLine(20)).toEqual("Legendary pity 20/150")
+		expect(RarityConfig.pityLine(-3)).toEqual("Legendary pity 0/150")
+		expect((RarityConfig :: any).EPIC_PITY).toBeNil()
 	end)
 
-	it("forces Epic+ at 50 and Legendary+ at 1000, rarest-first otherwise", function()
+	it("forces Legendary+ at 150 only, rarest-first otherwise", function()
 		local pool = ladderPool()
 		local miss = scripted(0.5)
-		local common, triggered =
-			RarityConfig.pick(pool, 1, { sinceEpic = 0, sinceLegendary = 0 }, miss)
+		local common, triggered = RarityConfig.pick(pool, 1, { sinceLegendary = 0 }, miss)
 		expect(common).toEqual("Common")
 		expect(triggered).toEqual(false)
 
-		local dry =
-			RarityConfig.pick(pool, 1, { sinceEpic = 48, sinceLegendary = 48 }, scripted(0.5))
-		expect(dry).toEqual("Common")
-
-		local epic =
+		-- An old save's sinceEpic at the old 50 does nothing.
+		local oldEpic, oldOn, oldFloor =
 			RarityConfig.pick(pool, 1, { sinceEpic = 49, sinceLegendary = 0 }, scripted(0.5))
-		expect(epic).toEqual("Epic")
+		expect(oldEpic).toEqual("Common")
+		expect(oldOn).toEqual(false)
+		expect(oldFloor).toBeNil()
 
-		local legendary =
-			RarityConfig.pick(pool, 1, { sinceEpic = 0, sinceLegendary = 999 }, scripted(0.5))
+		local legendary = RarityConfig.pick(pool, 1, { sinceLegendary = 149 }, scripted(0.5))
 		expect(legendary).toEqual("Legendary")
 
-		local secret =
-			RarityConfig.pick(pool, 1, { sinceEpic = 49, sinceLegendary = 0 }, scripted(0))
-		expect(secret).toEqual("Secret")
+		-- Mythic/Secret rows stay in the pool but never roll.
+		local top = RarityConfig.pick(pool, 1, { sinceLegendary = 0 }, scripted(0))
+		expect(top).toEqual("Legendary")
+	end)
+
+	it("adds soft pity from roll 101 and leaves rolls up to 100 alone", function()
+		local pool = ladderPool()
+		-- 0.03 misses 1/1000 but lands inside 1/1000 + 2% * 2 (roll 102).
+		expect(RarityConfig.pick(pool, 1, { sinceLegendary = 99 }, scripted(0.03))).toEqual("Rare")
+		expect(RarityConfig.pick(pool, 1, { sinceLegendary = 101 }, scripted(0.03))).toEqual("Legendary")
+		local _, forced = RarityConfig.pick(pool, 1, { sinceLegendary = 101 }, scripted(0.03))
+		expect(forced).toEqual(false)
 	end)
 
 	it("does not give a paid roll an earlier pity floor", function()
@@ -219,37 +238,36 @@ describe("RarityConfig", function()
 			paidLuck = true,
 			shardRolls = 9,
 		})
-		local _, early, earlyFloor =
-			RarityConfig.pick(pool, huge, { sinceEpic = 48, sinceLegendary = 998 }, scripted(0.5))
+		local _, early, earlyFloor = RarityConfig.pick(pool, huge, { sinceLegendary = 148 }, scripted(0.99))
 		expect(early).toEqual(false)
 		expect(earlyFloor).toBeNil()
-		local atEpic, epicOn, epicFloor =
-			RarityConfig.pick(pool, huge, { sinceEpic = 49, sinceLegendary = 0 }, scripted(0.5))
-		expect(epicOn).toEqual(true)
-		expect(epicFloor).toEqual("Epic")
-		expect(Rarities.INDEX[atEpic] >= Rarities.INDEX.Epic).toBeTrue()
 		local atLegend, legendOn, legendFloor =
-			RarityConfig.pick(pool, 1, { sinceEpic = 30, sinceLegendary = 999 }, scripted(0.5))
+			RarityConfig.pick(pool, 1, { sinceEpic = 30, sinceLegendary = 149 }, scripted(0.5))
 		expect(atLegend).toEqual("Legendary")
 		expect(legendOn).toEqual(true)
 		expect(legendFloor).toEqual("Legendary")
 	end)
 
-	it("resets the pity counter the granted rarity clears", function()
-		local pity = { sinceEpic = 99, sinceLegendary = 40 }
-		RarityConfig.advance(pity, "Epic", "Epic")
-		expect(pity.sinceEpic).toEqual(0)
+	it("resets the Legendary counter on Legendary+ and leaves sinceEpic as saved", function()
+		local pity: any = { sinceEpic = 99, sinceLegendary = 40 }
+		RarityConfig.advance(pity, "Epic", nil)
+		expect(pity.sinceEpic).toEqual(99)
 		expect(pity.sinceLegendary).toEqual(41)
 
-		pity = { sinceEpic = 10, sinceLegendary = 999 }
+		pity = { sinceEpic = 10, sinceLegendary = 149 }
 		RarityConfig.advance(pity, "Legendary", "Legendary")
-		expect(pity.sinceEpic).toEqual(0)
+		expect(pity.sinceEpic).toEqual(10)
 		expect(pity.sinceLegendary).toEqual(0)
 
-		pity = { sinceEpic = 3, sinceLegendary = 3 }
+		pity = { sinceLegendary = 3 }
 		RarityConfig.advance(pity, "Rare", nil)
-		expect(pity.sinceEpic).toEqual(4)
+		expect(pity.sinceEpic).toBeNil()
 		expect(pity.sinceLegendary).toEqual(4)
+
+		-- An owned legacy Mythic still counts as Legendary or better.
+		pity = { sinceLegendary = 70 }
+		RarityConfig.advance(pity, "Mythic", nil)
+		expect(pity.sinceLegendary).toEqual(0)
 	end)
 
 	it("builds a deterministic reel that lands on the server result", function()

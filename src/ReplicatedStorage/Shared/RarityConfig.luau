@@ -7,10 +7,23 @@
 
 	Rarity is checked rarest-first. Each listed 1-in-N is that check. The
 	commonest rarity in the pool absorbs whatever is left, so the percents
-	sum to 100. Secret is on the ladder because pools can drop it; a hidden
-	outcome would break the paid-random disclosure rule.
+	sum to 100.
+
+	Phase 1.3 (Kevin, Oct 22 2026): rolls use the 5-tier V1 ladder in
+	Config/Rarities (Common 1/2 remainder, Uncommon 1/4, Rare 1/15,
+	Epic 1/100, Legendary 1/1000) with one free Legendary pity (hard 150,
+	soft from 100). The checks give Common 69.2%, Uncommon 23.1%,
+	Rare 6.59%, Epic 0.999% and Legendary 0.1% at luck x1, and the odds
+	sheet prints those percentages.
+
+	Mythic and Secret stay on the Rarities ladder so owned items keep
+	their color and rank, but they are parked for Phase 5: they do not
+	roll while LaunchGate.extraTiers is off. Their old 1-in-N sits in
+	PARKED_ONE_IN for when that switch comes on.
 ]]
 
+local V1 = require("./Config/Rarities")
+local LaunchGate = require("./LaunchGate")
 local Rarities = require("./Rarities")
 local RollConfig = require("./RollConfig")
 
@@ -44,17 +57,18 @@ RarityConfig.SHAKE = RollConfig.SHAKE
 RarityConfig.AUTO_DISMISS = RollConfig.AUTO_DISMISS
 
 RarityConfig.BONUS_EVERY = RollConfig.BONUS_EVERY
-RarityConfig.EPIC_PITY = RollConfig.EPIC_PITY
 RarityConfig.LEGENDARY_PITY = RollConfig.LEGENDARY_PITY
 RarityConfig.ROUNDING_NOTE =
 	"Probabilities are rounded; total of displayed individual probabilities may not equal 100%."
 
-local ONE_IN: { [string]: number } = {
-	Common = 2,
-	Uncommon = 5,
-	Rare = 25,
-	Epic = 250,
-	Legendary = 2500,
+-- The rolling ladder: Config/Rarities (V1, 5 tiers).
+local ONE_IN: { [string]: number } = {}
+for _, id in ipairs(V1.ORDER) do
+	ONE_IN[id] = V1.TIERS[id].oneIn
+end
+
+-- Parked tiers (Phase 5). Only read while LaunchGate.extraTiers is on.
+local PARKED_ONE_IN: { [string]: number } = {
 	Mythic = 25000,
 	Secret = 100000,
 }
@@ -64,8 +78,9 @@ export type Rng = {
 	nextInteger: (self: Rng, min: number, max: number) -> number,
 }
 
+-- sinceEpic may still sit on old saves. Nothing reads it any more.
 export type PityCounters = {
-	sinceEpic: number,
+	sinceEpic: number?,
 	sinceLegendary: number,
 }
 
@@ -88,8 +103,20 @@ function RarityConfig.color(rarity: string): (number, number, number)
 	return Rarities.rgb(rarity)
 end
 
+-- True when this tier can come out of a roll. Owned items of a parked
+-- tier still load and display; they just are not drawn.
+function RarityConfig.rolls(rarity: any): boolean
+	if type(rarity) ~= "string" then
+		return false
+	end
+	if ONE_IN[rarity] ~= nil then
+		return true
+	end
+	return PARKED_ONE_IN[rarity] ~= nil and LaunchGate.on("extraTiers")
+end
+
 function RarityConfig.oneIn(rarity: string): number
-	return ONE_IN[rarity] or 2
+	return ONE_IN[rarity] or PARKED_ONE_IN[rarity] or 2
 end
 
 -- (1 + base) * bonusRoll + potion
@@ -160,29 +187,19 @@ function RarityConfig.bonusLabel(shardRolls: any): string
 	return "x2 Luck in " .. tostring(remaining)
 end
 
-function RarityConfig.pityLine(sinceEpic: any, sinceLegendary: any): string
-	local epic = whole(sinceEpic, 0)
+function RarityConfig.pityLine(sinceLegendary: any): string
 	local legendary = whole(sinceLegendary, 0)
-	if epic < 0 then
-		epic = 0
-	end
 	if legendary < 0 then
 		legendary = 0
 	end
-	return string.format(
-		"Epic %d/%d · Legendary %d/%d",
-		epic,
-		RarityConfig.EPIC_PITY,
-		legendary,
-		RarityConfig.LEGENDARY_PITY
-	)
+	return string.format("Legendary pity %d/%d", legendary, RarityConfig.LEGENDARY_PITY)
 end
 
 -- Rarest first, limited to rarities the pool can actually grant.
 function RarityConfig.present(pool: any): { string }
 	local have: { [string]: boolean } = {}
 	for _, entry in ipairs(entriesOf(pool)) do
-		if type(entry) == "table" and type(entry.rarity) == "string" then
+		if type(entry) == "table" and RarityConfig.rolls(entry.rarity) then
 			local weight = entry.weight
 			if type(weight) ~= "number" or weight > 0 then
 				have[entry.rarity] = true
@@ -210,7 +227,9 @@ local function unit(rng: Rng): number
 	return value
 end
 
-local function naturalPick(pool: any, luck: number, rng: Rng): string
+-- One check per tier, rarest first. soft is the extra absolute
+-- Legendary chance from soft pity (0 when not in the soft window).
+local function naturalPick(pool: any, luck: number, rng: Rng, soft: number?): string
 	local ladder = RarityConfig.present(pool)
 	if #ladder == 0 then
 		return "Common"
@@ -218,7 +237,11 @@ local function naturalPick(pool: any, luck: number, rng: Rng): string
 	for index = 1, #ladder - 1 do
 		local rarity = ladder[index]
 		local threshold = RarityConfig.effectiveOneIn(rarity, luck)
-		if unit(rng) < (1 / threshold) then
+		local hit = 1 / threshold
+		if rarity == "Legendary" and soft ~= nil and soft > 0 then
+			hit = math.min(1, hit + soft)
+		end
+		if unit(rng) < hit then
 			return rarity
 		end
 	end
@@ -236,23 +259,21 @@ local function bestAtLeast(pool: any, floor: string): string?
 	return closest
 end
 
+-- One draw. Only the Legendary pity floor exists: the roll that would
+-- be number LEGENDARY_PITY since the last Legendary+ is raised to
+-- Legendary. From SOFT_FROM on, the Legendary check also gets the
+-- soft-pity bonus. A saved sinceEpic is ignored.
 function RarityConfig.pick(pool: any, luck: number, pity: any, rng: Rng): (string, boolean, string?)
 	local counters = if type(pity) == "table" then pity else {}
-	local sinceEpic = whole(counters.sinceEpic, 0)
 	local sinceLegendary = whole(counters.sinceLegendary, 0)
-	if sinceEpic < 0 then
-		sinceEpic = 0
-	end
 	if sinceLegendary < 0 then
 		sinceLegendary = 0
 	end
 	local floor = nil
 	if sinceLegendary + 1 >= RarityConfig.LEGENDARY_PITY then
 		floor = "Legendary"
-	elseif sinceEpic + 1 >= RarityConfig.EPIC_PITY then
-		floor = "Epic"
 	end
-	local natural = naturalPick(pool, luck, rng)
+	local natural = naturalPick(pool, luck, rng, RollConfig.softBonus(sinceLegendary))
 	local chosen = natural
 	if floor ~= nil and Rarities.rank(natural) < Rarities.rank(floor) then
 		local raised = bestAtLeast(pool, floor)
@@ -265,19 +286,18 @@ function RarityConfig.pick(pool: any, luck: number, pity: any, rng: Rng): (strin
 	return chosen, floor ~= nil, floor
 end
 
+-- Legendary or better (natural, soft or forced) clears the meter;
+-- anything else adds one. sinceEpic is left exactly as it was saved.
 function RarityConfig.advance(pity: PityCounters, granted: string, floor: string?)
 	local rank = Rarities.rank(granted)
-	local clearEpic = rank >= Rarities.rank("Epic") or floor == "Epic" or floor == "Legendary"
-	local clearLegendary = rank >= Rarities.rank("Legendary") or floor == "Legendary"
-	if clearLegendary then
-		pity.sinceEpic = 0
+	if rank >= Rarities.rank("Legendary") or floor == "Legendary" then
 		pity.sinceLegendary = 0
-	elseif clearEpic then
-		pity.sinceEpic = 0
-		pity.sinceLegendary = whole(pity.sinceLegendary, 0) + 1
 	else
-		pity.sinceEpic = whole(pity.sinceEpic, 0) + 1
-		pity.sinceLegendary = whole(pity.sinceLegendary, 0) + 1
+		local since = whole(pity.sinceLegendary, 0)
+		if since < 0 then
+			since = 0
+		end
+		pity.sinceLegendary = since + 1
 	end
 end
 
@@ -413,7 +433,7 @@ function RarityConfig.formatPercent(chance: number): string
 	return text
 end
 
-function RarityConfig.disclose(pool: any, luck: number, sinceEpic: any?)
+function RarityConfig.disclose(pool: any, luck: number, sinceLegendary: any?)
 	local multiplier = luck
 	if type(multiplier) ~= "number" or multiplier ~= multiplier or multiplier < 1 then
 		multiplier = 1
@@ -466,20 +486,21 @@ function RarityConfig.disclose(pool: any, luck: number, sinceEpic: any?)
 			})
 		end
 	end
-	local guarantee = if sinceEpic ~= nil
-		then RollConfig.pityText(sinceEpic) .. " (free pity, never sold). "
+	local guarantee = if sinceLegendary ~= nil
+		then RollConfig.pityText(sinceLegendary) .. " (free pity, never sold). "
 		else ""
 	return {
 		notice = string.format(
-			"Luck x%.2f. Every %dth roll is x2. Epic+ at %d, Legendary+ at %d. %s%s",
+			"Luck x%.2f. Every %dth roll is x2. Legendary+ guaranteed by roll %d; from roll %d each roll adds +%d%% Legendary chance. %s%s",
 			multiplier,
 			RarityConfig.BONUS_EVERY,
-			RarityConfig.EPIC_PITY,
 			RarityConfig.LEGENDARY_PITY,
+			RollConfig.SOFT_FROM + 1,
+			math.floor(RollConfig.SOFT_STEP * 100 + 0.5),
 			guarantee,
 			RarityConfig.ROUNDING_NOTE
 		),
-		pityLeft = if sinceEpic ~= nil then RollConfig.pityLeft(sinceEpic) else nil,
+		pityLeft = if sinceLegendary ~= nil then RollConfig.pityLeft(sinceLegendary) else nil,
 		luck = multiplier,
 		rarities = rarities,
 		entries = rows,
@@ -497,8 +518,49 @@ function RarityConfig.formatLine(row: any): string
 			rarity = row.rarity
 		end
 	end
-	local oneIn, _, text = shownPair(chance)
-	return string.format("%s  1 in %d  (%s)", rarity, oneIn, text)
+	local _, _, text = shownPair(chance)
+	return string.format("%s  %s", rarity, text)
+end
+
+-- Base chance (luck x1, no pity) of landing this tier on the full V1
+-- ladder. nil for a tier that does not roll (a parked Mythic/Secret an
+-- old save still owns).
+function RarityConfig.tierChance(rarity: any): number?
+	if not RarityConfig.rolls(rarity) then
+		return nil
+	end
+	local ladder = {}
+	for index = #Rarities.ORDER, 1, -1 do
+		local name = Rarities.ORDER[index]
+		if RarityConfig.rolls(name) then
+			table.insert(ladder, name)
+		end
+	end
+	local remaining = 1
+	for index, name in ipairs(ladder) do
+		local chance
+		if index == #ladder then
+			chance = remaining
+		else
+			local hit = math.min(1, 1 / RarityConfig.oneIn(name))
+			chance = remaining * hit
+			remaining *= 1 - hit
+		end
+		if name == rarity then
+			return chance
+		end
+	end
+	return nil
+end
+
+-- The reveal's rarity line: "Rare · 6.6%". A parked tier shows its name.
+function RarityConfig.revealText(rarity: any): string
+	local name = if type(rarity) == "string" and rarity ~= "" then rarity else "Common"
+	local chance = RarityConfig.tierChance(name)
+	if chance == nil then
+		return name
+	end
+	return string.format("%s · %s", name, RarityConfig.formatPercent(chance))
 end
 
 function RarityConfig.quickEntitled(data: any, now: number): boolean
@@ -599,5 +661,6 @@ function RarityConfig.cycleSeconds(): number
 end
 
 table.freeze(ONE_IN)
+table.freeze(PARKED_ONE_IN)
 
 return RarityConfig

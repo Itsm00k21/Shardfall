@@ -165,8 +165,8 @@ end
 -- and checked the Bag. Returns the capture, or nil and a reason.
 local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 	local luck = RarityConfig.luckFromProfile(data)
+	-- Legendary pity only. A saved sinceEpic is left untouched.
 	local counters = {
-		sinceEpic = data.sinceEpic,
 		sinceLegendary = data.sinceLegendary,
 	}
 	local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
@@ -182,12 +182,11 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 	}, rng)
 	Schema.insertItem(data, item)
 	RarityConfig.advance(counters, item.rarity, floor)
-	data.sinceEpic = counters.sinceEpic
 	data.sinceLegendary = counters.sinceLegendary
 	data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
 	StarterGoalPay.grant(data, "rolls", nil)
-	-- The per-pool pity bucket is an old save field. The live counters
-	-- are sinceEpic and sinceLegendary. Do not increment the bucket.
+	-- The per-pool pity bucket is an old save field. The live counter is
+	-- sinceLegendary. Do not increment the bucket.
 	return {
 		item = item,
 		pityTriggered = pityTriggered,
@@ -195,7 +194,6 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		fillerSeed = fillerSeed,
 		luck = luck,
 		rollIndex = data.shardRolls,
-		sinceEpic = data.sinceEpic,
 		sinceLegendary = data.sinceLegendary,
 		tracker = StarterGoalPay.tracker(data),
 	}
@@ -304,12 +302,10 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 		quick = quick,
 		pityTriggered = captured.pityTriggered,
 		pity = {
-			sinceEpic = captured.sinceEpic,
 			sinceLegendary = captured.sinceLegendary,
-			epicAt = RarityConfig.EPIC_PITY,
 			legendaryAt = RarityConfig.LEGENDARY_PITY,
 			shardRolls = captured.rollIndex,
-			left = RollConfig.pityLeft(captured.sinceEpic),
+			left = RollConfig.pityLeft(captured.sinceLegendary),
 		},
 		currency = currency,
 		starterGoalTracker = captured.tracker,
@@ -322,12 +318,10 @@ end
 
 local function pityView(drawn: any)
 	return {
-		sinceEpic = drawn.sinceEpic,
 		sinceLegendary = drawn.sinceLegendary,
-		epicAt = RarityConfig.EPIC_PITY,
 		legendaryAt = RarityConfig.LEGENDARY_PITY,
 		shardRolls = drawn.rollIndex,
-		left = RollConfig.pityLeft(drawn.sinceEpic),
+		left = RollConfig.pityLeft(drawn.sinceLegendary),
 	}
 end
 
