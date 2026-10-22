@@ -44,6 +44,20 @@ its tag to merged and add the merge commit.
   remotes now refuse NaN/inf numbers, oversized pet ids and colors, and bad
   gear uids; `Dungeon("enter", "heartwood")` is closed while raids is parked.
   [#375] (merged, f83d5a1)
+- Phase 0: Kevin's Oct 22 calls. V1 Config has no Epic pity (Legendary pity
+  150, soft from 100, stays); the live 7-tier roll keeps its Epic meter until
+  Phase 1.3. The Grovewarden armor keeps its items but drops the set tag (no
+  set bonus behind it; sets return in Phase 2). PetCare free XP is parked
+  behind `LaunchGate.petCare` for a future pets update. Debug, DevGrant and
+  the boss skip work only for the game owner (`Shared/DevAccess`), so Team
+  Test guests can no longer use them. [#377] (open)
+- Dev tools left Settings for their own owner-only Dev Tools panel (the
+  "Dev" button under the Gold / Mastery / Shards pills), with collapsible
+  Currency, Progress, Run / Dungeon and Testing sections. Every press toasts
+  what changed ("+1000 Gold (now 1547).") and prints a `[Dev]` line in
+  Output; buttons for switched-off systems (chests, raids, paid Prisms,
+  Shard Pass Gems, event tokens) are hidden and the server refuses them with
+  a clear "is off" line. [#377] (open)
 
 ### Fixed
 - Gnarl's weak spot sits at chest height, and every boss hit says Guarded or
@@ -74,3 +88,4 @@ its tag to merged and add the merge commit.
 [#374]: https://github.com/Itsm00k21/Shardfall/pull/374
 [#375]: https://github.com/Itsm00k21/Shardfall/pull/375
 [#376]: https://github.com/Itsm00k21/Shardfall/pull/376
+[#377]: https://github.com/Itsm00k21/Shardfall/pull/377

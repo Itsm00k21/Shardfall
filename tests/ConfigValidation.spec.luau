@@ -41,14 +41,8 @@ local ELEMENT_STAT_PENDING: { [string]: boolean } = {
 	luck = true,
 }
 
--- FINDING (PR body): ItemBases tags the four Epic grovewarden_* armor
--- pieces with setId "grovewarden", but SetBonuses (RelicSets) has no
--- "grovewarden" set; its sets are the verdant_<class> raid sets. Nothing
--- reads the bonus for it today (RollMath only copies setId onto the item).
--- Needs a decision: add a Grovewarden set in Phase 2 or drop the tag.
-local ITEM_SET_PENDING: { [string]: boolean } = {
-	grovewarden = true,
-}
+-- The Grovewarden set tag (no set bonus behind it) was dropped on
+-- Oct 22 2026 (Kevin). Every setId on an item must name a real set.
 
 local function isFinite(value: any): boolean
 	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
@@ -303,8 +297,12 @@ describe("Config validation: odds", function()
 				expect(atHard >= 1 - 1e-9).toBeTrue()
 			end
 		end
-		-- Rarer tier, longer pity.
-		expect(Config.Rarities.PITY.epic.hard).toBeLessThan(Config.Rarities.PITY.legendary.hard)
+		-- Legendary is the only V1 pity (Kevin, Oct 22: Epic pity cut).
+		local tiers = {}
+		for _, pity in pairs(Config.Rarities.PITY) do
+			table.insert(tiers, pity.tier)
+		end
+		expect(tiers).toEqual({ "Legendary" })
 	end)
 
 	it("folds reserved live ids into a V1 tier", function()
@@ -590,11 +588,7 @@ describe("Config validation: cross-references", function()
 			setIds[set.id] = true
 		end
 		for _, base in ipairs(Config.Items.all()) do
-			if
-				base.setId ~= nil
-				and not setIds[base.setId]
-				and not ITEM_SET_PENDING[base.setId]
-			then
+			if base.setId ~= nil and not setIds[base.setId] then
 				fail("Items." .. base.id .. " names unknown set " .. base.setId)
 			end
 		end

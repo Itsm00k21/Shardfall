@@ -60,7 +60,8 @@ describe("Config V1 rarities", function()
 		expect(oneIn).toEqual({ 2, 4, 15, 100, 1000 })
 		expect(Config.Rarities.PITY.legendary.hard).toEqual(150)
 		expect(Config.Rarities.PITY.legendary.softFrom).toEqual(100)
-		expect(Config.Rarities.PITY.epic.hard).toEqual(50)
+		-- Kevin, Oct 22: no Epic pity in V1.
+		expect(Config.Rarities.PITY.epic).toBeNil()
 	end)
 
 	it("keeps tier ids that already exist on the live ladder", function()

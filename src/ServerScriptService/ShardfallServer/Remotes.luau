@@ -37,6 +37,7 @@ local RollService = require(script.Parent.RollService)
 local TradeService = require(script.Parent.TradeService)
 local TravelService = require(script.Parent.TravelService)
 local GoldShop = require(ReplicatedStorage.Shared.GoldShop)
+local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Pools = require(ReplicatedStorage.Shared.Pools)
 local Recipes = require(ReplicatedStorage.Shared.Recipes)
@@ -141,6 +142,7 @@ local PARKED_ACTION: { [string]: string } = {
 	PickTalent = "classes",
 	Travel = "travel",
 	FeedItem = "stars",
+	PetCare = "petCare",
 	BuyGoldShop = "goldShop",
 	BuyBoost = "paid",
 	BuyPrism = "paid",
@@ -356,6 +358,10 @@ function Remotes.bind()
 
 	functionRemote("Debug").OnServerInvoke = function(player, action)
 		return guard(player, "Debug", function()
+			-- Owner only (Oct 22). DebugService checks again.
+			if not DevAccess.player(player) then
+				return { ok = false, error = DevAccess.DENIED }
+			end
 			return DebugService.run(player, action)
 		end)
 	end
@@ -364,6 +370,10 @@ function Remotes.bind()
 		return guard(player, "DevGrant", function()
 			if type(kind) ~= "string" then
 				return { ok = false, error = "Unknown dev grant." }
+			end
+			-- Owner only (Oct 22). RollService.devGrant checks again.
+			if not DevAccess.player(player) then
+				return { ok = false, error = DevAccess.DENIED }
 			end
 			return RollService.devGrant(player, kind)
 		end)

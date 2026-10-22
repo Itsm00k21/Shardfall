@@ -4,7 +4,8 @@
 	One modal stack. Tabs replace each other. Esc and the backdrop pop.
 	The panel is a Frame, so the first open still receives tab clicks.
 	The backdrop dim is copied off UiRouter on every open and every close.
-	Debug grants live here and only while Studio is running.
+	Dev tools are not here: they live in the owner-only Dev Tools panel
+	(DebugHud), so Settings shows player settings only.
 
 	Bag, pets, roll, and hero draw cards. Market, raids, and the pass
 	use an empty state. A missing class opens the class cards.
@@ -6812,53 +6813,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.draft.access.holdToTap = not hubState.draft.access.holdToTap
 			end
 		)
-		if RunService:IsStudio() then
-			local actions = {
-				"level",
-				"gold",
-				"keys",
-				"gems",
-				"dust",
-				"tokens",
-				"chest",
-				"eggs",
-				"dungeon",
-				"raid",
-				"phase",
-			}
-			for index, action in ipairs(actions) do
-				local name = action
-				hubFn.row(hubState.settingsPage, "Debug  " .. name, 300 + index, function()
-					task.spawn(function()
-						pcall(hooks.invoke, "Debug", name)
-					end)
-				end)
-			end
-			local grants = {
-				{ "tokens", "Shards" },
-				{ "luck", "Luck" },
-				{ "ascension", "Ascend" },
-				{ "materials", "Materials" },
-				{ "chests", "Chests" },
-				{ "forgeboost", "Forge" },
-				{ "prisms", "Prisms" },
-				{ "boost", "Boost" },
-				{ "restrict", "Region" },
-			}
-			for index, pair in ipairs(grants) do
-				local kind = pair[1]
-				hubFn.row(hubState.settingsPage, "Grant  " .. pair[2], 320 + index, function()
-					task.spawn(function()
-						pcall(hooks.invoke, "DevGrant", kind)
-					end)
-				end)
-			end
-			hubFn.row(hubState.settingsPage, "Debug  Boss", 340, function()
-				task.spawn(function()
-					pcall(hooks.invoke, "Dungeon", "skip")
-				end)
-			end)
-		end
+		-- Dev tools moved to their own owner-only Dev Tools panel
+		-- (DebugHud, Kevin Oct 22). Settings keeps player settings only.
 		hubFn.hexify(hubState.settingsPage)
 		hubFn.hold("settings")
 		hubFn.hold("raids")

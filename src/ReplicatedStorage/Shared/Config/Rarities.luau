@@ -29,12 +29,13 @@ Rarities.TIERS = table.freeze({
 	Legendary = table.freeze({ id = "Legendary", rank = 5, oneIn = 1000, remainder = false }),
 })
 
--- Free, never sold. Epic keeps the live 50 (RollConfig.EPIC_PITY).
--- Legendary: guaranteed by roll 150. From roll 101 on, each roll adds
--- softStep (absolute) to the Legendary chance: roll 101 ~2.1%, roll 125
--- ~50%, roll 150 guaranteed.
+-- Free, never sold. Legendary only: guaranteed by roll 150. From roll
+-- 101 on, each roll adds softStep (absolute) to the Legendary chance:
+-- roll 101 ~2.1%, roll 125 ~50%, roll 150 guaranteed.
+-- No Epic pity in V1 (Kevin, Oct 22 2026). It can come back if
+-- playtests feel dry. The live 7-tier roll keeps RollConfig.EPIC_PITY
+-- until Phase 1.3 switches the roll to this ladder.
 Rarities.PITY = table.freeze({
-	epic = table.freeze({ id = "epic", tier = "Epic", hard = 50 }),
 	legendary = table.freeze({
 		id = "legendary",
 		tier = "Legendary",

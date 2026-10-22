@@ -27,6 +27,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local DungeonConfig = require(ReplicatedStorage.Shared.DungeonConfig)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Economy = require(ReplicatedStorage.Shared.Economy)
@@ -2860,6 +2861,9 @@ function DungeonService.skipToBoss(player: Player)
 	if not RunService:IsStudio() then
 		return reject("Dev tools only work in Studio.")
 	end
+	if not DevAccess.player(player) then
+		return reject(DevAccess.DENIED)
+	end
 	if runs[player] == nil then
 		local entered = DungeonService.enter(player, Dungeons.ROOTVAULT_ID)
 		if entered.ok ~= true then
@@ -2876,7 +2880,7 @@ function DungeonService.skipToBoss(player: Player)
 	run.wave = 0
 	teleport(player, roomSpawn(run.placeIndex))
 	spawnRoom(player, run)
-	return { ok = true, run = publicRun(player) }
+	return { ok = true, run = publicRun(player), message = "Skipped to the boss room." }
 end
 
 function DungeonService.chooseDoor(player: Player, doorId: any)
