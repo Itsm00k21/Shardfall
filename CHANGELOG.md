@@ -50,7 +50,7 @@ its tag to merged and add the merge commit.
   set bonus behind it; sets return in Phase 2). PetCare free XP is parked
   behind `LaunchGate.petCare` for a future pets update. Debug, DevGrant and
   the boss skip work only for the game owner (`Shared/DevAccess`), so Team
-  Test guests can no longer use them. (open)
+  Test guests can no longer use them. [#377] (open)
 
 ### Fixed
 - Gnarl's weak spot sits at chest height, and every boss hit says Guarded or
@@ -81,3 +81,4 @@ its tag to merged and add the merge commit.
 [#374]: https://github.com/Itsm00k21/Shardfall/pull/374
 [#375]: https://github.com/Itsm00k21/Shardfall/pull/375
 [#376]: https://github.com/Itsm00k21/Shardfall/pull/376
+[#377]: https://github.com/Itsm00k21/Shardfall/pull/377
