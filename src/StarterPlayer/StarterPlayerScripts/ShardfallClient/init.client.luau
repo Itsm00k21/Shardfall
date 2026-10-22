@@ -185,7 +185,7 @@ local function clearStaleGuis(gui: PlayerGui)
 	for _, descendant in ipairs(gui:GetDescendants()) do
 		if descendant:IsA("TextLabel") and ClientChrome.legacyReadout(descendant.Text) then
 			local host = descendant:FindFirstAncestorOfClass("ScreenGui")
-			if host ~= nil then
+			if host ~= nil and LegacyChrome.textScanned(host.Name) then
 				hosts[host] = true
 			end
 		end
@@ -226,6 +226,11 @@ playerGui.ChildAdded:Connect(function(child)
 	then
 		warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
 		child:Destroy()
+		return
+	end
+	-- Our own guis (ShardfallHub, ...) are never text-scanned: the Roll
+	-- page's "Pity 0/50" matched and the whole hub was destroyed.
+	if not LegacyChrome.textScanned(child.Name) then
 		return
 	end
 	task.defer(function()
