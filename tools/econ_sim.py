@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Shardfall economy sim (docs/research/economy_v1.md, section 9). Rev 3.
+"""Shardfall economy sim (docs/research/economy_v1.md). Rev 4.
 
-Deterministic: seed 42. Run: python3 tools/econ_sim.py
+Deterministic: seed 42.
+  python3 tools/econ_sim.py            V1 default: rev 2 five-tier ladder (+ current 7-tier comparison)
+  python3 tools/econ_sim.py --ladder8  Parking lot (Phase 5): 8 tiers, variants, mutations, chase, per-tier pity
 CURRENT values cite their repo file in the sheet; anything marked PROPOSED
 is a sheet proposal, not live config.
 """
-import random, statistics as st
+import random, statistics as st, sys
 
 SEED = 42
 PLAYERS = 1000
@@ -47,7 +49,13 @@ MODELS = {
         pool={"Common": 12, "Uncommon": 10, "Rare": 8, "Epic": 6, "Legendary": 4, "Mythic": 2, "Secret": 1},
         extras=False,
     ),
-    "proposed8": dict(  # PROPOSED rev 3: 8 tiers, per-tier pity with soft pity, variants, mutations, chase
+    "proposed5": dict(  # PROPOSED V1 (rev 2): 5 tiers, Legendary hard pity 150, soft from 100 (+2%/roll)
+        one_in={"Uncommon": 4, "Rare": 15, "Epic": 100, "Legendary": 1000},
+        pity={"Epic": (50, None, 0), "Legendary": (150, 100, 0.02)},
+        pool={"Common": 6, "Uncommon": 5, "Rare": 4, "Epic": 3, "Legendary": 2},
+        extras=False,
+    ),
+    "proposed8": dict(  # PARKING LOT (Phase 5)  # PROPOSED rev 3: 8 tiers, per-tier pity with soft pity, variants, mutations, chase
         one_in={"Uncommon": 4, "Rare": 15, "Epic": 100, "Legendary": 1000, "Mythic": 20000,
                 "Secret": 100000, "Divine": 500000},
         pity={"Epic": (50, 40, 0.03), "Legendary": (150, 100, 0.02), "Mythic": (3000, 2500, 0.002),
@@ -208,6 +216,7 @@ def per_minute():
 
 if __name__ == "__main__":
     per_minute()
-    for model in ("proposed8", "current7"):
+    models = ("proposed8",) if "--ladder8" in sys.argv else ("proposed5", "current7")
+    for model in models:
         for profile in ("normal", "ladder"):
             report(model, profile)
