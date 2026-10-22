@@ -5,6 +5,7 @@
 	place-file results panel, and its respawned copies.
 ]]
 
+local fs = require("@lune/fs")
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -78,6 +79,20 @@ describe("Parked follow-ups", function()
 	it("declares waveArena off", function()
 		expect(LaunchGate.SHOW.waveArena).toEqual(false)
 		expect(LaunchGate.on("waveArena")).toEqual(false)
+	end)
+
+	it("parks the loading tips screen so the client skips LoadingHud", function()
+		expect(LaunchGate.SHOW.loadingTips).toEqual(false)
+		expect(LaunchGate.on("loadingTips")).toEqual(false)
+		local client = fs.readFile(
+			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau"
+		)
+		local gateAt = string.find(client, 'if LaunchGate.on("loadingTips") then', 1, true)
+		local startAt = string.find(client, "LoadingHud.start(playerGui)", 1, true)
+		expect(gateAt ~= nil and startAt ~= nil).toBeTrue()
+		expect((gateAt :: number) < (startAt :: number)).toBeTrue()
+		local _, count = string.gsub(client, "LoadingHud%.start%(", "")
+		expect(count).toEqual(1)
 	end)
 
 	it("grants no chest from play while chests are parked", function()
