@@ -5,7 +5,22 @@ local luau = require("@lune/luau")
 
 local framework = require("./framework")
 local describe = framework.describe
-local it = framework.it
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
+-- These specs pin the full five-goal ladder, so they run with the Forge and
+-- guild switches on. ParkedFollowups.spec covers the parked tracker.
+local function it(name: string, fn: () -> ())
+	framework.it(name, function()
+		local craft, guilds = LaunchGate.SHOW.forgeCraft, LaunchGate.SHOW.guilds
+		LaunchGate.SHOW.forgeCraft = true
+		LaunchGate.SHOW.guilds = true
+		local ok, err = pcall(fn)
+		LaunchGate.SHOW.forgeCraft = craft
+		LaunchGate.SHOW.guilds = guilds
+		if not ok then
+			error(err, 0)
+		end
+	end)
+end
 local expect = framework.expect
 
 local BannerFit = require("../src/ReplicatedStorage/Shared/BannerFit")

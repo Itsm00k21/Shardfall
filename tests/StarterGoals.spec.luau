@@ -4,7 +4,22 @@ local fs = require("@lune/fs")
 
 local framework = require("./framework")
 local describe = framework.describe
-local it = framework.it
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
+-- These specs pin the full five-goal ladder, so they run with the Forge and
+-- guild switches on. ParkedFollowups.spec covers the parked tracker.
+local function it(name: string, fn: () -> ())
+	framework.it(name, function()
+		local craft, guilds = LaunchGate.SHOW.forgeCraft, LaunchGate.SHOW.guilds
+		LaunchGate.SHOW.forgeCraft = true
+		LaunchGate.SHOW.guilds = true
+		local ok, err = pcall(fn)
+		LaunchGate.SHOW.forgeCraft = craft
+		LaunchGate.SHOW.guilds = guilds
+		if not ok then
+			error(err, 0)
+		end
+	end)
+end
 local expect = framework.expect
 
 local StarterGoals = require("../src/ReplicatedStorage/Shared/StarterGoals")
@@ -634,7 +649,9 @@ end)
 
 describe("StarterGoals isolation", function()
 	it("is required only by the server pay module and does not roll, wait, or read the clock", function()
-		local source = fs.readFile("src/ReplicatedStorage/Shared/StarterGoals.luau")
+		local raw = fs.readFile("src/ReplicatedStorage/Shared/StarterGoals.luau")
+		-- LaunchGate (pure switches) is the one allowed require: parked goals skip the tracker.
+		local source = string.gsub(raw, 'require%("%./LaunchGate"%)', "")
 		expect(string.find(source, "require(", 1, true)).toBeNil()
 		expect(string.find(source, "FirstSession", 1, true)).toBeNil()
 		expect(string.find(source, "math.random", 1, true)).toBeNil()

@@ -149,7 +149,11 @@ local function clearStaleGuis(gui: PlayerGui)
 	for _, child in ipairs(gui:GetChildren()) do
 		if
 			child:IsA("ScreenGui")
-			and (ClientChrome.shouldClear(child.Name) or LegacyChrome.shouldDestroy(child.Name))
+			and (
+				ClientChrome.shouldClear(child.Name)
+				or LegacyChrome.shouldDestroy(child.Name)
+				or LegacyChrome.isPlaceCopy(child.Name, StarterGui:FindFirstChild(child.Name) ~= nil)
+			)
 		then
 			if LegacyChrome.shouldDestroy(child.Name) then
 				warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
@@ -180,11 +184,39 @@ if script.Parent ~= nil then
 end
 dropStaleScripts(playerGui)
 clearStaleGuis(playerGui)
+local function legacyText(host: Instance): boolean
+	for _, descendant in ipairs(host:GetDescendants()) do
+		if
+			(descendant:IsA("TextLabel") or descendant:IsA("TextButton"))
+			and ClientChrome.legacyReadout(descendant.Text)
+		then
+			return true
+		end
+	end
+	return false
+end
+
+-- A respawn re-clones StarterGui copies (ResetOnSpawn), so the join sweep
+-- alone misses them. That is how the old results panel and its Continue
+-- teleport came back after a dungeon.
 playerGui.ChildAdded:Connect(function(child)
-	if child:IsA("ScreenGui") and LegacyChrome.shouldDestroy(child.Name) then
+	if not child:IsA("ScreenGui") then
+		return
+	end
+	if
+		LegacyChrome.shouldDestroy(child.Name)
+		or LegacyChrome.isPlaceCopy(child.Name, StarterGui:FindFirstChild(child.Name) ~= nil)
+	then
 		warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
 		child:Destroy()
+		return
 	end
+	task.defer(function()
+		if child.Parent ~= nil and legacyText(child) then
+			warn("[Shardfall] removed legacy panel " .. child:GetFullName())
+			child:Destroy()
+		end
+	end)
 end)
 -- After the sweep. An earlier mount is destroyed: an unowned name is legacy,
 -- and an owned name is cleared as a leftover copy.

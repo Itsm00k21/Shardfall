@@ -2206,11 +2206,22 @@ describe("HavenBuilder", function()
 		end
 	end)
 
-	it("stands a readable training dummy off the gate lanes", function()
+	it("builds no Training Grove dummy while grove is parked", function()
+		expect(LaunchGate.on("grove")).toEqual(false)
 		local builder, _heartbeats, _workspace = loadBuilder()
 		local hub = instance("Model")
 		hub.Name = "Haven"
 		builder.build(hub)
+		expect(#findAll(hub, "GroveDummy")).toEqual(0)
+	end)
+
+	it("stands a readable training dummy off the gate lanes", function()
+		LaunchGate.SHOW.grove = true
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+		LaunchGate.SHOW.grove = false
 
 		local dummies = findAll(hub, "GroveDummy")
 		expect(#dummies).toEqual(1)
@@ -2268,7 +2279,7 @@ describe("HavenBuilder", function()
 				expect(child.MaxDistance >= 90).toBeTrue()
 			end
 		end
-		expect(prompts).toEqual(0) -- grove parked: dummy stands, no prompt
+		expect(prompts).toEqual(1)
 		expect(title.Text).toEqual("Training Grove")
 		expect(subline.Text).toEqual("Hit the dummy")
 		expect(title.TextStrokeTransparency).toEqual(0)

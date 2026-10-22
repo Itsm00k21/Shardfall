@@ -29,6 +29,8 @@
 	is the only src module that loads this one.
 ]]
 
+local LaunchGate = require("./LaunchGate")
+
 local StarterGoals = {}
 
 StarterGoals.ERRORS = table.freeze({
@@ -61,6 +63,18 @@ StarterGoals.GOALS = table.freeze({
 	goalRow("level", "Reach Lv 5", 5),
 	goalRow("guild", "Join or browse a guild", 1),
 })
+
+-- Goals whose system is parked (roadmap 0.1). They stay in the save and in
+-- GOALS, but the tracker skips them until their switch is on.
+StarterGoals.PARKED = table.freeze({
+	forge = "forgeCraft",
+	guild = "guilds",
+})
+
+function StarterGoals.reachable(id: string): boolean
+	local flag = StarterGoals.PARKED[id]
+	return flag == nil or LaunchGate.on(flag)
+end
 
 local order: { string } = {}
 for _, goal in ipairs(StarterGoals.GOALS) do
@@ -446,7 +460,7 @@ local function windowIds(state: State): { string }
 		return ids
 	end
 	for _, id in ipairs(StarterGoals.ORDER) do
-		if not isGranted(state.granted, id) then
+		if not isGranted(state.granted, id) and StarterGoals.reachable(id) then
 			table.insert(ids, id)
 			if #ids >= CONFIG.visible then
 				break

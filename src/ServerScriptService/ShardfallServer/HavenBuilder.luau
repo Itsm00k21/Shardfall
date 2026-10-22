@@ -2566,7 +2566,10 @@ function HavenBuilder.build(parent: Instance): number
 	buildGarden(parent)
 	buildObservatory(parent)
 	buildCourt(parent)
-	buildGrove(parent)
+	-- Training Grove is parked (0.1). The builder stays; nothing stands in the hub.
+	if LaunchGate.on("grove") then
+		buildGrove(parent)
+	end
 	buildPortals(parent)
 	buildBridges(parent)
 	buildRocks(parent)
