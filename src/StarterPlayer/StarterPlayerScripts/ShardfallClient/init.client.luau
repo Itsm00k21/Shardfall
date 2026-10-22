@@ -108,6 +108,23 @@ CombatStage.watchCamera()
 
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- A mouse or touch click must not leave a HUD button selected: a held
+-- GuiService.SelectedObject turns WASD into UI navigation. Gamepad keeps it.
+do
+	local GuiService = game:GetService("GuiService")
+	local UiSelection = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSelection"))
+	local function dropSelection()
+		local lastInput = UserInputService:GetLastInputType().Name
+		if UiSelection.shouldClear(lastInput, GuiService.SelectedObject ~= nil) then
+			GuiService.SelectedObject = nil
+		end
+	end
+	GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+		task.defer(dropSelection)
+	end)
+	UserInputService.LastInputTypeChanged:Connect(dropSelection)
+end
+
 local function scriptNames(instance: Instance): { string }
 	local names = { instance.Name }
 	local cursor: Instance? = instance.Parent
@@ -220,7 +237,11 @@ playerGui.ChildAdded:Connect(function(child)
 end)
 -- After the sweep. An earlier mount is destroyed: an unowned name is legacy,
 -- and an owned name is cleared as a leftover copy.
-LoadingHud.start(playerGui)
+-- Parked (Kevin, Oct 22): the tips overlay is off, so players drop straight
+-- into the hub. Nothing waits on it; the HUD and movement never gated on it.
+if LaunchGate.on("loadingTips") then
+	LoadingHud.start(playerGui)
+end
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))
@@ -1483,7 +1504,8 @@ CombatHud.start(remotes :: Instance, {
 	end,
 	onHint = function(text)
 		ui.setStatus(text, "info")
-		if hudShell ~= nil and string.sub(text, 1, 1) == "+" then
+		-- Loot lines ("Loot: Spore Cap x2", CombatFeel.LOOT_PREFIX) toast.
+		if hudShell ~= nil and string.sub(text, 1, 6) == "Loot: " then
 			hudShell.toast(text)
 		end
 	end,

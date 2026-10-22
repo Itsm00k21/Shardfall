@@ -364,6 +364,66 @@ function Keybinds.sinkNames(): { string }
 	return names
 end
 
+-- Which hub pages stop the character (Kevin, Oct 21). The Hero, Bag,
+-- Pets, Shop, Settings and Roll pages leave the world playable, so the
+-- player can walk with them open (Kevin, Oct 22: browsing Roll walks too).
+-- Only full-screen moments lock: the class picker, and a roll reveal while
+-- it plays (see worldMode's revealing arg). A page that is not listed
+-- locks, so a new screen is safe by default.
+Keybinds.LOCK_MOVEMENT = table.freeze({
+	hero = false,
+	bag = false,
+	pets = false,
+	shop = false,
+	settings = false,
+	roll = false,
+	class = true,
+})
+
+function Keybinds.locksMovement(page: any): boolean
+	if type(page) ~= "string" then
+		return true
+	end
+	return Keybinds.LOCK_MOVEMENT[page] ~= false
+end
+
+-- "free" (hub closed), "walk" (movement keys and controls stay live; only
+-- combat keys are sunk), or "lock" (the full sink and controls off). A
+-- gamepad always locks an open hub: the stick drives pad focus there.
+-- revealing (optional) is true while a roll reveal plays; it locks the
+-- open hub until the reveal ends, is skipped or the hub closes.
+function Keybinds.worldMode(open: boolean, page: any, gamepad: boolean, revealing: boolean?): string
+	if not open then
+		return "free"
+	end
+	if gamepad or revealing == true or Keybinds.locksMovement(page) then
+		return "lock"
+	end
+	return "walk"
+end
+
+-- Walk mode: combat keys only, so a click or a key on the panel does not
+-- swing or cast. Movement, Space, and Shift (sprint and dodge) stay free.
+function Keybinds.walkSinkNames(): { string }
+	local free: { [string]: boolean } = {}
+	for _, name in ipairs(MOVEMENT) do
+		free[name] = true
+	end
+	for _, key in ipairs(Keybinds.SPRINT) do
+		free[key] = true
+	end
+	local seen: { [string]: boolean } = {}
+	local names = {}
+	for _, key in pairs(Keybinds.COMBAT) do
+		if free[key] ~= true and seen[key] ~= true then
+			seen[key] = true
+			table.insert(names, key)
+		end
+	end
+	table.sort(names)
+	return names
+end
+
 local SLOT_KEYS = {
 	Keybinds.COMBAT.slot1,
 	Keybinds.COMBAT.slot2,
