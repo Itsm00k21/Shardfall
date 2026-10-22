@@ -220,7 +220,11 @@ playerGui.ChildAdded:Connect(function(child)
 end)
 -- After the sweep. An earlier mount is destroyed: an unowned name is legacy,
 -- and an owned name is cleared as a leftover copy.
-LoadingHud.start(playerGui)
+-- Parked (Kevin, Oct 22): the tips overlay is off, so players drop straight
+-- into the hub. Nothing waits on it; the HUD and movement never gated on it.
+if LaunchGate.on("loadingTips") then
+	LoadingHud.start(playerGui)
+end
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))

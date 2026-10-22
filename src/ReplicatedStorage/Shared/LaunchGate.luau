@@ -38,6 +38,7 @@ LaunchGate.SHOW = {
 	doors = false, -- old Rootvault room doors
 	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
+	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 }
 
 -- World prompt action to the switch that keeps it from being built.
