@@ -1262,7 +1262,7 @@ describe("HavenBuilder", function()
 		expect(armoryLabel).toBeTrue()
 		expect(armoryPrompt).toBeTrue()
 		expect(petsPrompt).toBeTrue()
-		expect(marketPrompt).toBeTrue()
+		expect(marketPrompt).toEqual(false) -- market parked: no prompt
 		expect(shrinePrompt).toBeTrue()
 
 		local heart = findNamed(hub, "LumenHeart")
@@ -2268,7 +2268,7 @@ describe("HavenBuilder", function()
 				expect(child.MaxDistance >= 90).toBeTrue()
 			end
 		end
-		expect(prompts).toEqual(1)
+		expect(prompts).toEqual(0) -- grove parked: dummy stands, no prompt
 		expect(title.Text).toEqual("Training Grove")
 		expect(subline.Text).toEqual("Hit the dummy")
 		expect(title.TextStrokeTransparency).toEqual(0)

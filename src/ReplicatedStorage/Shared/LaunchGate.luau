@@ -25,6 +25,28 @@ LaunchGate.SHOW = {
 	extraCurrencies = false,
 	chests = false,
 	paid = false,
+	-- Phase 0.1 (roadmap salvage map PARK list). Off-plan for V1.
+	classes = false, -- class picker, Change class, SetClass/PickTalent
+	travel = false, -- Quick Travel portal prompt, Travel panel, Travel remote
+	grove = false, -- Training Grove dummy and its loop
+	codex = false, -- codex pages and nameplate titles
+	wildCapture = false, -- wild capture prompt
+	stars = false, -- duplicate merge (Feed duplicate, FeedItem)
+	goldShop = false, -- gold shop (BuyGoldShop)
+	events = false, -- top event banner
+	traits = false, -- weapon/armor/pet traits on new rolls
+	doors = false, -- old Rootvault room doors
+	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
+}
+
+-- World prompt action to the switch that keeps it from being built.
+local PARKED_PROMPT: { [string]: string } = {
+	travel = "travel",
+	grove = "grove",
+	market = "market",
+	craft = "forgeCraft",
+	heartwood = "raids",
+	practice = "raids",
 }
 
 local PARKED_TAB = {
@@ -41,6 +63,15 @@ end
 -- only when its switch is on.
 function LaunchGate.tabOpen(id: string): boolean
 	local flag = PARKED_TAB[id]
+	if flag == nil then
+		return true
+	end
+	return LaunchGate.on(flag)
+end
+
+-- A Haven prompt is only built when its switch is on.
+function LaunchGate.promptOpen(action: string): boolean
+	local flag = PARKED_PROMPT[action]
 	if flag == nil then
 		return true
 	end

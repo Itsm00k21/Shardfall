@@ -1160,7 +1160,7 @@ inventory = InventoryHud.start(playerGui, {
 	end,
 })
 
-travel = TravelHud.start(playerGui, {
+travel = if not LaunchGate.on("travel") then nil else TravelHud.start(playerGui, {
 	onVisible = function(open: boolean)
 		if open then
 			closePanels("travel")
@@ -1301,7 +1301,9 @@ hudShell = HudShell.start(playerGui, {
 		openHub("settings")
 	end,
 })
-eventBanner = EventBanner.start(playerGui)
+if LaunchGate.on("events") then
+	eventBanner = EventBanner.start(playerGui)
+end
 -- After the shell, so the rows can sit on ShardfallHud. The frame stays
 -- hidden until present. A new ScreenGui here would be removed on ChildAdded.
 StarterGoalHud.start(playerGui)
@@ -1394,7 +1396,9 @@ VerdantLod.start()
 MarketHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
-CaptureHud.start(invoke)
+if LaunchGate.on("wildCapture") then
+	CaptureHud.start(invoke)
+end
 PetHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
@@ -1424,9 +1428,11 @@ retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)
-DoorHud.start(function(action: string, ...: any)
-	return invoke(action, ...)
-end)
+if LaunchGate.on("doors") then
+	DoorHud.start(function(action: string, ...: any)
+		return invoke(action, ...)
+	end)
+end
 ClassHud.start(remotes :: Instance, function(action: string, ...: any)
 	return invoke(action, ...)
 end)

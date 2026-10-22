@@ -22,6 +22,7 @@ local ItemBases = require("./ItemBases")
 local Rarities = require("./Rarities")
 local Stats = require("./Stats")
 local Traits = require("./Traits")
+local LaunchGate = require("./LaunchGate")
 
 local RollMath = {}
 
@@ -399,6 +400,9 @@ local function rollGear(
 		stats, quality = Stats.roll(base.stats, rarity, gearWeight(base), rng)
 	end
 	local traits = {}
+	if not LaunchGate.on("traits") then
+		return stats, quality, traits
+	end
 	if kind == "Weapon" or kind == "Armor" then
 		traits = Traits.roll(rarity, rng)
 	elseif kind == "Pet" then

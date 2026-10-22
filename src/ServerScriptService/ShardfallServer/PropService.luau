@@ -10,6 +10,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HavenProps = require(ReplicatedStorage.Shared.HavenProps)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local PropAssets = require(ReplicatedStorage.Shared.PropAssets)
 
 local PropService = {}
@@ -142,6 +143,9 @@ local function standPortal(parent: Instance, ignore: { Instance })
 		then portal
 		else portal:FindFirstChildWhichIsA("BasePart", true)
 	if host == nil then
+		return
+	end
+	if not LaunchGate.on("travel") then
 		return
 	end
 	local prompt = Instance.new("ProximityPrompt")

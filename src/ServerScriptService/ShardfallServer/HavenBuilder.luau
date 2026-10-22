@@ -302,6 +302,9 @@ local function promptOn(
 	district: string?,
 	reach: number?
 )
+	if not LaunchGate.promptOpen(action) then
+		return
+	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = actionText
 	prompt.ObjectText = objectText

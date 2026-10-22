@@ -992,7 +992,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				end)
 			end
 			local feeder = InventoryStacks.bestFeeder(profile, uid)
-			if feeder ~= nil and type(feeder.uid) == "string" and (item.stars or 0) < Stars.MAX then
+			if LaunchGate.on("stars") and feeder ~= nil and type(feeder.uid) == "string" and (item.stars or 0) < Stars.MAX then
 				local feed = actionButton(detail, "Feed duplicate", order, COLORS.gold)
 				order += 1
 				feed.TextColor3 = COLORS.ink

@@ -43,6 +43,31 @@ describe("LaunchGate", function()
 		expect(LaunchGate.on("shop")).toEqual(false)
 	end)
 
+	it("keeps the Phase 0.1 parked systems off", function()
+		local flags = {
+			"classes",
+			"travel",
+			"grove",
+			"codex",
+			"wildCapture",
+			"stars",
+			"goldShop",
+			"events",
+			"traits",
+			"doors",
+			"mireoak",
+		}
+		for _, id in ipairs(flags) do
+			expect(LaunchGate.SHOW[id]).toEqual(false)
+			expect(LaunchGate.on(id)).toEqual(false)
+		end
+		for _, action in ipairs({ "travel", "grove", "market", "craft", "heartwood", "practice" }) do
+			expect(LaunchGate.promptOpen(action)).toEqual(false)
+		end
+		expect(LaunchGate.promptOpen("waves")).toEqual(true)
+		expect(LaunchGate.promptOpen("rootvault")).toEqual(true)
+	end)
+
 	it("hides raids, the market board, and the pass from the hub cycle", function()
 		expect(LaunchGate.tabOpen("hero")).toEqual(true)
 		expect(LaunchGate.tabOpen("shop")).toEqual(true)
