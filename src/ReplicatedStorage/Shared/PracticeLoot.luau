@@ -110,7 +110,7 @@ function PracticeLoot.applyKill(data: any, ctx: KillContext): ({ [string]: numbe
 			table.insert(chestBits, row.label)
 		end
 		local floorTier = ctx.floorChest
-		if floorTier == "Uncommon" or floorTier == "Rare" then
+		if ChestConfig.dropsOn() and (floorTier == "Uncommon" or floorTier == "Rare") then
 			data.chests[floorTier] = (data.chests[floorTier] or 0) + 1
 			table.insert(chestBits, floorTier .. " chest")
 		end

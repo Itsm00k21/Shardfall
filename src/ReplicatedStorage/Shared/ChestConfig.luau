@@ -21,6 +21,7 @@ local Schema = require("./Schema")
 local Stars = require("./Stars")
 
 local Loops = require("./Loops")
+local LaunchGate = require("./LaunchGate")
 
 local ChestConfig = {}
 
@@ -366,9 +367,23 @@ local function weekNumber(now: number): number
 	return math.floor(now / (86400 * 7))
 end
 
+-- Chests are parked (roadmap 0.1). Play sources stop granting them; owned
+-- chests, the key shop, merges, and opening are untouched.
+function ChestConfig.dropsOn(): boolean
+	return LaunchGate.on("chests")
+end
+
 local function grantListed(data: any, source: string)
 	local spec = ChestConfig.SOURCES[source]
 	if spec == nil or type(spec.tier) ~= "string" then
+		return nil
+	end
+	if not ChestConfig.dropsOn() then
+		-- Shard Keys still pay. No chest, so no label for a toast.
+		local parkedKeys = whole(spec.keys, 0)
+		if parkedKeys > 0 then
+			data.shardKeys = math.min(99999, data.shardKeys + parkedKeys)
+		end
 		return nil
 	end
 	local gained = ChestConfig.addChest(data, spec.tier, 1)

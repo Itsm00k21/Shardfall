@@ -48,6 +48,13 @@ function LegacyChrome.allowed(name: string): boolean
 	return ClientChrome.shouldClear(name)
 end
 
+-- A PlayerGui ScreenGui that has a twin in StarterGui is a place-file copy.
+-- This client never parents a gui to StarterGui (Rojo does not map it), so
+-- even an owned name there is legacy. Roblox controls stay.
+function LegacyChrome.isPlaceCopy(name: string, inStarterGui: boolean): boolean
+	return inStarterGui and ROBLOX[name] ~= true
+end
+
 function LegacyChrome.shouldDestroy(name: string): boolean
 	return not LegacyChrome.allowed(name)
 end

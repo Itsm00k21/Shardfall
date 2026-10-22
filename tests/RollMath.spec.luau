@@ -8,6 +8,7 @@ local expect = framework.expect
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
 local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local RollMath = require("../src/ReplicatedStorage/Shared/RollMath")
 local Traits = require("../src/ReplicatedStorage/Shared/Traits")
 
@@ -408,6 +409,8 @@ describe("RollMath rolls", function()
 			return RollMath.roll(pool, pity, context("item", 0), zeroRng())
 		end
 
+		expect(#rollKind("Pet", "Secret").item.traits).toEqual(0) -- traits parked
+		LaunchGate.SHOW.traits = true
 		expect(#rollKind("Material", "Secret").item.traits).toEqual(0)
 		expect(#rollKind("Pet", "Common").item.traits).toEqual(0)
 		local pet = rollKind("Pet", "Secret")
@@ -431,6 +434,7 @@ describe("RollMath rolls", function()
 			seen[trait.id] = true
 			expect(Traits.isKnown(trait.id)).toBeTrue()
 		end
+		LaunchGate.SHOW.traits = false
 	end)
 
 	it("follows a fixed weight split for a two-entry pool", function()
@@ -463,6 +467,7 @@ describe("RollMath rolls", function()
 	end)
 
 	it("mints a fern stag at the bottom of its pet ranges", function()
+		LaunchGate.SHOW.traits = true
 		local item = RollMath.mint("fern_stag", { uid = "stag", now = 0 }, zeroRng())
 		expect(item.quality).toEqual(0)
 		expect(item.kind).toEqual("Pet")
@@ -472,6 +477,7 @@ describe("RollMath rolls", function()
 		expect(item.traits[1].display).toEqual("5.0%")
 		expect(item.stats[1].id).toEqual("pet_damage")
 		expect(item.stats[1].value).toBeCloseTo(5 * 1.35, 1e-9)
+		LaunchGate.SHOW.traits = false
 	end)
 end)
 

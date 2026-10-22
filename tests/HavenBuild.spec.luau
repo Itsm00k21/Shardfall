@@ -1262,7 +1262,7 @@ describe("HavenBuilder", function()
 		expect(armoryLabel).toBeTrue()
 		expect(armoryPrompt).toBeTrue()
 		expect(petsPrompt).toBeTrue()
-		expect(marketPrompt).toBeTrue()
+		expect(marketPrompt).toEqual(false) -- market parked: no prompt
 		expect(shrinePrompt).toBeTrue()
 
 		local heart = findNamed(hub, "LumenHeart")
@@ -2206,11 +2206,22 @@ describe("HavenBuilder", function()
 		end
 	end)
 
-	it("stands a readable training dummy off the gate lanes", function()
+	it("builds no Training Grove dummy while grove is parked", function()
+		expect(LaunchGate.on("grove")).toEqual(false)
 		local builder, _heartbeats, _workspace = loadBuilder()
 		local hub = instance("Model")
 		hub.Name = "Haven"
 		builder.build(hub)
+		expect(#findAll(hub, "GroveDummy")).toEqual(0)
+	end)
+
+	it("stands a readable training dummy off the gate lanes", function()
+		LaunchGate.SHOW.grove = true
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		builder.build(hub)
+		LaunchGate.SHOW.grove = false
 
 		local dummies = findAll(hub, "GroveDummy")
 		expect(#dummies).toEqual(1)

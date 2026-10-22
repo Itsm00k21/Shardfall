@@ -7,6 +7,8 @@
 	stops at +100%. Welcome Back and rest XP share that same cap.
 ]]
 
+local LaunchGate = require("./LaunchGate")
+
 local Progression = {}
 
 Progression.CAP = 20
@@ -88,7 +90,9 @@ function Progression.settle(data: any): number
 			if type(data.chests) ~= "table" then
 				data.chests = {}
 			end
-			data.chests.Rare = (data.chests.Rare or 0) + 1
+			if LaunchGate.on("chests") then
+				data.chests.Rare = (data.chests.Rare or 0) + 1
+			end
 			data.milestoneTitle = "Level " .. tostring(data.level)
 		end
 	end
@@ -136,8 +140,12 @@ function Progression.applyReturn(data: any, now: number)
 		if type(data.chests) ~= "table" then
 			data.chests = {}
 		end
-		data.chests.Rare = (data.chests.Rare or 0) + 1
-		data.welcomeNote = "Welcome back. 2x XP for a while, and a Rare chest."
+		if LaunchGate.on("chests") then
+			data.chests.Rare = (data.chests.Rare or 0) + 1
+			data.welcomeNote = "Welcome back. 2x XP for a while, and a Rare chest."
+		else
+			data.welcomeNote = "Welcome back. 2x XP for a while."
+		end
 		welcome = true
 	end
 	data.lastSeen = now

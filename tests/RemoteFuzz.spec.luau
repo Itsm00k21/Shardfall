@@ -810,6 +810,11 @@ function handlers.UseSkill(_data, _slot)
 	return fail("Skills are for a crawl.")
 end
 
+-- Phase 0.1 parked these behind LaunchGate. ParkedRemotes.spec covers them now.
+for _, name in ipairs({ "BuyGoldShop", "Travel", "FeedItem", "SetClass", "PickTalent" }) do
+	handlers[name] = nil
+end
+
 local REMOTES: { Remote } = {
 	{ name = "GetProfile", arity = 0 },
 	{ name = "GetOdds", arity = 1 },
@@ -848,8 +853,6 @@ local REMOTES: { Remote } = {
 			{ label = "unknown recipe", n = 1, a = "no_such_recipe", b = nil, c = nil, d = nil, e = nil },
 		},
 	},
-	{ name = "BuyGoldShop", arity = 1 },
-	{ name = "Travel", arity = 1 },
 	{ name = "SetShake", arity = 1 },
 	{ name = "SetAudio", arity = 2 },
 	{ name = "SetSettings", arity = 1 },
@@ -866,13 +869,6 @@ local REMOTES: { Remote } = {
 		arity = 2,
 		more = {
 			{ label = "unknown id favorite", n = 2, a = UNKNOWN, b = true, c = nil, d = nil, e = nil },
-		},
-	},
-	{
-		name = "FeedItem",
-		arity = 2,
-		more = {
-			{ label = "unknown ids", n = 2, a = UNKNOWN, b = "also-missing", c = nil, d = nil, e = nil },
 		},
 	},
 	{ name = "SetAutoFarm", arity = 1 },
@@ -927,8 +923,6 @@ local REMOTES: { Remote } = {
 	},
 	{ name = "UpgradeGear", arity = 1 },
 	{ name = "Onboard", arity = 1 },
-	{ name = "SetClass", arity = 1 },
-	{ name = "PickTalent", arity = 1 },
 	{ name = "UseSkill", arity = 1 },
 }
 

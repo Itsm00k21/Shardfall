@@ -8,6 +8,8 @@
 	see it again.
 ]]
 
+local LaunchGate = require("./LaunchGate")
+
 local Onboarding = {}
 
 Onboarding.STEPS = {
@@ -55,8 +57,10 @@ function Onboarding.starter(data: any)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
 	end
-	data.chests.Rare = (data.chests.Rare or 0) + 1
-	data.chests.Uncommon = (data.chests.Uncommon or 0) + 1
+	if LaunchGate.on("chests") then
+		data.chests.Rare = (data.chests.Rare or 0) + 1
+		data.chests.Uncommon = (data.chests.Uncommon or 0) + 1
+	end
 	if type(data.consumables) ~= "table" then
 		data.consumables = {}
 	end

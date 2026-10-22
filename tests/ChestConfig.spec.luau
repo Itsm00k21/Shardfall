@@ -1,6 +1,7 @@
 --!strict
 
 local framework = require("./framework")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
@@ -169,35 +170,49 @@ describe("ChestConfig", function()
 	end)
 
 	it("claims a daily common chest and an epic on the 7th day", function()
-		local data = profile()
-		local first = ChestConfig.claimLogin(data, 86400 * 10)
-		expect(first[1].tier).toEqual("Common")
-		expect(data.loginStreak).toEqual(1)
-		expect(data.shardKeys).toEqual(5)
-		local _, again = ChestConfig.claimLogin(data, 86400 * 10)
-		expect(again).toEqual("Daily login is already claimed.")
-		for day = 11, 16 do
-			ChestConfig.claimLogin(data, 86400 * day)
+		LaunchGate.SHOW.chests = true -- pins the chest ladder; drops are parked in play
+		local ok, err = pcall(function()
+			local data = profile()
+			local first = ChestConfig.claimLogin(data, 86400 * 10)
+			expect(first[1].tier).toEqual("Common")
+			expect(data.loginStreak).toEqual(1)
+			expect(data.shardKeys).toEqual(5)
+			local _, again = ChestConfig.claimLogin(data, 86400 * 10)
+			expect(again).toEqual("Daily login is already claimed.")
+			for day = 11, 16 do
+				ChestConfig.claimLogin(data, 86400 * day)
+			end
+			expect(data.loginStreak).toEqual(7)
+			expect(data.chests.Epic).toEqual(1)
+			expect(data.chests.Common).toEqual(7)
+		end)
+		LaunchGate.SHOW.chests = false
+		if not ok then
+			error(err, 0)
 		end
-		expect(data.loginStreak).toEqual(7)
-		expect(data.chests.Epic).toEqual(1)
-		expect(data.chests.Common).toEqual(7)
 	end)
 
 	it("drops a common chest from verdant enemies and pays the boss ladder", function()
-		local data = profile()
-		expect(ChestConfig.enemyDrop(data, "vine_crawler", rng(0.5))).toBeNil()
-		local drop = ChestConfig.enemyDrop(data, "vine_crawler", rng(0.01))
-		expect(drop.tier).toEqual("Common")
-		expect(data.chests.Common).toEqual(1)
-		expect(ChestConfig.enemyDrop(data, "grandmother_gnarl", rng(0))).toBeNil()
-		local kills = ChestConfig.bossKill(data, 86400 * 3)
-		expect(kills[1].tier).toEqual("Rare")
-		expect(kills[2].tier).toEqual("Epic")
-		expect(kills[3].tier).toEqual("Legendary")
-		local again = ChestConfig.bossKill(data, 86400 * 3 + 100)
-		expect(#again).toEqual(1)
-		expect(again[1].tier).toEqual("Rare")
+		LaunchGate.SHOW.chests = true -- pins the chest ladder; drops are parked in play
+		local ok, err = pcall(function()
+			local data = profile()
+			expect(ChestConfig.enemyDrop(data, "vine_crawler", rng(0.5))).toBeNil()
+			local drop = ChestConfig.enemyDrop(data, "vine_crawler", rng(0.01))
+			expect(drop.tier).toEqual("Common")
+			expect(data.chests.Common).toEqual(1)
+			expect(ChestConfig.enemyDrop(data, "grandmother_gnarl", rng(0))).toBeNil()
+			local kills = ChestConfig.bossKill(data, 86400 * 3)
+			expect(kills[1].tier).toEqual("Rare")
+			expect(kills[2].tier).toEqual("Epic")
+			expect(kills[3].tier).toEqual("Legendary")
+			local again = ChestConfig.bossKill(data, 86400 * 3 + 100)
+			expect(#again).toEqual(1)
+			expect(again[1].tier).toEqual("Rare")
+		end)
+		LaunchGate.SHOW.chests = false
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	it("opens many into a grid and holds a Mythic choice", function()

@@ -8,6 +8,7 @@ local expect = framework.expect
 
 local Drops = require("../src/ReplicatedStorage/Shared/Drops")
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Loops = require("../src/ReplicatedStorage/Shared/Loops")
 local ModelFactory = require("../src/ReplicatedStorage/Shared/ModelFactory")
 
@@ -128,9 +129,15 @@ describe("Far Glade in Waves", function()
 			expect(kinds[1]).toEqual("grandmother_gnarl")
 			expect(#kinds).toEqual(3)
 		end
+		-- Mireoak is parked (Phase 0.1): Gnarl takes the tens while it is off.
+		for _, wave in ipairs({ 10, 20, 30 }) do
+			expect(Dungeons.waveKinds(wave)[1]).toEqual("grandmother_gnarl")
+		end
+		LaunchGate.SHOW.mireoak = true
 		for _, wave in ipairs({ 10, 20, 30 }) do
 			expect(Dungeons.waveKinds(wave)).toEqual({ "mireoak", "mud_tusk", "seed_flinger" })
 		end
+		LaunchGate.SHOW.mireoak = false
 	end)
 end)
 

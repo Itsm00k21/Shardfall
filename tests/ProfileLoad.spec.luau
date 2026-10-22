@@ -9,6 +9,7 @@
 ]]
 
 local framework = require("./framework")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
@@ -50,65 +51,72 @@ describe("Profile load", function()
 	end)
 
 	it("keeps a versionless save and pays the welcome chest from its lastSeen", function()
-		local now = 1_700_000_000
-		local seen = now - Progression.WELCOME_GAP - 10
-		local store = MemoryStore.new()
-		local document = {
-			Data = {
-				gold = 40,
-				shardTokens = 100,
-				gems = 9,
-				raidMarks = 12,
-				lastSeen = seen,
-				companions = {
-					{ species = "shardjaw", name = "Shardjaw" },
+		LaunchGate.SHOW.chests = true -- pins the chest ladder; drops are parked in play
+		local ok, err = pcall(function()
+			local now = 1_700_000_000
+			local seen = now - Progression.WELCOME_GAP - 10
+			local store = MemoryStore.new()
+			local document = {
+				Data = {
+					gold = 40,
+					shardTokens = 100,
+					gems = 9,
+					raidMarks = 12,
+					lastSeen = seen,
+					companions = {
+						{ species = "shardjaw", name = "Shardjaw" },
+					},
+					codex = { unlocked = { attack = true } },
+					inventory = {
+						abc = { uid = "abc", name = "Wooden Sword", kind = "Weapon" },
+					},
 				},
-				codex = { unlocked = { attack = true } },
-				inventory = {
-					abc = { uid = "abc", name = "Wooden Sword", kind = "Weapon" },
+				Lock = {
+					jobId = "",
+					placeId = 0,
+					lockedAt = 0,
 				},
-			},
-			Lock = {
-				jobId = "",
-				placeId = 0,
-				lockedAt = 0,
-			},
-		}
-		store:updateAsync("Player_versionless", function()
-			return document
+			}
+			store:updateAsync("Player_versionless", function()
+				return document
+			end)
+			local opened = ProfileLoad.open(
+				store,
+				"Player_versionless",
+				now,
+				"studio-test",
+				0,
+				SessionLock.TIMEOUT_SECONDS
+			)
+			expect(opened.session).toBeFalse()
+			expect(opened.reason).toEqual("claimed")
+			expect(opened.data.gold).toEqual(40)
+			expect(opened.data.shardTokens).toEqual(100)
+			expect(opened.data.gems).toEqual(9)
+			expect(opened.data.raidMarks).toEqual(12)
+			expect(opened.data.companions[1].species).toEqual("shardjaw")
+			expect(opened.data.codex.unlocked.attack).toEqual(true)
+			expect(opened.data.inventory.abc.name).toEqual("Wooden Sword")
+			expect(opened.data.chests.Rare).toEqual(1)
+			expect(opened.data.welcomeCharges).toEqual(Progression.WELCOME_CHARGES)
+			local held = nil
+			store:updateAsync("Player_versionless", function(current)
+				held = current
+				return nil
+			end)
+			expect(held.Data.gold).toEqual(40)
+			expect(held.Data.gems).toEqual(9)
+			expect(held.Data.raidMarks).toEqual(12)
+			expect(held.Data.companions[1].species).toEqual("shardjaw")
+			expect(held.Data.codex.unlocked.attack).toEqual(true)
+			expect(held.Data.inventory.abc.name).toEqual("Wooden Sword")
+			expect(held.Data.chests.Rare).toEqual(1)
+			expect(held.Lock.jobId).toEqual("studio-test")
 		end)
-		local opened = ProfileLoad.open(
-			store,
-			"Player_versionless",
-			now,
-			"studio-test",
-			0,
-			SessionLock.TIMEOUT_SECONDS
-		)
-		expect(opened.session).toBeFalse()
-		expect(opened.reason).toEqual("claimed")
-		expect(opened.data.gold).toEqual(40)
-		expect(opened.data.shardTokens).toEqual(100)
-		expect(opened.data.gems).toEqual(9)
-		expect(opened.data.raidMarks).toEqual(12)
-		expect(opened.data.companions[1].species).toEqual("shardjaw")
-		expect(opened.data.codex.unlocked.attack).toEqual(true)
-		expect(opened.data.inventory.abc.name).toEqual("Wooden Sword")
-		expect(opened.data.chests.Rare).toEqual(1)
-		expect(opened.data.welcomeCharges).toEqual(Progression.WELCOME_CHARGES)
-		local held = nil
-		store:updateAsync("Player_versionless", function(current)
-			held = current
-			return nil
-		end)
-		expect(held.Data.gold).toEqual(40)
-		expect(held.Data.gems).toEqual(9)
-		expect(held.Data.raidMarks).toEqual(12)
-		expect(held.Data.companions[1].species).toEqual("shardjaw")
-		expect(held.Data.codex.unlocked.attack).toEqual(true)
-		expect(held.Data.inventory.abc.name).toEqual("Wooden Sword")
-		expect(held.Data.chests.Rare).toEqual(1)
-		expect(held.Lock.jobId).toEqual("studio-test")
+		LaunchGate.SHOW.chests = false
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	it("does not claim a profile whose bag is not a table", function()

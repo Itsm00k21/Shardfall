@@ -79,6 +79,14 @@ function ClientChrome.legacyReadout(text: string): boolean
 	if string.find(text, "/50 toward Legendary", 1, true) ~= nil then
 		return true
 	end
+	-- An old place-file results panel (Kevin's Oct 21 playtest). Our clear
+	-- card says "Materials" and only lists Materials.DEFS names.
+	if string.find(text, "Items Collected", 1, true) ~= nil then
+		return true
+	end
+	if string.find(text, "Do not unanchor", 1, true) ~= nil then
+		return true
+	end
 	-- An older rail (Inv, Shop, Guilds) is not the hub. HudShell and
 	-- MenuHub use Hero, Bag, Pets, Roll, Raids, and Market.
 	if string.find(text, "Guilds", 1, true) ~= nil then

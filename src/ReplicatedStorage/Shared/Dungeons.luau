@@ -14,6 +14,8 @@
 	Clear rewards are rolled by `rollClear`. Odds below are placeholders.
 ]]
 
+local LaunchGate = require("./LaunchGate")
+
 local Dungeons = {}
 
 export type EnemyDef = {
@@ -741,7 +743,7 @@ function Dungeons.waveKinds(wave: number): { string }
 	if Dungeons.isBossWave(n) then
 		-- Boss waves alternate: Gnarl on 5, 15, 25...; Mireoak and two
 		-- Far Glade adds on 10, 20, 30...
-		if n % (Dungeons.WAVE_BOSS_EVERY * 2) == 0 then
+		if n % (Dungeons.WAVE_BOSS_EVERY * 2) == 0 and LaunchGate.on("mireoak") then
 			return { "mireoak", "mud_tusk", "seed_flinger" }
 		end
 		return { "grandmother_gnarl", "vine_crawler", "spore_bat" }

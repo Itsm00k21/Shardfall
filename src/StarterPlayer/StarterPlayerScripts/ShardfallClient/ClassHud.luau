@@ -16,6 +16,7 @@ local SoundService = game:GetService("SoundService")
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local ClassHud = {}
@@ -276,6 +277,14 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 		clearCards()
 		local classId = if type(latest) == "table" then latest.classId else ""
 		local classDef = Classes.get(classId)
+		if not LaunchGate.on("classes") and classDef == nil then
+			-- Classes are parked. No picker, so no buttons that the server refuses.
+			picking = false
+			held = false
+			title.Text = "Skills come from your gear."
+			syncHold()
+			return
+		end
 		if classDef == nil or picking then
 			if classDef == nil then
 				picking = true
@@ -315,6 +324,10 @@ function ClassHud.start(remotes: Instance, callRemote: (string, ...any) -> any)
 					call("PickTalent", talent.id)
 				end)
 			end
+		end
+		if not LaunchGate.on("classes") then
+			syncHold()
+			return
 		end
 		local change = card("Change class", Color3.fromRGB(210, 206, 220), UiTheme.TAP)
 		change.Name = "ChangeClass"
