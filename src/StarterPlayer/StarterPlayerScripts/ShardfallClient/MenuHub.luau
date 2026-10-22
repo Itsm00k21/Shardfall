@@ -840,10 +840,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	-- Modal on the backdrop stops the mouse from steering the camera.
 	-- The sink stops movement, sprint, and combat. Tab letters stay free.
-	function hubFn.bindSinkKeys()
+	function hubFn.bindSinkKeys(names: { string }?)
 		ContextActionService:UnbindAction("ShardfallMenuSink")
 		local codes = {}
-		for _, name in ipairs(Keybinds.sinkNames()) do
+		for _, name in ipairs(names or Keybinds.sinkNames()) do
 			local code = (Enum.KeyCode :: any)[name]
 			if code ~= nil then
 				table.insert(codes, code)
@@ -858,28 +858,43 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 	end
 
-	function hubFn.setWorldInput(blocked: boolean)
-		local changed = blocked ~= hubState.worldBlocked
-		if not changed and not (blocked and hubState.controlsHeld ~= true) then
+	-- mode is Keybinds.worldMode: "free", "walk" or "lock". A boolean
+	-- still works (true = "lock", false = "free"). Only "lock" disables the
+	-- controls, so closing, or switching to a walk page, always releases them.
+	function hubFn.setWorldInput(mode: any)
+		if mode == true then
+			mode = "lock"
+		elseif mode ~= "walk" and mode ~= "lock" then
+			mode = "free"
+		end
+		local previous = hubState.worldMode or "free"
+		local locked = mode == "lock"
+		local changed = mode ~= previous
+		if not changed and not (locked and hubState.controlsHeld ~= true) then
 			return
 		end
-		hubState.worldBlocked = blocked
+		hubState.worldMode = mode
+		hubState.worldBlocked = mode ~= "free"
 		if changed then
-			if blocked then
+			if mode == "lock" then
 				hubFn.bindSinkKeys()
-				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			elseif mode == "walk" then
+				hubFn.bindSinkKeys(Keybinds.walkSinkNames())
 			else
 				ContextActionService:UnbindAction("ShardfallMenuSink")
+			end
+			if mode ~= "free" then
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 			end
 		end
 		local pad = hubFn.playerControls()
 		if type(pad) == "table" then
-			if blocked and type(pad.Disable) == "function" then
+			if locked and type(pad.Disable) == "function" then
 				pcall(function()
 					pad:Disable()
 				end)
 				hubState.controlsHeld = true
-			elseif not blocked and type(pad.Enable) == "function" then
+			elseif not locked and (changed or hubState.controlsHeld == true) and type(pad.Enable) == "function" then
 				pcall(function()
 					pad:Enable()
 				end)
@@ -887,6 +902,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 	end
+
+	function hubFn.worldModeFor(state: UiRouter.State): string
+		local gamepad = Keybinds.usesGamepad(UserInputService:GetLastInputType().Name)
+		return Keybinds.worldMode(state.open, UiRouter.top(state), gamepad)
+	end
+	-- Picking up a pad with a walk page open locks it (the stick drives pad
+	-- focus); going back to mouse or keys releases it again.
+	UserInputService.LastInputTypeChanged:Connect(function()
+		local route = hubState.route
+		if route ~= nil and route.open then
+			hubFn.setWorldInput(hubFn.worldModeFor(route))
+		end
+	end)
 
 	function hubFn.view(): (number, number)
 		local size = hubState.screen.AbsoluteSize
@@ -6853,7 +6881,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.route = state
 		hubState.backdrop.BackgroundTransparency = 1 - state.dim
 		hubState.backdrop.Modal = state.open
-		hubFn.setWorldInput(state.open)
+		hubFn.setWorldInput(hubFn.worldModeFor(state))
 		hubState.screen.Enabled = state.open
 		hubState.shadow.Visible = state.open
 		hubState.panel.Visible = state.open
