@@ -27,6 +27,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
+local DungeonConfig = require(ReplicatedStorage.Shared.DungeonConfig)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local cueModule = ReplicatedStorage.Shared
@@ -810,10 +811,83 @@ local function placeSunbeam(run: Run)
 	beam.CFrame = CFrame.new(x + offset.x, 0.45, z + offset.z)
 end
 
+-- Solid parts (walls, slopes, props) inside the rig's box, ignoring the
+-- floor slab under it, players, and other enemies' rigs.
+local function spawnBlocked(rig: Instance, run: Run): boolean
+	local boxCFrame: CFrame, boxSize: Vector3
+	if rig:IsA("Model") then
+		boxCFrame, boxSize = rig:GetBoundingBox()
+	elseif rig:IsA("BasePart") then
+		boxCFrame, boxSize = rig.CFrame, rig.Size
+	else
+		return false
+	end
+	local lift = math.min(1, boxSize.Y * 0.2)
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local ignore: { Instance } = { rig }
+	for _, other in pairs(run.enemies) do
+		local host = other.part.Parent
+		table.insert(ignore, if host ~= nil and host:IsA("Model") then host else other.part)
+	end
+	for _, member in ipairs(Players:GetPlayers()) do
+		if member.Character ~= nil then
+			table.insert(ignore, member.Character)
+		end
+	end
+	params.FilterDescendantsInstances = ignore
+	local hits = workspace:GetPartBoundsInBox(
+		boxCFrame + Vector3.new(0, lift / 2, 0),
+		Vector3.new(boxSize.X, math.max(0.5, boxSize.Y - lift), boxSize.Z),
+		params
+	)
+	for _, hit in ipairs(hits) do
+		if hit.CanCollide then
+			return true
+		end
+	end
+	return false
+end
+
+-- Steps a freshly built rig toward the room centre until it is clear.
+local function clearSpawn(rig: Instance, run: Run, localX: number, localZ: number)
+	local x, z = localX, localZ
+	for _ = 1, DungeonConfig.SPAWN_TRIES do
+		if not spawnBlocked(rig, run) then
+			return
+		end
+		local nx, nz = DungeonConfig.stepInward(x, z)
+		if nx == x and nz == z then
+			return
+		end
+		local shift = Vector3.new(nx - x, 0, nz - z)
+		x, z = nx, nz
+		if rig:IsA("Model") then
+			rig:PivotTo(rig:GetPivot() + shift)
+		elseif rig:IsA("BasePart") then
+			rig.CFrame += shift
+		end
+	end
+	warn(string.format("[Rootvault] spawn still blocked at %.0f, %.0f", x, z))
+end
+
 local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?): Enemy?
 	local definition = Dungeons.enemy(kind)
 	if definition == nil then
 		return nil
+	end
+	if definition.boss == true then
+		offset = Vector3.new(DungeonConfig.BOSS_SPAWN.x, offset.Y, DungeonConfig.BOSS_SPAWN.z)
+	end
+	do
+		local cx, cz = DungeonConfig.insideFloor(
+			offset.X,
+			offset.Z,
+			definition.size[1] / 2,
+			definition.size[3] / 2,
+			Dungeons.FLOOR_SIZE / 2
+		)
+		offset = Vector3.new(cx, offset.Y, cz)
 	end
 	nextEnemyId += 1
 	local id = "e" .. tostring(nextEnemyId)
@@ -876,6 +950,7 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	end
 	local host = part.Parent
 	local rigModel = if host ~= nil and host:IsA("Model") then host else nil
+	clearSpawn(if rigModel ~= nil then rigModel else part, run, offset.X, offset.Z)
 	if rigModel ~= nil then
 		local pieces = 0
 		for _, descendant in ipairs(rigModel:GetDescendants()) do
