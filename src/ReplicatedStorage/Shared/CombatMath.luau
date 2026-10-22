@@ -419,6 +419,23 @@ function CombatMath.bossTaken(
 	return reduced
 end
 
+-- Popup word for a boss hit: "Weak!" in the weak window, "Guarded" while
+-- armour cuts the damage, nil when the hit is plain full damage.
+CombatMath.GUARDED_TAG = "Guarded"
+CombatMath.WEAK_TAG = "Weak!"
+function CombatMath.bossTag(phase: number, weak: boolean, armoredMultiplier: number): string?
+	if phase >= 2 then
+		return nil
+	end
+	if weak then
+		return CombatMath.WEAK_TAG
+	end
+	if type(armoredMultiplier) == "number" and armoredMultiplier < 1 then
+		return CombatMath.GUARDED_TAG
+	end
+	return nil
+end
+
 function CombatMath.bonusGold(baseGold: number, goldFind: number): number
 	if type(baseGold) ~= "number" or baseGold <= 0 then
 		return 0

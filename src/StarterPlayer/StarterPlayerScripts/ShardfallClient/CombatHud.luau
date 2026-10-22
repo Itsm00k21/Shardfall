@@ -801,6 +801,15 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			if payload.heavy == true then
 				text = text .. "!"
 			end
+			-- Boss armour: "12 Guarded" in grey, "30 Weak!" in gold.
+			if payload.kind == "damage" and type(payload.tag) == "string" and payload.tag ~= "" then
+				text = text .. " " .. payload.tag
+				if payload.tag == "Guarded" then
+					color = Color3.fromRGB(170, 176, 196)
+				else
+					color = Color3.fromRGB(255, 196, 64)
+				end
+			end
 			floater(Vector3.new(x, y, z), text, color, numberSize)
 			playCue("hit")
 		elseif payload.kind == "telegraph" then
