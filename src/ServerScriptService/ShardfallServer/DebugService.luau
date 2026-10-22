@@ -1,13 +1,15 @@
 --!strict
 
 --[[
-	Studio-only jumps. Outside Studio every action refuses.
+	Studio-only jumps. Outside Studio every action refuses, and inside
+	Studio only the game owner may use them (DevAccess, Oct 22 2026).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local DebugTools = require(ReplicatedStorage.Shared.DebugTools)
+local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local DataService = require(script.Parent.DataService)
 
 local DebugService = {}
@@ -19,6 +21,9 @@ end
 function DebugService.run(player: Player, action: any)
 	if not RunService:IsStudio() then
 		return reject("Dev tools only work in Studio.")
+	end
+	if not DevAccess.player(player) then
+		return reject(DevAccess.DENIED)
 	end
 	if type(action) ~= "string" then
 		return reject("Unknown debug action.")

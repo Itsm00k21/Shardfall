@@ -253,10 +253,12 @@ weapon("mycelium_staff", "Mycelium Staff", "Rare", "staff", 0)
 weapon("nightbriar", "Nightbriar", "Rare", "dagger", 0)
 armor("living_bark_cuirass", "Living Bark Cuirass", "Rare", "chest", 0, nil)
 
-armor("grovewarden_hood", "Grovewarden Hood", "Epic", "helm", 0, "grovewarden")
-armor("grovewarden_vestments", "Grovewarden Vestments", "Epic", "chest", 0, "grovewarden")
-armor("grovewarden_greaves", "Grovewarden Greaves", "Epic", "legs", 0, "grovewarden")
-armor("grovewarden_wraps", "Grovewarden Wraps", "Epic", "boots", 0, "grovewarden")
+-- No set tag: there is no Grovewarden set bonus. Set bonuses return in
+-- Phase 2 (Kevin, Oct 22 2026).
+armor("grovewarden_hood", "Grovewarden Hood", "Epic", "helm", 0, nil)
+armor("grovewarden_vestments", "Grovewarden Vestments", "Epic", "chest", 0, nil)
+armor("grovewarden_greaves", "Grovewarden Greaves", "Epic", "legs", 0, nil)
+armor("grovewarden_wraps", "Grovewarden Wraps", "Epic", "boots", 0, nil)
 
 weapon("antlerbrand", "Antlerbrand", "Legendary", "sword", 0)
 weapon("worldroot_staff", "Worldroot Staff", "Legendary", "staff", 0)

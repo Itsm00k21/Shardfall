@@ -196,5 +196,6 @@ require("./LocalLimit.spec")
 require("./ConfigIndex.spec")
 require("./ConfigValidation.spec")
 require("./SkillPress.spec")
+require("./DevAccess.spec")
 
 process.exit(framework.run())

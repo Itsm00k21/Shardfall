@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local DevAccess = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DevAccess"))
 local ShellLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShellLayout"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 
@@ -28,6 +29,10 @@ function DebugHud.start(invoke: (string, ...any) -> any)
 		return
 	end
 	local player = Players.LocalPlayer
+	-- Owner only (Oct 22). The server refuses everyone else anyway.
+	if not DevAccess.player(player) then
+		return
+	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallDebug"
 	screen.ResetOnSpawn = false

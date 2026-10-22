@@ -19,6 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
+local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
@@ -539,6 +540,9 @@ end
 function RollService.devGrant(player: Player, kind: any)
 	if not RunService:IsStudio() then
 		return reject("Dev tools only work in Studio.")
+	end
+	if not DevAccess.player(player) then
+		return reject(DevAccess.DENIED)
 	end
 	if kind == "tokens" then
 		local ok, err = DataService.mutate(player, function(data)

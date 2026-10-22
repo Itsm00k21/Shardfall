@@ -95,6 +95,26 @@ describe("Parked follow-ups", function()
 		expect(count).toEqual(1)
 	end)
 
+	it("parks PetCare free XP for a future pets update", function()
+		expect(LaunchGate.SHOW.petCare).toEqual(false)
+		expect(LaunchGate.on("petCare")).toEqual(false)
+		local remotes = fs.readFile("src/ServerScriptService/ShardfallServer/Remotes.luau")
+		expect(string.find(remotes, 'PetCare = "petCare"', 1, true) ~= nil).toBeTrue()
+		local pets = fs.readFile("src/ServerScriptService/ShardfallServer/PetService.luau")
+		local careAt = string.find(pets, "function PetService.care", 1, true)
+		local gateAt = string.find(pets, 'if not LaunchGate.on("petCare") then', 1, true)
+		local mutateAt = string.find(pets, "DataService.mutate", careAt or 1, true)
+		expect(careAt ~= nil and gateAt ~= nil and mutateAt ~= nil).toBeTrue()
+		expect(
+			(careAt :: number) < (gateAt :: number) and (gateAt :: number) < (mutateAt :: number)
+		).toBeTrue()
+		-- No client button calls PetCare.
+		local client = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
+		for _, name in ipairs({ "MenuHub.luau", "init.client.luau", "InventoryHud.luau", "Ui.luau" }) do
+			expect(string.find(fs.readFile(client .. name), '"PetCare"', 1, true)).toBeNil()
+		end
+	end)
+
 	it("grants no chest from play while chests are parked", function()
 		expect(LaunchGate.on("chests")).toEqual(false)
 		local data = Schema.template()

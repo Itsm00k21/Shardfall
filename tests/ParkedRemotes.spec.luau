@@ -54,7 +54,6 @@ local M1_ALLOWED = {
 	Dodge = true,
 	Steer = true,
 	HatchPet = true,
-	PetCare = true,
 	PaintPet = true,
 	FavoritePet = true,
 	Loops = true,
@@ -92,6 +91,8 @@ local SERVICE_CALLS = {
 	{ "RaidService", "leave", {} },
 	{ "RaidService", "ready", {} },
 	{ "DungeonService", "startDailyBoss", {} },
+	-- Kevin, Oct 22: PetCare parked for a future pets update.
+	{ "PetService", "care", { "pet-a", "feed" } },
 }
 
 local function namesIn(source: string, kind: string): { string }

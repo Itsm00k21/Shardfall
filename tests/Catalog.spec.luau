@@ -73,9 +73,11 @@ describe("Catalog", function()
 			if base.weaponType ~= nil then
 				types[base.weaponType] = true
 			end
-			if base.setId == "grovewarden" then
+			if string.sub(base.id, 1, 12) == "grovewarden_" then
 				grove[base.slot] = true
 				expect(base.rarity).toEqual("Epic")
+				-- Kevin, Oct 22: the set tag is dropped until Phase 2 set bonuses.
+				expect(base.setId).toBeNil()
 			end
 			if base.kind ~= "Pet" then
 				expect(base.stats ~= nil and #base.stats > 0).toBeTrue()

@@ -61,6 +61,10 @@ function PetService.hatch(player: Player)
 end
 
 function PetService.care(player: Player, uid: any, kind: any)
+	-- Parked for a future pets update (Kevin, Oct 22): free XP with no cost.
+	if not LaunchGate.on("petCare") then
+		return reject("That is closed.")
+	end
 	if type(uid) ~= "string" or (kind ~= "pet" and kind ~= "feed") then
 		return reject("Pet or feed a companion.")
 	end

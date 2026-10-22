@@ -41,6 +41,7 @@ local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local CrackCard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackCard"))
 local CrackReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CrackReveal"))
 local Currencies = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Currencies"))
+local DevAccess = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DevAccess"))
 local GoldShop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GoldShop"))
 local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
 local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroBoard"))
@@ -6803,7 +6804,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.draft.access.holdToTap = not hubState.draft.access.holdToTap
 			end
 		)
-		if RunService:IsStudio() then
+		-- Owner only (Oct 22). The server refuses everyone else anyway.
+		if RunService:IsStudio() and DevAccess.player(Players.LocalPlayer) then
 			local actions = {
 				"level",
 				"gold",

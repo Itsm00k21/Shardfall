@@ -6,7 +6,8 @@
 
 	  - NaN and inf numbers stop at the remote (OpenChest, ChooseChest,
 	    RerollDaily, UseSkill, UseActionSlot).
-	  - UpgradeGear, PetCare, PaintPet and FavoritePet check ids and sizes.
+	  - UpgradeGear, PaintPet and FavoritePet check ids and sizes.
+	  - PetCare is parked (LaunchGate.petCare, Oct 22) and refuses first.
 	  - Dungeon("enter", "heartwood") is closed while raids is parked.
 
 	Valid input still reaches the same service call with the same args.
@@ -245,9 +246,8 @@ describe("Remotes audit (Phase 0.7)", function()
 		end
 		passes(invoke, "UpgradeGear", "CraftService", "upgrade", GUID)
 
-		refused(invoke, "PetCare", "Pet or feed a companion.", huge, "pet")
-		refused(invoke, "PetCare", "Pet or feed a companion.", 7, "feed")
-		passes(invoke, "PetCare", "PetService", "care", GUID, "feed")
+		refused(invoke, "PetCare", "That is closed.", huge, "pet")
+		refused(invoke, "PetCare", "That is closed.", GUID, "feed")
 
 		refused(invoke, "FavoritePet", "Pick a companion.", "", true)
 		passes(invoke, "FavoritePet", "PetService", "favorite", GUID, true)

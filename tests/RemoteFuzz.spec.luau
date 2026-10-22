@@ -638,25 +638,6 @@ function handlers.HatchPet(data)
 	return refused(saved, err, "Could not hatch.")
 end
 
-function handlers.PetCare(data, uid, kind)
-	if type(uid) ~= "string" or (kind ~= "pet" and kind ~= "feed") then
-		return fail("Pet or feed a companion.")
-	end
-	local saved, err = mutate(data, function(profile)
-		local pet = findPet(profile, uid)
-		if pet == nil then
-			return "That companion is not in the den."
-		end
-		if kind == "pet" then
-			Pets.pet(pet)
-		else
-			Pets.feed(pet)
-		end
-		return nil
-	end)
-	return refused(saved, err, "Could not do that.")
-end
-
 function handlers.PaintPet(data, uid, primary, secondary, glow)
 	if type(uid) ~= "string" or type(primary) ~= "string" then
 		return fail("Pick a color.")
@@ -883,14 +864,6 @@ local REMOTES: { Remote } = {
 	},
 	{ name = "UseActionSlot", arity = 1 },
 	{ name = "HatchPet", arity = 0 },
-	{
-		name = "PetCare",
-		arity = 2,
-		more = {
-			{ label = "unknown pet", n = 2, a = UNKNOWN, b = "pet", c = nil, d = nil, e = nil },
-			{ label = "unknown feed", n = 2, a = UNKNOWN, b = "feed", c = nil, d = nil, e = nil },
-		},
-	},
 	{
 		name = "PaintPet",
 		arity = 4,
