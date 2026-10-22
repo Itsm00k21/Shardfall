@@ -37,6 +37,7 @@ LaunchGate.SHOW = {
 	traits = false, -- weapon/armor/pet traits on new rolls
 	doors = false, -- old Rootvault room doors
 	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
+	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
 }
 
 -- World prompt action to the switch that keeps it from being built.

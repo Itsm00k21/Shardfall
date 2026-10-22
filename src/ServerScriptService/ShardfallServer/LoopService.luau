@@ -32,14 +32,14 @@ local function payLines(data, before: number, after: number)
 	if after <= before or type(data.chests) ~= "table" then
 		return
 	end
-	if after >= 1 and before < 1 then
+	if after >= 1 and before < 1 and ChestConfig.dropsOn() then
 		data.chests.Epic = (data.chests.Epic or 0) + 1
 	end
 	if after >= 2 and before < 2 then
 		data.gems = (data.gems or 0) + 5
 		data.shardKeys = (data.shardKeys or 0) + 3
 	end
-	if after >= 3 and before < 3 then
+	if after >= 3 and before < 3 and ChestConfig.dropsOn() then
 		data.chests.Legendary = (data.chests.Legendary or 0) + 1
 	end
 end
@@ -79,7 +79,7 @@ function LoopService.progress(player: Player, id: string, amount: number)
 		if allDone and data.dailyBonusDay ~= today then
 			data.dailyBonusDay = today
 			ChestConfig.grantSource(data, "room", now)
-			if type(data.chests) == "table" then
+			if ChestConfig.dropsOn() and type(data.chests) == "table" then
 				data.chests.Rare = (data.chests.Rare or 0) + 1
 			end
 		end

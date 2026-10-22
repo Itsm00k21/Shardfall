@@ -1420,7 +1420,7 @@ local function grant(
 			local mult, day, rare = Loops.firstClear(data.firstClearDay or -1, today)
 			data.firstClearDay = day
 			xpGain = rolled.xp * mult
-			if rare and type(data.chests) == "table" then
+			if rare and ChestConfig.dropsOn() and type(data.chests) == "table" then
 				data.chests.Rare = (data.chests.Rare or 0) + 1
 			end
 			if run.difficulty == "nightmare" then
