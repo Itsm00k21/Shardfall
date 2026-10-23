@@ -1072,7 +1072,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			footer.Name = "Marks"
 			local picked = row.id
 			local isGear = row.kind == "Weapon" or row.kind == "Armor"
-			if gear ~= nil and isGear then
+			-- [Ghost] Clip 5: pets get the card padlock too (same lock call).
+			if gear ~= nil and (isGear or row.kind == "Pet") then
 				-- Padlock: a gold closed lock while locked. Unlocked shows
 				-- nothing, or a faint lock on hover. Same call as the
 				-- detail pane.

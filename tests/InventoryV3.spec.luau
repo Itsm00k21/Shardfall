@@ -217,6 +217,37 @@ describe("InventoryHud one inventory", function()
 		end)
 	end)
 
+	it("shows a gold padlock on a locked pet card (clip 5)", function()
+		withGear(function()
+			local data = bag()
+			data.pets = {
+				owl = {
+					uid = "owl",
+					templateId = "dusk_owl",
+					name = "Dusk Owl",
+					kind = "Pet",
+					rarity = "Rare",
+					traits = {},
+					poolId = "dev",
+					obtainedAt = 1,
+					locked = true,
+				},
+			}
+			local _, screen = mount(data)
+			local root = GuiFake.findNamed(screen, "Inventory")
+			GuiFake.activate(GuiFake.findNamed(root, "Tab_pets"))
+			local card = GuiFake.findNamed(root, "Grid"):FindFirstChild("owl")
+			expect(card ~= nil).toBeTrue()
+			local padlock = card:FindFirstChild("Padlock")
+			expect(padlock ~= nil).toBeTrue()
+			expect(padlock.Visible).toEqual(true)
+			local icon = padlock:FindFirstChild("LockIcon")
+			expect(icon:GetAttribute("Locked")).toEqual(true)
+			local body = icon:FindFirstChild("Body")
+			expect(body.BackgroundColor3.R).toEqual(255)
+		end)
+	end)
+
 	it("gives a pet the gear header and one EQUIPPED state, at the top (clip 5)", function()
 		withGear(function()
 			local data = bag()
