@@ -6,9 +6,12 @@
 	DataService stores whatever migrate() returns. Adding a field later:
 	  1. Bump Schema.VERSION.
 	  2. Add a default in template().
-	  3. Write a `if version < N` step in migrate() that fills existing saves.
+	  3. Append one Schema.MIGRATIONS step (v_n -> v_n+1) that fills existing saves.
 	reconcile() only fills missing keys, so it will not reset gold or wipe
-	an inventory that is already there.
+	an inventory that is already there. A save with no schemaVersion loads
+	as v1 and walks forward. Unknown JSON fields are kept. NaN, instances,
+	and other values DataStores cannot store are dropped on the copy
+	migrate() returns, not on the table the caller passed in.
 
 	Profiles are plain tables: no Color3, no Instance, no functions. That is
 	what DataStores can save and what a RemoteEvent can send.
@@ -26,6 +29,8 @@ local Settings = require("./Settings")
 local Stars = require("./Stars")
 local StarterGoalPay = require("./StarterGoalPay")
 local Travel = require("./Travel")
+local SaveMigrate = require("./SaveMigrate")
+local SaveSanitize = require("./SaveSanitize")
 
 local Schema = {}
 
@@ -715,7 +720,11 @@ function Schema.reconcile(data: any): ProfileData
 	then
 		data.equipped.weapon = nil
 	end
-	if type(data.pets) == "table" and data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
+	if
+		type(data.pets) == "table"
+		and data.equipped.pet ~= nil
+		and data.pets[data.equipped.pet] == nil
+	then
 		data.equipped.pet = nil
 	end
 	local armor = {}
@@ -809,10 +818,403 @@ local function corruptCollection(value: any): boolean
 	return value ~= nil and type(value) ~= "table"
 end
 
+local function migrateTo1(raw: any, _versionless: boolean)
+	-- Version 1 is the first shipped shape. There is nothing to rewrite;
+	-- reconcile fills keys that were never saved.
+	raw.schemaVersion = 1
+end
+
+local function migrateTo2(raw: any, _versionless: boolean)
+	-- Armor slots. Older saves only had a weapon and a pet.
+	if type(raw.equipped) ~= "table" then
+		raw.equipped = {}
+	end
+	if type(raw.equipped.armor) ~= "table" then
+		raw.equipped.armor = {}
+	end
+	raw.schemaVersion = 2
+end
+
+local function migrateTo3(raw: any, _versionless: boolean)
+	-- Materials, tonics, and roll vouchers. Older saves had none of these.
+	if type(raw.materials) ~= "table" then
+		raw.materials = {}
+	end
+	if type(raw.consumables) ~= "table" then
+		raw.consumables = {}
+	end
+	if type(raw.vouchers) ~= "table" then
+		raw.vouchers = {}
+	end
+	raw.schemaVersion = 3
+end
+
+local function migrateTo4(raw: any, _versionless: boolean)
+	-- Star level. Older gear has no stars. The rolled number becomes
+	-- baseValue so a later feed can multiply it without compounding.
+	local function stamp(bag: any)
+		if type(bag) ~= "table" then
+			return
+		end
+		for _, item in pairs(bag) do
+			if type(item) == "table" then
+				if type(item.stars) ~= "number" then
+					item.stars = 0
+				end
+				if type(item.starProgress) ~= "number" then
+					item.starProgress = 0
+				end
+				if type(item.stats) == "table" then
+					for _, stat in ipairs(item.stats) do
+						if
+							type(stat) == "table"
+							and type(stat.baseValue) ~= "number"
+							and type(stat.value) == "number"
+						then
+							stat.baseValue = stat.value
+						end
+					end
+				end
+			end
+		end
+	end
+	stamp(raw.inventory)
+	stamp(raw.pets)
+	raw.schemaVersion = 4
+end
+
+local function migrateTo5(raw: any, _versionless: boolean)
+	-- Prism Tokens are the Robux wallet. Luck Boost is purchased luck.
+	-- Neither is copied from Shard Tokens.
+	if type(raw.prismTokens) ~= "number" then
+		raw.prismTokens = 0
+	end
+	if type(raw.luckBoost) ~= "number" then
+		raw.luckBoost = 0
+	end
+	raw.schemaVersion = 5
+end
+
+local function migrateTo6(raw: any, _versionless: boolean)
+	-- Crafting Level, the milestone table, and a timed Forge Boost.
+	if type(raw.craftingLevel) ~= "number" then
+		raw.craftingLevel = 1
+	end
+	if type(raw.craftingXp) ~= "number" then
+		raw.craftingXp = 0
+	end
+	if type(raw.craftingMilestones) ~= "table" then
+		raw.craftingMilestones = {}
+	end
+	if type(raw.forgeBoostUntil) ~= "number" then
+		raw.forgeBoostUntil = 0
+	end
+	raw.schemaVersion = 6
+end
+
+local function migrateTo7(raw: any, _versionless: boolean)
+	-- Lock, favorite, and socket count live on each piece. Extra bag
+	-- slots from a future purchase start at zero. Accessories are a
+	-- separate equip map so rings do not occupy armor slots.
+	if type(raw.inventoryBonus) ~= "number" then
+		raw.inventoryBonus = 0
+	end
+	if type(raw.equipped) ~= "table" then
+		raw.equipped = {}
+	end
+	if type(raw.equipped.accessories) ~= "table" then
+		raw.equipped.accessories = {}
+	end
+	local function stampItem(bag: any)
+		if type(bag) ~= "table" then
+			return
+		end
+		for _, item in pairs(bag) do
+			if type(item) == "table" then
+				if item.locked ~= true then
+					item.locked = false
+				end
+				if item.favorite ~= true then
+					item.favorite = false
+				end
+				if type(item.sockets) ~= "number" then
+					item.sockets = 0
+				end
+			end
+		end
+	end
+	stampItem(raw.inventory)
+	stampItem(raw.pets)
+	raw.schemaVersion = 7
+end
+
+local function migrateTo8(raw: any, _versionless: boolean)
+	-- Waystones, the travel clock, and the unsold travel pass.
+	if type(raw.waystones) ~= "table" then
+		raw.waystones = {}
+	end
+	if type(raw.lastTravel) ~= "number" then
+		raw.lastTravel = 0
+	end
+	if raw.travelPass ~= true then
+		raw.travelPass = false
+	end
+	raw.schemaVersion = 8
+end
+
+local function migrateTo9(raw: any, _versionless: boolean)
+	-- Graphics quality stays empty until this player picks a tier
+	-- or a touch device writes the Low default.
+	if Quality.normalize(raw.graphicsQuality) == nil then
+		raw.graphicsQuality = ""
+	end
+	raw.schemaVersion = 9
+end
+
+local function migrateTo10(raw: any, _versionless: boolean)
+	-- Global shard pity, the Quick Roll unlock, VIP, and the shake toggle.
+	-- Older per-pool pity stays where it is; these counters start fresh.
+	if type(raw.shardRolls) ~= "number" then
+		raw.shardRolls = 0
+	end
+	if type(raw.sinceEpic) ~= "number" then
+		raw.sinceEpic = 0
+	end
+	if type(raw.sinceLegendary) ~= "number" then
+		raw.sinceLegendary = 0
+	end
+	if raw.quickRoll ~= true then
+		raw.quickRoll = false
+	end
+	if type(raw.quickRollUntil) ~= "number" then
+		raw.quickRollUntil = 0
+	end
+	if raw.vip ~= true then
+		raw.vip = false
+	end
+	if raw.shake ~= false then
+		raw.shake = true
+	end
+	raw.schemaVersion = 10
+end
+
+local function migrateTo11(raw: any, _versionless: boolean)
+	-- Chests, Shard Keys, and Shard Dust. Login and boss clocks stay
+	-- at -1 so the first claim of a week still pays.
+	if type(raw.chests) ~= "table" then
+		raw.chests = {}
+	end
+	if type(raw.shardKeys) ~= "number" then
+		raw.shardKeys = 0
+	end
+	if type(raw.shardDust) ~= "number" then
+		raw.shardDust = 0
+	end
+	if type(raw.rareChestsSinceEpic) ~= "number" then
+		raw.rareChestsSinceEpic = 0
+	end
+	if type(raw.epicChestsSinceLegendary) ~= "number" then
+		raw.epicChestsSinceLegendary = 0
+	end
+	if type(raw.lastLoginDay) ~= "number" then
+		raw.lastLoginDay = -1
+	end
+	if type(raw.loginStreak) ~= "number" then
+		raw.loginStreak = 0
+	end
+	if type(raw.lastDailyBossDay) ~= "number" then
+		raw.lastDailyBossDay = -1
+	end
+	if type(raw.lastWeeklyBossWeek) ~= "number" then
+		raw.lastWeeklyBossWeek = -1
+	end
+	if raw.chestDuplicates ~= "star" then
+		raw.chestDuplicates = "dust"
+	end
+	if type(raw.chestSalvageBelow) ~= "string" then
+		raw.chestSalvageBelow = ""
+	end
+	raw.schemaVersion = 11
+end
+
+local function migrateTo12(raw: any, _versionless: boolean)
+	-- Music and SFX sliders. 1 is full. The Haven track still starts at
+	-- its own bed volume and the slider multiplies that.
+	if tonumber(raw.musicVolume) == nil then
+		raw.musicVolume = Audio.DEFAULT_MUSIC
+	end
+	if tonumber(raw.sfxVolume) == nil then
+		raw.sfxVolume = Audio.DEFAULT_SFX
+	end
+	raw.schemaVersion = 12
+end
+
+local function migrateTo13(raw: any, _versionless: boolean)
+	if type(raw.classId) ~= "string" then
+		raw.classId = ""
+	end
+	if type(raw.classXp) ~= "table" then
+		raw.classXp = {}
+	end
+	if type(raw.classTalent) ~= "table" then
+		raw.classTalent = {}
+	end
+	raw.schemaVersion = 13
+end
+
+local function migrateTo14(raw: any, versionless: boolean)
+	if type(raw.onboardStep) ~= "string" then
+		raw.onboardStep = "haven"
+	end
+	if versionless then
+		if type(raw.onboardDone) ~= "boolean" then
+			raw.onboardDone = true
+		end
+	elseif raw.onboardDone ~= true then
+		raw.onboardDone = true
+	end
+	raw.schemaVersion = 14
+end
+
+local function migrateTo15(raw: any, versionless: boolean)
+	raw.restCharges = keepExisting(versionless, raw.restCharges, 0)
+	raw.welcomeCharges = keepExisting(versionless, raw.welcomeCharges, 0)
+	raw.lastSeen = keepExisting(versionless, raw.lastSeen, os.time())
+	raw.milestoneTitle = keepExisting(versionless, raw.milestoneTitle, "")
+	raw.welcomeNote = keepExisting(versionless, raw.welcomeNote, "")
+	raw.schemaVersion = 15
+end
+
+local function migrateTo16(raw: any, versionless: boolean)
+	raw.gems = keepExisting(versionless, raw.gems, 0)
+	raw.eventTokens = keepExisting(versionless, raw.eventTokens, 0)
+	raw.ledger = keepExisting(versionless, raw.ledger, {})
+	raw.receipts = keepExisting(versionless, raw.receipts, {})
+	raw.schemaVersion = 16
+end
+
+local function migrateTo17(raw: any, versionless: boolean)
+	raw.eggs = keepExisting(versionless, raw.eggs, 1)
+	raw.companions = keepExisting(versionless, raw.companions, {})
+	raw.schemaVersion = 17
+end
+
+local function migrateTo18(raw: any, versionless: boolean)
+	raw.dailies = keepExisting(versionless, raw.dailies, {})
+	raw.weekly = keepExisting(versionless, raw.weekly, {})
+	raw.weeklyWeek = keepExisting(versionless, raw.weeklyWeek, -1)
+	raw.board = keepExisting(versionless, raw.board, {})
+	raw.boardLines = keepExisting(versionless, raw.boardLines, 0)
+	raw.passXp = keepExisting(versionless, raw.passXp, 0)
+	raw.passClaimed = keepExisting(versionless, raw.passClaimed, 0)
+	raw.firstClearDay = keepExisting(versionless, raw.firstClearDay, -1)
+	raw.nightmareBest = keepExisting(versionless, raw.nightmareBest, 0)
+	raw.dailyBonusDay = keepExisting(versionless, raw.dailyBonusDay, -1)
+	raw.dailyRerollDay = keepExisting(versionless, raw.dailyRerollDay, -1)
+	raw.schemaVersion = 18
+end
+
+local function migrateTo19(raw: any, versionless: boolean)
+	raw.raidMarks = keepExisting(versionless, raw.raidMarks, 0)
+	raw.raidMarksEarned = keepExisting(versionless, raw.raidMarksEarned, 0)
+	raw.raidMarkWeek = keepExisting(versionless, raw.raidMarkWeek, -1)
+	raw.raidLock = keepExisting(versionless, raw.raidLock, {})
+	raw.raidPity = keepExisting(versionless, raw.raidPity, {})
+	raw.raidStory = keepExisting(versionless, raw.raidStory, false)
+	raw.raidEcho = keepExisting(versionless, raw.raidEcho, 0)
+	raw.raidBest = keepExisting(versionless, raw.raidBest, 0)
+	raw.schemaVersion = 19
+end
+
+local function migrateTo20(raw: any, versionless: boolean)
+	raw.tradeDay = keepExisting(versionless, raw.tradeDay, 0)
+	raw.tradeValueToday = keepExisting(versionless, raw.tradeValueToday, 0)
+	raw.tradeLocked = keepExisting(versionless, raw.tradeLocked, false)
+	raw.tradeFlagged = keepExisting(versionless, raw.tradeFlagged, false)
+	raw.verifiedTrader = keepExisting(versionless, raw.verifiedTrader, false)
+	raw.tradeCleanSince = keepExisting(versionless, raw.tradeCleanSince, 0)
+	raw.tradeHandoff = keepExisting(versionless, raw.tradeHandoff, false)
+	raw.schemaVersion = 20
+end
+
+local function migrateTo21(raw: any, versionless: boolean)
+	raw.uiSettings = keepExisting(versionless, raw.uiSettings, Settings.default())
+	raw.schemaVersion = 21
+end
+
+local function migrateTo22(raw: any, versionless: boolean)
+	-- T-049 named 22 for raidLuck and never shipped. This is the free version.
+	-- A save from 21 starts unpaid. Do not copy onboardDone or another profile.
+	raw.starterGoals = keepExisting(versionless, raw.starterGoals, StarterGoalPay.blank())
+	raw.schemaVersion = 22
+end
+
+local function migrateTo23(raw: any, versionless: boolean)
+	-- A save that already finished onboarding does not get this kit.
+	-- A new profile stays returning false. Do not copy another account.
+	raw.firstSession = keepExisting(
+		versionless,
+		raw.firstSession,
+		firstSessionKit().blank(raw.onboardDone == true)
+	)
+	raw.schemaVersion = 23
+end
+
+local function migrateTo24(raw: any, versionless: boolean)
+	-- Per-class action bars. A save with none gets the class defaults.
+	-- Do not copy another profile's layout.
+	raw.actionBars = keepExisting(versionless, raw.actionBars, ActionSlots.fresh())
+	raw.schemaVersion = 24
+end
+
+local function migrateTo25(raw: any, versionless: boolean)
+	-- Codex seen flags. A save from 24 starts locked. Do not copy another profile.
+	raw.codex = keepExisting(versionless, raw.codex, blankCodex())
+	raw.schemaVersion = 25
+end
+
+local function migrateTo26(raw: any, versionless: boolean)
+	-- Training Grove. A save from 25 starts empty. Do not copy another profile.
+	-- Do not fold this into codex. Keys and gold are not stored.
+	raw.trainingGrove = keepExisting(versionless, raw.trainingGrove, blankGrove())
+	raw.schemaVersion = 26
+end
+
+local migrationList: { SaveMigrate.Step } = {
+	{ to = 1, apply = migrateTo1 },
+	{ to = 2, apply = migrateTo2 },
+	{ to = 3, apply = migrateTo3 },
+	{ to = 4, apply = migrateTo4 },
+	{ to = 5, apply = migrateTo5 },
+	{ to = 6, apply = migrateTo6 },
+	{ to = 7, apply = migrateTo7 },
+	{ to = 8, apply = migrateTo8 },
+	{ to = 9, apply = migrateTo9 },
+	{ to = 10, apply = migrateTo10 },
+	{ to = 11, apply = migrateTo11 },
+	{ to = 12, apply = migrateTo12 },
+	{ to = 13, apply = migrateTo13 },
+	{ to = 14, apply = migrateTo14 },
+	{ to = 15, apply = migrateTo15 },
+	{ to = 16, apply = migrateTo16 },
+	{ to = 17, apply = migrateTo17 },
+	{ to = 18, apply = migrateTo18 },
+	{ to = 19, apply = migrateTo19 },
+	{ to = 20, apply = migrateTo20 },
+	{ to = 21, apply = migrateTo21 },
+	{ to = 22, apply = migrateTo22 },
+	{ to = 23, apply = migrateTo23 },
+	{ to = 24, apply = migrateTo24 },
+	{ to = 25, apply = migrateTo25 },
+	{ to = 26, apply = migrateTo26 },
+}
+
+Schema.MIGRATIONS = table.freeze(migrationList)
+
 function Schema.migrate(raw: any): (ProfileData?, string?)
 	if raw == nil then
-		-- A missing key is a new player. The version walk treats nil as 0,
-		-- and the v14 step would mark the tutorial finished.
+		-- A missing key is a new player. Do not walk the steps: the v14
+		-- step would mark the tutorial finished.
 		return Schema.template(), nil
 	elseif type(raw) ~= "table" then
 		return nil, "corrupt"
@@ -825,403 +1227,20 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 		return nil, "corrupt"
 	end
 
-	local version = raw.schemaVersion
-	local versionless = version == nil
-	if version == nil then
-		version = 0
-	elseif type(version) ~= "number" or version ~= version then
-		return nil, "corrupt"
+	local version, versionErr, versionless = SaveMigrate.versionOf(raw.schemaVersion)
+	if versionErr ~= nil or version == nil then
+		return nil, versionErr or "corrupt"
 	end
 	if version > Schema.VERSION then
 		return nil, "newer"
 	end
 
-	if version < 1 then
-		-- Version 1 is the first shipped shape. There is nothing to rewrite;
-		-- reconcile fills keys that were never saved.
-		raw.schemaVersion = 1
-		version = 1
-	end
-
-	if version < 2 then
-		-- Armor slots. Older saves only had a weapon and a pet.
-		if type(raw.equipped) ~= "table" then
-			raw.equipped = {}
-		end
-		if type(raw.equipped.armor) ~= "table" then
-			raw.equipped.armor = {}
-		end
-		raw.schemaVersion = 2
-		version = 2
-	end
-
-	if version < 3 then
-		-- Materials, tonics, and roll vouchers. Older saves had none of these.
-		if type(raw.materials) ~= "table" then
-			raw.materials = {}
-		end
-		if type(raw.consumables) ~= "table" then
-			raw.consumables = {}
-		end
-		if type(raw.vouchers) ~= "table" then
-			raw.vouchers = {}
-		end
-		raw.schemaVersion = 3
-		version = 3
-	end
-
-	if version < 4 then
-		-- Star level. Older gear has no stars. The rolled number becomes
-		-- baseValue so a later feed can multiply it without compounding.
-		local function stamp(bag: any)
-			if type(bag) ~= "table" then
-				return
-			end
-			for _, item in pairs(bag) do
-				if type(item) == "table" then
-					if type(item.stars) ~= "number" then
-						item.stars = 0
-					end
-					if type(item.starProgress) ~= "number" then
-						item.starProgress = 0
-					end
-					if type(item.stats) == "table" then
-						for _, stat in ipairs(item.stats) do
-							if
-								type(stat) == "table"
-								and type(stat.baseValue) ~= "number"
-								and type(stat.value) == "number"
-							then
-								stat.baseValue = stat.value
-							end
-						end
-					end
-				end
-			end
-		end
-		stamp(raw.inventory)
-		stamp(raw.pets)
-		raw.schemaVersion = 4
-		version = 4
-	end
-
-	if version < 5 then
-		-- Prism Tokens are the Robux wallet. Luck Boost is purchased luck.
-		-- Neither is copied from Shard Tokens.
-		if type(raw.prismTokens) ~= "number" then
-			raw.prismTokens = 0
-		end
-		if type(raw.luckBoost) ~= "number" then
-			raw.luckBoost = 0
-		end
-		raw.schemaVersion = 5
-		version = 5
-	end
-
-	if version < 6 then
-		-- Crafting Level, the milestone table, and a timed Forge Boost.
-		if type(raw.craftingLevel) ~= "number" then
-			raw.craftingLevel = 1
-		end
-		if type(raw.craftingXp) ~= "number" then
-			raw.craftingXp = 0
-		end
-		if type(raw.craftingMilestones) ~= "table" then
-			raw.craftingMilestones = {}
-		end
-		if type(raw.forgeBoostUntil) ~= "number" then
-			raw.forgeBoostUntil = 0
-		end
-		raw.schemaVersion = 6
-		version = 6
-	end
-
-	if version < 7 then
-		-- Lock, favorite, and socket count live on each piece. Extra bag
-		-- slots from a future purchase start at zero. Accessories are a
-		-- separate equip map so rings do not occupy armor slots.
-		if type(raw.inventoryBonus) ~= "number" then
-			raw.inventoryBonus = 0
-		end
-		if type(raw.equipped) ~= "table" then
-			raw.equipped = {}
-		end
-		if type(raw.equipped.accessories) ~= "table" then
-			raw.equipped.accessories = {}
-		end
-		local function stampItem(bag: any)
-			if type(bag) ~= "table" then
-				return
-			end
-			for _, item in pairs(bag) do
-				if type(item) == "table" then
-					if item.locked ~= true then
-						item.locked = false
-					end
-					if item.favorite ~= true then
-						item.favorite = false
-					end
-					if type(item.sockets) ~= "number" then
-						item.sockets = 0
-					end
-				end
-			end
-		end
-		stampItem(raw.inventory)
-		stampItem(raw.pets)
-		raw.schemaVersion = 7
-		version = 7
-	end
-
-	if version < 8 then
-		-- Waystones, the travel clock, and the unsold travel pass.
-		if type(raw.waystones) ~= "table" then
-			raw.waystones = {}
-		end
-		if type(raw.lastTravel) ~= "number" then
-			raw.lastTravel = 0
-		end
-		if raw.travelPass ~= true then
-			raw.travelPass = false
-		end
-		raw.schemaVersion = 8
-		version = 8
-	end
-
-	if version < 9 then
-		-- Graphics quality stays empty until this player picks a tier
-		-- or a touch device writes the Low default.
-		if Quality.normalize(raw.graphicsQuality) == nil then
-			raw.graphicsQuality = ""
-		end
-		raw.schemaVersion = 9
-		version = 9
-	end
-
-	if version < 10 then
-		-- Global shard pity, the Quick Roll unlock, VIP, and the shake toggle.
-		-- Older per-pool pity stays where it is; these counters start fresh.
-		if type(raw.shardRolls) ~= "number" then
-			raw.shardRolls = 0
-		end
-		if type(raw.sinceEpic) ~= "number" then
-			raw.sinceEpic = 0
-		end
-		if type(raw.sinceLegendary) ~= "number" then
-			raw.sinceLegendary = 0
-		end
-		if raw.quickRoll ~= true then
-			raw.quickRoll = false
-		end
-		if type(raw.quickRollUntil) ~= "number" then
-			raw.quickRollUntil = 0
-		end
-		if raw.vip ~= true then
-			raw.vip = false
-		end
-		if raw.shake ~= false then
-			raw.shake = true
-		end
-		raw.schemaVersion = 10
-		version = 10
-	end
-
-	if version < 11 then
-		-- Chests, Shard Keys, and Shard Dust. Login and boss clocks stay
-		-- at -1 so the first claim of a week still pays.
-		if type(raw.chests) ~= "table" then
-			raw.chests = {}
-		end
-		if type(raw.shardKeys) ~= "number" then
-			raw.shardKeys = 0
-		end
-		if type(raw.shardDust) ~= "number" then
-			raw.shardDust = 0
-		end
-		if type(raw.rareChestsSinceEpic) ~= "number" then
-			raw.rareChestsSinceEpic = 0
-		end
-		if type(raw.epicChestsSinceLegendary) ~= "number" then
-			raw.epicChestsSinceLegendary = 0
-		end
-		if type(raw.lastLoginDay) ~= "number" then
-			raw.lastLoginDay = -1
-		end
-		if type(raw.loginStreak) ~= "number" then
-			raw.loginStreak = 0
-		end
-		if type(raw.lastDailyBossDay) ~= "number" then
-			raw.lastDailyBossDay = -1
-		end
-		if type(raw.lastWeeklyBossWeek) ~= "number" then
-			raw.lastWeeklyBossWeek = -1
-		end
-		if raw.chestDuplicates ~= "star" then
-			raw.chestDuplicates = "dust"
-		end
-		if type(raw.chestSalvageBelow) ~= "string" then
-			raw.chestSalvageBelow = ""
-		end
-		raw.schemaVersion = 11
-		version = 11
-	end
-
-	if version < 12 then
-		-- Music and SFX sliders. 1 is full. The Haven track still starts at
-		-- its own bed volume and the slider multiplies that.
-		if tonumber(raw.musicVolume) == nil then
-			raw.musicVolume = Audio.DEFAULT_MUSIC
-		end
-		if tonumber(raw.sfxVolume) == nil then
-			raw.sfxVolume = Audio.DEFAULT_SFX
-		end
-		raw.schemaVersion = 12
-		version = 12
-	end
-
-	if version < 13 then
-		if type(raw.classId) ~= "string" then
-			raw.classId = ""
-		end
-		if type(raw.classXp) ~= "table" then
-			raw.classXp = {}
-		end
-		if type(raw.classTalent) ~= "table" then
-			raw.classTalent = {}
-		end
-		raw.schemaVersion = 13
-		version = 13
-	end
-
-	if version < 14 then
-		if type(raw.onboardStep) ~= "string" then
-			raw.onboardStep = "haven"
-		end
-		if versionless then
-			if type(raw.onboardDone) ~= "boolean" then
-				raw.onboardDone = true
-			end
-		elseif raw.onboardDone ~= true then
-			raw.onboardDone = true
-		end
-		raw.schemaVersion = 14
-		version = 14
-	end
-
-	if version < 15 then
-		raw.restCharges = keepExisting(versionless, raw.restCharges, 0)
-		raw.welcomeCharges = keepExisting(versionless, raw.welcomeCharges, 0)
-		raw.lastSeen = keepExisting(versionless, raw.lastSeen, os.time())
-		raw.milestoneTitle = keepExisting(versionless, raw.milestoneTitle, "")
-		raw.welcomeNote = keepExisting(versionless, raw.welcomeNote, "")
-		raw.schemaVersion = 15
-		version = 15
-	end
-
-	if version < 16 then
-		raw.gems = keepExisting(versionless, raw.gems, 0)
-		raw.eventTokens = keepExisting(versionless, raw.eventTokens, 0)
-		raw.ledger = keepExisting(versionless, raw.ledger, {})
-		raw.receipts = keepExisting(versionless, raw.receipts, {})
-		raw.schemaVersion = 16
-		version = 16
-	end
-
-	if version < 17 then
-		raw.eggs = keepExisting(versionless, raw.eggs, 1)
-		raw.companions = keepExisting(versionless, raw.companions, {})
-		raw.schemaVersion = 17
-		version = 17
-	end
-
-	if version < 18 then
-		raw.dailies = keepExisting(versionless, raw.dailies, {})
-		raw.weekly = keepExisting(versionless, raw.weekly, {})
-		raw.weeklyWeek = keepExisting(versionless, raw.weeklyWeek, -1)
-		raw.board = keepExisting(versionless, raw.board, {})
-		raw.boardLines = keepExisting(versionless, raw.boardLines, 0)
-		raw.passXp = keepExisting(versionless, raw.passXp, 0)
-		raw.passClaimed = keepExisting(versionless, raw.passClaimed, 0)
-		raw.firstClearDay = keepExisting(versionless, raw.firstClearDay, -1)
-		raw.nightmareBest = keepExisting(versionless, raw.nightmareBest, 0)
-		raw.dailyBonusDay = keepExisting(versionless, raw.dailyBonusDay, -1)
-		raw.dailyRerollDay = keepExisting(versionless, raw.dailyRerollDay, -1)
-		raw.schemaVersion = 18
-		version = 18
-	end
-
-	if version < 19 then
-		raw.raidMarks = keepExisting(versionless, raw.raidMarks, 0)
-		raw.raidMarksEarned = keepExisting(versionless, raw.raidMarksEarned, 0)
-		raw.raidMarkWeek = keepExisting(versionless, raw.raidMarkWeek, -1)
-		raw.raidLock = keepExisting(versionless, raw.raidLock, {})
-		raw.raidPity = keepExisting(versionless, raw.raidPity, {})
-		raw.raidStory = keepExisting(versionless, raw.raidStory, false)
-		raw.raidEcho = keepExisting(versionless, raw.raidEcho, 0)
-		raw.raidBest = keepExisting(versionless, raw.raidBest, 0)
-		raw.schemaVersion = 19
-		version = 19
-	end
-
-	if version < 20 then
-		raw.tradeDay = keepExisting(versionless, raw.tradeDay, 0)
-		raw.tradeValueToday = keepExisting(versionless, raw.tradeValueToday, 0)
-		raw.tradeLocked = keepExisting(versionless, raw.tradeLocked, false)
-		raw.tradeFlagged = keepExisting(versionless, raw.tradeFlagged, false)
-		raw.verifiedTrader = keepExisting(versionless, raw.verifiedTrader, false)
-		raw.tradeCleanSince = keepExisting(versionless, raw.tradeCleanSince, 0)
-		raw.tradeHandoff = keepExisting(versionless, raw.tradeHandoff, false)
-		raw.schemaVersion = 20
-		version = 20
-	end
-
-	if version < 21 then
-		raw.uiSettings = keepExisting(versionless, raw.uiSettings, Settings.default())
-		raw.schemaVersion = 21
-		version = 21
-	end
-
-	-- T-049 named 22 for raidLuck and never shipped. This is the free version.
-	-- A save from 21 starts unpaid. Do not copy onboardDone or another profile.
-	if version < 22 then
-		raw.starterGoals = keepExisting(versionless, raw.starterGoals, StarterGoalPay.blank())
-		raw.schemaVersion = 22
-		version = 22
-	end
-
-	-- A save that already finished onboarding does not get this kit.
-	-- A new profile stays returning false. Do not copy another account.
-	if version < 23 then
-		raw.firstSession =
-			keepExisting(versionless, raw.firstSession, firstSessionKit().blank(raw.onboardDone == true))
-		raw.schemaVersion = 23
-		version = 23
-	end
-
-	-- Per-class action bars. A save with none gets the class defaults.
-	-- Do not copy another profile's layout.
-	if version < 24 then
-		raw.actionBars = keepExisting(versionless, raw.actionBars, ActionSlots.fresh())
-		raw.schemaVersion = 24
-		version = 24
-	end
-
-	-- Codex seen flags. A save from 24 starts locked. Do not copy another profile.
-	if version < 25 then
-		raw.codex = keepExisting(versionless, raw.codex, blankCodex())
-		raw.schemaVersion = 25
-		version = 25
-	end
-
-	-- Training Grove. A save from 25 starts empty. Do not copy another profile.
-	-- Do not fold this into codex. Keys and gold are not stored.
-	if version < 26 then
-		raw.trainingGrove = keepExisting(versionless, raw.trainingGrove, blankGrove())
-		raw.schemaVersion = 26
-		version = 26
-	end
-
-	return Schema.reconcile(raw), nil
+	-- Copy first. Steps and reconcile mutate this table only.
+	local data = Schema.deepCopy(raw)
+	SaveMigrate.run(data, version, versionless, Schema.MIGRATIONS)
+	local profile = Schema.reconcile(data)
+	SaveSanitize.scrub(profile)
+	return profile, nil
 end
 
 -- Old per-pool counter. The crack does not write it. sinceEpic and

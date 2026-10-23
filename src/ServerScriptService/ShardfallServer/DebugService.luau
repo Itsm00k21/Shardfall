@@ -60,6 +60,22 @@ function DebugService.run(player: Player, action: any)
 		local DungeonService = require(script.Parent.DungeonService)
 		return withMessage(DungeonService.setBossPhase(player, 2), "Boss set to phase 2.")
 	end
+	-- [ECHO hook] saveTools stays off until LaunchGate turns these on.
+	-- DevTools.blocked already refused them, so this does not run while it is off.
+	if action == "autosave" then
+		local saved, why = DataService.save(player)
+		if not saved then
+			return reject(why or "Could not save.")
+		end
+		return { ok = true, message = "Saved." }
+	end
+	if action == "saveversion" then
+		local data = DataService.get(player)
+		local version = if data ~= nil then data.schemaVersion else nil
+		local line = "schemaVersion " .. tostring(version)
+		print("[Shardfall] " .. line)
+		return { ok = true, message = line }
+	end
 	local note = ""
 	local ok, err = DataService.mutate(player, function(data)
 		local applied, text = DebugTools.apply(data, action)

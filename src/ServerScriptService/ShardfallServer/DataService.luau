@@ -41,6 +41,11 @@
 	then answered "Profile is still loading." forever. A timed-out or thrown
 	store read in Studio becomes an in-memory session profile and a warn.
 	That profile is not written back to the DataStore.
+
+	A failed load (corrupt, newer, busy, or a live DataStore error) never
+	calls UpdateAsync with a replacement profile. The player is kicked.
+	The Studio memory fallback is read-only: save and autosave no-op.
+	Load and write retry with backoff. A lost lock is not retried.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -50,6 +55,8 @@ local RunService = game:GetService("RunService")
 
 local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
 local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
+local SaveGuard = require(ReplicatedStorage.Shared.SaveGuard)
+local SaveRetry = require(ReplicatedStorage.Shared.SaveRetry)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local SessionLock = require(ReplicatedStorage.Shared.SessionLock)
 local StoreAdapter = require(script.Parent.StoreAdapter)
@@ -212,35 +219,56 @@ local function write(record: Record, releaseLock: boolean): (boolean, string)
 	if record.ephemeral == true then
 		return false, "unloaded"
 	end
-	local outcome = "unwritten"
+	-- A load that never succeeded must not replace the stored profile.
+	if SaveGuard.refusesWrite(record.failed == true) then
+		return false, "unloaded"
+	end
 	local store = currentAdapter()
-	local callOk, callErr = pcall(function()
-		store:updateAsync(record.key, function(document)
-			local saved, reason = SessionLock.trySave(
-				if type(document) == "table" then document else nil,
-				os.time(),
-				serverId,
-				placeId,
-				SessionLock.TIMEOUT_SECONDS,
-				Schema.deepCopy(record.data),
-				releaseLock
-			)
-			outcome = reason
-			return saved
+	local lastReason = "unwritten"
+	for attempt = 1, SaveRetry.WRITE_ATTEMPTS do
+		local outcome = "unwritten"
+		local callOk, callErr = pcall(function()
+			store:updateAsync(record.key, function(document)
+				local saved, reason = SessionLock.trySave(
+					if type(document) == "table" then document else nil,
+					os.time(),
+					serverId,
+					placeId,
+					SessionLock.TIMEOUT_SECONDS,
+					Schema.deepCopy(record.data),
+					releaseLock
+				)
+				outcome = reason
+				return saved
+			end)
 		end)
-	end)
-	if not callOk then
-		return false, "error:" .. tostring(callErr)
+		if callOk and outcome == "saved" then
+			return true, "saved"
+		end
+		if not callOk then
+			lastReason = "error:" .. tostring(callErr)
+		else
+			lastReason = outcome
+		end
+		local why = if callOk then outcome else "error"
+		if not SaveRetry.shouldRetry(attempt, SaveRetry.WRITE_ATTEMPTS, why) then
+			return false, lastReason
+		end
+		for _ = 1, SaveRetry.pauses(attempt) do
+			task.wait(LOAD_RETRY_SECONDS)
+		end
 	end
-	if outcome ~= "saved" then
-		return false, outcome
-	end
-	return true, "saved"
+	return false, lastReason
 end
 
 function DataService.save(player: Player): (boolean, string?)
 	local record = records[player]
-	if record == nil or not record.loaded or record.released then
+	if
+		record == nil
+		or not record.loaded
+		or record.released
+		or SaveGuard.refusesWrite(record.failed)
+	then
 		return false, "Profile is not loaded."
 	end
 	if record.closing then
@@ -260,7 +288,13 @@ end
 
 function DataService.replace(player: Player, data: any): boolean
 	local record = records[player]
-	if record == nil or not record.loaded or record.released or record.closing then
+	if
+		record == nil
+		or not record.loaded
+		or record.released
+		or record.closing
+		or SaveGuard.refusesWrite(record.failed)
+	then
 		return false
 	end
 	record.data = Schema.deepCopy(data)
@@ -343,7 +377,7 @@ local function sessionFallback(record: Record, player: Player, why: any): (boole
 end
 
 local function load(player: Player): (boolean, string?)
-	if records[player] ~= nil then
+	if SaveGuard.alreadyOpen(records[player] ~= nil) then
 		return false, "Profile is already loading."
 	end
 
@@ -466,10 +500,11 @@ local function load(player: Player): (boolean, string?)
 			end
 			print(
 				string.format(
-					"[Shardfall] Loaded %s (%d) via %s",
+					"[Shardfall] Loaded %s (%d) via %s (schema v%d)",
 					player.Name,
 					player.UserId,
-					if persistent then "DataStore" else "memory (not saved)"
+					if persistent then "DataStore" else "memory (not saved)",
+					record.data.schemaVersion
 				)
 			)
 			return true, nil
@@ -479,7 +514,9 @@ local function load(player: Player): (boolean, string?)
 
 		local retryable = reason == "busy" or reason == "error"
 		if retryable and attempt < LOAD_ATTEMPTS then
-			task.wait(LOAD_RETRY_SECONDS)
+			for _ = 1, SaveRetry.pauses(attempt) do
+				task.wait(LOAD_RETRY_SECONDS)
+			end
 			continue
 		end
 
@@ -927,7 +964,7 @@ local function onPlayer(player: Player)
 	-- PlayerAdded can race the "players already here" loop in Studio.
 	-- The flag is set before the spawn, because the record itself is created
 	-- later, inside the spawned load.
-	if playerStarted[player] then
+	if SaveGuard.alreadyOpen(playerStarted[player] == true) then
 		return
 	end
 	playerStarted[player] = true
@@ -965,6 +1002,7 @@ local function autosave()
 			local record = entry.record
 			if
 				ProfileLoad.maySave(record.loaded, record.ephemeral)
+				and not SaveGuard.refusesWrite(record.failed == true)
 				and not record.released
 				and not record.closing
 				and player.Parent == Players

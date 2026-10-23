@@ -22,6 +22,11 @@ its tag to merged and add the merge commit.
   Fails on missing or duplicate ids, bad rarity odds or pity, bad drop
   chances or pool weights, negative or NaN stats, missing strings, and
   broken cross-references. [#374] (merged, d37b2f1)
+- Phase 0.5: save system spec and hardening. Saves with no schemaVersion
+  load as v1 and migrate forward; unknown JSON fields stay; NaN and
+  Roblox values are stripped on the migrated copy; DataStore retries
+  back off; a failed load is never written. Session lock, 60s autosave,
+  and the shutdown flush stay. Schema stays 26. (open)
 
 ### Changed
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,

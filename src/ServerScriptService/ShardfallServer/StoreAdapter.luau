@@ -16,11 +16,17 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
 local MemoryStore = require(ReplicatedStorage.Shared.MemoryStore)
 
 local StoreAdapter = {}
+
+-- [ECHO hook] Studio uses the memory store unless this is turned on.
+-- A published server ignores it and still probes the live DataStore.
+-- Off by default so an API-on Studio session does not write live keys.
+StoreAdapter.STUDIO_LIVE = false
 
 local DATASTORE_NAME = "ShardfallPlayer_v1"
 local PROBE_STORE = "ShardfallProbe"
@@ -59,6 +65,11 @@ local function dataStoreAdapter(): Adapter
 end
 
 function StoreAdapter.connect(): (Adapter, string?)
+	-- [ECHO hook]
+	if RunService:IsStudio() and StoreAdapter.STUDIO_LIVE ~= true then
+		local memory = MemoryStore.new() :: Adapter
+		return memory, "Studio memory store (StoreAdapter.STUDIO_LIVE is off)"
+	end
 	-- The probe has to finish. Studio with API access off can leave
 	-- UpdateAsync yielded, and DataService.start used to wait there forever.
 	local ok, err = CallBudget.run(CallBudget.DATASTORE_SECONDS, function()
