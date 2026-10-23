@@ -16,6 +16,8 @@ its tag to merged and add the merge commit.
 - Gear UI hooks (Ghost): Bag "Salvage tools" mounts `BagTools` (`gearSalvage`), the details pane shows upgrade-boosted stats via `UpgradeScale.preview` (`upgradeScale`) and the Shard Core on a selected weapon (`shardCore`), a bag-full roll refusal offers "Salvage now" (nudge, then salvageNow with its token), and the reveal card shows `levelText` for a merged dupe. All flags stay off. Builds on #386/#387/#388/#389. (open)
 - Gear Progression Stage C: Shard Core (flag `shardCore`, off). One core per weapon, fed with `profile.gearEssence`. Levels and modest perks live in config. Perks add onto finished Equip totals. (open)
 - Phase 2 Equip server (flag `equip`, off) and Gear Progression Stage A. Gold upgrades scale stats when `upgradeScale` is on (off). Exact duplicates feed stars when `gearLevels` is on (off). Essence overflow stays on `gearEssence`. No second level field. (open)
+- Stage B: favorited gear stays out of salvage, and Salvage selected
+  waits for the same confirm token as salvage-all. [#388] (open)
 - Stage B: salvage weapons and armor into `profile.gearEssence` (1/3/10/40/200).
   Lock uses `item.locked`. Auto-salvage is off and only converts a new drop.
   `LaunchGate.gearSalvage` is off. `BagTools.mount` is the client hook. [#388] (open)

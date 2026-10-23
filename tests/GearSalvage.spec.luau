@@ -237,11 +237,19 @@ describe("Gear salvage", function()
 			local data = fresh()
 			put(data, sword("a", "Common", { upgrade = 3 }))
 			put(data, sword("b", "Uncommon"))
-			local result = GearSalvage.applyAction(data, 42, "salvage", {
+			local looked = GearSalvage.applyAction(data, 42, "salvage", {
 				uids = { "b", "a" },
 				amount = 999,
 				gearEssence = 999,
 			}, 1000)
+			expect(looked.ok).toEqual(true)
+			expect(looked.gain).toEqual(4)
+			expect(looked.token ~= nil).toBeTrue()
+			expect(data.gearEssence).toEqual(0)
+			expect(data.inventory.a ~= nil).toBeTrue()
+			expect(data.inventory.b ~= nil).toBeTrue()
+			local result =
+				GearSalvage.applyAction(data, 42, "confirm", { token = looked.token }, 1000)
 			expect(result.ok).toEqual(true)
 			expect(result.gained).toEqual(4)
 			expect(data.gearEssence).toEqual(4)
@@ -312,6 +320,106 @@ describe("Gear salvage", function()
 				receiptId = "r",
 			}, 1000)
 			expect(receipt.error).toEqual("Nothing here is for sale.")
+		end)
+	end)
+
+	it("keeps favorited gear on every salvage path", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			put(data, sword("star", "Common", { favorite = true }))
+			put(data, sword("locked", "Common", { locked = true }))
+			local one = GearSalvage.applyAction(data, 42, "salvage", { uids = { "star" } }, 1000)
+			expect(one.ok).toEqual(false)
+			expect(one.error).toEqual("That item is a favorite.")
+			expect(one.token).toBeNil()
+			expect(data.inventory.star.favorite).toEqual(true)
+			expect(data.gearEssence).toEqual(0)
+
+			local bulk = GearSalvage.applyAction(data, 42, "preview", {
+				uids = { "plain", "star" },
+			}, 1000)
+			expect(bulk.ok).toEqual(false)
+			expect(bulk.error).toEqual("That item is a favorite.")
+			expect(data.inventory.plain ~= nil).toBeTrue()
+			expect(data.inventory.star ~= nil).toBeTrue()
+			expect(data.gearEssence).toEqual(0)
+
+			local sweep = GearSalvage.applyAction(data, 42, "preview", { rarity = "Common" }, 1000)
+			expect(sweep.ok).toEqual(true)
+			expect(sweep.count).toEqual(1)
+			expect(sweep.gain).toEqual(1)
+			expect(sweep.uids).toEqual({ "plain" })
+			local favoriteSkip = nil
+			for _, row in ipairs(sweep.skipped) do
+				if row.uid == "star" then
+					favoriteSkip = row
+				end
+			end
+			expect(favoriteSkip).toEqual({ uid = "star", reason = "That item is a favorite." })
+			local done =
+				GearSalvage.applyAction(data, 42, "salvageNow", { token = sweep.token }, 1000)
+			expect(done.ok).toEqual(true)
+			expect(data.inventory.plain).toBeNil()
+			expect(data.inventory.star.favorite).toEqual(true)
+			expect(data.inventory.locked.locked).toEqual(true)
+			expect(data.gearEssence).toEqual(1)
+
+			local only = fresh()
+			put(only, sword("star", "Rare", { favorite = true }))
+			local none = GearSalvage.applyAction(only, 7, "nudge", { rarity = "Rare" }, 20)
+			expect(none.ok).toEqual(false)
+			expect(none.error).toEqual("That item is a favorite.")
+			expect(none.skipped).toEqual({
+				{ uid = "star", reason = "That item is a favorite." },
+			})
+			expect(only.inventory.star ~= nil).toBeTrue()
+
+			only.autoSalvage = true
+			only.autoSalvageRarity = "Rare"
+			local arrival = GearSalvage.receive(only, sword("drop", "Common", { favorite = true }))
+			expect(arrival.kept).toEqual(true)
+			expect(arrival.gained).toEqual(0)
+			expect(arrival.reason).toEqual("That item is a favorite.")
+			expect(only.gearEssence).toEqual(0)
+			expect(only.inventory.drop).toBeNil()
+			expect(only.inventory.star ~= nil).toBeTrue()
+		end)
+	end)
+
+	it("confirms salvage selected with a token and deletes nothing before that", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("a", "Common"))
+			put(data, sword("b", "Uncommon"))
+			local looked = GearSalvage.applyAction(data, 42, "preview", {
+				uids = { "b", "a" },
+			}, 80)
+			expect(looked.ok).toEqual(true)
+			expect(looked.uids).toEqual({ "a", "b" })
+			expect(data.inventory.a ~= nil).toBeTrue()
+			expect(data.gearEssence).toEqual(0)
+			data.inventory.a.favorite = true
+			local held = GearSalvage.applyAction(data, 42, "confirm", { token = looked.token }, 80)
+			expect(held.error).toEqual("That item is a favorite.")
+			expect(data.inventory.a ~= nil).toBeTrue()
+			expect(data.inventory.b ~= nil).toBeTrue()
+			expect(data.gearEssence).toEqual(0)
+
+			data.inventory.a.favorite = false
+			local again = GearSalvage.applyAction(data, 42, "salvage", {
+				uids = { "a", "b" },
+			}, 90)
+			expect(again.ok).toEqual(true)
+			expect(data.inventory.a ~= nil).toBeTrue()
+			local done = GearSalvage.applyAction(data, 42, "confirm", { token = again.token }, 90)
+			expect(done.ok).toEqual(true)
+			expect(done.gained).toEqual(4)
+			expect(data.inventory.a).toBeNil()
+			expect(data.inventory.b).toBeNil()
+			expect(data.gearEssence).toEqual(4)
+			local second = GearSalvage.applyAction(data, 42, "confirm", { token = again.token }, 90)
+			expect(second.ok).toEqual(false)
 		end)
 	end)
 
@@ -740,8 +848,9 @@ describe("BagTools mount", function()
 		expect(handle.root:FindFirstChild("Status").Text).toEqual("Equipped gear stays.")
 		expect(handle:getSelected()).toEqual({ "sword-1" })
 		handle.root:FindFirstChild("SalvageSelected").MouseButton1Click:Fire()
-		expect(calls[#calls].action).toEqual("salvage")
+		expect(calls[#calls].action).toEqual("preview")
 		expect(calls[#calls].payload.uids).toEqual({ "sword-1" })
+		expect(handle.root:FindFirstChild("Confirm").Visible).toEqual(true)
 		handle.root:FindFirstChild("LockButton").MouseButton1Click:Fire()
 		expect(calls[#calls].action).toEqual("lock")
 		expect(calls[#calls].payload.uid).toEqual("sword-1")

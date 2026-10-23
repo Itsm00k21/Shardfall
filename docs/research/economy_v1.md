@@ -100,7 +100,7 @@ Dev Tools grants **100** Essence. That button is not a product.
 
 Salvage, lock, auto-salvage, and the bag-full confirm read `LaunchGate.gearSalvage` (off by default).
 
-Equipped gear stays, including `equipLoadout` when that table exists. `item.locked` is the lock. There is no second lock field.
+Equipped gear stays, including `equipLoadout` when that table exists. `item.locked` is the lock. `item.favorite` stays out of salvage the same way: an explicit list returns "That item is a favorite." and a rarity sweep skips that piece. There is no second lock field.
 
 An explicit uid list is all-or-nothing. Auto-salvage is off by default and only converts a new drop. Turning it on leaves the bag as it is.
 
