@@ -200,5 +200,6 @@ require("./ConfigValidation.spec")
 require("./SkillPress.spec")
 require("./DevAccess.spec")
 require("./DevTools.spec")
+require("./EchoSaveHook.spec")
 
 process.exit(framework.run())
