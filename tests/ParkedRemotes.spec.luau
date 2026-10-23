@@ -93,6 +93,7 @@ local SERVICE_CALLS = {
 	{ "DungeonService", "startDailyBoss", {} },
 	-- Kevin, Oct 22: PetCare parked for a future pets update.
 	{ "PetService", "care", { "pet-a", "feed" } },
+	{ "GearSalvageService", "handle", { "salvage", { uids = { "piece-1" } } } },
 }
 
 local function namesIn(source: string, kind: string): { string }

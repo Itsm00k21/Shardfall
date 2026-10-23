@@ -144,6 +144,9 @@
         "BulkSalvage": {
           "$className": "RemoteFunction"
         },
+        "GearSalvage": {
+          "$className": "RemoteFunction"
+        },
         "SetItemLock": {
           "$className": "RemoteFunction"
         },

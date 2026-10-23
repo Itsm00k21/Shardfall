@@ -73,6 +73,13 @@ DevTools.SECTIONS = table.freeze({
 		}),
 	}),
 	table.freeze({
+		id = "salvage",
+		title = "Gear salvage",
+		entries = table.freeze({
+			entry("salvagefill", "Fill the Bag", "Debug", "salvagefill"),
+		}),
+	}),
+	table.freeze({
 		id = "testing",
 		title = "Testing",
 		entries = table.freeze({
@@ -104,6 +111,7 @@ local GATED: { [string]: string } = {
 	["Debug:geardupe"] = "gearLevels",
 	["Debug:fillbag"] = "gearLevels",
 	["Debug:essence"] = "shardCore",
+	["Debug:salvagefill"] = "gearSalvage",
 }
 
 local GATE_NAME: { [string]: string } = {
@@ -115,6 +123,7 @@ local GATE_NAME: { [string]: string } = {
 	equip = "Equip",
 	gearLevels = "Gear levels",
 	shardCore = "Shard Core",
+	gearSalvage = "Gear salvage",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?

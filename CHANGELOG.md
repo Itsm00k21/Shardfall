@@ -15,6 +15,9 @@ its tag to merged and add the merge commit.
 ### Added
 - Gear Progression Stage C: Shard Core (flag `shardCore`, off). One core per weapon, fed with `profile.gearEssence`. Levels and modest perks live in config. Perks add onto finished Equip totals. (open)
 - Phase 2 Equip server (flag `equip`, off) and Gear Progression Stage A. Gold upgrades scale stats when `upgradeScale` is on (off). Exact duplicates feed stars when `gearLevels` is on (off). Essence overflow stays on `gearEssence`. No second level field. (open)
+- Stage B: salvage weapons and armor into `profile.gearEssence` (1/3/10/40/200).
+  Lock uses `item.locked`. Auto-salvage is off and only converts a new drop.
+  `LaunchGate.gearSalvage` is off. `BagTools.mount` is the client hook. [#388] (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and

@@ -31,6 +31,7 @@ local RollConfig = require(ReplicatedStorage.Shared.RollConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 local Settings = require(ReplicatedStorage.Shared.Settings)
 local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local DataService = require(script.Parent.DataService)
@@ -170,9 +171,12 @@ local function gearSpare(data: any): boolean
 	return Accept.spareRoom(data, true)
 end
 
-local function gearPlace(data: any, item: any): (any?, string?)
+local function gearPlace(data: any, item: any, place: ((any) -> ())?): (any?, string?)
+	local insert = place or function(row: any)
+		Schema.insertItem(data, row)
+	end
 	if not LaunchGate.on("gearLevels") then
-		Schema.insertItem(data, item)
+		insert(item)
 		return nil, nil
 	end
 	local Accept = require(script.Parent.GearLevels.Accept)
@@ -183,7 +187,7 @@ local function gearPlace(data: any, item: any): (any?, string?)
 		if Schema.countItems(data) >= Schema.inventoryCap(data) then
 			return nil, "Inventory is full."
 		end
-		Schema.insertItem(data, landing.item)
+		insert(landing.item)
 	end
 	return landing, nil
 end
@@ -219,7 +223,15 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		now = os.time(),
 		poolId = pool.id,
 	}, rng)
-	local landing, placeError = gearPlace(data, item)
+	-- [ECHO hook] Stage A merges an exact duplicate first. Auto-salvage (#388)
+	-- only sees a new drop that Stage A did not merge.
+	local arrival = { kept = true, gained = 0 }
+	local landing, placeError = gearPlace(data, item, function(row: any)
+		arrival = GearSalvage.receive(data, row)
+		if arrival.kept ~= false then
+			Schema.insertItem(data, row)
+		end
+	end)
 	if placeError ~= nil then
 		return nil, placeError
 	end
@@ -245,10 +257,20 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		tracker = StarterGoalPay.tracker(data),
 	}
 	attachGear(captured, landing)
+	if arrival.kept == false then
+		captured.autoSalvaged = true
+		captured.essenceGained = arrival.gained
+	end
 	return captured
 end
 
-local function crack(player: Player, poolId: any, currency: string, skip: boolean, ignoreCooldown: boolean?)
+local function crack(
+	player: Player,
+	poolId: any,
+	currency: string,
+	skip: boolean,
+	ignoreCooldown: boolean?
+)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")
