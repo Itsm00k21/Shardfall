@@ -172,8 +172,8 @@ function View.mount(parent: Instance)
 		line.TextWrapped = false
 		local bx = 3
 		for _, badgeText in ipairs(data.badges) do
-			local shortText = if badgeText == RollSummary.SALVAGED then "♻" else badgeText
-			local width = if shortText == "♻" then 20 else math.max(28, #shortText * 7 + 6)
+			local shortText = if badgeText == RollSummary.SALVAGED then "Salvaged" else badgeText
+			local width = math.max(28, (utf8.len(shortText) or #shortText) * 7 + 8)
 			local badge = text(box, "Badge", shortText, 10, INK)
 			badge.BackgroundTransparency = 0
 			badge.BackgroundColor3 = BADGE_COLOR[badgeText] or GOLD

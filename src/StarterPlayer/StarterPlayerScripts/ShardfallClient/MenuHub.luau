@@ -1822,7 +1822,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.batchSkipButton.Font = headerFont()
 	hubState.batchSkipButton.TextSize = 15
 	hubState.batchSkipButton.TextColor3 = rgb("text")
-	hubState.batchSkipButton.Text = RollSummary.SKIP .. " ▸▸"
+	hubState.batchSkipButton.Text = RollSummary.SKIP .. " »"
 	hubState.batchSkipButton.AutoButtonColor = true
 	hubState.batchSkipButton.Visible = false
 	hubState.batchSkipButton.ZIndex = 13
