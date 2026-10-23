@@ -135,14 +135,14 @@ function View.mount(parent: Instance)
 		root.Visible = false
 	end
 
-	local function tile(index: number, data: RollSummary.Tile, cell: number): Frame
+	local function tile(index: number, data: RollSummary.Tile, cell: number, cellH: number): Frame
 		local color = rarity3(data.rarity)
 		local box = Instance.new("Frame")
 		box.Name = "Tile_" .. index
 		box.BackgroundColor3 = tint(data.rarity, 0.22)
 		box.BorderSizePixel = 0
 		box.ZIndex = 41
-		box.Size = UDim2.fromOffset(cell, cell)
+		box.Size = UDim2.fromOffset(cell, cellH)
 		box:SetAttribute("Rarity", data.rarity)
 		box:SetAttribute("Salvaged", data.salvaged)
 		corner(box, 8)
@@ -170,7 +170,7 @@ function View.mount(parent: Instance)
 		-- the Essence so it fits a 100 px card without "...".
 		local lineText = if data.salvaged then string.format("+%d Essence", data.essence) else data.line
 		local line = text(box, "Line", lineText, 11, if data.salvaged then MUTED else color)
-		line.Position = UDim2.fromOffset(4, cell - 17)
+		line.Position = UDim2.fromOffset(4, cellH - 17)
 		line.Size = UDim2.fromOffset(cell - 8, 14)
 		line.TextWrapped = false
 		local bx = 3
@@ -210,10 +210,10 @@ function View.mount(parent: Instance)
 		grid.Position = UDim2.fromOffset(lay.grid.x, lay.grid.y)
 		grid.Size = UDim2.fromOffset(lay.grid.w, lay.grid.h)
 		for index, data in ipairs(tiles) do
-			local box = tile(index, data, lay.cell)
+			local box = tile(index, data, lay.cell, lay.cellH)
 			local col = (index - 1) % lay.cols
 			local row = math.floor((index - 1) / lay.cols)
-			box.Position = UDim2.fromOffset(col * (lay.cell + lay.gap), row * (lay.cell + lay.gap))
+			box.Position = UDim2.fromOffset(col * (lay.cell + lay.gap), row * (lay.cellH + lay.gap))
 			box.Parent = grid
 		end
 		local buttonY = lay.panel.h - lay.pad - 40

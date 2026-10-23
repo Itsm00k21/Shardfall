@@ -107,6 +107,11 @@ describe("RollSummary: layout", function()
 			expect(lay.panel.y + lay.panel.h <= size[2]).toBeTrue()
 			expect(lay.grid.x + lay.grid.w <= lay.panel.w).toBeTrue()
 			expect(lay.cell >= 40).toBeTrue()
+			expect(lay.cellH >= lay.cell).toBeTrue()
+			if lay.cell < 84 then
+				-- Room for art, a 2-line name and the result line.
+				expect(lay.cellH >= 90).toBeTrue()
+			end
 		end)
 	end
 	it("uses two rows of five on a desktop", function()

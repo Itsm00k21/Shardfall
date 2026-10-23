@@ -162,6 +162,7 @@ export type Layout = {
 	cols: number,
 	rows: number,
 	cell: number,
+	cellH: number,
 	gap: number,
 	pad: number,
 	head: number,
@@ -195,8 +196,14 @@ function RollSummary.layout(vx: number, vy: number, phone: boolean?, count: numb
 	if rows * cell > roomH then
 		cell = math.max(40, math.floor(roomH / rows))
 	end
+	-- Narrow tiles (phone portrait) grow taller so the 2-line name and the
+	-- result line never sit on top of each other.
+	local cellH = cell
+	if cell < 84 then
+		cellH = math.max(cell, math.min(cell + 36, math.floor(roomH / rows)))
+	end
 	local gridW = cols * cell + gap * (cols - 1)
-	local gridH = rows * cell + gap * (rows - 1)
+	local gridH = rows * cellH + gap * (rows - 1)
 	local w = math.max(RollSummary.MIN_W, gridW + pad * 2)
 	w = math.min(w, math.max(gridW + pad * 2, maxW))
 	local h = pad + head + gridH + foot + pad
@@ -207,6 +214,7 @@ function RollSummary.layout(vx: number, vy: number, phone: boolean?, count: numb
 		cols = cols,
 		rows = rows,
 		cell = cell,
+		cellH = cellH,
 		gap = gap,
 		pad = pad,
 		head = head,
