@@ -166,7 +166,10 @@ function View.mount(parent: Instance)
 		local name = text(box, "Name", data.name, nameSize, if data.salvaged then MUTED else TEXT)
 		name.Position = UDim2.fromOffset(4, artSize + 8)
 		name.Size = UDim2.fromOffset(cell - 8, nameSize * 2 + 2)
-		local line = text(box, "Line", data.line, 11, if data.salvaged then MUTED else color)
+		-- The Salvaged badge already says how it went; the tile line keeps
+		-- the Essence so it fits a 100 px card without "...".
+		local lineText = if data.salvaged then string.format("+%d Essence", data.essence) else data.line
+		local line = text(box, "Line", lineText, 11, if data.salvaged then MUTED else color)
 		line.Position = UDim2.fromOffset(4, cell - 17)
 		line.Size = UDim2.fromOffset(cell - 8, 14)
 		line.TextWrapped = false

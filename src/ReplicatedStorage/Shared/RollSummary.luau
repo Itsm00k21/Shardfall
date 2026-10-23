@@ -76,7 +76,8 @@ function RollSummary.row(item: any, result: any, isNew: any): Tile
 	local old, new = whole(info.oldLevel), whole(info.newLevel)
 	local starUp = info.merged == true and (old == nil or new == nil or new > old)
 	local essence = whole(info.essenceGained) or whole(info.essence) or 0
-	local fresh = isNew == true and not starUp
+	-- A salvaged drop never reached the bag, so it is not "NEW".
+	local fresh = isNew == true and not starUp and not salvaged
 	local badges = {}
 	if fresh then
 		table.insert(badges, RollSummary.NEW)
