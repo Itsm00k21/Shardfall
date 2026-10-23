@@ -1265,6 +1265,7 @@ inventory = InventoryHud.start(playerGui, {
 			closePanels("inventory")
 		end
 		ui.setCovered(open)
+		OnboardHud.setCovered("inventory", open)
 	end,
 })
 
@@ -1364,6 +1365,8 @@ menuHub = MenuHub.start(playerGui, {
 		if hudShell ~= nil and not open then
 			hudShell.setRail("")
 		end
+		-- [Ghost] Clip 7: the intro card and goals step aside for the hub.
+		OnboardHud.setCovered("hub", open)
 	end,
 	onTab = function(id: string)
 		if hudShell ~= nil then
@@ -1549,7 +1552,7 @@ end
 retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
-end)
+end, applyResult)
 if LaunchGate.on("doors") then
 	DoorHud.start(function(action: string, ...: any)
 		return invoke(action, ...)

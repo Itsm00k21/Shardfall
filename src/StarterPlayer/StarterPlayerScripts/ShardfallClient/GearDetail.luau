@@ -106,31 +106,54 @@ function GearDetail.lockIcon(parent: Instance, locked: boolean, px: number): Fra
 	icon.Size = UDim2.fromOffset(px, px)
 	icon:SetAttribute("Locked", locked)
 	icon.Parent = parent
+	-- [Ghost] Clip 6: the open lock read as a blob (a closed ring floating
+	-- over the body). The shackle is now a thin full arch whose bottom edge
+	-- is faded out, so open shows two short legs lifted clear of the body.
 	local shackle = Instance.new("Frame")
 	shackle.Name = "Shackle"
 	shackle.BackgroundTransparency = 1
-	shackle.Size = UDim2.fromScale(0.5, 0.55)
-	-- Open: the shackle lifts and swings right.
-	shackle.Position = if locked then UDim2.fromScale(0.25, 0.08) else UDim2.fromScale(0.45, -0.04)
+	shackle.Size = UDim2.fromScale(0.46, 0.56)
+	-- Open: the shackle lifts and shifts right.
+	shackle.Position = if locked then UDim2.fromScale(0.27, 0.04) else UDim2.fromScale(0.45, -0.1)
 	shackle.Parent = icon
 	local ring = Instance.new("UIStroke")
 	ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	ring.Thickness = math.max(1.5, px / 9)
+	ring.Thickness = math.max(1.5, px / 10)
 	ring.Color = color
 	ring.Parent = shackle
-	corner(shackle, math.floor(px * 0.25))
+	local fade = Instance.new("UIGradient")
+	fade.Name = "LegFade"
+	fade.Rotation = 90
+	fade.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.78, 0),
+		NumberSequenceKeypoint.new(0.8, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	fade.Parent = ring
+	corner(shackle, math.floor(px * 0.23))
 	local body = Instance.new("Frame")
 	body.Name = "Body"
 	body.BorderSizePixel = 0
 	body.BackgroundColor3 = color
-	body.Size = UDim2.fromScale(0.72, 0.46)
-	body.Position = UDim2.fromScale(0.14, 0.48)
+	body.Size = UDim2.fromScale(0.74, 0.44)
+	body.Position = UDim2.fromScale(0.13, 0.5)
 	body.Parent = icon
-	corner(body, math.max(2, math.floor(px / 8)))
+	corner(body, math.max(2, math.floor(px / 7)))
+	local keyhole = Instance.new("Frame")
+	keyhole.Name = "Keyhole"
+	keyhole.BorderSizePixel = 0
+	keyhole.BackgroundColor3 = Color3.fromRGB(22, 18, 34)
+	keyhole.AnchorPoint = Vector2.new(0.5, 0.5)
+	keyhole.Position = UDim2.fromScale(0.5, 0.48)
+	keyhole.Size = UDim2.fromScale(0.16, 0.32)
+	keyhole.Parent = body
+	corner(keyhole, math.max(1, math.floor(px / 16)))
 	local baseZ = if parent:IsA("GuiObject") then parent.ZIndex else 1
 	icon.ZIndex = baseZ
 	shackle.ZIndex = baseZ
 	body.ZIndex = baseZ + 1
+	keyhole.ZIndex = baseZ + 2
 	return icon
 end
 
@@ -201,6 +224,15 @@ end
 
 function GearDetail.shortText(missing: number): string
 	return string.format("Need %s more gold", grouped(missing))
+end
+
+function GearDetail.haveText(profile: any): string
+	local gold = if type(profile) == "table"
+			and type(profile.gold) == "number"
+			and profile.gold == profile.gold
+		then math.max(0, profile.gold)
+		else 0
+	return string.format("You have %s gold", grouped(gold))
 end
 
 function GearDetail.build(host: Instance, opts: any): any
@@ -339,15 +371,24 @@ function GearDetail.build(host: Instance, opts: any): any
 	local padlock = Instance.new("TextButton")
 	padlock.Name = "Padlock"
 	padlock.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
+	-- [Ghost] Clip 6: no grey disc behind a grey lock. A faint well and a
+	-- thin ring in the lock colour keep the touch target readable.
 	padlock.BackgroundColor3 = colors.dim
+	padlock.BackgroundTransparency = 0.65
 	padlock.BorderSizePixel = 0
-	padlock.AutoButtonColor = true
+	padlock.AutoButtonColor = false
 	padlock.Text = ""
 	padlock.LayoutOrder = 3
 	padlock.Parent = hero
 	padlock:SetAttribute("Locked", locked)
 	corner(padlock, UiTheme.TOUCH // 2)
-	GearDetail.lockIcon(padlock, locked, 22)
+	local ring = Instance.new("UIStroke")
+	ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	ring.Thickness = 1
+	ring.Color = if locked then GearDetail.LOCK_GOLD else GearDetail.LOCK_GREY
+	ring.Transparency = if locked then 0.2 else 0.55
+	ring.Parent = padlock
+	GearDetail.lockIcon(padlock, locked, 24)
 	bind(padlock, function()
 		if type(opts.onLock) == "function" then
 			opts.onLock(not locked)
@@ -446,6 +487,11 @@ function GearDetail.build(host: Instance, opts: any): any
 	end)
 	if short ~= nil then
 		line(host, "UpgradeShort", GearDetail.shortText(short), order, colors.muted)
+		order += 1
+	elseif not maxed then
+		-- [Ghost] Clip 6: UPGRADE 150 was bright at Gold 250 (correct), but
+		-- the Bag only shows Essence 0, so it read as free. Name the gold.
+		line(host, "UpgradeGold", GearDetail.haveText(profile), order, colors.muted)
 		order += 1
 	end
 

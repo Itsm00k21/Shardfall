@@ -2497,6 +2497,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local backup = nil
 		if type(profile) == "table" and type(profile.inventory) == "table" then
 			local item = profile.inventory[uid]
+			-- [Ghost] Clip 6: pets live in profile.pets, so the Pets page
+			-- never flipped to EQUIPPED until a later profile push.
+			if item == nil and type(profile.pets) == "table" then
+				item = profile.pets[uid]
+			end
 			if type(profile.equipped) == "table" then
 				backup = {}
 				for key, value in pairs(profile.equipped) do
@@ -2538,6 +2543,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				-- Repaint so the pane names the new worn item at once.
 				if hubState.shownId == "bag" or hubState.shownId == "sets" then
 					hubFn.paintBag()
+				elseif hubState.shownId == "pets" then
+					hubFn.paintPets()
 				end
 				return
 			end
@@ -2547,6 +2554,74 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.showMilestone("Could not equip that.")
 			if hubState.shownId == "bag" then
 				hubFn.paintBag()
+			elseif hubState.shownId == "pets" then
+				hubFn.paintPets()
+			end
+		end)
+	end
+
+	-- [Ghost] Clip 6: the second tap on a worn pet's EQUIPPED button.
+	-- Flips at once, then asks the server; puts the pet back on failure.
+	function hubFn.unequipPet(uid: string)
+		local profile = hubState.profile
+		if
+			type(profile) ~= "table"
+			or type(profile.equipped) ~= "table"
+			or profile.equipped.pet ~= uid
+		then
+			return
+		end
+		profile.equipped.pet = nil
+		if hubState.shownId == "pets" then
+			hubFn.paintPets()
+		end
+		task.spawn(function()
+			local ok, result = pcall(hooks.invoke, "UnequipItem", uid)
+			if ok and type(result) == "table" and result.ok == true then
+				if type(result.profile) == "table" then
+					hubState.profile = result.profile
+				end
+				return
+			end
+			local now = hubState.profile
+			if
+				type(now) == "table"
+				and type(now.equipped) == "table"
+				and now.equipped.pet == nil
+			then
+				now.equipped.pet = uid
+			end
+			hubFn.showMilestone("Could not unequip that.")
+			if hubState.shownId == "pets" then
+				hubFn.paintPets()
+			end
+		end)
+	end
+
+	-- [Ghost] Clip 6: the padlock flips at once; the server push confirms.
+	function hubFn.togglePetLock(uid: string)
+		local profile = hubState.profile
+		local pet = if type(profile) == "table" and type(profile.pets) == "table"
+			then profile.pets[uid]
+			else nil
+		if type(pet) ~= "table" then
+			return
+		end
+		local want = pet.locked ~= true
+		pet.locked = want
+		if hubState.shownId == "pets" then
+			hubFn.paintPets()
+		end
+		task.spawn(function()
+			local ok, result = pcall(hooks.invoke, "SetItemLock", uid, want)
+			if ok and type(result) == "table" and result.ok == true then
+				return
+			end
+			if pet.locked == want then
+				pet.locked = not want
+			end
+			if hubState.shownId == "pets" then
+				hubFn.paintPets()
 			end
 		end)
 	end
@@ -3476,8 +3551,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				headerFont()
 			).TextXAlignment =
 				Enum.TextXAlignment.Center
+			-- [Ghost] Clip 6: Hero Power now includes worn Item Power (4-5
+			-- digits), so the number shrinks to fit its 120 px column.
+			local powerText = tostring(power)
+			local powerSize = if #powerText <= 3 then 48 elseif #powerText == 4 then 40 else 32
 			local value =
-				label(header, tostring(power), px, 46, powerW, 56, 48, rgb("gold"), headerFont())
+				label(header, powerText, px, 46, powerW, 56, powerSize, rgb("gold"), headerFont())
 			value.Name = "Power"
 			value.TextXAlignment = Enum.TextXAlignment.Center
 		end
@@ -4253,6 +4332,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					table.insert(cards, pet)
 				end
 			end
+			-- [Ghost] A stable order, so a repaint keeps the picked pet put.
+			table.sort(cards, function(a, b)
+				if a.name ~= b.name then
+					return a.name < b.name
+				end
+				return tostring(a.uid) < tostring(b.uid)
+			end)
 		end
 		for _, companion in ipairs(following) do
 			table.insert(cards, {
@@ -4302,7 +4388,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			cardRarity.Name = "Rarity"
 			cardRarity.BackgroundTransparency = 1
 			cardRarity.Position = UDim2.fromOffset(56, 30)
-			cardRarity.Size = UDim2.new(1, -62, 0, 18)
+			cardRarity.Size = UDim2.new(1, -100, 0, 18)
 			cardRarity.Font = bodyFont()
 			cardRarity.TextSize = UiTheme.MIN_TEXT
 			cardRarity.TextXAlignment = Enum.TextXAlignment.Left
@@ -4312,16 +4398,52 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local cardName = Instance.new("TextLabel")
 			cardName.BackgroundTransparency = 1
 			cardName.Position = UDim2.fromOffset(56, 6)
-			cardName.Size = UDim2.new(1, -62, 0, 24)
+			cardName.Size = UDim2.new(1, -100, 0, 24)
 			cardName.Font = headerFont()
 			cardName.TextSize = UiTheme.MIN_TEXT
 			cardName.TextXAlignment = Enum.TextXAlignment.Left
 			cardName.TextColor3 = rgb("text")
 			cardName.Text = tostring(pet.name or "Pet")
 			cardName.Parent = card
+			-- [Ghost] Clip 6: the same star row and padlock as Bag cards.
+			if type(pet.uid) == "string" then
+				local petUid = pet.uid
+				card:SetAttribute("Uid", petUid)
+				local stars = Instance.new("TextLabel")
+				stars.Name = "Stars"
+				stars.BackgroundTransparency = 1
+				stars.AnchorPoint = Vector2.new(1, 0)
+				stars.Position = UDim2.new(1, -44, 0, 30)
+				stars.Size = UDim2.fromOffset(110, 18)
+				stars.Font = bodyFont()
+				stars.TextSize = UiTheme.MIN_TEXT
+				stars.TextXAlignment = Enum.TextXAlignment.Right
+				stars.TextColor3 = rgb("gold")
+				stars.Text = GearHooks.levelLine(pet)
+				stars.ZIndex = 3
+				stars.Parent = card
+				local lockedPet = pet.locked == true
+				local petLock = Instance.new("TextButton")
+				petLock.Name = "Lock"
+				petLock.AnchorPoint = Vector2.new(1, 0.5)
+				petLock.Position = UDim2.new(1, -8, 0.5, 0)
+				petLock.Size = UDim2.fromOffset(30, 30)
+				petLock.BackgroundTransparency = 1
+				petLock.Text = ""
+				petLock.AutoButtonColor = false
+				petLock.ZIndex = 7
+				petLock:SetAttribute("Locked", lockedPet)
+				petLock.Parent = card
+				GearDetail.lockIcon(petLock, lockedPet, 20)
+				hubFn.bindActivated(petLock, function()
+					hubFn.togglePetLock(petUid)
+				end)
+			end
 			local pick = index
+			local pickUid = pet.uid
 			hubFn.bindActivated(card, function()
 				hubState.petPick = pick
+				hubState.petPickUid = pickUid
 				hubFn.paintPets()
 				hubFn.show("pets")
 			end)
@@ -4329,6 +4451,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local picked = cards[1]
 		if type(hubState.petPick) == "number" and cards[hubState.petPick] ~= nil then
 			picked = cards[hubState.petPick]
+		end
+		if type(hubState.petPickUid) == "string" then
+			for _, card in ipairs(cards) do
+				if card.uid == hubState.petPickUid then
+					picked = card
+					break
+				end
+			end
 		end
 		local petDetail = Instance.new("Frame")
 		petDetail.Name = "PetDetail"
@@ -4369,9 +4499,39 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if type(picked) == "table" and type(picked.uid) == "string" then
 			local petUid = picked.uid
-			hubFn.row(petDetail, HubStyle.EQUIP, 20, function()
-				hubFn.equipUid(petUid)
-			end)
+			-- [Ghost] Clip 6: one EQUIPPED state once worn; a second tap
+			-- within GearDetail.ARM_SECONDS unequips (same as the Bag).
+			local worn = hubFn.itemWorn(petUid)
+			local equipRow = hubFn.row(petDetail, HubStyle.EQUIP, 20, nil)
+			equipRow.Name = "PetEquip"
+			equipRow.TextXAlignment = Enum.TextXAlignment.Center
+			equipRow.Font = headerFont()
+			equipRow:SetAttribute("Worn", worn)
+			if worn then
+				local wornFill = Color3.fromRGB(46, 70, 60)
+				equipRow.Text = "EQUIPPED"
+				equipRow.BackgroundColor3 = wornFill
+				hubFn.setRest(equipRow, wornFill)
+				hubFn.bindActivated(
+					equipRow,
+					GearDetail.wornTap(equipRow, function()
+						hubFn.unequipPet(petUid)
+					end)
+				)
+			else
+				equipRow.Text = HubStyle.EQUIP
+				hubFn.bindActivated(equipRow, function()
+					if equipRow:GetAttribute("Equipping") == true then
+						return
+					end
+					equipRow:SetAttribute("Equipping", true)
+					equipRow.Text = "EQUIPPED"
+					hubFn.equipUid(petUid)
+					if hubState.shownId == "pets" then
+						hubFn.paintPets()
+					end
+				end)
+			end
 		end
 		local crack = hubFn.row(hubState.pets, "Crack a Pet Shard", 20, function()
 			hubState.rollKind = "pets"

@@ -441,12 +441,20 @@ end)
 
 describe("GearBar: x10 with auto-salvage", function()
 	it("marks rows that never reached the Bag and says so", function()
-		local profile = { inventory = { keep = { uid = "keep" } } }
+		local profile = {
+			inventory = { keep = { uid = "keep" } },
+			autoSalvage = true,
+			autoSalvageRarity = "Uncommon",
+		}
 		local items = {
-			{ item = { uid = "c1", rarity = "Common" }, rarity = "Common" },
-			{ item = { uid = "u1", rarity = "Uncommon" }, rarity = "Uncommon" },
-			{ item = { uid = "keep", rarity = "Rare" }, rarity = "Rare" },
-			{ item = { uid = "m1", rarity = "Rare" }, rarity = "Rare", merged = true },
+			{ item = { uid = "c1", kind = "Weapon", rarity = "Common" }, rarity = "Common" },
+			{ item = { uid = "u1", kind = "Armor", rarity = "Uncommon" }, rarity = "Uncommon" },
+			{ item = { uid = "keep", kind = "Weapon", rarity = "Rare" }, rarity = "Rare" },
+			{
+				item = { uid = "m1", kind = "Weapon", rarity = "Rare" },
+				rarity = "Rare",
+				merged = true,
+			},
 		}
 		local gone, gain = GearHooks.markBatch(items, profile)
 		expect(gone).toEqual(2)
@@ -456,5 +464,58 @@ describe("GearBar: x10 with auto-salvage", function()
 		expect(items[4].autoSalvaged).toBeNil()
 		expect(GearHooks.batchLine(4, gone, gain)).toEqual("x4 done: 2 auto-salvaged (+4 Essence), 2 kept.")
 		expect(GearHooks.batchLine(10, 0, 0)).toBeNil()
+	end)
+
+	it("never marks pets, Legendaries, or anything while auto-salvage is off (clip 6)", function()
+		-- The clip: a pity Legendary Antler Hart and a first Moss Hare stayed
+		-- in profile.pets but showed Salvaged +200 / +1 Essence.
+		local pets = {
+			hart = { uid = "hart", kind = "Pet", rarity = "Legendary" },
+			hare = { uid = "hare", kind = "Pet", rarity = "Common" },
+		}
+		local function rows()
+			return {
+				{ item = pets.hart, kind = "Pet", rarity = "Legendary" },
+				{ item = pets.hare, kind = "Pet", rarity = "Common" },
+				{ item = { uid = "gone", kind = "Pet", rarity = "Common" }, rarity = "Common" },
+				{
+					item = { uid = "leg", kind = "Weapon", rarity = "Legendary" },
+					rarity = "Legendary",
+				},
+				{ item = { uid = "c1", kind = "Weapon", rarity = "Common" }, rarity = "Common" },
+			}
+		end
+		local off = rows()
+		local gone, gain =
+			GearHooks.markBatch(off, { inventory = {}, pets = pets, autoSalvage = false })
+		expect(gone).toEqual(0)
+		expect(gain).toEqual(0)
+		for _, row in ipairs(off) do
+			expect(row.autoSalvaged).toBeNil()
+		end
+		local on = rows()
+		gone, gain = GearHooks.markBatch(
+			on,
+			{ inventory = {}, pets = pets, autoSalvage = true, autoSalvageRarity = "Uncommon" }
+		)
+		expect(gone).toEqual(1)
+		expect(gain).toEqual(1)
+		expect(on[1].autoSalvaged).toBeNil()
+		expect(on[2].autoSalvaged).toBeNil()
+		expect(on[3].autoSalvaged).toBeNil()
+		expect(on[4].autoSalvaged).toBeNil()
+		expect(on[5].autoSalvaged).toEqual(true)
+		-- A stray server flag on a pet row is dropped too.
+		local stray = {
+			{
+				item = pets.hart,
+				kind = "Pet",
+				rarity = "Legendary",
+				autoSalvaged = true,
+				essenceGained = 200,
+			},
+		}
+		expect((GearHooks.markBatch(stray, { inventory = {}, pets = pets }))).toEqual(0)
+		expect(stray[1].autoSalvaged).toBeNil()
 	end)
 end)

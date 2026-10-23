@@ -217,6 +217,27 @@ describe("InventoryHud one inventory", function()
 		end)
 	end)
 
+	it("dims UPGRADE when a profile push drops gold below the cost (clip 6)", function()
+		withGear(function()
+			local rich = bag()
+			rich.gold = 250
+			local controller, screen = mount(rich)
+			-- The worn Rare is +0: the next upgrade costs 150.
+			local upgrade = GuiFake.findNamed(screen, "Upgrade")
+			expect(upgrade.Text).toEqual("UPGRADE  150")
+			expect(upgrade:GetAttribute("Short")).toEqual(false)
+			expect(GuiFake.findNamed(screen, "UpgradeGold").Text).toEqual("You have 250 gold")
+			local broke = table.clone(rich)
+			broke.gold = 0
+			controller.setProfile(broke)
+			upgrade = GuiFake.findNamed(screen, "Upgrade")
+			expect(upgrade:GetAttribute("Short")).toEqual(true)
+			expect(upgrade.BackgroundColor3.R < 120).toBeTrue()
+			expect(GuiFake.findNamed(screen, "UpgradeShort").Text).toEqual("Need 150 more gold")
+			expect(GuiFake.findNamed(screen, "UpgradeGold")).toBeNil()
+		end)
+	end)
+
 	it("shows a gold padlock on a locked pet card (clip 5)", function()
 		withGear(function()
 			local data = bag()

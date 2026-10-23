@@ -234,19 +234,47 @@ end
 -- An x10 row whose item is not in the returned Bag and did not merge was
 -- auto-salvaged on the server. Older servers leave that flag off the batch
 -- rows, so the client marks it. Returns how many and the Essence.
+-- Clip 6: pets live in profile.pets, not profile.inventory, so every pet
+-- row read as salvaged. Only weapons and armor can be salvaged, and only
+-- while auto-salvage is on at or under the saved cap, so nothing else is
+-- ever inferred, and a pet row never counts.
+local SALVAGEABLE = { Weapon = true, Armor = true }
+
+local function stillOwned(profile: any, uid: string): boolean
+	if profile.inventory[uid] ~= nil then
+		return true
+	end
+	return type(profile.pets) == "table" and profile.pets[uid] ~= nil
+end
+
 function GearHooks.markBatch(items: any, profile: any): (number, number)
 	if type(items) ~= "table" or type(profile) ~= "table" or type(profile.inventory) ~= "table" then
 		return 0, 0
 	end
+	local cap = GearHooks.autoRarity(profile)
 	local gone, gain = 0, 0
 	for _, row in ipairs(items) do
 		if type(row) == "table" and row.merged ~= true then
 			local item = row.item
 			local uid = if type(item) == "table" then item.uid else nil
-			if row.autoSalvaged ~= true and type(uid) == "string" and profile.inventory[uid] == nil then
+			local kind = row.kind or (if type(item) == "table" then item.kind else nil)
+			local rarity = row.rarity or (if type(item) == "table" then item.rarity else nil)
+			if kind == "Pet" then
+				row.autoSalvaged = nil
+				row.essenceGained = nil
+			end
+			if
+				row.autoSalvaged ~= true
+				and cap ~= nil
+				and SALVAGEABLE[kind] == true
+				and GearHooks.capRank(rarity) > 0
+				and GearHooks.capRank(rarity) <= GearHooks.capRank(cap)
+				and type(uid) == "string"
+				and not stillOwned(profile, uid)
+			then
 				row.autoSalvaged = true
 				if row.essenceGained == nil then
-					row.essenceGained = Essence.amount(row.rarity or item.rarity) or 0
+					row.essenceGained = Essence.amount(rarity) or 0
 				end
 			end
 			if row.autoSalvaged == true then

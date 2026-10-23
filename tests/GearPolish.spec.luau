@@ -468,3 +468,178 @@ describe("Gear polish: auto pill", function()
 		end)
 	end)
 end)
+
+describe("Gear polish: clip 6 Pets page", function()
+	local function pets()
+		return {
+			fox = { uid = "fox", name = "Moss Fox", kind = "Pet", rarity = "Common", stars = 2 },
+			owl = { uid = "owl", name = "Dusk Owl", kind = "Pet", rarity = "Rare", locked = true },
+		}
+	end
+
+	local function petCard(screen: any, uid: string): any
+		for _, node in ipairs(screen:GetDescendants()) do
+			if node.Name == "PetCard" and node:GetAttribute("Uid") == uid then
+				return node
+			end
+		end
+		return nil
+	end
+
+	local function invoked(calls: any, name: string): { any }?
+		for _, call in ipairs(calls.invokes) do
+			if call[1] == name then
+				return call
+			end
+		end
+		return nil
+	end
+
+	it("gives pet cards the star row and the padlock, and flips the lock", function()
+		withFlags(ALL, function()
+			local _, hub, screen, calls = boot({ pets = pets() })
+			hub.open("pets")
+			local fox = petCard(screen, "fox")
+			expect(fox ~= nil).toBeTrue()
+			expect(GuiFake.findNamed(fox, "Stars").Text).toEqual("★★☆☆☆")
+			expect(GuiFake.findNamed(fox, "Lock"):GetAttribute("Locked")).toEqual(false)
+			local owl = petCard(screen, "owl")
+			expect(GuiFake.findNamed(owl, "Stars").Text).toEqual("☆☆☆☆☆")
+			expect(GuiFake.findNamed(owl, "Lock"):GetAttribute("Locked")).toEqual(true)
+			GuiFake.activate(GuiFake.findNamed(fox, "Lock"))
+			local call = invoked(calls, "SetItemLock")
+			expect(call ~= nil and call[2] == "fox" and call[3] == true).toBeTrue()
+			expect(GuiFake.findNamed(petCard(screen, "fox"), "Lock"):GetAttribute("Locked")).toEqual(
+				true
+			)
+		end)
+	end)
+
+	it("shows one EQUIPPED state once a pet is worn, and a second tap unequips", function()
+		withFlags(ALL, function()
+			local _, hub, screen, calls = boot({ pets = pets() })
+			hub.open("pets")
+			GuiFake.activate(petCard(screen, "fox"))
+			local equip = GuiFake.findNamed(screen, "PetEquip")
+			expect(equip.Text).toEqual("EQUIP")
+			GuiFake.activate(equip)
+			expect(invoked(calls, "EquipItem") ~= nil).toBeTrue()
+			equip = GuiFake.findNamed(screen, "PetEquip")
+			expect(equip.Text).toEqual("EQUIPPED")
+			expect(equip:GetAttribute("Worn")).toEqual(true)
+			GuiFake.activate(equip)
+			expect(equip.Text).toEqual("Tap again to unequip")
+			expect(invoked(calls, "UnequipItem")).toBeNil()
+			GuiFake.activate(equip)
+			local call = invoked(calls, "UnequipItem")
+			expect(call ~= nil and call[2] == "fox").toBeTrue()
+			expect(GuiFake.findNamed(screen, "PetEquip").Text).toEqual("EQUIP")
+		end)
+	end)
+end)
+
+describe("Gear polish: clip 7 intro card", function()
+	local function start(answer: (string) -> any)
+		local world = GuiFake.world()
+		world.playerGui.Parent = world.player
+		local calls = {}
+		local applied = {}
+		local OnboardHud = world.load("OnboardHud")
+		OnboardHud.start(function(name: string, action: string)
+			table.insert(calls, { name, action })
+			return answer(action)
+		end, function(result: any)
+			table.insert(applied, result)
+		end)
+		local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
+		return OnboardHud, onboard, calls, applied
+	end
+
+	local function textHas(root: any, needle: string): boolean
+		for _, node in ipairs(root:GetDescendants()) do
+			if node:IsA("TextLabel") and string.find(node.Text, needle, 1, true) ~= nil then
+				return true
+			end
+		end
+		return false
+	end
+
+	it("hints instead of dead-clicking Continue at the class step", function()
+		local OnboardHud, onboard, calls = start(function()
+			return { ok = false, error = "Try it in the world first." }
+		end)
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		local continue = GuiFake.findNamed(onboard, "Continue")
+		expect(continue.Parent.Visible).toEqual(true)
+		GuiFake.activate(continue)
+		expect(#calls).toEqual(0)
+		expect(textHas(onboard, "press Choose on a class")).toBeTrue()
+		-- The same push keeps the hint up; a new step replaces it.
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		expect(textHas(onboard, "press Choose on a class")).toBeTrue()
+		expect(OnboardHud.continueHint("open")).toBeNil()
+		expect(OnboardHud.continueHint("haven")).toBeNil()
+	end)
+
+	it("closes on Skip even when the server does not answer ok", function()
+		local OnboardHud, onboard, calls = start(function()
+			return { ok = false, error = "Could not save." }
+		end)
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		local skip = GuiFake.findNamed(onboard, "Skip")
+		GuiFake.activate(skip)
+		expect(skip.Parent.Visible).toEqual(false)
+		expect(GuiFake.findNamed(onboard, "OnboardGoals").Visible).toEqual(false)
+		expect(calls[1][2]).toEqual("skip")
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		expect(skip.Parent.Visible).toEqual(false)
+	end)
+
+	it("applies the skip answer so the starter kit lands at once", function()
+		local OnboardHud, onboard, _, applied = start(function()
+			return { ok = true, profile = { onboardDone = true } }
+		end)
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "open" })
+		GuiFake.activate(GuiFake.findNamed(onboard, "Skip"))
+		expect(#applied).toEqual(1)
+	end)
+
+	it("backs the goals with a panel and hides card and goals under an open menu", function()
+		local OnboardHud, onboard = start(function()
+			return { ok = true }
+		end)
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		local panel = GuiFake.findNamed(onboard, "OnboardGoals")
+		local card = GuiFake.findNamed(onboard, "Continue").Parent
+		expect(panel.Visible).toEqual(true)
+		expect(panel.BackgroundTransparency < 0.5).toBeTrue()
+		expect(
+			string.find(GuiFake.findNamed(panel, "GoalText").Text, "Choose a class", 1, true) ~= nil
+		).toBeTrue()
+		OnboardHud.setCovered("hub", true)
+		expect(card.Visible).toEqual(false)
+		expect(panel.Visible).toEqual(false)
+		OnboardHud.setCovered("inventory", true)
+		OnboardHud.setCovered("hub", false)
+		expect(card.Visible).toEqual(false)
+		OnboardHud.setCovered("inventory", false)
+		expect(card.Visible).toEqual(true)
+		expect(panel.Visible).toEqual(true)
+	end)
+
+	it("puts the goals beside the card on a wide screen, clear of the character", function()
+		local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
+		local world = GuiFake.world()
+		local OnboardHud = world.load("OnboardHud")
+		local wide = HudLayout.onboard(1482, 669)
+		local x, y, w, h = OnboardHud.goalRect(wide, 1482, 5)
+		expect(x >= wide.card.x + wide.card.w).toBeTrue()
+		expect(y).toEqual(wide.card.y)
+		expect(x + w <= 1482 - 16).toBeTrue()
+		expect(h >= 5 * 17).toBeTrue()
+		local phone = HudLayout.onboard(667, 375)
+		local px, py = OnboardHud.goalRect(phone, 667, 5)
+		expect(px).toEqual(phone.tracker.x)
+		expect(py).toEqual(phone.tracker.y)
+	end)
+end)
