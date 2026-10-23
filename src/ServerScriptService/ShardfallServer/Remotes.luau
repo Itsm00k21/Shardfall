@@ -148,6 +148,8 @@ local PARKED_ACTION: { [string]: string } = {
 	BuyPrism = "paid",
 	RollPaid = "paid",
 	BuyInventoryExpansion = "paid",
+	-- [ECHO hook] The whole remote stays closed while waveArena is off.
+	WaveArena = "waveArena",
 }
 
 local function guard(player: Player, action: string, callback: () -> any)
@@ -856,6 +858,25 @@ function Remotes.bind()
 	Players.PlayerRemoving:Connect(function(player)
 		RateLimiter.forget(player.UserId)
 	end)
+
+	-- [ECHO hook] Enter, step, and leave. Skip and boss stay owner-only.
+	-- Nothing here writes loot into the profile.
+	functionRemote("WaveArena").OnServerInvoke = function(player, action, payload)
+		return guard(player, "WaveArena", function()
+			if type(action) ~= "string" then
+				return { ok = false, error = "Unknown arena action." }
+			end
+			if not DevAccess.player(player) then
+				return { ok = false, error = DevAccess.DENIED }
+			end
+			local DevTools = require(ReplicatedStorage.Shared.DevTools)
+			local off = DevTools.blocked("WaveArena", action)
+			if off ~= nil then
+				return { ok = false, error = off }
+			end
+			return require(script.Parent.WaveArenaHost).handle(player, action, payload)
+		end)
+	end
 end
 
 return Remotes

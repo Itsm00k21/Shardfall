@@ -191,6 +191,9 @@
         },
         "HavenPrompt": {
           "$className": "RemoteEvent"
+        },
+        "WaveArena": {
+          "$className": "RemoteFunction"
         }
       }
     },
@@ -208,6 +211,15 @@
       "$ignoreUnknownInstances": false,
       "ShardfallServer": {
         "$path": "src/ServerScriptService/ShardfallServer"
+      },
+      "WaveArenaSrc": {
+        "$className": "Folder",
+        "server": {
+          "$path": "src/server"
+        },
+        "shared": {
+          "$path": "src/shared"
+        }
       }
     },
     "StarterPlayer": {

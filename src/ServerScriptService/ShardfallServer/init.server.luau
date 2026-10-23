@@ -172,6 +172,13 @@ end)
 begin("MarketService", function()
 	MarketService.start()
 end)
+begin("WaveArena", function()
+	-- [ECHO hook] present builds nothing unless both switches are on.
+	if not LaunchGate.on("waveArena") then
+		return
+	end
+	require(script.WaveArenaHost).present()
+end)
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()
 		local ok, err = pcall(function()

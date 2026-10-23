@@ -152,7 +152,10 @@ describe("Wave arena guards", function()
 			expect(string.find(source, "Robux", 1, true)).toBeNil()
 		end
 		local boot = fs.readFile("src/ServerScriptService/ShardfallServer/init.server.luau")
-		expect(string.find(boot, "WaveArena", 1, true)).toBeNil()
+		local gate = string.find(boot, 'LaunchGate.on("waveArena")', 1, true)
+		local present = string.find(boot, "WaveArenaHost).present()", 1, true)
+		expect(gate ~= nil and present ~= nil and (gate :: number) < (present :: number)).toBeTrue()
+		expect(string.find(boot, "require(script.WaveArena)", 1, true)).toBeNil()
 	end)
 end)
 

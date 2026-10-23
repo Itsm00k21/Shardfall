@@ -201,5 +201,6 @@ require("./DevAccess.spec")
 require("./DevTools.spec")
 require("./WaveArena.spec")
 require("./WaveArenaFight.spec")
+require("./EchoArenaHook.spec")
 
 process.exit(framework.run())

@@ -9,7 +9,13 @@
 	2. WaveArenaConfig.enabled == true. Shipped as false.
 ]]
 
-local LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
+-- [ECHO hook] Studio reads the live LaunchGate. Lune keeps the file path.
+local LaunchGate
+if game ~= nil then
+	LaunchGate = require(game:GetService("ReplicatedStorage").Shared.LaunchGate)
+else
+	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
+end
 local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
 
 local Gate = {}

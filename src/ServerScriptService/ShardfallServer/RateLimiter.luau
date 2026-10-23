@@ -100,6 +100,8 @@ local RULES: { [string]: Rule } = {
 	SetShake = { capacity = 4, perSecond = 1 },
 	-- Refreshed while the player is holding a move key.
 	Steer = { capacity = 8, perSecond = 4 },
+	-- [ECHO hook] Client step plus a state poll. Closed while waveArena is off.
+	WaveArena = { capacity = 30, perSecond = 24 },
 }
 
 local buckets: { [string]: Bucket } = {}
