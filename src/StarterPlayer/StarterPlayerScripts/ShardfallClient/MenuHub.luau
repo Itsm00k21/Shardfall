@@ -49,6 +49,7 @@ local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local HubStyle = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HubStyle"))
 local BagCompare = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagCompare"))
+local GearHooks = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GearHooks"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
@@ -77,6 +78,8 @@ local PadFocus = require(script.Parent:WaitForChild("PadFocus"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
+local BagTools = require(script.Parent.BagTools)
+local ShardCoreMount = require(script.Parent.ShardCore.Mount)
 
 local MenuHub = {}
 
@@ -1490,6 +1493,138 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.flashCover.ZIndex = 12
 	hubState.flashCover.Parent = hubState.rollPage
 
+	-- [Ghost] Echo's gear stages (#387/#388/#389). Every piece below sits
+	-- behind its LaunchGate flag; with the flags off nothing here shows.
+	hubState.salvageNudge = nil
+	hubState.salvageNowBusy = false
+	hubState.salvageNowButton = Instance.new("TextButton")
+	hubState.salvageNowButton.Name = "SalvageNow"
+	hubState.salvageNowButton.AnchorPoint = Vector2.new(0.5, 1)
+	hubState.salvageNowButton.Position = UDim2.new(0.5, 0, 1, -96)
+	hubState.salvageNowButton.Size = UDim2.new(1, -24, 0, UiTheme.TOUCH)
+	hubState.salvageNowButton.BackgroundColor3 = rgb("gold")
+	hubState.salvageNowButton.Font = headerFont()
+	hubState.salvageNowButton.TextSize = UiTheme.MIN_TEXT
+	hubState.salvageNowButton.TextColor3 = rgb("ink")
+	hubState.salvageNowButton.Text = GearHooks.SALVAGE_NOW
+	hubState.salvageNowButton.AutoButtonColor = false
+	hubState.salvageNowButton.Visible = false
+	hubState.salvageNowButton.ZIndex = 9
+	hubState.salvageNowButton.Parent = hubState.rollPage
+	local salvageNowCorner = Instance.new("UICorner")
+	salvageNowCorner.CornerRadius = UDim.new(0, 8)
+	salvageNowCorner.Parent = hubState.salvageNowButton
+
+	-- Batch rows carry the same gear fields as a single roll.
+	function hubFn.gearFields(target: any, source: any)
+		if type(target) ~= "table" or type(source) ~= "table" then
+			return
+		end
+		for _, key in ipairs({
+			"merged",
+			"oldLevel",
+			"newLevel",
+			"essence",
+			"levelText",
+			"autoSalvaged",
+			"essenceGained",
+		}) do
+			if source[key] ~= nil then
+				target[key] = source[key]
+			end
+		end
+	end
+
+	-- A gear remote answered with a fresh snapshot. Take it and keep the
+	-- Bag tools list in step. Never edits the profile itself.
+	function hubFn.takeGearProfile(result: any)
+		if type(result) ~= "table" or type(result.profile) ~= "table" then
+			return
+		end
+		hubState.profile = result.profile
+		if hubState.bagTools ~= nil then
+			hubState.bagTools:refresh(result.profile)
+		end
+	end
+
+	function hubFn.paintSalvageNudge()
+		local button = hubState.salvageNowButton
+		local label = if LaunchGate.on("gearSalvage")
+			then GearHooks.nudgeLabel(hubState.salvageNudge)
+			else nil
+		if label == nil then
+			button.Visible = false
+			return
+		end
+		button.Text = label
+		if hubState.revealCard ~= nil then
+			button.Position = hubState.revealCard.Position
+		end
+		button.Visible = true
+	end
+
+	-- Read-only: nudge only plans. Nothing leaves the Bag until the
+	-- player presses Salvage now.
+	function hubFn.askNudge(): any
+		local ok, answer = pcall(hooks.invoke, BagTools.REMOTE, "nudge", {})
+		if ok and type(answer) == "table" and answer.ok == true and type(answer.token) == "string" then
+			return {
+				token = answer.token,
+				count = answer.count,
+				gain = answer.gain,
+				at = os.clock(),
+			}
+		end
+		return nil
+	end
+
+	function hubFn.noteBagFull(full: boolean)
+		if not full or not LaunchGate.on("gearSalvage") then
+			hubState.salvageNudge = nil
+			hubFn.paintSalvageNudge()
+			return
+		end
+		hubState.salvageNudge = hubFn.askNudge()
+		hubFn.paintSalvageNudge()
+	end
+
+	function hubFn.salvageNow()
+		local nudge = hubState.salvageNudge
+		if nudge == nil or hubState.salvageNowBusy or not LaunchGate.on("gearSalvage") then
+			return
+		end
+		hubState.salvageNowBusy = true
+		-- Tokens last 20 s. A stale one is re-planned; if the plan changed,
+		-- show the new count and wait for another press.
+		if os.clock() - nudge.at > 15 then
+			local fresh = hubFn.askNudge()
+			if fresh == nil or fresh.count ~= nudge.count then
+				hubState.salvageNudge = fresh
+				hubState.salvageNowBusy = false
+				hubFn.paintSalvageNudge()
+				return
+			end
+			nudge = fresh
+		end
+		local ok, answer = pcall(hooks.invoke, BagTools.REMOTE, "salvageNow", { token = nudge.token })
+		hubState.salvageNowBusy = false
+		local message = "Could not salvage that."
+		if ok and type(answer) == "table" then
+			hubFn.takeGearProfile(answer)
+			if answer.ok == true then
+				message = if type(answer.message) == "string" then answer.message else "Salvaged."
+			elseif type(answer.error) == "string" then
+				message = answer.error
+			end
+		end
+		hubState.salvageNudge = nil
+		hubFn.paintSalvageNudge()
+		if hooks.onToast ~= nil then
+			hooks.onToast(message)
+		end
+		hubFn.paintRoll()
+	end
+
 	-- Same card clear a miss uses. Leaving the tab and every other
 	-- beginRoll hide go through here so the previous name cannot stay.
 	function hubFn.blankReveal()
@@ -2521,6 +2656,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local powerLabel =
 			hubFn.line(hubState.detailList, detail.power.text, 80, toneColor(detail.power.tone))
 		powerLabel.Name = "Stat_power"
+		if detail.boost ~= nil then
+			local boost = hubFn.line(hubState.detailList, detail.boost.text, 81, rgb("ok"))
+			boost.Name = "Stat_boost"
+		end
 		if type(hubState.upgradeNote) == "table" and hubState.upgradeNote.uid == item.uid then
 			local note = hubFn.line(
 				hubState.detailList,
@@ -2561,11 +2700,49 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			upgrade.BackgroundColor3 = rgb("gold")
 			upgrade.TextColor3 = rgb("ink")
 			hubFn.setRest(upgrade, rgb("gold"))
+			if item.kind == "Weapon" then
+				hubFn.mountCore(uid)
+			end
 		end
 		hubFn.placeDetail()
 		hubState.detail.Visible = true
 		hubFn.fitBagList()
 		hubState.detailOpen = true
+	end
+
+	-- [Ghost] Echo's Shard Core (#389) on the selected weapon, behind
+	-- shardCore. Feed is the server's call; this only shows its answer.
+	function hubFn.mountCore(uid: string)
+		if not LaunchGate.on("shardCore") then
+			return
+		end
+		local host = Instance.new("Frame")
+		host.Name = "CoreHost"
+		host.BackgroundTransparency = 1
+		host.Size = UDim2.new(1, 0, 0, 380)
+		host.LayoutOrder = 95
+		host.Parent = hubState.detailList
+		local handle = ShardCoreMount.mount(host, {
+			invoke = function(action: string, itemId: string?): any
+				local ok, answer = pcall(hooks.invoke, action, itemId)
+				if not ok then
+					return { ok = false, error = tostring(answer) }
+				end
+				return answer
+			end,
+			profile = function(): any
+				return hubState.profile
+			end,
+			onResult = function(result: any)
+				if type(result) == "table" and type(result.profile) == "table" then
+					hubState.profile = result.profile
+				end
+			end,
+			theme = UiTheme,
+		})
+		handle.setWeapon(uid)
+		handle.refresh(hubState.profile)
+		hubState.coreHandle = handle
 	end
 
 	-- The server charges and levels in one mutate. Show its answer: apply
@@ -3567,6 +3744,84 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return following
 	end
 
+	-- [Ghost] Echo's BagTools (#388) behind gearSalvage. Folded by default;
+	-- "Salvage tools" opens it. Selection and status survive a repaint.
+	function hubFn.mountBagTools(actions: Instance)
+		local previous = hubState.bagTools
+		if previous ~= nil then
+			hubState.bagToolsSelected = previous:getSelected()
+			local oldStatus = previous.root:FindFirstChild("Status")
+			if oldStatus ~= nil and oldStatus:IsA("TextLabel") then
+				hubState.bagToolsStatus = oldStatus.Text
+			end
+			previous:destroy()
+			hubState.bagTools = nil
+		end
+		if not LaunchGate.on("gearSalvage") then
+			return
+		end
+		local toggle = hubFn.row(
+			actions,
+			if hubState.bagToolsOpen then "Hide salvage tools" else "Salvage tools",
+			8,
+			function()
+				hubState.bagToolsOpen = not hubState.bagToolsOpen
+				hubFn.paintBag()
+				hubFn.show("bag")
+			end
+		)
+		toggle.Name = "SalvageTools"
+		if not hubState.bagToolsOpen then
+			return
+		end
+		local host = Instance.new("Frame")
+		host.Name = "GearTools"
+		host.BackgroundTransparency = 1
+		host.Size = UDim2.fromScale(1, 0)
+		host.AutomaticSize = Enum.AutomaticSize.Y
+		host.LayoutOrder = 9
+		host.Parent = actions
+		local handle = BagTools.mount(host, {
+			invoke = function(remote: string, action: string, payload: any): any
+				local ok, answer = pcall(hooks.invoke, remote, action, payload)
+				if not ok then
+					return { ok = false, error = tostring(answer) }
+				end
+				hubFn.takeGearProfile(answer)
+				if
+					type(answer) == "table"
+					and answer.ok == true
+					and (action == "salvage" or action == "confirm" or action == "lock")
+				then
+					task.defer(function()
+						if hubState.shownId == "bag" then
+							hubFn.paintBag()
+						end
+					end)
+				end
+				return answer
+			end,
+			getProfile = function(): any
+				return hubState.profile
+			end,
+		})
+		-- BagTools fills its parent; let it grow inside the scrolling Bag.
+		handle.root.Size = UDim2.fromScale(1, 0)
+		handle.root.AutomaticSize = Enum.AutomaticSize.Y
+		local list = handle.root:FindFirstChild("List")
+		if list ~= nil and list:IsA("Frame") then
+			list.Size = UDim2.fromScale(1, 0)
+			list.AutomaticSize = Enum.AutomaticSize.Y
+		end
+		hubState.bagTools = handle
+		if type(hubState.bagToolsSelected) == "table" then
+			handle:setSelected(hubState.bagToolsSelected)
+		end
+		if type(hubState.bagToolsStatus) == "string" and hubState.bagToolsStatus ~= "" then
+			handle:setStatus(hubState.bagToolsStatus)
+		end
+	end
+
 	function hubFn.paintBag()
 		hubState.bagCompactPainted = hubFn.bagCompact()
 		for _, child in ipairs(hubState.screen:GetChildren()) do
@@ -3778,6 +4033,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 			end
 		end
+		hubFn.mountBagTools(actions)
 		if #shown == 0 then
 			hubFn.emptyState(hubState.bag, "bag", "The bag is empty.", "Open full bag", function()
 				hooks.onBag()
@@ -5368,11 +5624,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		item: any,
 		record: RollReveal.Record,
 		isNew: boolean,
-		upgrade: boolean
+		upgrade: boolean,
+		extra: any?
 	)
 		hubState.revealCard.Visible = true
 		hubState.revealTitle.Text = record.name
 		hubState.revealRarity.Text = record.rarity
+		-- [Ghost] Echo's gear stages: a merged dupe or an auto-salvaged drop.
+		local gearNote = if type(extra) == "table" and type(extra.note) == "string"
+			then extra.note
+			else nil
+		local gone = type(extra) == "table" and extra.gone == true
+		if gearNote ~= nil then
+			hubState.revealRarity.Text = record.rarity .. "  ·  " .. gearNote
+		end
 		local color = hubFn.rarityColor3(record.rarity)
 		hubState.revealRarity.TextColor3 = color
 		hubState.revealStroke.Color = color
@@ -5400,11 +5665,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.draft.rolls.autoJunk,
 			upgrade
 		)
-		hubState.revealEquip.Visible = junk == "equip" and hubState.cardRoom >= 72
+		hubState.revealEquip.Visible = junk == "equip" and hubState.cardRoom >= 72 and not gone
 		if type(item.uid) == "string" then
 			hubState.revealEquip:SetAttribute("Uid", item.uid)
 		end
-		if junk == "salvage" and LaunchGate.on("forgeSalvage") and type(item.uid) == "string" then
+		if
+			junk == "salvage"
+			and not gone
+			and LaunchGate.on("forgeSalvage")
+			and type(item.uid) == "string"
+		then
 			task.spawn(function()
 				pcall(hooks.invoke, "Salvage", item.uid)
 			end)
@@ -5487,6 +5757,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				quick = true,
 				currency = "shard",
 			}
+			hubFn.gearFields(hubState.replayResult, nextCrack)
 			hubState.rollBusy = false
 			hubState.loop = { phase = "revealing", queued = false }
 			hubFn.beginRoll()
@@ -5601,6 +5872,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 							currency = batch.currency,
 							profile = batch.profile,
 						}
+						hubFn.gearFields(result, first)
 						ok = true
 					else
 						hubState.batching = false
@@ -5640,6 +5912,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			-- A refusal did not land and did not miss. Leave the streak.
 			local kind = RollRefuse.classify(ok, result)
+			hubFn.noteBagFull(kind == "refuse" and GearHooks.bagFull(ok, result))
 			if kind ~= "land" or record == nil then
 				local caption = "Roll"
 				if kind == "refuse" then
@@ -5770,6 +6043,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				record = shownRecord,
 				isNew = hubState.activeNew,
 				upgrade = hubState.activeUpgrade,
+				extra = {
+					note = GearHooks.revealNote(result),
+					gone = type(result) == "table" and result.autoSalvaged == true,
+				},
 			}
 			if hubState.batching then
 				table.insert(hubState.summaryItems, item)
@@ -5859,7 +6136,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if not hubState.crackNamed and type(hubState.pendingFace) == "table" then
 			hubState.crackNamed = true
 			local face = hubState.pendingFace
-			hubFn.paintResult(face.item, face.record, face.isNew, face.upgrade)
+			hubFn.paintResult(face.item, face.record, face.isNew, face.upgrade, face.extra)
 		end
 		hubState.holdingRoll = false
 		hubState.loop = RollLoop.idle()
@@ -5930,6 +6207,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 		end
 	end)
+	hubFn.bindActivated(hubState.salvageNowButton, function()
+		task.spawn(hubFn.salvageNow)
+	end)
 	hubFn.bindActivated(hubState.revealEquip, function()
 		local uid = hubState.revealEquip:GetAttribute("Uid")
 		if type(uid) ~= "string" or uid == "" then
@@ -5999,7 +6279,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					hubState.pendingFace.item,
 					hubState.pendingFace.record,
 					hubState.pendingFace.isNew,
-					hubState.pendingFace.upgrade
+					hubState.pendingFace.upgrade,
+					hubState.pendingFace.extra
 				)
 			end
 			if elapsed >= active.duration then

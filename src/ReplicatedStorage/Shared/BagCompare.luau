@@ -5,6 +5,7 @@
 
 local Economy = require("./Economy")
 local Stats = require("./Stats")
+local UpgradeScale = require("./UpgradeScale")
 
 local BagCompare = {}
 
@@ -22,6 +23,7 @@ export type Detail = {
 	other: any?,
 	rows: { Row },
 	power: Row,
+	boost: Row?,
 }
 
 -- The uid worn in the item's slot, whether or not it is this item.
@@ -60,7 +62,10 @@ local function lookup(profile: any, uid: string): any?
 	return nil
 end
 
-function BagCompare.statMap(item: any): { [string]: number }
+-- Saved stat values. While upgradeScale is on, UpgradeScale.preview
+-- boosts them by the forge upgrade, so both sides compare as they fight.
+-- Off: the saved numbers, exactly as before. Nothing here writes.
+function BagCompare.statMap(item: any, enabled: boolean?): { [string]: number }
 	local map: { [string]: number } = {}
 	if type(item) ~= "table" or type(item.stats) ~= "table" then
 		return map
@@ -70,7 +75,28 @@ function BagCompare.statMap(item: any): { [string]: number }
 			map[stat.id] = stat.value
 		end
 	end
+	local preview = UpgradeScale.preview(item, enabled)
+	if preview.enabled and preview.upgrade > 0 then
+		for _, line in ipairs(preview.lines) do
+			map[line.id] = line.value
+		end
+	end
 	return map
+end
+
+-- "Upgrade +3  stats x1.24" while upgradeScale is on and the item has a
+-- forge level. nil otherwise.
+function BagCompare.boost(item: any, enabled: boolean?): Row?
+	local preview = UpgradeScale.preview(item, enabled)
+	if not preview.enabled or preview.upgrade <= 0 then
+		return nil
+	end
+	return {
+		id = "boost",
+		text = string.format("Upgrade +%d  stats x%.2f", preview.upgrade, preview.multiplier),
+		mark = nil,
+		tone = "gain",
+	}
 end
 
 -- The value exactly as the pane prints it.
@@ -165,6 +191,7 @@ function BagCompare.detail(profile: any, item: any, powerOf: (any) -> number): D
 		other = if state == "compare" then other else nil,
 		rows = rows,
 		power = powerRow,
+		boost = BagCompare.boost(item),
 	}
 end
 
@@ -183,6 +210,10 @@ end
 function BagCompare.title(item: any): string
 	local name = if type(item) == "table" then tostring(item.name or "Item") else "Item"
 	local level = BagCompare.level(item)
+	local stars = if type(item) == "table" then tonumber(item.stars) else nil
+	if stars ~= nil and stars == stars and stars >= 1 then
+		name = name .. "  " .. string.rep("★", math.min(5, math.floor(stars)))
+	end
 	if level > 0 then
 		return name .. "  +" .. tostring(level)
 	end
