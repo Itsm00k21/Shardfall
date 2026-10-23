@@ -80,6 +80,11 @@ local function rarityColor(rarity: string): Color3
 end
 
 -- The art key the icon well paints. Pure, so tests can read it.
+-- The fallback glyph for a kind with no art (inventory cards use it too).
+function GearDetail.glyph(kind: any): string
+	return GLYPH[tostring(kind)] or "◆"
+end
+
 function GearDetail.artKey(item: any): string
 	return HubStyle.itemArt(item)
 end

@@ -9,26 +9,36 @@
 
 	While the server says a shard can go in, an open socket glows. This
 	panel does not send seen.
+
+	[Ghost] Phase 3: this is the one inventory. A centered modal right of
+	the left rail and under the HP card (InventoryLayout.modal), with a
+	header (title, capacity, Equip Best, Close; "+ Slots" only for
+	DevAccess owners), one tabs row, ONE filter row (Search plus Rarity,
+	Type and Sort dropdowns), the thin GearBar action bar, a 4-6 column
+	grid and a right detail panel that is never empty while the tab has
+	items (it starts on the equipped weapon).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local MobileShell = require(script.Parent.MobileShell)
 local GearBar = require(script.Parent.GearBar)
 local GearDetail = require(script.Parent:WaitForChild("GearDetail"))
+local Dropdown = require(script.Parent:WaitForChild("Dropdown"))
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
+local DevAccess = require(Shared:WaitForChild("DevAccess"))
+local InventoryLayout = require(Shared:WaitForChild("InventoryLayout"))
 local GearHooks = require(Shared:WaitForChild("GearHooks"))
 local HubStyle = require(Shared:WaitForChild("HubStyle"))
-local HudLayout = require(Shared:WaitForChild("HudLayout"))
 local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
-local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
 local InventoryStacks = require(Shared:WaitForChild("InventoryStacks"))
 local InventoryView = require(Shared:WaitForChild("InventoryView"))
@@ -127,6 +137,15 @@ local function strokeFor(parent: Instance, rarity: string)
 	end
 end
 
+-- The card fill: the row color with 18% of the rarity color.
+local function tintedRow(rarity: string): Color3
+	local r, g, b = Rarities.rgb(rarity)
+	local function mix(base: number, top: number): number
+		return math.floor(base + (top - base) * 0.18 + 0.5)
+	end
+	return Color3.fromRGB(mix(40, r), mix(34, g), mix(58, b))
+end
+
 local function clearGenerated(container: Instance)
 	for _, child in ipairs(container:GetChildren()) do
 		if
@@ -205,20 +224,50 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		ClipsDescendants = true,
 	}, screen) :: Frame
 	corner(root, 12)
+	new("UIStroke", {
+		Name = "Edge",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Thickness = 1.5,
+		Color = Color3.fromRGB(92, 80, 128),
+	}, root)
+	-- Studio only: PreviewPhone (bool) and PreviewView (Vector2) on the
+	-- ScreenGui let a screenshot show the phone layout on a desktop.
+	local function previewAttr(name: string): any
+		if not RunService:IsStudio() then
+			return nil
+		end
+		return screen:GetAttribute(name)
+	end
 	local function phoneLayout(): boolean
+		local forced = previewAttr("PreviewPhone")
+		if type(forced) == "boolean" then
+			return forced
+		end
 		return ShellLayout.mobile(UserInputService.TouchEnabled, UserInputService.KeyboardEnabled)
+	end
+	local function railRight(): number
+		local rail = playerGui:FindFirstChild("ShardfallRail")
+		local frame = if rail ~= nil then rail:FindFirstChild("Rail") else nil
+		if frame ~= nil and frame:IsA("GuiObject") and frame.Visible and frame.AbsoluteSize.X > 0 then
+			return frame.AbsolutePosition.X + frame.AbsoluteSize.X
+		end
+		return 80
 	end
 	local placeChrome: (() -> ())? = nil
 	local function fitRoot()
 		local vx, vy = MobileShell.view(screen)
-		local phone = phoneLayout()
-		local box = ShellLayout.inventory(vx, vy, phone)
-		local pet = ShellLayout.petRect()
-		if phone then
-			root.Position = UDim2.fromOffset(UiTheme.safeMargin(), UiTheme.safeMargin())
-		else
-			root.Position = UDim2.fromOffset(16, pet.y + pet.h + 8)
+		local view = previewAttr("PreviewView")
+		if typeof(view) == "Vector2" then
+			vx, vy = view.X, view.Y
 		end
+		local phone = phoneLayout()
+		local pet = ShellLayout.petRect()
+		local box = InventoryLayout.modal(vx, vy, {
+			phone = phone,
+			railRight = railRight(),
+			top = pet.y + pet.h + 8,
+		})
+		root.Position = UDim2.fromOffset(box.x, box.y)
 		root.Size = UDim2.fromOffset(box.w, box.h)
 		local place = placeChrome
 		if place ~= nil then
@@ -244,27 +293,50 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local title = new("TextLabel", {
 		Name = "Title",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -196, 1, 0),
+		Size = UDim2.new(0, 100, 1, 0),
 		Font = Enum.Font.BuilderSansBold,
-		TextSize = 22,
+		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.None,
 		TextColor3 = COLORS.text,
 		Text = "Inventory",
 	}, header) :: TextLabel
 	local capacity = new("TextLabel", {
+		Name = "Capacity",
 		BackgroundTransparency = 1,
-		Visible = false,
-		Size = UDim2.fromOffset(0, 0),
-		Font = Enum.Font.BuilderSans,
+		Visible = true,
+		Position = UDim2.fromOffset(100, 0),
+		Size = UDim2.new(0, 64, 1, 0),
+		Font = Enum.Font.BuilderSansBold,
 		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
 		Text = "",
 	}, header) :: TextLabel
+	-- Equip Best moved here from the small Bag.
+	local equipBest = new("TextButton", {
+		Name = "EquipBest",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(104, 36),
+		BackgroundColor3 = COLORS.gold,
+		BorderSizePixel = 0,
+		Font = Enum.Font.BuilderSansBold,
+		TextSize = 14,
+		TextColor3 = COLORS.ink,
+		Text = "Equip Best",
+	}, header) :: TextButton
+	corner(equipBest, 6)
+	-- "+ Slots" is a dev tool: only DevAccess owners see it.
+	local devOwner = false
+	pcall(function()
+		devOwner = DevAccess.player(Players.LocalPlayer) == true
+	end)
 	local expand = new("TextButton", {
+		Name = "Expand",
+		Visible = devOwner,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -92, 0.5, 0),
-		Size = UDim2.fromOffset(88, 44),
+		Size = UDim2.fromOffset(72, 36),
 		BackgroundColor3 = COLORS.buttonDim,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -274,9 +346,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, header) :: TextButton
 	corner(expand, 6)
 	local close = new("TextButton", {
+		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(88, 44),
+		Size = UDim2.fromOffset(72, 36),
 		BackgroundColor3 = COLORS.button,
 		BorderSizePixel = 0,
 		Font = Enum.Font.BuilderSansBold,
@@ -286,36 +359,32 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	}, header) :: TextButton
 	corner(close, 6)
 
-	local tabBar = new("ScrollingFrame", {
+	-- One tabs row and one filter row. Neither scrolls sideways: widths
+	-- are fitted in placeChrome.
+	local tabBar = new("Frame", {
+		Name = "Tabs",
 		Position = UDim2.fromOffset(0, 48),
-		Size = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.new(1, 0, 0, 36),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 6,
-		ScrollingEnabled = true,
-		CanvasSize = UDim2.fromOffset(720, 44),
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
-		ScrollingDirection = Enum.ScrollingDirection.X,
 		ClipsDescendants = true,
-	}, root) :: ScrollingFrame
+		ZIndex = 2,
+	}, root) :: Frame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, tabBar)
 
-	local filterBar = new("ScrollingFrame", {
+	local filterBar = new("Frame", {
+		Name = "Filters",
 		Position = UDim2.fromOffset(0, 100),
-		Size = UDim2.new(1, 0, 0, 56),
+		Size = UDim2.new(1, 0, 0, 36),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 6,
-		ScrollingEnabled = true,
-		CanvasSize = UDim2.fromOffset(1400, 44),
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
-		ScrollingDirection = Enum.ScrollingDirection.X,
-		ClipsDescendants = true,
-	}, root) :: ScrollingFrame
+		ClipsDescendants = false,
+		ZIndex = 2,
+	}, root) :: Frame
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 6),
@@ -327,10 +396,11 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "Search",
 		BackgroundColor3 = COLORS.panel,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(160, 44),
+		Size = UDim2.fromOffset(200, 36),
 		Font = Enum.Font.BuilderSans,
-		TextSize = 16,
+		TextSize = 15,
 		PlaceholderText = "Search",
+		TextXAlignment = Enum.TextXAlignment.Left,
 		PlaceholderColor3 = COLORS.muted,
 		TextColor3 = COLORS.text,
 		Text = "",
@@ -338,6 +408,14 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		LayoutOrder = 1,
 	}, filterBar) :: TextBox
 	corner(search, 6)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 8) }, search)
+	local actionsFrame = new("Frame", {
+		Name = "Actions",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0),
+		ZIndex = 2,
+	}, root) :: Frame
 
 	local body = new("Frame", {
 		Position = UDim2.fromOffset(0, 164),
@@ -347,16 +425,53 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	-- Full-bag salvage (#388). Built only while gearSalvage is on.
 	local gear: any = nil
 	local placeGear: (() -> ())? = nil
+	local fitTabs: (() -> ())? = nil
+	local fitFilters: (() -> ())? = nil
 	placeChrome = function()
-		local chrome = HudLayout.bagChrome(root.Size.X.Offset, root.Size.Y.Offset)
+		local phone = phoneLayout()
+		local chrome = InventoryLayout.chrome(root.Size.X.Offset, root.Size.Y.Offset, phone, gear ~= nil)
+		local rowH = chrome.rowH
 		header.Position = UDim2.fromOffset(chrome.header.x, chrome.header.y)
 		header.Size = UDim2.fromOffset(chrome.header.w, chrome.header.h)
-		tabBar.Position = UDim2.fromOffset(chrome.tabs.x, chrome.tabs.y)
-		tabBar.Size = UDim2.fromOffset(chrome.tabs.w, chrome.tabs.h)
+		-- Header buttons, right to left: Close, Equip Best, + Slots (dev).
+		close.Size = UDim2.fromOffset(72, rowH)
+		close.Position = UDim2.fromScale(1, 0.5)
+		local right = 72 + 6
+		local bestW = if phone then 64 else 104
+		equipBest.Text = if phone then "Best" else "Equip Best"
+		equipBest.Size = UDim2.fromOffset(bestW, rowH)
+		equipBest.Position = UDim2.new(1, -right, 0.5, 0)
+		right += bestW + 6
+		if expand.Visible then
+			expand.Size = UDim2.fromOffset(72, rowH)
+			expand.Position = UDim2.new(1, -right, 0.5, 0)
+			right += 72 + 6
+		end
+		if chrome.compact then
+			-- Short window: the tabs share the header row.
+			local left = chrome.header.x + 12 + 100 + 64 + 8
+			local stop = chrome.header.x + chrome.header.w - 4 - right - 4
+			tabBar.Position = UDim2.fromOffset(left, chrome.header.y)
+			tabBar.Size = UDim2.fromOffset(math.max(0, stop - left), rowH)
+		else
+			tabBar.Position = UDim2.fromOffset(chrome.tabs.x, chrome.tabs.y)
+			tabBar.Size = UDim2.fromOffset(chrome.tabs.w, chrome.tabs.h)
+		end
 		filterBar.Position = UDim2.fromOffset(chrome.filters.x, chrome.filters.y)
 		filterBar.Size = UDim2.fromOffset(chrome.filters.w, chrome.filters.h)
+		actionsFrame.Position = UDim2.fromOffset(chrome.actions.x, chrome.actions.y)
+		actionsFrame.Size = UDim2.fromOffset(chrome.actions.w, chrome.actions.h)
+		actionsFrame.Visible = chrome.actions.h > 0
 		body.Position = UDim2.fromOffset(chrome.body.x, chrome.body.y)
 		body.Size = UDim2.fromOffset(chrome.body.w, chrome.body.h)
+		local tabsFit = fitTabs
+		if tabsFit ~= nil then
+			tabsFit()
+		end
+		local filtersFit = fitFilters
+		if filtersFit ~= nil then
+			filtersFit()
+		end
 		local place = placeGear
 		if place ~= nil then
 			place()
@@ -474,34 +589,39 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local function placePanes()
 		local phone = phoneLayout()
 		local showDetail = selectedId ~= nil
-		-- The gear row sits on top of the body and the salvage bar under
-		-- the grid. Both are 0 while gearSalvage is off.
-		local top = if gear ~= nil then GearBar.ROW_H else 0
-		local foot = if gear ~= nil and gear.selecting() then GearBar.BAR_H + 8 else 0
+		-- The action bar (GearBar row) has its own strip above the body;
+		-- the salvage bar sits under the grid while Select is on.
+		local foot = if gear ~= nil and gear.selecting() then GearBar.BAR_H + 6 else 0
+		local bodyW = body.Size.X.Offset
+		local detailW = InventoryLayout.detailW(bodyW, phone)
 		if phone then
 			grid.Visible = not showDetail
 			detail.Visible = showDetail
-			grid.Position = UDim2.fromOffset(0, top)
-			grid.Size = UDim2.new(1, 0, 1, -(top + foot))
-			detail.Position = UDim2.fromOffset(0, top)
-			detail.Size = UDim2.new(1, 0, 1, -(top + foot))
+			grid.Position = UDim2.fromOffset(0, 0)
+			grid.Size = UDim2.new(1, 0, 1, -foot)
+			detail.Position = UDim2.fromOffset(0, 0)
+			detail.Size = UDim2.new(1, 0, 1, -foot)
 		else
 			grid.Visible = true
 			detail.Visible = true
-			grid.Position = UDim2.fromOffset(0, top)
-			grid.Size = UDim2.new(1, -312, 1, -(top + foot))
-			detail.Position = UDim2.new(1, -300, 0, top)
-			detail.Size = UDim2.new(0, 300, 1, -(top + foot))
+			grid.Position = UDim2.fromOffset(0, 0)
+			grid.Size = UDim2.new(1, -(detailW + 12), 1, -foot)
+			detail.Position = UDim2.new(1, -detailW, 0, 0)
+			detail.Size = UDim2.new(0, detailW, 1, 0)
 		end
 		if gear ~= nil then
 			gear.row.Position = UDim2.fromOffset(0, 0)
-			gear.row.Size = UDim2.new(1, 0, 0, GearBar.ROW_H - 8)
+			gear.row.Size = UDim2.fromScale(1, 1)
 			gear.bar.Position = UDim2.new(0, 0, 1, -GearBar.BAR_H)
-			gear.bar.Size = UDim2.new(1, if phone then 0 else -312, 0, GearBar.BAR_H)
+			gear.bar.Size = UDim2.new(1, if phone then 0 else -(detailW + 12), 0, GearBar.BAR_H)
 		end
-		gridLayout.CellSize = if phone
-			then UDim2.fromOffset(100, 120)
-			else UDim2.fromOffset(112, 128)
+		local cells = InventoryLayout.grid(
+			if phone then bodyW else bodyW - detailW - 12,
+			phone,
+			body.Size.Y.Offset - foot
+		)
+		gridLayout.CellSize = UDim2.fromOffset(cells.cellW, cells.cellH)
+		gridLayout.CellPadding = UDim2.fromOffset(cells.gap, cells.gap)
 	end
 
 	local function label(parent: Instance, text: string, order: number, color: Color3, size: number)
@@ -705,7 +825,12 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			onStatus = function(text: string, kind: string)
 				callbacks.onStatus(text, kind)
 			end,
+			getTab = function(): string?
+				return query.tab
+			end,
+			host = root,
 		})
+		gear.row.Parent = actionsFrame
 		placeGear = placePanes
 		placePanes()
 	end
@@ -744,7 +869,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			then profile.inventoryCap
 			else Schema.inventoryCap(profile)
 		capacity.Text = string.format("%d / %d", used, cap)
-		title.Text = string.format("Inventory   %d / %d", used, cap)
+		capacity.TextColor3 = if used >= cap then COLORS.danger else COLORS.muted
+		title.Text = "Inventory"
 
 		for _, tab in ipairs(InventoryView.TABS) do
 			local button = tabButtons[tab]
@@ -757,6 +883,35 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 		query.now = os.time()
 		local rows = InventoryView.query(profile, query)
+		-- The detail panel is never empty while the tab has items: keep
+		-- the pick if it is still here, else the equipped weapon, else
+		-- anything worn, else the first card. A phone keeps the grid.
+		local present = false
+		for _, row in ipairs(rows) do
+			if row.id == selectedId then
+				present = true
+			end
+		end
+		if not present then
+			selectedId = nil
+			if not phoneLayout() and #rows > 0 then
+				local pick = rows[1]
+				local worn = nil
+				for _, row in ipairs(rows) do
+					if row.equipped and row.kind == "Weapon" then
+						pick = row
+						worn = nil
+						break
+					elseif row.equipped and worn == nil then
+						worn = row
+					end
+				end
+				if worn ~= nil and not pick.equipped then
+					pick = worn
+				end
+				selectedId = pick.id
+			end
+		end
 		clearGenerated(grid)
 		local still = false
 		for index, row in ipairs(rows) do
@@ -765,10 +920,11 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			local cellW = gridLayout.CellSize.X.Offset
 			local cellH = gridLayout.CellSize.Y.Offset
-			local inner = HudLayout.inventoryCard(cellW, cellH)
+			local inner = InventoryLayout.card(cellW, cellH)
+			local tint = rarityColor(row.rarity)
 			local card = new("TextButton", {
 				Name = row.id,
-				BackgroundColor3 = COLORS.row,
+				BackgroundColor3 = tintedRow(row.rarity),
 				BorderSizePixel = 0,
 				Font = Enum.Font.BuilderSansBold,
 				TextSize = 13,
@@ -777,8 +933,33 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				LayoutOrder = index,
 				ClipsDescendants = true,
 			}, grid) :: TextButton
-			corner(card, 8)
+			corner(card, 10)
 			strokeFor(card, row.rarity)
+			-- Centered icon: the item art, or a glyph when there is none.
+			local artId = IconAssets[HubStyle.itemArt(row.item)]
+			local art: GuiObject
+			if type(artId) == "string" then
+				art = new("ImageLabel", {
+					Name = "Art",
+					BackgroundTransparency = 1,
+					Position = UDim2.fromOffset(inner.art.x, inner.art.y),
+					Size = UDim2.fromOffset(inner.art.w, inner.art.h),
+					ScaleType = Enum.ScaleType.Fit,
+					Image = artId,
+				}, card) :: ImageLabel
+			else
+				art = new("TextLabel", {
+					Name = "Art",
+					BackgroundTransparency = 1,
+					Position = UDim2.fromOffset(inner.art.x, inner.art.y),
+					Size = UDim2.fromOffset(inner.art.w, inner.art.h),
+					Font = Enum.Font.BuilderSansBold,
+					TextSize = math.max(16, math.floor(inner.art.h * 0.6)),
+					TextColor3 = tint,
+					Text = GearDetail.glyph(row.kind),
+				}, card) :: TextLabel
+				art:SetAttribute("SkipTextScale", true)
+			end
 			local nameLabel = new("TextLabel", {
 				Name = "Name",
 				BackgroundTransparency = 1,
@@ -788,43 +969,59 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				TextSize = 13,
 				TextWrapped = true,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Top,
-				TextColor3 = rarityColor(row.rarity),
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextYAlignment = Enum.TextYAlignment.Center,
+				TextColor3 = tint,
 				Text = row.name,
 			}, card) :: TextLabel
-			nameLabel.Name = "Name"
-			-- [Ghost] Gear cards show the item art and +level/stars. The
-			-- name moves under the art; the padlock keeps the top right.
-			if gear ~= nil and (row.kind == "Weapon" or row.kind == "Armor") and type(row.item) == "table" then
-				local artId = IconAssets[HubStyle.itemArt(row.item)]
-				if type(artId) == "string" then
-					new("ImageLabel", {
-						Name = "Art",
-						BackgroundTransparency = 1,
-						Position = UDim2.fromOffset(0, 0),
-						Size = UDim2.fromOffset(40, 40),
-						ScaleType = Enum.ScaleType.Fit,
-						Image = artId,
-					}, card)
-				end
-				nameLabel.Position = UDim2.fromOffset(0, 42)
-				nameLabel.Size = UDim2.new(1, 0, 0, 34)
-				local levelText = GearHooks.levelLine(row.item)
-				if levelText ~= "" then
-					new("TextLabel", {
-						Name = "Level",
-						BackgroundTransparency = 1,
-						Position = UDim2.fromOffset(0, 78),
-						Size = UDim2.new(1, 0, 0, 16),
-						Font = Enum.Font.BuilderSansBold,
-						TextSize = 12,
-						TextXAlignment = Enum.TextXAlignment.Left,
-						TextTruncate = Enum.TextTruncate.AtEnd,
-						TextColor3 = COLORS.gold,
-						Text = levelText,
-					}, card)
-				end
+			-- +level and stars on one line (gear); a count for stacks.
+			local levelText = if type(row.item) == "table" and (row.kind == "Weapon" or row.kind == "Armor")
+				then GearHooks.levelLine(row.item)
+				else ""
+			if levelText == "" and row.count > 1 then
+				levelText = "x" .. tostring(row.count)
+			end
+			new("TextLabel", {
+				Name = "Level",
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(inner.level.x, inner.level.y),
+				Size = UDim2.fromOffset(inner.level.w, inner.level.h),
+				Font = Enum.Font.BuilderSansBold,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = COLORS.gold,
+				Text = levelText,
+			}, card)
+			if row.equipped then
+				local badge = new("TextLabel", {
+					Name = "EquipBadge",
+					Position = UDim2.fromOffset(inner.badge.x, inner.badge.y),
+					Size = UDim2.fromOffset(inner.badge.w, inner.badge.h),
+					BackgroundColor3 = COLORS.gold,
+					BorderSizePixel = 0,
+					Font = Enum.Font.BuilderSansBold,
+					TextSize = 13,
+					TextColor3 = COLORS.ink,
+					Text = "E",
+					ZIndex = 3,
+				}, card) :: TextLabel
+				corner(badge, 10)
+			end
+			if row.id == selectedId then
+				local focus = new("Frame", {
+					Name = "Focus",
+					BackgroundTransparency = 1,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.new(1, -4, 1, -4),
+				}, card)
+				corner(focus, 9)
+				new("UIStroke", {
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					Thickness = 2,
+					Color = COLORS.text,
+				}, focus)
 			end
 			if socketCue and row.sockets >= 1 then
 				new("UIStroke", {
@@ -838,33 +1035,20 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 					),
 				}, card)
 			end
-			new("UIPadding", {
-				PaddingTop = UDim.new(0, 8),
-				PaddingBottom = UDim.new(0, 22),
-				PaddingLeft = UDim.new(0, 8),
-				PaddingRight = UDim.new(0, 8),
-			}, card)
 			local marks = {}
-			if row.equipped then
-				table.insert(marks, "Equipped")
-			end
-			if row.locked then
+			if row.locked and gear == nil then
 				table.insert(marks, "Locked")
 			end
 			if row.favorite then
 				table.insert(marks, "Fav")
 			end
-			if row.count > 1 then
-				table.insert(marks, "x" .. tostring(row.count))
-			end
 			local footer = (new("TextLabel", {
 				BackgroundTransparency = 1,
-				AnchorPoint = Vector2.new(0, 0),
 				Position = UDim2.fromOffset(inner.marks.x, inner.marks.y),
 				Size = UDim2.fromOffset(inner.marks.w, inner.marks.h),
 				Font = Enum.Font.BuilderSans,
 				TextSize = 11,
-				TextXAlignment = Enum.TextXAlignment.Left,
+				TextXAlignment = Enum.TextXAlignment.Center,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = COLORS.muted,
 				Text = table.concat(marks, " · "),
@@ -873,48 +1057,63 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local picked = row.id
 			local isGear = row.kind == "Weapon" or row.kind == "Armor"
 			if gear ~= nil and isGear then
-				-- Padlock on every gear card. It sends the same lock call as
-				-- the detail pane.
+				-- Padlock: a gold closed lock while locked. Unlocked shows
+				-- nothing, or a faint lock on hover. Same call as the
+				-- detail pane.
 				local lockedNow = row.locked == true
 				local padlock = new("TextButton", {
 					Name = "Padlock",
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, 6, 0, -6),
-					Size = UDim2.fromOffset(32, 32),
-					BackgroundColor3 = if lockedNow then COLORS.gold else COLORS.buttonDim,
-					BackgroundTransparency = if lockedNow then 0 else 0.3,
+					Position = UDim2.fromOffset(inner.lock.x, inner.lock.y),
+					Size = UDim2.fromOffset(inner.lock.w, inner.lock.h),
+					BackgroundTransparency = 1,
 					BorderSizePixel = 0,
 					Font = Enum.Font.BuilderSansBold,
-					TextSize = 16,
-					TextColor3 = if lockedNow then COLORS.ink else COLORS.text,
-					Text = if lockedNow then "🔒" else "🔓",
+					TextSize = 15,
+					TextColor3 = if lockedNow then COLORS.gold else COLORS.muted,
+					TextTransparency = if lockedNow then 0 else 0.55,
+					Text = "🔒",
+					Visible = lockedNow,
 					ZIndex = 3,
 				}, card) :: TextButton
-				corner(padlock, 16)
+				padlock:SetAttribute("Locked", lockedNow)
+				if not lockedNow then
+					card.MouseEnter:Connect(function()
+						padlock.Visible = true
+					end)
+					card.MouseLeave:Connect(function()
+						padlock.Visible = false
+					end)
+					padlock.MouseEnter:Connect(function()
+						padlock.Visible = true
+					end)
+				end
 				padlock.MouseButton1Click:Connect(function()
 					callbacks.onLock(picked, not lockedNow)
 				end)
-				if gear.selecting() then
-					local why = gear.blockFor(picked)
-					if why ~= nil then
-						card.BackgroundTransparency = 0.55
-						nameLabel.TextTransparency = 0.5
-						footer.Text = why
-					elseif gear.isSelected(picked) then
-						card.BackgroundColor3 = Color3.fromRGB(92, 64, 34)
-						new("UIStroke", {
-							Name = "Picked",
-							ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-							Thickness = 3,
-							Color = COLORS.gold,
-						}, card)
-						footer.Text = "Selected"
-						footer.TextColor3 = COLORS.gold
+			end
+			if gear ~= nil and gear.selecting() then
+				-- Select mode: dim what cannot be picked and say why.
+				local why = if isGear then gear.blockFor(picked) else "Not gear"
+				if why ~= nil then
+					card.BackgroundTransparency = 0.6
+					nameLabel.TextTransparency = 0.55
+					if art:IsA("ImageLabel") then
+						art.ImageTransparency = 0.6
+					elseif art:IsA("TextLabel") then
+						art.TextTransparency = 0.6
 					end
+					footer.Text = why
+				elseif gear.isSelected(picked) then
+					card.BackgroundColor3 = Color3.fromRGB(92, 64, 34)
+					new("UIStroke", {
+						Name = "Picked",
+						ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+						Thickness = 3,
+						Color = COLORS.gold,
+					}, card)
+					footer.Text = "✓ Selected"
+					footer.TextColor3 = COLORS.gold
 				end
-			elseif gear ~= nil and gear.selecting() then
-				card.BackgroundTransparency = 0.55
-				nameLabel.TextTransparency = 0.5
 			end
 			card.MouseButton1Click:Connect(function()
 				if gear ~= nil and gear.selecting() then
@@ -925,6 +1124,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 					local ok, why = gear.toggle(picked)
 					if not ok and why ~= nil then
 						callbacks.onStatus(string.format("Can't select: %s.", why), "error")
+					end
+					-- The detail panel follows the tap (desktop).
+					if not phoneLayout() then
+						selectedId = picked
 					end
 					render()
 					return
@@ -1377,7 +1580,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	for index, tab in ipairs(InventoryView.TABS) do
 		local labelText = string.upper(string.sub(tab, 1, 1)) .. string.sub(tab, 2)
 		local button = chip(tabBar, labelText, index)
-		button.Size = UDim2.fromOffset(120, 44)
+		button.Name = "Tab_" .. tab
+		button.Size = UDim2.fromOffset(120, 36)
 		button.AutomaticSize = Enum.AutomaticSize.None
 		tabButtons[tab] = button
 		button.Visible = tab ~= "chests" or LaunchGate.on("chests")
@@ -1388,184 +1592,168 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			query.tab = tab
 			query.slot = nil
 			selectedId = nil
+			if gear ~= nil then
+				gear.closePopups()
+			end
 			render()
 		end)
 	end
 
-	local function cycle(list: { string }, current: string?): string?
-		local index = 0
-		for i, value in ipairs(list) do
-			if value == current then
-				index = i
+	-- Tabs share the row evenly; short words when a tab gets narrow.
+	local SHORT_TAB: { [string]: string } = { accessories = "Acc.", materials = "Mats" }
+	fitTabs = function()
+		local rowH = tabBar.Size.Y.Offset
+		local shown: { string } = {}
+		for _, tab in ipairs(InventoryView.TABS) do
+			local button = tabButtons[tab]
+			if button ~= nil and button.Visible then
+				table.insert(shown, tab)
 			end
 		end
-		local nextIndex = index + 1
-		if nextIndex > #list then
-			return nil
+		local count = math.max(1, #shown)
+		local w = math.min(120, math.floor((tabBar.Size.X.Offset - 6 * (count - 1)) / count))
+		for _, tab in ipairs(shown) do
+			local button = tabButtons[tab]
+			button.Size = UDim2.fromOffset(math.max(40, w), rowH)
+			local full = string.upper(string.sub(tab, 1, 1)) .. string.sub(tab, 2)
+			button.Text = if w < 84 and SHORT_TAB[tab] ~= nil then SHORT_TAB[tab] else full
 		end
-		return list[nextIndex]
 	end
 
-	local realmButton = chip(filterBar, "All realms", 2)
-	local slotButton = chip(filterBar, "All types", 3)
-	local socketButton = chip(filterBar, "All sockets", 4)
-	local equippedButton = chip(filterBar, "Worn: All", 5)
-	local lockedButton = chip(filterBar, "Lock: All", 6)
-	local sortButton = chip(filterBar, "Sort: Power", 7)
+	-- ONE filter row: Search plus Rarity, Type and Sort dropdowns. The
+	-- lists open on the modal root so the row never clips them.
+	local function titleCase(text: string): string
+		return string.upper(string.sub(text, 1, 1)) .. string.sub(text, 2)
+	end
+	local rarityOptions: { any } = { { value = nil, text = "All" } }
+	for _, rarity in ipairs(Rarities.ORDER) do
+		table.insert(rarityOptions, { value = rarity, text = rarity })
+	end
+	local function onlyRarity(): string?
+		for _, rarity in ipairs(Rarities.ORDER) do
+			if query.rarities[rarity] == true then
+				return rarity
+			end
+		end
+		return nil
+	end
+	local rarityPick = Dropdown.new(filterBar, {
+		name = "RarityFilter",
+		prefix = "Rarity",
+		options = rarityOptions,
+		value = nil,
+		host = root,
+		width = 150,
+		height = 36,
+		order = 2,
+		colors = { button = COLORS.buttonDim, panel = COLORS.panel, text = COLORS.text, gold = COLORS.gold, ink = COLORS.ink },
+		onChange = function(value: any)
+			table.clear(query.rarities)
+			if type(value) == "string" then
+				query.rarities[value] = true
+			end
+			render()
+		end,
+	})
+	local typePick = Dropdown.new(filterBar, {
+		name = "TypeFilter",
+		prefix = "Type",
+		options = { { value = nil, text = "All" } },
+		value = nil,
+		host = root,
+		width = 150,
+		height = 36,
+		order = 3,
+		colors = { button = COLORS.buttonDim, panel = COLORS.panel, text = COLORS.text, gold = COLORS.gold, ink = COLORS.ink },
+		onChange = function(value: any)
+			query.slot = if type(value) == "string" then value else nil
+			render()
+		end,
+	})
+	local sortOptions: { any } = {}
+	for _, name in ipairs(InventoryView.SORTS) do
+		table.insert(sortOptions, { value = name, text = titleCase(name) })
+	end
+	local sortPick = Dropdown.new(filterBar, {
+		name = "SortFilter",
+		prefix = "Sort",
+		options = sortOptions,
+		value = query.sort,
+		host = root,
+		width = 150,
+		height = 36,
+		order = 4,
+		colors = { button = COLORS.buttonDim, panel = COLORS.panel, text = COLORS.text, gold = COLORS.gold, ink = COLORS.ink },
+		onChange = function(value: any)
+			if type(value) == "string" then
+				query.sort = value
+			end
+			render()
+		end,
+	})
+	local filterPicks = { rarityPick, typePick, sortPick }
+	local typeTab: string? = nil
+
+	fitFilters = function()
+		local rowH = filterBar.Size.Y.Offset
+		local fw = filterBar.Size.X.Offset
+		local shown = {}
+		for _, pick in ipairs(filterPicks) do
+			if pick.button.Visible then
+				table.insert(shown, pick)
+			end
+		end
+		local count = #shown
+		local dropW = 0
+		if count > 0 then
+			dropW = math.clamp(math.floor((fw - 6 * count) / (count + 1.4)), 96, 180)
+		end
+		local searchW = math.min(340, fw - count * (dropW + 6))
+		if searchW < 110 and count > 0 then
+			searchW = 110
+			dropW = math.floor((fw - searchW - 6 * count) / count)
+		end
+		search.Size = UDim2.fromOffset(searchW, rowH)
+		for _, pick in ipairs(shown) do
+			pick.setWidth(dropW, rowH)
+		end
+	end
 
 	paintFilters = function()
 		local flags = InventoryView.activeFilters(query.tab)
-		if not flags.realm then
-			query.realm = nil
-		end
+		-- The old realm, socket, worn and lock chips are gone; those query
+		-- fields stay at "all".
+		query.realm = nil
+		query.sockets = nil
+		query.socketsAtLeast = nil
+		query.equipped = "all"
+		query.locked = "all"
 		if not flags.slot then
 			query.slot = nil
-		end
-		if not flags.sockets then
-			query.sockets = nil
-			query.socketsAtLeast = nil
-		end
-		if not flags.worn then
-			query.equipped = "all"
-		end
-		if not flags.locked then
-			query.locked = "all"
 		end
 		if not flags.rarity then
 			table.clear(query.rarities)
 		end
-		realmButton.Visible = flags.realm and LaunchGate.on("extraRealms")
-		slotButton.Visible = flags.slot
-		socketButton.Visible = flags.sockets
-		equippedButton.Visible = flags.worn
-		lockedButton.Visible = flags.locked
-		sortButton.Visible = flags.sort
-		realmButton.Text = InventoryView.realmLabel(query.realm)
-		slotButton.Text = InventoryView.slotLabel(query.slot)
-		socketButton.Text = InventoryView.socketLabel(query.sockets, query.socketsAtLeast)
-		realmButton.Size = UDim2.fromOffset(chipWidth(realmButton.Text), 44)
-		slotButton.Size = UDim2.fromOffset(chipWidth(slotButton.Text), 44)
-		socketButton.Size = UDim2.fromOffset(chipWidth(socketButton.Text), 44)
-		equippedButton.Text = "Worn: "
-			.. string.upper(string.sub(query.equipped, 1, 1))
-			.. string.sub(query.equipped, 2)
-		lockedButton.Text = "Lock: "
-			.. string.upper(string.sub(query.locked, 1, 1))
-			.. string.sub(query.locked, 2)
-		local sortName = if query.sort == "power"
-			then "Power"
-			elseif query.sort == "rarity" then "Rarity"
-			elseif query.sort == "newest" then "Newest"
-			else "Name"
-		sortButton.Text = "Sort: " .. sortName
-		sortButton.Size = UDim2.fromOffset(chipWidth(sortButton.Text), 44)
-		equippedButton.Size = UDim2.fromOffset(chipWidth(equippedButton.Text), 44)
-		lockedButton.Size = UDim2.fromOffset(chipWidth(lockedButton.Text), 44)
-		local rarityOn = false
-		for _, rarity in ipairs(Rarities.ORDER) do
-			if query.rarities[rarity] == true then
-				rarityOn = true
+		rarityPick.button.Visible = flags.rarity
+		typePick.button.Visible = flags.slot
+		sortPick.button.Visible = flags.sort
+		if typeTab ~= query.tab then
+			typeTab = query.tab
+			local options: { any } = { { value = nil, text = "All" } }
+			for _, slot in ipairs(InventoryView.slotChoices(query.tab)) do
+				table.insert(options, { value = slot, text = InventoryView.slotLabel(slot) })
 			end
+			typePick.setOptions(options)
 		end
-		for _, rarity in ipairs(Rarities.ORDER) do
-			local button = filterBar:FindFirstChild("Rarity_" .. rarity)
-			if button ~= nil and button:IsA("TextButton") then
-				button.Visible = flags.rarity
-				button.Size = UDim2.fromOffset(chipWidth(button.Text), 44)
-				local on = query.rarities[rarity] == true
-				button.BackgroundColor3 = if on then rarityColor(rarity) else COLORS.buttonDim
-				button.TextColor3 = if on
-						and rarity ~= "Legendary"
-						and rarity ~= "Secret"
-					then COLORS.ink
-					else COLORS.text
-			end
-		end
-		if not rarityOn then
-			for _, rarity in ipairs(Rarities.ORDER) do
-				local button = filterBar:FindFirstChild("Rarity_" .. rarity)
-				if button ~= nil and button:IsA("TextButton") then
-					button.BackgroundColor3 = COLORS.buttonDim
-					button.TextColor3 = COLORS.text
-				end
-			end
+		rarityPick.set(onlyRarity())
+		typePick.set(query.slot)
+		sortPick.set(query.sort)
+		local fit = fitFilters
+		if fit ~= nil then
+			fit()
 		end
 	end
 
-	for index, rarity in ipairs(Rarities.ORDER) do
-		local button = chip(filterBar, rarity, 10 + index)
-		button.Name = "Rarity_" .. rarity
-		button.MouseButton1Click:Connect(function()
-			query.rarities[rarity] = not (query.rarities[rarity] == true)
-			if query.rarities[rarity] ~= true then
-				query.rarities[rarity] = nil
-			end
-			paintFilters()
-			render()
-		end)
-	end
-
-	realmButton.MouseButton1Click:Connect(function()
-		query.realm = cycle(Materials.REALMS, query.realm)
-		paintFilters()
-		render()
-	end)
-	slotButton.MouseButton1Click:Connect(function()
-		query.slot = cycle(InventoryView.slotChoices(query.tab), query.slot)
-		paintFilters()
-		render()
-	end)
-	socketButton.MouseButton1Click:Connect(function()
-		if query.sockets == nil and query.socketsAtLeast == nil then
-			query.sockets = 0
-		elseif query.sockets == 0 then
-			query.sockets = 1
-		elseif query.sockets == 1 then
-			query.sockets = 2
-		elseif query.sockets == 2 then
-			query.sockets = nil
-			query.socketsAtLeast = 3
-		else
-			query.sockets = nil
-			query.socketsAtLeast = nil
-		end
-		paintFilters()
-		render()
-	end)
-	equippedButton.MouseButton1Click:Connect(function()
-		if query.equipped == "all" then
-			query.equipped = "equipped"
-		elseif query.equipped == "equipped" then
-			query.equipped = "unequipped"
-		else
-			query.equipped = "all"
-		end
-		paintFilters()
-		render()
-	end)
-	lockedButton.MouseButton1Click:Connect(function()
-		if query.locked == "all" then
-			query.locked = "locked"
-		elseif query.locked == "locked" then
-			query.locked = "unlocked"
-		else
-			query.locked = "all"
-		end
-		paintFilters()
-		render()
-	end)
-	sortButton.MouseButton1Click:Connect(function()
-		local sorts = InventoryView.SORTS
-		local index = 1
-		for i, name in ipairs(sorts) do
-			if name == query.sort then
-				index = i
-			end
-		end
-		query.sort = sorts[(index % #sorts) + 1]
-		paintFilters()
-		render()
-	end)
 	search:GetPropertyChangedSignal("Text"):Connect(function()
 		query.search = search.Text
 		if isOpen then
@@ -1584,7 +1772,23 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			callbacks.onFeed(feed[1], feed[2])
 		end
 	end)
-	expand.MouseButton1Click:Connect(callbacks.onExpand)
+	expand.MouseButton1Click:Connect(function()
+		if devOwner then
+			callbacks.onExpand()
+		end
+	end)
+	-- Equip Best (moved here from the small Bag): the same picks the Bag
+	-- used, one equip call each.
+	equipBest.MouseButton1Click:Connect(function()
+		local uids = HubStyle.bestGear(latest)
+		if #uids == 0 then
+			callbacks.onStatus("Your best gear is already equipped.", "info")
+			return
+		end
+		for _, uid in ipairs(uids) do
+			callbacks.onEquip(uid)
+		end
+	end)
 
 	local function setOpen(open: boolean)
 		if isOpen == open then
@@ -1595,6 +1799,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		isOpen = open
 		root.Visible = open
 		openButton.Visible = false
+		if not open and gear ~= nil then
+			gear.closePopups()
+		end
+		Dropdown.closeAll(root)
 		fitRoot()
 		if open then
 			render()

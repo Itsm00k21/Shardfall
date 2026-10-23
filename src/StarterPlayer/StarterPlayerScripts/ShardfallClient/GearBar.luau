@@ -4,18 +4,23 @@
 	Full-bag salvage for Echo's GearSalvage remote (#388). Ghost owns this
 	view. Echo's server APIs are unchanged.
 
-	mount(parent, opts) builds three pieces under parent. The caller places
-	them:
-	  row      "GearRow": Essence, the Auto-salvage toggle and its cap,
-	           Select, and "Select all at or below <rarity>".
+	mount(parent, opts) builds these under parent (popups go on opts.host):
+	  row      "GearRow": the thin action bar. The Auto-salvage pill (opens
+	           the settings popover), Essence, Select, and in Select mode
+	           a "Select all ≤ <rarity>" dropdown.
+	  popover  "AutoPopover": the only place auto-salvage changes. A toggle
+	           and a cap dropdown limited to Common or Uncommon. Turning it
+	           on or raising the cap asks first ("AutoAsk").
 	  bar      "SalvageBar": "Salvage N for +X Essence" and Clear. Shown
 	           while Select is on.
 	  confirm  "SalvageConfirm": every salvage goes through it.
 
 	Auto-salvage is read from the profile snapshot the server last sent.
 	This view keeps no copy of it, polls nothing, and sends explicit
-	{enabled, rarity}. Default is Off. A refused press leaves the label on
-	the server's value and shows the reason.
+	{enabled, rarity}. Default is Off. The client never sends a cap above
+	Uncommon (GearHooks.safeCap); a saved Rare+ cap is shown as it is and
+	the popover offers to lower it. A refused press leaves the label on the
+	server's value and shows the reason.
 
 	Equipped, locked and favorite gear cannot be picked. The server checks
 	again on confirm. Nothing here costs Robux.
@@ -25,9 +30,14 @@
 	  getProfile() -> profile
 	  onChanged()                          repaint the grid (selection changed).
 	  onStatus(text, kind)
+	  getTab() -> string?                  the inventory tab; bulk select
+	                                       keeps to weapons or armor.
+	  host                                 where popups are parented.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Dropdown = require(script.Parent:WaitForChild("Dropdown"))
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GearHooks = require(Shared:WaitForChild("GearHooks"))
@@ -36,8 +46,10 @@ local UiTheme = require(Shared:WaitForChild("UiTheme"))
 
 local GearBar = {}
 
-GearBar.ROW_H = 52
-GearBar.BAR_H = 56
+-- Thin action bar: 36px controls in a 40px row.
+GearBar.ROW_H = 40
+GearBar.BAR_H = 48
+GearBar.CONTROL_H = 36
 
 local PICK_CAPS = { "Common", "Uncommon", "Rare", "Epic" }
 
@@ -60,6 +72,8 @@ export type Opts = {
 	getProfile: () -> any,
 	onChanged: () -> (),
 	onStatus: (text: string, kind: string) -> (),
+	getTab: (() -> string?)?,
+	host: Instance?,
 }
 
 local function corner(parent: Instance, radius: number)
@@ -78,13 +92,13 @@ local function pad(parent: Instance, x: number, y: number)
 end
 
 local function widthFor(text: string): number
-	return math.max(UiTheme.TOUCH, #text * 8 + 28)
+	return math.max(GearBar.CONTROL_H, #text * 8 + 24)
 end
 
 local function button(parent: Instance, name: string, text: string, order: number, color: Color3): TextButton
 	local b = Instance.new("TextButton")
 	b.Name = name
-	b.Size = UDim2.fromOffset(widthFor(text), UiTheme.TOUCH)
+	b.Size = UDim2.fromOffset(widthFor(text), GearBar.CONTROL_H)
 	b.BackgroundColor3 = color
 	b.BorderSizePixel = 0
 	b.Font = Enum.Font.BuilderSansBold
@@ -99,9 +113,27 @@ local function button(parent: Instance, name: string, text: string, order: numbe
 	return b
 end
 
+local function label(parent: Instance, name: string, text: string, order: number, color: Color3, size: number): TextLabel
+	local l = Instance.new("TextLabel")
+	l.Name = name
+	l.BackgroundTransparency = 1
+	l.Size = UDim2.new(1, 0, 0, 20)
+	l.AutomaticSize = Enum.AutomaticSize.Y
+	l.Font = Enum.Font.BuilderSans
+	l.TextSize = size
+	l.TextWrapped = true
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextColor3 = color
+	l.Text = text
+	l.LayoutOrder = order
+	l.ZIndex = 31
+	l.Parent = parent
+	return l
+end
+
 local function setText(b: TextButton, text: string)
 	b.Text = text
-	b.Size = UDim2.fromOffset(widthFor(text), UiTheme.TOUCH)
+	b.Size = UDim2.fromOffset(widthFor(text), GearBar.CONTROL_H)
 end
 
 local function message(result: any, fallback: string): string
@@ -111,24 +143,74 @@ local function message(result: any, fallback: string): string
 	return fallback
 end
 
+local function panel(host: Instance, name: string, width: number): Frame
+	local f = Instance.new("Frame")
+	f.Name = name
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromScale(0.5, 0.5)
+	f.Size = UDim2.fromOffset(width, 0)
+	f.AutomaticSize = Enum.AutomaticSize.Y
+	f.BackgroundColor3 = COLORS.panel
+	f.BorderSizePixel = 0
+	f.Visible = false
+	f.ZIndex = 30
+	f.Parent = host
+	corner(f, 12)
+	pad(f, 14, 12)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = COLORS.gold
+	stroke.Transparency = 0.5
+	stroke.Thickness = 1
+	stroke.Parent = f
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, UiTheme.PAD)
+	layout.Parent = f
+	return f
+end
+
+local function wideButton(parent: Instance, name: string, text: string, order: number, color: Color3): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = name
+	b.Size = UDim2.new(1, 0, 0, GearBar.CONTROL_H)
+	b.BackgroundColor3 = color
+	b.BorderSizePixel = 0
+	b.Font = Enum.Font.BuilderSansBold
+	b.TextSize = 15
+	b.TextColor3 = COLORS.text
+	b.Text = text
+	b.ZIndex = 31
+	b.LayoutOrder = order
+	b.AutoButtonColor = true
+	b.Parent = parent
+	corner(b, 8)
+	return b
+end
+
 function GearBar.mount(parent: Instance, opts: Opts)
+	local host: Instance = opts.host or parent
 	local selecting = false
 	local busy = false
 	local selected: { [string]: boolean } = {}
 	local pickIndex = 1
 	local token: string? = nil
+	local pendingAuto: { enabled: boolean, rarity: string }? = nil
 
-	-- Settings row: one line that scrolls sideways on a phone.
-	local row = Instance.new("ScrollingFrame")
+	local function tab(): string?
+		local getTab = opts.getTab
+		if getTab == nil then
+			return nil
+		end
+		return getTab()
+	end
+
+	-- The thin action bar. One line, no sideways scroll.
+	local row = Instance.new("Frame")
 	row.Name = "GearRow"
 	row.BackgroundTransparency = 1
 	row.BorderSizePixel = 0
 	row.Size = UDim2.new(1, 0, 0, GearBar.ROW_H)
-	row.ScrollBarThickness = 4
-	row.ScrollingDirection = Enum.ScrollingDirection.X
-	row.AutomaticCanvasSize = Enum.AutomaticSize.X
-	row.CanvasSize = UDim2.fromOffset(0, 0)
-	row.ClipsDescendants = true
+	row.ClipsDescendants = false
 	row.Parent = parent
 	local rowLayout = Instance.new("UIListLayout")
 	rowLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -136,13 +218,12 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	rowLayout.Padding = UDim.new(0, UiTheme.PAD)
 	rowLayout.Parent = row
-	pad(row, 2, 0)
 
 	local essence = Instance.new("TextLabel")
 	essence.Name = "Essence"
 	essence.BackgroundColor3 = COLORS.panel
 	essence.BorderSizePixel = 0
-	essence.Size = UDim2.fromOffset(120, UiTheme.TOUCH)
+	essence.Size = UDim2.fromOffset(110, GearBar.CONTROL_H)
 	essence.Font = Enum.Font.BuilderSansBold
 	essence.TextSize = UiTheme.MIN_TEXT
 	essence.TextColor3 = COLORS.gold
@@ -153,13 +234,14 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	pad(essence, 10, 0)
 
 	-- The Auto-salvage pill comes first so its real state is the first
-	-- thing in the header: amber with dark ink and a warning mark while
-	-- it is on, quiet while it is off. Tapping it still toggles.
+	-- thing in the bar: amber with dark ink and a warning mark while it is
+	-- on, quiet while it is off. Tapping it opens the settings popover; it
+	-- never changes the setting by itself.
 	local autoButton = button(row, "AutoSalvage", GearHooks.AUTO_OFF, 0, COLORS.buttonDim)
 	autoButton.Font = Enum.Font.BuilderSansExtraBold
 	local autoCorner = autoButton:FindFirstChildOfClass("UICorner")
 	if autoCorner ~= nil then
-		autoCorner.CornerRadius = UDim.new(0, UiTheme.TOUCH // 2)
+		autoCorner.CornerRadius = UDim.new(0, GearBar.CONTROL_H // 2)
 	end
 	local autoPad = autoButton:FindFirstChildOfClass("UIPadding")
 	local autoStroke = Instance.new("UIStroke")
@@ -172,7 +254,7 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	local autoMark = Instance.new("TextLabel")
 	autoMark.Name = "AutoMark"
 	autoMark.BackgroundTransparency = 1
-	autoMark.Size = UDim2.fromOffset(24, UiTheme.TOUCH)
+	autoMark.Size = UDim2.fromOffset(24, GearBar.CONTROL_H)
 	autoMark.Position = UDim2.fromOffset(-6, 0)
 	autoMark.Font = Enum.Font.BuilderSansExtraBold
 	autoMark.TextSize = 16
@@ -180,12 +262,84 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	autoMark.Text = "⚠"
 	autoMark.Visible = false
 	autoMark.Parent = autoButton
-	local capButton = button(row, "AutoCap", GearHooks.capLabel(nil), 3, COLORS.buttonDim)
 	local selectButton = button(row, "SelectMode", "Select", 4, COLORS.button)
-	local pickButton = button(row, "SelectUpTo", "Select all at or below Common", 5, COLORS.buttonDim)
-	local pickRarity = button(row, "SelectRarity", "Common", 6, COLORS.buttonDim)
-	pickButton.Visible = false
-	pickRarity.Visible = false
+
+	local pickOptions = {}
+	for _, cap in ipairs(PICK_CAPS) do
+		table.insert(pickOptions, { value = cap, text = cap })
+	end
+	local pickDrop: any = nil
+
+	-- Settings popover. The only place auto-salvage changes.
+	local popover = panel(host, "AutoPopover", 320)
+	local popTitle = label(popover, "AutoTitle", "Auto-salvage", 1, COLORS.text, 18)
+	popTitle.Font = Enum.Font.BuilderSansBold
+	label(
+		popover,
+		"Destroys new drops at or below the cap for Essence. Gear you already own is not touched.",
+		2,
+		COLORS.muted,
+		13
+	)
+	local toggleRow = Instance.new("Frame")
+	toggleRow.Name = "AutoToggleRow"
+	toggleRow.BackgroundTransparency = 1
+	toggleRow.Size = UDim2.new(1, 0, 0, GearBar.CONTROL_H)
+	toggleRow.LayoutOrder = 3
+	toggleRow.ZIndex = 31
+	toggleRow.Parent = popover
+	local toggleLayout = Instance.new("UIListLayout")
+	toggleLayout.FillDirection = Enum.FillDirection.Horizontal
+	toggleLayout.Padding = UDim.new(0, UiTheme.PAD)
+	toggleLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	toggleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	toggleLayout.Parent = toggleRow
+	local toggleButton = button(toggleRow, "AutoToggle", "Off", 1, COLORS.buttonDim)
+	toggleButton.Size = UDim2.fromOffset(84, GearBar.CONTROL_H)
+	toggleButton.ZIndex = 31
+	local capDrop = Dropdown.new(toggleRow, {
+		name = "AutoCapPick",
+		prefix = "Cap",
+		options = {
+			{ value = "Common", text = "Common" },
+			{ value = "Uncommon", text = "Uncommon" },
+		},
+		value = "Common",
+		host = popover,
+		width = 180,
+		height = GearBar.CONTROL_H,
+		order = 2,
+		colors = COLORS,
+		onChange = function(_: any) end,
+	})
+	capDrop.button.ZIndex = 31
+	local unsafe = label(popover, "AutoUnsafe", "", 4, COLORS.warn, 13)
+	unsafe.Visible = false
+	local lowerButton = wideButton(popover, "AutoLower", "Lower cap to Uncommon", 5, COLORS.buttonDim)
+	lowerButton.Visible = false
+	local ask = Instance.new("Frame")
+	ask.Name = "AutoAsk"
+	ask.BackgroundColor3 = Color3.fromRGB(60, 34, 30)
+	ask.BorderSizePixel = 0
+	ask.Size = UDim2.fromScale(1, 0)
+	ask.AutomaticSize = Enum.AutomaticSize.Y
+	ask.LayoutOrder = 6
+	ask.Visible = false
+	ask.ZIndex = 31
+	ask.Parent = popover
+	corner(ask, 8)
+	pad(ask, 10, 8)
+	local askLayout = Instance.new("UIListLayout")
+	askLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	askLayout.Padding = UDim.new(0, 6)
+	askLayout.Parent = ask
+	local askText = label(ask, "AutoAskText", "", 1, COLORS.text, 14)
+	askText.ZIndex = 32
+	local askYes = wideButton(ask, "AutoYes", "Turn on", 2, COLORS.danger)
+	askYes.ZIndex = 32
+	local askNo = wideButton(ask, "AutoNo", "Cancel", 3, COLORS.buttonDim)
+	askNo.ZIndex = 32
+	local popClose = wideButton(popover, "AutoClose", "Done", 7, COLORS.button)
 
 	-- Action bar under the grid.
 	local bar = Instance.new("Frame")
@@ -205,7 +359,7 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	barLayout.Parent = bar
 	local salvageButton = Instance.new("TextButton")
 	salvageButton.Name = "SalvageSelected"
-	salvageButton.Size = UDim2.new(1, -(96 + UiTheme.PAD), 0, UiTheme.TOUCH)
+	salvageButton.Size = UDim2.new(1, -(96 + UiTheme.PAD), 0, GearBar.CONTROL_H)
 	salvageButton.BackgroundColor3 = COLORS.buttonDim
 	salvageButton.BorderSizePixel = 0
 	salvageButton.Font = Enum.Font.BuilderSansBold
@@ -219,7 +373,7 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	pad(salvageButton, 10, 0)
 	local clearButton = Instance.new("TextButton")
 	clearButton.Name = "ClearSelection"
-	clearButton.Size = UDim2.fromOffset(96, UiTheme.TOUCH)
+	clearButton.Size = UDim2.fromOffset(96, GearBar.CONTROL_H)
 	clearButton.BackgroundColor3 = COLORS.buttonDim
 	clearButton.BorderSizePixel = 0
 	clearButton.Font = Enum.Font.BuilderSansBold
@@ -231,63 +385,10 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	corner(clearButton, 8)
 
 	-- Confirm. Every salvage stops here first.
-	local confirm = Instance.new("Frame")
-	confirm.Name = "SalvageConfirm"
-	confirm.AnchorPoint = Vector2.new(0.5, 0.5)
-	confirm.Position = UDim2.fromScale(0.5, 0.5)
-	confirm.Size = UDim2.fromScale(0.9, 0)
-	confirm.AutomaticSize = Enum.AutomaticSize.Y
-	confirm.BackgroundColor3 = COLORS.panel
-	confirm.BorderSizePixel = 0
-	confirm.Visible = false
-	confirm.ZIndex = 20
-	confirm.Parent = parent
-	corner(confirm, 12)
-	pad(confirm, 14, 14)
-	local confirmLayout = Instance.new("UIListLayout")
-	confirmLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	confirmLayout.Padding = UDim.new(0, UiTheme.PAD)
-	confirmLayout.Parent = confirm
-	local confirmText = Instance.new("TextLabel")
-	confirmText.Name = "Text"
-	confirmText.BackgroundTransparency = 1
-	confirmText.Size = UDim2.new(1, 0, 0, 44)
-	confirmText.AutomaticSize = Enum.AutomaticSize.Y
-	confirmText.Font = Enum.Font.BuilderSans
-	confirmText.TextSize = 15
-	confirmText.TextWrapped = true
-	confirmText.TextXAlignment = Enum.TextXAlignment.Left
-	confirmText.TextColor3 = COLORS.text
-	confirmText.Text = ""
-	confirmText.ZIndex = 21
-	confirmText.LayoutOrder = 1
-	confirmText.Parent = confirm
-	local confirmYes = Instance.new("TextButton")
-	confirmYes.Name = "ConfirmSalvage"
-	confirmYes.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
-	confirmYes.BackgroundColor3 = COLORS.danger
-	confirmYes.BorderSizePixel = 0
-	confirmYes.Font = Enum.Font.BuilderSansBold
-	confirmYes.TextSize = 15
-	confirmYes.TextColor3 = COLORS.text
-	confirmYes.Text = "Confirm"
-	confirmYes.ZIndex = 21
-	confirmYes.LayoutOrder = 2
-	confirmYes.Parent = confirm
-	corner(confirmYes, 8)
-	local confirmNo = Instance.new("TextButton")
-	confirmNo.Name = "CancelSalvage"
-	confirmNo.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
-	confirmNo.BackgroundColor3 = COLORS.buttonDim
-	confirmNo.BorderSizePixel = 0
-	confirmNo.Font = Enum.Font.BuilderSansBold
-	confirmNo.TextSize = 15
-	confirmNo.TextColor3 = COLORS.text
-	confirmNo.Text = "Cancel"
-	confirmNo.ZIndex = 21
-	confirmNo.LayoutOrder = 3
-	confirmNo.Parent = confirm
-	corner(confirmNo, 8)
+	local confirm = panel(host, "SalvageConfirm", 360)
+	local confirmText = label(confirm, "Text", "", 1, COLORS.text, 15)
+	local confirmYes = wideButton(confirm, "ConfirmSalvage", "Confirm", 2, COLORS.danger)
+	local confirmNo = wideButton(confirm, "CancelSalvage", "Cancel", 3, COLORS.buttonDim)
 
 	local function picked(): { string }
 		local list = {}
@@ -310,6 +411,25 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		end
 	end
 
+	local function paintPopover(profile: any)
+		local on = GearHooks.autoRarity(profile) ~= nil
+		toggleButton.Text = if on then "On" else "Off"
+		toggleButton.BackgroundColor3 = if on then COLORS.warn else COLORS.buttonDim
+		toggleButton.TextColor3 = if on then COLORS.ink else COLORS.text
+		toggleButton:SetAttribute("On", on)
+		capDrop.set(GearHooks.safeCap(GearHooks.autoCapName(profile)))
+		local risky = GearHooks.capUnsafe(profile)
+		unsafe.Visible = risky
+		lowerButton.Visible = risky
+		if risky then
+			unsafe.Text = string.format(
+				"Your saved cap is %s%s. Auto-salvage now allows Uncommon at most.",
+				GearHooks.autoCapName(profile),
+				if on then " and it is on" else ""
+			)
+		end
+	end
+
 	local function paint()
 		local profile = opts.getProfile()
 		prune(profile)
@@ -317,11 +437,11 @@ function GearBar.mount(parent: Instance, opts: Opts)
 			then math.max(0, math.floor(profile.gearEssence))
 			else 0
 		essence.Text = string.format("Essence %d", held)
-		local on = GearHooks.autoRarity(profile) ~= nil
-		setText(autoButton, GearHooks.autoLabel(profile))
+		local chipText, on = GearHooks.autoChip(profile)
+		setText(autoButton, chipText .. "  ⚙")
 		if on then
 			-- Room for the warning mark on the left.
-			autoButton.Size = UDim2.fromOffset(widthFor(autoButton.Text) + 18, UiTheme.TOUCH)
+			autoButton.Size = UDim2.fromOffset(widthFor(autoButton.Text) + 18, GearBar.CONTROL_H)
 		end
 		autoButton.BackgroundColor3 = if on then COLORS.warn else COLORS.buttonDim
 		autoButton.TextColor3 = if on then COLORS.ink else COLORS.text
@@ -331,15 +451,17 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		if autoPad ~= nil then
 			autoPad.PaddingLeft = UDim.new(0, if on then 26 else 10)
 		end
-		setText(capButton, GearHooks.capLabel(profile))
+		paintPopover(profile)
 		setText(selectButton, if selecting then "Done" else "Select")
 		selectButton.BackgroundColor3 = if selecting then COLORS.gold else COLORS.button
 		selectButton.TextColor3 = if selecting then COLORS.ink else COLORS.text
-		local cap = PICK_CAPS[pickIndex] or "Common"
-		setText(pickButton, "Select all at or below " .. cap)
-		setText(pickRarity, cap)
-		pickButton.Visible = selecting
-		pickRarity.Visible = selecting
+		if pickDrop ~= nil then
+			pickDrop.button.Visible = selecting
+			pickDrop.set(PICK_CAPS[pickIndex] or "Common")
+			if not selecting then
+				pickDrop.close()
+			end
+		end
 		bar.Visible = selecting
 		local count, gain = GearHooks.estimate(profile, picked())
 		salvageButton.Text = GearHooks.salvageLabel(count, gain)
@@ -350,6 +472,11 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	local function hideConfirm()
 		confirm.Visible = false
 		token = nil
+	end
+
+	local function hideAsk()
+		ask.Visible = false
+		pendingAuto = nil
 	end
 
 	-- One request at a time. A second tap while one is out is dropped, so a
@@ -370,27 +497,95 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		end)
 	end
 
-	autoButton.MouseButton1Click:Connect(function()
-		local want = GearHooks.autoToggle(opts.getProfile())
-		call("auto", { enabled = want.enabled, rarity = want.rarity }, function(result)
+	-- Every auto-salvage change goes through here. The cap is clamped to
+	-- Common or Uncommon before it leaves the client.
+	local function sendAuto(want: { enabled: boolean, rarity: string })
+		local safe = { enabled = want.enabled == true, rarity = GearHooks.safeCap(want.rarity) }
+		call("auto", safe, function(result)
 			if type(result) ~= "table" or result.ok ~= true then
 				opts.onStatus(message(result, "Could not change auto-salvage."), "error")
 				return
 			end
 			opts.onStatus(if type(result.message) == "string" then result.message else "Saved.", "ok")
 		end)
+	end
+
+	-- Ask first when the change turns it on or raises the cap.
+	local function requestAuto(want: { enabled: boolean, rarity: string })
+		local text = GearHooks.autoAsk(opts.getProfile(), want)
+		if text == nil then
+			hideAsk()
+			sendAuto(want)
+			return
+		end
+		pendingAuto = { enabled = want.enabled, rarity = GearHooks.safeCap(want.rarity) }
+		askText.Text = text
+		askYes.Text = if GearHooks.autoRarity(opts.getProfile()) == nil then "Turn on" else "Raise cap"
+		ask.Visible = true
+	end
+
+	local function openPopover()
+		Dropdown.closeAll(host)
+		hideAsk()
+		paint()
+		popover.Visible = true
+	end
+
+	local function closePopover()
+		hideAsk()
+		capDrop.close()
+		popover.Visible = false
+	end
+
+	autoButton.MouseButton1Click:Connect(function()
+		if popover.Visible then
+			closePopover()
+		else
+			openPopover()
+		end
 	end)
 
-	capButton.MouseButton1Click:Connect(function()
-		local want = GearHooks.autoCap(opts.getProfile())
-		call("auto", { enabled = want.enabled, rarity = want.rarity }, function(result)
-			if type(result) ~= "table" or result.ok ~= true then
-				opts.onStatus(message(result, "Could not change auto-salvage."), "error")
-				return
-			end
-			opts.onStatus(if type(result.message) == "string" then result.message else "Saved.", "ok")
-		end)
+	toggleButton.MouseButton1Click:Connect(function()
+		local profile = opts.getProfile()
+		local on = GearHooks.autoRarity(profile) ~= nil
+		requestAuto(GearHooks.autoWant(profile, not on, capDrop.value()))
 	end)
+
+	-- The cap dropdown sends only when it changed. Raising it while on asks.
+	local capChanged = function(value: any)
+		local profile = opts.getProfile()
+		local on = GearHooks.autoRarity(profile) ~= nil
+		requestAuto(GearHooks.autoWant(profile, on, value))
+	end
+	for _, child in ipairs(capDrop.list:GetChildren()) do
+		if child:IsA("TextButton") then
+			local key = child:GetAttribute("Key")
+			child.MouseButton1Click:Connect(function()
+				if key ~= GearHooks.safeCap(GearHooks.autoCapName(opts.getProfile())) then
+					capChanged(key)
+				end
+			end)
+		end
+	end
+
+	lowerButton.MouseButton1Click:Connect(function()
+		local profile = opts.getProfile()
+		hideAsk()
+		sendAuto({ enabled = GearHooks.autoRarity(profile) ~= nil, rarity = "Uncommon" })
+	end)
+
+	askYes.MouseButton1Click:Connect(function()
+		local want = pendingAuto
+		hideAsk()
+		if want ~= nil then
+			sendAuto(want)
+		end
+	end)
+	askNo.MouseButton1Click:Connect(function()
+		hideAsk()
+		paint()
+	end)
+	popClose.MouseButton1Click:Connect(closePopover)
 
 	selectButton.MouseButton1Click:Connect(function()
 		selecting = not selecting
@@ -402,13 +597,18 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		opts.onChanged()
 	end)
 
-	pickRarity.MouseButton1Click:Connect(function()
-		pickIndex = (pickIndex % #PICK_CAPS) + 1
-		paint()
-	end)
-
-	pickButton.MouseButton1Click:Connect(function()
-		local cap = PICK_CAPS[pickIndex] or "Common"
+	local function selectUpTo(cap: string)
+		local where = tab()
+		if where ~= nil and where ~= "weapons" and where ~= "armor" then
+			opts.onStatus("Open Weapons or Armor to bulk select gear.", "info")
+			return
+		end
+		local why = GearHooks.pickEmpty(opts.getProfile(), cap, where)
+		if why ~= nil then
+			opts.onStatus(why, "info")
+			return
+		end
+		local kind = if where == "weapons" then "Weapon" elseif where == "armor" then "Armor" else nil
 		call("preview", { rarity = cap }, function(result)
 			if type(result) ~= "table" or result.ok ~= true then
 				opts.onStatus(message(result, "Could not check the Bag."), "error")
@@ -421,20 +621,50 @@ function GearBar.mount(parent: Instance, opts: Opts)
 					local item = if type(profile) == "table" and type(profile.inventory) == "table"
 						then profile.inventory[uid]
 						else nil
-					if type(uid) == "string" and item ~= nil and GearHooks.pickBlock(profile, item) == nil then
+					if
+						type(uid) == "string"
+						and item ~= nil
+						and (kind == nil or item.kind == kind)
+						and GearHooks.pickBlock(profile, item) == nil
+					then
 						selected[uid] = true
 						added += 1
 					end
 				end
 			end
 			if added == 0 then
-				opts.onStatus(string.format("Nothing at or below %s to salvage.", cap), "info")
+				opts.onStatus(
+					GearHooks.pickEmpty(profile, cap, where) or string.format("Nothing at or below %s to salvage.", cap),
+					"info"
+				)
 			else
 				opts.onStatus(string.format("Selected %d at or below %s.", added, cap), "ok")
 			end
 			opts.onChanged()
 		end)
-	end)
+	end
+
+	pickDrop = Dropdown.new(row, {
+		name = "SelectUpTo",
+		prefix = "Select all ≤",
+		options = pickOptions,
+		value = "Common",
+		host = host,
+		width = 210,
+		height = GearBar.CONTROL_H,
+		order = 5,
+		colors = COLORS,
+		always = true,
+		onChange = function(value: any)
+			for index, cap in ipairs(PICK_CAPS) do
+				if cap == value then
+					pickIndex = index
+				end
+			end
+			selectUpTo(PICK_CAPS[pickIndex] or "Common")
+		end,
+	})
+	pickDrop.button.Visible = false
 
 	clearButton.MouseButton1Click:Connect(function()
 		table.clear(selected)
@@ -502,6 +732,7 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		row = row,
 		bar = bar,
 		confirm = confirm,
+		popover = popover,
 	}
 
 	function handle.selecting(): boolean
@@ -537,8 +768,21 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		return GearHooks.pickBlock(profile, item)
 	end
 
+	function handle.count(): (number, number)
+		return GearHooks.estimate(opts.getProfile(), picked())
+	end
+
 	function handle.refresh()
 		paint()
+	end
+
+	function handle.openAuto()
+		openPopover()
+	end
+
+	function handle.closePopups()
+		closePopover()
+		Dropdown.closeAll(host)
 	end
 
 	function handle.rarityName(): string

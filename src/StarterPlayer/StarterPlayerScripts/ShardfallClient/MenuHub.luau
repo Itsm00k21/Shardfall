@@ -3965,9 +3965,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.apply(UiRouter.push(hubState.route, "sets"))
 			end)
 		end
-		hubFn.row(actions, "Open full bag", 3, function()
-			hooks.onBag()
-		end)
+		if not LaunchGate.on("oneInventory") then
+			hubFn.row(actions, "Open full bag", 3, function()
+				hooks.onBag()
+			end)
+		end
 		-- [Ghost] Auto-salvage is a live setting in the save. When it is on,
 		-- say so here too; the switch itself is in the full inventory.
 		if LaunchGate.on("gearSalvage") then
@@ -7168,6 +7170,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.follow(nextState: UiRouter.State)
 		if nextState.generation == hubState.route.generation then
+			return
+		end
+		-- [Ghost] One inventory: the Bag route (rail button, B key, hub
+		-- tab) opens the full Inventory instead of the small Bag. The old
+		-- Bag page stays behind LaunchGate oneInventory = false.
+		if
+			LaunchGate.on("oneInventory")
+			and nextState.open
+			and UiRouter.top(nextState) == "bag"
+		then
+			hooks.onBag()
 			return
 		end
 		local prompt = nextState.open

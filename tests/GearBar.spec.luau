@@ -125,15 +125,144 @@ describe("GearBar: auto-salvage labels", function()
 			rarity = "Uncommon",
 		})
 		expect(GearHooks.autoToggle({})).toEqual({ enabled = true, rarity = "Common" })
-		-- The cap press keeps on/off as the server has it.
-		expect(GearHooks.autoCap({ autoSalvage = false, autoSalvageRarity = "Common" })).toEqual({
-			enabled = false,
+		expect(GearHooks.autoChip({})).toEqual("Auto-salvage: Off")
+		expect(GearHooks.autoChip({ autoSalvage = true, autoSalvageRarity = "Uncommon" })).toEqual(
+			"Auto-salvage: ≤ Uncommon"
+		)
+	end)
+
+	it("clamps every cap the client sends to Common or Uncommon", function()
+		expect(GearHooks.safeCap("Common")).toEqual("Common")
+		expect(GearHooks.safeCap("Uncommon")).toEqual("Uncommon")
+		expect(GearHooks.safeCap("Rare")).toEqual("Uncommon")
+		expect(GearHooks.safeCap("Legendary")).toEqual("Uncommon")
+		expect(GearHooks.safeCap(nil)).toEqual("Common")
+		expect(GearHooks.autoWant({ autoSalvageRarity = "Rare" }, true, nil)).toEqual({
+			enabled = true,
 			rarity = "Uncommon",
 		})
-		expect(GearHooks.autoCap({ autoSalvage = true, autoSalvageRarity = "Rare" })).toEqual({
-			enabled = true,
-			rarity = "Common",
-		})
+		expect(GearHooks.capUnsafe({ autoSalvageRarity = "Rare" })).toBeTrue()
+		expect(GearHooks.capUnsafe({ autoSalvageRarity = "Uncommon" })).toBeFalse()
+	end)
+
+	it("asks before turning on or raising the cap, never before off or lower", function()
+		local off = { autoSalvage = false, autoSalvageRarity = "Common" }
+		expect(GearHooks.autoAsk(off, { enabled = true, rarity = "Uncommon" })).toEqual(
+			"Auto-salvage will destroy new Uncommon and lower drops. Turn on?"
+		)
+		local on = { autoSalvage = true, autoSalvageRarity = "Common" }
+		expect(GearHooks.autoAsk(on, { enabled = true, rarity = "Uncommon" })).toEqual(
+			"Auto-salvage will destroy new Uncommon and lower drops. Raise the cap?"
+		)
+		expect(GearHooks.autoAsk(on, { enabled = false, rarity = "Common" })).toBeNil()
+		local high = { autoSalvage = true, autoSalvageRarity = "Uncommon" }
+		expect(GearHooks.autoAsk(high, { enabled = true, rarity = "Common" })).toBeNil()
+	end)
+
+	it("the pill opens a popover; one tap never changes the setting", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke, calls = server(profile)
+			local _, parent = mount(profile, invoke)
+			local auto = GuiFake.findNamed(parent, "AutoSalvage")
+			expect(auto.Text).toEqual("Auto-salvage: Off  ⚙")
+			expect(GuiFake.findNamed(parent, "AutoCap")).toBeNil()
+			GuiFake.activate(auto)
+			GuiFake.activate(auto)
+			GuiFake.activate(auto)
+			expect(#calls).toEqual(0)
+			expect(profile.autoSalvage).toEqual(false)
+			expect(GuiFake.findNamed(parent, "AutoPopover").Visible).toBeTrue()
+			-- Rare and above are not offered at all.
+			expect(GuiFake.findNamed(parent, "AutoCapPick_Common") ~= nil).toBeTrue()
+			expect(GuiFake.findNamed(parent, "AutoCapPick_Uncommon") ~= nil).toBeTrue()
+			expect(GuiFake.findNamed(parent, "AutoCapPick_Rare")).toBeNil()
+			expect(GuiFake.findNamed(parent, "AutoCapPick_Epic")).toBeNil()
+		end)
+	end)
+
+	it("turning on needs the confirm; Cancel sends nothing", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke, calls = server(profile)
+			local _, parent = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			-- Cap to Uncommon while off: saved, still off, no confirm.
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCapPick"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCapPick_Uncommon"))
+			expect(profile.autoSalvage).toEqual(false)
+			expect(profile.autoSalvageRarity).toEqual("Uncommon")
+			local sent = #calls
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			local ask = GuiFake.findNamed(parent, "AutoAsk")
+			expect(ask.Visible).toBeTrue()
+			expect(GuiFake.findNamed(parent, "AutoAskText").Text).toEqual(
+				"Auto-salvage will destroy new Uncommon and lower drops. Turn on?"
+			)
+			expect(#calls).toEqual(sent)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoNo"))
+			expect(ask.Visible).toBeFalse()
+			expect(profile.autoSalvage).toEqual(false)
+			expect(#calls).toEqual(sent)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoYes"))
+			expect(profile.autoSalvage).toEqual(true)
+			expect(calls[#calls][2]).toEqual({ enabled = true, rarity = "Uncommon" })
+			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: ≤ Uncommon  ⚙")
+			expect(GuiFake.findNamed(parent, "AutoSalvage"):GetAttribute("AutoOn")).toEqual(true)
+			-- Turning off never asks.
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			expect(profile.autoSalvage).toEqual(false)
+			expect(GuiFake.findNamed(parent, "AutoAsk").Visible).toBeFalse()
+		end)
+	end)
+
+	it("raising the cap while on asks; lowering does not", function()
+		withFlag(function()
+			local profile = bag()
+			profile.autoSalvage = true
+			profile.autoSalvageRarity = "Common"
+			local invoke, calls = server(profile)
+			local _, parent = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCapPick"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCapPick_Uncommon"))
+			expect(#calls).toEqual(0)
+			expect(GuiFake.findNamed(parent, "AutoAskText").Text).toEqual(
+				"Auto-salvage will destroy new Uncommon and lower drops. Raise the cap?"
+			)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoYes"))
+			expect(profile.autoSalvageRarity).toEqual("Uncommon")
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCapPick"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCapPick_Common"))
+			expect(profile.autoSalvageRarity).toEqual("Common")
+			expect(GuiFake.findNamed(parent, "AutoAsk").Visible).toBeFalse()
+		end)
+	end)
+
+	it("a saved Rare cap is shown, never sent back, and can be lowered", function()
+		withFlag(function()
+			local profile = bag()
+			profile.autoSalvage = true
+			profile.autoSalvageRarity = "Rare"
+			local invoke, calls = server(profile)
+			local _, parent = mount(profile, invoke)
+			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: ≤ Rare  ⚙")
+			-- Mounting sends nothing; the save is not rewritten quietly.
+			expect(#calls).toEqual(0)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			expect(GuiFake.findNamed(parent, "AutoUnsafe").Visible).toBeTrue()
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoLower"))
+			expect(calls[#calls][2]).toEqual({ enabled = true, rarity = "Uncommon" })
+			expect(profile.autoSalvageRarity).toEqual("Uncommon")
+			-- Off then On again sends Uncommon, never Rare.
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoYes"))
+			for _, call in ipairs(calls) do
+				expect(GearHooks.capRank(call[2].rarity) <= 2).toBeTrue()
+			end
+		end)
 	end)
 
 	it("keeps auto-salvage off once turned off: save, reload, and a Common drop", function()
@@ -141,56 +270,52 @@ describe("GearBar: auto-salvage labels", function()
 			local profile = bag()
 			local invoke, calls = server(profile)
 			local handle, parent = mount(profile, invoke)
-			local auto = GuiFake.findNamed(parent, "AutoSalvage")
-			expect(auto.Text).toEqual("Auto-salvage: Off")
-			GuiFake.activate(GuiFake.findNamed(parent, "AutoCap"))
-			expect(profile.autoSalvage).toEqual(false)
-			expect(profile.autoSalvageRarity).toEqual("Uncommon")
-			GuiFake.activate(auto)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoYes"))
 			expect(profile.autoSalvage).toEqual(true)
-			expect(auto.Text).toEqual("Auto-salvage: Uncommons and below")
-			GuiFake.activate(auto)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
 			expect(profile.autoSalvage).toEqual(false)
-			expect(auto.Text).toEqual("Auto-salvage: Off")
-			expect(calls[#calls][2]).toEqual({ enabled = false, rarity = "Uncommon" })
-			-- A repaint, a remount, and a save round trip all stay Off.
+			local auto = GuiFake.findNamed(parent, "AutoSalvage")
+			expect(auto.Text).toEqual("Auto-salvage: Off  ⚙")
+			expect(calls[#calls][2]).toEqual({ enabled = false, rarity = "Common" })
 			handle.refresh()
-			expect(auto.Text).toEqual("Auto-salvage: Off")
-			local again = mount(profile, invoke)
-			expect(again ~= nil).toBeTrue()
+			expect(auto.Text).toEqual("Auto-salvage: Off  ⚙")
 			local reloaded = Schema.reconcile(Schema.deepCopy(profile))
 			expect(reloaded.autoSalvage).toEqual(false)
 			local before = profile.gearEssence
 			local drop = GearSalvage.receive(profile, sword("new", "Common"))
 			expect(drop.kept).toEqual(true)
 			expect(profile.gearEssence).toEqual(before)
-			local dropAfterReload = GearSalvage.receive(reloaded, sword("new2", "Common"))
-			expect(dropAfterReload.kept).toEqual(true)
 		end)
 	end)
 
-	it("shows the server value after a refused press and never flips on its own", function()
+	it("shows the server value after a refused press", function()
 		withFlag(function()
 			local profile = bag()
 			local invoke, calls, hold = server(profile)
 			local _, parent, statuses = mount(profile, invoke)
-			local auto = GuiFake.findNamed(parent, "AutoSalvage")
 			hold(true)
-			GuiFake.activate(auto)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoYes"))
 			expect(profile.autoSalvage).toEqual(false)
-			expect(auto.Text).toEqual("Auto-salvage: Off")
+			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: Off  ⚙")
 			expect(statuses[#statuses][2]).toEqual("error")
 			hold(false)
-			-- Mounting sends nothing. No state poll.
 			local before = #calls
 			mount(profile, invoke)
 			expect(#calls).toEqual(before)
 		end)
 	end)
+end)
 
+describe("GearBar: one request at a time", function()
 	it("drops a second tap while the first is still out", function()
 		withFlag(function()
 			local profile = bag()
+			profile.autoSalvage = true
+			profile.autoSalvageRarity = "Common"
 			local sent = 0
 			local inner = server(profile)
 			local parent: any = nil
@@ -199,15 +324,16 @@ describe("GearBar: auto-salvage labels", function()
 				sent += 1
 				if not nested then
 					nested = true
-					GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+					GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
 				end
 				return inner(action, payload)
 			end
 			local _, root = mount(profile, invoke)
 			parent = root
 			GuiFake.activate(GuiFake.findNamed(root, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(root, "AutoToggle"))
 			expect(sent).toEqual(1)
-			expect(profile.autoSalvage).toEqual(true)
+			expect(profile.autoSalvage).toEqual(false)
 		end)
 	end)
 end)
@@ -266,27 +392,50 @@ describe("GearBar: select and salvage", function()
 		end)
 	end)
 
-	it("selects everything at or below a rarity from the server preview", function()
+	it("selects everything at or below a rarity from the dropdown", function()
 		withFlag(function()
 			local profile = bag()
 			local invoke, calls = server(profile)
 			local handle, parent = mount(profile, invoke)
+			expect(GuiFake.findNamed(parent, "SelectUpTo").Visible).toBeFalse()
 			GuiFake.activate(GuiFake.findNamed(parent, "SelectMode"))
-			expect(GuiFake.findNamed(parent, "SelectUpTo").Text).toEqual("Select all at or below Common")
+			expect(GuiFake.findNamed(parent, "SelectUpTo").Visible).toBeTrue()
 			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo"))
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo_Common"))
 			expect(calls[#calls][2]).toEqual({ rarity = "Common" })
 			expect(handle.isSelected("a")).toEqual(true)
 			expect(handle.isSelected("b")).toEqual(false)
 			expect(handle.isSelected("fav")).toEqual(false)
 			expect(handle.isSelected("worn")).toEqual(false)
-			GuiFake.activate(GuiFake.findNamed(parent, "SelectRarity"))
 			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo"))
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo_Uncommon"))
 			expect(handle.isSelected("b")).toEqual(true)
 			-- Nothing is gone until Confirm.
 			expect(profile.inventory.a ~= nil).toBeTrue()
 			GuiFake.activate(GuiFake.findNamed(parent, "ClearSelection"))
 			expect(handle.isSelected("a")).toEqual(false)
 		end)
+	end)
+
+	it("says why nothing qualifies instead of asking the server", function()
+		withFlag(function()
+			local profile = bag()
+			profile.inventory.a.locked = true
+			local invoke, calls = server(profile)
+			local _, parent, statuses = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectMode"))
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo"))
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo_Common"))
+			expect(#calls).toEqual(0)
+			expect(statuses[#statuses][1]).toEqual(
+				"No unlocked, unequipped Commons in your Bag (2 locked, 1 equipped, 1 favorite)."
+			)
+			expect(statuses[#statuses][2]).toEqual("info")
+		end)
+		expect(GearHooks.pickEmpty({ inventory = {} }, "Common", "weapons")).toEqual("No Commons in Weapons.")
+		expect(GearHooks.pickEmpty({
+			inventory = { x = { uid = "x", kind = "Armor", rarity = "Common", locked = true } },
+		}, "Uncommon", "armor")).toEqual("No unlocked, unequipped Uncommons or lower in Armor (1 locked).")
 	end)
 end)
 

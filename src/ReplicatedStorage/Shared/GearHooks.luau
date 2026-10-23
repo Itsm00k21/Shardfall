@@ -402,4 +402,121 @@ function GearHooks.levelLine(item: any): string
 	return table.concat(parts, "  ")
 end
 
+-- Auto-salvage safety (Kevin, Oct 23). The client offers and sends only
+-- these caps. A saved Rare+ cap is shown as-is (never rewritten quietly)
+-- and the settings popover offers to lower it.
+GearHooks.AUTO_SAFE = table.freeze({ "Common", "Uncommon" })
+
+local CAP_RANK = { Common = 1, Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5, Mythic = 6, Secret = 7 }
+
+function GearHooks.capRank(rarity: any): number
+	return if type(rarity) == "string" and CAP_RANK[rarity] ~= nil then CAP_RANK[rarity] else 0
+end
+
+-- The cap the client may send: Common or Uncommon. Anything higher is
+-- clamped to Uncommon; anything unknown reads as Common.
+function GearHooks.safeCap(rarity: any): string
+	local rank = GearHooks.capRank(rarity)
+	if rank >= 2 then
+		return "Uncommon"
+	end
+	return "Common"
+end
+
+-- True when the saved cap is above what the client allows.
+function GearHooks.capUnsafe(profile: any): boolean
+	return type(profile) == "table" and GearHooks.capRank(profile.autoSalvageRarity) > 2
+end
+
+-- The {enabled, rarity} a popover change sends, clamped. want.rarity is
+-- what the player picked; nil keeps the saved (clamped) cap.
+function GearHooks.autoWant(profile: any, enabled: boolean, rarity: any): { enabled: boolean, rarity: string }
+	local pick = if rarity ~= nil then rarity else GearHooks.autoCapName(profile)
+	return { enabled = enabled == true, rarity = GearHooks.safeCap(pick) }
+end
+
+-- The confirm text when a change turns auto-salvage on or raises its cap,
+-- else nil (turning it off or lowering the cap never asks).
+function GearHooks.autoAsk(profile: any, want: any): string?
+	if type(want) ~= "table" or want.enabled ~= true then
+		return nil
+	end
+	local cap = GearHooks.safeCap(want.rarity)
+	local current = GearHooks.autoRarity(profile)
+	if current == nil then
+		return string.format("Auto-salvage will destroy new %s and lower drops. Turn on?", cap)
+	end
+	if GearHooks.capRank(cap) > GearHooks.capRank(current) then
+		return string.format("Auto-salvage will destroy new %s and lower drops. Raise the cap?", cap)
+	end
+	return nil
+end
+
+-- The action-bar pill: short, and honest about a saved unsafe cap.
+function GearHooks.autoChip(profile: any): (string, boolean)
+	local rarity = GearHooks.autoRarity(profile)
+	if rarity == nil then
+		return "Auto-salvage: Off", false
+	end
+	return string.format("Auto-salvage: ≤ %s", rarity), true
+end
+
+local KIND_FOR_TAB = { weapons = "Weapon", armor = "Armor" }
+local TAB_NAME = { weapons = "Weapons", armor = "Armor" }
+
+-- Why "select all at or below cap" found nothing in this tab, or nil when
+-- something qualifies. e.g. "No unlocked, unequipped Commons in Weapons."
+function GearHooks.pickEmpty(profile: any, cap: any, tab: any): string?
+	local capName = if type(cap) == "string" then cap else "Common"
+	local where = TAB_NAME[tab] or "your Bag"
+	local kind = KIND_FOR_TAB[tab]
+	local noun = if capName == "Common" then "Commons" else capName .. "s or lower"
+	local inventory = if type(profile) == "table" and type(profile.inventory) == "table"
+		then profile.inventory
+		else {}
+	local limit = GearHooks.capRank(capName)
+	local any, free = 0, 0
+	local locked, worn, fav = 0, 0, 0
+	for uid, item in pairs(inventory) do
+		if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
+			if (kind == nil or item.kind == kind) and GearHooks.capRank(item.rarity) <= limit and GearHooks.capRank(item.rarity) > 0 then
+				any += 1
+				local probe = item
+				if type(probe.uid) ~= "string" then
+					probe = table.clone(item)
+					probe.uid = uid
+				end
+				local why = GearHooks.pickBlock(profile, probe)
+				if why == nil then
+					free += 1
+				elseif why == "Locked" then
+					locked += 1
+				elseif why == "Equipped" then
+					worn += 1
+				elseif why == "Favorite" then
+					fav += 1
+				end
+			end
+		end
+	end
+	if free > 0 then
+		return nil
+	end
+	if any == 0 then
+		return string.format("No %s in %s.", noun, where)
+	end
+	local bits = {}
+	if locked > 0 then
+		table.insert(bits, string.format("%d locked", locked))
+	end
+	if worn > 0 then
+		table.insert(bits, string.format("%d equipped", worn))
+	end
+	if fav > 0 then
+		table.insert(bits, string.format("%d favorite", fav))
+	end
+	local tail = if #bits > 0 then " (" .. table.concat(bits, ", ") .. ")" else ""
+	return string.format("No unlocked, unequipped %s in %s%s.", noun, where, tail)
+end
+
 return GearHooks

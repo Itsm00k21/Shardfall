@@ -45,6 +45,7 @@ LaunchGate.SHOW = {
 	upgradeScale = false, -- gold forge upgrades multiply stats at read time
 	shardCore = false, -- Shard Core feeder (GetShardCore / FeedShardCore). Spends gearEssence.
 	gearSalvage = false, -- salvage gear into Essence (Stage B). Off until Kevin flips it.
+	oneInventory = false, -- [Ghost] Bag rail button and B key open the full Inventory; the small Bag is retired.
 }
 
 -- World prompt action to the switch that keeps it from being built.

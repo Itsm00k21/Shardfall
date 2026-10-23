@@ -1342,6 +1342,11 @@ menuHub = MenuHub.start(playerGui, {
 		return selectedPoolId
 	end,
 	onBag = function()
+		-- [Ghost] One inventory: the Bag key toggles it.
+		if LaunchGate.on("oneInventory") and inventory.isOpen() then
+			inventory.close()
+			return
+		end
 		closePanels("inventory")
 		inventory.open()
 		if menuHub ~= nil then

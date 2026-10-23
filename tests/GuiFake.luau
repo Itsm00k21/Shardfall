@@ -927,6 +927,8 @@ function GuiFake.world()
 		"GearBar",
 		"CoreCard",
 		"GearDetail",
+		"Dropdown",
+		"InventoryHud",
 	}) do
 		local moduleScript = newInstance("ModuleScript")
 		moduleScript.Name = name
@@ -1094,6 +1096,8 @@ function GuiFake.world()
 				or moduleName == "GearBar"
 				or moduleName == "CoreCard"
 				or moduleName == "GearDetail"
+				or moduleName == "Dropdown"
+				or moduleName == "InventoryHud"
 			then
 				return loadClient(moduleName)
 			end
