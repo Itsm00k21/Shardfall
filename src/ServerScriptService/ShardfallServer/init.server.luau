@@ -172,6 +172,13 @@ end)
 begin("MarketService", function()
 	MarketService.start()
 end)
+begin("Analytics", function()
+	-- [ECHO hook] Session lines only. Gameplay stays quiet while analytics is off.
+	if LaunchGate.on("analytics") then
+		local AnalyticsService = require(script.AnalyticsService)
+		AnalyticsService.start()
+	end
+end)
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()
 		local ok, err = pcall(function()

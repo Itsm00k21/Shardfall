@@ -139,13 +139,25 @@ function InventoryService.setFlag(
 end
 
 function InventoryService.equip(player: Player, uid: string): (boolean, string?)
-	return DataService.mutate(player, function(data)
+	local ok, err = DataService.mutate(player, function(data)
 		local item = Schema.findItem(data, uid)
 		if item == nil then
 			return "You do not have that item."
 		end
 		return Schema.equipItem(data, item)
 	end)
+	-- [ECHO hook]
+	if ok == true then
+		local tracked, hookErr = pcall(function()
+			local AnalyticsService = require(script.Parent.AnalyticsService)
+			AnalyticsService.funnel(player, "first_roll", "equip")
+			AnalyticsService.funnel(player, "first_session", "first_equip")
+		end)
+		if not tracked then
+			warn("[Shardfall] analytics hook: " .. tostring(hookErr))
+		end
+	end
+	return ok, err
 end
 
 function InventoryService.unequip(player: Player, uid: string): (boolean, string?)

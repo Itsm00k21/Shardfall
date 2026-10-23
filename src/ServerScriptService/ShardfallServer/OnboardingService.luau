@@ -38,11 +38,20 @@ local function grantKit(data)
 end
 
 function OnboardingService.note(player: Player, eventId: string)
-	DataService.mutate(player, function(data)
+	local ok = DataService.mutate(player, function(data)
 		move(data, eventId)
 		grantKit(data)
 		return nil
 	end)
+	-- [ECHO hook]
+	if ok == true then
+		local tracked, hookErr = pcall(function()
+			require(script.Parent.AnalyticsService).funnel(player, "tutorial", eventId)
+		end)
+		if not tracked then
+			warn("[Shardfall] analytics hook: " .. tostring(hookErr))
+		end
+	end
 end
 
 function OnboardingService.advance(player: Player)
@@ -65,6 +74,13 @@ function OnboardingService.advance(player: Player)
 	if not saved then
 		return { ok = false, error = err or "Could not save." }
 	end
+	-- [ECHO hook]
+	local tracked, hookErr = pcall(function()
+		require(script.Parent.AnalyticsService).funnel(player, "tutorial", "done")
+	end)
+	if not tracked then
+		warn("[Shardfall] analytics hook: " .. tostring(hookErr))
+	end
 	return { ok = true, profile = DataService.snapshot(player) }
 end
 
@@ -78,6 +94,13 @@ function OnboardingService.skip(player: Player)
 	end)
 	if not saved then
 		return { ok = false, error = err or "Could not save." }
+	end
+	-- [ECHO hook]
+	local tracked, hookErr = pcall(function()
+		require(script.Parent.AnalyticsService).funnel(player, "tutorial", "done")
+	end)
+	if not tracked then
+		warn("[Shardfall] analytics hook: " .. tostring(hookErr))
 	end
 	return { ok = true, profile = DataService.snapshot(player) }
 end
