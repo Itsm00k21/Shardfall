@@ -19,7 +19,7 @@ its tag to merged and add the merge commit.
   currency sources and sinks. `AnalyticsService` pcalls the engine,
   rate-limits per player, and sends nothing while `LaunchGate.analytics`
   or the catalog `ENABLED` flag is off (both default off). Gameplay call
-  sites are not wired. No save changes and no paid products. (open)
+  sites are not wired. No save changes and no paid products. [#383] (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and
@@ -98,3 +98,4 @@ its tag to merged and add the merge commit.
 [#375]: https://github.com/Itsm00k21/Shardfall/pull/375
 [#376]: https://github.com/Itsm00k21/Shardfall/pull/376
 [#377]: https://github.com/Itsm00k21/Shardfall/pull/377
+[#383]: https://github.com/Itsm00k21/Shardfall/pull/383
