@@ -40,6 +40,10 @@ LaunchGate.SHOW = {
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
+	equip = false, -- Phase 2 equip remotes (EquipSlot / UnequipSlot / GetEquip)
+	gearLevels = false, -- auto-feed an exact duplicate into stars (off until Kevin decides)
+	upgradeScale = false, -- gold forge upgrades multiply stats at read time
+	shardCore = false, -- Shard Core feeder (GetShardCore / FeedShardCore). Spends gearEssence.
 }
 
 -- World prompt action to the switch that keeps it from being built.

@@ -32,7 +32,10 @@ local function silenceForeignScripts()
 				local inAvatar = false
 				while cursor ~= nil do
 					table.insert(names, cursor.Name)
-					if cursor:IsA("Model") and game:GetService("Players"):GetPlayerFromCharacter(cursor) ~= nil then
+					if
+						cursor:IsA("Model")
+						and game:GetService("Players"):GetPlayerFromCharacter(cursor) ~= nil
+					then
 						inAvatar = true
 					end
 					cursor = cursor.Parent
@@ -160,6 +163,14 @@ begin("PropService", function()
 end)
 begin("GearService", function()
 	GearService.start()
+end)
+-- [ECHO hook] Equip remotes. The handler refuses while LaunchGate.equip is off.
+begin("EquipService", function()
+	require(script.EquipService.Bind).start()
+end)
+-- [ECHO hook] Shard Core remotes. The handler refuses while LaunchGate.shardCore is off.
+begin("ShardCore", function()
+	require(script.ShardCore.Bind).start()
 end)
 begin("GroveService", function()
 	if LaunchGate.on("grove") then
