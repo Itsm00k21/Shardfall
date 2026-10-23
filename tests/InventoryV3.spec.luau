@@ -202,6 +202,46 @@ describe("InventoryHud one inventory", function()
 		end)
 	end)
 
+	it("fits the phone header and action bar without sideways overflow", function()
+		withGear(function()
+			local world = GuiFake.world()
+			world.userInput.TouchEnabled = true
+			world.userInput.KeyboardEnabled = false
+			local InventoryHud = world.load("InventoryHud")
+			local profile = bag()
+			local controller = InventoryHud.start(world.playerGui, {
+				onGear = function(action: string, payload: any): any
+					return GearSalvage.applyAction(profile, 42, action, payload, 100)
+				end,
+			})
+			controller.setProfile(profile)
+			controller.open()
+			local screen = GuiFake.findNamed(world.playerGui, "ShardfallInventory")
+			local root = GuiFake.findNamed(screen, "Inventory")
+			expect(GuiFake.findNamed(root, "EquipBest").Text).toEqual("Best")
+			local auto = GuiFake.findNamed(root, "AutoSalvage")
+			expect(string.find(auto.Text, "Auto: Off", 1, true) ~= nil).toBeTrue()
+			local actions = GuiFake.findNamed(root, "Actions")
+			local row = GuiFake.findNamed(root, "GearRow")
+			local function rowWidth(): number
+				local width, shown = 0, 0
+				for _, child in ipairs(row:GetChildren()) do
+					if child:IsA("GuiObject") and child.Visible then
+						width += child.Size.X.Offset
+						shown += 1
+					end
+				end
+				return width + 8 * math.max(0, shown - 1)
+			end
+			expect(rowWidth() <= 370).toBeTrue()
+			expect(rowWidth() <= actions.Size.X.Offset).toBeTrue()
+			GuiFake.activate(GuiFake.findNamed(root, "SelectMode"))
+			expect(auto.Visible).toBeFalse()
+			expect(GuiFake.findNamed(root, "Essence").Visible).toBeFalse()
+			expect(rowWidth() <= 370).toBeTrue()
+		end)
+	end)
+
 	it("has one filter row of Search plus three dropdowns and no sideways scroll", function()
 		withGear(function()
 			local _, screen = mount(bag())

@@ -434,18 +434,23 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		header.Position = UDim2.fromOffset(chrome.header.x, chrome.header.y)
 		header.Size = UDim2.fromOffset(chrome.header.w, chrome.header.h)
 		-- Header buttons, right to left: Close, Equip Best, + Slots (dev).
-		close.Size = UDim2.fromOffset(72, rowH)
+		-- A phone header is about 370 wide: the buttons shrink so they
+		-- stop short of the title and the capacity count.
+		local closeW = if phone then 56 else 72
+		close.Size = UDim2.fromOffset(closeW, rowH)
 		close.Position = UDim2.fromScale(1, 0.5)
-		local right = 72 + 6
-		local bestW = if phone then 64 else 104
+		local right = closeW + 6
+		local bestW = if phone then 52 else 104
 		equipBest.Text = if phone then "Best" else "Equip Best"
 		equipBest.Size = UDim2.fromOffset(bestW, rowH)
 		equipBest.Position = UDim2.new(1, -right, 0.5, 0)
 		right += bestW + 6
 		if expand.Visible then
-			expand.Size = UDim2.fromOffset(72, rowH)
+			local expandW = if phone then 56 else 72
+			expand.Text = if phone then "+Slots" else "+ Slots"
+			expand.Size = UDim2.fromOffset(expandW, rowH)
 			expand.Position = UDim2.new(1, -right, 0.5, 0)
-			right += 72 + 6
+			right += expandW + 6
 		end
 		if chrome.compact then
 			-- Short window: the tabs share the header row.
@@ -611,6 +616,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			detail.Size = UDim2.new(0, detailW, 1, 0)
 		end
 		if gear ~= nil then
+			gear.setCompact(phone)
 			gear.row.Position = UDim2.fromOffset(0, 0)
 			gear.row.Size = UDim2.fromScale(1, 1)
 			gear.bar.Position = UDim2.new(0, 0, 1, -GearBar.BAR_H)

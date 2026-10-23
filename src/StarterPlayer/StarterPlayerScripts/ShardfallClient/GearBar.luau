@@ -195,6 +195,9 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	local pickIndex = 1
 	local token: string? = nil
 	local pendingAuto: { enabled: boolean, rarity: string }? = nil
+	-- Phone width: shorter chip text, and Select mode keeps only what
+	-- picking needs so the bar never scrolls sideways.
+	local compact = false
 
 	local function tab(): string?
 		local getTab = opts.getTab
@@ -439,6 +442,14 @@ function GearBar.mount(parent: Instance, opts: Opts)
 			else 0
 		essence.Text = string.format("Essence %d", held)
 		local chipText, on = GearHooks.autoChip(profile)
+		if compact then
+			chipText = if on then "Auto: On" else "Auto: Off"
+			essence.Size = UDim2.fromOffset(math.max(80, #essence.Text * 7 + 20), GearBar.CONTROL_H)
+		else
+			essence.Size = UDim2.fromOffset(110, GearBar.CONTROL_H)
+		end
+		essence.Visible = not (compact and selecting)
+		autoButton.Visible = not (compact and selecting)
 		setText(autoButton, chipText .. "  ⚙")
 		if on then
 			-- Room for the warning mark on the left.
@@ -775,6 +786,13 @@ function GearBar.mount(parent: Instance, opts: Opts)
 
 	function handle.refresh()
 		paint()
+	end
+
+	function handle.setCompact(on: boolean)
+		if compact ~= on then
+			compact = on
+			paint()
+		end
 	end
 
 	function handle.openAuto()
