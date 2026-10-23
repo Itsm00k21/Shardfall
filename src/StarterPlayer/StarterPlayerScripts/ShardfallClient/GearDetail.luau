@@ -90,6 +90,83 @@ function GearDetail.artKey(item: any): string
 	return HubStyle.itemArt(item)
 end
 
+-- [Ghost] Clip 5: one padlock look everywhere. Drawn from frames (an
+-- emoji ignores TextColor3): gold and closed while locked, muted grey
+-- and open while unlocked.
+GearDetail.LOCK_GOLD = Color3.fromRGB(255, 196, 64)
+GearDetail.LOCK_GREY = Color3.fromRGB(150, 146, 170)
+
+function GearDetail.lockIcon(parent: Instance, locked: boolean, px: number): Frame
+	local color = if locked then GearDetail.LOCK_GOLD else GearDetail.LOCK_GREY
+	local icon = Instance.new("Frame")
+	icon.Name = "LockIcon"
+	icon.BackgroundTransparency = 1
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.fromScale(0.5, 0.5)
+	icon.Size = UDim2.fromOffset(px, px)
+	icon:SetAttribute("Locked", locked)
+	icon.Parent = parent
+	local shackle = Instance.new("Frame")
+	shackle.Name = "Shackle"
+	shackle.BackgroundTransparency = 1
+	shackle.Size = UDim2.fromScale(0.5, 0.55)
+	-- Open: the shackle lifts and swings right.
+	shackle.Position = if locked then UDim2.fromScale(0.25, 0.08) else UDim2.fromScale(0.45, -0.04)
+	shackle.Parent = icon
+	local ring = Instance.new("UIStroke")
+	ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	ring.Thickness = math.max(1.5, px / 9)
+	ring.Color = color
+	ring.Parent = shackle
+	corner(shackle, math.floor(px * 0.25))
+	local body = Instance.new("Frame")
+	body.Name = "Body"
+	body.BorderSizePixel = 0
+	body.BackgroundColor3 = color
+	body.Size = UDim2.fromScale(0.72, 0.46)
+	body.Position = UDim2.fromScale(0.14, 0.48)
+	body.Parent = icon
+	corner(body, math.max(2, math.floor(px / 8)))
+	local baseZ = if parent:IsA("GuiObject") then parent.ZIndex else 1
+	icon.ZIndex = baseZ
+	shackle.ZIndex = baseZ
+	body.ZIndex = baseZ + 1
+	return icon
+end
+
+-- [Ghost] Clip 5: worn items show one EQUIPPED state. A first tap arms it
+-- ("Tap again to unequip"), a second tap within 3 s unequips. Unequip
+-- stays possible (UnequipItem is live) without a second button.
+GearDetail.ARM_SECONDS = 3
+
+function GearDetail.wornTap(button: TextButton, onUnequip: (() -> ())?): () -> ()
+	local armedAt: number? = nil
+	return function()
+		if onUnequip == nil then
+			return
+		end
+		local now = os.clock()
+		if armedAt ~= nil and now - armedAt <= GearDetail.ARM_SECONDS then
+			armedAt = nil
+			button.Text = "EQUIPPED"
+			button:SetAttribute("Armed", false)
+			onUnequip()
+			return
+		end
+		armedAt = now
+		button.Text = "Tap again to unequip"
+		button:SetAttribute("Armed", true)
+		local stamp = now
+		task.delay(GearDetail.ARM_SECONDS, function()
+			if armedAt == stamp and button.Parent ~= nil then
+				armedAt = nil
+				button.Text = "EQUIPPED"
+				button:SetAttribute("Armed", false)
+			end
+		end)
+	end
+end
+
 local function grouped(amount: number): string
 	local text = tostring(math.floor(amount))
 	local out = text
@@ -262,22 +339,29 @@ function GearDetail.build(host: Instance, opts: any): any
 	local padlock = Instance.new("TextButton")
 	padlock.Name = "Padlock"
 	padlock.Size = UDim2.fromOffset(UiTheme.TOUCH, UiTheme.TOUCH)
-	padlock.BackgroundColor3 = if locked then colors.lockOn else colors.dim
+	padlock.BackgroundColor3 = colors.dim
 	padlock.BorderSizePixel = 0
 	padlock.AutoButtonColor = true
-	padlock.Font = headerFont
-	padlock.TextSize = 20
-	padlock.TextColor3 = if locked then colors.ink else colors.text
-	padlock.Text = if locked then "🔒" else "🔓"
+	padlock.Text = ""
 	padlock.LayoutOrder = 3
 	padlock.Parent = hero
 	padlock:SetAttribute("Locked", locked)
 	corner(padlock, UiTheme.TOUCH // 2)
+	GearDetail.lockIcon(padlock, locked, 22)
 	bind(padlock, function()
 		if type(opts.onLock) == "function" then
 			opts.onLock(not locked)
 		end
 	end)
+	-- [Ghost] Clip 5: pets reuse just the header (icon, name, rarity,
+	-- padlock); the host draws their stats and the equip state below.
+	if opts.headerOnly == true then
+		return {
+			hero = hero,
+			padlock = padlock,
+			nextOrder = base + 1,
+		}
+	end
 
 	-- Stats against the worn item.
 	local detail = BagCompare.detail(profile, item, opts.powerOf)
@@ -332,8 +416,12 @@ function GearDetail.build(host: Instance, opts: any): any
 		if worn then colors.equipped else colors.equip,
 		colors.text
 	)
+	local unequip = if type(opts.onUnequip) == "function" then opts.onUnequip else nil
+	local wornTap = GearDetail.wornTap(equip, unequip)
 	bind(equip, function()
-		if not worn and type(opts.onEquip) == "function" then
+		if worn then
+			wornTap()
+		elseif type(opts.onEquip) == "function" then
 			opts.onEquip()
 		end
 	end)

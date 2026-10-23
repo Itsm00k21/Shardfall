@@ -588,6 +588,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local socketCue = false
 	local isOpen = false
 	local coreOpen = true
+	-- [Ghost] Clip 5: a newly picked item opens its detail at the top.
+	local lastDetailId: string? = nil
 	local pendingRarity: string? = nil
 	local pendingFeed: { string }? = nil
 	local tabButtons: { [string]: TextButton } = {}
@@ -1083,13 +1085,14 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 					BorderSizePixel = 0,
 					Font = Enum.Font.BuilderSansBold,
 					TextSize = 15,
-					TextColor3 = if lockedNow then COLORS.gold else COLORS.muted,
-					TextTransparency = if lockedNow then 0 else 0.55,
-					Text = "🔒",
+					Text = "",
 					Visible = lockedNow,
 					ZIndex = 3,
 				}, card) :: TextButton
 				padlock:SetAttribute("Locked", lockedNow)
+				-- [Ghost] Clip 5: gold closed lock when locked; the hover
+				-- hint is the grey open lock.
+				GearDetail.lockIcon(padlock, lockedNow, math.max(12, math.min(inner.lock.w, inner.lock.h) - 4))
 				if not lockedNow then
 					card.MouseEnter:Connect(function()
 						padlock.Visible = true
@@ -1176,6 +1179,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 
 		clearGenerated(detail)
+		if selectedId ~= lastDetailId then
+			lastDetailId = selectedId
+			detail.CanvasPosition = Vector2.new(0, 0)
+		end
 		local order = 1
 		if stacked() and selectedId ~= nil then
 			local back = actionButton(detail, "Back", order, COLORS.buttonDim)
@@ -1220,6 +1227,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				powerOf = InventoryView.powerOf,
 				onEquip = function()
 					callbacks.onEquip(gearUid)
+				end,
+				onUnequip = function()
+					callbacks.onUnequip(gearUid)
 				end,
 				onUpgrade = function()
 					local onUpgrade = callbacks.onUpgrade
@@ -1275,7 +1285,45 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			})
 			order = built.nextOrder
 		end
-		if not gearPanel then
+		-- [Ghost] Clip 5: pets get the gear panel's header (icon, name,
+		-- rarity, padlock) and one EQUIPPED state instead of the old list.
+		local petPanel = gear ~= nil and selected.kind == "Pet" and type(selected.item) == "table"
+		if petPanel then
+			local petItem = table.clone(selected.item)
+			if type(petItem.uid) ~= "string" then
+				petItem.uid = selected.id
+			end
+			if type(petItem.kind) ~= "string" then
+				petItem.kind = "Pet"
+			end
+			if type(petItem.rarity) ~= "string" then
+				petItem.rarity = selected.rarity
+			end
+			local petUid = selected.id
+			local head = GearDetail.build(detail, {
+				profile = profile,
+				item = petItem,
+				order = order,
+				headerOnly = true,
+				onLock = function(locked: boolean)
+					callbacks.onLock(petUid, locked)
+				end,
+			})
+			order = head.nextOrder
+		end
+		if not gearPanel and petPanel then
+			if selected.realm ~= "" then
+				label(detail, selected.realm, order, COLORS.muted, 13)
+				order += 1
+			end
+			local socketColor = COLORS.text
+			if socketCue and selected.sockets >= 1 then
+				socketColor = Color3.fromRGB(CodexCues.COLOR.socket[1], CodexCues.COLOR.socket[2], CodexCues.COLOR.socket[3])
+			end
+			label(detail, string.format("Sockets  %d", selected.sockets), order, socketColor, 14)
+			order += 1
+		end
+		if not gearPanel and not petPanel then
 			local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
 			name.Font = Enum.Font.BuilderSansBold
 			order += 1
@@ -1355,7 +1403,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 						)
 						order += 1
 					end
-				elseif selected.equipped then
+				elseif selected.equipped and not petPanel then
 					label(detail, "This is equipped.", order, COLORS.ok, 13)
 					order += 1
 				end
@@ -1364,9 +1412,32 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				or selected.kind == "Armor"
 				or selected.kind == "Pet"
 				or selected.kind == "Accessory"
-			-- [Ghost] Clip 4: the gear panel's EQUIPPED is the one worn state
-			-- (UnequipItem is a parked remote), so no Unequip under it.
-			if canWear and not gearPanel then
+			-- [Ghost] Clip 5: gear and pet panels show one worn state, EQUIPPED,
+			-- and unequip by tapping it twice (UnequipItem is live), so no
+			-- separate Unequip button under it.
+			if petPanel then
+				-- One worn state: EQUIPPED (tap twice to unequip) or EQUIP.
+				local wornNow = selected.equipped == true
+				local wear = actionButton(
+					detail,
+					if wornNow then "EQUIPPED" else "EQUIP",
+					order,
+					if wornNow then Color3.fromRGB(46, 70, 60) else Color3.fromRGB(36, 84, 168)
+				)
+				wear.Name = "PetEquip"
+				order += 1
+				local petUid = selected.id
+				local wornTap = GearDetail.wornTap(wear, function()
+					callbacks.onUnequip(petUid)
+				end)
+				wear.MouseButton1Click:Connect(function()
+					if wornNow then
+						wornTap()
+					else
+						callbacks.onEquip(petUid)
+					end
+				end)
+			elseif canWear and not gearPanel then
 				local wear = actionButton(
 					detail,
 					if selected.equipped then "Unequip" else "Equip",
@@ -1384,7 +1455,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				end)
 			end
 			local uid = selected.id
-			if not gearPanel then
+			if not gearPanel and not petPanel then
 				local lockButton = actionButton(
 					detail,
 					if gear ~= nil

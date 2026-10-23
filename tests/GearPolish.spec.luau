@@ -245,6 +245,45 @@ describe("Gear polish: Shard Core picker", function()
 	end)
 end)
 
+describe("Gear polish: clip 5", function()
+	it("draws locked as a gold closed lock on the header and the Bag card", function()
+		withFlags(ALL, function()
+			local _, hub, screen = boot()
+			local data = profile()
+			data.inventory.blade.locked = true
+			hub.setProfile(data)
+			hub.open("bag")
+			GuiFake.activate(cardFor(screen, "Bramble Fang"))
+			local icon = GuiFake.findNamed(GuiFake.findNamed(screen, "Padlock"), "LockIcon")
+			expect(icon:GetAttribute("Locked")).toEqual(true)
+			local body = GuiFake.findNamed(icon, "Body")
+			expect(body.BackgroundColor3.R > 240 and body.BackgroundColor3.G > 180).toBeTrue()
+			local card = cardFor(screen, "Bramble Fang")
+			local cardIcon = GuiFake.findNamed(card, "LockIcon")
+			expect(cardIcon ~= nil).toBeTrue()
+			expect(cardIcon:GetAttribute("Locked")).toEqual(true)
+		end)
+	end)
+
+	it("shows the star row on every gear card, even at 0 stars", function()
+		expect(GearHooks.levelLine({ stars = 0 })).toEqual("☆☆☆☆☆")
+		expect(GearHooks.levelLine({})).toEqual("☆☆☆☆☆")
+		expect(GearHooks.levelLine({ stars = 1, upgrade = 2 })).toEqual("+2  ★☆☆☆☆")
+		expect(GearHooks.levelLine({ stars = 9 })).toEqual("★★★★★")
+	end)
+
+	it("shows Hero Crit damage as a percent", function()
+		local HeroBoard = require("../src/ReplicatedStorage/Shared/HeroBoard")
+		local value = nil
+		for _, tile in ipairs(HeroBoard.tiles(profile())) do
+			if tile.id == "critDamage" then
+				value = tile.value
+			end
+		end
+		expect(value ~= nil and string.match(value, "^%d+%%$") ~= nil).toBeTrue()
+	end)
+end)
+
 describe("Gear polish: clip 4 detail panel", function()
 	it("dims UPGRADE and names the gold gap when gold is short", function()
 		withFlags(ALL, function()
@@ -357,7 +396,11 @@ describe("Gear polish: small Bag", function()
 			hub.open("bag")
 			GuiFake.activate(cardFor(screen, "Bramble Fang"))
 			expect(GuiFake.findNamed(screen, "ItemIcon") ~= nil).toBeTrue()
-			expect(GuiFake.findNamed(screen, "Padlock").Text).toEqual("🔓")
+			-- Clip 5: a drawn lock, grey and open while unlocked.
+			local padlock = GuiFake.findNamed(screen, "Padlock")
+			local icon = GuiFake.findNamed(padlock, "LockIcon")
+			expect(icon:GetAttribute("Locked")).toEqual(false)
+			expect(GuiFake.findNamed(icon, "Body").BackgroundColor3.R < 200).toBeTrue()
 			local actions = GuiFake.findNamed(screen, "DetailActions")
 			local equip = actions:FindFirstChild("DetailEquip")
 			local upgrade = actions:FindFirstChild("Upgrade")

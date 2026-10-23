@@ -3103,12 +3103,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
 			-- Padlock glyph, gold when locked. The name stays "Lock".
 			local lockedCard = item.locked == true
-			local lockFill = if lockedCard then rgb("gold") else navy
+			-- [Ghost] Clip 5: drawn lock, gold closed / grey open (GearDetail).
+			local lockFill = navy
 			lock.BackgroundColor3 = lockFill
-			lock.Font = headerFont()
-			lock.TextSize = 18
-			lock.TextColor3 = if lockedCard then rgb("ink") else rgb("text")
-			lock.Text = if lockedCard then "🔒" else "🔓"
+			lock.Text = ""
+			lock:SetAttribute("Locked", lockedCard)
+			GearDetail.lockIcon(lock, lockedCard, math.max(12, math.min(parts.lock.w, parts.lock.h) - 10))
 			lock.AutoButtonColor = false
 			lock.ZIndex = 7
 			lock.Parent = card

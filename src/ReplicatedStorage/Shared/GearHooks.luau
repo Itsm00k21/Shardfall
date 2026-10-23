@@ -397,11 +397,9 @@ function GearHooks.levelLine(item: any): string
 	if level > 0 then
 		table.insert(parts, "+" .. tostring(level))
 	end
-	local stars = whole(tonumber(item.stars)) or 0
-	if stars > 0 then
-		stars = math.min(5, stars)
-		table.insert(parts, string.rep("★", stars) .. string.rep("☆", 5 - stars))
-	end
+	-- [Ghost] Clip 5: every gear card shows its star row, ☆☆☆☆☆ at 0.
+	local stars = math.min(5, whole(tonumber(item.stars)) or 0)
+	table.insert(parts, string.rep("★", stars) .. string.rep("☆", 5 - stars))
 	return table.concat(parts, "  ")
 end
 

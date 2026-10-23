@@ -217,6 +217,73 @@ describe("InventoryHud one inventory", function()
 		end)
 	end)
 
+	it("gives a pet the gear header and one EQUIPPED state, at the top (clip 5)", function()
+		withGear(function()
+			local data = bag()
+			data.pets = {
+				fox = {
+					uid = "fox",
+					templateId = "moss_fox",
+					name = "Moss Fox",
+					kind = "Pet",
+					rarity = "Legendary",
+					traits = {},
+					poolId = "dev",
+					obtainedAt = 1,
+					locked = false,
+				},
+			}
+			data.equipped.pet = "fox"
+			local _, screen, calls = mount(data)
+			local root = GuiFake.findNamed(screen, "Inventory")
+			-- Scrolled down on the weapon panel, then open Pets.
+			local detail = GuiFake.findNamed(root, "Detail")
+			expect(detail ~= nil).toBeTrue()
+			detail.CanvasPosition = { X = 0, Y = 400 }
+			GuiFake.activate(GuiFake.findNamed(root, "Tab_pets"))
+			local grid = GuiFake.findNamed(root, "Grid")
+			local card = grid:FindFirstChild("fox")
+			expect(card ~= nil).toBeTrue()
+			GuiFake.activate(card)
+			local hero = GuiFake.findNamed(root, "Hero")
+			expect(hero ~= nil).toBeTrue()
+			expect(GuiFake.findNamed(hero, "ItemIcon") ~= nil).toBeTrue()
+			expect(string.find(GuiFake.findNamed(hero, "Title").Text, "Moss Fox", 1, true) ~= nil).toBeTrue()
+			expect(GuiFake.findNamed(hero, "Kind").Text).toEqual("Legendary  ·  Pet")
+			local padlock = GuiFake.findNamed(hero, "Padlock")
+			expect(padlock ~= nil).toBeTrue()
+			local wear = GuiFake.findNamed(root, "PetEquip")
+			expect(wear.Text).toEqual("EQUIPPED")
+			for _, desc in ipairs(screen:GetDescendants()) do
+				if (desc:IsA("TextButton") or desc:IsA("TextLabel")) and desc.Visible ~= false then
+					expect(desc.Text ~= "Unequip").toBeTrue()
+					expect(desc.Text ~= "This is equipped.").toBeTrue()
+					expect(desc.Text ~= "🔓 Lock" and desc.Text ~= "🔒 Unlock").toBeTrue()
+				end
+			end
+			expect(detail.CanvasPosition.Y).toEqual(0)
+			-- Unequip stays possible: tap EQUIPPED twice.
+			GuiFake.activate(wear)
+			expect(wear.Text).toEqual("Tap again to unequip")
+			GuiFake.activate(wear)
+			local unequipped = false
+			for _, call in ipairs(calls) do
+				if call[1] == "unequip" and call[2] == "fox" then
+					unequipped = true
+				end
+			end
+			expect(unequipped).toBeTrue()
+			GuiFake.activate(padlock)
+			local locked = false
+			for _, call in ipairs(calls) do
+				if call[1] == "lock" and call[2] == "fox" and call[3] == true then
+					locked = true
+				end
+			end
+			expect(locked).toBeTrue()
+		end)
+	end)
+
 	it("fits the phone header and action bar without sideways overflow", function()
 		withGear(function()
 			local world = GuiFake.world()

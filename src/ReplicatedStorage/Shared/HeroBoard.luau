@@ -97,7 +97,8 @@ function HeroBoard.tiles(profile: any): { Tile }
 		{
 			id = "critDamage",
 			label = "Crit damage",
-			value = string.format("%.2f", offense.critDamage),
+			-- [Ghost] Clip 5: a percent like Crit (3.42 -> 342%).
+			value = string.format("%d%%", math.floor(offense.critDamage * 100 + 0.5)),
 			art = "SkillHeavy",
 		},
 		{
