@@ -1,6 +1,6 @@
 # Economy v1 — gear upgrade numbers
 
-Run pay (Roll Tokens per wave) lives in `Shared/Config/Economy.luau` and is not repeated here. The live forge is `Shared/Economy.luau`. This note is the tuning sheet for gear upgrades, duplicate overflow, and the later Shard Core.
+Run pay (Roll Tokens per wave) lives in `Shared/Config/Economy.luau` and is not repeated here. The live forge is `Shared/Economy.luau`. This note is the tuning sheet for gear upgrades, duplicate overflow, and the Shard Core.
 
 Nothing here is a Robux price.
 
@@ -47,7 +47,7 @@ Duplicates do not add upgrade levels. While `gearLevels` is on they feed stars. 
 
 ## Essence record (overflow only)
 
-A duplicate of a piece that is already ★5 does not raise stars or `item.upgrade`. It adds this much to `profile.gearEssence` (default 0). Same numbers as the old duplicate fragments. Stage B is the wallet, the salvage, and the spend. This table is only the record. The automatic feed stays behind `gearLevels` (off).
+A duplicate of a piece that is already ★5 does not raise stars or `item.upgrade`. It adds this much to `profile.gearEssence` (default 0). Same numbers as the old duplicate fragments. Stage B salvages into this wallet. Stage C spends it on a Shard Core. This table is only the overflow record. The automatic feed stays behind `gearLevels` (off).
 
 | Rarity | Essence |
 |---|---:|
@@ -57,18 +57,22 @@ A duplicate of a piece that is already ★5 does not raise stars or `item.upgrad
 | Epic | 40 |
 | Legendary, Mythic, Secret | 200 |
 
-## Stage C — Shard Core (not built)
+## Stage C — Shard Core (flag `shardCore`, off)
 
-Nothing in the game reads this block. It is a starting sheet so the numbers can be balanced before that PR.
+One core per weapon. The level is `profile.shardCores[weaponUid]` (missing means **0**, cap **5**). Feeding spends `profile.gearEssence`. The item is not written: no `item.coreLevel`, and the core does not read `item.upgrade` or stars.
 
-One core per weapon. Feed Essence to raise it. Proposed costs to reach each level: **5, 15, 40, 100, 250** Essence (levels 1 through 5). Cap 5.
+Essence to buy the next level:
 
-Proposed perks, one each, modest, not required to clear:
+| From | Essence | Unlocks (kept at higher levels) |
+|---|---:|---|
+| 0 → 1 | 5 | +1% crit chance (`crit_chance` +0.01) |
+| 1 → 2 | 15 | +2% shard find (`shard_find` +0.02) |
+| 2 → 3 | 40 | +2% move speed (`move_speed` +0.02) |
+| 3 → 4 | 100 | +5% crit damage (`crit_damage` +0.05) |
+| 4 → 5 | 250 | +1 luck (`luck` +1) |
 
-1. +1% crit chance
-2. +2% shard find
-3. +2% move speed
-4. +5% crit damage
-5. +1 luck
+A full core costs **410** Essence. The crit-damage perk adds **0.05** to the finished multiplier (1.50 becomes 1.55). It does not multiply the finished stat.
 
-Pets stay parked. No pet feeder.
+Perks are applied once, after Equip has finished its totals (base, gear, elements, and whatever upgrade or star scale is on). While `shardCore` is off, that add does not run. They are small. None of them is required to clear. Pets have no core.
+
+Dev Tools grants **100** Essence. That button is not a product.

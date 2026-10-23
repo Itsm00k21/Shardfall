@@ -48,7 +48,10 @@ function DebugService.run(player: Player, action: any)
 	if action == "dungeon" then
 		local DungeonService = require(script.Parent.DungeonService)
 		DungeonService.leave(player)
-		return withMessage(DungeonService.enter(player, "rootvault", "normal"), "Entered the Rootvault.")
+		return withMessage(
+			DungeonService.enter(player, "rootvault", "normal"),
+			"Entered the Rootvault."
+		)
 	end
 	if action == "raid" then
 		local DungeonService = require(script.Parent.DungeonService)
@@ -63,6 +66,24 @@ function DebugService.run(player: Player, action: any)
 	-- [ECHO hook] Equip and Stage A dev buttons. LaunchGate already refused them.
 	if action == "equip" then
 		return require(script.Parent.EquipService.Bind).devEquipOwned(player)
+	end
+	-- [ECHO hook] Stage C. Grants Essence onto profile.gearEssence. Items stay as they are.
+	if action == "essence" then
+		local CoreDev = require(script.Parent.ShardCore.Dev)
+		local CoreConfig = require(ReplicatedStorage.Shared.Config.ShardCore)
+		local note = ""
+		local granted, err = DataService.mutate(player, function(data)
+			local applied, text = CoreDev.grant(data, CoreConfig)
+			if not applied then
+				return text
+			end
+			note = text
+			return nil
+		end)
+		if not granted then
+			return reject(err or "Could not do that.")
+		end
+		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
 	end
 	if action == "geardupe" or action == "fillbag" then
 		local GearDev = require(script.Parent.GearLevels.Dev)

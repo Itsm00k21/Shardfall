@@ -60,7 +60,11 @@ local function rolled(item: any, statId: string): number?
 end
 
 local function scales(elements: any, elementId: any, statId: string): boolean
-	if type(elementId) ~= "string" or type(elements) ~= "table" or type(elements.LIST) ~= "table" then
+	if
+		type(elementId) ~= "string"
+		or type(elements) ~= "table"
+		or type(elements.LIST) ~= "table"
+	then
 		return false
 	end
 	local row = elements.LIST[elementId]
@@ -155,7 +159,9 @@ function Totals.compute(profile: any, loadout: { [string]: string }, ctx: any): 
 	local lines = {}
 	local byId = {}
 	local stats = ctx.stats
-	local order = if type(stats) == "table" and type(stats.ORDER) == "table" then stats.ORDER else {}
+	local order = if type(stats) == "table" and type(stats.ORDER) == "table"
+		then stats.ORDER
+		else {}
 	local defs = if type(stats) == "table" and type(stats.DEFS) == "table" then stats.DEFS else {}
 	for _, statId in ipairs(order) do
 		local def = defs[statId]
@@ -200,10 +206,28 @@ function Totals.compute(profile: any, loadout: { [string]: string }, ctx: any): 
 			})
 		end
 	end
-	return { lines = lines, byId = byId }
+	local result = { lines = lines, byId = byId }
+	-- [ECHO hook] Shard Core. One add, after the finished totals.
+	-- Upgrade scaling and stars stay above. This does not read item.upgrade.
+	-- Off unless ctx.coreEnabled and ctx.applyCore are both set.
+	if type(ctx) == "table" and ctx.coreEnabled == true and type(ctx.applyCore) == "function" then
+		local applied = ctx.applyCore(result, profile, loadout, ctx)
+		if
+			type(applied) == "table"
+			and type(applied.lines) == "table"
+			and type(applied.byId) == "table"
+		then
+			return applied
+		end
+	end
+	return result
 end
 
-function Totals.elements(profile: any, loadout: { [string]: string }, ctx: any): { [string]: number }
+function Totals.elements(
+	profile: any,
+	loadout: { [string]: string },
+	ctx: any
+): { [string]: number }
 	local counts = {}
 	local elements = ctx.elements
 	if type(elements) == "table" and type(elements.ORDER) == "table" then
@@ -215,7 +239,11 @@ function Totals.elements(profile: any, loadout: { [string]: string }, ctx: any):
 		local slot = ctx.slots.LIST[slotId]
 		if type(slot) == "table" and slot.countsElement == true then
 			local piece = gearPiece(profile, slot, loadout[slotId] or "", ctx)
-			if type(piece) == "table" and type(piece.element) == "string" and counts[piece.element] ~= nil then
+			if
+				type(piece) == "table"
+				and type(piece.element) == "string"
+				and counts[piece.element] ~= nil
+			then
 				counts[piece.element] += 1
 			end
 		end

@@ -202,5 +202,6 @@ require("./DevTools.spec")
 require("./EquipService.spec")
 require("./GearLevels.spec")
 require("./UpgradeScale.spec")
+require("./ShardCore.spec")
 
 process.exit(framework.run())

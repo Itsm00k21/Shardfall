@@ -79,7 +79,7 @@ DevTools.SECTIONS = table.freeze({
 			entry("region", "Toggle region lock", "DevGrant", "restrict"),
 		}),
 	}),
-	-- [ECHO hook] Hidden while equip / gearLevels are off.
+	-- [ECHO hook] Hidden while equip / gearLevels / shardCore are off.
 	table.freeze({
 		id = "gear",
 		title = "Gear",
@@ -87,6 +87,7 @@ DevTools.SECTIONS = table.freeze({
 			entry("equip", "Seat owned gear", "Debug", "equip"),
 			entry("geardupe", "Grant a dupe", "Debug", "geardupe"),
 			entry("fillbag", "Fill the Bag", "Debug", "fillbag"),
+			entry("essence", "Grant Essence", "Debug", "essence"),
 		}),
 	}),
 })
@@ -102,6 +103,7 @@ local GATED: { [string]: string } = {
 	["Debug:equip"] = "equip",
 	["Debug:geardupe"] = "gearLevels",
 	["Debug:fillbag"] = "gearLevels",
+	["Debug:essence"] = "shardCore",
 }
 
 local GATE_NAME: { [string]: string } = {
@@ -112,6 +114,7 @@ local GATE_NAME: { [string]: string } = {
 	raids = "The raid system",
 	equip = "Equip",
 	gearLevels = "Gear levels",
+	shardCore = "Shard Core",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?
@@ -122,7 +125,11 @@ function DevTools.gateOf(remote: string, arg: any): string?
 end
 
 function DevTools.offMessage(flag: string): string
-	return string.format("%s is off (LaunchGate.%s), so this does nothing yet.", GATE_NAME[flag] or flag, flag)
+	return string.format(
+		"%s is off (LaunchGate.%s), so this does nothing yet.",
+		GATE_NAME[flag] or flag,
+		flag
+	)
 end
 
 -- nil when the action may run. Otherwise why it is refused.

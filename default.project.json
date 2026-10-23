@@ -203,6 +203,15 @@
         },
         "EquipChanged": {
           "$className": "RemoteEvent"
+        },
+        "GetShardCore": {
+          "$className": "RemoteFunction"
+        },
+        "FeedShardCore": {
+          "$className": "RemoteFunction"
+        },
+        "ShardCoreChanged": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -225,6 +234,9 @@
         },
         "GearLevels": {
           "$path": "src/server/GearLevels"
+        },
+        "ShardCore": {
+          "$path": "src/server/ShardCore"
         }
       }
     },

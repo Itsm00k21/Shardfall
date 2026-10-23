@@ -43,6 +43,7 @@ LaunchGate.SHOW = {
 	equip = false, -- Phase 2 equip remotes (EquipSlot / UnequipSlot / GetEquip)
 	gearLevels = false, -- auto-feed an exact duplicate into stars (off until Kevin decides)
 	upgradeScale = false, -- gold forge upgrades multiply stats at read time
+	shardCore = false, -- Shard Core feeder (GetShardCore / FeedShardCore). Spends gearEssence.
 }
 
 -- World prompt action to the switch that keeps it from being built.

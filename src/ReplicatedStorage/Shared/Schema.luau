@@ -18,6 +18,7 @@ local ActionSlots = require("./ActionSlots")
 local Audio = require("./Audio")
 local Classes = require("./Classes")
 local EquipSlots = require("./Config/EquipSlots")
+local ShardCoreConfig = require("./Config/ShardCore")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Loops = require("./Loops")
@@ -327,6 +328,8 @@ export type ProfileData = {
 	-- [ECHO hook] Additive. schemaVersion stays 26. item.upgrade already exists.
 	equipLoadout: { [string]: string },
 	gearEssence: number,
+	-- [ECHO hook] Core level per weapon uid. Missing uid is 0. Items are not written.
+	shardCores: { [string]: number },
 }
 
 function Schema.template(): ProfileData
@@ -352,8 +355,10 @@ function Schema.template(): ProfileData
 		},
 		-- [ECHO hook] Phase 2 slots. Empty until the player equips.
 		equipLoadout = EquipSlots.empty(),
-		-- [ECHO hook] Duplicate overflow record. Stage B spends it.
+		-- [ECHO hook] Duplicate overflow record. Stage B spends it. Stage C spends it too.
 		gearEssence = 0,
+		-- [ECHO hook] Shard Core levels. Empty until the player feeds a weapon.
+		shardCores = {},
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
 		vouchers = { armory = 0, pets = 0 },
@@ -724,7 +729,11 @@ function Schema.reconcile(data: any): ProfileData
 	then
 		data.equipped.weapon = nil
 	end
-	if type(data.pets) == "table" and data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
+	if
+		type(data.pets) == "table"
+		and data.equipped.pet ~= nil
+		and data.pets[data.equipped.pet] == nil
+	then
 		data.equipped.pet = nil
 	end
 	local armor = {}
@@ -754,6 +763,8 @@ function Schema.reconcile(data: any): ProfileData
 	if data.gearEssence > 1000000000 then
 		data.gearEssence = 1000000000
 	end
+	-- [ECHO hook] Keep stored core levels. Drop junk. Do not write the items.
+	data.shardCores = ShardCoreConfig.sanitize(data.shardCores)
 	if data.materials == nil or type(data.materials) == "table" then
 		data.materials = Materials.sanitize(data.materials)
 	end
@@ -1210,8 +1221,11 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	-- A save that already finished onboarding does not get this kit.
 	-- A new profile stays returning false. Do not copy another account.
 	if version < 23 then
-		raw.firstSession =
-			keepExisting(versionless, raw.firstSession, firstSessionKit().blank(raw.onboardDone == true))
+		raw.firstSession = keepExisting(
+			versionless,
+			raw.firstSession,
+			firstSessionKit().blank(raw.onboardDone == true)
+		)
 		raw.schemaVersion = 23
 		version = 23
 	end
@@ -1401,6 +1415,7 @@ function Schema.snapshot(data: ProfileData)
 		},
 		equipLoadout = EquipSlots.publicCopy(data.equipLoadout),
 		gearEssence = data.gearEssence,
+		shardCores = ShardCoreConfig.sanitize(data.shardCores),
 		inventoryBonus = data.inventoryBonus,
 		petSlotBonus = data.petSlotBonus,
 		inventoryCap = Schema.inventoryCap(data),

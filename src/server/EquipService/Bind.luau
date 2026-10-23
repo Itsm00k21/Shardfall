@@ -31,6 +31,7 @@ end
 
 local function catalog()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 	return {
 		slots = require(ReplicatedStorage.Shared.Config.EquipSlots),
 		stats = require(ReplicatedStorage.Shared.Config.EquipStats),
@@ -38,12 +39,20 @@ local function catalog()
 		classes = require(ReplicatedStorage.Shared.Classes),
 		gearConfig = require(ReplicatedStorage.Shared.Config.GearLevels),
 		-- Upgrade scale is its own flag. gearLevels is the undecided dupe rule.
-		gearEnabled = require(ReplicatedStorage.Shared.LaunchGate).on("upgradeScale"),
+		gearEnabled = LaunchGate.on("upgradeScale"),
+		-- [ECHO hook] Shard Core perks. Totals calls applyCore only when the flag is on.
+		coreConfig = require(ReplicatedStorage.Shared.Config.ShardCore),
+		coreEnabled = LaunchGate.on("shardCore"),
+		applyCore = require(script.Parent.Parent.ShardCore.Perks).apply,
 	}
 end
 
 local function lineText(view: any, statId: string): string
-	if type(view) ~= "table" or type(view.stats) ~= "table" or type(view.stats.lines) ~= "table" then
+	if
+		type(view) ~= "table"
+		or type(view.stats) ~= "table"
+		or type(view.stats.lines) ~= "table"
+	then
 		return "0"
 	end
 	for _, line in ipairs(view.stats.lines) do
