@@ -45,12 +45,14 @@ local function payLines(data, before: number, after: number)
 end
 
 function LoopService.progress(player: Player, id: string, amount: number)
-	DataService.mutate(player, function(data)
+	local gained = 0
+	local ok = DataService.mutate(player, function(data)
 		local now = os.time()
 		Loops.refresh(data, now, player.UserId)
 		local finished = Loops.apply(data, id, amount)
 		if finished > 0 then
 			data.gold += Economy.QUEST_GOLD * finished
+			gained = Economy.QUEST_GOLD * finished
 			data.shardKeys = (data.shardKeys or 0) + finished
 			data.passXp = select(1, Loops.passXp(data.passXp or 0, 100 * finished))
 			local lines = data.boardLines or 0
@@ -85,6 +87,20 @@ function LoopService.progress(player: Player, id: string, amount: number)
 		end
 		return nil
 	end)
+	-- [ECHO hook]
+	if ok == true and gained >= 1 then
+		local balance = 0
+		local data = DataService.get(player)
+		if data ~= nil and type(data.gold) == "number" then
+			balance = data.gold
+		end
+		local tracked, hookErr = pcall(function()
+			require(script.Parent.AnalyticsService).economy(player, "source", "gold", gained, balance, "daily")
+		end)
+		if not tracked then
+			warn("[Shardfall] analytics hook: " .. tostring(hookErr))
+		end
+	end
 end
 
 function LoopService.recordTime(name: string, userId: number, seconds: number)

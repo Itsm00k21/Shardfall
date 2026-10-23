@@ -41,6 +41,18 @@ local RollService = {}
 type LastCrack = { at: number, rarity: string, quick: boolean }
 
 local lastRoll: { [number]: LastCrack } = {}
+
+-- [ECHO hook] Counts token cracks on this server. Vouchers do not count.
+local echoTokenCracks: { [Player]: number } = {}
+
+local function echoTrack(send: (any) -> ())
+	local ok, err = pcall(function()
+		send(require(script.Parent.AnalyticsService))
+	end)
+	if not ok then
+		warn("[Shardfall] analytics hook: " .. tostring(err))
+	end
+end
 local announcementsBound = false
 
 local function reject(message: string)
@@ -317,7 +329,40 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 end
 
 function RollService.rollFree(player: Player, poolId: any, skip: any)
-	return crack(player, poolId, Currencies.SHARD, skip == true)
+	local before = DataService.get(player)
+	local beforeTokens = if before ~= nil and type(before.shardTokens) == "number" then before.shardTokens else 0
+	local result = crack(player, poolId, Currencies.SHARD, skip == true)
+	-- [ECHO hook] Not inside the mutate, and not on rollPaid.
+	if type(result) == "table" and result.ok == true then
+		local after = DataService.get(player)
+		local balance = if after ~= nil and type(after.shardTokens) == "number" then after.shardTokens else 0
+		local price = beforeTokens - balance
+		local pool = poolFromClient(poolId)
+		local poolIdName = if pool ~= nil then pool.id else "unknown"
+		local second = false
+		if price >= 1 then
+			echoTokenCracks[player] = (echoTokenCracks[player] or 0) + 1
+			second = echoTokenCracks[player] == 2
+		end
+		echoTrack(function(AnalyticsService)
+			AnalyticsService.track(player, "roll_x1", { pool = poolIdName })
+			AnalyticsService.track(player, "rarity_pulled", {
+				rarity = result.rarity,
+				pool = poolIdName,
+				count = 1,
+			})
+			if price >= 1 then
+				AnalyticsService.economy(player, "sink", "shardTokens", price, balance, "roll_x1")
+			end
+			AnalyticsService.funnel(player, "first_roll", "roll_x1")
+			AnalyticsService.funnel(player, "first_roll", "reveal")
+			AnalyticsService.funnel(player, "first_session", "first_roll")
+			if second then
+				AnalyticsService.funnel(player, "first_session", "second_roll")
+			end
+		end)
+	end
+	return result
 end
 
 local function pityView(drawn: any)
@@ -393,6 +438,32 @@ local function crackBatch(player: Player, poolId: any, total: number)
 		end
 	end
 	local last = captures[#captures]
+	-- [ECHO hook] After the mutate. The batch is already saved or rolled back.
+	local balance = 0
+	local after = DataService.get(player)
+	if after ~= nil and type(after.shardTokens) == "number" then
+		balance = after.shardTokens
+	end
+	if price >= 1 then
+		echoTokenCracks[player] = (echoTokenCracks[player] or 0) + 1
+	end
+	local second = echoTokenCracks[player] == 2
+	echoTrack(function(AnalyticsService)
+		AnalyticsService.track(player, "roll_x10", { pool = pool.id, price = price })
+		if price >= 1 then
+			AnalyticsService.economy(player, "sink", "shardTokens", price, balance, "roll_x10")
+		end
+		for _, drawn in ipairs(items) do
+			AnalyticsService.track(player, "rarity_pulled", {
+				rarity = drawn.rarity,
+				pool = pool.id,
+				count = 1,
+			})
+		end
+		if second and price >= 1 then
+			AnalyticsService.funnel(player, "first_session", "second_roll")
+		end
+	end)
 	lastRoll[player.UserId] = {
 		at = os.clock(),
 		rarity = if type(last.rarity) == "string" then last.rarity else "",

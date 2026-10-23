@@ -138,17 +138,32 @@ function CraftService.upgrade(player: Player, uid: any)
 		return reject("Pick a piece of gear.")
 	end
 	local note = ""
+	local cost = 0
+	local balance = 0
 	local ok, err = DataService.mutate(player, function(data)
 		local item = data.inventory[uid]
+		local level = if type(item) == "table" then math.floor(tonumber(item.upgrade) or 0) else 0
+		local gold = Economy.upgradeCost(level)
 		local upgraded, reason = Economy.upgrade(item, data)
 		if not upgraded then
 			return reason
 		end
+		cost = gold
+		balance = data.gold
 		note = reason
 		return nil
 	end)
 	if not ok then
 		return reject(err or "Could not upgrade that.")
+	end
+	-- [ECHO hook]
+	if cost >= 1 then
+		local tracked, hookErr = pcall(function()
+			require(script.Parent.AnalyticsService).economy(player, "sink", "gold", cost, balance, "forge")
+		end)
+		if not tracked then
+			warn("[Shardfall] analytics hook: " .. tostring(hookErr))
+		end
 	end
 	LoopService.progress(player, "forge", 1)
 	return { ok = true, note = note, profile = DataService.snapshot(player) }

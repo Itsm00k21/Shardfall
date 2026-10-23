@@ -63,6 +63,18 @@ local HavenBuilder = require(script.Parent.HavenBuilder)
 
 local DungeonService = {}
 
+-- [ECHO hook] track/funnel/economy no-op while analytics is off.
+local echoEntered: { [Player]: number } = {}
+
+local function echoTrack(send: (any) -> ())
+	local ok, err = pcall(function()
+		send(require(script.Parent.AnalyticsService))
+	end)
+	if not ok then
+		warn("[Shardfall] analytics hook: " .. tostring(err))
+	end
+end
+
 type Enemy = {
 	id: string,
 	kind: string,
@@ -1113,6 +1125,10 @@ local function spawnWave(player: Player, run: Run)
 	text ..= Dungeons.waveNote(run.wave)
 	pushRun(player, text)
 	publishCues(player)
+	-- [ECHO hook]
+	echoTrack(function(AnalyticsService)
+		AnalyticsService.track(player, "wave_enter", { dungeon = run.dungeon.id, wave = run.wave })
+	end)
 end
 
 local function storyEcho(run: Run, fight: RaidEchoFight.Fight): boolean
@@ -1477,6 +1493,10 @@ local function grant(
 	local bonus = CombatMath.bonusGold(rolled.gold, goldFind)
 	local levels = 0
 	local xpShown = rolled.xp
+	local paidGold = 0
+	local paidTokens = 0
+	local balanceGold = 0
+	local balanceTokens = 0
 	local ok, err = DataService.mutate(player, function(data)
 		local elapsed = 0
 		if farmSince[player] ~= nil then
@@ -1489,7 +1509,11 @@ local function grant(
 		end
 		data.gold += paid
 		Economy.log(data, "dungeon_clear", "gold", paid, data.gold)
+		paidGold = paid
+		balanceGold = data.gold
 		data.shardTokens += rolled.shardTokens
+		paidTokens = rolled.shardTokens
+		balanceTokens = data.shardTokens
 		local xpGain = rolled.xp
 		if run.dungeon.endless ~= true and run.dungeon.id == Dungeons.ROOTVAULT_ID then
 			local today = Loops.dayNumber(os.time())
@@ -1552,6 +1576,15 @@ local function grant(
 		})
 		return false
 	end
+	-- [ECHO hook] Outside the mutate. A zero amount is not sent.
+	echoTrack(function(AnalyticsService)
+		if paidGold >= 1 then
+			AnalyticsService.economy(player, "source", "gold", paidGold, balanceGold, "run")
+		end
+		if paidTokens >= 1 then
+			AnalyticsService.economy(player, "source", "shardTokens", paidTokens, balanceTokens, "run")
+		end
+	end)
 	if run.dungeon.endless ~= true then
 		LoopService.progress(player, "rooms", 1)
 	end
@@ -1591,6 +1624,13 @@ local function grant(
 			kind = "hint",
 			text = string.format("Wave %d cleared. %s.", run.wave, table.concat(bits, ", ")),
 		})
+		-- [ECHO hook]
+		echoTrack(function(AnalyticsService)
+			AnalyticsService.track(player, "wave_clear", { dungeon = run.dungeon.id, wave = run.wave })
+			if run.wave == 1 then
+				AnalyticsService.funnel(player, "first_session", "cleared_wave_1")
+			end
+		end)
 	else
 		fx(player, {
 			kind = "victory",
@@ -1659,6 +1699,20 @@ local function finish(player: Player, victory: boolean)
 		note = if endless then "Waves ended." else "Rootvault cleared."
 	elseif victory then
 		note = "Clear did not save."
+	end
+	-- [ECHO hook]
+	if victory and saved then
+		echoTrack(function(AnalyticsService)
+			AnalyticsService.track(player, "dungeon_clear", {
+				dungeon = dungeonId,
+				difficulty = run.difficulty,
+			})
+			AnalyticsService.funnel(player, "first_session", "finished_first_run")
+		end)
+	elseif not victory then
+		echoTrack(function(AnalyticsService)
+			AnalyticsService.track(player, "dungeon_leave", { dungeon = dungeonId, reason = "died" })
+		end)
 	end
 	pushRun(player, note)
 	if farming then
@@ -2685,6 +2739,19 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		retrying = false,
 	}
 	runs[player] = run
+	-- [ECHO hook]
+	echoEntered[player] = (echoEntered[player] or 0) + 1
+	local enterCount = echoEntered[player]
+	echoTrack(function(AnalyticsService)
+		AnalyticsService.track(player, "dungeon_enter", {
+			dungeon = dungeon.id,
+			difficulty = run.difficulty,
+		})
+		AnalyticsService.funnel(player, "first_session", "entered_gate")
+		if enterCount == 2 then
+			AnalyticsService.funnel(player, "first_session", "second_run")
+		end
+	end)
 	CombatService.refresh(player)
 	if echoFight ~= nil then
 		rememberMax(player, run)
@@ -2775,6 +2842,15 @@ function DungeonService.leave(player: Player)
 	end
 	CombatService.revive(player)
 	teleport(player, hubCFrame())
+	-- [ECHO hook]
+	echoTrack(function(AnalyticsService)
+		AnalyticsService.track(player, "dungeon_leave", { dungeon = run.dungeon.id, reason = "left" })
+		AnalyticsService.track(player, "wave_leave", {
+			dungeon = run.dungeon.id,
+			wave = run.wave,
+			reason = "left",
+		})
+	end)
 	destroyRun(player, run)
 	pushRun(player, "Left the Rootvault.")
 	return { ok = true, run = publicRun(player) }

@@ -60,6 +60,13 @@ function DebugService.run(player: Player, action: any)
 		local DungeonService = require(script.Parent.DungeonService)
 		return withMessage(DungeonService.setBossPhase(player, 2), "Boss set to phase 2.")
 	end
+	-- [ECHO hook] Before the profile mutate. DevTools.blocked already refused this while analytics is off.
+	if action == "analytics" then
+		return {
+			ok = true,
+			message = require(script.Parent.AnalyticsService).printRecent(),
+		}
+	end
 	local note = ""
 	local ok, err = DataService.mutate(player, function(data)
 		local applied, text = DebugTools.apply(data, action)

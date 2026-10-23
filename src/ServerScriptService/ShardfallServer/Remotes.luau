@@ -429,8 +429,16 @@ function Remotes.bind()
 	functionRemote("BuyGoldShop").OnServerInvoke = function(player, offerId)
 		return guard(player, "BuyGoldShop", function()
 			local reason: string? = nil
+			local price = 0
+			local balance = 0
 			local saved, err = DataService.mutate(player, function(data)
+				local before = if type(data) == "table" and type(data.gold) == "number" then data.gold else 0
 				reason = GoldShop.apply(data, offerId)
+				-- [ECHO hook] Record the spend. The event fires after the mutate returns.
+				if reason == nil and type(data) == "table" and type(data.gold) == "number" then
+					price = before - data.gold
+					balance = data.gold
+				end
 				return reason
 			end)
 			if not saved then
@@ -439,6 +447,22 @@ function Remotes.bind()
 					message = "Could not buy that."
 				end
 				return { ok = false, error = message }
+			end
+			-- [ECHO hook] After the mutate. A zero price is not sent.
+			if price >= 1 then
+				local tracked, hookErr = pcall(function()
+					require(script.Parent.AnalyticsService).economy(
+						player,
+						"sink",
+						"gold",
+						price,
+						balance,
+						"gold_shop"
+					)
+				end)
+				if not tracked then
+					warn("[Shardfall] analytics hook: " .. tostring(hookErr))
+				end
 			end
 			return { ok = true }
 		end)
