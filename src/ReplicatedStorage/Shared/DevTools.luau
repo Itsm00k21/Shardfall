@@ -77,6 +77,8 @@ DevTools.SECTIONS = table.freeze({
 		title = "Testing",
 		entries = table.freeze({
 			entry("region", "Toggle region lock", "DevGrant", "restrict"),
+			entry("autosave", "Force autosave", "Debug", "autosave"),
+			entry("saveVersion", "Print save version", "Debug", "saveversion"),
 		}),
 	}),
 })
@@ -89,6 +91,8 @@ local GATED: { [string]: string } = {
 	["DevGrant:prisms"] = "paid",
 	["Debug:tokens"] = "events",
 	["Debug:raid"] = "raids",
+	["Debug:autosave"] = "saveTools",
+	["Debug:saveversion"] = "saveTools",
 }
 
 local GATE_NAME: { [string]: string } = {
@@ -97,6 +101,7 @@ local GATE_NAME: { [string]: string } = {
 	paid = "Paid rolls (Prisms)",
 	events = "The events system (Event Tokens)",
 	raids = "The raid system",
+	saveTools = "Save tools",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?
