@@ -5623,7 +5623,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			else nil
 		local gone = type(extra) == "table" and extra.gone == true
 		if gearNote ~= nil then
-			hubState.revealRarity.Text = record.rarity .. "  ·  " .. gearNote
+			hubState.revealRarity.Text = record.rarity .. " · " .. gearNote
 		end
 		local color = hubFn.rarityColor3(record.rarity)
 		hubState.revealRarity.TextColor3 = color

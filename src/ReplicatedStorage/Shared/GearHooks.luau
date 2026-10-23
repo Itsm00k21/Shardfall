@@ -49,26 +49,29 @@ function GearHooks.revealNote(result: any): string?
 	if type(result) ~= "table" then
 		return nil
 	end
+	-- Kevin, Oct 23: the line reads "Uncommon · 23% · ★ 0 -> ★ 1". The card
+	-- title already names the item, so the server's levelText name is dropped.
 	if result.merged == true then
-		local text = result.levelText
-		if type(text) ~= "string" or text == "" then
-			local old = whole(result.oldLevel)
-			local new = whole(result.newLevel)
-			if old ~= nil and new ~= nil then
-				text = string.format("★%d -> ★%d", old, new)
-			else
-				text = "Merged into your copy"
+		local text: string = "Merged into your copy"
+		local old = whole(result.oldLevel)
+		local new = whole(result.newLevel)
+		if old ~= nil and new ~= nil then
+			text = string.format("★ %d -> ★ %d", old, new)
+		elseif type(result.levelText) == "string" then
+			local a, b = string.match(result.levelText, "★%s*(%d+)%s*%->%s*★%s*(%d+)")
+			if a ~= nil and b ~= nil then
+				text = string.format("★ %s -> ★ %s", a, b)
 			end
 		end
 		local essence = whole(result.essence)
 		if essence ~= nil and essence > 0 then
-			text = string.format("%s  +%d Essence", text :: string, essence)
+			text = string.format("%s · +%d Essence", text, essence)
 		end
 		return text
 	end
 	if result.autoSalvaged == true then
 		local gained = whole(result.essenceGained) or 0
-		return string.format("Auto-salvaged  +%d Essence", gained)
+		return string.format("Auto-salvaged +%d Essence", gained)
 	end
 	return nil
 end

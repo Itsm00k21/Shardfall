@@ -132,13 +132,13 @@ end
 describe("Gear UI hooks: pure text", function()
 	it("names a merged dupe and an auto-salvaged drop on the reveal card", function()
 		expect(GearHooks.revealNote({ merged = true, levelText = "Bramble Fang ★2 -> ★3" })).toEqual(
-			"Bramble Fang ★2 -> ★3"
+			"★ 2 -> ★ 3"
 		)
 		expect(GearHooks.revealNote({ merged = true, oldLevel = 5, newLevel = 5, essence = 25 })).toEqual(
-			"★5 -> ★5  +25 Essence"
+			"★ 5 -> ★ 5 · +25 Essence"
 		)
 		expect(GearHooks.revealNote({ autoSalvaged = true, essenceGained = 3 })).toEqual(
-			"Auto-salvaged  +3 Essence"
+			"Auto-salvaged +3 Essence"
 		)
 		expect(GearHooks.revealNote({ ok = true })).toBeNil()
 		expect(GearHooks.bagFull(true, { ok = false, error = "Inventory is full." })).toBeTrue()
@@ -299,7 +299,7 @@ describe("Gear UI hooks: Roll tab", function()
 			crack(screen)
 			local rarity = GuiFake.findNamed(GuiFake.findNamed(screen, "Reveal"), "Rarity")
 			expect(rarity ~= nil).toBeTrue()
-			expect(rarity.Text).toEqual("Rare  ·  Bramble Fang ★2 -> ★3")
+			expect(rarity.Text).toEqual("Rare · ★ 2 -> ★ 3")
 		end)
 	end)
 end)
