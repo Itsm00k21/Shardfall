@@ -870,6 +870,65 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 	end
 
+	-- The lock must not depend on PlayerModule alone: a forked or missing
+	-- ControlModule, keys outside the sink (arrows), or a server MoveTo
+	-- (auto-farm kiting) all move the Humanoid straight past Disable().
+	-- So "lock" also zeroes the local Humanoid's WalkSpeed and jump (the
+	-- client owns its character, so this stops every walk source) and
+	-- puts the exact old values back on release.
+	hubState.frozen = nil
+
+	function hubFn.localHumanoid(): any
+		local localPlayer = Players.LocalPlayer
+		local character = if localPlayer ~= nil then localPlayer.Character else nil
+		if character == nil then
+			return nil
+		end
+		return character:FindFirstChildOfClass("Humanoid")
+	end
+
+	function hubFn.freezeCharacter(on: boolean)
+		local frozen = hubState.frozen
+		if on then
+			local humanoid = hubFn.localHumanoid()
+			if humanoid == nil or (frozen ~= nil and frozen.humanoid == humanoid) then
+				return
+			end
+			if frozen ~= nil then
+				hubFn.freezeCharacter(false)
+			end
+			hubState.frozen = {
+				humanoid = humanoid,
+				walkSpeed = humanoid.WalkSpeed,
+				jumpPower = humanoid.JumpPower,
+				jumpHeight = humanoid.JumpHeight,
+			}
+			humanoid.WalkSpeed = 0
+			humanoid.JumpPower = 0
+			humanoid.JumpHeight = 0
+			pcall(function()
+				humanoid:Move(Vector3.zero)
+			end)
+			return
+		end
+		hubState.frozen = nil
+		if frozen == nil then
+			return
+		end
+		local humanoid = frozen.humanoid
+		-- Only undo our own zero: if something else changed it meanwhile,
+		-- that value wins. A saved zero falls back to Roblox defaults.
+		if humanoid.WalkSpeed == 0 then
+			humanoid.WalkSpeed = if frozen.walkSpeed > 0 then frozen.walkSpeed else 16
+		end
+		if humanoid.JumpPower == 0 then
+			humanoid.JumpPower = if frozen.jumpPower > 0 then frozen.jumpPower else 50
+		end
+		if humanoid.JumpHeight == 0 then
+			humanoid.JumpHeight = if frozen.jumpHeight > 0 then frozen.jumpHeight else 7.2
+		end
+	end
+
 	-- mode is Keybinds.worldMode: "free", "walk" or "lock". A boolean
 	-- still works (true = "lock", false = "free"). Only "lock" disables the
 	-- controls, so closing, or switching to a walk page, always releases them.
@@ -883,6 +942,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local locked = mode == "lock"
 		local changed = mode ~= previous
 		if not changed and not (locked and hubState.controlsHeld ~= true) then
+			if locked then
+				hubFn.freezeCharacter(true)
+			end
 			return
 		end
 		hubState.worldMode = mode
@@ -913,6 +975,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.controlsHeld = false
 			end
 		end
+		hubFn.freezeCharacter(locked)
 	end
 
 	function hubFn.worldModeFor(state: UiRouter.State): string
@@ -1444,6 +1507,56 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.revealRarity.Text = ""
 	hubState.revealRarity.ZIndex = 9
 	hubState.revealRarity.Parent = hubState.revealCard
+	-- Every face has an icon tile and a detail line: the shard while it
+	-- cracks, the gear kind and two stats once it lands.
+	hubState.revealIconTile = Instance.new("Frame")
+	hubState.revealIconTile.Name = "IconTile"
+	hubState.revealIconTile.Position = UDim2.fromOffset(8, 8)
+	hubState.revealIconTile.Size = UDim2.fromOffset(56, 56)
+	hubState.revealIconTile.BackgroundColor3 = rgb("body")
+	hubState.revealIconTile.BorderSizePixel = 0
+	hubState.revealIconTile.ZIndex = 9
+	hubState.revealIconTile.Parent = hubState.revealCard
+	hubState.revealIconCorner = Instance.new("UICorner")
+	hubState.revealIconCorner.CornerRadius = UDim.new(0, 8)
+	hubState.revealIconCorner.Parent = hubState.revealIconTile
+	hubState.revealIconStroke = Instance.new("UIStroke")
+	hubState.revealIconStroke.Thickness = UiTheme.STROKE
+	hubState.revealIconStroke.Color = rgb("accent")
+	hubState.revealIconStroke.Parent = hubState.revealIconTile
+	hubState.revealIcon = Instance.new("ImageLabel")
+	hubState.revealIcon.Name = "Icon"
+	hubState.revealIcon.BackgroundTransparency = 1
+	hubState.revealIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	hubState.revealIcon.Position = UDim2.fromScale(0.5, 0.5)
+	hubState.revealIcon.Size = UDim2.fromScale(0.8, 0.8)
+	hubState.revealIcon.ScaleType = Enum.ScaleType.Fit
+	hubState.revealIcon.Image = IconAssets.Shards or ""
+	hubState.revealIcon.ZIndex = 10
+	hubState.revealIcon.Parent = hubState.revealIconTile
+	hubState.revealDetail = Instance.new("TextLabel")
+	hubState.revealDetail.Name = "Detail"
+	hubState.revealDetail.BackgroundTransparency = 1
+	hubState.revealDetail.Position = UDim2.fromOffset(72, 64)
+	hubState.revealDetail.Size = UDim2.new(1, -200, 0, 20)
+	hubState.revealDetail.Font = bodyFont()
+	hubState.revealDetail.TextSize = UiTheme.MIN_TEXT
+	hubState.revealDetail.TextXAlignment = Enum.TextXAlignment.Left
+	hubState.revealDetail.TextTruncate = Enum.TextTruncate.AtEnd
+	hubState.revealDetail.TextColor3 = rgb("muted")
+	hubState.revealDetail.Text = ""
+	hubState.revealDetail.ZIndex = 9
+	hubState.revealDetail.Parent = hubState.revealCard
+
+	function hubFn.paintCardFace(face: any, color: Color3)
+		local art = (IconAssets :: any)[face.icon]
+		hubState.revealIcon.Image = if type(art) == "string" then art else (IconAssets.ItemMisc or "")
+		hubState.revealIconStroke.Color = color
+		hubState.revealTitle.Text = face.title
+		hubState.revealRarity.Text = face.rarity
+		hubState.revealDetail.Text = face.detail
+	end
+
 	hubState.revealNew = Instance.new("TextLabel")
 	hubState.revealNew.Name = "New"
 	hubState.revealNew.AnchorPoint = Vector2.new(1, 0)
@@ -1526,6 +1639,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealCard.Visible = face.visible
 		hubState.revealTitle.Text = face.name
 		hubState.revealRarity.Text = face.rarity
+		hubState.revealDetail.Text = ""
 		hubState.revealNew.Visible = false
 		hubState.revealEquip.Visible = false
 		hubState.revealBest.Visible = false
@@ -1858,7 +1972,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		local wide = caption ~= "Roll" and caption ~= "Miss"
+		-- "Shard" is the crack itself: the crystal must stay on screen.
+		-- Hiding it left a wide "Shard" window with an empty body.
+		local wide = caption ~= "Roll" and caption ~= "Miss" and caption ~= "Shard"
 		hubState.shardStone.Visible = not wide
 		hubFn.placeReelWindows(wide)
 		hubFn.paintWindow(hubState.reelLeft, "—", "Common", false)
@@ -2009,11 +2125,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealCard.Size = UDim2.new(1, -24, 0, layout.card.h)
 		hubState.revealCard.Position = UDim2.new(0.5, 0, 0, layout.card.y + layout.card.h)
 		hubState.revealCard.AnchorPoint = Vector2.new(0.5, 1)
-		hubState.revealTitle.Position = UDim2.fromOffset(12, layout.name.y)
-		hubState.revealTitle.Size = UDim2.new(1, -120, 0, layout.name.h)
+		local tile = math.max(24, math.min(56, layout.card.h - 16))
+		local textX = 8 + tile + 10
+		hubState.revealIconTile.Size = UDim2.fromOffset(tile, tile)
+		hubState.revealIconTile.Position = UDim2.fromOffset(8, math.floor((layout.card.h - tile) / 2))
+		hubState.revealTitle.Position = UDim2.fromOffset(textX, layout.name.y)
+		hubState.revealTitle.Size = UDim2.new(1, -(textX + 108), 0, layout.name.h)
 		hubState.revealRarity.Visible = layout.rarity.visible
-		hubState.revealRarity.Position = UDim2.fromOffset(12, layout.rarity.y)
-		hubState.revealRarity.Size = UDim2.new(1, -120, 0, layout.rarity.h)
+		hubState.revealRarity.Position = UDim2.fromOffset(textX, layout.rarity.y)
+		hubState.revealRarity.Size = UDim2.new(1, -(textX + 108), 0, layout.rarity.h)
+		local detailY = layout.rarity.y + layout.rarity.h
+		hubState.revealDetail.Visible = layout.rarity.visible and detailY + 16 <= layout.card.h
+		hubState.revealDetail.Position = UDim2.fromOffset(textX, detailY)
+		hubState.revealDetail.Size = UDim2.new(1, -(textX + 136), 0, 18)
 		local aboveCard = height - layout.card.y + 6
 		hubState.closeBeat.Position = UDim2.new(1, -12, 1, -aboveCard)
 		hubState.revealFly.Visible = layout.fly
@@ -5407,10 +5531,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		upgrade: boolean
 	)
 		hubState.revealCard.Visible = true
-		hubState.revealTitle.Text = record.name
-		-- Tier color plus the real base chance, e.g. "Rare · 6.6%".
-		hubState.revealRarity.Text = RarityConfig.revealText(record.rarity)
+		-- Icon, name, tier color plus the real base chance ("Rare · 6.6%")
+		-- and the first two stats, the same face the Bag card leads with.
 		local color = hubFn.rarityColor3(record.rarity)
+		hubFn.paintCardFace(
+			RollReveal.cardFace(item, record, InventoryView.statLines(item)),
+			color
+		)
 		hubState.revealRarity.TextColor3 = color
 		hubState.revealStroke.Color = color
 		hubState.revealNew.Visible = isNew
@@ -5480,8 +5607,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.stageReveal()
 		hubState.revealCard.Visible = true
-		hubState.revealTitle.Text = ""
-		hubState.revealRarity.Text = ""
+		local total = 1
+		local index = 1
+		if hubState.batching then
+			index = #hubState.summaryItems
+			total = index + #hubState.batchLeft
+		end
+		hubFn.paintCardFace(RollReveal.pendingFace(index, total), rgb("accent"))
+		hubState.revealRarity.TextColor3 = rgb("text")
 		hubState.revealNew.Visible = false
 		hubState.revealBest.Visible = false
 		hubState.revealEquip.Visible = false
@@ -5984,6 +6117,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		-- Failsafe: a hold or reveal that outlives REVEAL_HOLD_MAX (a hung
 		-- server call, a lost Heartbeat end) stops the roll and frees the
 		-- player. Nothing can leave the character frozen.
+		if hubState.worldMode == "lock" then
+			-- A respawn mid-lock brings a fresh Humanoid; freeze that too.
+			hubFn.freezeCharacter(true)
+		elseif hubState.frozen ~= nil then
+			hubFn.freezeCharacter(false)
+		end
 		local hold = hubState.rollHold
 		local stuck = hubState.activeReveal
 		if

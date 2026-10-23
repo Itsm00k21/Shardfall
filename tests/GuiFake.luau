@@ -202,6 +202,7 @@ local PROPS: { [string]: { [string]: boolean } } = {
 		UserId = true,
 	},
 	Humanoid = {
+		CameraOffset = true,
 		DisplayDistanceType = true,
 		Health = true,
 		HipHeight = true,
@@ -514,6 +515,9 @@ local function newInstance(className: string)
 		signals.MouseLeave = makeSignal()
 	elseif className == "Player" then
 		signals.CharacterAdded = makeSignal()
+	elseif className == "Humanoid" then
+		signals.HealthChanged = makeSignal()
+		signals.Died = makeSignal()
 	elseif className == "RemoteEvent" then
 		signals.OnClientEvent = makeSignal()
 	end
@@ -1120,10 +1124,28 @@ function GuiFake.world()
 		return controls
 	end
 
+	-- Opt in: give the player a Character with a Humanoid (WalkSpeed 16,
+	-- JumpPower 50, JumpHeight 7.2) so tests can see the hub freeze it.
+	local function withCharacter()
+		local character = newInstance("Folder")
+		character.Name = "Character"
+		local humanoid = newInstance("Humanoid")
+		humanoid.WalkSpeed = 16
+		humanoid.JumpPower = 50
+		humanoid.JumpHeight = 7.2
+		humanoid.Health = 100
+		humanoid.MaxHealth = 100
+		humanoid.CameraOffset = vector3(0, 0, 0)
+		humanoid.Parent = character
+		player.Character = character
+		return humanoid
+	end
+
 	return {
 		playerGui = playerGui,
 		player = player,
 		withControls = withControls,
+		withCharacter = withCharacter,
 		userInput = userInput,
 		binds = binds,
 		controls = controls,

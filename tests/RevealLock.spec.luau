@@ -24,11 +24,17 @@ type Rig = {
 	screen: any,
 	calls: { { name: string, enabled: boolean } },
 	step: (seconds: number) -> (),
+	humanoid: any,
 }
 
-local function rig(mode: string?): Rig
+-- noControls: no PlayerModule at all (a forked/missing ControlModule in
+-- the live place). The Humanoid freeze alone must still stop the player.
+local function rig(mode: string?, noControls: boolean?): Rig
 	local world = GuiFake.world()
-	world.withControls()
+	if noControls ~= true then
+		world.withControls()
+	end
+	local humanoid = world.withCharacter()
 	local MenuHub = world.load("MenuHub")
 	local count = 0
 	local function item()
@@ -110,6 +116,7 @@ local function rig(mode: string?): Rig
 		screen = GuiFake.findNamed(world.playerGui, "ShardfallHub"),
 		calls = calls,
 		step = step,
+		humanoid = humanoid,
 	}
 end
 
@@ -214,5 +221,83 @@ describe("Roll reveal movement lock", function()
 		expect(Keybinds.holdExpired(10, 10 + Keybinds.REVEAL_HOLD_MAX - 0.5)).toEqual(false)
 		expect(Keybinds.holdExpired(10, 10 + Keybinds.REVEAL_HOLD_MAX + 0.5)).toEqual(true)
 		expect(Keybinds.holdExpired(nil, 10)).toEqual(true)
+	end)
+end)
+
+describe("Roll reveal freezes the Humanoid, not just the PlayerModule", function()
+	-- Kevin, Oct 22 9:55 PM: controls:Disable() alone let the character run
+	-- left and right behind the x1 and x10 reveals in live Studio.
+	local function frozen(r: Rig): boolean
+		return r.humanoid.WalkSpeed == 0 and r.humanoid.JumpPower == 0 and r.humanoid.JumpHeight == 0
+	end
+	local function restored(r: Rig): boolean
+		return r.humanoid.WalkSpeed == 16 and r.humanoid.JumpPower == 50 and r.humanoid.JumpHeight == 7.2
+	end
+
+	it("leaves WalkSpeed alone on the walkable Roll page", function()
+		local r = rig(nil, true)
+		expect(restored(r)).toEqual(true)
+	end)
+
+	it("freezes an x1 roll from the press to the end with no PlayerModule", function()
+		local r = rig(nil, true)
+		press(r, "Roll")
+		expect(frozen(r)).toEqual(true)
+		r.step(1)
+		expect(frozen(r)).toEqual(true)
+		r.step(6)
+		expect(restored(r)).toEqual(true)
+	end)
+
+	it("keeps an x10 frozen across every card, then restores once", function()
+		local r = rig(nil, true)
+		press(r, "TimesTen")
+		local thawedEarly = false
+		local elapsed = 0
+		while r.hub ~= nil and elapsed < 2 do
+			r.step(0.2)
+			elapsed += 0.2
+			if not frozen(r) then
+				thawedEarly = true
+			end
+		end
+		expect(thawedEarly).toEqual(false)
+		r.step(12)
+		expect(restored(r)).toEqual(true)
+	end)
+
+	it("restores on skip, close, error and the hang failsafe", function()
+		local skip = rig(nil, true)
+		press(skip, "Roll")
+		skip.step(0.2)
+		press(skip, "Roll")
+		expect(restored(skip)).toEqual(true)
+
+		local closed = rig(nil, true)
+		press(closed, "Roll")
+		closed.step(0.2)
+		closed.hub.close()
+		expect(restored(closed)).toEqual(true)
+
+		local failed = rig("error", true)
+		press(failed, "Roll")
+		expect(restored(failed)).toEqual(true)
+
+		local hung = rig("hang", true)
+		local thread = coroutine.create(function()
+			press(hung, "Roll")
+		end)
+		coroutine.resume(thread)
+		expect(frozen(hung)).toEqual(true)
+		hung.step(Keybinds.REVEAL_HOLD_MAX + 1)
+		expect(restored(hung)).toEqual(true)
+	end)
+
+	it("restores to defaults, never zero, if it froze an already-zero Humanoid", function()
+		local r = rig(nil, true)
+		r.humanoid.WalkSpeed = 0
+		press(r, "Roll")
+		r.step(8)
+		expect(r.humanoid.WalkSpeed).toEqual(16)
 	end)
 end)

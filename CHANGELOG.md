@@ -40,6 +40,13 @@ its tag to merged and add the merge commit.
   `tests/RevealLock.spec.luau`. The every-10th-roll x2 luck milestone and its
   "x2 Luck in N" meter are parked behind `LaunchGate.SHOW.luckMilestone`
   (off; `shardRolls` still counts). Branch `phase1/rolls-core`. (open)
+- Phase 1 follow-up 2 (Oct 22 retest): the reveal lock now also zeroes the local
+  Humanoid's WalkSpeed/jump for the whole roll (x1, x10, auto) and restores the exact
+  old values on finish, skip, close, leaving the tab, error and the 12s failsafe, so
+  movement stops even when PlayerModule Disable() or the key sink is bypassed (e.g. a
+  server MoveTo). The crack no longer shows a blank "Shard" window/card: the crystal
+  stays visible and the reveal card always has an icon, title, rarity line and a
+  detail line ("Card 3 of 10" while cracking, first two stats once landed).
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
   Damookie21) in `DevAccess.OWNER_IDS`. (open)
 - Docs: replaced the roadmap with the locked V1 roadmap (Phases 0-7, Phase S,
