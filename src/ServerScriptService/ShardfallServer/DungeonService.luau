@@ -1618,6 +1618,60 @@ local function scheduleRestart(player: Player, dungeonId: string, delay: number)
 	}
 end
 
+-- [ECHO hook] Run end only. Off returns before grant and before any save write.
+-- Room clears pass 0 waves so this does not stack on the live shardTokens grant.
+-- Endless passes cleared waves (the current wave counts only after it is cleared).
+local function echoRunPayout(player: Player, run: Run)
+	if LaunchGate.on("payouts") ~= true or run.practice == true or type(run.runId) ~= "string" then
+		return
+	end
+	local waves = 0
+	local difficulty: string? = nil
+	if run.dungeon.endless == true then
+		local config = require(ReplicatedStorage.Shared.Config.Economy)
+		waves = run.wave
+		if run.cleared ~= true then
+			waves -= 1
+		end
+		local cap = #config.WAVES
+		if waves < 0 then
+			waves = 0
+		elseif waves > cap then
+			waves = cap
+		end
+		if type(run.difficulty) == "string" and config.DIFFICULTIES[run.difficulty] ~= nil then
+			difficulty = run.difficulty
+		end
+		if waves >= 1 and difficulty == nil then
+			return
+		end
+	end
+	local request: { [string]: any } = { wavesCleared = waves }
+	if waves >= 1 and difficulty ~= nil then
+		request.difficulty = difficulty
+	end
+	local quoted, payout = pcall(function()
+		return require(script.Parent.PayoutService).grant(player.UserId, run.runId, request)
+	end)
+	if not quoted or type(payout) ~= "table" or payout.paid ~= true then
+		return
+	end
+	local tokens = payout.tokens
+	if type(tokens) ~= "number" or tokens < 1 then
+		return
+	end
+	local saved, why = DataService.mutate(player, function(data)
+		if payout.paid == true then
+			data.shardTokens += payout.tokens
+			Economy.log(data, "run_payout", "shardTokens", payout.tokens, data.shardTokens)
+		end
+		return nil
+	end)
+	if not saved then
+		warn("[Shardfall] payout hook: " .. tostring(why))
+	end
+end
+
 local function finish(player: Player, victory: boolean)
 	local run = runs[player]
 	if run == nil or run.resolving then
@@ -1659,6 +1713,10 @@ local function finish(player: Player, victory: boolean)
 		note = if endless then "Waves ended." else "Rootvault cleared."
 	elseif victory then
 		note = "Clear did not save."
+	end
+	-- [ECHO hook] One grant per run. leave returns early once resolving is set.
+	if not victory or saved then
+		echoRunPayout(player, run)
 	end
 	pushRun(player, note)
 	if farming then
@@ -2775,6 +2833,8 @@ function DungeonService.leave(player: Player)
 	end
 	CombatService.revive(player)
 	teleport(player, hubCFrame())
+	-- [ECHO hook]
+	echoRunPayout(player, run)
 	destroyRun(player, run)
 	pushRun(player, "Left the Rootvault.")
 	return { ok = true, run = publicRun(player) }

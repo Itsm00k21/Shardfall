@@ -172,6 +172,12 @@ end)
 begin("MarketService", function()
 	MarketService.start()
 end)
+begin("Payouts", function()
+	-- [ECHO hook] Load only. grant pays nothing while payouts is off.
+	if LaunchGate.on("payouts") then
+		require(script.PayoutService)
+	end
+end)
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()
 		local ok, err = pcall(function()
