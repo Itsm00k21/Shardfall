@@ -6,6 +6,11 @@
 --   row(item, result, isNew)
 --                         one summary tile: name, rarity, NEW / ★ up /
 --                         auto-salvaged badges and a short line.
+--   batch(rows, owned)    one tile per server batch row, in roll order, with
+--                         exactly one outcome each (see OUTCOMES). `owned`
+--                         is the templateId set from BEFORE the batch, so a
+--                         dupe of gear Kevin already had is never NEW, and a
+--                         repeat inside the batch chains its stars per copy.
 --   tiles(items, meta)    rows for the batch in roll order.
 --   headline(tiles)       "x10: 2 NEW · 1 ★ up · 3 auto-salvaged (+24 Essence)".
 --   layout(vx, vy, phone, count)
@@ -22,6 +27,14 @@ RollSummary.CLOSE = "Close"
 RollSummary.NEW = "NEW"
 RollSummary.STAR_UP = "★ up"
 RollSummary.SALVAGED = "Auto-salvaged"
+RollSummary.FED = "★ fed"
+RollSummary.ESSENCE = "Essence"
+RollSummary.COPY = "Copy"
+RollSummary.STAR_CAP = 5
+
+-- Every tile has exactly one of these. A dupe feeds 34-100% of a star
+-- (Shared/Stars), so a merge that does not finish a star is "fed".
+RollSummary.OUTCOMES = table.freeze({ "new", "starUp", "fed", "essence", "copy", "salvaged" })
 
 export type Tile = {
 	name: string,
@@ -30,6 +43,8 @@ export type Tile = {
 	isNew: boolean,
 	starUp: boolean,
 	salvaged: boolean,
+	outcome: string,
+	stars: number?,
 	essence: number,
 	badges: { string },
 	line: string,
@@ -63,7 +78,18 @@ function RollSummary.fast(plan: any): any
 	return out
 end
 
-function RollSummary.row(item: any, result: any, isNew: any): Tile
+local BADGE = {
+	new = RollSummary.NEW,
+	starUp = RollSummary.STAR_UP,
+	fed = RollSummary.FED,
+	essence = RollSummary.ESSENCE,
+	copy = RollSummary.COPY,
+	salvaged = RollSummary.SALVAGED,
+}
+
+-- chainFrom (optional): the stars this copy already reached earlier in the
+-- batch, so a repeat reads ★1 -> ★2 after ★0 -> ★1.
+function RollSummary.row(item: any, result: any, isNew: any, chainFrom: number?): Tile
 	local source = if type(item) == "table" then item else {}
 	local info = if type(result) == "table" then result else {}
 	local rarity = if type(source.rarity) == "string"
@@ -72,39 +98,95 @@ function RollSummary.row(item: any, result: any, isNew: any): Tile
 		else "Common"
 	local name = if type(source.name) == "string" and source.name ~= "" then source.name else "Shard"
 	local kind = if type(source.kind) == "string" then source.kind else ""
-	local salvaged = info.autoSalvaged == true
-	local old, new = whole(info.oldLevel), whole(info.newLevel)
-	local starUp = info.merged == true and (old == nil or new == nil or new > old)
-	local essence = whole(info.essenceGained) or whole(info.essence) or 0
-	-- A salvaged drop never reached the bag, so it is not "NEW".
-	local fresh = isNew == true and not starUp and not salvaged
-	local badges = {}
-	if fresh then
-		table.insert(badges, RollSummary.NEW)
-	end
-	if starUp then
-		table.insert(badges, RollSummary.STAR_UP)
-	end
-	if salvaged then
-		table.insert(badges, RollSummary.SALVAGED)
-	end
+	local outcome
+	local stars: number? = nil
 	local line = rarity
-	if salvaged then
-		line = string.format("Auto-salvaged +%d Essence", whole(info.essenceGained) or 0)
-	elseif starUp and old ~= nil and new ~= nil then
-		line = string.format("★ %d -> ★ %d", old, new)
+	local essence = 0
+	if info.autoSalvaged == true then
+		outcome = "salvaged"
+		essence = whole(info.essenceGained) or 0
+		line = string.format("Auto-salvaged +%d Essence", essence)
+	elseif info.merged == true then
+		local old = whole(info.oldLevel)
+		local new = whole(info.newLevel)
+		if old == nil then
+			old = whole(source.stars) or 0
+		end
+		if chainFrom ~= nil and old < chainFrom then
+			old = chainFrom
+		end
+		if new == nil or new < old then
+			new = old
+		end
+		local gained = whole(info.essenceGained) or whole(info.essence) or 0
+		if new > old then
+			outcome = "starUp"
+			line = string.format("★ %d -> ★ %d", old, new)
+		elseif old >= RollSummary.STAR_CAP or gained > 0 then
+			outcome = "essence"
+			essence = gained
+			line = string.format("★ %d · +%d Essence", old, gained)
+		else
+			outcome = "fed"
+			line = string.format("★ %d · toward ★ %d", old, old + 1)
+		end
+		stars = new
+	elseif isNew == true then
+		outcome = "new"
+	else
+		outcome = "copy"
 	end
 	return {
 		name = name,
 		rarity = rarity,
 		kind = kind,
-		isNew = fresh,
-		starUp = starUp,
-		salvaged = salvaged,
-		essence = if salvaged then whole(info.essenceGained) or 0 else essence,
-		badges = badges,
+		isNew = outcome == "new",
+		starUp = outcome == "starUp",
+		salvaged = outcome == "salvaged",
+		outcome = outcome,
+		stars = stars,
+		essence = essence,
+		badges = { BADGE[outcome] },
 		line = line,
 	}
+end
+
+-- rows: the server's batch.items ({ item, merged, oldLevel, newLevel,
+-- essence, autoSalvaged, essenceGained }). owned: templateId -> true for
+-- what the profile held before the batch (RollLoop.ownedTemplates).
+function RollSummary.batch(rows: any, owned: any): { Tile }
+	local out = {}
+	if type(rows) ~= "table" then
+		return out
+	end
+	local seen: { [string]: boolean } = {}
+	if type(owned) == "table" then
+		for id, has in pairs(owned) do
+			if has == true and type(id) == "string" then
+				seen[id] = true
+			end
+		end
+	end
+	local reached: { [string]: number } = {}
+	for _, row in ipairs(rows) do
+		local info = if type(row) == "table" then row else {}
+		local item = if type(info.item) == "table" then info.item else {}
+		local templateId = if type(item.templateId) == "string" and item.templateId ~= ""
+			then item.templateId
+			else nil
+		local uid = if type(item.uid) == "string" then item.uid else nil
+		local fresh = templateId ~= nil and seen[templateId] ~= true
+		local chain = if uid ~= nil then reached[uid] else nil
+		local tile = RollSummary.row(item, info, fresh, chain)
+		if tile.stars ~= nil and uid ~= nil then
+			reached[uid] = tile.stars
+		end
+		if tile.outcome ~= "salvaged" and templateId ~= nil then
+			seen[templateId] = true
+		end
+		table.insert(out, tile)
+	end
+	return out
 end
 
 -- meta maps an item table to the tile built when it landed. Items with no
@@ -125,30 +207,33 @@ function RollSummary.tiles(items: any, meta: any): { Tile }
 	return out
 end
 
+-- The counts come from the same outcome the badges show, so the header
+-- always adds up to the grid.
 function RollSummary.headline(tiles: { Tile }): string
-	local fresh, ups, gone, gain = 0, 0, 0, 0
+	local count: { [string]: number } = {}
+	local gain: { [string]: number } = {}
 	for _, tile in ipairs(tiles) do
-		if tile.isNew then
-			fresh += 1
-		end
-		if tile.starUp then
-			ups += 1
-		end
-		if tile.salvaged then
-			gone += 1
-			gain += tile.essence
-		end
+		local outcome = tile.outcome or (if tile.salvaged
+			then "salvaged"
+			elseif tile.starUp then "starUp"
+			elseif tile.isNew then "new"
+			else "copy")
+		count[outcome] = (count[outcome] or 0) + 1
+		gain[outcome] = (gain[outcome] or 0) + (tile.essence or 0)
 	end
 	local parts = {}
-	if fresh > 0 then
-		table.insert(parts, string.format("%d NEW", fresh))
+	local function add(key: string, text: string)
+		local n = count[key] or 0
+		if n > 0 then
+			table.insert(parts, string.format(text, n, gain[key] or 0))
+		end
 	end
-	if ups > 0 then
-		table.insert(parts, string.format("%d ★ up", ups))
-	end
-	if gone > 0 then
-		table.insert(parts, string.format("%d auto-salvaged (+%d Essence)", gone, gain))
-	end
+	add("new", "%d NEW")
+	add("starUp", "%d ★ up")
+	add("fed", "%d ★ fed")
+	add("essence", "%d at ★5 (+%d Essence)")
+	add("copy", if (count.copy or 0) > 1 then "%d copies" else "%d copy")
+	add("salvaged", "%d auto-salvaged (+%d Essence)")
 	local head = string.format("x%d results", #tiles)
 	if #parts == 0 then
 		return head

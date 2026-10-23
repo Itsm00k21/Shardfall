@@ -92,7 +92,97 @@ describe("RollSummary: tiles", function()
 		expect(RollSummary.headline(tiles)).toEqual(
 			"x4 results: 1 NEW · 1 ★ up · 2 auto-salvaged (+12 Essence)"
 		)
-		expect(RollSummary.headline({ RollSummary.row({ name = "E" }, {}, false) })).toEqual("x1 results")
+		expect(RollSummary.headline({ RollSummary.row({ name = "E" }, {}, false) })).toEqual("x1 results: 1 copy")
+	end)
+end)
+
+describe("RollSummary: one outcome per tile (playtest clip 4)", function()
+	local function gear(uid: string, templateId: string, name: string, rarity: string?): any
+		return { uid = uid, templateId = templateId, name = name, rarity = rarity or "Rare", kind = "Weapon" }
+	end
+
+	it("never marks a dupe of gear owned before the batch NEW", function()
+		local owned = { worldroot_staff = true, bramble_fang = true, beastbone_hammer = true }
+		local tiles = RollSummary.batch({
+			-- At ★5 the dupe pays Essence.
+			{ item = gear("w1", "worldroot_staff", "Worldroot Staff", "Legendary"), merged = true, oldLevel = 5, newLevel = 5, essence = 40 },
+			-- Fed, but short of the next star.
+			{ item = gear("b1", "bramble_fang", "Bramble Fang"), merged = true, oldLevel = 2, newLevel = 2, essence = 0 },
+			-- Server did not merge (Stage A off): a plain copy, still not NEW.
+			{ item = gear("h2", "beastbone_hammer", "Beastbone Hammer") },
+		}, owned)
+		expect(tiles[1].isNew).toBeFalse()
+		expect(tiles[1].outcome).toEqual("essence")
+		expect(tiles[1].badges[1]).toEqual("Essence")
+		expect(tiles[1].line).toEqual("★ 5 · +40 Essence")
+		expect(tiles[2].isNew).toBeFalse()
+		expect(tiles[2].outcome).toEqual("fed")
+		expect(tiles[2].line).toEqual("★ 2 · toward ★ 3")
+		expect(tiles[3].isNew).toBeFalse()
+		expect(tiles[3].outcome).toEqual("copy")
+	end)
+
+	it("chains stars through the batch when one item repeats", function()
+		local tiles = RollSummary.batch({
+			{ item = gear("g1", "wildgrowth_staff", "Wildgrowth Staff") },
+			{ item = gear("g1", "wildgrowth_staff", "Wildgrowth Staff"), merged = true, oldLevel = 0, newLevel = 1 },
+			{ item = gear("g1", "wildgrowth_staff", "Wildgrowth Staff"), merged = true, oldLevel = 1, newLevel = 2 },
+			-- A stale row that still says 0 -> 1 is read from where the chain got to.
+			{ item = gear("g1", "wildgrowth_staff", "Wildgrowth Staff"), merged = true, oldLevel = 0, newLevel = 1 },
+		}, {})
+		expect(tiles[1].outcome).toEqual("new")
+		expect(tiles[2].line).toEqual("★ 0 -> ★ 1")
+		expect(tiles[3].line).toEqual("★ 1 -> ★ 2")
+		expect(tiles[4].outcome).toEqual("fed")
+		expect(tiles[4].line).toEqual("★ 2 · toward ★ 3")
+	end)
+
+	it("keeps two copies' chains apart", function()
+		local tiles = RollSummary.batch({
+			{ item = gear("a", "wildgrowth_staff", "Wildgrowth Staff"), merged = true, oldLevel = 0, newLevel = 1 },
+			{ item = gear("b", "wildgrowth_staff", "Wildgrowth Staff"), merged = true, oldLevel = 0, newLevel = 1 },
+		}, { wildgrowth_staff = true })
+		expect(tiles[1].line).toEqual("★ 0 -> ★ 1")
+		expect(tiles[2].line).toEqual("★ 0 -> ★ 1")
+	end)
+
+	it("a second copy of a brand-new drop inside the batch is not NEW twice", function()
+		local tiles = RollSummary.batch({
+			{ item = gear("n1", "glade_charm", "Glade Charm") },
+			{ item = gear("n2", "glade_charm", "Glade Charm") },
+		}, {})
+		expect(tiles[1].outcome).toEqual("new")
+		expect(tiles[2].outcome).toEqual("copy")
+	end)
+
+	it("gives every tile exactly one badge and the header matches them", function()
+		local rows = {
+			{ item = gear("1", "t1", "A") },
+			{ item = gear("2", "t2", "B"), merged = true, oldLevel = 1, newLevel = 2 },
+			{ item = gear("2", "t2", "B"), merged = true, oldLevel = 2, newLevel = 2 },
+			{ item = gear("3", "t3", "C"), merged = true, oldLevel = 5, newLevel = 5, essence = 20 },
+			{ item = gear("4", "t4", "D"), autoSalvaged = true, essenceGained = 4 },
+			{ item = gear("5", "t5", "E"), autoSalvaged = true, essenceGained = 8 },
+			{ item = gear("6", "t6", "F") },
+			{ item = gear("7", "t1", "A") },
+			{ item = gear("8", "t8", "G"), merged = true, oldLevel = 0, newLevel = 1 },
+			{ item = gear("9", "t9", "H") },
+		}
+		local tiles = RollSummary.batch(rows, { t2 = true, t3 = true, t8 = true })
+		local counted: { [string]: number } = {}
+		for _, tile in ipairs(tiles) do
+			expect(#tile.badges).toEqual(1)
+			counted[tile.badges[1]] = (counted[tile.badges[1]] or 0) + 1
+		end
+		expect(counted["NEW"]).toEqual(3)
+		expect(counted["★ up"]).toEqual(2)
+		expect(counted["★ fed"]).toEqual(1)
+		expect(counted["Essence"]).toEqual(1)
+		expect(counted["Copy"]).toEqual(1)
+		expect(counted["Auto-salvaged"]).toEqual(2)
+		expect(RollSummary.headline(tiles)).toEqual(
+			"x10 results: 3 NEW · 2 ★ up · 1 ★ fed · 1 at ★5 (+20 Essence) · 1 copy · 2 auto-salvaged (+12 Essence)"
+		)
 	end)
 end)
 
@@ -121,7 +211,7 @@ describe("RollSummary: layout", function()
 	end)
 end)
 
-local function rig(rows: ((index: number) -> any)?)
+local function rig(rows: ((index: number) -> any)?, inventory: any?)
 	local world = GuiFake.world()
 	world.withControls()
 	world.withCharacter()
@@ -170,7 +260,7 @@ local function rig(rows: ((index: number) -> any)?)
 		shardTokens = 50,
 		gold = 0,
 		shardRolls = 0,
-		inventory = {},
+		inventory = inventory or {},
 		pets = {},
 		equipped = {},
 		consumables = {},
@@ -281,6 +371,65 @@ describe("x10 reveal and summary", function()
 		expect(gone:FindFirstChild("Line").Text).toEqual("+9 Essence")
 		expect(gone:FindFirstChild("Badge").Text).toEqual("Salvaged")
 		expect(string.find(GuiFake.findNamed(summary, "Headline").Text, "auto-salvaged (+9 Essence)", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("does not tag a dupe of equipped gear NEW (Worldroot Staff, clip 4)", function()
+		local owned = {
+			uid = "u1",
+			templateId = entry.templateId .. "_1",
+			name = entry.name,
+			rarity = "Legendary",
+			kind = entry.kind,
+			stars = 2,
+		}
+		local r = rig(function(index: number)
+			if index == 1 then
+				-- The server merged the dupe into the copy Kevin wears; the row
+				-- carries that copy (same uid), so "not in my bag" is no test.
+				return { merged = true, oldLevel = 2, newLevel = 2, essence = 0 }
+			end
+			return nil
+		end, { u1 = owned })
+		GuiFake.activate(r.find("TimesTen"))
+		GuiFake.activate(r.find("SkipBatch"))
+		local grid = r.find("RollSummary"):FindFirstChild("Grid")
+		local first = grid:FindFirstChild("Tile_1")
+		expect(first:FindFirstChild("Badge"):GetAttribute("Badge")).toEqual("★ fed")
+		for index = 1, 10 do
+			local n = 0
+			for _, child in ipairs(grid:FindFirstChild("Tile_" .. index):GetChildren()) do
+				if child.Name == "Badge" then
+					n += 1
+				end
+			end
+			expect(n).toEqual(1)
+		end
+	end)
+
+	it("puts Skip at the bottom right of the reveal card, clear of the Shards pill", function()
+		local r = rig()
+		local skip = r.find("SkipBatch")
+		expect(skip.AnchorPoint.Y).toEqual(1)
+		expect(skip.Position.Y.Scale).toEqual(1)
+		expect(skip.Position.X.Scale).toEqual(1)
+	end)
+
+	it("drops the roll-page clutter: Junk/Below, second Streak/Rolls, plain Odds rows", function()
+		local r = rig()
+		expect(r.find("Junk").Visible).toBeFalse()
+		expect(r.find("OddsLines").Visible).toBeFalse()
+		expect(r.find("Progress"):FindFirstChild("Odds")).toBeNil()
+		local streaks = 0
+		for _, desc in ipairs(r.screen:GetDescendants()) do
+			if desc:IsA("TextLabel") and desc.Visible then
+				expect(string.find(desc.Text, "^Rolls  %d") == nil).toBeTrue()
+				if string.find(desc.Text, "^Streak") ~= nil then
+					streaks += 1
+				end
+			end
+		end
+		-- Only the streak bar's own label.
+		expect(streaks <= 1).toBeTrue()
 	end)
 
 	it("Roll again rolls ten more, Close just closes", function()

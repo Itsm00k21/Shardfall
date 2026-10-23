@@ -1815,8 +1815,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	-- on the summary grid.
 	hubState.batchSkipButton = Instance.new("TextButton")
 	hubState.batchSkipButton.Name = "SkipBatch"
-	hubState.batchSkipButton.AnchorPoint = Vector2.new(1, 0)
-	hubState.batchSkipButton.Position = UDim2.new(1, -6, 0, 4)
+	-- Bottom right of the reveal card (the card sits 96 px off the page
+	-- bottom), clear of the Shards wallet pill in the top right.
+	hubState.batchSkipButton.AnchorPoint = Vector2.new(1, 1)
+	hubState.batchSkipButton.Position = UDim2.new(1, -20, 1, -104)
 	hubState.batchSkipButton.Size = UDim2.fromOffset(72, 30)
 	hubState.batchSkipButton.BackgroundColor3 = rgb("body")
 	hubState.batchSkipButton.Font = headerFont()
@@ -4965,8 +4967,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn)
 
+		-- [Ghost] Kevin, clip 4: the roll page reads streak bar, Gear/Pet tabs,
+		-- crystal + ODDS, pity bar, then the buttons. The old junk row and the
+		-- repeated Streak/Rolls/Odds lines stay behind rollMenuExtras (off).
+		local cleanMenu = not LaunchGate.on("rollMenuExtras")
 		local junkRow = Instance.new("Frame")
 		junkRow.Name = "Junk"
+		junkRow.Visible = not cleanMenu
 		junkRow.BackgroundTransparency = 1
 		junkRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
 		junkRow.LayoutOrder = 5
@@ -5006,13 +5013,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		hubFn.line(
-			hubState.roll,
-			UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
-			6,
-			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		)
-		hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		if not cleanMenu then
+			hubFn.line(
+				hubState.roll,
+				UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
+				6,
+				rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
+			)
+			hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		end
 		local bestText = "Best pull  —"
 		if type(hubState.bestPull) == "table" then
 			bestText = string.format(
@@ -5303,7 +5312,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.legendaryFillShown = nextLegendaryFill
 		hubState.legendaryFlashRoll = nextLegendarySeen
 		local oddsRow = progressRow("Odds")
-		if oddsRow ~= nil then
+		if oddsRow ~= nil and cleanMenu then
+			-- Only the pity bar: drop the reserved "Odds" strip under it.
+			progressHost.Size = UDim2.fromOffset(progress.w, math.max(0, oddsRow.y - 6))
+		end
+		if oddsRow ~= nil and not cleanMenu then
 			local oddsHost = Instance.new("Frame")
 			oddsHost.Name = "Odds"
 			oddsHost.BackgroundColor3 = rgb("header")
@@ -5339,6 +5352,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		oddsLines.Size = UDim2.fromScale(1, 0)
 		oddsLines.AutomaticSize = Enum.AutomaticSize.Y
 		oddsLines.LayoutOrder = 13
+		oddsLines.Visible = not cleanMenu
 		oddsLines.Parent = hubState.roll
 		local oddsLayout = Instance.new("UIListLayout")
 		oddsLayout.Padding = UDim.new(0, 4)
@@ -5813,6 +5827,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if hubState.pendingCount > 1 then
 					local count = hubState.pendingCount
 					hubState.pendingCount = 1
+					-- [Ghost] What Kevin owned BEFORE the batch: the reply's profile
+					-- already holds every drop, so NEW is judged against this.
+					local ownedBefore = RollLoop.ownedTemplates(hubState.profile, nil)
 					local batchOk, batch = pcall(hooks.invoke, "RollShards", poolId, count)
 					if generation ~= hubState.revealToken then
 						hubState.rollBusy = false
@@ -5835,6 +5852,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						for _, row in ipairs(batch.items) do
 							if type(row) == "table" and type(row.item) == "table" then
 								hubState.batchRows[row.item] = row
+							end
+						end
+						-- One outcome per tile, stars chained per copy through the batch.
+						local planned = RollSummary.batch(batch.items, ownedBefore)
+						for index, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" and planned[index] ~= nil then
+								hubState.summaryMeta[row.item] = planned[index]
 							end
 						end
 						hubState.batchLeft = {}
@@ -5969,6 +5993,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if type(item.uid) == "string" then item.uid else nil
 			)
 			hubState.activeNew = RollLoop.isNew(item.templateId, owned)
+			local plannedTile = if hubState.batching then hubState.summaryMeta[item] else nil
+			if plannedTile ~= nil then
+				-- [Ghost] The reveal card agrees with the summary tile.
+				hubState.activeNew = plannedTile.isNew
+			end
 			hubState.activeUpgrade = RollLoop.isUpgrade(hubState.profile, item)
 			hubState.activeItem = item
 			hubState.bestPull = RollLoop.best(hubState.bestPull, item)
@@ -6023,8 +6052,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			}
 			if hubState.batching then
 				table.insert(hubState.summaryItems, item)
-				local source = hubState.batchRows[item] or result
-				hubState.summaryMeta[item] = RollSummary.row(item, source, hubState.activeNew)
+				if hubState.summaryMeta[item] == nil then
+					local source = hubState.batchRows[item] or result
+					hubState.summaryMeta[item] = RollSummary.row(item, source, hubState.activeNew)
+				end
 			end
 			hubState.crackNamed = false
 			hubState.crackSounded = false

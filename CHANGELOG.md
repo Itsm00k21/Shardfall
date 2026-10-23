@@ -13,6 +13,7 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- x10 summary fixes (Ghost, playtest clip 4): every tile shows exactly one outcome (NEW only if the item was not owned before the batch; ★ up a -> b chained across repeats; ★ fed for a dupe that adds star progress; +N Essence at ★5; Copy; Salvaged) and the headline counts the same outcomes. Skip sits at the bottom right of the reveal card, off the Shards pill. The Roll page drops the Junk/Below row, the second Streak/Rolls lines and the plain "Odds" rows (`LaunchGate.rollMenuExtras`, off). Client only. (open)
 - x10 roll reveal (Ghost): each x10 card cracks in at most 0.3 s (`RollSummary.fast` scales the CrackReveal plan) with a Skip button on screen for the whole batch; Skip lands the rest at once. The batch ends on a 10-tile summary grid (`RollSummaryHud`) with NEW / ★ up / auto-salvaged badges, a headline, and "Roll again" / "Close"; it replaces the "Cracked" text list. The milestone banner is now a small toast at the top of the Roll page. Server, odds and prices unchanged. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,

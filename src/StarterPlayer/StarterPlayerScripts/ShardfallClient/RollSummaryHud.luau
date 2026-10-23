@@ -75,6 +75,9 @@ local BADGE_COLOR = {
 	[RollSummary.NEW] = OK,
 	[RollSummary.STAR_UP] = GOLD,
 	[RollSummary.SALVAGED] = Color3.fromRGB(230, 120, 110),
+	[RollSummary.FED] = Color3.fromRGB(240, 214, 140),
+	[RollSummary.ESSENCE] = Color3.fromRGB(196, 160, 255),
+	[RollSummary.COPY] = Color3.fromRGB(170, 166, 190),
 }
 
 function View.mount(parent: Instance)
