@@ -26,7 +26,7 @@ its tag to merged and add the merge commit.
   (`Shared/Config/Payouts`, `PayoutService`). A clear multiplies the wave
   total and rounds half up (Normal 11, Medium 14, Hard 17). Duplicates
   convert to Fragments (1/3/10/40/200). One grant per run, so a retry or a
-  leave cannot pay twice. `LaunchGate.payouts` stays off. (open)
+  leave cannot pay twice. `LaunchGate.payouts` stays off. [#384] (open)
 
 ### Changed
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
@@ -96,3 +96,4 @@ its tag to merged and add the merge commit.
 [#375]: https://github.com/Itsm00k21/Shardfall/pull/375
 [#376]: https://github.com/Itsm00k21/Shardfall/pull/376
 [#377]: https://github.com/Itsm00k21/Shardfall/pull/377
+[#384]: https://github.com/Itsm00k21/Shardfall/pull/384
