@@ -10,11 +10,14 @@
 	nothing overlaps at any width.
 
 	  CoreHeader  "Shard Core  Lv 1/5", taps collapse/expand.
-	  CoreBody    progress bar, Essence and next cost, perk ladder,
-	              "Feed" button.
-	  CorePicker  opened by Feed. One row per kind of weapon copy:
-	              "Beastbone Hammer x7  ·  Core Lv 0", never one row per
-	              copy. A row asks to confirm before anything is spent.
+	  CoreBody    progress pips, Essence and next cost, perk ladder,
+	              one "Feed N Essence" button for THIS weapon's core.
+	  CoreConfirm inline under Feed: "Spend N Essence on X core?" with
+	              Feed / Cancel. Nothing is spent before the confirm.
+	After a feed: a toast "Bramble Fang core Lv 1: +1% crit chance", and
+	the next paint lights the new pip and the unlocked perk row (Fresh).
+	Clip 4 (Oct 23): the all-cores picker is gone; only the selected
+	weapon's core is fed here.
 
 	opts:
 	  uid       the selected weapon
@@ -38,6 +41,33 @@ local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local CoreCard = {}
 
 CoreCard.FEED = "FeedShardCore"
+-- How long the new pip and perk row stay lit after a feed.
+CoreCard.FRESH_SECONDS = 2.5
+
+-- The last feed this client saw: { uid, level, at }. The host repaints
+-- after a feed, so the next build reads this to light the new level.
+local fresh: { uid: string, level: number, at: number }? = nil
+
+-- "Bramble Fang core Lv 1: +1% crit chance"
+function CoreCard.fedText(name: string, level: number): string
+	for _, perk in ipairs(ShardCore.PERKS) do
+		if perk.level == level then
+			return string.format("%s core Lv %d: %s", name, level, perk.text)
+		end
+	end
+	return string.format("%s core Lv %d", name, level)
+end
+
+function CoreCard.feedLabel(level: number, essence: number): (string, boolean)
+	local cost = ShardCore.costToNext(level)
+	if cost == nil then
+		return "Core maxed", false
+	end
+	if essence < cost then
+		return string.format("Feed %d Essence  (have %d)", cost, essence), false
+	end
+	return string.format("Feed %d Essence", cost), true
+end
 
 local DEFAULT = {
 	card = Color3.fromRGB(24, 20, 52),
@@ -188,15 +218,36 @@ function CoreCard.build(parent: Instance, opts: any): any
 	bar.LayoutOrder = 1
 	bar.Parent = body
 	list(bar, 4, true)
+	local lit = 0
+	if fresh ~= nil and fresh.uid == uid and fresh.level == level and os.clock() - fresh.at < CoreCard.FRESH_SECONDS then
+		lit = level
+	end
+	local function glow(target: GuiObject)
+		target:SetAttribute("Fresh", true)
+		local ring = Instance.new("UIStroke")
+		ring.Name = "FreshGlow"
+		ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		ring.Color = colors.gold
+		ring.Thickness = 2
+		ring.Parent = target
+		task.delay(CoreCard.FRESH_SECONDS, function()
+			if ring.Parent ~= nil then
+				ring:Destroy()
+			end
+		end)
+	end
 	for step = 1, ShardCore.CAP do
 		local seg = Instance.new("Frame")
 		seg.Name = "Step" .. step
 		seg.BorderSizePixel = 0
 		seg.Size = UDim2.new(1 / ShardCore.CAP, -4, 1, 0)
-		seg.BackgroundColor3 = if step <= level then colors.core else colors.track
+		seg.BackgroundColor3 = if step == lit then colors.gold elseif step <= level then colors.core else colors.track
 		seg.LayoutOrder = step
 		seg.Parent = bar
 		corner(seg, 4)
+		if step == lit then
+			glow(seg)
+		end
 	end
 
 	local nextText, canFeedThis = GearHooks.coreNext(level, essence, ShardCore.COST)
@@ -213,36 +264,33 @@ function CoreCard.build(parent: Instance, opts: any): any
 			perk.unlocked
 		)
 		row:SetAttribute("Unlocked", perk.unlocked == true)
-	end
-
-	local preview = ShardCore.preview(profile, uid)
-	local groups = GearHooks.coreGroups(preview, uid)
-	local anyFeed = false
-	for _, group in ipairs(groups) do
-		if group.canFeed then
-			anyFeed = true
+		if perk.level == lit then
+			row.TextColor3 = colors.gold
+			glow(row)
 		end
 	end
+
+	local inventory = if type(profile) == "table" and type(profile.inventory) == "table" then profile.inventory else {}
+	local owned = inventory[uid]
+	local name = if type(owned) == "table" and type(owned.name) == "string" then owned.name else "Weapon"
+	local feedText, canFeed = CoreCard.feedLabel(level, essence)
+	local cost = ShardCore.costToNext(level)
 	local feed = button(
 		body,
 		"CoreFeed",
-		if anyFeed then "Feed a core" else "Feed a core  (not enough Essence)",
+		feedText,
 		4,
-		if anyFeed then colors.gold else colors.dim,
-		if anyFeed then colors.ink else colors.muted
+		if canFeed then colors.gold else colors.dim,
+		if canFeed then colors.ink else colors.muted
 	)
+	feed:SetAttribute("CanFeed", canFeed)
 
-	local picker = stack(card, "CorePicker", 3)
-	picker.Visible = false
-	local confirm = stack(picker, "CoreConfirm", 0)
+	local confirm = stack(body, "CoreConfirm", 5)
 	confirm.Visible = false
 
 	local function paintHeader()
 		header.Text = string.format("%s  %s", if open then "▼" else "▶", GearHooks.coreHeader(level))
 		body.Visible = open
-		if not open then
-			picker.Visible = false
-		end
 	end
 	paintHeader()
 
@@ -260,92 +308,69 @@ function CoreCard.build(parent: Instance, opts: any): any
 		end
 	end
 
-	local function ask(group: any)
-		for _, child in ipairs(confirm:GetChildren()) do
-			if not child:IsA("UIListLayout") then
-				child:Destroy()
-			end
-		end
-		local cost = group.nextCost
-		if group.capped or cost == nil then
-			text(confirm, "CoreAsk", group.name .. " is at its cap.", 1, colors.muted)
-		elseif not group.canFeed then
-			text(confirm, "CoreAsk", string.format("Need %d Essence (you have %d).", cost, essence), 1, colors.muted)
-		else
-			text(
-				confirm,
-				"CoreAsk",
-				string.format("Spend %d Essence on %s?  Core Lv %d → %d", cost, group.name, group.level, group.level + 1),
-				1,
-				colors.text,
-				true
-			)
-			local yes = button(confirm, "CoreConfirmFeed", string.format("Feed %d Essence", cost), 2, colors.gold, colors.ink)
-			local target = group.uid
-			bind(yes, function()
-				if busy then
-					return
-				end
-				busy = true
-				yes.Text = "Feeding..."
-				task.spawn(function()
-					local ok, answer = pcall(opts.invoke, CoreCard.FEED, target)
-					busy = false
-					if not ok or type(answer) ~= "table" or answer.ok ~= true then
-						local why = if ok and type(answer) == "table" and type(answer.error) == "string"
-							then answer.error
-							else "Could not feed that core."
-						status(why, "error")
-						yes.Text = string.format("Feed %d Essence", cost)
-						return
-					end
-					status(
-						string.format("%s core is now Lv %d.", group.name, tonumber(answer.level) or group.level + 1),
-						"ok"
-					)
-					if type(opts.onFed) == "function" then
-						opts.onFed(answer, target)
-					end
-				end)
-			end)
-		end
-		local no = button(confirm, "CoreCancel", "Cancel", 3, colors.dim, colors.text)
+	if canFeed and cost ~= nil then
+		text(
+			confirm,
+			"CoreAsk",
+			string.format("Spend %d Essence on %s core?  Lv %d → %d", cost, name, level, level + 1),
+			1,
+			colors.text,
+			true
+		)
+		local choices = Instance.new("Frame")
+		choices.Name = "CoreChoices"
+		choices.BackgroundTransparency = 1
+		choices.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		choices.LayoutOrder = 2
+		choices.Parent = confirm
+		list(choices, 8, true)
+		local yes = button(choices, "CoreConfirmFeed", string.format("Feed %d Essence", cost), 1, colors.gold, colors.ink)
+		yes.Size = UDim2.new(0.5, -4, 1, 0)
+		local no = button(choices, "CoreCancel", "Cancel", 2, colors.dim, colors.text)
+		no.Size = UDim2.new(0.5, -4, 1, 0)
 		bind(no, function()
 			confirm.Visible = false
 		end)
-		confirm.Visible = true
-	end
-
-	text(picker, "CorePickTitle", "Pick a weapon core to feed", 1, colors.muted)
-	for index, group in ipairs(groups) do
-		local cost = if group.capped or group.nextCost == nil then "Max" else string.format("%d Essence", group.nextCost)
-		local mark = if group.selected then "  (this one)" else ""
-		local row = button(
-			picker,
-			"CoreGroup",
-			string.format("%s%s  ·  %s", group.label, mark, cost),
-			index + 1,
-			if group.selected then colors.row else colors.dim,
-			if group.canFeed then colors.text else colors.muted
-		)
-		row.TextXAlignment = Enum.TextXAlignment.Left
-		row:SetAttribute("Count", group.count)
-		bind(row, function()
-			ask(group)
+		bind(yes, function()
+			if busy then
+				return
+			end
+			busy = true
+			yes.Text = "Feeding..."
+			task.spawn(function()
+				local ok, answer = pcall(opts.invoke, CoreCard.FEED, uid)
+				busy = false
+				if not ok or type(answer) ~= "table" or answer.ok ~= true then
+					local why = if ok and type(answer) == "table" and type(answer.error) == "string"
+						then answer.error
+						else "Could not feed that core."
+					status(why, "error")
+					yes.Text = string.format("Feed %d Essence", cost)
+					return
+				end
+				local now = math.floor(tonumber(answer.level) or level + 1)
+				fresh = { uid = uid, level = now, at = os.clock() }
+				status(CoreCard.fedText(name, now), "ok")
+				confirm.Visible = false
+				if type(opts.onFed) == "function" then
+					opts.onFed(answer, uid)
+				end
+			end)
 		end)
-	end
-	if #groups == 0 then
-		text(picker, "CoreNone", "No weapons to feed.", 2, colors.muted)
 	end
 
 	bind(feed, function()
-		picker.Visible = not picker.Visible
-		confirm.Visible = false
+		if not canFeed then
+			status(if cost == nil then name .. " core is maxed." else string.format("Need %d Essence (you have %d).", cost, essence), "error")
+			return
+		end
+		confirm.Visible = not confirm.Visible
 	end)
 
 	return {
 		frame = card,
-		groups = groups,
+		feed = feed,
+		confirm = confirm,
 		isOpen = function(): boolean
 			return open
 		end,

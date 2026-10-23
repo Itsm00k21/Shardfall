@@ -37,6 +37,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BagCompare = require(Shared:WaitForChild("BagCompare"))
+local Economy = require(Shared:WaitForChild("Economy"))
 local HubStyle = require(Shared:WaitForChild("HubStyle"))
 local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local LaunchGate = require(Shared:WaitForChild("LaunchGate"))
@@ -87,6 +88,42 @@ end
 
 function GearDetail.artKey(item: any): string
 	return HubStyle.itemArt(item)
+end
+
+local function grouped(amount: number): string
+	local text = tostring(math.floor(amount))
+	local out = text
+	repeat
+		local count
+		out, count = string.gsub(out, "^(-?%d+)(%d%d%d)", "%1,%2")
+	until count == 0
+	return out
+end
+
+-- Gold still missing for the next upgrade, or nil when it is affordable.
+function GearDetail.goldShort(profile: any, item: any): number?
+	if type(item) ~= "table" then
+		return nil
+	end
+	local level = tonumber(item.upgrade) or 0
+	if level ~= level or level < 0 then
+		level = 0
+	end
+	if level >= Economy.UPGRADE_MAX then
+		return nil
+	end
+	local cost = Economy.upgradeCost(level)
+	local gold = if type(profile) == "table" and type(profile.gold) == "number" and profile.gold == profile.gold
+		then math.max(0, profile.gold)
+		else 0
+	if gold >= cost then
+		return nil
+	end
+	return math.ceil(cost - gold)
+end
+
+function GearDetail.shortText(missing: number): string
+	return string.format("Need %s more gold", grouped(missing))
 end
 
 function GearDetail.build(host: Instance, opts: any): any
@@ -253,7 +290,10 @@ function GearDetail.build(host: Instance, opts: any): any
 		end
 		return colors.text
 	end
-	line(host, "CompareHeader", detail.header, base + 1, if worn then colors.ok else colors.muted)
+	-- [Ghost] Clip 4: worn gear already says so on the E badge and the
+	-- EQUIPPED button, so the green "Equipped" header is hidden.
+	local compareHeader = line(host, "CompareHeader", detail.header, base + 1, if worn then colors.ok else colors.muted)
+	compareHeader.Visible = not worn
 	local order = base + 2
 	for _, row in ipairs(detail.rows) do
 		line(host, "Stat_" .. row.id, row.text, order, tone(row.tone))
@@ -299,19 +339,27 @@ function GearDetail.build(host: Instance, opts: any): any
 	end)
 	local upgradeText = HubStyle.upgradeLabel(item.upgrade)
 	local maxed = string.find(upgradeText, "Max", 1, true) ~= nil
+	-- [Ghost] Clip 4: UPGRADE looked pressable with too little gold. The
+	-- server still decides; this only dims the button and says the gap.
+	local short = if maxed then nil else GearDetail.goldShort(profile, item)
 	local upgrade = action(
 		actions,
 		"Upgrade",
 		upgradeText,
 		2,
-		if maxed then colors.dim else colors.upgrade,
-		if maxed then colors.muted else colors.ink
+		if maxed or short ~= nil then colors.dim else colors.upgrade,
+		if maxed or short ~= nil then colors.muted else colors.ink
 	)
+	upgrade:SetAttribute("Short", short ~= nil)
 	bind(upgrade, function()
-		if not maxed and type(opts.onUpgrade) == "function" then
+		if not maxed and short == nil and type(opts.onUpgrade) == "function" then
 			opts.onUpgrade()
 		end
 	end)
+	if short ~= nil then
+		line(host, "UpgradeShort", GearDetail.shortText(short), order, colors.muted)
+		order += 1
+	end
 
 	local core = nil
 	if item.kind == "Weapon" and type(item.uid) == "string" and type(opts.core) == "table" and LaunchGate.on("shardCore") then

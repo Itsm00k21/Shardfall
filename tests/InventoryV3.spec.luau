@@ -202,6 +202,21 @@ describe("InventoryHud one inventory", function()
 		end)
 	end)
 
+	it("shows worn gear as one EQUIPPED state with no Unequip (clip 4)", function()
+		withGear(function()
+			local _, screen = mount(bag())
+			local equip = GuiFake.findNamed(screen, "DetailEquip")
+			expect(equip ~= nil).toBeTrue()
+			expect(equip.Text).toEqual("EQUIPPED")
+			for _, desc in ipairs(screen:GetDescendants()) do
+				if desc:IsA("TextButton") or desc:IsA("TextLabel") then
+					expect(desc.Text ~= "Unequip").toBeTrue()
+					expect(desc.Text ~= "This is equipped.").toBeTrue()
+				end
+			end
+		end)
+	end)
+
 	it("fits the phone header and action bar without sideways overflow", function()
 		withGear(function()
 			local world = GuiFake.world()

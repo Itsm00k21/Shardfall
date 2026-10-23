@@ -1364,8 +1364,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				or selected.kind == "Armor"
 				or selected.kind == "Pet"
 				or selected.kind == "Accessory"
-			-- The gear panel has EQUIP; keep Unequip here for worn gear.
-			if canWear and (not gearPanel or selected.equipped) then
+			-- [Ghost] Clip 4: the gear panel's EQUIPPED is the one worn state
+			-- (UnequipItem is a parked remote), so no Unequip under it.
+			if canWear and not gearPanel then
 				local wear = actionButton(
 					detail,
 					if selected.equipped then "Unequip" else "Equip",

@@ -105,6 +105,15 @@ function BagCompare.shown(id: string, value: number): string
 	if definition ~= nil and definition.unit == "percent" then
 		return string.format("%.1f%%", value * 100)
 	end
+	-- [Ghost] Clip 4: Crit Damage reads as a percent like Crit Chance
+	-- (a 4.51x crit shows 451%).
+	if id == "crit_damage" then
+		local percent = math.floor(value * 1000 + 0.5) / 10
+		if percent == math.floor(percent) then
+			return string.format("%d%%", percent)
+		end
+		return string.format("%.1f%%", percent)
+	end
 	if definition ~= nil and definition.decimals > 0 then
 		return string.format("%." .. tostring(definition.decimals) .. "f", value)
 	end

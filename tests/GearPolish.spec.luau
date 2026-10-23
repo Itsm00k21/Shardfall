@@ -177,7 +177,7 @@ describe("Gear polish: Shard Core picker", function()
 		expect(GearHooks.coreGroups(nil, nil)).toEqual({})
 	end)
 
-	it("shows one picker row per group in the Bag and feeds the chosen core", function()
+	it("feeds only the selected weapon's core after an inline confirm (clip 4)", function()
 		withFlags(ALL, function()
 			local _, hub, screen, calls = boot(nil, function(name: string, uid: any)
 				if name == "FeedShardCore" then
@@ -189,26 +189,20 @@ describe("Gear polish: Shard Core picker", function()
 			GuiFake.activate(cardFor(screen, "Bramble Fang"))
 			local card = GuiFake.findNamed(screen, "CoreCard")
 			expect(card ~= nil).toBeTrue()
-			-- No repeated "Lv 0" rows: seven hammers are one row.
-			local rows = {}
+			-- No all-cores list.
+			expect(GuiFake.findNamed(card, "CorePicker")).toBeNil()
 			for _, node in ipairs(card:GetDescendants()) do
-				if node.Name == "CoreGroup" then
-					table.insert(rows, node)
-				end
+				expect(node.Name ~= "CoreGroup").toBeTrue()
+				expect(node:IsA("ScrollingFrame")).toBeFalse()
 			end
-			expect(#rows).toEqual(3)
-			local hammerRow = nil
-			for _, row in ipairs(rows) do
-				if string.find(row.Text, "Beastbone Hammer x7", 1, true) ~= nil then
-					hammerRow = row
-				end
+			local feed = GuiFake.findNamed(card, "CoreFeed")
+			expect(feed.Text).toEqual("Feed 5 Essence")
+			GuiFake.activate(feed)
+			expect(GuiFake.findNamed(card, "CoreConfirm").Visible).toBeTrue()
+			for _, call in ipairs(calls.invokes) do
+				expect(call[1] ~= "FeedShardCore").toBeTrue()
 			end
-			expect(hammerRow ~= nil).toBeTrue()
-			expect(hammerRow:GetAttribute("Count")).toEqual(7)
-			GuiFake.activate(GuiFake.findNamed(card, "CoreFeed"))
-			expect(GuiFake.findNamed(screen, "CorePicker").Visible).toBeTrue()
-			GuiFake.activate(hammerRow)
-			GuiFake.activate(GuiFake.findNamed(screen, "CoreConfirmFeed"))
+			GuiFake.activate(GuiFake.findNamed(card, "CoreConfirmFeed"))
 			local fed = nil
 			for _, call in ipairs(calls.invokes) do
 				if call[1] == "FeedShardCore" then
@@ -216,7 +210,80 @@ describe("Gear polish: Shard Core picker", function()
 				end
 			end
 			expect(fed ~= nil).toBeTrue()
-			expect(fed[2]).toEqual("hammer1")
+			expect(fed[2]).toEqual("blade")
+			local toasted = false
+			for _, message in ipairs(calls.toasts) do
+				if message == "Bramble Fang core Lv 1: +1% crit chance" then
+					toasted = true
+				end
+			end
+			expect(toasted).toBeTrue()
+			-- The repaint lights the new pip and the perk it unlocked.
+			card = GuiFake.findNamed(screen, "CoreCard")
+			expect(GuiFake.findNamed(card, "Step1"):GetAttribute("Fresh")).toEqual(true)
+			local perk = GuiFake.findNamed(card, "Perk1")
+			expect(perk:GetAttribute("Fresh")).toEqual(true)
+			expect(perk:GetAttribute("Unlocked")).toEqual(true)
+			expect(GuiFake.findNamed(card, "CoreFeed").Text).toEqual("Feed 15 Essence")
+		end)
+	end)
+
+	it("says the Essence gap instead of feeding when the wallet is short", function()
+		withFlags(ALL, function()
+			local _, hub, screen, calls = boot({ gearEssence = 3 })
+			hub.open("bag")
+			GuiFake.activate(cardFor(screen, "Bramble Fang"))
+			local feed = GuiFake.findNamed(screen, "CoreFeed")
+			expect(feed.Text).toEqual("Feed 5 Essence  (have 3)")
+			expect(feed:GetAttribute("CanFeed")).toEqual(false)
+			GuiFake.activate(feed)
+			expect(GuiFake.findNamed(screen, "CoreConfirm").Visible).toBeFalse()
+			for _, call in ipairs(calls.invokes) do
+				expect(call[1] ~= "FeedShardCore").toBeTrue()
+			end
+		end)
+	end)
+end)
+
+describe("Gear polish: clip 4 detail panel", function()
+	it("dims UPGRADE and names the gold gap when gold is short", function()
+		withFlags(ALL, function()
+			-- Bramble Fang is +2: the next upgrade costs 1,280 gold.
+			local _, hub, screen, calls = boot({ gold = 300 })
+			hub.open("bag")
+			GuiFake.activate(cardFor(screen, "Bramble Fang"))
+			local upgrade = GuiFake.findNamed(GuiFake.findNamed(screen, "DetailActions"), "Upgrade")
+			expect(upgrade.Text).toEqual("UPGRADE  1,280")
+			expect(upgrade:GetAttribute("Short")).toEqual(true)
+			expect(upgrade.BackgroundColor3.R < 120).toBeTrue()
+			expect(GuiFake.findNamed(screen, "UpgradeShort").Text).toEqual("Need 980 more gold")
+			GuiFake.activate(upgrade)
+			for _, call in ipairs(calls.invokes) do
+				expect(call[1] ~= "UpgradeGear").toBeTrue()
+			end
+		end)
+	end)
+
+	it("shows one equipped state for worn gear", function()
+		withFlags(ALL, function()
+			local _, hub, screen = boot({ gold = 100000 })
+			hub.open("bag")
+			GuiFake.activate(cardFor(screen, "Iron Sword"))
+			local equip = GuiFake.findNamed(GuiFake.findNamed(screen, "DetailActions"), "DetailEquip")
+			expect(equip.Text).toEqual("EQUIPPED")
+			local header = GuiFake.findNamed(screen, "CompareHeader")
+			expect(header == nil or header.Visible == false).toBeTrue()
+			-- Only the detail pane; the grid card keeps its own E state.
+			local count = 0
+			for _, node in ipairs(GuiFake.findNamed(screen, "Compare"):GetDescendants()) do
+				if (node:IsA("TextLabel") or node:IsA("TextButton")) and node.Visible then
+					local words = string.lower(node.Text)
+					if words == "equipped" or words == "unequip" or words == "this is equipped." then
+						count += 1
+					end
+				end
+			end
+			expect(count).toEqual(1)
 		end)
 	end)
 end)
@@ -286,7 +353,7 @@ describe("Gear polish: small Bag", function()
 
 	it("shows the item icon, a padlock, and side-by-side EQUIP and UPGRADE", function()
 		withFlags(ALL, function()
-			local _, hub, screen = boot()
+			local _, hub, screen = boot({ gold = 100000 })
 			hub.open("bag")
 			GuiFake.activate(cardFor(screen, "Bramble Fang"))
 			expect(GuiFake.findNamed(screen, "ItemIcon") ~= nil).toBeTrue()
