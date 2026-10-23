@@ -97,6 +97,7 @@ local GATE_NAME: { [string]: string } = {
 	paid = "Paid rolls (Prisms)",
 	events = "The events system (Event Tokens)",
 	raids = "The raid system",
+	payouts = "Run payouts (Roll Tokens and Fragments)",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?

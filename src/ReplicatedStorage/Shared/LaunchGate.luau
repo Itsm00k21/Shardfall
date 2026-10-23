@@ -38,6 +38,7 @@ LaunchGate.SHOW = {
 	doors = false, -- old Rootvault room doors
 	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
+	payouts = false, -- Phase 4.1 Roll Token and Fragment payouts
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
 }
