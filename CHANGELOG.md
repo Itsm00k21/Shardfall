@@ -22,6 +22,11 @@ its tag to merged and add the merge commit.
   Fails on missing or duplicate ids, bad rarity odds or pity, bad drop
   chances or pool weights, negative or NaN stats, missing strings, and
   broken cross-references. [#374] (merged, d37b2f1)
+- Phase 4.1 / 4.4: Roll Token and Fragment payouts from config
+  (`Shared/Config/Payouts`, `PayoutService`). A clear multiplies the wave
+  total and rounds half up (Normal 11, Medium 14, Hard 17). Duplicates
+  convert to Fragments (1/3/10/40/200). One grant per run, so a retry or a
+  leave cannot pay twice. `LaunchGate.payouts` stays off. (open)
 
 ### Changed
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
