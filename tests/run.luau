@@ -207,5 +207,6 @@ require("./GearLevels.spec")
 require("./UpgradeScale.spec")
 require("./ShardCore.spec")
 require("./GearSalvage.spec")
+require("./GearPolish.spec")
 
 process.exit(framework.run())

@@ -15,10 +15,16 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build b6c099e+ client` in Output.
+	still leaves `[Shardfall] build <git sha> client` in Output. Build has no
+	requires; the sha comes from the generated BuildStamp (scripts/stamp.sh).
 ]]
 
-print("[Shardfall] build b6c099e+ client")
+print((function(): string
+	local ok, line = pcall(function()
+		return require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Build")).line("client")
+	end)
+	return if ok then line else "[Shardfall] build unknown client"
+end)())
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1002,6 +1008,36 @@ inventory = InventoryHud.start(playerGui, {
 			return { ok = false, error = "Could not reach the server. Try again." }
 		end
 		applyResult(result)
+		return result
+	end,
+	-- [Ghost] Full-inventory gear panel. Same remotes as the Bag.
+	onUpgrade = function(uid: string)
+		local ok, result = pcall(function()
+			return invoke("UpgradeGear", uid)
+		end)
+		local message = remoteError(ok, result, "Could not upgrade that.")
+		if message ~= nil then
+			ui.setStatus(message, "error")
+			return result
+		end
+		applyResult(result)
+		local note = if type(result) == "table" and type(result.note) == "string" then result.note else nil
+		ui.setStatus(if note ~= nil then "Upgraded " .. note else "Upgraded.", "ok")
+		return result
+	end,
+	-- Shard Core reads and feeds. The feed answer has no profile; the
+	-- panel mirrors essence and level until the next profile push.
+	onCore = function(action: string, uid: string): any
+		if action ~= "FeedShardCore" and action ~= "GetShardCore" then
+			return { ok = false, error = "Unknown Shard Core action." }
+		end
+		local ok, result = pcall(function()
+			return invoke(action, uid)
+		end)
+		if not ok then
+			warn("[Shardfall] " .. tostring(result))
+			return { ok = false, error = "Could not reach the server. Try again." }
+		end
 		return result
 	end,
 	onLock = function(uid: string, locked: boolean)

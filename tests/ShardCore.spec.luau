@@ -792,9 +792,11 @@ describe("Shard Core wiring", function()
 		expect(string.find(project, '"FeedShardCore"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(project, '"GetShardCore"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(project, '"ShardCoreChanged"', 1, true) ~= nil).toBeTrue()
-		-- Ghost mounts the panel (ghost/gear-ui-hooks), only behind the flag.
-		local mountAt = string.find(hub, "ShardCoreMount.mount(", 1, true)
-		local gateAt = string.find(hub, 'if not LaunchGate.on("shardCore") then', 1, true)
+		-- Ghost shows the core (ghost/gear-ui-hooks) through GearDetail's
+		-- CoreCard, only behind the flag.
+		local detail = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/GearDetail.luau")
+		local mountAt = string.find(detail, "CoreCard.build(", 1, true)
+		local gateAt = string.find(detail, 'LaunchGate.on("shardCore")', 1, true)
 		expect(mountAt ~= nil and gateAt ~= nil and (gateAt :: number) < (mountAt :: number)).toBeTrue()
 		expect(string.find(bar, "ShardCore", 1, true)).toBeNil()
 		local DevTools = require("../src/ReplicatedStorage/Shared/DevTools")

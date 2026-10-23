@@ -106,7 +106,8 @@ end
 local function pane(screen: any): { string }
 	local list = GuiFake.findNamed(screen, "Compare")
 	local rows = {}
-	for _, child in ipairs(list:GetChildren()) do
+	-- The gear panel nests the title in Hero and the buttons in Actions.
+	for _, child in ipairs(list:GetDescendants()) do
 		if child:IsA("TextLabel") or child:IsA("TextButton") then
 			table.insert(rows, { child.LayoutOrder, child.Text })
 		end
@@ -181,7 +182,7 @@ describe("Bag detail compare", function()
 		expect(has(rows, "Damage  28  +")).toBeTrue()
 		select(screen, "Nightstriker")
 		local label = nil
-		for _, child in ipairs(GuiFake.findNamed(screen, "Compare"):GetChildren()) do
+		for _, child in ipairs(GuiFake.findNamed(screen, "Compare"):GetDescendants()) do
 			if child:IsA("TextLabel") and child.Text == "Crit Damage  2.00  -" then
 				label = child
 			end

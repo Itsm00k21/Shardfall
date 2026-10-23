@@ -17,12 +17,16 @@ local UserInputService = game:GetService("UserInputService")
 
 local MobileShell = require(script.Parent.MobileShell)
 local GearBar = require(script.Parent.GearBar)
+local GearDetail = require(script.Parent:WaitForChild("GearDetail"))
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
 local ActionSlots = require(Shared:WaitForChild("ActionSlots"))
 local CodexCues = require(Shared:WaitForChild("CodexCues"))
+local GearHooks = require(Shared:WaitForChild("GearHooks"))
+local HubStyle = require(Shared:WaitForChild("HubStyle"))
 local HudLayout = require(Shared:WaitForChild("HudLayout"))
+local IconAssets = require(Shared:WaitForChild("IconAssets"))
 local ShellLayout = require(Shared:WaitForChild("ShellLayout"))
 local UiTheme = require(Shared:WaitForChild("UiTheme"))
 local ChestConfig = require(Shared:WaitForChild("ChestConfig"))
@@ -62,6 +66,10 @@ export type Callbacks = {
 	-- GearSalvage(action, payload). Returns the answer after the profile
 	-- in it is applied. Only used while gearSalvage is on.
 	onGear: ((action: string, payload: any) -> any)?,
+	-- [Ghost] Gear detail panel. UpgradeGear(uid) and the Shard Core
+	-- remotes (GetShardCore / FeedShardCore). Each returns the answer.
+	onUpgrade: ((uid: string) -> any)?,
+	onCore: ((action: string, uid: string) -> any)?,
 }
 
 local COLORS = {
@@ -458,6 +466,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local latest: any = nil
 	local socketCue = false
 	local isOpen = false
+	local coreOpen = true
 	local pendingRarity: string? = nil
 	local pendingFeed: { string }? = nil
 	local tabButtons: { [string]: TextButton } = {}
@@ -785,6 +794,38 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				Text = row.name,
 			}, card) :: TextLabel
 			nameLabel.Name = "Name"
+			-- [Ghost] Gear cards show the item art and +level/stars. The
+			-- name moves under the art; the padlock keeps the top right.
+			if gear ~= nil and (row.kind == "Weapon" or row.kind == "Armor") and type(row.item) == "table" then
+				local artId = IconAssets[HubStyle.itemArt(row.item)]
+				if type(artId) == "string" then
+					new("ImageLabel", {
+						Name = "Art",
+						BackgroundTransparency = 1,
+						Position = UDim2.fromOffset(0, 0),
+						Size = UDim2.fromOffset(40, 40),
+						ScaleType = Enum.ScaleType.Fit,
+						Image = artId,
+					}, card)
+				end
+				nameLabel.Position = UDim2.fromOffset(0, 42)
+				nameLabel.Size = UDim2.new(1, 0, 0, 34)
+				local levelText = GearHooks.levelLine(row.item)
+				if levelText ~= "" then
+					new("TextLabel", {
+						Name = "Level",
+						BackgroundTransparency = 1,
+						Position = UDim2.fromOffset(0, 78),
+						Size = UDim2.new(1, 0, 0, 16),
+						Font = Enum.Font.BuilderSansBold,
+						TextSize = 12,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						TextColor3 = COLORS.gold,
+						Text = levelText,
+					}, card)
+				end
+			end
 			if socketCue and row.sockets >= 1 then
 				new("UIStroke", {
 					Name = "SocketGlow",
@@ -943,92 +984,171 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			fitBagText()
 			return
 		end
-		local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
-		name.Font = Enum.Font.BuilderSansBold
-		order += 1
-		if Rarities.isRainbow(selected.rarity) then
-			local gradient = new("UIGradient", {
-				Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 90)),
-					ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 130)),
-					ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 160, 255)),
-				}),
-			}, name) :: UIGradient
-			table.insert(gradients, gradient)
-		end
-		label(
-			detail,
-			string.format("%s  ·  %s", selected.rarity, selected.kind),
-			order,
-			COLORS.muted,
-			13
-		)
-		order += 1
-		if selected.realm ~= "" then
-			label(detail, selected.realm, order, COLORS.muted, 13)
-			order += 1
-		end
-		if selected.slot ~= nil then
-			label(detail, "Type  " .. selected.slot, order, COLORS.text, 14)
-			order += 1
-		end
-		if
-			selected.kind == "Weapon"
-			or selected.kind == "Armor"
-			or selected.kind == "Accessory"
-			or selected.kind == "Pet"
-		then
-			local socketColor = COLORS.text
-			if socketCue and selected.sockets >= 1 then
-				socketColor = Color3.fromRGB(
-					CodexCues.COLOR.socket[1],
-					CodexCues.COLOR.socket[2],
-					CodexCues.COLOR.socket[3]
-				)
+		-- [Ghost] Weapons and armor use the shared gear panel (icon, stats
+		-- against the worn item, EQUIP / UPGRADE, padlock, Shard Core).
+		-- Favorite, Salvage, Drop and Feed stay below it.
+		local gearPanel = gear ~= nil
+			and (selected.kind == "Weapon" or selected.kind == "Armor")
+			and type(selected.item) == "table"
+		if gearPanel then
+			local gearItem = table.clone(selected.item)
+			if type(gearItem.uid) ~= "string" then
+				gearItem.uid = selected.id
 			end
-			label(detail, string.format("Sockets  %d", selected.sockets), order, socketColor, 14)
+			local gearUid = gearItem.uid
+			local built = GearDetail.build(detail, {
+				profile = profile,
+				item = gearItem,
+				order = order,
+				powerOf = InventoryView.powerOf,
+				onEquip = function()
+					callbacks.onEquip(gearUid)
+				end,
+				onUpgrade = function()
+					local onUpgrade = callbacks.onUpgrade
+					if onUpgrade == nil then
+						callbacks.onStatus("Upgrade at the Forge.", "error")
+						return
+					end
+					task.spawn(onUpgrade, gearUid)
+				end,
+				onLock = function(locked: boolean)
+					callbacks.onLock(gearUid, locked)
+				end,
+				core = if callbacks.onCore ~= nil
+					then {
+						open = coreOpen,
+						onToggle = function(open: boolean)
+							coreOpen = open
+						end,
+						invoke = function(action: string, itemId: string): any
+							local onCore = callbacks.onCore
+							if onCore == nil then
+								return { ok = false, error = "Shard Core is not available." }
+							end
+							local ok, answer = pcall(onCore, action, itemId)
+							if not ok then
+								return { ok = false, error = tostring(answer) }
+							end
+							return answer
+						end,
+						onFed = function(answer: any, fedUid: string)
+							-- The feed answer carries the view, not the
+							-- profile: mirror the two fields it changed.
+							if type(latest) == "table" and type(answer) == "table" then
+								if type(answer.essence) == "number" then
+									latest.gearEssence = answer.essence
+								end
+								if type(answer.level) == "number" then
+									if type(latest.shardCores) ~= "table" then
+										latest.shardCores = {}
+									end
+									latest.shardCores[fedUid] = answer.level
+								end
+							end
+							if isOpen then
+								render()
+							end
+						end,
+						onStatus = function(text: string, kind: string)
+							callbacks.onStatus(text, kind)
+						end,
+					}
+					else nil,
+			})
+			order = built.nextOrder
+		end
+		if not gearPanel then
+			local name = label(detail, selected.name, order, rarityColor(selected.rarity), 18)
+			name.Font = Enum.Font.BuilderSansBold
 			order += 1
+			if Rarities.isRainbow(selected.rarity) then
+				local gradient = new("UIGradient", {
+					Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 90)),
+						ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 130)),
+						ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 160, 255)),
+					}),
+				}, name) :: UIGradient
+				table.insert(gradients, gradient)
+			end
+			label(
+				detail,
+				string.format("%s  ·  %s", selected.rarity, selected.kind),
+				order,
+				COLORS.muted,
+				13
+			)
+			order += 1
+			if selected.realm ~= "" then
+				label(detail, selected.realm, order, COLORS.muted, 13)
+				order += 1
+			end
+			if selected.slot ~= nil then
+				label(detail, "Type  " .. selected.slot, order, COLORS.text, 14)
+				order += 1
+			end
+			if
+				selected.kind == "Weapon"
+				or selected.kind == "Armor"
+				or selected.kind == "Accessory"
+				or selected.kind == "Pet"
+			then
+				local socketColor = COLORS.text
+				if socketCue and selected.sockets >= 1 then
+					socketColor = Color3.fromRGB(
+						CodexCues.COLOR.socket[1],
+						CodexCues.COLOR.socket[2],
+						CodexCues.COLOR.socket[3]
+					)
+				end
+				label(detail, string.format("Sockets  %d", selected.sockets), order, socketColor, 14)
+				order += 1
+			end
 		end
 		local item = selected.item
 		if type(item) == "table" then
-			for _, line in ipairs(InventoryView.statLines(item)) do
-				label(detail, line, order, COLORS.text, 14)
-				order += 1
-			end
-			if type(item.quality) == "number" then
-				label(
-					detail,
-					"Roll quality  " .. string.format("%d%%", math.floor(item.quality * 100 + 0.5)),
-					order,
-					COLORS.gold,
-					13
-				)
-				order += 1
-			end
-			local other = InventoryView.counterpart(profile, item)
-			if other ~= nil then
-				label(detail, "Compared with " .. tostring(other.name), order, COLORS.gold, 13)
-				order += 1
-				for _, line in ipairs(InventoryView.compare(item, other)) do
-					local delta = if line.delta ~= "" then "  (" .. line.delta .. ")" else ""
+			if not gearPanel then
+				for _, line in ipairs(InventoryView.statLines(item)) do
+					label(detail, line, order, COLORS.text, 14)
+					order += 1
+				end
+				if type(item.quality) == "number" then
 					label(
 						detail,
-						string.format("%s  %s vs %s%s", line.name, line.yours, line.theirs, delta),
+						"Roll quality  " .. string.format("%d%%", math.floor(item.quality * 100 + 0.5)),
 						order,
-						COLORS.text,
+						COLORS.gold,
 						13
 					)
 					order += 1
 				end
-			elseif selected.equipped then
-				label(detail, "This is equipped.", order, COLORS.ok, 13)
-				order += 1
+				local other = InventoryView.counterpart(profile, item)
+				if other ~= nil then
+					label(detail, "Compared with " .. tostring(other.name), order, COLORS.gold, 13)
+					order += 1
+					for _, line in ipairs(InventoryView.compare(item, other)) do
+						local delta = if line.delta ~= "" then "  (" .. line.delta .. ")" else ""
+						label(
+							detail,
+							string.format("%s  %s vs %s%s", line.name, line.yours, line.theirs, delta),
+							order,
+							COLORS.text,
+							13
+						)
+						order += 1
+					end
+				elseif selected.equipped then
+					label(detail, "This is equipped.", order, COLORS.ok, 13)
+					order += 1
+				end
 			end
 			local canWear = selected.kind == "Weapon"
 				or selected.kind == "Armor"
 				or selected.kind == "Pet"
 				or selected.kind == "Accessory"
-			if canWear then
+			-- The gear panel has EQUIP; keep Unequip here for worn gear.
+			if canWear and (not gearPanel or selected.equipped) then
 				local wear = actionButton(
 					detail,
 					if selected.equipped then "Unequip" else "Equip",
@@ -1046,19 +1166,21 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				end)
 			end
 			local uid = selected.id
-			local lockButton = actionButton(
-				detail,
-				if gear ~= nil
-					then (if selected.locked then "🔒 Unlock" else "🔓 Lock")
-					elseif selected.locked then "Unlock"
-					else "Lock",
-				order,
-				COLORS.buttonDim
-			)
-			order += 1
-			lockButton.MouseButton1Click:Connect(function()
-				callbacks.onLock(uid, not selected.locked)
-			end)
+			if not gearPanel then
+				local lockButton = actionButton(
+					detail,
+					if gear ~= nil
+						then (if selected.locked then "🔒 Unlock" else "🔓 Lock")
+						elseif selected.locked then "Unlock"
+						else "Lock",
+					order,
+					COLORS.buttonDim
+				)
+				order += 1
+				lockButton.MouseButton1Click:Connect(function()
+					callbacks.onLock(uid, not selected.locked)
+				end)
+			end
 			local favButton = actionButton(
 				detail,
 				if selected.favorite then "Unfavorite" else "Favorite",

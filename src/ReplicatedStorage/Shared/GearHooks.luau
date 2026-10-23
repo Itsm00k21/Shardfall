@@ -20,6 +20,16 @@
 --   salvageLabel(count, gain) the action bar text.
 --   markBatch(items, profile) flags x10 rows that are not in the Bag.
 --   batchLine(total, gone, gain) the line after an x10 with auto-salvage.
+--
+-- The full inventory header and the Shard Core card read these:
+--
+--   autoPill(profile)    pill text and whether auto-salvage is on.
+--   coreGroups(preview, selectedUid)  Shard Core feed targets grouped by
+--                        name, rarity and core level, with a count, so ten
+--                        copies read "Beastbone Hammer x10", not ten rows.
+--   coreHeader(level)    "Shard Core  Lv 2/5".
+--   coreNext(level, essence)  the next-level line and whether it can feed.
+--   levelLine(item)      "+3  ★★☆☆☆" for the detail header.
 
 local Essence = require("./Config/Essence")
 local InventoryView = require("./InventoryView")
@@ -258,6 +268,138 @@ function GearHooks.batchLine(total: any, gone: any, gain: any): string?
 		whole(gain) or 0,
 		math.max(0, n - salvaged)
 	)
+end
+
+-- The header pill. On reads as a warning so a saved "On" cannot hide.
+function GearHooks.autoPill(profile: any): (string, boolean)
+	local rarity = GearHooks.autoRarity(profile)
+	if rarity == nil then
+		return "Auto-salvage: Off", false
+	end
+	return string.format("⚠ Auto-salvage ON: %ss and below", rarity), true
+end
+
+GearHooks.CORE_CAP = 5
+
+export type CoreGroup = {
+	key: string,
+	name: string,
+	rarity: string,
+	level: number,
+	count: number,
+	uid: string,
+	uids: { string },
+	label: string,
+	selected: boolean,
+	canFeed: boolean,
+	capped: boolean,
+	nextCost: number?,
+	status: string,
+}
+
+-- Groups the preview's weapons (one row per copy) by what the player can
+-- tell apart: name, rarity and core level. uid is the copy a feed goes
+-- to: the selected one when it is in the group, else the first by uid.
+-- The selected weapon's group comes first, then by name, rarity, level.
+function GearHooks.coreGroups(preview: any, selectedUid: any): { CoreGroup }
+	local groups: { CoreGroup } = {}
+	if type(preview) ~= "table" or type(preview.weapons) ~= "table" then
+		return groups
+	end
+	local byKey: { [string]: CoreGroup } = {}
+	for _, row in ipairs(preview.weapons) do
+		if type(row) == "table" and type(row.uid) == "string" then
+			local name = if type(row.name) == "string" and row.name ~= "" then row.name else "Weapon"
+			local rarity = if type(row.rarity) == "string" then row.rarity else ""
+			local level = whole(row.level) or 0
+			local key = string.format("%s|%s|%d", name, rarity, level)
+			local group = byKey[key]
+			if group == nil then
+				group = {
+					key = key,
+					name = name,
+					rarity = rarity,
+					level = level,
+					count = 0,
+					uid = row.uid,
+					uids = {},
+					label = "",
+					selected = false,
+					canFeed = row.canFeed == true,
+					capped = row.capped == true,
+					nextCost = whole(row.nextCost),
+					status = if type(row.status) == "string" then row.status else "",
+				}
+				byKey[key] = group
+				table.insert(groups, group)
+			end
+			local g = group :: CoreGroup
+			g.count += 1
+			table.insert(g.uids, row.uid)
+			if row.uid == selectedUid then
+				g.uid = row.uid
+				g.selected = true
+			elseif not g.selected and row.uid < g.uid then
+				g.uid = row.uid
+			end
+		end
+	end
+	for _, group in ipairs(groups) do
+		table.sort(group.uids)
+		local copies = if group.count > 1 then string.format(" x%d", group.count) else ""
+		group.label = string.format("%s%s  ·  Core Lv %d", group.name, copies, group.level)
+	end
+	table.sort(groups, function(a, b)
+		if a.selected ~= b.selected then
+			return a.selected
+		end
+		if a.name ~= b.name then
+			return a.name < b.name
+		end
+		if a.rarity ~= b.rarity then
+			return a.rarity < b.rarity
+		end
+		return a.level < b.level
+	end)
+	return groups
+end
+
+function GearHooks.coreHeader(level: any): string
+	return string.format("Shard Core  Lv %d/%d", math.min(whole(level) or 0, GearHooks.CORE_CAP), GearHooks.CORE_CAP)
+end
+
+-- costs: Echo's ShardCore.COST. Returns the line and whether a feed fits.
+function GearHooks.coreNext(level: any, essence: any, costs: any): (string, boolean)
+	local current = whole(level) or 0
+	local held = whole(essence) or 0
+	if current >= GearHooks.CORE_CAP then
+		return "Core is at its cap.", false
+	end
+	local cost = if type(costs) == "table" then whole(costs[current + 1]) else nil
+	if cost == nil then
+		return "Core is at its cap.", false
+	end
+	if held < cost then
+		return string.format("Next level: %d Essence (you have %d)", cost, held), false
+	end
+	return string.format("Next level: %d Essence", cost), true
+end
+
+function GearHooks.levelLine(item: any): string
+	if type(item) ~= "table" then
+		return ""
+	end
+	local parts = {}
+	local level = whole(tonumber(item.upgrade)) or 0
+	if level > 0 then
+		table.insert(parts, "+" .. tostring(level))
+	end
+	local stars = whole(tonumber(item.stars)) or 0
+	if stars > 0 then
+		stars = math.min(5, stars)
+		table.insert(parts, string.rep("★", stars) .. string.rep("☆", 5 - stars))
+	end
+	return table.concat(parts, "  ")
 end
 
 return GearHooks

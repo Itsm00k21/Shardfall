@@ -586,29 +586,52 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			art.ImageColor3 = if color ~= nil
 				then Color3.fromRGB(color[1], color[2], color[3]):Lerp(Color3.new(1, 1, 1), 0.35)
 				else Color3.new(1, 1, 1)
-			art.Size = UDim2.fromOffset(place.tile - 12, place.tile - 12)
-			art.Position = UDim2.fromOffset(6, 4)
+			art.Size = UDim2.fromOffset(place.tile - 16, place.tile - 16)
+			art.Position = UDim2.fromOffset(8, 8)
 			art.Parent = cell
+			-- Quantity badge on the art's top-right corner, dark plate so
+			-- it reads over any icon.
 			local count = Instance.new("TextLabel")
-			count.BackgroundTransparency = 1
+			count.Name = "Qty"
+			count.BackgroundColor3 = Color3.fromRGB(18, 12, 34)
+			count.BackgroundTransparency = 0.15
+			count.BorderSizePixel = 0
 			count.Font = Enum.Font.BuilderSansExtraBold
 			count.TextSize = 14
 			count.TextColor3 = Color3.fromRGB(255, 220, 120)
-			count.TextXAlignment = Enum.TextXAlignment.Right
 			count.Text = countText
-			count.Size = UDim2.fromOffset(place.tile - 4, 14)
-			count.Position = UDim2.fromOffset(0, place.tile - 16)
+			count.AutomaticSize = Enum.AutomaticSize.X
+			count.Size = UDim2.fromOffset(22, 18)
+			count.AnchorPoint = Vector2.new(1, 0)
+			count.Position = UDim2.fromOffset(place.tile - 2, 2)
+			count.ZIndex = 3
 			count.Parent = cell
+			local countCorner = Instance.new("UICorner")
+			countCorner.CornerRadius = UDim.new(0, 6)
+			countCorner.Parent = count
+			local countPad = Instance.new("UIPadding")
+			countPad.PaddingLeft = UDim.new(0, 4)
+			countPad.PaddingRight = UDim.new(0, 4)
+			countPad.Parent = count
+			-- Full name on up to two lines; shrinks a little before it would
+			-- ever cut. No AtEnd truncation.
 			local label = Instance.new("TextLabel")
+			label.Name = "ItemName"
 			label.BackgroundTransparency = 1
 			label.Font = Enum.Font.BuilderSansBold
-			label.TextSize = 14
+			label.TextSize = 13
+			label.TextScaled = true
+			label.TextWrapped = true
+			label.TextYAlignment = Enum.TextYAlignment.Top
 			label.TextColor3 = Color3.fromRGB(226, 208, 255)
-			label.TextTruncate = Enum.TextTruncate.AtEnd
 			label.Text = name
-			label.Size = UDim2.fromOffset(place.tile - 4, ResultsGrid.LABEL_H - 6)
-			label.Position = UDim2.fromOffset(2, place.tile + 2)
+			label.Size = UDim2.fromOffset(place.tile, ResultsGrid.LABEL_H - 4)
+			label.Position = UDim2.fromOffset(0, place.tile + 2)
 			label.Parent = cell
+			local fit = Instance.new("UITextSizeConstraint")
+			fit.MaxTextSize = 13
+			fit.MinTextSize = 9
+			fit.Parent = label
 		end
 		for slot = 1, place.shown do
 			local tile = tiles[slot]

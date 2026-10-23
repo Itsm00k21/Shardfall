@@ -51,6 +51,8 @@ local COLORS = {
 	button = Color3.fromRGB(108, 78, 196),
 	buttonDim = Color3.fromRGB(54, 46, 78),
 	on = Color3.fromRGB(70, 140, 96),
+	-- Auto-salvage on destroys new drops, so it reads as a warning.
+	warn = Color3.fromRGB(255, 168, 48),
 }
 
 export type Opts = {
@@ -150,7 +152,34 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	corner(essence, 8)
 	pad(essence, 10, 0)
 
-	local autoButton = button(row, "AutoSalvage", GearHooks.AUTO_OFF, 2, COLORS.buttonDim)
+	-- The Auto-salvage pill comes first so its real state is the first
+	-- thing in the header: amber with dark ink and a warning mark while
+	-- it is on, quiet while it is off. Tapping it still toggles.
+	local autoButton = button(row, "AutoSalvage", GearHooks.AUTO_OFF, 0, COLORS.buttonDim)
+	autoButton.Font = Enum.Font.BuilderSansExtraBold
+	local autoCorner = autoButton:FindFirstChildOfClass("UICorner")
+	if autoCorner ~= nil then
+		autoCorner.CornerRadius = UDim.new(0, UiTheme.TOUCH // 2)
+	end
+	local autoPad = autoButton:FindFirstChildOfClass("UIPadding")
+	local autoStroke = Instance.new("UIStroke")
+	autoStroke.Name = "AutoStroke"
+	autoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	autoStroke.Thickness = 2
+	autoStroke.Color = COLORS.warn
+	autoStroke.Enabled = false
+	autoStroke.Parent = autoButton
+	local autoMark = Instance.new("TextLabel")
+	autoMark.Name = "AutoMark"
+	autoMark.BackgroundTransparency = 1
+	autoMark.Size = UDim2.fromOffset(24, UiTheme.TOUCH)
+	autoMark.Position = UDim2.fromOffset(-6, 0)
+	autoMark.Font = Enum.Font.BuilderSansExtraBold
+	autoMark.TextSize = 16
+	autoMark.TextColor3 = COLORS.ink
+	autoMark.Text = "⚠"
+	autoMark.Visible = false
+	autoMark.Parent = autoButton
 	local capButton = button(row, "AutoCap", GearHooks.capLabel(nil), 3, COLORS.buttonDim)
 	local selectButton = button(row, "SelectMode", "Select", 4, COLORS.button)
 	local pickButton = button(row, "SelectUpTo", "Select all at or below Common", 5, COLORS.buttonDim)
@@ -290,7 +319,18 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		essence.Text = string.format("Essence %d", held)
 		local on = GearHooks.autoRarity(profile) ~= nil
 		setText(autoButton, GearHooks.autoLabel(profile))
-		autoButton.BackgroundColor3 = if on then COLORS.on else COLORS.buttonDim
+		if on then
+			-- Room for the warning mark on the left.
+			autoButton.Size = UDim2.fromOffset(widthFor(autoButton.Text) + 18, UiTheme.TOUCH)
+		end
+		autoButton.BackgroundColor3 = if on then COLORS.warn else COLORS.buttonDim
+		autoButton.TextColor3 = if on then COLORS.ink else COLORS.text
+		autoButton:SetAttribute("AutoOn", on)
+		autoStroke.Enabled = on
+		autoMark.Visible = on
+		if autoPad ~= nil then
+			autoPad.PaddingLeft = UDim.new(0, if on then 26 else 10)
+		end
 		setText(capButton, GearHooks.capLabel(profile))
 		setText(selectButton, if selecting then "Done" else "Select")
 		selectButton.BackgroundColor3 = if selecting then COLORS.gold else COLORS.button

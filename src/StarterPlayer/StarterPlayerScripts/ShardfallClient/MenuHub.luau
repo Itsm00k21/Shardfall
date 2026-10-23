@@ -79,7 +79,7 @@ local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
 local BagTools = require(script.Parent.BagTools)
-local ShardCoreMount = require(script.Parent.ShardCore.Mount)
+local GearDetail = require(script.Parent:WaitForChild("GearDetail"))
 
 local MenuHub = {}
 
@@ -1192,7 +1192,32 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	hubState.hero = hubFn.scroll(hubFn.page("hero"))
+	function hubFn.hideTips()
+		local screen = hubState.screen
+		if screen == nil then
+			return
+		end
+		-- Tips live on the screen (so they can overlap the grid edge) and
+		-- outlive their card when the grid repaints. Drop orphans; an
+		-- orphan has no card position and drew stuck at the bottom-left.
+		local owners = hubState.tipOwners
+		for _, child in ipairs(screen:GetChildren()) do
+			if child.Name == "Tip" and child:IsA("Frame") then
+				child.Visible = false
+				local owner = if owners ~= nil then owners[child] else nil
+				if owner ~= nil and owner.Parent == nil then
+					owners[child] = nil
+					child:Destroy()
+				end
+			end
+		end
+	end
 	hubState.bag = hubFn.scroll(hubFn.page("bag"))
+	-- Any scroll of the grid hides hover tips; they track the cursor, not
+	-- the canvas, and would float over the wrong card.
+	hubState.bag:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		hubFn.hideTips()
+	end)
 	hubState.sets = hubFn.scroll(hubFn.page("sets"))
 	hubState.pets = hubFn.scroll(hubFn.page("pets"))
 	hubState.rollPage = hubFn.page("roll")
@@ -2156,8 +2181,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.detailStroke.Parent = hubState.detail
 	hubState.detailList = Instance.new("ScrollingFrame")
 	hubState.detailList.Name = "Compare"
-	hubState.detailList.Position = UDim2.fromOffset(0, 52)
-	hubState.detailList.Size = UDim2.new(1, 0, 1, -52)
+	-- Starts under the Back button (4 + TOUCH) with a gap, so the first
+	-- row can never sit under Back.
+	hubState.detailList.Position = UDim2.fromOffset(0, UiTheme.TOUCH + 12)
+	hubState.detailList.Size = UDim2.new(1, 0, 1, -(UiTheme.TOUCH + 12))
 	hubState.detailList.BackgroundTransparency = 1
 	hubState.detailList.BorderSizePixel = 0
 	hubState.detailList.ScrollBarThickness = 6
@@ -2172,6 +2199,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.detailPad = Instance.new("UIPadding")
 	hubState.detailPad.PaddingLeft = UDim.new(0, UiTheme.GAP)
 	hubState.detailPad.PaddingRight = UDim.new(0, UiTheme.GAP)
+	hubState.detailPad.PaddingTop = UDim.new(0, 4)
+	hubState.detailPad.PaddingBottom = UDim.new(0, UiTheme.GAP)
 	hubState.detailPad.Parent = hubState.detailList
 	hubState.detailBack = Instance.new("TextButton")
 	hubState.detailBack.Name = "Back"
@@ -2212,6 +2241,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.show(id: string)
+		hubFn.hideTips()
 		for pageId, frame in pairs(hubState.pages) do
 			frame.Visible = pageId == id
 		end
@@ -2587,14 +2617,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.bagCompactPainted = hubFn.bagCompact()
 			task.defer(hubFn.paintBag)
 		end
+		-- Leave room for the pinned BagFoot, or the last card row sits
+		-- under it and reads as cut off.
+		local footH = if list.Parent ~= nil and list.Parent:FindFirstChild("BagFoot") ~= nil
+			then UiTheme.TOUCH + UiTheme.PAD * 2
+			else 0
 		if not hubState.detail.Visible then
-			list.Size = UDim2.fromScale(1, 1)
+			list.Size = UDim2.new(1, 0, 1, -footH)
 			return
 		end
 		local box = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
 		local gap = 8
 		if box.detail.x > 0 then
-			list.Size = UDim2.new(0, math.max(80, box.detail.x - gap), 1, 0)
+			list.Size = UDim2.new(0, math.max(80, box.detail.x - gap), 1, -footH)
 		else
 			list.Size = UDim2.new(1, 0, 0, math.max(80, box.detail.y - gap))
 		end
@@ -2617,129 +2652,111 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.paintDetail(item: any)
+		hubFn.hideTips()
 		hubFn.clear(hubState.detailList)
 		if type(item) ~= "table" then
 			hubState.detailOpen = false
 			hubFn.paintWorn()
 			return
 		end
-		hubFn.mountWorn(hubState.detailList)
-		local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
-		local red, green, blue = UiTheme.rarityColor(rarity)
-		hubFn.line(hubState.detailList, BagCompare.title(item), 1, rgb("text"))
-		hubFn.line(hubState.detailList, rarity, 2, Color3.fromRGB(red, green, blue))
-		hubFn.divider(hubState.detailList, 3)
-		-- The worn uid for this slot decides the header. The old counterpart
-		-- lookup hid the worn item itself, so "Equipped." never showed.
-		local detail = BagCompare.detail(hubState.profile, item, InventoryView.powerOf)
-		local same = detail.state == "equipped"
-		local headerTone = if same then rgb("ok") else rgb("muted")
-		local header = hubFn.line(hubState.detailList, detail.header, 4, headerTone)
-		header.Name = "CompareHeader"
-		local toneColor = function(tone: string): Color3
-			if tone == "gain" then
-				return rgb("ok")
-			elseif tone == "loss" then
-				return rgb("loss")
-			end
-			return rgb("text")
-		end
-		local order = 10
-		for _, row in ipairs(detail.rows) do
-			local label = hubFn.line(hubState.detailList, row.text, order, toneColor(row.tone))
-			label.Name = "Stat_" .. row.id
-			order += 1
-		end
-		local powerLabel =
-			hubFn.line(hubState.detailList, detail.power.text, 80, toneColor(detail.power.tone))
-		powerLabel.Name = "Stat_power"
-		if detail.boost ~= nil then
-			local boost = hubFn.line(hubState.detailList, detail.boost.text, 81, rgb("ok"))
-			boost.Name = "Stat_boost"
-		end
+		-- [Ghost] The shared gear panel: the item's icon (not the avatar),
+		-- stats with compare marks, EQUIP and UPGRADE side by side, the
+		-- padlock, and the Shard Core card. The avatar stays on paintWorn.
+		local uid = if type(item.uid) == "string" then item.uid else nil
+		local note = nil
 		if type(hubState.upgradeNote) == "table" and hubState.upgradeNote.uid == item.uid then
-			local note = hubFn.line(
-				hubState.detailList,
-				hubState.upgradeNote.text,
-				85,
-				if hubState.upgradeNote.ok then rgb("ok") else rgb("loss")
-			)
-			note.Name = "UpgradeNote"
+			note = hubState.upgradeNote
 		end
-		if type(item.uid) == "string" then
-			local uid = item.uid
-			local equip = hubFn.row(
-				hubState.detailList,
-				if same then "EQUIPPED" else HubStyle.EQUIP,
-				90,
-				function()
-					if not same then
-						hubFn.equipUid(uid)
-					end
+		GearDetail.build(hubState.detailList, {
+			profile = hubState.profile,
+			item = item,
+			order = 1,
+			powerOf = InventoryView.powerOf,
+			note = note,
+			fonts = { header = headerFont(), body = bodyFont() },
+			colors = {
+				text = rgb("text"),
+				muted = rgb("muted"),
+				ok = rgb("ok"),
+				loss = rgb("loss"),
+				equip = rgb("equip"),
+			},
+			decorate = function(button: TextButton, rest: Color3)
+				hubFn.setRest(button, rest)
+				hubFn.motion(button)
+			end,
+			bind = hubFn.bindActivated,
+			onEquip = function()
+				if uid ~= nil then
+					hubFn.equipUid(uid)
 				end
-			)
-			if not same then
-				equip.BackgroundColor3 = rgb("equip")
-				equip.TextColor3 = rgb("text")
-				hubFn.setRest(equip, rgb("equip"))
-			end
-			local upgrade = hubFn.row(
-				hubState.detailList,
-				HubStyle.upgradeLabel(item.upgrade),
-				91,
-				function()
+			end,
+			onUpgrade = function()
+				if uid ~= nil then
 					task.spawn(function()
 						hubFn.upgradeUid(uid)
 					end)
 				end
-			)
-			upgrade.Name = "Upgrade"
-			upgrade.BackgroundColor3 = rgb("gold")
-			upgrade.TextColor3 = rgb("ink")
-			hubFn.setRest(upgrade, rgb("gold"))
-			if item.kind == "Weapon" then
-				hubFn.mountCore(uid)
-			end
-		end
+			end,
+			onLock = function(locked: boolean)
+				if uid == nil then
+					return
+				end
+				-- Same call as the card padlock; the profile push repaints.
+				task.spawn(function()
+					pcall(hooks.invoke, "SetItemLock", uid, locked)
+				end)
+			end,
+			core = if uid ~= nil
+				then {
+					open = hubState.coreOpen ~= false,
+					onToggle = function(open: boolean)
+						hubState.coreOpen = open
+					end,
+					invoke = function(action: string, itemId: string): any
+						local ok, answer = pcall(hooks.invoke, action, itemId)
+						if not ok then
+							return { ok = false, error = tostring(answer) }
+						end
+						return answer
+					end,
+					onFed = function(answer: any, fedUid: string)
+						hubFn.mirrorCore(answer, fedUid)
+						if hubState.selectedUid ~= nil and hubState.detailOpen then
+							hubFn.paintDetail(hubFn.findItem(hubState.selectedUid))
+						end
+					end,
+					onStatus = function(text: string, _kind: string)
+						if hooks.onToast ~= nil then
+							hooks.onToast(text)
+						end
+					end,
+				}
+				else nil,
+		})
 		hubFn.placeDetail()
 		hubState.detail.Visible = true
 		hubFn.fitBagList()
 		hubState.detailOpen = true
 	end
 
-	-- [Ghost] Echo's Shard Core (#389) on the selected weapon, behind
-	-- shardCore. Feed is the server's call; this only shows its answer.
-	function hubFn.mountCore(uid: string)
-		if not LaunchGate.on("shardCore") then
+	-- FeedShardCore answers with the view, not the profile. Mirror the two
+	-- fields it changed into the local snapshot until the next profile
+	-- push. Nothing here is saved; the server already wrote it.
+	function hubFn.mirrorCore(answer: any, fedUid: string)
+		local profile = hubState.profile
+		if type(profile) ~= "table" or type(answer) ~= "table" then
 			return
 		end
-		local host = Instance.new("Frame")
-		host.Name = "CoreHost"
-		host.BackgroundTransparency = 1
-		host.Size = UDim2.new(1, 0, 0, 380)
-		host.LayoutOrder = 95
-		host.Parent = hubState.detailList
-		local handle = ShardCoreMount.mount(host, {
-			invoke = function(action: string, itemId: string?): any
-				local ok, answer = pcall(hooks.invoke, action, itemId)
-				if not ok then
-					return { ok = false, error = tostring(answer) }
-				end
-				return answer
-			end,
-			profile = function(): any
-				return hubState.profile
-			end,
-			onResult = function(result: any)
-				if type(result) == "table" and type(result.profile) == "table" then
-					hubState.profile = result.profile
-				end
-			end,
-			theme = UiTheme,
-		})
-		handle.setWeapon(uid)
-		handle.refresh(hubState.profile)
-		hubState.coreHandle = handle
+		if type(answer.essence) == "number" then
+			profile.gearEssence = answer.essence
+		end
+		if type(answer.level) == "number" then
+			if type(profile.shardCores) ~= "table" then
+				profile.shardCores = {}
+			end
+			profile.shardCores[fedUid] = answer.level
+		end
 	end
 
 	-- The server charges and levels in one mutate. Show its answer: apply
@@ -2775,6 +2792,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.openItem(uid: string)
+		hubFn.hideTips()
 		hubState.selectedUid = uid
 		hubState.detailHidden = false
 		local item = hubFn.findItem(uid)
@@ -2793,6 +2811,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tip.Visible = false
 		tip.ZIndex = 30
 		tip.Parent = hubState.screen
+		if hubState.tipOwners == nil then
+			hubState.tipOwners = setmetatable({}, { __mode = "k" }) :: any
+		end
+		hubState.tipOwners[tip] = card
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		corner.Parent = tip
@@ -2848,23 +2870,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			tip.Position = UDim2.fromOffset(box.x, box.y)
 			tip.Size = UDim2.fromOffset(box.w, box.h)
 		end
-		local function pinned(): boolean
-			return hubState.selectedUid ~= nil and hubState.selectedUid == item.uid
-		end
+		-- Hover only. A tip is never pinned to the selected card: the
+		-- detail pane shows that item, and a pinned tip outlived view
+		-- changes (stuck bottom-left). hideTips clears every tip on any
+		-- click, scroll, tab change, or panel close.
 		card.MouseEnter:Connect(function()
+			hubFn.hideTips()
 			fill()
 			tip.Visible = true
 		end)
 		card.MouseLeave:Connect(function()
-			tip.Visible = pinned()
-			if tip.Visible then
-				fill()
-			end
+			tip.Visible = false
 		end)
-		if pinned() then
-			fill()
-			tip.Visible = true
-		end
 	end
 
 	function hubFn.itemCard(
@@ -2982,9 +2999,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			else Enum.TextYAlignment.Top
 		name.TextWrapped = not compact
 		name.TextTruncate = if compact then Enum.TextTruncate.AtEnd else Enum.TextTruncate.None
-		name.TextColor3 = rgb("text")
+		name.TextColor3 = Color3.fromRGB(liftR, liftG, liftB)
 		name.Text = tostring(item.name or "Item")
 		name.Parent = card
+		-- [Ghost] +level and stars under the name (full) or beside the
+		-- icon (compact), in gold.
+		local levelText = GearHooks.levelLine(item)
+		if levelText ~= "" then
+			local level = Instance.new("TextLabel")
+			level.Name = "Level"
+			level.BackgroundTransparency = 1
+			if compact then
+				level.Position = UDim2.fromOffset(parts.icon.x + parts.icon.w + 4, parts.icon.y)
+				level.Size = UDim2.fromOffset(math.max(0, cellW - parts.icon.w - 20), parts.icon.h)
+				level.TextXAlignment = Enum.TextXAlignment.Right
+			else
+				level.Position = UDim2.fromOffset(full.tip.x, full.tip.y)
+				level.Size = UDim2.fromOffset(full.tip.w, full.tip.h)
+				level.TextXAlignment = Enum.TextXAlignment.Left
+			end
+			level.Font = headerFont()
+			level.TextSize = UiTheme.MIN_TEXT
+			level.TextColor3 = rgb("gold")
+			level.TextTruncate = Enum.TextTruncate.AtEnd
+			level.Text = levelText
+			level.ZIndex = 6
+			level.Parent = card
+		end
 		if not compact and BagBoard.isNew(item, hubState.seen.bagAt) then
 			local badge = Instance.new("TextLabel")
 			badge.Name = "New"
@@ -3060,11 +3101,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lock.AnchorPoint = Vector2.new(0, 0)
 			lock.Position = UDim2.fromOffset(parts.lock.x, parts.lock.y)
 			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
-			lock.BackgroundColor3 = navy
+			-- Padlock glyph, gold when locked. The name stays "Lock".
+			local lockedCard = item.locked == true
+			local lockFill = if lockedCard then rgb("gold") else navy
+			lock.BackgroundColor3 = lockFill
 			lock.Font = headerFont()
-			lock.TextSize = UiTheme.MIN_TEXT
-			lock.TextColor3 = rgb("text")
-			lock.Text = if item.locked == true then "Locked" else "Lock"
+			lock.TextSize = 18
+			lock.TextColor3 = if lockedCard then rgb("ink") else rgb("text")
+			lock.Text = if lockedCard then "🔒" else "🔓"
 			lock.AutoButtonColor = false
 			lock.ZIndex = 7
 			lock.Parent = card
@@ -3076,7 +3120,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lockStroke.Thickness = 1.5
 			lockStroke.Color = Color3.fromRGB(150, 92, 255)
 			lockStroke.Parent = lock
-			hubFn.setRest(lock, navy)
+			hubFn.setRest(lock, lockFill)
 			hubFn.motion(lock)
 			local locked = item.locked == true
 			hubFn.bindActivated(lock, function()
@@ -3924,6 +3968,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.row(actions, "Open full bag", 3, function()
 			hooks.onBag()
 		end)
+		-- [Ghost] Auto-salvage is a live setting in the save. When it is on,
+		-- say so here too; the switch itself is in the full inventory.
+		if LaunchGate.on("gearSalvage") then
+			local autoText, autoOn = GearHooks.autoPill(hubState.profile)
+			if autoOn then
+				local warn = hubFn.line(actions, autoText .. "  (change it in Open full bag)", 1, rgb("gold"))
+				warn.Name = "AutoWarn"
+			end
+		end
 		if LaunchGate.on("forgeSalvage") then
 			if hubState.salvageArmed then
 				hubFn.line(actions, BagBoard.confirm(hubState.salvageRarity), 4, rgb("loss"))
@@ -7098,6 +7151,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.close()
+		hubFn.hideTips()
 		hubFn.apply(UiRouter.close(hubState.route))
 	end
 
@@ -7304,6 +7358,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			hubFn.hideTips()
+		end
 		if hubState.capturing ~= nil and input.KeyCode == Enum.KeyCode.Escape then
 			hubState.capturing = nil
 			hubState.bindNote = nil
