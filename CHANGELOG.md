@@ -13,6 +13,8 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Stage B: favorited gear stays out of salvage, and Salvage selected
+  waits for the same confirm token as salvage-all. [#388] (open)
 - Stage B: salvage weapons and armor into `profile.gearEssence` (1/3/10/40/200).
   Lock uses `item.locked`. Auto-salvage is off and only converts a new drop.
   `LaunchGate.gearSalvage` is off. `BagTools.mount` is the client hook. [#388] (open)

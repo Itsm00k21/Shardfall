@@ -24,8 +24,13 @@
 
 	The panel stays visible when the flag is off and shows the server's
 	"That is closed." line. Equipped gear cannot be selected. Locked
-	rows stay out of the salvage payload. Salvage all asks for a server
-	token, then Confirm sends it.
+	and favorited rows stay out of the salvage payload. Salvage
+	selected and Salvage all each ask for a server token, then Confirm
+	sends it. A favorite returns "That item is a favorite."
+
+	preview payload is { rarity = "Common" } or { uids = { "sword-1" } }.
+	confirm payload is { token = "es-1-2" }. The mount signature is
+	unchanged.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -193,6 +198,7 @@ function BagTools.mount(parent: Instance, hooks: Hooks)
 		end
 	end
 
+	local paint
 	local function apply(result: any, action: string)
 		if type(result) ~= "table" then
 			setStatus("No answer from the server.")
@@ -220,9 +226,17 @@ function BagTools.mount(parent: Instance, hooks: Hooks)
 				token = result.token
 				confirm.Visible = true
 			end
-		elseif action == "confirm" or action == "salvageNow" or action == "salvage" then
+		elseif action == "confirm" or action == "salvageNow" then
 			token = nil
 			confirm.Visible = false
+			if type(result.uids) == "table" then
+				for _, uid in ipairs(result.uids) do
+					if type(uid) == "string" then
+						selected[uid] = nil
+					end
+				end
+				paint()
+			end
 		end
 		if type(result.message) == "string" then
 			setStatus(result.message)
@@ -253,7 +267,7 @@ function BagTools.mount(parent: Instance, hooks: Hooks)
 		return found
 	end
 
-	local function paint()
+	paint = function()
 		for _, child in ipairs(list:GetChildren()) do
 			if child:IsA("TextButton") then
 				child:Destroy()
@@ -272,6 +286,9 @@ function BagTools.mount(parent: Instance, hooks: Hooks)
 			end
 			if item.locked == true then
 				table.insert(marks, "Locked")
+			end
+			if item.favorite == true then
+				table.insert(marks, "Favorite")
 			end
 			if isEquipped(lastProfile, uid) then
 				table.insert(marks, "Equipped")
@@ -403,6 +420,8 @@ function BagTools.mount(parent: Instance, hooks: Hooks)
 			return
 		end
 		local uids = {}
+		local sawFavorite = false
+		local sawLocked = false
 		for uid, on in pairs(selected) do
 			if on ~= true or isEquipped(lastProfile, uid) then
 				continue
@@ -411,23 +430,29 @@ function BagTools.mount(parent: Instance, hooks: Hooks)
 			if type(lastProfile) == "table" and type(lastProfile.inventory) == "table" then
 				item = lastProfile.inventory[uid]
 			end
-			if type(item) == "table" and item.locked ~= true then
+			if type(item) ~= "table" then
+				continue
+			end
+			if item.locked == true then
+				sawLocked = true
+			elseif item.favorite == true then
+				sawFavorite = true
+			else
 				table.insert(uids, uid)
 			end
 		end
 		table.sort(uids)
 		if #uids == 0 then
-			setStatus("Pick gear to salvage.")
+			if sawFavorite then
+				setStatus("That item is a favorite.")
+			elseif sawLocked then
+				setStatus("That item is locked.")
+			else
+				setStatus("Pick gear to salvage.")
+			end
 			return
 		end
-		local result = hooks.invoke(BagTools.REMOTE, "salvage", { uids = uids })
-		apply(result, "salvage")
-		if type(result) == "table" and result.ok == true then
-			for _, uid in ipairs(uids) do
-				selected[uid] = nil
-			end
-			paint()
-		end
+		call("preview", { uids = uids })
 	end)
 
 	salvageAll.MouseButton1Click:Connect(function()

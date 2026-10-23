@@ -34,7 +34,14 @@
 	chosen rarity into Essence. It does not delete a row that is
 	already in the bag. Equipped gear, including equipLoadout when
 	that table exists, is never salvaged. Locked gear is never
-	salvaged. Nothing here is for sale.
+	salvaged. Favorited gear (item.favorite) is never salvaged.
+	An explicit list fails with "That item is a favorite." and
+	deletes nothing. A rarity sweep skips that piece and reports
+	the skip. Nothing here is for sale.
+
+	Salvage selected and salvage-all both preview first. The preview
+	stores a token and deletes nothing. confirm (and salvageNow)
+	spends that token.
 ]]
 
 local Essence = require("./Config/Essence")
@@ -53,6 +60,8 @@ local READ = {
 	state = true,
 	preview = true,
 	nudge = true,
+	-- Explicit salvage previews a token. confirm is the delete.
+	salvage = true,
 }
 
 local ACTIONS = {
@@ -68,6 +77,7 @@ local ACTIONS = {
 
 type Pending = {
 	token: string,
+	mode: string,
 	rarity: string,
 	uids: { string },
 	expires: number,
@@ -120,8 +130,18 @@ local function inLoadout(profile: any, uid: string): boolean
 	return false
 end
 
--- Nil when this piece may be salvaged. Equipped and locked stay.
+local FAVORITE = "That item is a favorite."
+
+-- Nil when this piece may be salvaged. Equipped, locked, and favorited stay.
 local function blockReason(profile: any, item: any): string?
+	if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
+		if item.locked == true then
+			return "That item is locked."
+		end
+		if item.favorite == true then
+			return FAVORITE
+		end
+	end
 	local reason = InventoryView.salvageBlock(profile, item)
 	if reason ~= nil then
 		return reason
@@ -333,8 +353,9 @@ local function sameList(left: { string }, right: { string }): boolean
 	return true
 end
 
--- Unequipped, unlocked weapons and armor at or below rarity.
-function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, string?)
+-- Unequipped, unlocked, unfavorited weapons and armor at or below rarity.
+-- skipped lists each piece that was in range and stayed, with the reason.
+function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, string?, { any }?)
 	if not knownRarity(rarity) then
 		return nil, "Unknown rarity."
 	end
@@ -343,30 +364,52 @@ function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, strin
 	end
 	local cap = Rarities.INDEX[rarity]
 	local uids = {}
+	local skipped = {}
 	for uid, item in pairs(profile.inventory) do
 		if type(uid) == "string" and type(item) == "table" and type(item.rarity) == "string" then
 			local rank = Rarities.INDEX[item.rarity]
 			local pay = Essence.amount(item.rarity)
-			if
-				rank ~= nil
-				and cap ~= nil
-				and rank <= cap
-				and pay ~= nil
-				and blockReason(profile, item) == nil
-			then
-				table.insert(uids, uid)
+			if rank ~= nil and cap ~= nil and rank <= cap and pay ~= nil then
+				local blocked = blockReason(profile, item)
+				if blocked == nil then
+					table.insert(uids, uid)
+				else
+					table.insert(skipped, { uid = uid, reason = blocked })
+				end
 			end
 		end
 	end
 	table.sort(uids)
+	table.sort(skipped, function(left, right)
+		return left.uid < right.uid
+	end)
 	if #uids == 0 then
-		return nil, "Nothing of that rarity can be salvaged."
+		local onlyFavorites = #skipped > 0
+		for _, row in ipairs(skipped) do
+			if row.reason ~= FAVORITE then
+				onlyFavorites = false
+				break
+			end
+		end
+		if onlyFavorites then
+			return nil, FAVORITE, skipped
+		end
+		return nil, "Nothing of that rarity can be salvaged.", skipped
 	end
 	local gain = 0
 	for _, uid in ipairs(uids) do
 		gain += Essence.amount(profile.inventory[uid].rarity) :: number
 	end
-	return { uids = uids, rarity = rarity, gain = gain, count = #uids }, nil
+	return {
+		uids = uids,
+		rarity = rarity,
+		gain = gain,
+		count = #uids,
+		skipped = skipped,
+		mode = "rarity",
+	},
+		nil,
+		skipped
 end
 
 local function salvageUids(profile: any, uids: { string }): ({ [string]: any }?, string?)
@@ -491,8 +534,11 @@ function GearSalvage.receive(profile: any, item: any)
 	then
 		return keep()
 	end
-	if blockReason(profile, item) ~= nil then
-		return keep()
+	local blocked = blockReason(profile, item)
+	if blocked ~= nil then
+		local held = keep()
+		held.reason = blocked
+		return held
 	end
 	local pay = Essence.amount(item.rarity)
 	if pay == nil then
@@ -526,13 +572,22 @@ end
 
 local function storePlan(owner: string, plan: { [string]: any }, now: number): string
 	local token = mint(now)
+	local rarity = plan.rarity
 	pending[owner] = {
 		token = token,
-		rarity = plan.rarity,
+		mode = if plan.mode == "selected" then "selected" else "rarity",
+		rarity = if type(rarity) == "string" then rarity else "",
 		uids = copyUids(plan.uids),
 		expires = now + GearSalvage.TOKEN_SECONDS,
 	}
 	return token
+end
+
+local function withSkipped(result: { [string]: any }, skipped: { any }?): { [string]: any }
+	if skipped ~= nil then
+		result.skipped = skipped
+	end
+	return result
 end
 
 local function preview(profile: any, ownerId: any, rarity: any, now: any)
@@ -541,9 +596,9 @@ local function preview(profile: any, ownerId: any, rarity: any, now: any)
 	if owner == nil or when == nil then
 		return fail("Could not salvage that.")
 	end
-	local plan, reason = GearSalvage.plan(profile, rarity)
+	local plan, reason, skipped = GearSalvage.plan(profile, rarity)
 	if plan == nil then
-		return fail(reason or "Nothing of that rarity can be salvaged.")
+		return withSkipped(fail(reason or "Nothing of that rarity can be salvaged."), skipped)
 	end
 	local token = storePlan(owner, plan, when)
 	return pack(profile, {
@@ -552,8 +607,70 @@ local function preview(profile: any, ownerId: any, rarity: any, now: any)
 		gain = plan.gain,
 		rarity = plan.rarity,
 		uids = copyUids(plan.uids),
+		skipped = plan.skipped,
 		message = string.format("%d pieces would become %d Essence.", plan.count, plan.gain),
 	})
+end
+
+-- Explicit uids. All-or-nothing. Stores a token and deletes nothing.
+local function previewSelected(profile: any, ownerId: any, rawUids: any, now: any)
+	local owner = ownerKey(ownerId)
+	local when = clock(now)
+	if owner == nil or when == nil then
+		return fail("Could not salvage that.")
+	end
+	local uids, why = readUids(rawUids)
+	if uids == nil then
+		return fail(why or "Pick gear to salvage.")
+	end
+	table.sort(uids)
+	if type(profile.inventory) ~= "table" then
+		return fail("You do not have that item.")
+	end
+	local total = 0
+	for _, uid in ipairs(uids) do
+		local item = profile.inventory[uid]
+		if type(item) ~= "table" then
+			return fail("You do not have that item.")
+		end
+		local blocked = blockReason(profile, item)
+		if blocked ~= nil then
+			return fail(blocked)
+		end
+		local pay = Essence.amount(item.rarity)
+		if pay == nil then
+			return fail("Unknown rarity.")
+		end
+		total += pay
+	end
+	local token = storePlan(owner, { mode = "selected", rarity = "", uids = uids }, when)
+	return pack(profile, {
+		token = token,
+		count = #uids,
+		gain = total,
+		uids = copyUids(uids),
+		message = string.format("%d pieces would become %d Essence.", #uids, total),
+	})
+end
+
+local function recheckSelected(profile: any, uids: { string }): (boolean, string?)
+	if type(profile.inventory) ~= "table" then
+		return false, "The bag changed. Look again."
+	end
+	for _, uid in ipairs(uids) do
+		local item = profile.inventory[uid]
+		if type(item) ~= "table" then
+			return false, "The bag changed. Look again."
+		end
+		local blocked = blockReason(profile, item)
+		if blocked ~= nil then
+			return false, blocked
+		end
+		if Essence.amount(item.rarity) == nil then
+			return false, "Unknown rarity."
+		end
+	end
+	return true, nil
 end
 
 local function confirm(profile: any, ownerId: any, token: any, now: any)
@@ -566,12 +683,22 @@ local function confirm(profile: any, ownerId: any, token: any, now: any)
 	if row == nil or row.token ~= token or when > row.expires then
 		return fail("That confirm expired. Look again.")
 	end
-	local plan = GearSalvage.plan(profile, row.rarity)
-	if plan == nil or not sameList(plan.uids, row.uids) then
-		pending[owner] = nil
-		return fail("The bag changed. Look again.")
+	local summary, why
+	if row.mode == "selected" then
+		local ready, blocked = recheckSelected(profile, row.uids)
+		if not ready then
+			pending[owner] = nil
+			return fail(blocked or "The bag changed. Look again.")
+		end
+		summary, why = salvageUids(profile, row.uids)
+	else
+		local plan = GearSalvage.plan(profile, row.rarity)
+		if plan == nil or not sameList(plan.uids, row.uids) then
+			pending[owner] = nil
+			return fail("The bag changed. Look again.")
+		end
+		summary, why = salvageUids(profile, plan.uids)
 	end
-	local summary, why = salvageUids(profile, plan.uids)
 	if summary == nil then
 		return fail(why or "Could not salvage that.")
 	end
@@ -620,20 +747,15 @@ function GearSalvage.applyAction(profile: any, ownerId: any, action: any, payloa
 		return pack(profile, { message = message })
 	end
 	if action == "salvage" then
-		local uids, why = readUids(body.uids)
-		if uids == nil then
-			return fail(why or "Pick gear to salvage.")
-		end
-		table.sort(uids)
-		local summary, reason = salvageUids(profile, uids)
-		if summary == nil then
-			return fail(reason or "Could not salvage that.")
-		end
-		summary.message =
-			string.format("Salvaged %d for %d Essence.", summary.count, summary.gained)
-		return pack(profile, summary)
+		return previewSelected(profile, ownerId, body.uids, now)
 	end
 	if action == "preview" then
+		if body.uids ~= nil and knownRarity(body.rarity) then
+			return fail("Pick gear to salvage.")
+		end
+		if body.uids ~= nil then
+			return previewSelected(profile, ownerId, body.uids, now)
+		end
 		return preview(profile, ownerId, body.rarity, now)
 	end
 	if action == "nudge" then
