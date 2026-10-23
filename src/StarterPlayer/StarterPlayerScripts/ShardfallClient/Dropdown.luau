@@ -9,7 +9,7 @@
 	Dropdown.new(parent, opts) -> handle
 	  opts.name      button name; the list is "<name>List" and each choice
 	                 "<name>_<key>" (key is the value, or "All" for nil).
-	  opts.prefix    "Rarity" -> "Rarity: All ▾". Optional.
+	  opts.prefix    "Rarity" -> "Rarity: All ▼". Optional.
 	  opts.options   { { value = any, text = string } }
 	  opts.value     the starting value.
 	  opts.host      where the list is parented (the modal root).
@@ -129,7 +129,7 @@ function Dropdown.new(parent: Instance, opts: any)
 		if type(opts.prefix) == "string" and opts.prefix ~= "" then
 			shown = opts.prefix .. ": " .. shown
 		end
-		button.Text = shown .. "  ▾"
+		button.Text = shown .. "  ▼"
 		for _, child in ipairs(list:GetChildren()) do
 			if child:IsA("TextButton") then
 				local on = child:GetAttribute("Key") == keyOf(value)

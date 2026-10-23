@@ -238,7 +238,7 @@ function CoreCard.build(parent: Instance, opts: any): any
 	confirm.Visible = false
 
 	local function paintHeader()
-		header.Text = string.format("%s  %s", if open then "▾" else "▸", GearHooks.coreHeader(level))
+		header.Text = string.format("%s  %s", if open then "▼" else "▶", GearHooks.coreHeader(level))
 		body.Visible = open
 		if not open then
 			picker.Visible = false

@@ -492,7 +492,8 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		CellSize = UDim2.fromOffset(112, 128),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, grid) :: UIGridLayout
-	new("UIPadding", { PaddingBottom = UDim.new(0, 8) }, grid)
+	-- Top room so the first row's rarity border is not clipped by the scroller.
+	new("UIPadding", { PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 8) }, grid)
 
 	local detail = new("ScrollingFrame", {
 		Name = "Detail",
