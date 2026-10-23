@@ -161,6 +161,10 @@ end)
 begin("GearService", function()
 	GearService.start()
 end)
+-- [ECHO hook] Equip remotes. The handler refuses while LaunchGate.equip is off.
+begin("EquipService", function()
+	require(script.EquipService.Bind).start()
+end)
 begin("GroveService", function()
 	if LaunchGate.on("grove") then
 		GroveService.start()

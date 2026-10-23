@@ -44,6 +44,11 @@ Config.Rewards = require("../Drops")
 Config.Economy = require("./Economy")
 Config.Strings = require("./Strings")
 
+-- Phase 2 and Stage A. Extra tables, not a tenth area.
+Config.EquipSlots = require("./EquipSlots")
+Config.EquipStats = require("./EquipStats")
+Config.GearLevels = require("./GearLevels")
+
 Config.AREAS = table.freeze({
 	"Items",
 	"Rarities",
