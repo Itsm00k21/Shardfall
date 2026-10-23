@@ -95,7 +95,13 @@ function DebugService.run(player: Player, action: any)
 		local ok, err = DataService.mutate(player, function(data)
 			local applied, text
 			if action == "geardupe" then
-				applied, text = GearDev.grantDupe(data, ItemBases.all(), GearLevels, Schema.inventoryCap(data), Stars)
+				applied, text = GearDev.grantDupe(
+					data,
+					ItemBases.all(),
+					GearLevels,
+					Schema.inventoryCap(data),
+					Stars
+				)
 			else
 				applied, text = GearDev.fillBag(data, ItemBases.all(), Schema.inventoryCap(data))
 			end
