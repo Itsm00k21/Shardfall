@@ -13,6 +13,13 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Phase 0.8: server analytics. `Config/Analytics` lists session start/end,
+  the tutorial funnel, the first-roll funnel, the first-session funnel,
+  roll x1/x10, rarity pulled, dungeon and wave enter/clear/leave, and
+  currency sources and sinks. `AnalyticsService` pcalls the engine,
+  rate-limits per player, and sends nothing while `LaunchGate.analytics`
+  or the catalog `ENABLED` flag is off (both default off). Gameplay call
+  sites are not wired. No save changes and no paid products. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and
