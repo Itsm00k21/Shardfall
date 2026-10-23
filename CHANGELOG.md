@@ -67,6 +67,9 @@ its tag to merged and add the merge commit.
   a clear "is off" line. [#377] (open)
 
 ### Fixed
+- Stage B: an auto-salvaged x10 row carries `autoSalvaged` and `essenceGained`,
+  the same fields a single crack returns. The granted Essence is the server
+  number. [#388] (open)
 - Gnarl's weak spot sits at chest height, and every boss hit says Guarded or
   Weak!. [#359] (merged, e0bc15b)
 - Loot toasts read "Loot: Spore Cap x2" with no stray lead character. [#360]

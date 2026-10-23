@@ -887,3 +887,250 @@ describe("BagTools mount", function()
 		expect(LaunchGate.on("gearSalvage")).toEqual(false)
 	end)
 end)
+
+-- Loads RollService the way Studio would, with the real salvage rules and
+-- a profile mutate that keeps the same table. Random always misses, so a
+-- draw is Common unless Epic pity fires.
+local function loadRollService(current: { profile: any })
+	local guid = 0
+	local function node(name: string)
+		local inst = { Name = name, ClassName = "ModuleScript" }
+		setmetatable(inst, {
+			__index = function(_self, key)
+				return node(tostring(key))
+			end,
+		})
+		return inst
+	end
+
+	local function restore(data, backup)
+		local keys = {}
+		for key in pairs(data) do
+			table.insert(keys, key)
+		end
+		for _, key in ipairs(keys) do
+			data[key] = nil
+		end
+		for key, value in pairs(backup) do
+			data[key] = value
+		end
+	end
+
+	local dataService = {
+		get = function()
+			return current.profile
+		end,
+		mutate = function(_player, callback)
+			local backup = Schema.deepCopy(current.profile)
+			local ok, result = pcall(callback, current.profile)
+			if not ok or result ~= nil then
+				restore(current.profile, backup)
+				if not ok then
+					return false, "Could not update your profile."
+				end
+				if type(result) == "string" then
+					return false, result
+				end
+				return false, "Could not update your profile."
+			end
+			return true, nil
+		end,
+	}
+	local scriptNode = node("RollService")
+	scriptNode.Parent = node("ShardfallServer")
+	local services = {
+		HttpService = {
+			GenerateGUID = function()
+				guid += 1
+				return string.format("salvage-roll-%d", guid)
+			end,
+			JSONEncode = function()
+				return "{}"
+			end,
+		},
+		Players = {
+			PlayerRemoving = {
+				Connect = function()
+					return { Disconnect = function() end }
+				end,
+			},
+		},
+		ReplicatedStorage = node("ReplicatedStorage"),
+		RunService = {
+			IsStudio = function()
+				return true
+			end,
+		},
+	}
+	local game = {
+		JobId = "salvage-test",
+		PlaceId = 0,
+	}
+	function game:GetService(name: string)
+		local found = services[name]
+		if found == nil then
+			error("No service " .. name, 2)
+		end
+		return found
+	end
+	local shared = {
+		CallBudget = true,
+		DebugTools = true,
+		DevAccess = true,
+		DevTools = true,
+		LaunchGate = true,
+		Currencies = true,
+		Pools = true,
+		RarityConfig = true,
+		Rarities = true,
+		RollConfig = true,
+		RollLoop = true,
+		RollMath = true,
+		Schema = true,
+		GearSalvage = true,
+		Settings = true,
+		StarterGoalPay = true,
+	}
+	local source = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
+	local chunk = luau.load(luau.compile(source, { debugLevel = 2 }), {
+		debugName = "RollService",
+		environment = {
+			assert = assert,
+			error = error,
+			ipairs = ipairs,
+			next = next,
+			pairs = pairs,
+			pcall = pcall,
+			print = print,
+			select = select,
+			tonumber = tonumber,
+			tostring = tostring,
+			type = type,
+			warn = function() end,
+			math = math,
+			string = string,
+			table = table,
+			os = os,
+			coroutine = coroutine,
+			Random = {
+				new = function()
+					return {
+						NextNumber = function()
+							return 0.999
+						end,
+						NextInteger = function(_self, minimum: number)
+							return minimum
+						end,
+					}
+				end,
+			},
+			game = game,
+			script = scriptNode,
+			typeof = typeof,
+			require = function(module)
+				local name = if type(module) == "table" then module.Name else ""
+				if name == "DataService" then
+					return dataService
+				end
+				if name == "PolicyCache" then
+					return {
+						allowPaid = function()
+							return true
+						end,
+					}
+				end
+				if name == "LaunchGate" then
+					return LaunchGate
+				end
+				if name == "GearSalvage" then
+					return GearSalvage
+				end
+				if name == "Schema" then
+					return Schema
+				end
+				if shared[name] ~= true then
+					error("Unexpected require " .. tostring(name), 2)
+				end
+				return require("../src/ReplicatedStorage/Shared/" .. name)
+			end,
+		},
+	})
+	return chunk()
+end
+
+local function rollPlayer(userId: number)
+	return {
+		ClassName = "Player",
+		Name = "Echo",
+		UserId = userId,
+	}
+end
+
+local function salvageProfile(sinceEpic: number)
+	local data = Schema.template()
+	data.shardTokens = 50
+	data.sinceEpic = sinceEpic
+	data.autoSalvage = true
+	data.autoSalvageRarity = "Common"
+	return data
+end
+
+describe("Auto-salvaged x10 batch", function()
+	it("copies autoSalvaged and essenceGained onto batch rows", function()
+		local current = { profile = salvageProfile(0) }
+		local roll = loadRollService(current)
+		local singlePlayer = rollPlayer(4101)
+		local batchPlayer = rollPlayer(4102)
+
+		withFlag(true, function()
+			local single = roll.rollFree(singlePlayer, "verdant_armory", false)
+			expect(single.ok).toEqual(true)
+			expect(single.rarity).toEqual("Common")
+			expect(single.autoSalvaged).toEqual(true)
+			expect(single.essenceGained).toEqual(1)
+			expect(current.profile.inventory[single.item.uid]).toBeNil()
+			expect(current.profile.gearEssence).toEqual(1)
+
+			current.profile = salvageProfile(45)
+			local batch = roll.rollMany(batchPlayer, "verdant_armory", 10)
+			expect(batch.ok).toEqual(true)
+			expect(batch.count).toEqual(10)
+			expect(#batch.items).toEqual(10)
+			local salvaged = 0
+			local kept = 0
+			for index, row in ipairs(batch.items) do
+				if index == 5 then
+					expect(row.rarity).toEqual("Epic")
+					expect(row.autoSalvaged).toBeNil()
+					expect(row.essenceGained).toBeNil()
+					expect(current.profile.inventory[row.item.uid]).toEqual(row.item)
+					kept += 1
+				else
+					expect(row.rarity).toEqual("Common")
+					expect(row.autoSalvaged).toEqual(single.autoSalvaged)
+					expect(row.essenceGained).toEqual(single.essenceGained)
+					expect(current.profile.inventory[row.item.uid]).toBeNil()
+					salvaged += 1
+				end
+			end
+			expect(salvaged).toEqual(9)
+			expect(kept).toEqual(1)
+			expect(current.profile.gearEssence).toEqual(9)
+			expect(current.profile.shardTokens).toEqual(41)
+			expect(Schema.countItems(current.profile)).toEqual(1)
+		end)
+
+		current.profile = salvageProfile(0)
+		local closed = roll.rollMany(rollPlayer(4103), "verdant_armory", 10)
+		expect(closed.ok).toEqual(true)
+		expect(#closed.items).toEqual(10)
+		for _, row in ipairs(closed.items) do
+			expect(row.autoSalvaged).toBeNil()
+			expect(row.essenceGained).toBeNil()
+			expect(current.profile.inventory[row.item.uid]).toEqual(row.item)
+		end
+		expect(current.profile.gearEssence).toEqual(0)
+		expect(current.profile.shardTokens).toEqual(41)
+		expect(LaunchGate.on("gearSalvage")).toEqual(false)
+	end)
+end)
