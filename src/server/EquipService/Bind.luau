@@ -37,7 +37,8 @@ local function catalog()
 		elements = require(ReplicatedStorage.Shared.Config.Elements),
 		classes = require(ReplicatedStorage.Shared.Classes),
 		gearConfig = require(ReplicatedStorage.Shared.Config.GearLevels),
-		gearEnabled = require(ReplicatedStorage.Shared.LaunchGate).on("gearLevels"),
+		-- Upgrade scale is its own flag. gearLevels is the undecided dupe rule.
+		gearEnabled = require(ReplicatedStorage.Shared.LaunchGate).on("upgradeScale"),
 	}
 end
 

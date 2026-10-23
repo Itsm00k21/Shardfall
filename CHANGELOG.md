@@ -13,7 +13,7 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
-- Phase 2 Equip server (flag `equip`, off) and Gear Progression Stage A (flag `gearLevels`, off). An exact duplicate grants +1 on the existing forge field `item.upgrade` (cap +10, gold curve unchanged). No second level field. (open)
+- Phase 2 Equip server (flag `equip`, off) and Gear Progression Stage A. Gold upgrades scale stats when `upgradeScale` is on (off). Exact duplicates feed stars when `gearLevels` is on (off). Essence overflow stays on `gearEssence`. No second level field. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and

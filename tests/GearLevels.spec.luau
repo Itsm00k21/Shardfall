@@ -1,9 +1,8 @@
 --!strict
 
 --[[
-	Stage A uses the forge upgrade that is already saved. A duplicate
-	adds 1 to item.upgrade, stops at Economy.UPGRADE_MAX, and never
-	writes item.level.
+	Stage A. Gold owns item.upgrade. An automatic duplicate feeds stars
+	and never writes item.upgrade or item.level. ★5 records gearEssence.
 ]]
 
 local fs = require("@lune/fs")
@@ -18,6 +17,7 @@ local Dev = require("../src/server/GearLevels/Dev")
 local Economy = require("../src/ReplicatedStorage/Shared/Economy")
 local GearLevels = require("../src/ReplicatedStorage/Shared/Config/GearLevels")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
+local Stars = require("../src/ReplicatedStorage/Shared/Stars")
 
 local function piece(uid: string, upgrade: number?): any
 	return {
@@ -62,7 +62,7 @@ describe("GearLevels config", function()
 		expect(GearLevels.multiplier(0, "Legendary")).toEqual(1)
 		expect(GearLevels.multiplier(1, "Common")).toBeCloseTo(1.08)
 		expect(GearLevels.multiplier(10, "Common")).toBeCloseTo(1.8)
-		expect(GearLevels.levelText("Bramble Fang", 3, 4)).toEqual("Bramble Fang +3 -> +4")
+		expect(GearLevels.levelText("Bramble Fang", 3, 4)).toEqual("Bramble Fang ★3 -> ★4")
 		expect(GearLevels.levelText("Bramble Fang", 4, 4)).toBeNil()
 	end)
 
@@ -104,43 +104,49 @@ describe("GearLevels duplicates", function()
 		expect(data.gold).toEqual(500)
 	end)
 
-	it("grants +1 upgrade and takes no bag slot", function()
+	it("feeds one star and takes no bag slot", function()
 		local data = profile()
 		local owned = piece("a", 2)
 		data.inventory.a = owned
-		local landing = Accept.accept(data, piece("incoming", nil), true, GearLevels)
-		expect(landing.action).toEqual("level")
+		local incoming = piece("incoming", nil)
+		incoming.quality = 1
+		local landing = Accept.accept(data, incoming, true, GearLevels, nil, Stars)
+		expect(landing.action).toEqual("star")
 		expect(landing.merged).toEqual(true)
-		expect(landing.oldLevel).toEqual(2)
-		expect(landing.newLevel).toEqual(3)
-		expect(landing.levelText).toEqual("Bramble Fang +2 -> +3")
+		expect(landing.oldLevel).toEqual(0)
+		expect(landing.newLevel).toEqual(1)
+		expect(landing.levelText).toEqual("Bramble Fang ★0 -> ★1")
 		expect(landing.essence).toEqual(0)
-		expect(owned.upgrade).toEqual(3)
+		expect(owned.upgrade).toEqual(2)
+		expect(owned.stars).toEqual(1)
 		expect(owned.level).toBeNil()
 		expect(owned.uid).toEqual("a")
-		expect(owned.stats[1].value).toEqual(12)
+		expect(owned.stats[1].value).toBeCloseTo(12 * 1.08)
+		expect(owned.stats[1].baseValue).toEqual(12)
 		expect(data.inventory.incoming).toBeNil()
 		expect(data.gold).toEqual(500)
 		expect(data.gearEssence).toBeNil()
 	end)
 
-	it("treats a missing upgrade as +0", function()
+	it("leaves a +10 forge upgrade alone and still feeds a star", function()
 		local data = profile()
-		local owned = piece("a", nil)
-		owned.upgrade = nil
+		local owned = piece("a", 10)
 		data.inventory.a = owned
-		local landing = Accept.accept(data, { templateId = "bramble_fang", name = "Bramble Fang" }, true, GearLevels)
-		expect(landing.oldLevel).toEqual(0)
+		local incoming = piece("incoming", nil)
+		incoming.quality = 1
+		local landing = Accept.accept(data, incoming, true, GearLevels, nil, Stars)
+		expect(landing.action).toEqual("star")
 		expect(landing.newLevel).toEqual(1)
-		expect(owned.upgrade).toEqual(1)
-		expect(owned.level).toBeNil()
+		expect(owned.upgrade).toEqual(10)
+		expect(owned.stars).toEqual(1)
+		expect(data.gearEssence).toBeNil()
 	end)
 
 	it("does not merge a different item", function()
 		local data = profile()
 		data.inventory.a = piece("a", 1)
 		local incoming = { templateId = "other", name = "Other", uid = "n" }
-		local landing = Accept.accept(data, incoming, true, GearLevels)
+		local landing = Accept.accept(data, incoming, true, GearLevels, nil, Stars)
 		expect(landing.action).toEqual("insert")
 		expect(landing.merged).toEqual(false)
 		expect(landing.oldLevel).toBeNil()
@@ -150,17 +156,22 @@ describe("GearLevels duplicates", function()
 		expect(data.inventory.a.upgrade).toEqual(1)
 	end)
 
-	it("turns a duplicate of a +10 piece into essence", function()
+	it("turns a duplicate of a five-star piece into essence", function()
 		local data = profile()
-		local owned = piece("a", 10)
+		local owned = piece("a", 4)
+		owned.stars = 5
 		data.inventory.a = owned
-		local landing = Accept.accept(data, piece("incoming", nil), true, GearLevels)
+		local incoming = piece("incoming", nil)
+		incoming.quality = 1
+		local landing = Accept.accept(data, incoming, true, GearLevels, nil, Stars)
 		expect(landing.action).toEqual("essence")
-		expect(landing.oldLevel).toEqual(10)
-		expect(landing.newLevel).toEqual(10)
+		expect(landing.oldLevel).toEqual(5)
+		expect(landing.newLevel).toEqual(5)
 		expect(landing.essence).toEqual(3)
 		expect(landing.levelText).toBeNil()
-		expect(owned.upgrade).toEqual(10)
+		expect(owned.upgrade).toEqual(4)
+		expect(owned.stars).toEqual(5)
+		expect(owned.stats[1].value).toEqual(12)
 		expect(owned.level).toBeNil()
 		expect(data.gearEssence).toEqual(3)
 		expect(data.inventory.incoming).toBeNil()
@@ -169,36 +180,51 @@ describe("GearLevels duplicates", function()
 
 	it("lets a hook replace the essence record", function()
 		local data = profile()
-		data.inventory.a = piece("a", 10)
+		local owned = piece("a", 1)
+		owned.stars = 5
+		data.inventory.a = owned
 		local seen = 0
 		Accept.accept(data, piece("incoming", nil), true, GearLevels, function(saved, amount)
 			seen = amount
 			saved.gearEssence = 7
-		end)
+		end, Stars)
 		expect(seen).toEqual(3)
 		expect(data.gearEssence).toEqual(7)
+		expect(owned.upgrade).toEqual(1)
 	end)
 
-	it("prefers the equipped copy, then the lowest upgrade", function()
+	it("prefers the equipped copy, then the lowest star count", function()
 		local data = profile()
-		data.inventory.a = piece("a", 1)
-		data.inventory.b = piece("b", 4)
+		data.inventory.a = piece("a", 9)
+		data.inventory.b = piece("b", 1)
+		data.inventory.a.stars = 0
+		data.inventory.b.stars = 2
 		data.equipped.weapon = "b"
-		Accept.accept(data, piece("incoming", nil), true, GearLevels)
-		expect(data.inventory.b.upgrade).toEqual(5)
-		expect(data.inventory.a.upgrade).toEqual(1)
+		local incoming = piece("incoming", nil)
+		incoming.quality = 1
+		Accept.accept(data, incoming, true, GearLevels, nil, Stars)
+		expect(data.inventory.b.stars).toEqual(3)
+		expect(data.inventory.a.stars).toEqual(0)
+		expect(data.inventory.b.upgrade).toEqual(1)
+		expect(data.inventory.a.upgrade).toEqual(9)
 
-		data.inventory.b.upgrade = 10
-		Accept.accept(data, piece("incoming", nil), true, GearLevels)
-		expect(data.inventory.a.upgrade).toEqual(2)
-		expect(data.inventory.b.upgrade).toEqual(10)
+		data.inventory.b.stars = 5
+		local again = piece("again", nil)
+		again.quality = 1
+		Accept.accept(data, again, true, GearLevels, nil, Stars)
+		expect(data.inventory.a.stars).toEqual(1)
+		expect(data.inventory.b.stars).toEqual(5)
 
 		local plain = profile()
-		plain.inventory.a = piece("a", 4)
-		plain.inventory.b = piece("b", 1)
-		Accept.accept(plain, piece("incoming", nil), true, GearLevels)
-		expect(plain.inventory.b.upgrade).toEqual(2)
-		expect(plain.inventory.a.upgrade).toEqual(4)
+		plain.inventory.a = piece("a", 0)
+		plain.inventory.b = piece("b", 0)
+		plain.inventory.a.stars = 2
+		plain.inventory.b.stars = 0
+		local third = piece("third", nil)
+		third.quality = 1
+		Accept.accept(plain, third, true, GearLevels, nil, Stars)
+		expect(plain.inventory.b.stars).toEqual(1)
+		expect(plain.inventory.a.stars).toEqual(2)
 	end)
 
 	it("merges a pet the same way and leaves the other copy", function()
@@ -219,9 +245,12 @@ describe("GearLevels duplicates", function()
 			rarity = "Rare",
 			upgrade = 3,
 		}
-		local landing = Accept.accept(data, { templateId = "rift_hound", name = "Rift Hound" }, true, GearLevels)
+		local incoming = { templateId = "rift_hound", name = "Rift Hound", uid = "incoming", quality = 1 }
+		local landing = Accept.accept(data, incoming, true, GearLevels, nil, Stars)
 		expect(landing.newLevel).toEqual(1)
-		expect(data.pets.p.upgrade).toEqual(1)
+		expect(data.pets.p.stars).toEqual(1)
+		expect(data.pets.q.stars == nil or data.pets.q.stars == 0).toEqual(true)
+		expect(data.pets.p.upgrade).toEqual(0)
 		expect(data.pets.q.upgrade).toEqual(3)
 		expect(data.pets.q.uid).toEqual("q")
 	end)
@@ -256,15 +285,17 @@ describe("GearLevels dev buttons", function()
 		local bases = {
 			{ id = "bramble_fang", name = "Bramble Fang", kind = "Weapon", rarity = "Uncommon" },
 		}
-		local ok, text = Dev.grantDupe(data, bases, GearLevels, 100)
+		local ok, text = Dev.grantDupe(data, bases, GearLevels, 100, Stars)
 		expect(ok).toEqual(true)
-		expect(text).toEqual("Granted Bramble Fang at +0.")
+		expect(text).toEqual("Granted Bramble Fang at ★0.")
 		expect(data.inventory["dev-dupe-1"].level).toBeNil()
 		expect(data.inventory["dev-dupe-1"].upgrade).toBeNil()
-		local again, line = Dev.grantDupe(data, bases, GearLevels, 100)
+		expect(data.inventory["dev-dupe-1"].stars).toBeNil()
+		local again, line = Dev.grantDupe(data, bases, GearLevels, 100, Stars)
 		expect(again).toEqual(true)
-		expect(line).toEqual("Bramble Fang +0 -> +1.")
-		expect(data.inventory["dev-dupe-1"].upgrade).toEqual(1)
+		expect(line).toEqual("Bramble Fang ★0 -> ★1.")
+		expect(data.inventory["dev-dupe-1"].upgrade).toBeNil()
+		expect(data.inventory["dev-dupe-1"].stars).toEqual(1)
 		expect(data.inventory["dev-dupe-1"].level).toBeNil()
 		local count = 0
 		for _ in pairs(data.inventory) do

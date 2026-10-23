@@ -31,21 +31,23 @@ Gold for the step that leaves the current upgrade (`level` in the function is th
 
 Stage A asked for Common 5, Uncommon 6, Rare 7, Epic 8, Legendary 10. That fights the button: a Common piece can still be forged to +10, and the gold curve above is priced through that step. Duplicates use the same cap, `Economy.UPGRADE_MAX`, for every rarity including Mythic and Secret. Changing the cap means changing the forge, not adding a second ladder.
 
-## Read-time scale (Stage A, flag `gearLevels`, off)
+## Read-time scale (flag `upgradeScale`, off)
 
-`1 + upgrade * 0.08` on the rolled stat when Equip totals are computed.
+`1 + upgrade * 0.08` on the saved stat. Stars are already inside that saved number (`Stars.STAT_PER_STAR` is 0.08). The upgrade multiply is a second step, at read time, so the two do not bake into each other.
 
-- +0 → ×1 (an old item does not gain power)
+- +0 → ×1
 - +1 → ×1.08
 - +10 → ×1.80
 
-The product is not written back onto `stat.value`. Stars already did their multiply into that saved value (`Stars.STAT_PER_STAR` is also 0.08, from ★0). The element multiplier runs after this scale. While `gearLevels` is off, totals skip the scale, so flipping Equip on does not buff a piece someone already forged.
+Readers: Equip totals, combat weapon damage, combat armor HP, Item Power (`+10` per upgrade, the same step as one star), and `UpgradeScale.preview` for the Bag. The product is not written back onto `stat.value`.
 
-Paid forge upgrades and free duplicate upgrades share this scale. Neither is sold for Robux.
+The flag is separate from `gearLevels`. Gold already spends. The dupe rule is still Kevin's call. One flag would force those two decisions to move together.
+
+Duplicates do not add upgrade levels. While `gearLevels` is on they feed stars. At ★5 they add Essence (below). A +10 piece with room for stars still takes a star. A ★5 piece does not move `item.upgrade`.
 
 ## Essence record (overflow only)
 
-A duplicate of a piece that is already +10 does not raise the upgrade. It adds this much to `profile.gearEssence` (default 0). Same numbers as the old duplicate fragments. Stage B is the wallet, the salvage, and the spend. This table is only the record.
+A duplicate of a piece that is already ★5 does not raise stars or `item.upgrade`. It adds this much to `profile.gearEssence` (default 0). Same numbers as the old duplicate fragments. Stage B is the wallet, the salvage, and the spend. This table is only the record. The automatic feed stays behind `gearLevels` (off).
 
 | Rarity | Essence |
 |---|---:|

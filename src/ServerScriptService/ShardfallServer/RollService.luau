@@ -161,7 +161,7 @@ local function poolFromClient(poolId: any)
 end
 
 -- [ECHO hook] gearLevels. Off: insert as today. On: an exact duplicate
--- spends no Bag slot and raises item.upgrade by 1, up to the forge cap.
+-- spends no Bag slot and feeds Stars (not item.upgrade). ★5 records Essence.
 local function gearSpare(data: any): boolean
 	if not LaunchGate.on("gearLevels") then
 		return false
@@ -177,7 +177,8 @@ local function gearPlace(data: any, item: any): (any?, string?)
 	end
 	local Accept = require(script.Parent.GearLevels.Accept)
 	local GearLevels = require(ReplicatedStorage.Shared.Config.GearLevels)
-	local landing = Accept.accept(data, item, true, GearLevels)
+	local Stars = require(ReplicatedStorage.Shared.Stars)
+	local landing = Accept.accept(data, item, true, GearLevels, nil, Stars)
 	if landing.merged ~= true then
 		if Schema.countItems(data) >= Schema.inventoryCap(data) then
 			return nil, "Inventory is full."

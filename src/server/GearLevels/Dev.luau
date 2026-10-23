@@ -3,9 +3,9 @@
 --[[
 	Studio buttons for Stage A. Both mutate only through the caller's
 	profile table. Fill adds new rows. It does not delete or edit an
-	item that was already in the bag. Grant-a-dupe raises item.upgrade
-	on an owned copy when one exists, and otherwise inserts one piece
-	at +0 (the forge default). It never writes item.level.
+	item that was already in the bag. Grant-a-dupe feeds one 100% quality
+	copy into an owned piece (one star) and otherwise inserts one piece
+	at ★0. It does not write item.upgrade or item.level.
 ]]
 
 local Accept = require("./Accept")
@@ -83,7 +83,7 @@ local function starterBase(bases: { any }): any
 	return fallback
 end
 
-function Dev.grantDupe(profile: any, bases: { any }, config: any, cap: number?): (boolean, string)
+function Dev.grantDupe(profile: any, bases: { any }, config: any, cap: number?, starsMod: any): (boolean, string)
 	if type(profile) ~= "table" then
 		return false, "Profile is not loaded."
 	end
@@ -115,7 +115,7 @@ function Dev.grantDupe(profile: any, bases: { any }, config: any, cap: number?):
 			return false, "Could not grant that."
 		end
 		insert(profile, item)
-		return true, string.format("Granted %s at +0.", tostring(base.name))
+		return true, string.format("Granted %s at ★0.", tostring(base.name))
 	end
 	local before = countItems(profile)
 	local upgradeBefore = owned.upgrade
@@ -125,30 +125,32 @@ function Dev.grantDupe(profile: any, bases: { any }, config: any, cap: number?):
 		kind = owned.kind,
 		rarity = owned.rarity,
 		uid = "dev-dupe-incoming",
-	}, true, config)
+		quality = 1,
+	}, true, config, nil, starsMod)
 	if countItems(profile) ~= before then
 		return false, "A dupe must not take a Bag slot."
 	end
-	if landing.action == "level" and owned.upgrade == upgradeBefore then
+	if landing.merged ~= true then
+		return false, "Could not grant that."
+	end
+	if owned.upgrade ~= upgradeBefore or owned.level ~= nil then
+		owned.upgrade = upgradeBefore
+		owned.level = nil
 		return false, "Could not grant that."
 	end
 	if landing.action == "essence" then
 		return true, string.format(
-			"%s is at +%d. Essence +%d (now %d).",
+			"%s is at ★%d. Essence +%d (now %d).",
 			tostring(owned.name),
 			landing.newLevel or 0,
 			landing.essence or 0,
 			if type(profile.gearEssence) == "number" then profile.gearEssence else 0
 		)
 	end
-	if owned.level ~= nil or upgradeBefore == owned.upgrade and landing.action == "level" then
-		owned.upgrade = upgradeBefore
-		return false, "Could not grant that."
-	end
 	if type(landing.levelText) == "string" then
 		return true, landing.levelText .. "."
 	end
-	return true, string.format("%s +%d.", tostring(owned.name), landing.newLevel or 0)
+	return true, string.format("%s ★%d.", tostring(owned.name), landing.newLevel or 0)
 end
 
 function Dev.fillBag(profile: any, bases: { any }, cap: number): (boolean, string)

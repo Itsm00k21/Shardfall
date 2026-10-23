@@ -1,50 +1,54 @@
 # Gear levels, Stage A
 
-An exact duplicate (same `templateId`) grants **+1 forge upgrade** on the owned copy. It does not take a Bag slot. This is the field the Bag **UPGRADE** button already writes: `item.upgrade`. There is no `item.level`.
+Two tracks, one item. No `item.level`.
 
-`LaunchGate.gearLevels` defaults **off**. While it is off, rolls insert a new row the way they do today, and the reveal payload has no `oldLevel` / `newLevel`.
+- **Gold** spends `Economy.upgradeCost` and writes `item.upgrade` (+0 through +10). That is the Bag UPGRADE button.
+- **Duplicates** feed **stars** through `Stars.commit`, the same math as Feed duplicate. They do not change `item.upgrade`.
 
-## Cap
+`LaunchGate.gearLevels` defaults **off**. While it is off, a roll inserts a new row and the reveal has no `oldLevel` / `newLevel`. The manual Feed button stays on its own `stars` flag.
 
-Every rarity stops at `Economy.UPGRADE_MAX` (**+10**). The per-rarity caps Common 5 / Uncommon 6 / Rare 7 / Epic 8 / Legendary 10 do not fit that curve: the UPGRADE button still sells +6 through +10 on a Common piece. One cap keeps the free duplicate and the paid forge on the same track.
+`LaunchGate.upgradeScale` defaults **off**. It is separate so gold can start scaling without also auto-feeding duplicates, and so trying the dupe rule does not have to turn gold scaling on.
 
-The button's price is gold from `Economy.upgradeCost`, plus one Gnarl's Seed from +7 upward (`+8`, `+9`, `+10`). A duplicate does not spend gold or materials. The curve is in `docs/research/economy_v1.md`.
+## What a duplicate does (`gearLevels` on)
 
-## What a duplicate does
-
-- Flag off: no read, no write. Caller inserts the new item. Reveal fields are absent.
-- No owned copy: caller inserts. `item.upgrade` stays unset (Schema saves `+0`). Not a level-up, so `oldLevel` / `newLevel` are absent.
-- Owned copy under +10: `item.upgrade` becomes `old + 1`. Stats, uid, and equipped stay put. Other copies stay in the bag.
-- Which copy: the equipped one if it is under the cap (legacy `equipped` or `equipLoadout`), otherwise the lowest upgrade under the cap, otherwise the lowest uid.
-- Already +10: upgrade stays. `profile.gearEssence` increases by the config amount (Common 1, Uncommon 3, Rare 10, Epic 40, Legendary / Mythic / Secret 200). A hook argument can replace that write. Stage B spends Essence. This PR only records it.
-
-`gearEssence` is additive and defaults to 0. `item.upgrade` was already saved, so no new per-item field and no schema bump. `Accept.migrate` copies first and only fills `gearEssence`.
+- No owned copy: the caller inserts. Not a star-up, so `oldLevel` / `newLevel` are absent.
+- Owned copy under ★5: `Stars.commit` on that copy. The new row is not inserted. `item.upgrade`, uid, and equipped stay put. Other copies stay in the bag. A 100% quality feed is one star. A real roll uses the rolled quality (34% to 100% of a star).
+- Which copy: the equipped one if it is under ★5 (legacy `equipped` or `equipLoadout`), otherwise the lowest star count, otherwise the lowest uid.
+- Already ★5: stars stay. `profile.gearEssence` increases by the config amount (Common 1, Uncommon 3, Rare 10, Epic 40, Legendary / Mythic / Secret 200). A hook can replace that write. Stage B spends Essence.
 
 ## Reveal
 
-On a merge, the existing roll payload (`RollShard` / `RollShards`, not a new remote) gains:
+On a merge, the existing roll payload gains:
 
 | Field | Meaning |
 |---|---|
 | `merged` | `true` |
-| `oldLevel` | upgrade before |
-| `newLevel` | upgrade after (same number when the piece was capped) |
+| `oldLevel` | star count before |
+| `newLevel` | star count after (equal when the feed did not finish a star, or the piece was ★5) |
 | `essence` | 0, or the overflow just recorded |
-| `levelText` | `Bramble Fang +3 -> +4`, or nil when the upgrade did not rise |
+| `levelText` | `Bramble Fang ★2 -> ★3`, or nil when the star count did not rise |
 
-`item` on that payload is the owned copy, not a new row.
+`item` is the owned copy.
 
 ## Stats
 
-Equip totals, only while `gearLevels` is on: `stat.value * (1 + upgrade * 0.08)`, then the element multiplier. `+0` is ×1. The product is not written back. Stars already live in the saved `value`.
+Stars write `stat.value = baseValue * (1 + stars * 0.08)`. Gold upgrades are not written into that number.
+
+While `upgradeScale` is on, readers multiply the saved value by `1 + upgrade * 0.08` (+0 is ×1):
+
+- Equip stat totals
+- Combat weapon damage and armor HP (defense and attack speed stay on the saved number)
+- Item Power, `+10` per upgrade (the same step as one star)
+
+`UpgradeScale.preview` is the Bag helper. It does not mutate the item.
 
 ## Dev buttons
 
-Both are Debug actions, hidden and refused while `gearLevels` is off.
+Hidden while `gearLevels` is off.
 
-- Grant a dupe. No gear yet: inserts Bramble Fang at +0. Otherwise: one free upgrade, or an Essence line at +10. Bag count does not grow.
-- Fill the Bag. Inserts new rows up to the inventory cap. Does not edit or delete a row that was already there.
+- Grant a dupe. No gear yet: inserts Bramble Fang at ★0. Otherwise: one 100% quality feed (one star), or an Essence line at ★5. Bag count does not grow. `item.upgrade` stays put.
+- Fill the Bag. Inserts new rows. Does not edit or delete a row that was already there.
 
 ## Not in this PR
 
-Stage B (salvage, lock, bulk salvage, auto-salvage, BagTools, the #384 fragment path) and Stage C (Shard Core) are later PRs. Core numbers in the economy note are proposals and nothing reads them.
+Stage B and Stage C. Core numbers in `docs/research/economy_v1.md` are proposals.

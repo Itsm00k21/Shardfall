@@ -5,7 +5,7 @@
 	writes equipLoadout only. The legacy equipped weapon, armor, and pet
 	are left alone, and so are gold and the bag.
 
-	Stat totals are computed here. They are not saved. With gear levels
+	Stat totals are computed here. They are not saved. With upgradeScale
 	on, a piece's stat is multiplied from item.upgrade (+0 is ×1).
 	The slot's level field is that same upgrade. There is no item.level.
 ]]

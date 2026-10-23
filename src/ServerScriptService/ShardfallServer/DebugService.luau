@@ -69,11 +69,12 @@ function DebugService.run(player: Player, action: any)
 		local GearLevels = require(ReplicatedStorage.Shared.Config.GearLevels)
 		local ItemBases = require(ReplicatedStorage.Shared.ItemBases)
 		local Schema = require(ReplicatedStorage.Shared.Schema)
+		local Stars = require(ReplicatedStorage.Shared.Stars)
 		local note = ""
 		local ok, err = DataService.mutate(player, function(data)
 			local applied, text
 			if action == "geardupe" then
-				applied, text = GearDev.grantDupe(data, ItemBases.all(), GearLevels, Schema.inventoryCap(data))
+				applied, text = GearDev.grantDupe(data, ItemBases.all(), GearLevels, Schema.inventoryCap(data), Stars)
 			else
 				applied, text = GearDev.fillBag(data, ItemBases.all(), Schema.inventoryCap(data))
 			end

@@ -35,7 +35,7 @@ The same id cannot sit in two slots. A locked skill may still be equipped (`slot
 
 Empty loadout: damage 5, attack speed 1, crit chance 0.02, crit damage 1.5, HP 100. Replace-stats come from the weapon. Add-stats sum onto the base (HP 100).
 
-When `LaunchGate.gearLevels` is on, a rolled stat is multiplied by `1 + item.upgrade * 0.08` before the element multiplier. `+0` is ×1. The scale is not written back onto `stat.value`. While `gearLevels` is off, totals use the saved stat as it is. See `docs/specs/gear_levels_stage_a.md`.
+When `LaunchGate.upgradeScale` is on, a rolled stat is multiplied by `1 + item.upgrade * 0.08` before the element multiplier. `+0` is ×1. The scale is not written back onto `stat.value`. While that flag is off, totals use the saved stat as it is. See `docs/specs/gear_levels_stage_a.md`.
 
 ## Client API
 

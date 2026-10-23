@@ -201,5 +201,6 @@ require("./DevAccess.spec")
 require("./DevTools.spec")
 require("./EquipService.spec")
 require("./GearLevels.spec")
+require("./UpgradeScale.spec")
 
 process.exit(framework.run())

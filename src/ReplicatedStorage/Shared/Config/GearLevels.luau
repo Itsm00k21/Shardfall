@@ -1,24 +1,16 @@
 --!strict
 
 --[[
-	Stage A duplicate upgrades. Data only, plus the read-time scale.
+	Gold-upgrade scale, plus the Essence amounts for a full star track.
 
-	This is not a second level. The Bag UPGRADE button already writes
-	item.upgrade, Schema already saves it (0 through Economy.UPGRADE_MAX),
-	and Economy.upgradeCost is the gold curve. A duplicate grants +1 on
-	that same field and stops at that same cap.
+	item.upgrade is the forge field (0 through Economy.UPGRADE_MAX).
+	Gold spends it. Duplicates do not. Stars are the dupe track
+	(Stars.applyStats). PER_LEVEL is +8% of the saved stat per upgrade
+	above +0. +0 is ×1. UpgradeScale reads it and does not write it back,
+	so stars (already in stat.value) and gold upgrades both apply.
 
-	The earlier per-rarity caps (Common 5, Uncommon 6, Rare 7, Epic 8,
-	Legendary 10) do not fit. The button still sells +6 through +10 on a
-	Common piece. One cap for every rarity keeps the two paths together.
-
-	PER_LEVEL is +8% of the piece's current stat for each upgrade above
-	+0. +0 is ×1, so an item nobody has upgraded keeps its numbers.
-	The scale is applied when totals are computed. It is not written
-	back onto the saved stat. Stars already multiply the saved value.
-
-	ESSENCE is how much overflow a duplicate records once the piece is
-	at the cap. Stage B spends it. This module does not.
+	ESSENCE is recorded when an automatic dupe finds a ★5 piece. Stage B
+	spends it. This module does not.
 ]]
 
 local Economy = require("../Economy")
@@ -91,7 +83,7 @@ function GearLevels.levelText(name: any, oldLevel: number, newLevel: number): st
 	if type(name) ~= "string" or name == "" or newLevel <= oldLevel then
 		return nil
 	end
-	return string.format("%s +%d -> +%d", name, oldLevel, newLevel)
+	return string.format("%s ★%d -> ★%d", name, oldLevel, newLevel)
 end
 
 return table.freeze(GearLevels)

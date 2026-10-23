@@ -104,8 +104,8 @@ local function contribution(item: any, statId: string, ctx: any): number?
 		return nil
 	end
 	local amount = value or 0
-	-- +0 is ×1. The scale reads item.upgrade (the forge field) and only
-	-- runs while gearLevels is on. It is not written back onto the stat.
+	-- +0 is ×1. The scale reads item.upgrade and only runs while the
+	-- caller has upgradeScale on (ctx.gearEnabled). It is not written back.
 	if value ~= nil and ctx.gearEnabled == true and type(ctx.gearConfig) == "table" then
 		local scale = ctx.gearConfig.multiplier(item.upgrade, item.rarity)
 		if type(scale) == "number" and scale == scale and scale >= 0 and scale <= 10 then
