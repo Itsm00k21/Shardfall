@@ -31,6 +31,7 @@ local RollConfig = require(ReplicatedStorage.Shared.RollConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 local Settings = require(ReplicatedStorage.Shared.Settings)
 local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local DataService = require(script.Parent.DataService)
@@ -180,7 +181,11 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		now = os.time(),
 		poolId = pool.id,
 	}, rng)
-	Schema.insertItem(data, item)
+	-- [ECHO hook] Auto-salvage a new drop only. A duplicate is Stage A's call.
+	local arrival = GearSalvage.receive(data, item)
+	if arrival.kept ~= false then
+		Schema.insertItem(data, item)
+	end
 	RarityConfig.advance(counters, item.rarity, floor)
 	data.sinceEpic = counters.sinceEpic
 	data.sinceLegendary = counters.sinceLegendary
@@ -188,7 +193,7 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 	StarterGoalPay.grant(data, "rolls", nil)
 	-- The per-pool pity bucket is an old save field. The live counters
 	-- are sinceEpic and sinceLegendary. Do not increment the bucket.
-	return {
+	local capture = {
 		item = item,
 		pityTriggered = pityTriggered,
 		rarity = item.rarity,
@@ -199,9 +204,20 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		sinceLegendary = data.sinceLegendary,
 		tracker = StarterGoalPay.tracker(data),
 	}
+	if arrival.kept == false then
+		capture.autoSalvaged = true
+		capture.essenceGained = arrival.gained
+	end
+	return capture
 end
 
-local function crack(player: Player, poolId: any, currency: string, skip: boolean, ignoreCooldown: boolean?)
+local function crack(
+	player: Player,
+	poolId: any,
+	currency: string,
+	skip: boolean,
+	ignoreCooldown: boolean?
+)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")

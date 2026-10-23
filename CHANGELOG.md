@@ -13,6 +13,9 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Stage B: salvage weapons and armor into `profile.gearEssence` (1/3/10/40/200).
+  Lock uses `item.locked`. Auto-salvage is off and only converts a new drop.
+  `LaunchGate.gearSalvage` is off. `BagTools.mount` is the client hook. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and

@@ -199,5 +199,6 @@ require("./ConfigValidation.spec")
 require("./SkillPress.spec")
 require("./DevAccess.spec")
 require("./DevTools.spec")
+require("./GearSalvage.spec")
 
 process.exit(framework.run())

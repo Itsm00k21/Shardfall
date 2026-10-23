@@ -43,6 +43,8 @@ Config.Enemies = Dungeons.ENEMIES
 Config.Rewards = require("../Drops")
 Config.Economy = require("./Economy")
 Config.Strings = require("./Strings")
+-- Stage B salvage amounts. Not a tenth area. Same numbers as #387 GearLevels.ESSENCE.
+Config.Essence = require("./Essence")
 
 Config.AREAS = table.freeze({
 	"Items",

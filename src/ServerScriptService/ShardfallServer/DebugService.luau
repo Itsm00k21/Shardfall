@@ -48,7 +48,10 @@ function DebugService.run(player: Player, action: any)
 	if action == "dungeon" then
 		local DungeonService = require(script.Parent.DungeonService)
 		DungeonService.leave(player)
-		return withMessage(DungeonService.enter(player, "rootvault", "normal"), "Entered the Rootvault.")
+		return withMessage(
+			DungeonService.enter(player, "rootvault", "normal"),
+			"Entered the Rootvault."
+		)
 	end
 	if action == "raid" then
 		local DungeonService = require(script.Parent.DungeonService)
@@ -59,6 +62,28 @@ function DebugService.run(player: Player, action: any)
 	if action == "phase" then
 		local DungeonService = require(script.Parent.DungeonService)
 		return withMessage(DungeonService.setBossPhase(player, 2), "Boss set to phase 2.")
+	end
+	-- [ECHO hook] Stage B. essence and salvagefill only. #387 uses equip, geardupe, and fillbag.
+	if action == "essence" or action == "salvagefill" then
+		local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
+		local note = ""
+		local ok, err = DataService.mutate(player, function(data)
+			local applied, text
+			if action == "essence" then
+				applied, text = GearSalvage.debugGrant(data)
+			else
+				applied, text = GearSalvage.debugFill(data, os.time())
+			end
+			if not applied then
+				return text
+			end
+			note = text
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not do that.")
+		end
+		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
 	end
 	local note = ""
 	local ok, err = DataService.mutate(player, function(data)
