@@ -990,6 +990,20 @@ inventory = InventoryHud.start(playerGui, {
 			ui.setStatus(string.format("Salvaged %s %s pieces.", tostring(count), rarity), "ok")
 		end)
 	end,
+	-- Full-bag salvage (#388). GearBar waits on the answer, so this one
+	-- yields instead of spawning. The profile in the answer is applied
+	-- first, so the labels read the server's values.
+	onGear = function(action: string, payload: any): any
+		local ok, result = pcall(function()
+			return invoke("GearSalvage", action, payload)
+		end)
+		if not ok then
+			warn("[Shardfall] " .. tostring(result))
+			return { ok = false, error = "Could not reach the server. Try again." }
+		end
+		applyResult(result)
+		return result
+	end,
 	onLock = function(uid: string, locked: boolean)
 		task.spawn(function()
 			local ok, result = pcall(function()

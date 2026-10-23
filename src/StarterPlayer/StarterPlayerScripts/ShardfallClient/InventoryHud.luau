@@ -16,6 +16,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local MobileShell = require(script.Parent.MobileShell)
+local GearBar = require(script.Parent.GearBar)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ActionDrag = require(Shared:WaitForChild("ActionDrag"))
@@ -58,6 +59,9 @@ export type Callbacks = {
 	onBuyBundle: (() -> ())?,
 	onChestOptions: ((mode: string, salvage: string) -> ())?,
 	onResumeChest: ((pending: any) -> ())?,
+	-- GearSalvage(action, payload). Returns the answer after the profile
+	-- in it is applied. Only used while gearSalvage is on.
+	onGear: ((action: string, payload: any) -> any)?,
 }
 
 local COLORS = {
@@ -159,7 +163,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Name = "ShardfallInventory",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 20,
+		-- Above the left rail (85) so the rail does not cover the title.
+		-- Prompts (90) and toasts (100) stay on top.
+		DisplayOrder = 86,
 	}, playerGui) :: ScreenGui
 	MobileShell.mount(screen)
 
@@ -219,9 +225,14 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitRoot)
 
 	local header = new("Frame", {
+		Name = "Header",
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 36),
 	}, root) :: Frame
+	new("UIPadding", {
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 4),
+	}, header)
 	local title = new("TextLabel", {
 		Name = "Title",
 		BackgroundTransparency = 1,
@@ -325,6 +336,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Size = UDim2.new(1, 0, 1, -164),
 		BackgroundTransparency = 1,
 	}, root) :: Frame
+	-- Full-bag salvage (#388). Built only while gearSalvage is on.
+	local gear: any = nil
+	local placeGear: (() -> ())? = nil
 	placeChrome = function()
 		local chrome = HudLayout.bagChrome(root.Size.X.Offset, root.Size.Y.Offset)
 		header.Position = UDim2.fromOffset(chrome.header.x, chrome.header.y)
@@ -335,6 +349,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		filterBar.Size = UDim2.fromOffset(chrome.filters.w, chrome.filters.h)
 		body.Position = UDim2.fromOffset(chrome.body.x, chrome.body.y)
 		body.Size = UDim2.fromOffset(chrome.body.w, chrome.body.h)
+		local place = placeGear
+		if place ~= nil then
+			place()
+		end
 	end
 	fitRoot()
 
@@ -447,20 +465,30 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local function placePanes()
 		local phone = phoneLayout()
 		local showDetail = selectedId ~= nil
+		-- The gear row sits on top of the body and the salvage bar under
+		-- the grid. Both are 0 while gearSalvage is off.
+		local top = if gear ~= nil then GearBar.ROW_H else 0
+		local foot = if gear ~= nil and gear.selecting() then GearBar.BAR_H + 8 else 0
 		if phone then
 			grid.Visible = not showDetail
 			detail.Visible = showDetail
-			grid.Position = UDim2.fromOffset(0, 0)
-			grid.Size = UDim2.fromScale(1, 1)
-			detail.Position = UDim2.fromOffset(0, 0)
-			detail.Size = UDim2.fromScale(1, 1)
+			grid.Position = UDim2.fromOffset(0, top)
+			grid.Size = UDim2.new(1, 0, 1, -(top + foot))
+			detail.Position = UDim2.fromOffset(0, top)
+			detail.Size = UDim2.new(1, 0, 1, -(top + foot))
 		else
 			grid.Visible = true
 			detail.Visible = true
-			grid.Position = UDim2.fromOffset(0, 0)
-			grid.Size = UDim2.new(1, -312, 1, 0)
-			detail.Position = UDim2.new(1, -300, 0, 0)
-			detail.Size = UDim2.new(0, 300, 1, 0)
+			grid.Position = UDim2.fromOffset(0, top)
+			grid.Size = UDim2.new(1, -312, 1, -(top + foot))
+			detail.Position = UDim2.new(1, -300, 0, top)
+			detail.Size = UDim2.new(0, 300, 1, -(top + foot))
+		end
+		if gear ~= nil then
+			gear.row.Position = UDim2.fromOffset(0, 0)
+			gear.row.Size = UDim2.new(1, 0, 0, GearBar.ROW_H - 8)
+			gear.bar.Position = UDim2.new(0, 0, 1, -GearBar.BAR_H)
+			gear.bar.Size = UDim2.new(1, if phone then 0 else -312, 0, GearBar.BAR_H)
 		end
 		gridLayout.CellSize = if phone
 			then UDim2.fromOffset(100, 120)
@@ -651,6 +679,28 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local render: () -> ()
 	local paintFilters: () -> ()
 
+	local onGear = callbacks.onGear
+	if LaunchGate.on("gearSalvage") and onGear ~= nil then
+		gear = GearBar.mount(body, {
+			invoke = function(action: string, payload: any): any
+				return onGear(action, payload)
+			end,
+			getProfile = function(): any
+				return latest
+			end,
+			onChanged = function()
+				if isOpen then
+					render()
+				end
+			end,
+			onStatus = function(text: string, kind: string)
+				callbacks.onStatus(text, kind)
+			end,
+		})
+		placeGear = placePanes
+		placePanes()
+	end
+
 	local function hideConfirm()
 		confirm.Visible = false
 		pendingRarity = nil
@@ -671,6 +721,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	render = function()
 		paintFilters()
 		placePanes()
+		if gear ~= nil then
+			gear.refresh()
+		end
 		local profile = latest
 		if type(profile) ~= "table" then
 			capacity.Text = ""
@@ -763,7 +816,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			if row.count > 1 then
 				table.insert(marks, "x" .. tostring(row.count))
 			end
-			local footer = new("TextLabel", {
+			local footer = (new("TextLabel", {
 				BackgroundTransparency = 1,
 				AnchorPoint = Vector2.new(0, 0),
 				Position = UDim2.fromOffset(inner.marks.x, inner.marks.y),
@@ -774,10 +827,67 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = COLORS.muted,
 				Text = table.concat(marks, " · "),
-			}, card)
+			}, card) :: any) :: TextLabel
 			footer.Name = "Marks"
 			local picked = row.id
+			local isGear = row.kind == "Weapon" or row.kind == "Armor"
+			if gear ~= nil and isGear then
+				-- Padlock on every gear card. It sends the same lock call as
+				-- the detail pane.
+				local lockedNow = row.locked == true
+				local padlock = new("TextButton", {
+					Name = "Padlock",
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, 6, 0, -6),
+					Size = UDim2.fromOffset(32, 32),
+					BackgroundColor3 = if lockedNow then COLORS.gold else COLORS.buttonDim,
+					BackgroundTransparency = if lockedNow then 0 else 0.3,
+					BorderSizePixel = 0,
+					Font = Enum.Font.BuilderSansBold,
+					TextSize = 16,
+					TextColor3 = if lockedNow then COLORS.ink else COLORS.text,
+					Text = if lockedNow then "🔒" else "🔓",
+					ZIndex = 3,
+				}, card) :: TextButton
+				corner(padlock, 16)
+				padlock.MouseButton1Click:Connect(function()
+					callbacks.onLock(picked, not lockedNow)
+				end)
+				if gear.selecting() then
+					local why = gear.blockFor(picked)
+					if why ~= nil then
+						card.BackgroundTransparency = 0.55
+						nameLabel.TextTransparency = 0.5
+						footer.Text = why
+					elseif gear.isSelected(picked) then
+						card.BackgroundColor3 = Color3.fromRGB(92, 64, 34)
+						new("UIStroke", {
+							Name = "Picked",
+							ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+							Thickness = 3,
+							Color = COLORS.gold,
+						}, card)
+						footer.Text = "Selected"
+						footer.TextColor3 = COLORS.gold
+					end
+				end
+			elseif gear ~= nil and gear.selecting() then
+				card.BackgroundTransparency = 0.55
+				nameLabel.TextTransparency = 0.5
+			end
 			card.MouseButton1Click:Connect(function()
+				if gear ~= nil and gear.selecting() then
+					if not isGear then
+						callbacks.onStatus("Only weapons and armor can be salvaged.", "error")
+						return
+					end
+					local ok, why = gear.toggle(picked)
+					if not ok and why ~= nil then
+						callbacks.onStatus(string.format("Can't select: %s.", why), "error")
+					end
+					render()
+					return
+				end
 				selectedId = picked
 				render()
 			end)
@@ -938,7 +1048,10 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local uid = selected.id
 			local lockButton = actionButton(
 				detail,
-				if selected.locked then "Unlock" else "Lock",
+				if gear ~= nil
+					then (if selected.locked then "🔒 Unlock" else "🔓 Lock")
+					elseif selected.locked then "Unlock"
+					else "Lock",
 				order,
 				COLORS.buttonDim
 			)

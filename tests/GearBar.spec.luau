@@ -1,0 +1,311 @@
+--!strict
+
+--[[
+	Full-bag salvage (GearBar) and the auto-salvage-off regression from
+	Kevin's playtest: "Off" came back "On (Uncommon)" and Commons were
+	salvaged. The label is the server's value, a press sends explicit
+	values, a second tap while one is out is dropped, and Off stays off
+	through save, reload, and a drop.
+]]
+
+local framework = require("./framework")
+local describe = framework.describe
+local it = framework.it
+local expect = framework.expect
+
+local GearHooks = require("../src/ReplicatedStorage/Shared/GearHooks")
+local GearSalvage = require("../src/ReplicatedStorage/Shared/GearSalvage")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
+local Schema = require("../src/ReplicatedStorage/Shared/Schema")
+local GuiFake = require("./GuiFake")
+
+local function sword(uid: string, rarity: string, extra: { [string]: any }?): { [string]: any }
+	local item: { [string]: any } = {
+		uid = uid,
+		templateId = "iron_sword",
+		name = "Iron Sword " .. uid,
+		kind = "Weapon",
+		rarity = rarity,
+		traits = {},
+		poolId = "dev",
+		obtainedAt = 1,
+		locked = false,
+	}
+	if extra ~= nil then
+		for key, value in pairs(extra) do
+			item[key] = value
+		end
+	end
+	return item
+end
+
+local function withFlag(fn: () -> ())
+	local previous = LaunchGate.SHOW.gearSalvage
+	LaunchGate.SHOW.gearSalvage = true
+	GearSalvage._reset()
+	local ok, err = pcall(fn)
+	LaunchGate.SHOW.gearSalvage = previous
+	GearSalvage._reset()
+	if not ok then
+		error(err, 0)
+	end
+end
+
+local function bag(): any
+	local data = Schema.template()
+	data.inventory = {}
+	data.pets = {}
+	Schema.insertItem(data, sword("a", "Common") :: any)
+	Schema.insertItem(data, sword("b", "Uncommon") :: any)
+	Schema.insertItem(data, sword("worn", "Common") :: any)
+	Schema.insertItem(data, sword("held", "Common", { locked = true }) :: any)
+	Schema.insertItem(data, sword("fav", "Common", { favorite = true }) :: any)
+	data.equipped = data.equipped or {}
+	data.equipped.weapon = "worn"
+	data.gearEssence = 0
+	return data
+end
+
+-- A fake server: GearSalvage.applyAction on one profile, the way the
+-- remote guard does it, with the profile attached to every answer.
+local function server(profile: any)
+	local calls = {}
+	local hold = false
+	local function invoke(action: string, payload: any): any
+		table.insert(calls, { action, payload })
+		if hold then
+			return { ok = false, error = "Too fast. Try again in a moment." }
+		end
+		local result = GearSalvage.applyAction(profile, 42, action, payload, 100)
+		if type(result) == "table" then
+			result.profile = profile
+		end
+		return result
+	end
+	return invoke, calls, function(value: boolean)
+		hold = value
+	end
+end
+
+local function mount(profile: any, invoke: any)
+	local world = GuiFake.world()
+	local GearBar = world.load("GearBar")
+	local parent = world.playerGui
+	local statuses = {}
+	local changed = 0
+	local handle = GearBar.mount(parent, {
+		invoke = invoke,
+		getProfile = function()
+			return profile
+		end,
+		onChanged = function()
+			changed += 1
+		end,
+		onStatus = function(text: string, kind: string)
+			table.insert(statuses, { text, kind })
+		end,
+	})
+	return handle, parent, statuses, function()
+		return changed
+	end
+end
+
+describe("GearBar: auto-salvage labels", function()
+	it("reads the profile and defaults to Off", function()
+		expect(GearHooks.autoLabel(nil)).toEqual("Auto-salvage: Off")
+		expect(GearHooks.autoLabel({ autoSalvage = false, autoSalvageRarity = "Uncommon" })).toEqual(
+			"Auto-salvage: Off"
+		)
+		expect(GearHooks.autoLabel({ autoSalvage = true, autoSalvageRarity = "Common" })).toEqual(
+			"Auto-salvage: Commons and below"
+		)
+		expect(GearHooks.autoLabel({ autoSalvage = true, autoSalvageRarity = "" })).toEqual("Auto-salvage: Off")
+		expect(GearHooks.autoToggle({ autoSalvage = true, autoSalvageRarity = "Uncommon" })).toEqual({
+			enabled = false,
+			rarity = "Uncommon",
+		})
+		expect(GearHooks.autoToggle({})).toEqual({ enabled = true, rarity = "Common" })
+		-- The cap press keeps on/off as the server has it.
+		expect(GearHooks.autoCap({ autoSalvage = false, autoSalvageRarity = "Common" })).toEqual({
+			enabled = false,
+			rarity = "Uncommon",
+		})
+		expect(GearHooks.autoCap({ autoSalvage = true, autoSalvageRarity = "Rare" })).toEqual({
+			enabled = true,
+			rarity = "Common",
+		})
+	end)
+
+	it("keeps auto-salvage off once turned off: save, reload, and a Common drop", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke, calls = server(profile)
+			local handle, parent = mount(profile, invoke)
+			local auto = GuiFake.findNamed(parent, "AutoSalvage")
+			expect(auto.Text).toEqual("Auto-salvage: Off")
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoCap"))
+			expect(profile.autoSalvage).toEqual(false)
+			expect(profile.autoSalvageRarity).toEqual("Uncommon")
+			GuiFake.activate(auto)
+			expect(profile.autoSalvage).toEqual(true)
+			expect(auto.Text).toEqual("Auto-salvage: Uncommons and below")
+			GuiFake.activate(auto)
+			expect(profile.autoSalvage).toEqual(false)
+			expect(auto.Text).toEqual("Auto-salvage: Off")
+			expect(calls[#calls][2]).toEqual({ enabled = false, rarity = "Uncommon" })
+			-- A repaint, a remount, and a save round trip all stay Off.
+			handle.refresh()
+			expect(auto.Text).toEqual("Auto-salvage: Off")
+			local again = mount(profile, invoke)
+			expect(again ~= nil).toBeTrue()
+			local reloaded = Schema.reconcile(Schema.deepCopy(profile))
+			expect(reloaded.autoSalvage).toEqual(false)
+			local before = profile.gearEssence
+			local drop = GearSalvage.receive(profile, sword("new", "Common"))
+			expect(drop.kept).toEqual(true)
+			expect(profile.gearEssence).toEqual(before)
+			local dropAfterReload = GearSalvage.receive(reloaded, sword("new2", "Common"))
+			expect(dropAfterReload.kept).toEqual(true)
+		end)
+	end)
+
+	it("shows the server value after a refused press and never flips on its own", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke, calls, hold = server(profile)
+			local _, parent, statuses = mount(profile, invoke)
+			local auto = GuiFake.findNamed(parent, "AutoSalvage")
+			hold(true)
+			GuiFake.activate(auto)
+			expect(profile.autoSalvage).toEqual(false)
+			expect(auto.Text).toEqual("Auto-salvage: Off")
+			expect(statuses[#statuses][2]).toEqual("error")
+			hold(false)
+			-- Mounting sends nothing. No state poll.
+			local before = #calls
+			mount(profile, invoke)
+			expect(#calls).toEqual(before)
+		end)
+	end)
+
+	it("drops a second tap while the first is still out", function()
+		withFlag(function()
+			local profile = bag()
+			local sent = 0
+			local inner = server(profile)
+			local parent: any = nil
+			local nested = false
+			local function invoke(action: string, payload: any): any
+				sent += 1
+				if not nested then
+					nested = true
+					GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+				end
+				return inner(action, payload)
+			end
+			local _, root = mount(profile, invoke)
+			parent = root
+			GuiFake.activate(GuiFake.findNamed(root, "AutoSalvage"))
+			expect(sent).toEqual(1)
+			expect(profile.autoSalvage).toEqual(true)
+		end)
+	end)
+end)
+
+describe("GearBar: select and salvage", function()
+	it("will not pick equipped, locked, or favorite gear", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke = server(profile)
+			local handle, parent = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectMode"))
+			expect(handle.selecting()).toBeTrue()
+			expect(GuiFake.findNamed(parent, "SalvageBar").Visible).toBeTrue()
+			local okWorn, whyWorn = handle.toggle("worn")
+			expect(okWorn).toEqual(false)
+			expect(whyWorn).toEqual("Equipped")
+			expect(select(2, handle.toggle("held"))).toEqual("Locked")
+			expect(select(2, handle.toggle("fav"))).toEqual("Favorite")
+			expect(handle.toggle("a")).toEqual(true)
+			expect(handle.toggle("b")).toEqual(true)
+			expect(GuiFake.findNamed(parent, "SalvageSelected").Text).toEqual("Salvage 2 for +4 Essence")
+			expect(handle.toggle("b")).toEqual(true)
+			expect(GuiFake.findNamed(parent, "SalvageSelected").Text).toEqual("Salvage 1 for +1 Essence")
+		end)
+	end)
+
+	it("needs Confirm before anything is deleted", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke, calls = server(profile)
+			local handle, parent, statuses = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectMode"))
+			handle.toggle("a")
+			handle.toggle("b")
+			GuiFake.activate(GuiFake.findNamed(parent, "SalvageSelected"))
+			expect(calls[#calls][1]).toEqual("preview")
+			expect(profile.inventory.a ~= nil).toBeTrue()
+			local confirm = GuiFake.findNamed(parent, "SalvageConfirm")
+			expect(confirm.Visible).toBeTrue()
+			expect(GuiFake.findNamed(confirm, "Text").Text).toEqual("Salvage 2 for +4 Essence? This cannot be undone.")
+			-- Cancel keeps everything.
+			GuiFake.activate(GuiFake.findNamed(parent, "CancelSalvage"))
+			expect(confirm.Visible).toBeFalse()
+			expect(profile.inventory.a ~= nil).toBeTrue()
+			GuiFake.activate(GuiFake.findNamed(parent, "SalvageSelected"))
+			GuiFake.activate(GuiFake.findNamed(parent, "ConfirmSalvage"))
+			expect(calls[#calls][1]).toEqual("confirm")
+			expect(profile.inventory.a).toBeNil()
+			expect(profile.inventory.b).toBeNil()
+			expect(profile.inventory.worn ~= nil).toBeTrue()
+			expect(profile.inventory.fav ~= nil).toBeTrue()
+			expect(profile.gearEssence).toEqual(4)
+			expect(GuiFake.findNamed(parent, "Essence").Text).toEqual("Essence 4")
+			expect(statuses[#statuses][2]).toEqual("ok")
+			expect(handle.isSelected("a")).toEqual(false)
+		end)
+	end)
+
+	it("selects everything at or below a rarity from the server preview", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke, calls = server(profile)
+			local handle, parent = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectMode"))
+			expect(GuiFake.findNamed(parent, "SelectUpTo").Text).toEqual("Select all at or below Common")
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo"))
+			expect(calls[#calls][2]).toEqual({ rarity = "Common" })
+			expect(handle.isSelected("a")).toEqual(true)
+			expect(handle.isSelected("b")).toEqual(false)
+			expect(handle.isSelected("fav")).toEqual(false)
+			expect(handle.isSelected("worn")).toEqual(false)
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectRarity"))
+			GuiFake.activate(GuiFake.findNamed(parent, "SelectUpTo"))
+			expect(handle.isSelected("b")).toEqual(true)
+			-- Nothing is gone until Confirm.
+			expect(profile.inventory.a ~= nil).toBeTrue()
+			GuiFake.activate(GuiFake.findNamed(parent, "ClearSelection"))
+			expect(handle.isSelected("a")).toEqual(false)
+		end)
+	end)
+end)
+
+describe("GearBar: x10 with auto-salvage", function()
+	it("marks rows that never reached the Bag and says so", function()
+		local profile = { inventory = { keep = { uid = "keep" } } }
+		local items = {
+			{ item = { uid = "c1", rarity = "Common" }, rarity = "Common" },
+			{ item = { uid = "u1", rarity = "Uncommon" }, rarity = "Uncommon" },
+			{ item = { uid = "keep", rarity = "Rare" }, rarity = "Rare" },
+			{ item = { uid = "m1", rarity = "Rare" }, rarity = "Rare", merged = true },
+		}
+		local gone, gain = GearHooks.markBatch(items, profile)
+		expect(gone).toEqual(2)
+		expect(gain).toEqual(4)
+		expect(items[1].autoSalvaged).toEqual(true)
+		expect(items[3].autoSalvaged).toBeNil()
+		expect(items[4].autoSalvaged).toBeNil()
+		expect(GearHooks.batchLine(4, gone, gain)).toEqual("x4 done: 2 auto-salvaged (+4 Essence), 2 kept.")
+		expect(GearHooks.batchLine(10, 0, 0)).toBeNil()
+	end)
+end)

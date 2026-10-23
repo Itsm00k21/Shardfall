@@ -1536,15 +1536,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	-- A gear remote answered with a fresh snapshot. Take it and keep the
-	-- Bag tools list in step. Never edits the profile itself.
+	-- Bag in step. Never edits the profile itself.
 	function hubFn.takeGearProfile(result: any)
 		if type(result) ~= "table" or type(result.profile) ~= "table" then
 			return
 		end
 		hubState.profile = result.profile
-		if hubState.bagTools ~= nil then
-			hubState.bagTools:refresh(result.profile)
-		end
 	end
 
 	function hubFn.paintSalvageNudge()
@@ -3744,83 +3741,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return following
 	end
 
-	-- [Ghost] Echo's BagTools (#388) behind gearSalvage. Folded by default;
-	-- "Salvage tools" opens it. Selection and status survive a repaint.
-	function hubFn.mountBagTools(actions: Instance)
-		local previous = hubState.bagTools
-		if previous ~= nil then
-			hubState.bagToolsSelected = previous:getSelected()
-			local oldStatus = previous.root:FindFirstChild("Status")
-			if oldStatus ~= nil and oldStatus:IsA("TextLabel") then
-				hubState.bagToolsStatus = oldStatus.Text
-			end
-			previous:destroy()
-			hubState.bagTools = nil
-		end
-		if not LaunchGate.on("gearSalvage") then
-			return
-		end
-		local toggle = hubFn.row(
-			actions,
-			if hubState.bagToolsOpen then "Hide salvage tools" else "Salvage tools",
-			8,
-			function()
-				hubState.bagToolsOpen = not hubState.bagToolsOpen
-				hubFn.paintBag()
-				hubFn.show("bag")
-			end
-		)
-		toggle.Name = "SalvageTools"
-		if not hubState.bagToolsOpen then
-			return
-		end
-		local host = Instance.new("Frame")
-		host.Name = "GearTools"
-		host.BackgroundTransparency = 1
-		host.Size = UDim2.fromScale(1, 0)
-		host.AutomaticSize = Enum.AutomaticSize.Y
-		host.LayoutOrder = 9
-		host.Parent = actions
-		local handle = BagTools.mount(host, {
-			invoke = function(remote: string, action: string, payload: any): any
-				local ok, answer = pcall(hooks.invoke, remote, action, payload)
-				if not ok then
-					return { ok = false, error = tostring(answer) }
-				end
-				hubFn.takeGearProfile(answer)
-				if
-					type(answer) == "table"
-					and answer.ok == true
-					and (action == "salvage" or action == "confirm" or action == "lock")
-				then
-					task.defer(function()
-						if hubState.shownId == "bag" then
-							hubFn.paintBag()
-						end
-					end)
-				end
-				return answer
-			end,
-			getProfile = function(): any
-				return hubState.profile
-			end,
-		})
-		-- BagTools fills its parent; let it grow inside the scrolling Bag.
-		handle.root.Size = UDim2.fromScale(1, 0)
-		handle.root.AutomaticSize = Enum.AutomaticSize.Y
-		local list = handle.root:FindFirstChild("List")
-		if list ~= nil and list:IsA("Frame") then
-			list.Size = UDim2.fromScale(1, 0)
-			list.AutomaticSize = Enum.AutomaticSize.Y
-		end
-		hubState.bagTools = handle
-		if type(hubState.bagToolsSelected) == "table" then
-			handle:setSelected(hubState.bagToolsSelected)
-		end
-		if type(hubState.bagToolsStatus) == "string" and hubState.bagToolsStatus ~= "" then
-			handle:setStatus(hubState.bagToolsStatus)
-		end
-	end
+	-- [Ghost] Salvage lives in the full bag (InventoryHud + GearBar). The
+	-- small Bag is a preview: the grid, one "Open full bag", and a footer.
 
 	function hubFn.paintBag()
 		hubState.bagCompactPainted = hubFn.bagCompact()
@@ -4033,15 +3955,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 			end
 		end
-		hubFn.mountBagTools(actions)
 		if #shown == 0 then
-			hubFn.emptyState(hubState.bag, "bag", "The bag is empty.", "Open full bag", function()
-				hooks.onBag()
-			end)
-			local empty = hubState.bag:FindFirstChild("Empty")
-			if empty ~= nil and empty:IsA("GuiObject") then
-				empty.LayoutOrder = 9
-			end
+			-- "Open full bag" is already in the actions above. The empty
+			-- line is copy only, so the button is not shown twice.
+			local empty = hubFn.line(hubState.bag, "The bag is empty. Roll a shard to fill it.", 9, rgb("muted"))
+			empty.Name = "Empty"
 		else
 			local listH = hubState.bag.AbsoluteSize.Y
 			local listW = hubState.bag.AbsoluteSize.X
@@ -4121,12 +4039,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			slotCorner.Parent = slotButton
 			hubFn.bindActivated(slotButton, function() end)
 		end
+		-- The footer is pinned under the scrolling list, on the page, so a
+		-- long grid or a repaint after a roll cannot push it out of view.
+		local page = hubState.bag.Parent
+		local footH = UiTheme.TOUCH + UiTheme.PAD * 2
+		hubState.bag.Size = UDim2.new(1, 0, 1, -footH)
+		if page ~= nil then
+			local old = page:FindFirstChild("BagFoot")
+			if old ~= nil then
+				hubFn.clear(old)
+				old:Destroy()
+			end
+		end
 		local foot = Instance.new("Frame")
 		foot.Name = "BagFoot"
 		foot.BackgroundTransparency = 1
-		foot.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		foot.AnchorPoint = Vector2.new(0, 1)
+		foot.Position = UDim2.new(0, UiTheme.PAD, 1, -UiTheme.PAD)
+		foot.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, UiTheme.TOUCH)
 		foot.LayoutOrder = 13
-		foot.Parent = hubState.bag
+		foot.Parent = if page ~= nil then page else hubState.bag
 		local footLayout = Instance.new("UIListLayout")
 		footLayout.FillDirection = Enum.FillDirection.Horizontal
 		footLayout.Padding = UDim.new(0, 8)
@@ -5855,6 +5787,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						and type(batch.items) == "table"
 						and #batch.items > 0
 					then
+						-- [Ghost] Auto-salvaged x10 rows never reach the Bag.
+						-- Say so, or the press looks like it did nothing.
+						if LaunchGate.on("gearSalvage") then
+							local gone, gain = GearHooks.markBatch(batch.items, batch.profile)
+							local note = GearHooks.batchLine(#batch.items, gone, gain)
+							if note ~= nil and hooks.onToast ~= nil then
+								hooks.onToast(note)
+							end
+						end
 						hubState.batching = true
 						hubState.summaryItems = {}
 						hubState.batchLeft = {}

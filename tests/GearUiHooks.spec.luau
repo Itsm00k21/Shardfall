@@ -1,8 +1,8 @@
 --!strict
 
 --[[
-	Ghost's hookups for Echo's gear stages (#387/#388/#389): BagTools in
-	the Bag, upgrade-boosted stats in the details pane, the Shard Core on
+	Ghost's hookups for Echo's gear stages (#387/#388/#389): the full-bag salvage
+	(GearBar spec), upgrade-boosted stats in the details pane, the Shard Core on
 	a selected weapon, "Salvage now" on a bag-full refusal, and the merge
 	line on the reveal card. Every flag is restored when a test ends.
 ]]
@@ -175,41 +175,36 @@ describe("Gear UI hooks: Bag", function()
 		end)
 	end)
 
-	it("mounts BagTools behind gearSalvage and applies the server profile", function()
+	it("keeps salvage out of the small Bag, with one Open full bag and a pinned footer", function()
 		withFlags({ gearSalvage = true }, function()
-			local after = profile()
-			after.inventory.spare = nil
-			after.gearEssence = 41
-			local _, hub, screen, calls = boot(function(name: string, action: any)
-				if name == "GearSalvage" and action == "salvage" then
-					return {
-						ok = true,
-						message = "Salvaged 1 for 1 Essence.",
-						gearEssence = 41,
-						profile = after,
-					}
-				end
-				if name == "GearSalvage" then
-					return { ok = true, gearEssence = 40 }
-				end
-				return nil
-			end)
+			local _, hub, screen, calls = boot()
 			hub.open("bag")
-			local toggle = GuiFake.findNamed(screen, "SalvageTools")
-			expect(toggle ~= nil).toBeTrue()
+			expect(GuiFake.findNamed(screen, "SalvageTools")).toBeNil()
 			expect(GuiFake.findNamed(screen, "BagTools")).toBeNil()
-			GuiFake.activate(toggle)
-			local tools = GuiFake.findNamed(screen, "BagTools")
-			expect(tools ~= nil).toBeTrue()
-			expect(#called(calls, "GearSalvage", "state")).toEqual(1)
-			-- The worn Iron Sword cannot be picked; the Fang can.
-			local list = tools:FindFirstChild("List")
-			GuiFake.activate(list:FindFirstChild("blade"))
-			GuiFake.activate(tools:FindFirstChild("SalvageSelected"))
-			local sent = called(calls, "GearSalvage", "salvage")
-			expect(#sent).toEqual(1)
-			expect(sent[1][3].uids).toEqual({ "blade" })
-			expect(tools:FindFirstChild("Status").Text).toEqual("Salvaged 1 for 1 Essence.")
+			expect(#called(calls, "GearSalvage", "state")).toEqual(0)
+			local opens = 0
+			for _, node in ipairs(screen:GetDescendants()) do
+				if node:IsA("TextButton") and string.find(node.Text, "Open full bag", 1, true) ~= nil then
+					opens += 1
+				end
+			end
+			expect(opens).toEqual(1)
+			local foot = GuiFake.findNamed(screen, "BagFoot")
+			expect(foot ~= nil).toBeTrue()
+			expect(foot:FindFirstChild("EquipBest", true) ~= nil).toBeTrue()
+			expect(foot:FindFirstChild("Capacity", true) ~= nil).toBeTrue()
+			-- The footer sits on the page, not inside the scrolling list,
+			-- so a repaint after a roll cannot scroll it away.
+			expect(foot.Parent.Name).toEqual("bag")
+			hub.setProfile(profile())
+			expect(GuiFake.findNamed(screen, "BagFoot") ~= nil).toBeTrue()
+			local feet = 0
+			for _, node in ipairs(screen:GetDescendants()) do
+				if node.Name == "BagFoot" then
+					feet += 1
+				end
+			end
+			expect(feet).toEqual(1)
 		end)
 	end)
 
