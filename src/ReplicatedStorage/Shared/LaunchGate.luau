@@ -40,6 +40,8 @@ LaunchGate.SHOW = {
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
+	equip = false, -- Phase 2 equip remotes (EquipSlot / UnequipSlot / GetEquip)
+	gearLevels = false, -- free +1 on item.upgrade when an exact duplicate rolls
 }
 
 -- World prompt action to the switch that keeps it from being built.

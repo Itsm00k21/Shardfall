@@ -79,6 +79,16 @@ DevTools.SECTIONS = table.freeze({
 			entry("region", "Toggle region lock", "DevGrant", "restrict"),
 		}),
 	}),
+	-- [ECHO hook] Hidden while equip / gearLevels are off.
+	table.freeze({
+		id = "gear",
+		title = "Gear",
+		entries = table.freeze({
+			entry("equip", "Seat owned gear", "Debug", "equip"),
+			entry("geardupe", "Grant a dupe", "Debug", "geardupe"),
+			entry("fillbag", "Fill the Bag", "Debug", "fillbag"),
+		}),
+	}),
 })
 
 -- remote:arg to the LaunchGate switch that parks it.
@@ -89,6 +99,9 @@ local GATED: { [string]: string } = {
 	["DevGrant:prisms"] = "paid",
 	["Debug:tokens"] = "events",
 	["Debug:raid"] = "raids",
+	["Debug:equip"] = "equip",
+	["Debug:geardupe"] = "gearLevels",
+	["Debug:fillbag"] = "gearLevels",
 }
 
 local GATE_NAME: { [string]: string } = {
@@ -97,6 +110,8 @@ local GATE_NAME: { [string]: string } = {
 	paid = "Paid rolls (Prisms)",
 	events = "The events system (Event Tokens)",
 	raids = "The raid system",
+	equip = "Equip",
+	gearLevels = "Gear levels",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?
