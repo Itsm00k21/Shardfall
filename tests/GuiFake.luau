@@ -364,7 +364,16 @@ vector3Meta.__add = function(a, b)
 end
 
 local function color3(red: number, green: number, blue: number)
-	return { R = red, G = green, B = blue, __type = "Color3" }
+	local color = { R = red, G = green, B = blue, __type = "Color3" }
+	function color.Lerp(self, other, alpha: number)
+		local a = math.clamp(alpha or 0, 0, 1)
+		return color3(
+			self.R + (other.R - self.R) * a,
+			self.G + (other.G - self.G) * a,
+			self.B + (other.B - self.B) * a
+		)
+	end
+	return color
 end
 
 local function udim(scale: number?, offset: number?)
@@ -839,6 +848,30 @@ function GuiFake.world()
 		end,
 	}
 	local binds = {}
+	-- A stand-in for PlayerModule:GetControls(). enabled is false while
+	-- the hub holds the character still.
+	local controls = { enabled = true, disables = 0, enables = 0 }
+	function controls.Disable(self)
+		self.enabled = false
+		self.disables += 1
+	end
+	function controls.Enable(self)
+		self.enabled = true
+		self.enables += 1
+	end
+	function controls.GetMoveVector(_self)
+		return vector3(0, 0, 0)
+	end
+	local playerModule = { GetControls = function()
+		return controls
+	end }
+	-- Test clock: nil follows os.clock; a number freezes it there.
+	local clock = { now = nil :: number? }
+	local fakeOs = setmetatable({
+		clock = function()
+			return clock.now or os.clock()
+		end,
+	}, { __index = os })
 	local context = {
 		BindActionAtPriority = function(_self, name, callback, ...)
 			binds[name] = callback
@@ -955,7 +988,7 @@ function GuiFake.world()
 		math = math,
 		string = string,
 		table = table,
-		os = os,
+		os = fakeOs,
 		coroutine = coroutine,
 		setmetatable = setmetatable,
 		getmetatable = getmetatable,
@@ -1046,6 +1079,9 @@ function GuiFake.world()
 				error("require " .. tostring(module), 2)
 			end
 			local moduleName = module.Name
+			if moduleName == "PlayerModule" then
+				return playerModule
+			end
 			if moduleName == "MenuHub"
 				or moduleName == "ClassHud"
 				or moduleName == "MobileShell"
@@ -1072,11 +1108,27 @@ function GuiFake.world()
 	local playerGui = newInstance("Folder")
 	playerGui.Name = "PlayerGui"
 
+	-- Opt in: give the player a PlayerScripts.PlayerModule so the hub can
+	-- reach the fake controls (Disable/Enable are counted on `controls`).
+	local function withControls()
+		local playerScripts = newInstance("Folder")
+		playerScripts.Name = "PlayerScripts"
+		playerScripts.Parent = player
+		local moduleScript = newInstance("ModuleScript")
+		moduleScript.Name = "PlayerModule"
+		moduleScript.Parent = playerScripts
+		return controls
+	end
+
 	return {
 		playerGui = playerGui,
 		player = player,
+		withControls = withControls,
 		userInput = userInput,
 		binds = binds,
+		controls = controls,
+		clock = clock,
+		runService = runService,
 		enum = EnumRoot,
 		load = loadClient,
 		vector2 = vector2,

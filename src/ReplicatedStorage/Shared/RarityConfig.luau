@@ -119,12 +119,23 @@ function RarityConfig.oneIn(rarity: string): number
 	return ONE_IN[rarity] or PARKED_ONE_IN[rarity] or 2
 end
 
+-- The every-10th-roll x2 luck milestone. Parked (Kevin, Oct 22) behind
+-- LaunchGate.luckMilestone: off, no roll gets the x2 and the meter hides.
+-- shardRolls keeps counting either way, so turning it back on resumes.
+function RarityConfig.milestoneOn(): boolean
+	return LaunchGate.on("luckMilestone")
+end
+
 -- (1 + base) * bonusRoll + potion
--- base and potion are luck points / 100. The 10th roll sets bonusRoll to 2.
+-- base and potion are luck points / 100. The 10th roll sets bonusRoll to 2
+-- only while the milestone is on (input.milestone overrides the flag).
 -- The paid potion drops out while the kill switch is off.
 -- vip is cosmetic. It is not a term in this formula.
 function RarityConfig.luckMultiplier(input: any): number
 	local source = if type(input) == "table" then input else {}
+	local milestone = if source.milestone == nil
+		then RarityConfig.milestoneOn()
+		else source.milestone == true
 	local base = whole(source.shardLuck, 0) / 100
 	if base < 0 then
 		base = 0
@@ -143,7 +154,7 @@ function RarityConfig.luckMultiplier(input: any): number
 			potion = 0
 		end
 	end
-	local bonus = if (rolls + 1) % RarityConfig.BONUS_EVERY == 0 then 2 else 1
+	local bonus = if milestone and (rolls + 1) % RarityConfig.BONUS_EVERY == 0 then 2 else 1
 	local value = (1 + base) * bonus + potion
 	if value ~= value or value < 1 then
 		return 1
@@ -175,7 +186,11 @@ function RarityConfig.effectiveOneIn(rarity: string, luck: number): number
 	return threshold
 end
 
+-- Empty while the milestone is parked, so no "x2 Luck" text shows.
 function RarityConfig.bonusLabel(shardRolls: any): string
+	if not RarityConfig.milestoneOn() then
+		return ""
+	end
 	local rolls = whole(shardRolls, 0)
 	if rolls < 0 then
 		rolls = 0
@@ -491,9 +506,11 @@ function RarityConfig.disclose(pool: any, luck: number, sinceLegendary: any?)
 		else ""
 	return {
 		notice = string.format(
-			"Luck x%.2f. Every %dth roll is x2. Legendary+ guaranteed by roll %d; from roll %d each roll adds +%d%% Legendary chance. %s%s",
+			"Luck x%.2f. %sLegendary+ guaranteed by roll %d; from roll %d each roll adds +%d%% Legendary chance. %s%s",
 			multiplier,
-			RarityConfig.BONUS_EVERY,
+			if RarityConfig.milestoneOn()
+				then string.format("Every %dth roll is x2. ", RarityConfig.BONUS_EVERY)
+				else "",
 			RarityConfig.LEGENDARY_PITY,
 			RollConfig.SOFT_FROM + 1,
 			math.floor(RollConfig.SOFT_STEP * 100 + 0.5),

@@ -388,6 +388,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.sessionRolls = {}
 	hubState.sessionTemplates = {}
 	hubState.activeReveal = nil
+	-- A roll session (x1, x10 batch or auto chain) holds the movement lock
+	-- from the press until its last reveal ends, so the server wait, the
+	-- cooldown and the gaps between x10 cards stay locked too. nil = free.
+	-- { since = os.clock(), token = revealToken }. See hubFn.holdRoll.
+	hubState.rollHold = nil
 	-- A newer roll bumps this and cancels the previous card tweens so a
 	-- late spin cannot paint the older name over the newer result.
 	hubState.cardGeneration = 0
@@ -916,8 +921,30 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			state.open,
 			UiRouter.top(state),
 			gamepad,
-			hubState.activeReveal ~= nil
+			hubState.activeReveal ~= nil or hubState.rollHold ~= nil
 		)
+	end
+
+	-- Lock movement for a whole roll session. beginRoll calls this before
+	-- the server call; every end path calls releaseRoll. The Heartbeat
+	-- failsafe drops a hold older than Keybinds.REVEAL_HOLD_MAX seconds.
+	function hubFn.holdRoll(token: number)
+		hubState.rollHold = { since = os.clock(), token = token }
+		hubFn.syncRevealLock()
+	end
+
+	-- token (optional): only release the hold that roll took, so a stale
+	-- task cannot free a newer roll. No token releases any hold.
+	function hubFn.releaseRoll(token: number?)
+		local hold = hubState.rollHold
+		if hold == nil then
+			return
+		end
+		if token ~= nil and hold.token ~= token then
+			return
+		end
+		hubState.rollHold = nil
+		hubFn.syncRevealLock()
 	end
 
 	-- A reveal locks the hub while it plays; recompute when it starts and
@@ -1353,6 +1380,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealToken += 1
 		hubState.holdingRoll = false
 		hubState.activeReveal = nil
+		hubState.rollHold = nil
 		hubFn.syncRevealLock()
 		hubState.replayResult = nil
 		hubState.batchLeft = {}
@@ -1493,6 +1521,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local face = RollReveal.face(nil)
 		hubFn.bumpCardGeneration()
 		hubState.activeReveal = nil
+		hubState.rollHold = nil
 		hubFn.syncRevealLock()
 		hubState.revealCard.Visible = face.visible
 		hubState.revealTitle.Text = face.name
@@ -4508,6 +4537,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		local luck = Instance.new("Frame")
 		luck.Name = "LuckMeter"
+		-- Parked milestone (LaunchGate.luckMilestone off): built but hidden.
+		luck.Visible = RarityConfig.milestoneOn()
 		luck.BackgroundTransparency = 1
 		luck.Position = UDim2.fromOffset(screen.luck.x, screen.luck.y)
 		luck.Size = UDim2.fromOffset(screen.luck.w, screen.luck.h)
@@ -4837,7 +4868,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			infoPad.PaddingRight = UDim.new(0, UiTheme.GAP)
 			infoPad.Parent = info
 			hubFn.line(info, string.format("Luck  %d", luck + boost), 1, rgb("gold"))
-			hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
+			if RarityConfig.milestoneOn() then
+				hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
+			end
 			local legendaryCount = if type(sinceLegendary) == "number" then sinceLegendary else 0
 			hubFn.line(info, RarityConfig.pityLine(legendaryCount), 3, rgb("text"))
 			local infoPool = if hubState.rollKind == "pets"
@@ -5500,6 +5533,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.batching = false
 			hubState.pendingCount = 1
 			hubState.loop = RollLoop.idle()
+			hubFn.releaseRoll()
 			hubFn.setPulse(true)
 			hubFn.paintRoll()
 			return
@@ -5511,6 +5545,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		hubState.loop = RollLoop.idle()
+		hubFn.releaseRoll()
 		hubFn.setPulse(true)
 		hubFn.paintCrackButton()
 	end
@@ -5540,6 +5575,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.setPulse(false)
 		hubFn.paintCrackButton()
 		hubState.revealToken += 1
+		hubFn.holdRoll(hubState.revealToken)
 		hubFn.bumpCardGeneration()
 		-- Cancel leaves a flash or drip where it was. Snap them off so the
 		-- previous roll cannot sit on top of this one.
@@ -5564,12 +5600,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if generation ~= hubState.revealToken then
 					hubState.rollBusy = false
 					hubState.crackLocked = false
+					hubFn.releaseRoll(generation)
 					return
 				end
 				if RollFocus.chain(hubState.windowFocused) ~= true then
 					hubState.rollBusy = false
 					hubState.crackLocked = false
 					hubState.loop = RollLoop.idle()
+					hubFn.releaseRoll(generation)
 					hubFn.setPulse(true)
 					return
 				end
@@ -5580,6 +5618,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					if generation ~= hubState.revealToken then
 						hubState.rollBusy = false
 						hubState.crackLocked = false
+						hubFn.releaseRoll(generation)
 						return
 					end
 					if
@@ -5618,6 +5657,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if generation ~= hubState.revealToken then
 				hubState.rollBusy = false
 				hubState.crackLocked = false
+				hubFn.releaseRoll(generation)
 				return
 			end
 			hubState.rollBusy = false
@@ -5941,6 +5981,21 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 	end)
 	RunService.Heartbeat:Connect(function()
+		-- Failsafe: a hold or reveal that outlives REVEAL_HOLD_MAX (a hung
+		-- server call, a lost Heartbeat end) stops the roll and frees the
+		-- player. Nothing can leave the character frozen.
+		local hold = hubState.rollHold
+		local stuck = hubState.activeReveal
+		if
+			(hold ~= nil and Keybinds.holdExpired(hold.since, os.clock()))
+			or (stuck ~= nil and Keybinds.holdExpired(stuck.started, os.clock()))
+		then
+			hubFn.stopRollChain()
+			hubState.crackLocked = false
+			hubFn.setPulse(true)
+			hubFn.paintCrackButton()
+			return
+		end
 		local active = hubState.activeReveal
 		if active == nil or active.generation ~= hubState.cardGeneration then
 			return

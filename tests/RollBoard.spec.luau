@@ -113,7 +113,8 @@ describe("RollBoard", function()
 			return expected
 		end
 		local serverLuck = RarityConfig.luckFromProfile(profile)
-		expect(serverLuck).toEqual((1 + 0.5) * 2)
+		-- 10th roll, but the x2 milestone is parked (LaunchGate.luckMilestone).
+		expect(serverLuck).toEqual(1 + 0.5)
 		local lines = RollBoard.oddsLines(pool, profile, 999, 99)
 		expect(lines).toEqual(sheet(RarityConfig.disclose(pool, serverLuck)))
 		local plain = {
@@ -131,7 +132,7 @@ describe("RollBoard", function()
 			vip = true,
 			paidLuck = true,
 		})
-		expect(paidLuck).toEqual((1 + 0.5) * 2 + 0.25)
+		expect(paidLuck).toEqual(1 + 0.5 + 0.25)
 		local paidLines = sheet(RarityConfig.disclose(pool, paidLuck))
 		local same = #paidLines == #lines
 		if same then

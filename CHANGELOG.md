@@ -34,6 +34,12 @@ its tag to merged and add the merge commit.
   still load). New `tests/RollOdds.spec.luau` (100k seeded rolls + pity
   150). Dev Tools: Rolls / Pity rows (+100 Shards, Set pity 149/120, Reset
   pity). Branch `phase1/rolls-core`. (open)
+- Phase 1 follow-up: the roll reveal now freezes movement for the whole roll
+  (press and server wait, every x10 card, auto chains) and always frees it
+  after (finish, skip, close, error, 12s failsafe); new
+  `tests/RevealLock.spec.luau`. The every-10th-roll x2 luck milestone and its
+  "x2 Luck in N" meter are parked behind `LaunchGate.SHOW.luckMilestone`
+  (off; `shardRolls` still counts). Branch `phase1/rolls-core`. (open)
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
   Damookie21) in `DevAccess.OWNER_IDS`. (open)
 - Docs: replaced the roadmap with the locked V1 roadmap (Phases 0-7, Phase S,

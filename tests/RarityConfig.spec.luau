@@ -8,6 +8,7 @@ local expect = framework.expect
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
 local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 
 local function ladderPool()
 	local entries = {}
@@ -123,7 +124,9 @@ describe("RarityConfig", function()
 
 	it("uses the spec luck formula and drops paid terms when the switch is off", function()
 		expect(RarityConfig.luckMultiplier({})).toEqual(1)
-		expect(RarityConfig.luckMultiplier({ shardRolls = 9 })).toEqual(2)
+		-- The 10th-roll x2 milestone is parked: a 10th roll is plain x1.
+		expect(RarityConfig.luckMultiplier({ shardRolls = 9 })).toEqual(1)
+		expect(RarityConfig.luckMultiplier({ shardRolls = 9, milestone = true })).toEqual(2)
 		expect(RarityConfig.luckMultiplier({ shardLuck = 100 })).toEqual(2)
 		expect(RarityConfig.luckMultiplier({ luckBoost = 25, vip = true })).toEqual(1)
 		expect(RarityConfig.luckMultiplier({
@@ -136,6 +139,13 @@ describe("RarityConfig", function()
 			luckBoost = 25,
 			vip = true,
 			paidLuck = true,
+		})).toEqual(1 + 0.25)
+		expect(RarityConfig.luckMultiplier({
+			shardRolls = 9,
+			luckBoost = 25,
+			vip = true,
+			paidLuck = true,
+			milestone = true,
 		})).toEqual(1 * 2 + 0.25)
 		expect(RarityConfig.luckMultiplier({
 			luckBoost = 100,
@@ -182,17 +192,43 @@ describe("RarityConfig", function()
 			vip = false,
 		}
 		expect(RarityConfig.luckFromProfile(stored)).toEqual(RarityConfig.luckFromProfile(plain))
-		expect(RarityConfig.luckFromProfile(stored)).toEqual((1 + 0.8) * 2)
+		expect(RarityConfig.luckFromProfile(stored)).toEqual(1 + 0.8)
 		expect(RarityConfig.luckFromProfile(stored)).toEqual(
 			RarityConfig.luckMultiplier({ shardLuck = 80, shardRolls = 9 })
 		)
 	end)
 
+	it("parks the 10th-roll x2 luck milestone by default", function()
+		expect(LaunchGate.on("luckMilestone")).toEqual(false)
+		expect(RarityConfig.milestoneOn()).toEqual(false)
+		for rolls = 0, 30 do
+			expect(RarityConfig.bonusLabel(rolls)).toEqual("")
+			expect(RarityConfig.luckFromProfile({ shardRolls = rolls })).toEqual(1)
+		end
+		local notice = RarityConfig.disclose(ladderPool(), 1).notice
+		expect(string.find(notice, "x2", 1, true)).toBeNil()
+		-- The profile's counters are read, never written.
+		local profile = { shardRolls = 9, sinceLegendary = 42 }
+		RarityConfig.luckFromProfile(profile)
+		expect(profile.shardRolls).toEqual(9)
+		expect(profile.sinceLegendary).toEqual(42)
+	end)
+
 	it("shows x2 luck on the 10th roll and the Legendary pity counter", function()
-		expect(RarityConfig.bonusLabel(0)).toEqual("x2 Luck in 10")
-		expect(RarityConfig.bonusLabel(8)).toEqual("x2 Luck in 2")
-		expect(RarityConfig.bonusLabel(9)).toEqual("x2 Luck Ready")
-		expect(RarityConfig.bonusLabel(19)).toEqual("x2 Luck Ready")
+		LaunchGate.SHOW.luckMilestone = true
+		local labels = {
+			RarityConfig.bonusLabel(0),
+			RarityConfig.bonusLabel(8),
+			RarityConfig.bonusLabel(9),
+			RarityConfig.bonusLabel(19),
+		}
+		local luck = RarityConfig.luckFromProfile({ shardRolls = 9 })
+		LaunchGate.SHOW.luckMilestone = false
+		expect(labels[1]).toEqual("x2 Luck in 10")
+		expect(labels[2]).toEqual("x2 Luck in 2")
+		expect(labels[3]).toEqual("x2 Luck Ready")
+		expect(labels[4]).toEqual("x2 Luck Ready")
+		expect(luck).toEqual(2)
 		expect(RarityConfig.pityLine(20)).toEqual("Legendary pity 20/150")
 		expect(RarityConfig.pityLine(-3)).toEqual("Legendary pity 0/150")
 		expect((RarityConfig :: any).EPIC_PITY).toBeNil()

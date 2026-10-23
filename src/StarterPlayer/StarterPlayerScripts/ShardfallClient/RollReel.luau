@@ -493,7 +493,10 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	local function paint()
 		local rolls = if type(profile) == "table" then profile.shardRolls or 0 else 0
 		local sinceLegendary = if type(profile) == "table" then profile.sinceLegendary or 0 else 0
-		luckLabel.Text = string.format("Rolls %d   %s", rolls, RarityConfig.bonusLabel(rolls))
+		local bonus = RarityConfig.bonusLabel(rolls)
+		luckLabel.Text = if bonus == ""
+			then string.format("Rolls %d", rolls)
+			else string.format("Rolls %d   %s", rolls, bonus)
 		pityLabel.Text = RarityConfig.pityLine(sinceLegendary)
 		if type(profile) == "table" then
 			local saved = profile.shake ~= false
