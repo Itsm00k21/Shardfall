@@ -1,11 +1,11 @@
 --!strict
 
 --[[
-	Both guards. The graybox builds only when both are on.
+	Both guards. Nothing builds unless both are on.
 
-	1. LaunchGate.waveArena == true. A missing key is nil, and nil is not
-	   true, so the flag stays off until Ghost adds it. This does not read
-	   LaunchGate.SHOW and it does not call LaunchGate.on.
+	1. LaunchGate.waveArena == true. The live switch is SHOW.waveArena
+	   (Phase 0.1, default false). A direct field of the same name is the
+	   graybox alias. A missing key is nil, and nil is off.
 	2. WaveArenaConfig.enabled == true. Shipped as false.
 ]]
 
@@ -23,8 +23,15 @@ function Gate.waveArenaOn(launchGate: any): boolean
 		return false
 	end
 	-- LaunchGate.waveArena == true. A missing key is nil, which is off.
-	local waveArena = (gate :: any).waveArena
-	return waveArena == true
+	-- SHOW.waveArena is the same switch on the live module.
+	if (gate :: any).waveArena == true then
+		return true
+	end
+	local show = (gate :: any).SHOW
+	if typeof(show) == "table" and show.waveArena == true then
+		return true
+	end
+	return false
 end
 
 function Gate.configOn(config: any): boolean

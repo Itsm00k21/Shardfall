@@ -75,10 +75,17 @@ describe("Wave arena guards", function()
 
 		local gateSrc = fs.readFile("src/server/WaveArena/Gate.luau")
 		expect(string.find(gateSrc, "waveArena == true", 1, true) ~= nil).toBeTrue()
+		-- Phase 0.1 already declared the live switch. It stays off.
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
+		expect(LaunchGate.on("waveArena")).toEqual(false)
 		local launchSrc = fs.readFile("src/ReplicatedStorage/Shared/LaunchGate.luau")
-		expect(string.find(launchSrc, "waveArena", 1, true)).toBeNil()
+		expect(string.find(launchSrc, "waveArena = false", 1, true) ~= nil).toBeTrue()
 		local cfgSrc = fs.readFile("src/shared/Config/WaveArenaConfig.luau")
 		expect(string.find(cfgSrc, "enabled = false", 1, true) ~= nil).toBeTrue()
+		expect(Gate.waveArenaOn({ SHOW = { waveArena = false } })).toEqual(false)
+		expect(Gate.waveArenaOn({ SHOW = { waveArena = true } })).toEqual(true)
+		expect(Gate.open({ SHOW = { waveArena = true } }, withEnabled(true))).toEqual(true)
+		expect(WaveArena.build({ launchGate = LaunchGate, config = withEnabled(true) })).toBeNil()
 	end)
 
 	it("does not build or start a round while either guard is off", function()

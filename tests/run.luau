@@ -200,5 +200,6 @@ require("./SkillPress.spec")
 require("./DevAccess.spec")
 require("./DevTools.spec")
 require("./WaveArena.spec")
+require("./WaveArenaFight.spec")
 
 process.exit(framework.run())

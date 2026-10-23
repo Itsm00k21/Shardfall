@@ -13,6 +13,14 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Phase 3: solo wave arena. Shard Gate pad, a round arena of at least 120
+  studs with 3 enemy gates, enemy types 1-3, waves 6/8/10/12 then a boss and
+  4 adds, leave-with-loot, a stuck-enemy teleport or despawn, ground loot
+  with a 12-stud pickup that sweeps at the end of the wave, a boss HP bar,
+  a camera room so the view does not sit inside the boss, a slam after the
+  red warning, a 1.5s boss death pause, and a hit flash plus death puff on
+  small enemies. `LaunchGate.waveArena` and `WaveArenaConfig.enabled` both
+  stay off, so nothing builds or shows until they are turned on. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and

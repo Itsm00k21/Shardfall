@@ -70,6 +70,9 @@ DevTools.SECTIONS = table.freeze({
 			entry("boss", "Skip to boss", "Dungeon", "skip"),
 			entry("phase", "Boss phase 2", "Debug", "phase"),
 			entry("raid", "Raid practice", "Debug", "raid"),
+			entry("arena", "Enter arena", "WaveArena", "enter"),
+			entry("arenaSkip", "Skip wave", "WaveArena", "skip"),
+			entry("arenaBoss", "Spawn boss", "WaveArena", "boss"),
 		}),
 	}),
 	table.freeze({
@@ -89,6 +92,9 @@ local GATED: { [string]: string } = {
 	["DevGrant:prisms"] = "paid",
 	["Debug:tokens"] = "events",
 	["Debug:raid"] = "raids",
+	["WaveArena:enter"] = "waveArena",
+	["WaveArena:skip"] = "waveArena",
+	["WaveArena:boss"] = "waveArena",
 }
 
 local GATE_NAME: { [string]: string } = {
@@ -97,6 +103,7 @@ local GATE_NAME: { [string]: string } = {
 	paid = "Paid rolls (Prisms)",
 	events = "The events system (Event Tokens)",
 	raids = "The raid system",
+	waveArena = "The wave arena",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?
@@ -107,7 +114,11 @@ function DevTools.gateOf(remote: string, arg: any): string?
 end
 
 function DevTools.offMessage(flag: string): string
-	return string.format("%s is off (LaunchGate.%s), so this does nothing yet.", GATE_NAME[flag] or flag, flag)
+	return string.format(
+		"%s is off (LaunchGate.%s), so this does nothing yet.",
+		GATE_NAME[flag] or flag,
+		flag
+	)
 end
 
 -- nil when the action may run. Otherwise why it is refused.

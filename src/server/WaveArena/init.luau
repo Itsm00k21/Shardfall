@@ -13,8 +13,12 @@
 
 -- init.luau is the folder module, so Lune resolves these from src/server.
 local WaveArenaConfig = require("../shared/Config/WaveArenaConfig")
+local Camera = require("./WaveArena/Camera")
 local Gate = require("./WaveArena/Gate")
 local Graybox = require("./WaveArena/Graybox")
+local HubPad = require("./WaveArena/HubPad")
+local Hud = require("./WaveArena/Hud")
+local Round = require("./WaveArena/Round")
 local Spawns = require("./WaveArena/Spawns")
 local Waves = require("./WaveArena/Waves")
 
@@ -114,6 +118,96 @@ function WaveArena.advance(run: any, options: any?): Run?
 		roster = Waves.roster(nextWave, cfg),
 		spawned = spawned,
 	}
+end
+
+function WaveArena.hubPad(options: any?): any
+	local launchGate, config = resolve(options)
+	return HubPad.plan(launchGate, config)
+end
+
+-- Arena parts plus the hub pad. Nil, and create is not called, while gated.
+function WaveArena.present(options: any?): any
+	local launchGate, config, create = resolve(options)
+	if not Gate.open(launchGate, config) then
+		return nil
+	end
+	local parts = WaveArena.build(options)
+	local pad = HubPad.plan(launchGate, config)
+	if parts == nil or pad == nil then
+		return nil
+	end
+	if create ~= nil then
+		create(pad)
+	end
+	return { arena = parts, pad = pad }
+end
+
+function WaveArena.enter(options: any?): any
+	return Round.enter(options)
+end
+
+function WaveArena.step(run: any, dt: any, input: any, options: any?): (any, { any })
+	return Round.step(run, dt, input, options)
+end
+
+function WaveArena.leave(run: any, options: any?): (any, { any })
+	return Round.leave(run, options)
+end
+
+function WaveArena.skip(run: any, options: any?): (any, { any })
+	return Round.skip(run, options)
+end
+
+function WaveArena.spawnBoss(run: any, options: any?): (any, { any })
+	return Round.spawnBoss(run, options)
+end
+
+function WaveArena.hud(run: any, options: any?): any
+	local launchGate, config = resolve(options)
+	return Hud.snapshot(run, Gate.open(launchGate, config))
+end
+
+function WaveArena.camera(eye: any, center: any, size: { number }, config: any?): any
+	local cfg = if config == nil then WaveArenaConfig else config
+	return Camera.correct(eye, center, size, cfg)
+end
+
+function WaveArena.dev(action: any, run: any, options: any?): any
+	local launchGate, config = resolve(options)
+	if not Gate.open(launchGate, config) then
+		return {
+			ok = false,
+			error = "The wave arena is off (LaunchGate.waveArena), so this does nothing yet.",
+		}
+	end
+	if action == "enter" then
+		local started = Round.enter(options)
+		if started == nil then
+			return { ok = false, error = "Could not enter the arena." }
+		end
+		return { ok = true, message = "Entered the wave arena.", run = started }
+	end
+	if action == "skip" then
+		if typeof(run) ~= "table" then
+			return { ok = false, error = "No arena run." }
+		end
+		local updated = Round.skip(run, options)
+		if updated == nil then
+			return { ok = false, error = "No arena run." }
+		end
+		return { ok = true, message = "Skipped the wave.", run = updated }
+	end
+	if action == "boss" then
+		if typeof(run) ~= "table" then
+			return { ok = false, error = "No arena run." }
+		end
+		local updated = Round.spawnBoss(run, options)
+		if updated == nil then
+			return { ok = false, error = "No arena run." }
+		end
+		return { ok = true, message = "Spawned the boss.", run = updated }
+	end
+	return { ok = false, error = "Unknown arena action." }
 end
 
 return WaveArena
