@@ -186,6 +186,22 @@ local function mount(profile: any): (any, any, { any })
 end
 
 describe("InventoryHud one inventory", function()
+	it("builds every label with real colours and text (Studio rejects a number)", function()
+		withGear(function()
+			local _, screen = mount(bag())
+			local help = GuiFake.findNamed(screen, "AutoHelp")
+			expect(help ~= nil).toBeTrue()
+			expect(string.find(help.Text, "Destroys new drops", 1, true) ~= nil).toBeTrue()
+			for _, desc in ipairs(screen:GetDescendants()) do
+				if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+					expect(type(desc.TextColor3) == "number").toBeFalse()
+					expect(type(desc.Text)).toEqual("string")
+					expect(type(desc.TextSize)).toEqual("number")
+				end
+			end
+		end)
+	end)
+
 	it("has one filter row of Search plus three dropdowns and no sideways scroll", function()
 		withGear(function()
 			local _, screen = mount(bag())

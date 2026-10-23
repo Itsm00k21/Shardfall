@@ -276,6 +276,7 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	popTitle.Font = Enum.Font.BuilderSansBold
 	label(
 		popover,
+		"AutoHelp",
 		"Destroys new drops at or below the cap for Essence. Gear you already own is not touched.",
 		2,
 		COLORS.muted,
