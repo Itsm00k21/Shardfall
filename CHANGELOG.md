@@ -13,6 +13,7 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- x10 roll reveal (Ghost): each x10 card cracks in at most 0.3 s (`RollSummary.fast` scales the CrackReveal plan) with a Skip button on screen for the whole batch; Skip lands the rest at once. The batch ends on a 10-tile summary grid (`RollSummaryHud`) with NEW / ★ up / auto-salvaged badges, a headline, and "Roll again" / "Close"; it replaces the "Cracked" text list. The milestone banner is now a small toast at the top of the Roll page. Server, odds and prices unchanged. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and
