@@ -592,8 +592,15 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local pendingFeed: { string }? = nil
 	local tabButtons: { [string]: TextButton } = {}
 
+	-- A phone too narrow for two panes (portrait) shows the grid, and a
+	-- tap opens the detail with Back. A landscape phone keeps the side
+	-- panel, so the detail is filled there too.
+	local function stacked(): boolean
+		return phoneLayout() and body.Size.X.Offset < 600
+	end
+
 	local function placePanes()
-		local phone = phoneLayout()
+		local phone = stacked()
 		local showDetail = selectedId ~= nil
 		-- The action bar (GearBar row) has its own strip above the body;
 		-- the salvage bar sits under the grid while Select is on.
@@ -616,7 +623,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 			detail.Size = UDim2.new(0, detailW, 1, 0)
 		end
 		if gear ~= nil then
-			gear.setCompact(phone)
+			gear.setCompact(phoneLayout())
 			gear.row.Position = UDim2.fromOffset(0, 0)
 			gear.row.Size = UDim2.fromScale(1, 1)
 			gear.bar.Position = UDim2.new(0, 0, 1, -GearBar.BAR_H)
@@ -901,7 +908,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 		if not present then
 			selectedId = nil
-			if not phoneLayout() and #rows > 0 then
+			if not stacked() and #rows > 0 then
 				local pick = rows[1]
 				local worn = nil
 				for _, row in ipairs(rows) do
@@ -1133,7 +1140,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 						callbacks.onStatus(string.format("Can't select: %s.", why), "error")
 					end
 					-- The detail panel follows the tap (desktop).
-					if not phoneLayout() then
+					if not stacked() then
 						selectedId = picked
 					end
 					render()
@@ -1170,7 +1177,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 		clearGenerated(detail)
 		local order = 1
-		if phoneLayout() and selectedId ~= nil then
+		if stacked() and selectedId ~= nil then
 			local back = actionButton(detail, "Back", order, COLORS.buttonDim)
 			order += 1
 			back.MouseButton1Click:Connect(function()
