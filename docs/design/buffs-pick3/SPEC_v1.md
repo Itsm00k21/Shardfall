@@ -1,3 +1,5 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
 # Pick-1-of-3 Buffs ("Shard Draft"), Spec v1
 
 Owner: Prism (design). Builders: Ghost (UI + VFX), Echo (server + Config). Base: `cursor/live-build-9721` @ `581c995`. Docs only, no code.
@@ -145,12 +147,13 @@ SVG (in repo, fake data, original art): `mockups/01-pick-phone-390x844.svg` (pic
 ## 11. Open questions (answer by number)
 1. @Kevin: Resonance (2 pips of one element = +1 matching item for set bonuses, max +2) — yes, or keep buffs fully separate from set bonuses? (Prism pick: yes)
 2. @Kevin: Card names (Kindle, Flashburn, Ignite, Cinder Heart, Rime Hide, Frostguard, Chill Touch, Glacier Heart, Quickcut, Shard Sense, Hollow Mark, Rift Echo) — keep or rename? (Prism pick: keep)
-3. @Echo: Break length 8 s for every wave (Core Loop allows 5–8 s), and held-offer auto-take = highest rarity at the next clear / boss start? (yes/no)
-4. @Echo: Shard Sense luck applies to this run's drops only (never to gacha rolls); is a +8/+16/… luck cap in Config fine with the economy? (yes/no)
+3. ~~@Echo: 8 s break and held-offer auto-take?~~ **Yes (Echo, Oct 23, 2026).** 8 s break is a Config value; a held offer auto-takes the highest rarity, ties go to the first card, decided on the server. Board row: https://app.notion.com/p/403c31ca388381dba1c1f358d0618f00
+4. ~~@Echo: Shard Sense run-drops only, luck cap in Config?~~ **Yes (Echo).** Shard Sense touches run drops only, never RollService; the cap lives in Config with a validation test and is tuned after the fun test.
 5. @Ghost: Buff strip at (12, 52) under the Roblox menu — any clash with the live HUD in the arena? (yes/no)
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): Prism specs pick-1-of-3 buffs (5.1) now, design only; building waits for the fun test. Prism recommends direction A (Shard Draft); not approved yet.
+- 2026-10-23 (Echo): Q3 = **yes** (8 s Config break; held offer auto-takes highest rarity, ties to first card, server-decided). Q4 = **yes** (run drops only, never RollService; Config cap + validation test). Q1, Q2 (Kevin) and Q5 (Ghost) are still open.
 
 ## Later (not V1)
 5.2 Fusion cards (two buffs combine, e.g. Ember + Frost = "Steam"), element-leaning offers matching the wave's element (would pair with decision 7's Config-only element waves), a draft-history Codex page, cosmetic card backs (never power).
@@ -180,3 +183,6 @@ Stock Roblox UI only. No blur or glassmorphism (BlurEffect blurs the 3D world, n
 | el_ember_128, el_frost_128, el_void_128 | 128×128 | element icons on cards, tray, strip |
 | card_glyph_* ×12 | 128×128 | optional per-card glyph (V1 can ship with the element icon only) |
 | glow_soft_256, shard_frag_a/b/c, spinner_64 | as in #397 | reused |
+
+
+</cursor_untrusted_data_1337>
