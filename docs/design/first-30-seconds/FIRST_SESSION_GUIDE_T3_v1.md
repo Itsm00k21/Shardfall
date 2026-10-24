@@ -1,3 +1,5 @@
+> **Superseded by #449 (Oct 24, 2026).** The T3 spec of record is now `docs/design/t3-first-session-guide/SPEC_v1.md` on `prism/t3-first-session-guide` (PR #449), per Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (12:50Z, Q1, Kevin pre-approved). Where they differ, #449 wins. This draft is kept for history; nothing deleted. Its steps 4–5 (buff pick, wave 2) move to Later (NOT APPROVED).
+
 # T3 First-Session Guide ("Wren's Trail"), Spec v1
 
 Owner: Prism (design, docs only, no code, no config edits). Builders: Ghost (OnboardHud / Focus mode UI), Echo (onboarding server steps). Base: `cursor/live-build-9721`. Status: **proposal, not approved.**
