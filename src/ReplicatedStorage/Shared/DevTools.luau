@@ -86,6 +86,8 @@ DevTools.SECTIONS = table.freeze({
 		id = "salvage",
 		title = "Gear salvage",
 		entries = table.freeze({
+			-- Stage B grant. Stage C keeps Debug:essence ("Grant Essence") below.
+			entry("salvageEssence", "+500 Essence", "Debug", "salvageEssence"),
 			entry("salvagefill", "Fill the Bag", "Debug", "salvagefill"),
 		}),
 	}),
@@ -121,6 +123,7 @@ local GATED: { [string]: string } = {
 	["Debug:geardupe"] = "gearLevels",
 	["Debug:fillbag"] = "gearLevels",
 	["Debug:essence"] = "shardCore",
+	["Debug:salvageEssence"] = "gearSalvage",
 	["Debug:salvagefill"] = "gearSalvage",
 }
 

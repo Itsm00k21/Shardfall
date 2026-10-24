@@ -126,9 +126,13 @@ describe("Essence save fields", function()
 		expect(bad.gearEssence).toEqual(1000000000)
 		bad.autoSalvage = true
 		bad.autoSalvageRarity = "Rare"
+		local keptGold = bad.gold
+		local keptItem = Schema.deepCopy(bad.inventory.a)
 		GearSalvage.applySave(bad)
 		expect(bad.autoSalvage).toEqual(true)
-		expect(bad.autoSalvageRarity).toEqual("Rare")
+		expect(bad.autoSalvageRarity).toEqual("Uncommon")
+		expect(bad.gold).toEqual(keptGold)
+		expect(bad.inventory.a).toEqual(keptItem)
 		bad.autoSalvage = true
 		bad.autoSalvageRarity = "nope"
 		GearSalvage.applySave(bad)
@@ -158,10 +162,17 @@ describe("Essence save fields", function()
 		tuned.gearEssence = 12.9
 		tuned.autoSalvage = true
 		tuned.autoSalvageRarity = "Epic"
+		tuned.chestSalvageBelow = "Mythic"
+		tuned.gold = 40
+		local worn = tuned.inventory
 		Schema.reconcile(tuned)
 		expect(tuned.gearEssence).toEqual(12)
 		expect(tuned.autoSalvage).toEqual(true)
-		expect(tuned.autoSalvageRarity).toEqual("Epic")
+		expect(tuned.autoSalvageRarity).toEqual("Uncommon")
+		expect(tuned.chestSalvageBelow).toEqual("Uncommon")
+		expect(tuned.gold).toEqual(40)
+		expect(tuned.inventory).toEqual(worn)
+		expect(tuned.schemaVersion).toEqual(26)
 		tuned.autoSalvage = true
 		tuned.autoSalvageRarity = "nope"
 		tuned.gearEssence = math.huge
@@ -441,6 +452,7 @@ describe("Gear salvage", function()
 
 			local wrong = GearSalvage.applyAction(data, 42, "confirm", { token = "es-9-9" }, 1000)
 			expect(wrong.ok).toEqual(false)
+			expect(wrong.expired).toEqual(true)
 			expect(data.inventory.common ~= nil).toBeTrue()
 			local done =
 				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1020)
@@ -467,6 +479,7 @@ describe("Gear salvage", function()
 			local late =
 				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1021)
 			expect(late.ok).toEqual(false)
+			expect(late.expired).toEqual(true)
 			expect(data.inventory.common ~= nil).toBeTrue()
 			local still =
 				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1020)
@@ -487,7 +500,10 @@ describe("Gear salvage", function()
 			local again = GearSalvage.applyAction(data, 42, "preview", { rarity = "Common" }, 50)
 			data.gearEssence = GearSalvage.CAP
 			local full = GearSalvage.applyAction(data, 42, "confirm", { token = again.token }, 50)
+			expect(full.ok).toEqual(false)
+			expect(full.reason).toEqual("essence_cap")
 			expect(full.error).toEqual("Essence is full.")
+			expect(full.expired).toBeNil()
 			expect(data.inventory.next ~= nil).toBeTrue()
 			expect(data.inventory.extra ~= nil).toBeTrue()
 			expect(data.gearEssence).toEqual(GearSalvage.CAP)
@@ -513,7 +529,7 @@ describe("Gear salvage", function()
 
 			local turned = GearSalvage.applyAction(data, 42, "auto", {
 				enabled = true,
-				rarity = "Rare",
+				rarity = "Uncommon",
 			}, 10)
 			expect(turned.ok).toEqual(true)
 			expect(data.autoSalvage).toEqual(true)
@@ -550,6 +566,10 @@ describe("Gear salvage", function()
 		expect(data).toEqual(shot)
 		local state = GearSalvage.applyAction(data, 42, "state", {}, 10)
 		expect(state.error).toEqual("That is closed.")
+		local counted = GearSalvage.applyAction(data, 42, "counts", {}, 10)
+		expect(counted.ok).toEqual(false)
+		expect(counted.error).toEqual("That is closed.")
+		expect(counted.token).toBeNil()
 		expect(data).toEqual(shot)
 	end)
 
@@ -576,6 +596,178 @@ describe("Gear salvage", function()
 		expect(granted).toEqual(true)
 		expect(line).toEqual("+500 Essence (now 500).")
 		expect(empty.gearEssence).toEqual(500)
+	end)
+end)
+
+describe("Essence salvage counts", function()
+	it("reads picker rows in one call and deletes nothing", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			put(data, sword("star", "Common", { favorite = true }))
+			put(data, sword("locked", "Uncommon", { locked = true }))
+			put(data, sword("worn", "Common"))
+			data.equipped.weapon = "worn"
+			local helm = sword("helm", "Uncommon")
+			helm.kind = "Armor"
+			put(data, helm)
+			data.equipped.armor.helm = "helm"
+			put(data, sword("cored", "Uncommon"))
+			data.shardCores.cored = 2
+			put(data, sword("rare", "Rare"))
+			local pet = sword("pet", "Common")
+			pet.kind = "Pet"
+			put(data, pet)
+			local shot = Schema.deepCopy(data)
+			local result = GearSalvage.applyAction(data, 42, "counts", {
+				rarities = { "Common", "Uncommon", "Rare" },
+			}, 1000)
+			expect(result.ok).toEqual(true)
+			expect(result.token).toBeNil()
+			expect(result.order).toEqual({ "Common", "Uncommon", "Rare" })
+			expect(result.counts.Common).toEqual({ count = 1, gain = 1 })
+			expect(result.Common).toEqual(result.counts.Common)
+			expect(result.counts.Uncommon).toEqual({ count = 2, gain = 4 })
+			expect(result.counts.Rare).toEqual({ count = 3, gain = 14 })
+			expect(data).toEqual(shot)
+			local defaults = GearSalvage.applyAction(data, 42, "counts", {}, 1000)
+			expect(defaults.ok).toEqual(true)
+			expect(defaults.counts.Rare.gain).toEqual(14)
+			expect(data.inventory.cored ~= nil).toBeTrue()
+			expect(data.shardCores.cored).toEqual(2)
+		end)
+	end)
+
+	it("rate-limits counts and leaves a preview token alone", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			local preview =
+				GearSalvage.applyAction(data, 42, "preview", { rarity = "Common" }, 1000)
+			expect(preview.token ~= nil).toBeTrue()
+			local capacity = Essence.COUNTS.capacity
+			for _ = 1, capacity do
+				local row = GearSalvage.applyAction(data, 42, "counts", {}, 1000)
+				expect(row.ok).toEqual(true)
+				expect(row.token).toBeNil()
+			end
+			local blocked = GearSalvage.applyAction(data, 42, "counts", {}, 1000)
+			expect(blocked.ok).toEqual(false)
+			expect(blocked.error).toEqual("Slow down a moment.")
+			expect(data.inventory.plain ~= nil).toBeTrue()
+			expect(data.gearEssence).toEqual(0)
+			local later = GearSalvage.applyAction(data, 42, "counts", {}, 1001)
+			expect(later.ok).toEqual(true)
+			local done =
+				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1000)
+			expect(done.ok).toEqual(true)
+			expect(data.inventory.plain).toBeNil()
+			expect(data.gearEssence).toEqual(1)
+			local bad = GearSalvage.applyAction(data, 42, "counts", {
+				rarities = { "Common", "nope" },
+			}, 1002)
+			expect(bad.ok).toEqual(false)
+			expect(bad.error).toEqual("Unknown rarity.")
+		end)
+	end)
+
+	it("warns about a Shard Core and still salvages that weapon", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			put(data, sword("cored", "Rare"))
+			put(data, sword("other", "Epic"))
+			data.shardCores.cored = 3
+			data.shardCores.other = 1
+			put(data, sword("star", "Common", { favorite = true }))
+			put(data, sword("worn", "Rare"))
+			data.equipped.weapon = "worn"
+			data.shardCores.worn = 4
+			local sweep =
+				GearSalvage.applyAction(data, 42, "preview", { rarity = "Rare" }, 80)
+			expect(sweep.ok).toEqual(true)
+			expect(sweep.uids).toEqual({ "cored", "plain" })
+			expect(sweep.warning).toEqual("That weapon has a Shard Core.")
+			expect(sweep.cored).toEqual({ { uid = "cored", level = 3 } })
+			local protected = false
+			for _, row in ipairs(sweep.skipped) do
+				if row.uid == "cored" or row.uid == "other" then
+					protected = true
+				end
+				if row.uid == "worn" then
+					expect(row.reason).toEqual("Unequip it before salvaging.")
+				end
+				if row.uid == "star" then
+					expect(row.reason).toEqual("That item is a favorite.")
+				end
+			end
+			expect(protected).toEqual(false)
+			expect(data.inventory.cored ~= nil).toBeTrue()
+			local done =
+				GearSalvage.applyAction(data, 42, "confirm", { token = sweep.token }, 80)
+			expect(done.ok).toEqual(true)
+			expect(done.warning).toEqual("That weapon has a Shard Core.")
+			expect(done.cored).toEqual({ { uid = "cored", level = 3 } })
+			expect(data.inventory.cored).toBeNil()
+			expect(data.inventory.plain).toBeNil()
+			expect(data.inventory.other ~= nil).toBeTrue()
+			expect(data.inventory.star.favorite).toEqual(true)
+			expect(data.inventory.worn ~= nil).toBeTrue()
+			expect(data.equipped.weapon).toEqual("worn")
+			expect(data.gearEssence).toEqual(11)
+			expect(data.shardCores.cored).toEqual(3)
+
+			local both = GearSalvage.applyAction(data, 9, "salvage", {
+				uids = { "other", "cored" },
+			}, 90)
+			expect(both.ok).toEqual(false)
+			put(data, sword("cored", "Rare"))
+			local listed = GearSalvage.applyAction(data, 9, "preview", {
+				uids = { "other", "cored" },
+			}, 90)
+			expect(listed.ok).toEqual(true)
+			expect(listed.warning).toEqual("2 weapons have a Shard Core.")
+			expect(listed.cored).toEqual({
+				{ uid = "cored", level = 3 },
+				{ uid = "other", level = 1 },
+			})
+			expect(data.inventory.other ~= nil).toBeTrue()
+			local spent =
+				GearSalvage.applyAction(data, 9, "confirm", { token = listed.token }, 90)
+			expect(spent.ok).toEqual(true)
+			expect(spent.warning).toEqual("2 weapons have a Shard Core.")
+			expect(data.inventory.other).toBeNil()
+			expect(data.inventory.cored).toBeNil()
+		end)
+	end)
+
+	it("refuses a grant that would pass the Essence cap", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("room", "Common"))
+			put(data, sword("wide", "Uncommon"))
+			data.gearEssence = GearSalvage.CAP - 1
+			local fit = GearSalvage.applyAction(data, 42, "preview", {
+				uids = { "room" },
+			}, 10)
+			local took = GearSalvage.applyAction(data, 42, "confirm", { token = fit.token }, 10)
+			expect(took.ok).toEqual(true)
+			expect(data.gearEssence).toEqual(GearSalvage.CAP)
+			expect(data.inventory.room).toBeNil()
+			expect(data.inventory.wide ~= nil).toBeTrue()
+
+			local look = GearSalvage.applyAction(data, 42, "preview", {
+				uids = { "wide" },
+			}, 11)
+			expect(look.ok).toEqual(true)
+			local before = Schema.deepCopy(data.inventory)
+			local full = GearSalvage.applyAction(data, 42, "confirm", { token = look.token }, 11)
+			expect(full.ok).toEqual(false)
+			expect(full.reason).toEqual(Essence.CAP_REASON)
+			expect(full.expired).toBeNil()
+			expect(data.inventory).toEqual(before)
+			expect(data.gearEssence).toEqual(GearSalvage.CAP)
+		end)
 	end)
 end)
 
@@ -884,6 +1076,348 @@ describe("BagTools mount", function()
 		expect(closedCalls[1].action).toEqual("state")
 		handle:destroy()
 		closed:destroy()
+		expect(LaunchGate.on("gearSalvage")).toEqual(false)
+	end)
+end)
+
+-- Loads RollService the way Studio would, with the real salvage rules and
+-- a profile mutate that keeps the same table. Random always misses, so a
+-- draw is Common unless Legendary pity fires. A saved sinceEpic is ignored.
+local function loadRollService(current: { profile: any })
+	local guid = 0
+	local function node(name: string)
+		local inst = { Name = name, ClassName = "ModuleScript" }
+		-- Live announces a Legendary. The harness has no Remotes folder.
+		function inst:FindFirstChild(_child: string)
+			return nil
+		end
+		function inst:IsA(_className: string)
+			return false
+		end
+		setmetatable(inst, {
+			__index = function(_self, key)
+				return node(tostring(key))
+			end,
+		})
+		return inst
+	end
+
+	local function restore(data, backup)
+		local keys = {}
+		for key in pairs(data) do
+			table.insert(keys, key)
+		end
+		for _, key in ipairs(keys) do
+			data[key] = nil
+		end
+		for key, value in pairs(backup) do
+			data[key] = value
+		end
+	end
+
+	local dataService = {
+		get = function()
+			return current.profile
+		end,
+		mutate = function(_player, callback)
+			local backup = Schema.deepCopy(current.profile)
+			local ok, result = pcall(callback, current.profile)
+			if not ok or result ~= nil then
+				restore(current.profile, backup)
+				if not ok then
+					return false, "Could not update your profile."
+				end
+				if type(result) == "string" then
+					return false, result
+				end
+				return false, "Could not update your profile."
+			end
+			return true, nil
+		end,
+	}
+	local scriptNode = node("RollService")
+	scriptNode.Parent = node("ShardfallServer")
+	local services = {
+		HttpService = {
+			GenerateGUID = function()
+				guid += 1
+				return string.format("salvage-roll-%d", guid)
+			end,
+			JSONEncode = function()
+				return "{}"
+			end,
+		},
+		Players = {
+			PlayerRemoving = {
+				Connect = function()
+					return { Disconnect = function() end }
+				end,
+			},
+		},
+		ReplicatedStorage = node("ReplicatedStorage"),
+		RunService = {
+			IsStudio = function()
+				return true
+			end,
+		},
+	}
+	local game = {
+		JobId = "salvage-test",
+		PlaceId = 0,
+	}
+	function game:GetService(name: string)
+		local found = services[name]
+		if found == nil then
+			error("No service " .. name, 2)
+		end
+		return found
+	end
+	local shared = {
+		CallBudget = true,
+		DebugTools = true,
+		DevAccess = true,
+		DevTools = true,
+		LaunchGate = true,
+		Currencies = true,
+		Pools = true,
+		RarityConfig = true,
+		Rarities = true,
+		RollConfig = true,
+		RollLoop = true,
+		RollMath = true,
+		Schema = true,
+		GearSalvage = true,
+		Settings = true,
+		StarterGoalPay = true,
+	}
+	local source = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
+	local chunk = luau.load(luau.compile(source, { debugLevel = 2 }), {
+		debugName = "RollService",
+		environment = {
+			assert = assert,
+			error = error,
+			ipairs = ipairs,
+			next = next,
+			pairs = pairs,
+			pcall = pcall,
+			print = print,
+			select = select,
+			tonumber = tonumber,
+			tostring = tostring,
+			type = type,
+			warn = function() end,
+			math = math,
+			string = string,
+			table = table,
+			os = os,
+			coroutine = coroutine,
+			Random = {
+				new = function()
+					return {
+						NextNumber = function()
+							return 0.999
+						end,
+						NextInteger = function(_self, minimum: number)
+							return minimum
+						end,
+					}
+				end,
+			},
+			game = game,
+			script = scriptNode,
+			typeof = typeof,
+			require = function(module)
+				local name = if type(module) == "table" then module.Name else ""
+				if name == "DataService" then
+					return dataService
+				end
+				if name == "PolicyCache" then
+					return {
+						allowPaid = function()
+							return true
+						end,
+					}
+				end
+				if name == "LaunchGate" then
+					return LaunchGate
+				end
+				if name == "GearSalvage" then
+					return GearSalvage
+				end
+				if name == "Schema" then
+					return Schema
+				end
+				if shared[name] ~= true then
+					error("Unexpected require " .. tostring(name), 2)
+				end
+				return require("../src/ReplicatedStorage/Shared/" .. name)
+			end,
+		},
+	})
+	return chunk()
+end
+
+local function rollPlayer(userId: number)
+	return {
+		ClassName = "Player",
+		Name = "Echo",
+		UserId = userId,
+	}
+end
+
+local function salvageProfile(sinceLegendary: number)
+	local data = Schema.template()
+	data.shardTokens = 50
+	-- Old Epic meter. Live rolls ignore it. The batch below proves that.
+	data.sinceEpic = 45
+	data.sinceLegendary = sinceLegendary
+	data.autoSalvage = true
+	data.autoSalvageRarity = "Common"
+	return data
+end
+
+describe("Auto-salvage cap", function()
+	it("refuses a client cap above Uncommon and lowers a saved one", function()
+		expect(Schema.VERSION).toEqual(26)
+		local saved = Schema.template()
+		saved.schemaVersion = 26
+		saved.gold = 40
+		saved.gearEssence = 7
+		saved.autoSalvage = true
+		saved.autoSalvageRarity = "Mythic"
+		saved.chestSalvageBelow = "Legendary"
+		put(saved, sword("kept", "Rare", { upgrade = 2, favorite = true }))
+		Schema.reconcile(saved)
+		expect(saved.schemaVersion).toEqual(26)
+		expect(saved.autoSalvage).toEqual(true)
+		expect(saved.autoSalvageRarity).toEqual("Uncommon")
+		expect(saved.chestSalvageBelow).toEqual("Uncommon")
+		expect(saved.gold).toEqual(40)
+		expect(saved.gearEssence).toEqual(7)
+		expect(saved.inventory.kept.uid).toEqual("kept")
+		expect(saved.inventory.kept.rarity).toEqual("Rare")
+		expect(saved.inventory.kept.upgrade).toEqual(2)
+		expect(saved.inventory.kept.favorite).toEqual(true)
+
+		local live = fresh()
+		live.gold = 3
+		live.autoSalvage = true
+		live.autoSalvageRarity = "Epic"
+		put(live, sword("worn", "Rare"))
+		GearSalvage.applySave(live)
+		expect(live.autoSalvage).toEqual(true)
+		expect(live.autoSalvageRarity).toEqual("Uncommon")
+		expect(live.gold).toEqual(3)
+		expect(live.inventory.worn.rarity).toEqual("Rare")
+
+		withFlag(true, function()
+			local data = fresh()
+			data.gold = 8
+			data.gearEssence = 4
+			data.autoSalvage = true
+			data.autoSalvageRarity = "Common"
+			put(data, sword("bag", "Epic", { upgrade = 1 }))
+			local shot = Schema.deepCopy(data)
+			for _, rarity in ipairs({ "Rare", "Epic", "Legendary", "Mythic", "Secret" }) do
+				local refused = GearSalvage.applyAction(data, 42, "auto", {
+					enabled = true,
+					rarity = rarity,
+				}, 10)
+				expect(refused.ok).toEqual(false)
+				expect(refused.error).toEqual("Auto-salvage stops at Uncommon.")
+				expect(data).toEqual(shot)
+				local off = GearSalvage.applyAction(data, 42, "auto", {
+					enabled = false,
+					rarity = rarity,
+				}, 10)
+				expect(off.ok).toEqual(false)
+				expect(off.error).toEqual("Auto-salvage stops at Uncommon.")
+				expect(data).toEqual(shot)
+			end
+			local on = GearSalvage.applyAction(data, 42, "auto", {
+				enabled = true,
+				rarity = "Uncommon",
+			}, 10)
+			expect(on.ok).toEqual(true)
+			expect(data.autoSalvage).toEqual(true)
+			expect(data.autoSalvageRarity).toEqual("Uncommon")
+			expect(data.gold).toEqual(8)
+			expect(data.gearEssence).toEqual(4)
+			expect(data.inventory.bag.upgrade).toEqual(1)
+
+			data.autoSalvageRarity = "Secret"
+			local common = GearSalvage.receive(data, sword("drop", "Common"))
+			expect(common.kept).toEqual(false)
+			expect(common.gained).toEqual(1)
+			expect(data.autoSalvageRarity).toEqual("Uncommon")
+			local rare = GearSalvage.receive(data, sword("rare", "Rare"))
+			expect(rare.kept).toEqual(true)
+			expect(data.inventory.rare).toBeNil()
+			expect(data.inventory.bag.upgrade).toEqual(1)
+			expect(data.gearEssence).toEqual(5)
+		end)
+		expect(LaunchGate.on("gearSalvage")).toEqual(false)
+	end)
+end)
+
+describe("Auto-salvaged x10 batch", function()
+	it("copies autoSalvaged and essenceGained onto batch rows", function()
+		local current = { profile = salvageProfile(0) }
+		local roll = loadRollService(current)
+		local singlePlayer = rollPlayer(4101)
+		local batchPlayer = rollPlayer(4102)
+
+		withFlag(true, function()
+			local single = roll.rollFree(singlePlayer, "verdant_armory", false)
+			expect(single.ok).toEqual(true)
+			expect(single.rarity).toEqual("Common")
+			expect(single.autoSalvaged).toEqual(true)
+			expect(single.essenceGained).toEqual(1)
+			expect(current.profile.inventory[single.item.uid]).toBeNil()
+			expect(current.profile.gearEssence).toEqual(1)
+
+			-- 145 + four misses lands the fifth crack on Legendary pity 150.
+			current.profile = salvageProfile(145)
+			local batch = roll.rollMany(batchPlayer, "verdant_armory", 10)
+			expect(batch.ok).toEqual(true)
+			expect(batch.count).toEqual(10)
+			expect(#batch.items).toEqual(10)
+			local salvaged = 0
+			local kept = 0
+			for index, row in ipairs(batch.items) do
+				if index == 5 then
+					expect(row.rarity).toEqual("Legendary")
+					expect(row.autoSalvaged).toBeNil()
+					expect(row.essenceGained).toBeNil()
+					expect(current.profile.inventory[row.item.uid]).toEqual(row.item)
+					kept += 1
+				else
+					expect(row.rarity).toEqual("Common")
+					expect(row.autoSalvaged).toEqual(single.autoSalvaged)
+					expect(row.essenceGained).toEqual(single.essenceGained)
+					expect(current.profile.inventory[row.item.uid]).toBeNil()
+					salvaged += 1
+				end
+			end
+			expect(salvaged).toEqual(9)
+			expect(kept).toEqual(1)
+			expect(current.profile.gearEssence).toEqual(9)
+			expect(current.profile.shardTokens).toEqual(41)
+			expect(current.profile.sinceEpic).toEqual(45)
+			expect(Schema.countItems(current.profile)).toEqual(1)
+		end)
+
+		current.profile = salvageProfile(0)
+		local closed = roll.rollMany(rollPlayer(4103), "verdant_armory", 10)
+		expect(closed.ok).toEqual(true)
+		expect(#closed.items).toEqual(10)
+		for _, row in ipairs(closed.items) do
+			expect(row.autoSalvaged).toBeNil()
+			expect(row.essenceGained).toBeNil()
+			expect(current.profile.inventory[row.item.uid]).toEqual(row.item)
+		end
+		expect(current.profile.gearEssence).toEqual(0)
+		expect(current.profile.shardTokens).toEqual(41)
 		expect(LaunchGate.on("gearSalvage")).toEqual(false)
 	end)
 end)

@@ -80,6 +80,7 @@ describe("Shard Core numbers", function()
 		expect(LaunchGate.SHOW.shardCore).toEqual(false)
 		expect(ShardCore.CAP).toEqual(5)
 		expect(ShardCore.COST).toEqual({ 5, 15, 40, 100, 250 })
+		expect(ShardCore.FULL_COST).toEqual(410)
 		expect(ShardCore.DEV_GRANT).toEqual(100)
 		expect(#ShardCore.PERKS).toEqual(5)
 		local total = 0
@@ -90,7 +91,7 @@ describe("Shard Core numbers", function()
 			end
 			total += cost
 		end
-		expect(total).toEqual(410)
+		expect(total).toEqual(ShardCore.FULL_COST)
 		local ids = {
 			crit_chance = 0.01,
 			shard_find = 0.02,

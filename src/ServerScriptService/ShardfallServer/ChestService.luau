@@ -244,6 +244,9 @@ function ChestService.setOptions(player: Player, mode: any, salvage: any)
 	if type(salvage) ~= "string" then
 		return reject("Unknown salvage rarity.")
 	end
+	if ChestConfig.salvageAboveCap(salvage) then
+		return reject("Auto-salvage stops at Uncommon.")
+	end
 	local ok, err = DataService.mutate(player, function(data)
 		data.chestDuplicates = mode
 		data.chestSalvageBelow = salvage

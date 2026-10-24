@@ -262,6 +262,18 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 	return captured
 end
 
+-- drawInto already stored these on the capture. A single crack returns
+-- that capture through the result below. An x10 builds a fresh row, so
+-- the same two fields have to be copied or the client would be guessing
+-- the Essence. The server number stays the one that was granted.
+local function copyAutoSalvage(row: any, drawn: any)
+	if type(drawn) ~= "table" or drawn.autoSalvaged ~= true then
+		return
+	end
+	row.autoSalvaged = true
+	row.essenceGained = drawn.essenceGained
+end
+
 local function crack(
 	player: Player,
 	poolId: any,
@@ -383,6 +395,7 @@ local function crack(
 		starterGoalTracker = captured.tracker,
 	}
 	attachGear(result, captured)
+	copyAutoSalvage(result, captured)
 	return result
 end
 
@@ -454,6 +467,7 @@ local function crackBatch(player: Player, poolId: any, total: number)
 			pity = pityView(drawn),
 		}
 		attachGear(row, drawn)
+		copyAutoSalvage(row, drawn)
 		table.insert(items, row)
 		if Rarities.rank(drawn.rarity) > Rarities.rank(captures[best].rarity) then
 			best = index
@@ -527,6 +541,7 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 			pity = result.pity,
 		}
 		attachGear(row, result)
+		copyAutoSalvage(row, result)
 		table.insert(items, row)
 		lastPity = result.pity
 		tracker = result.starterGoalTracker

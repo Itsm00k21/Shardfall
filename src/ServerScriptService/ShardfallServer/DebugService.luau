@@ -116,12 +116,18 @@ function DebugService.run(player: Player, action: any)
 		end
 		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
 	end
-	-- [ECHO hook] Stage B (#388). salvagefill only; essence is the Stage C grant above.
-	if action == "salvagefill" then
+	-- [ECHO hook] Stage B (#388). salvageEssence grants +500. salvagefill fills the bag.
+	-- essence is the Stage C grant above.
+	if action == "salvageEssence" or action == "salvagefill" then
 		local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 		local note = ""
 		local ok, err = DataService.mutate(player, function(data)
-			local applied, text = GearSalvage.debugFill(data, os.time())
+			local applied, text
+			if action == "salvageEssence" then
+				applied, text = GearSalvage.debugGrant(data)
+			else
+				applied, text = GearSalvage.debugFill(data, os.time())
+			end
 			if not applied then
 				return text
 			end

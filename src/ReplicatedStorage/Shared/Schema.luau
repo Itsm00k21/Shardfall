@@ -490,6 +490,14 @@ local AUTO_RARITY = {
 	Secret = true,
 }
 
+-- Kevin's playtest: auto-salvage stops at Uncommon. A save that already
+-- says Rare or higher is lowered here. schemaVersion stays 26. Gear,
+-- gold, and Essence are not touched.
+local AUTO_CAP = {
+	Common = true,
+	Uncommon = true,
+}
+
 local function wholeNumber(value: any, fallback: number, minimum: number): number
 	local numberValue = tonumber(value)
 	-- Positive infinity is a number. Floor keeps it, and the next save
@@ -731,9 +739,13 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	if type(data.chestSalvageBelow) ~= "string" then
 		data.chestSalvageBelow = ""
+	elseif AUTO_RARITY[data.chestSalvageBelow] == true and AUTO_CAP[data.chestSalvageBelow] ~= true then
+		data.chestSalvageBelow = "Uncommon"
 	end
 	if type(data.autoSalvageRarity) ~= "string" or AUTO_RARITY[data.autoSalvageRarity] ~= true then
 		data.autoSalvageRarity = ""
+	elseif AUTO_CAP[data.autoSalvageRarity] ~= true then
+		data.autoSalvageRarity = "Uncommon"
 	end
 	if data.autoSalvage ~= true or data.autoSalvageRarity == "" then
 		data.autoSalvage = false

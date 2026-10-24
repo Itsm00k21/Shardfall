@@ -634,10 +634,31 @@ describe("Config validation: cross-references", function()
 			seen[id] = true
 		end
 		expect(Config.Essence.CAP).toEqual(1000000000)
+		expect(Config.Essence.CAP_REASON).toEqual("essence_cap")
+		expect(Config.Essence.TOKEN_SECONDS).toEqual(20)
+		expect(isPositiveInt(Config.Essence.TOKEN_SECONDS)).toBeTrue()
+		expect(Config.Essence.PICKER).toEqual({ "Common", "Uncommon", "Rare" })
+		for _, id in ipairs(Config.Essence.PICKER) do
+			expect(Config.Essence.amount(id) ~= nil).toBeTrue()
+		end
+		expect(isPositiveInt(Config.Essence.COUNTS.capacity)).toBeTrue()
+		expect(Config.Essence.COUNTS.capacity).toEqual(4)
+		expect(Config.Essence.COUNTS.perSecond).toEqual(1)
 		for id in pairs(Config.Essence.AMOUNT) do
 			expect(seen[id] == true).toBeTrue()
 		end
 		expect(Config.Essence.amount("nope")).toBeNil()
+	end)
+
+	it("keeps a full Shard Core at 410 Essence", function()
+		expect(Config.ShardCore.FULL_COST).toEqual(410)
+		expect(#Config.ShardCore.COST).toEqual(Config.ShardCore.CAP)
+		local total = 0
+		for _, cost in ipairs(Config.ShardCore.COST) do
+			expect(isPositiveInt(cost)).toBeTrue()
+			total += cost
+		end
+		expect(total).toEqual(Config.ShardCore.FULL_COST)
 	end)
 
 	it("keeps live difficulties inside the V1 difficulty list", function()

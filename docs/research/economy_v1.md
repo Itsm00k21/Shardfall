@@ -51,6 +51,34 @@ A duplicate of a piece that is already ★5 does not raise stars or `item.upgrad
 
 | Rarity | Essence |
 |---|---:|
+| Common | 1 |
+| Uncommon | 3 |
+| Rare | 10 |
+| Epic | 40 |
+| Legendary | 200 |
+| Mythic | 200 |
+| Secret | 200 |
+
+## Stage C — Shard Core (flag `shardCore`, off)
+
+One core per weapon. The level is `profile.shardCores[weaponUid]` (missing means **0**, cap **5**). Feeding spends `profile.gearEssence`. The item is not written: no `item.coreLevel`, and the core does not read `item.upgrade` or stars.
+
+Essence to buy the next level:
+
+| From | Essence | Unlocks (kept at higher levels) |
+|---|---:|---|
+| 0 → 1 | 5 | +1% crit chance (`crit_chance` +0.01) |
+| 1 → 2 | 15 | +2% shard find (`shard_find` +0.02) |
+| 2 → 3 | 40 | +2% move speed (`move_speed` +0.02) |
+| 3 → 4 | 100 | +5% crit damage (`crit_damage` +0.05) |
+| 4 → 5 | 250 | +1 luck (`luck` +1) |
+
+A full core costs **410** Essence. The crit-damage perk adds **0.05** to the finished multiplier (1.50 becomes 1.55). It does not multiply the finished stat.
+
+Perks are applied once, after Equip has finished its totals (base, gear, elements, and whatever upgrade or star scale is on). While `shardCore` is off, that add does not run. They are small. None of them is required to clear. Pets have no core.
+
+Dev Tools grants **100** Essence on `Debug:essence`. That button is not a product. Stage B's +500 grant is a separate button (`salvageEssence`) behind `gearSalvage`.
+
 # Economy v1 — Essence (Stage B salvage)
 
 This file is also added by PR #387 (`echo/2-equip-server`). On merge, keep both sections. #387 is being revised (issue #15, comment 6358371837): duplicates may grant stars through `Stars.applyStats`, and gold upgrades get stat scaling. This section does not assume a duplicate writes `item.upgrade`.
@@ -71,27 +99,6 @@ One piece of gear becomes this much Essence. The numbers match the overflow tabl
 | Uncommon | 3 |
 | Rare | 10 |
 | Epic | 40 |
-| Legendary, Mythic, Secret | 200 |
-
-## Stage C — Shard Core (flag `shardCore`, off)
-
-One core per weapon. The level is `profile.shardCores[weaponUid]` (missing means **0**, cap **5**). Feeding spends `profile.gearEssence`. The item is not written: no `item.coreLevel`, and the core does not read `item.upgrade` or stars.
-
-Essence to buy the next level:
-
-| From | Essence | Unlocks (kept at higher levels) |
-|---|---:|---|
-| 0 → 1 | 5 | +1% crit chance (`crit_chance` +0.01) |
-| 1 → 2 | 15 | +2% shard find (`shard_find` +0.02) |
-| 2 → 3 | 40 | +2% move speed (`move_speed` +0.02) |
-| 3 → 4 | 100 | +5% crit damage (`crit_damage` +0.05) |
-| 4 → 5 | 250 | +1 luck (`luck` +1) |
-
-A full core costs **410** Essence. The crit-damage perk adds **0.05** to the finished multiplier (1.50 becomes 1.55). It does not multiply the finished stat.
-
-Perks are applied once, after Equip has finished its totals (base, gear, elements, and whatever upgrade or star scale is on). While `shardCore` is off, that add does not run. They are small. None of them is required to clear. Pets have no core.
-
-Dev Tools grants **100** Essence. That button is not a product.
 | Legendary | 200 |
 | Mythic | 200 |
 | Secret | 200 |
@@ -102,7 +109,7 @@ Salvage, lock, auto-salvage, and the bag-full confirm read `LaunchGate.gearSalva
 
 Equipped gear stays, including `equipLoadout` when that table exists. `item.locked` is the lock. `item.favorite` stays out of salvage the same way: an explicit list returns "That item is a favorite." and a rarity sweep skips that piece. There is no second lock field.
 
-An explicit uid list is all-or-nothing. Auto-salvage is off by default and only converts a new drop. Turning it on leaves the bag as it is.
+An explicit uid list is all-or-nothing. Auto-salvage is off by default and only converts a new drop. Turning it on leaves the bag as it is. A client cap above Uncommon is refused, and a save that already stores one is lowered to Uncommon. `schemaVersion` stays 26. Gear, gold, and Essence stay.
 
 A capped duplicate calls `GearSalvage.grant(profile, amount)` or `GearSalvage.grantCappedDupe(profile, rarity, key, ownerId)`. That write does not look at the owned item. Stage A decides when a duplicate is capped. `Accept.record` on #387 can pass `grant` as its hook so both paths share one write. Calling `grant` and `Accept.record`'s default write on the same duplicate pays twice.
 

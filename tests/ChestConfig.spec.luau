@@ -1,5 +1,7 @@
 --!strict
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local describe = framework.describe
@@ -129,6 +131,62 @@ describe("ChestConfig", function()
 		local early = ChestConfig.open(data, "Rare", 1, rng(0), 1000, uidFactory())
 		expect(early.results[1].rarity).toEqual("Rare")
 		expect(data.rareChestsSinceEpic).toEqual(19)
+	end)
+
+	it("stops chest auto-salvage at Uncommon", function()
+		local data = Schema.template()
+		data.schemaVersion = 26
+		data.gold = 12
+		data.gearEssence = 4
+		data.chestSalvageBelow = "Mythic"
+		data.chests.Common = 2
+		ChestConfig.ensure(data)
+		expect(data.chestSalvageBelow).toEqual("Uncommon")
+		expect(data.schemaVersion).toEqual(26)
+		expect(data.gold).toEqual(12)
+		expect(data.gearEssence).toEqual(4)
+		expect(data.chests.Common).toEqual(2)
+		expect(ChestConfig.salvageAboveCap("Rare")).toEqual(true)
+		expect(ChestConfig.salvageAboveCap("Epic")).toEqual(true)
+		expect(ChestConfig.salvageAboveCap("Legendary")).toEqual(true)
+		expect(ChestConfig.salvageAboveCap("Mythic")).toEqual(true)
+		expect(ChestConfig.salvageAboveCap("Secret")).toEqual(true)
+		expect(ChestConfig.salvageAboveCap("Uncommon")).toEqual(false)
+		expect(ChestConfig.salvageAboveCap("Common")).toEqual(false)
+		expect(ChestConfig.salvageAboveCap("")).toEqual(false)
+
+		local common = profile()
+		common.chests.Common = 1
+		local first = ChestConfig.open(common, "Common", 1, rng(0), 1000, uidFactory())
+		expect(first.results[1].kind).toEqual("item")
+		common.chestDuplicates = "star"
+		common.chestSalvageBelow = "Mythic"
+		common.chests.Common = 1
+		local again = ChestConfig.open(common, "Common", 1, rng(0), 1000, uidFactory())
+		expect(common.chestSalvageBelow).toEqual("Uncommon")
+		expect(again.results[1].kind).toEqual("dust")
+		expect(common.gold).toEqual(0)
+
+		local rare = profile()
+		rare.chests.Rare = 1
+		local opened = ChestConfig.open(rare, "Rare", 1, rng(0), 1000, uidFactory())
+		expect(opened.results[1].rarity).toEqual("Rare")
+		expect(opened.results[1].kind).toEqual("item")
+		rare.chestDuplicates = "star"
+		rare.chestSalvageBelow = "Epic"
+		rare.chests.Rare = 1
+		local second = ChestConfig.open(rare, "Rare", 1, rng(0), 1000, uidFactory())
+		expect(rare.chestSalvageBelow).toEqual("Uncommon")
+		expect(second.results[1].rarity).toEqual("Rare")
+		expect(second.results[1].kind).toEqual("star")
+
+		local service = fs.readFile("src/ServerScriptService/ShardfallServer/ChestService.luau")
+		local at = string.find(service, "function ChestService.setOptions", 1, true) :: number
+		local body = string.sub(service, at, at + 700)
+		local guard = string.find(body, "ChestConfig.salvageAboveCap(salvage)", 1, true)
+		local write = string.find(body, "data.chestSalvageBelow = salvage", 1, true)
+		expect(guard ~= nil and write ~= nil and (guard :: number) < (write :: number)).toBeTrue()
+		expect(string.find(body, 'reject("Auto-salvage stops at Uncommon.")', 1, true) ~= nil).toBeTrue()
 	end)
 
 	it("turns a duplicate into dust and materials, and dust buys a chosen shard", function()
