@@ -3139,7 +3139,10 @@ end
 
 function DungeonService.chooseDoor(player: Player, doorId: any)
 	local run = runs[player]
-	if run == nil or run.offer == nil then
+	-- Leave sets resolving, then yields in the hub stream while this run
+	-- is still current. A door in that gap must not pay treasure. The
+	-- same refusal covers a run that is no longer the player's current run.
+	if run == nil or not DungeonAdvance.live(runs[player], run) or run.offer == nil then
 		return reject("No doors are open.")
 	end
 	local picked = nil

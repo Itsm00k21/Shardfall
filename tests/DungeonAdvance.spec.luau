@@ -171,9 +171,80 @@ describe("Dungeon advance latch", function()
 		local open = session(1, false)
 		expect(open.advance()).toEqual("last")
 		expect(open.run.roomIndex).toEqual(1)
-		expect(open.run.cleared).toEqual(false)
+		expect(open.run.placeIndex).toEqual(1)
+		expect(open.run.wave).toEqual(1)
+		expect(open.run.cleared).toEqual(true)
+		expect(open.run.advanceAt).toEqual(10)
+		expect(open.run.offer).toEqual({ { id = "spring" } })
 		expect(open.spawned()).toEqual(0)
-		expect(open.advance()).toEqual("uncleared")
+		expect(open.advance()).toEqual("last")
+	end)
+
+	it("leaves the run untouched when the last room rejects", function()
+		local open = session(1, false)
+		local offer = open.run.offer
+		table.freeze(open.run)
+		expect(open.advance()).toEqual("last")
+		expect(open.run.cleared).toEqual(true)
+		expect(open.run.resolving).toEqual(false)
+		expect(open.run.advanceAt).toEqual(10)
+		expect(open.run.offer).toEqual(offer)
+		expect(open.run.roomIndex).toEqual(1)
+		expect(open.run.placeIndex).toEqual(1)
+		expect(open.run.wave).toEqual(1)
+		expect(open.spawned()).toEqual(0)
+		expect(open.advance()).toEqual("last")
+
+		local uncleared = session(1, false)
+		uncleared.run.cleared = false
+		table.freeze(uncleared.run)
+		expect(uncleared.advance()).toEqual("uncleared")
+		expect(uncleared.run.roomIndex).toEqual(1)
+
+		local latch = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonAdvance.luau")
+		local claim = between(latch, "local function begin", "function DungeonAdvance.live")
+		local lastAt = at(claim, 'return "last"')
+		local clearCleared = at(claim, "run.cleared = false")
+		local clearAt = at(claim, "run.advanceAt = nil")
+		local clearOffer = at(claim, "run.offer = nil")
+		local waveAt = at(claim, "run.wave += 1")
+		expect(lastAt < clearCleared).toBeTrue()
+		expect(lastAt < clearAt).toBeTrue()
+		expect(lastAt < clearOffer).toBeTrue()
+		expect(lastAt < waveAt).toBeTrue()
+	end)
+
+	it("refuses a door while the run is ending or is not the current run", function()
+		local run = {
+			resolving = false,
+			offer = { { id = "treasure" } },
+		}
+		expect(DungeonAdvance.live(run, run)).toEqual(true)
+		expect(DungeonAdvance.live(nil, run)).toEqual(false)
+		expect(DungeonAdvance.live({}, run)).toEqual(false)
+		run.resolving = true
+		expect(DungeonAdvance.live(run, run)).toEqual(false)
+		expect(DungeonAdvance.live(nil, nil)).toEqual(false)
+
+		local latch = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonAdvance.luau")
+		local live = between(latch, "function DungeonAdvance.live", "function DungeonAdvance.advance")
+		expect(string.find(live, "current == run", 1, true) ~= nil).toBeTrue()
+		expect(string.find(live, "run.resolving ~= true", 1, true) ~= nil).toBeTrue()
+
+		local dungeon = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		local door = between(
+			dungeon,
+			"function DungeonService.chooseDoor",
+			"function DungeonService.action"
+		)
+		local guardAt = at(door, "DungeonAdvance.live(runs[player], run)")
+		local offerAt = at(door, "run.offer = nil")
+		local goldAt = at(door, "Rootvault.TREASURE_GOLD")
+		local mutateAt = at(door, "DataService.mutate")
+		expect(guardAt < offerAt).toBeTrue()
+		expect(guardAt < goldAt).toBeTrue()
+		expect(guardAt < mutateAt).toBeTrue()
+		expect(offerAt < goldAt).toBeTrue()
 	end)
 
 	it("clears the latch before the stream and checks the run before spawning", function()
