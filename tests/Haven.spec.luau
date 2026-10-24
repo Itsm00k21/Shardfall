@@ -7,6 +7,7 @@ local expect = framework.expect
 
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 
 describe("Haven", function()
 	it("lays the districts and six gates on the crescent", function()
@@ -62,7 +63,7 @@ describe("Haven", function()
 		expect(Haven.portal("rootvault").dungeonId).toEqual(Dungeons.ROOTVAULT_ID)
 		expect(Haven.portal("heartwood").dungeonId).toEqual(Dungeons.HEARTWOOD_ID)
 		expect(Haven.portal("tidecrypt").open).toEqual(false)
-		expect(Haven.portal("tidecrypt").message).toEqual("Sunken Reach is sealed.")
+		expect(Haven.portal("tidecrypt").message).toEqual("Tidecrypt is sealed.")
 		expect(Haven.portal("ember").message).toEqual("Emberforge is sealed.")
 		expect(Haven.portal("frost").message).toEqual("Frostveil is sealed.")
 		expect(Haven.portal("void").message).toEqual("Void Rift is sealed.")
@@ -157,6 +158,27 @@ describe("Haven", function()
 			sealed = true,
 		}
 		expect(Haven.gatePlate(shut)).toEqual("Lv 15")
+	end)
+
+	it("seals Heartwood with Opens later while raids are off", function()
+		local heart = Haven.portal("heartwood")
+		expect(LaunchGate.on("raids")).toEqual(false)
+		expect(Haven.gateOpen(heart)).toEqual(true)
+		expect(Haven.gateShownOpen(heart)).toEqual(false)
+		expect(Haven.gateShownPlate(heart)).toEqual("Opens later")
+		expect(Haven.gateShownOpen(Haven.portal("rootvault"))).toEqual(true)
+		expect(Haven.gateShownPlate(Haven.portal("rootvault"))).toEqual("Lv 1 · Solo")
+		expect(Haven.gateShownOpen(Haven.portal("tidecrypt"))).toEqual(false)
+		expect(Haven.gateShownPlate(Haven.portal("tidecrypt"))).toEqual(Haven.gatePlate(Haven.portal("tidecrypt")))
+		LaunchGate.SHOW.raids = true
+		local shown = Haven.gateShownOpen(heart)
+		local plate = Haven.gateShownPlate(heart)
+		LaunchGate.SHOW.raids = false
+		expect(shown).toEqual(true)
+		expect(plate).toEqual("Lv 15 · 4–8")
+		expect(LaunchGate.on("raids")).toEqual(false)
+		expect(Haven.gateShownOpen(heart)).toEqual(false)
+		expect(Haven.gateOpen(heart)).toEqual(true)
 	end)
 
 	it("gives every live dungeon exactly one arch", function()

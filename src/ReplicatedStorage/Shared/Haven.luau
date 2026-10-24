@@ -15,6 +15,7 @@
 ]]
 
 local Dungeons = require("./Dungeons")
+local LaunchGate = require("./LaunchGate")
 local Raids = require("./Raids")
 
 local Haven = {}
@@ -171,9 +172,11 @@ Haven.DISTRICTS = {
 } :: { Place }
 
 -- Left to right from the pad: Rootvault, then each later gate to the right.
--- Open versus sealed is Haven.gateOpen: implemented dungeons, plus the
--- Heartwood raid. Rootvault and Heartwood are open. The other four stay
--- sealed. `color` is the mouth accent the light already uses.
+-- Content open versus sealed is Haven.gateOpen. The built arch uses
+-- Haven.gateShownOpen: Rootvault is open, Heartwood is open only while
+-- raids are on, and the other four stay sealed. With raids off the orange
+-- Heartwood mouth is sealed and labeled Opens later. `color` is the mouth
+-- accent the light already uses.
 Haven.PORTALS = {
 	{
 		id = "rootvault",
@@ -226,7 +229,7 @@ Haven.PORTALS = {
 		level = 20,
 		height = 18,
 		subline = "Lv 20 · Sealed",
-		message = "Sunken Reach is sealed.",
+		message = "Tidecrypt is sealed.",
 	},
 	{
 		id = "ember",
@@ -336,8 +339,18 @@ function Haven.gateOpen(portal: Place): boolean
 	return false
 end
 
--- The inlay and the court ring light for an open gate.
+-- True when the gate's content is live. The hub paints gateShownOpen, so a
+-- parked Heartwood raid stays dark until raids are on.
 function Haven.gateLit(portal: Place): boolean
+	return Haven.gateOpen(portal)
+end
+
+-- The arch the player sees. Heartwood's content is live, but while the
+-- raids switch is off the orange mouth is sealed so it does not read as a door.
+function Haven.gateShownOpen(portal: Place): boolean
+	if portal.id == Dungeons.HEARTWOOD_ID and not LaunchGate.on("raids") then
+		return false
+	end
 	return Haven.gateOpen(portal)
 end
 
@@ -358,6 +371,14 @@ function Haven.gatePlate(portal: Place): string
 		return line
 	end
 	return "Sealed"
+end
+
+-- Plate on the built arch. Heartwood says Opens later until raids are on.
+function Haven.gateShownPlate(portal: Place): string
+	if portal.id == Dungeons.HEARTWOOD_ID and not LaunchGate.on("raids") then
+		return "Opens later"
+	end
+	return Haven.gatePlate(portal)
 end
 
 -- Point on the court rim (a circle around spawn) toward a district.

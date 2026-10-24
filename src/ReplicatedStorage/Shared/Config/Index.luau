@@ -63,6 +63,9 @@ Config.EnemyPerf = require("./EnemyPerf")
 -- T6 big-roll beam. Not a tenth area. The server reads it only while
 -- LaunchGate.bigRollBeam is on (off).
 Config.BigRoll = require("./BigRoll")
+-- T4 Gate Ring. Not a tenth area. The server reads it only while
+-- LaunchGate.parties is on (off). Nothing here is a save field.
+Config.PartyGather = require("./PartyGather")
 
 Config.AREAS = table.freeze({
 	"Items",
