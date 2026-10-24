@@ -13,8 +13,9 @@
 	Pets have no core. There is no pet feeder.
 
 	Costs are the Essence to buy the next level: 5, 15, 40, 100, 250.
-	Cap is 5. Perks are cumulative and modest. Level 1 keeps perk 1,
-	level 2 keeps perks 1 and 2, and so on.
+	FULL_COST is that whole climb, 410. Cap is 5. Perks are cumulative
+	and modest. Level 1 keeps perk 1, level 2 keeps perks 1 and 2, and
+	so on.
 ]]
 
 local ShardCore = {}
@@ -29,6 +30,9 @@ ShardCore.WALLET_CAP = 1000000000
 
 -- Index 1 is the cost of level 0 -> 1.
 ShardCore.COST = table.freeze({ 5, 15, 40, 100, 250 })
+
+-- Essence to take one weapon core from level 0 to CAP. Sum of COST.
+ShardCore.FULL_COST = 410
 
 ShardCore.PERKS = table.freeze({
 	table.freeze({
