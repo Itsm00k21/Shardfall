@@ -1,3 +1,5 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
 # Shardfall: Bag Salvage… flow + Shard Core panel, Build Spec v1.1
 
 **Status:** Draft for Ghost (UI) and Echo (server). Docs only, with no code and no flags.
@@ -7,7 +9,7 @@
 - `CoreCard` is **restyled to the pack chrome** (§6 tokens replace its own `DEFAULT` table).
 - Echo may add the token-free **`counts`** read (§9 Echo 1).
 - `CoreCard` in the detail pane is the **only Shard Core UI in V1**. `ShardCore/Mount` is **not used in V1**; this spec does not propose deleting its code.
-- Kevin questions (Q1, Q2, Q4, Q7) and the 410-Essence pacing note are with Kevin via Ghost. Essence-cap behavior and `expired = true` are Echo's call (Ghost leans: refuse at 0 gain, yes to `expired`).
+- Q1, Q2, Q4, Q7 and the 410-Essence pacing note were decided by Ghost on Oct 23, 2026 under Kevin's pre-approval (see §11 and the Decision log; Kevin can change any later). Essence-cap behavior and `expired = true` are Echo's call (Ghost leans: refuse at 0 gain, yes to `expired`).
 
 **Asked for in:** #15 comment [6379856660](https://github.com/Itsm00k21/Shardfall/issues/15#issuecomment-6379856660), item 5: "a spec and mockups for the Bag's Salvage… flow and the Shard Core panel (Essence balance, the per-weapon core and its perks), using the same pack chrome. No code."
 **Sources read (read-only):** `cursor/live-build-9721` @ `49bd902`: `Shared/GearSalvage.luau`, `Shared/Config/Essence.luau`, `Shared/Config/ShardCore.luau`, `Shared/GearHooks.luau`, `server/ShardCore/*`, `ShardfallClient/CoreCard.luau`, `ShardfallClient/ShardCore/{Mount,View}.luau`. `ghost/bag-intro-fixes` @ `33f1147` (the "Salvage…" BulkPicker in `GearBar.luau`). PR #392 `docs/ui/reference/STYLE.md` + `OWNERSHIP.md` (the pack). PR #388 (server auto-cap at Uncommon), PR #393, Echo's review [6378950270](https://github.com/Itsm00k21/Shardfall/issues/15#issuecomment-6378950270). Notion: Combat & Gear, Crafting, Gear & Customization.
@@ -221,14 +223,21 @@ Portrait phone 390×844, pack colors, fake data. They're committed as SVG (vecto
 ## 11. Open questions
 Echo decides: salvage at the Essence cap (refuse at 0 gain, or delete with clamped gain) and `expired = true` on stale tokens.
 
-1. @Kevin (with Kevin via Ghost): Should weapons with a Shard Core at Lv 1+ be protected from bulk salvage, the same way favorites are? (yes/no) If no, the confirm shows a warning line instead.
-2. @Kevin (with Kevin via Ghost): Keep the "Salvage all Rare and below" row in the manual picker? (yes/no) Auto-salvage stays capped at Uncommon either way.
+1. ~~@Kevin: Protect weapons with a Shard Core at Lv 1+ from bulk salvage?~~ **Yes (Ghost, Kevin pre-approved).** Cored weapons (Lv 1+) are skipped by every bulk salvage and auto-salvage, the same way favorites are; they can only be salvaged one at a time from the detail pane. Server work is Echo's (queued on Echo's row).
+2. ~~@Kevin: Keep the "Salvage all Rare and below" row?~~ **Yes, keep it (Ghost, Kevin pre-approved).** Auto-salvage stays capped at Uncommon.
 3. ~~@Ghost: Restyle `CoreCard` to the pack chrome (panel 28,24,40, row 40,34,58, stroke 108,78,196, muted 176,168,198, ink 32,22,10) instead of its own `DEFAULT` table?~~ **Yes (Ghost).**
-4. @Kevin (with Kevin via Ghost): Color for filled core pips: pick **A** cyan 120,210,255 (current code) or **B** button purple 108,78,196. Gold stays the "just fed" glow.
+4. ~~@Kevin: Filled core pip color?~~ **A, cyan 120,210,255 (Ghost, Kevin pre-approved).** Matches current code, so no change. Gold stays the "just fed" glow.
 5. ~~@Ghost: OK for Echo to add a token-free `counts` read?~~ **Yes (Ghost).**
 6. ~~@Ghost: Is CoreCard the only Shard Core UI for V1?~~ **Yes (Ghost).** Mount is not used in V1; no code deletion proposed.
-7. @Kevin (with Kevin via Ghost): The first-time help line: pick **A** once per session (no save change) or **B** once ever (needs a new save field, Echo).
+7. ~~@Kevin: First-time help line once per session or once ever?~~ **A, once per session (Ghost, Kevin pre-approved).** No new save field. Echo's small client/session flag is queued on Echo's row.
 
 ---
 **Note for Kevin (not a question):** Notion's Crafting page (Oct 15) still says salvage gives realm **materials** at the Forge. The repo's Stage B pays **Essence** instead (#388/#390). This spec follows the repo. The Notion page can be updated when you're ready (Prism won't edit it without an ask).
 **Pacing observation (code numbers, unchanged):** one full core costs 410 Essence, which is about 137 Uncommons, 41 Rares, or 2–3 Legendaries. It's worth watching in playtests; it isn't a change request.
+**Decided (Ghost, Kevin pre-approved):** keep 410 Essence for now and tune `ShardCore.COST` in Config after the playtest.
+
+## Decision log
+- 2026-10-23 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d): Q1 = **yes**, protect Shard Core Lv 1+ weapons from bulk salvage. Q2 = **yes**, keep "Salvage all Rare and below". Q4 = **A** cyan pips. Q7 = **A** help line once per session. The salvage tip ships (Ghost decision 1). Total core cost stays **410 Essence**, tuned in Config after playtest. All §11 questions are now closed.
+
+
+</cursor_untrusted_data_1337>
