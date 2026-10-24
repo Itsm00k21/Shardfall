@@ -187,8 +187,8 @@ SVG in `mockups/`. Fake data. The dashed box is the center keep-out. Rendered an
 6. Rejoining mid-flow resumes at the same beat. A returning player never sees Focus mode.
 
 ## 11. Open questions (answer by number)
-1. @Kevin: The first fight is **A**, wave 1 of the real Normal dungeon through the Shard Gate (default, no new content, needs the #382 arena live), or **B**, one practice shardling next to spawn (first hit about 10 s sooner, adds one hub enemy)? (A/B)
-2. @Kevin: The locked Core Loop §7 has free rolls at 0:30–1:30 and the Gate at 1:30–2:00. This spec targets 3 rolls by about 0:12 and wave 1 by about 0:20. OK to treat that as the playtest tune of those "starting estimates"? (yes/no)
+1. ~~@Kevin: First fight A (wave 1 via Shard Gate) or B (practice shardling)?~~ **RESOLVED by Kevin (Oct 23, 2026): A.** The first fight is wave 1 of the Normal dungeon through the Shard Gate. Needs the #382 arena gated on; until then the "Coming soon" edge case in §7 applies.
+2. ~~@Kevin: OK to treat Core Loop §7 times as starting estimates tuned by this spec?~~ **RESOLVED by Kevin (Oct 23, 2026): yes.** Core Loop §7 times are starting estimates; this spec's ~0:12 rolls / ~0:20 wave 1 are the playtest tune. The locked Core Loop page is not edited here; changing it, or copying this into Vision & Design Rules, still needs Kevin.
 3. @Ghost: The live `Onboarding.STEPS` is the older cold open (class pedestals → swing → dodge → door → Haven). For V1, should it be **replaced** by this flow's steps (keeping Skip and the same kit), or should this flow **run after** it? (replace/after)
 4. @Echo: For the first-ever Gate run, use solo, a 3 s countdown instead of 15 s (Config), and preload the arena so the teleport takes 3 s or less? (yes/no)
 5. @Echo: Tutorial pools of roll 1 Weapon, roll 2 Armor, roll 3 Weapon with the Rare floor, all free, with server auto-equip-if-better? (yes/no)
@@ -197,6 +197,9 @@ Already pending with Kevin (not re-asked; Decision request row https://app.notio
 - Q2 "force the first roll to full length": this spec assumes **yes** for all 3 tutorial rolls. They're short anyway, and Auto is hidden until roll 3. A "no" changes nothing else.
 - The salvage tip (Q1) is not shown in the first 30 s, because the Bag stays hidden.
 - The Core Loop vs repo rarity-ladder conflict is still open. This spec uses the repo's 5 V1 tiers per the master prompt.
+
+## Decision log
+- 2026-10-23 (Kevin): Q1 = **A**, first fight is wave 1 through the Shard Gate (depends on #382 arena being gated on). Q2 = **yes**, Core Loop §7 timings are starting estimates; this spec's timings are the tune. Locked Core Loop page unchanged.
 
 ## Later (not V1)
 Voice lines for Wren, a set-bonus tip (Core Loop: only once the player owns 2 items of the same element), party-join during onboarding, and a Pets/Skills tutorial roll.
