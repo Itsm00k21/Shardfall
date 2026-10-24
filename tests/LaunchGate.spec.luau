@@ -68,6 +68,11 @@ describe("LaunchGate", function()
 		expect(LaunchGate.promptOpen("rootvault")).toEqual(true)
 	end)
 
+	it("keeps the V1 enemy roster off", function()
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.on("enemyTypes")).toEqual(false)
+	end)
+
 	it("hides raids, the market board, and the pass from the hub cycle", function()
 		expect(LaunchGate.tabOpen("hero")).toEqual(true)
 		expect(LaunchGate.tabOpen("shop")).toEqual(true)
