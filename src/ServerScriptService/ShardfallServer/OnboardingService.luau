@@ -7,10 +7,10 @@
 	An existing save is marked done so a playtest character is not tutored
 	again.
 
-	The T3 guide is LaunchGate.firstSessionGuide. Off, skip and note behave
-	as they always have: no guide tokens, no free-roll step. On, unused
-	free rolls are paid once inside the same onboardDone check as the
-	starter kit. Replay writes nothing.
+	The T3 guide is LaunchGate.firstSessionGuide. Off, note and free rolls
+	stay as they were. advance() treats a saved guide step as the cold-open
+	card, so a rollback is not stuck. Skip pays the saved step's tokens
+	once either way. Replay writes nothing.
 ]]
 
 -- Lune has no DataModel. Studio requires go through ReplicatedStorage.
@@ -41,6 +41,7 @@ end
 local OnboardingService = {}
 
 local watching = false
+local padCarry = 0
 
 local function move(data, eventId: string)
 	if data.onboardDone == true then
@@ -80,22 +81,50 @@ function OnboardingService.note(player: Player, eventId: string)
 	end)
 end
 
+-- A saved guide id is the cold-open card while the flag is off. The
+-- live guide (flag on) still refuses a roll or gate step here.
+local function continueId(step: any): string
+	if not LaunchGate.on("firstSessionGuide") and SessionGuide.known(step) then
+		return "open"
+	end
+	if type(step) ~= "string" then
+		return ""
+	end
+	return step
+end
+
+function OnboardingService.applyAdvance(data): (boolean, string?)
+	if type(data) ~= "table" then
+		return false, "Try it in the world first."
+	end
+	if data.onboardDone == true then
+		return true, nil
+	end
+	local step = continueId(data.onboardStep)
+	if step ~= "open" and step ~= "haven" then
+		return false, "Try it in the world first."
+	end
+	if step == "haven" then
+		Onboarding.starter(data)
+	else
+		data.onboardStep = step
+		move(data, step)
+	end
+	grantKit(data)
+	return true, nil
+end
+
 function OnboardingService.advance(player: Player)
 	local store = dataService()
 	local profile = store.get(player)
 	if profile == nil or profile.onboardDone then
 		return { ok = true, profile = store.snapshot(player) }
 	end
-	if profile.onboardStep ~= "open" and profile.onboardStep ~= "haven" then
-		return { ok = false, error = "Try it in the world first." }
-	end
 	local saved, err = store.mutate(player, function(data)
-		if data.onboardStep == "haven" then
-			Onboarding.starter(data)
-		else
-			move(data, data.onboardStep)
+		local proceeded, why = OnboardingService.applyAdvance(data)
+		if not proceeded then
+			return why or "Try it in the world first."
 		end
-		grantKit(data)
 		return nil
 	end)
 	if not saved then
@@ -151,8 +180,13 @@ function OnboardingService.start()
 	watching = true
 	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
-	RunService.Heartbeat:Connect(function()
+	RunService.Heartbeat:Connect(function(dt)
 		if not LaunchGate.on("firstSessionGuide") then
+			return
+		end
+		local due
+		padCarry, due = SessionGuide.padClock(padCarry, dt)
+		if due ~= true then
 			return
 		end
 		for _, player in Players:GetPlayers() do

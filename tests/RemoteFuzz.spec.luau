@@ -733,10 +733,17 @@ function handlers.Onboard(data, action)
 	if data.onboardDone == true then
 		return { ok = true }
 	end
-	if data.onboardStep ~= "open" and data.onboardStep ~= "haven" then
+	local stepId = data.onboardStep
+	if not LaunchGate.on("firstSessionGuide") and SessionGuide.known(stepId) then
+		stepId = "open"
+	end
+	if stepId ~= "open" and stepId ~= "haven" then
 		return fail("Try it in the world first.")
 	end
 	local saved, err = mutate(data, function(profile)
+		if not LaunchGate.on("firstSessionGuide") and SessionGuide.known(profile.onboardStep) then
+			profile.onboardStep = "open"
+		end
 		if profile.onboardStep == "haven" then
 			Onboarding.starter(profile)
 		else

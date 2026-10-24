@@ -476,6 +476,11 @@ local function crackBatch(player: Player, poolId: any, total: number)
 		if blocked ~= nil then
 			return blocked
 		end
+		-- Guide rolls 1-3 are the free single crack. x10 does not spend.
+		local note = SessionGuide.batchNotice(data)
+		if note ~= nil then
+			return note
+		end
 		data.shardTokens -= price
 		local rng = serverRng()
 		for _ = 1, total do
@@ -488,7 +493,15 @@ local function crackBatch(player: Player, poolId: any, total: number)
 		return nil
 	end)
 	if not ok or #captures ~= total then
-		return reject(err or "Could not crack that shard.")
+		local message = if type(err) == "string" then err else "Could not crack that shard."
+		if message == SessionGuide.FREE_ROLL_NOTICE then
+			return {
+				ok = false,
+				error = message,
+				notice = message,
+			}
+		end
+		return reject(message)
 	end
 	local items = {}
 	local best = 1
@@ -567,6 +580,14 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 		return reject("Roll cooling down.")
 	end
 	if total == RollConfig.MULTI_COUNT then
+		local note = SessionGuide.batchNotice(DataService.get(player))
+		if type(note) == "string" then
+			return {
+				ok = false,
+				error = note,
+				notice = note,
+			}
+		end
 		return crackBatch(player, poolId, total)
 	end
 	local items = {}
