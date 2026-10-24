@@ -6,8 +6,12 @@
 	Normal and Hard are the V1 offer. Medium, Nightmare, and Insane stay
 	in that table and are refused while LaunchGate.extraDifficulties is off.
 
-	A play session joins on Normal. The pad tier is server memory for this
-	session only. This module does not read or write a profile.
+	A play session joins on Normal. Each player's tier is server memory
+	for that player only. One pick does not change anyone else. This
+	module does not read or write a profile.
+
+	Hard is offered only while LaunchGate.hardMode is on. That switch
+	ships off, so the pad stays on Normal.
 ]]
 
 local Economy = require("./Config/Economy")
@@ -27,14 +31,25 @@ local PARKED: { [string]: boolean } = {
 	insane = true,
 }
 
+-- Per player. There is no server-wide slot. A missing key is Normal.
 local sessions: { [string]: string } = {}
 local joins: { [string]: string } = {}
 
-local function sessionKey(id: any): string
-	if type(id) == "string" and id ~= "" then
-		return id
+-- The old gate id is not a player. Writing it would lock every pad touch.
+local function playerKey(id: any): string?
+	if id == nil or id == HardMode.GATE then
+		return nil
 	end
-	return HardMode.GATE
+	if type(id) == "number" then
+		if id ~= id or id <= 0 or id >= math.huge then
+			return nil
+		end
+		return "p:" .. tostring(math.floor(id))
+	end
+	if type(id) == "string" and id ~= "" then
+		return "p:" .. id
+	end
+	return nil
 end
 
 local function wholeLevel(level: any): number
@@ -69,6 +84,9 @@ function HardMode.offered(id: string): boolean
 	if Economy.DIFFICULTIES[id] == nil then
 		return false
 	end
+	if id == "hard" and LaunchGate.on("hardMode") ~= true then
+		return false
+	end
 	if PARKED[id] == true and LaunchGate.on("extraDifficulties") ~= true then
 		return false
 	end
@@ -80,15 +98,33 @@ function HardMode.joinTier(): string
 	return HardMode.JOIN
 end
 
--- Player join. Always Normal. A profile is not an argument on purpose.
+-- Player join. This player starts on Normal. Every other player stays.
+-- A profile is not an argument on purpose.
 function HardMode.noteJoin(userId: any): string
-	local key = tostring(userId)
+	local key = playerKey(userId)
+	if key == nil then
+		return HardMode.JOIN
+	end
 	joins[key] = HardMode.JOIN
-	return joins[key]
+	sessions[key] = HardMode.JOIN
+	return HardMode.JOIN
 end
 
 function HardMode.joinedTier(userId: any): string
-	return joins[tostring(userId)] or HardMode.JOIN
+	local key = playerKey(userId)
+	if key == nil then
+		return HardMode.JOIN
+	end
+	return joins[key] or HardMode.JOIN
+end
+
+function HardMode.release(userId: any)
+	local key = playerKey(userId)
+	if key == nil then
+		return
+	end
+	sessions[key] = nil
+	joins[key] = nil
 end
 
 -- nil, blank, or an unknown name joins on Normal.
@@ -112,35 +148,49 @@ function HardMode.accept(level: any, requested: any): (string?, string?)
 	return id, nil
 end
 
--- Opens (or resets) a pad session on Normal. Does not read a profile.
+-- Resets one player's session to Normal. A shared gate id writes nothing.
 function HardMode.open(id: any): string
-	local key = sessionKey(id)
+	local key = playerKey(id)
+	if key == nil then
+		return HardMode.JOIN
+	end
 	sessions[key] = HardMode.JOIN
-	return sessions[key]
+	return HardMode.JOIN
 end
 
 function HardMode.sessionTier(id: any): string
-	return sessions[sessionKey(id)] or HardMode.JOIN
+	local key = playerKey(id)
+	if key == nil then
+		return HardMode.JOIN
+	end
+	return sessions[key] or HardMode.JOIN
 end
 
--- Remembers a tier for this server session only. A refusal leaves the
--- previous tier alone.
+-- Remembers a tier for this player only. A refusal writes nothing.
+-- A missing player id writes nothing, so it cannot flip the server.
 function HardMode.select(level: any, requested: any, id: any): (string?, string?)
 	local accepted, why = HardMode.accept(level, requested)
 	if accepted == nil then
 		return nil, why
 	end
-	sessions[sessionKey(id)] = accepted
+	local key = playerKey(id)
+	if key == nil then
+		return nil, HardMode.CLOSED
+	end
+	sessions[key] = accepted
 	return accepted, nil
 end
 
--- Stepping on the pad uses the session tier. Under Lv 5 on Hard is refused
--- and the session tier stays so the leader's pick is not dropped.
+-- The pad reads this player's tier. Someone else's Hard does not refuse
+-- them, pull them onto Hard, or change their tier.
 function HardMode.touch(level: any, id: any): (string?, string?)
 	local tier = HardMode.sessionTier(id)
 	local accepted, why = HardMode.accept(level, tier)
 	if accepted == nil and tier == "hard" then
-		return nil, HardMode.PAD_REFUSED
+		if LaunchGate.on("hardMode") ~= true then
+			return nil, HardMode.CLOSED
+		end
+		return nil, HardMode.REFUSED
 	end
 	return accepted, why
 end

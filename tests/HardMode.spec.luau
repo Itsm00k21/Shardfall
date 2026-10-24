@@ -45,6 +45,7 @@ describe("Hard mode config", function()
 		expect(Economy.DIFFICULTIES.nightmare.hpMultiplier).toEqual(2)
 		expect(Economy.DIFFICULTIES.insane.tokenMultiplier).toEqual(3)
 		expect(LaunchGate.on("extraDifficulties")).toEqual(false)
+		expect(LaunchGate.on("hardMode")).toEqual(false)
 		expect(HardMode.parked("medium")).toEqual(true)
 		expect(HardMode.parked("nightmare")).toEqual(true)
 		expect(HardMode.parked("insane")).toEqual(true)
@@ -52,7 +53,7 @@ describe("Hard mode config", function()
 		expect(HardMode.offered("medium")).toEqual(false)
 		expect(HardMode.offered("nightmare")).toEqual(false)
 		expect(HardMode.offered("insane")).toEqual(false)
-		expect(HardMode.offered("hard")).toEqual(true)
+		expect(HardMode.offered("hard")).toEqual(false)
 		expect(HardMode.offered("normal")).toEqual(true)
 	end)
 
@@ -71,48 +72,114 @@ describe("Hard mode config", function()
 end)
 
 describe("Hard mode pad", function()
-	it("joins a session on Normal and refuses Hard under Lv 5", function()
-		HardMode.open(HardMode.GATE)
+	it("stays on Normal and refuses Hard while hardMode is off", function()
+		expect(LaunchGate.on("hardMode")).toEqual(false)
+		HardMode.noteJoin(42)
+		HardMode.noteJoin(43)
 		expect(HardMode.joinTier()).toEqual("normal")
-		expect(HardMode.sessionTier()).toEqual("normal")
-		expect(HardMode.noteJoin(42)).toEqual("normal")
+		expect(HardMode.sessionTier(42)).toEqual("normal")
 		expect(HardMode.joinedTier(42)).toEqual("normal")
 		expect(HardMode.accept(1, nil)).toEqual("normal")
 		expect(HardMode.accept(4, "")).toEqual("normal")
 		expect(HardMode.accept(4, "nope")).toEqual("normal")
 		expect(HardMode.accept(3, "normal")).toEqual("normal")
-
-		local denied, why = HardMode.accept(4, "hard")
-		expect(denied).toBeNil()
-		expect(why).toEqual("Hard unlocks at Lv 5.")
-		local shouted = HardMode.accept(4, "HARD")
-		expect(shouted).toBeNil()
-		expect(HardMode.accept(5, "hard")).toEqual("hard")
 		-- An unknown name is not a tier. The session stays on Normal.
 		expect(HardMode.accept(9, " hard ")).toEqual("normal")
 
-		local picked, pickWhy = HardMode.select(4, "hard")
+		local denied, why = HardMode.accept(4, "hard")
+		expect(denied).toBeNil()
+		expect(why).toEqual(HardMode.CLOSED)
+		local shouted = HardMode.accept(99, "HARD")
+		expect(shouted).toBeNil()
+		expect(HardMode.accept(5, "hard")).toBeNil()
+
+		local picked, pickWhy = HardMode.select(99, "hard", 42)
 		expect(picked).toBeNil()
-		expect(pickWhy).toEqual(HardMode.REFUSED)
-		expect(HardMode.sessionTier()).toEqual("normal")
+		expect(pickWhy).toEqual(HardMode.CLOSED)
+		expect(HardMode.sessionTier(42)).toEqual("normal")
+		expect(HardMode.sessionTier(43)).toEqual("normal")
+		expect(HardMode.touch(4, 42)).toEqual("normal")
+		expect(HardMode.touch(99, 43)).toEqual("normal")
+		-- The old shared gate key still cannot store a tier.
+		expect(HardMode.open(HardMode.GATE)).toEqual("normal")
+		expect(HardMode.sessionTier(HardMode.GATE)).toEqual("normal")
+		expect(HardMode.select(99, "normal", HardMode.GATE)).toBeNil()
+		expect(HardMode.sessionTier(42)).toEqual("normal")
+		HardMode.release(42)
+		HardMode.release(43)
+	end)
 
-		expect(HardMode.select(5, "hard")).toEqual("hard")
-		expect(HardMode.sessionTier()).toEqual("hard")
-		-- A later join does not restore a save and does not drop the pad.
-		expect(HardMode.noteJoin(7)).toEqual("normal")
-		expect(HardMode.sessionTier()).toEqual("hard")
+	it("one player's pick cannot lock out, drag along, or flip anyone else", function()
+		local previous = LaunchGate.SHOW.hardMode
+		LaunchGate.SHOW.hardMode = false
+		local ok, err = pcall(function()
+			local alpha = 101
+			local beta = 202
+			HardMode.noteJoin(alpha)
+			HardMode.noteJoin(beta)
 
-		local blocked, padWhy = HardMode.touch(4)
-		expect(blocked).toBeNil()
-		expect(padWhy).toEqual("This party is on Hard (Lv 5).")
-		expect(HardMode.sessionTier()).toEqual("hard")
-		expect(HardMode.touch(5)).toEqual("hard")
-		expect(HardMode.touch(1, "other")).toEqual("normal")
+			-- Flag off: a Hard ask does not stick, and the other player stays Normal.
+			expect(HardMode.select(20, "hard", alpha)).toBeNil()
+			expect(HardMode.sessionTier(alpha)).toEqual("normal")
+			expect(HardMode.sessionTier(beta)).toEqual("normal")
+			expect(HardMode.touch(3, beta)).toEqual("normal")
+			expect(HardMode.touch(20, alpha)).toEqual("normal")
 
-		expect(HardMode.select(5, "normal")).toEqual("normal")
-		expect(HardMode.touch(1)).toEqual("normal")
-		HardMode.open(HardMode.GATE)
-		expect(HardMode.sessionTier()).toEqual("normal")
+			LaunchGate.SHOW.hardMode = true
+			expect(HardMode.accept(4, "hard")).toBeNil()
+			expect(HardMode.accept(5, "hard")).toEqual("hard")
+			local low, lowWhy = HardMode.select(4, "hard", alpha)
+			expect(low).toBeNil()
+			expect(lowWhy).toEqual(HardMode.REFUSED)
+			expect(HardMode.sessionTier(alpha)).toEqual("normal")
+			expect(HardMode.sessionTier(beta)).toEqual("normal")
+
+			expect(HardMode.select(8, "hard", alpha)).toEqual("hard")
+			-- Beta is not locked out, dragged onto Hard, or flipped.
+			expect(HardMode.sessionTier(beta)).toEqual("normal")
+			expect(HardMode.touch(3, beta)).toEqual("normal")
+			expect(HardMode.touch(12, beta)).toEqual("normal")
+			expect(HardMode.touch(3, alpha)).toBeNil()
+			expect(HardMode.sessionTier(alpha)).toEqual("hard")
+
+			expect(HardMode.select(9, "normal", beta)).toEqual("normal")
+			expect(HardMode.sessionTier(alpha)).toEqual("hard")
+			expect(HardMode.select(9, "hard", beta)).toEqual("hard")
+			expect(HardMode.sessionTier(alpha)).toEqual("hard")
+			expect(HardMode.touch(9, beta)).toEqual("hard")
+			expect(HardMode.select(8, "normal", alpha)).toEqual("normal")
+			expect(HardMode.sessionTier(beta)).toEqual("hard")
+			expect(HardMode.touch(8, alpha)).toEqual("normal")
+
+			-- A shared key cannot write a tier that both players then share.
+			expect(HardMode.select(20, "hard", HardMode.GATE)).toBeNil()
+			expect(HardMode.sessionTier(alpha)).toEqual("normal")
+			expect(HardMode.sessionTier(beta)).toEqual("hard")
+
+			-- Flag off again: Hard is refused for the player on it, and the
+			-- other player still walks in on Normal.
+			LaunchGate.SHOW.hardMode = false
+			expect(HardMode.touch(9, beta)).toBeNil()
+			expect(HardMode.sessionTier(alpha)).toEqual("normal")
+			expect(HardMode.touch(8, alpha)).toEqual("normal")
+			expect(HardMode.sessionTier(beta)).toEqual("hard")
+			LaunchGate.SHOW.hardMode = true
+
+			expect(HardMode.noteJoin(beta)).toEqual("normal")
+			expect(HardMode.sessionTier(alpha)).toEqual("normal")
+			expect(HardMode.sessionTier(beta)).toEqual("normal")
+
+			LaunchGate.SHOW.hardMode = false
+			expect(HardMode.select(20, "hard", alpha)).toBeNil()
+			expect(HardMode.touch(20, alpha)).toEqual("normal")
+			expect(HardMode.touch(3, beta)).toEqual("normal")
+		end)
+		LaunchGate.SHOW.hardMode = previous
+		HardMode.release(101)
+		HardMode.release(202)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	it("refuses Medium, Nightmare, and Insane while the flag is off", function()
@@ -170,11 +237,15 @@ describe("Hard mode pad", function()
 		expect(string.find(pick, "DataService.mutate", 1, true)).toBeNil()
 		expect(string.find(pick, "DataService.get", 1, true) ~= nil).toBeTrue()
 
-		expect(string.find(service, "HardMode.touch", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "HardMode.touch(level, player.UserId)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "HardMode.select(profile.level, tier, player.UserId)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "HardMode.touch(level, HardMode.GATE)", 1, true)).toBeNil()
+		expect(string.find(service, "HardMode.select(profile.level, tier, HardMode.GATE)", 1, true)).toBeNil()
+		expect(string.find(service, "HardMode.open(HardMode.GATE)", 1, true)).toBeNil()
 		expect(string.find(service, 'enterFromPad(player, descendant:GetAttribute("EnterDungeon"))', 1, true) ~= nil).toBeTrue()
 		expect(string.find(service, "enterFromPad(player, Dungeons.ROOTVAULT_ID)", 1, true) ~= nil).toBeTrue()
-		expect(string.find(service, "HardMode.open(HardMode.GATE)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(service, "HardMode.noteJoin(player.UserId)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "HardMode.release(player.UserId)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(service, "HardMode.tokens", 1, true) ~= nil).toBeTrue()
 
 		local client = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")

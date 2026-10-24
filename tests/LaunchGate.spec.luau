@@ -37,6 +37,7 @@ describe("LaunchGate", function()
 			"chests",
 			"paid",
 			"extraDifficulties",
+			"hardMode",
 		}
 		for _, id in ipairs(flags) do
 			expect(LaunchGate.on(id)).toEqual(false)

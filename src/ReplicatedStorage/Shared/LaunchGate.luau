@@ -48,7 +48,8 @@ LaunchGate.SHOW = {
 	gearSalvage = false, -- salvage gear into Essence (Stage B). Off until Kevin flips it.
 	oneInventory = false, -- [Ghost] Bag rail button and B key open the full Inventory; the small Bag is retired.
 	extraTiers = false, -- Mythic/Secret rolling (Phase 5). Owned items of those tiers still load and show
-	extraDifficulties = false, -- Medium, Nightmare, Insane. Rows stay in Config. Hard stays on.
+	extraDifficulties = false, -- Medium, Nightmare, Insane. Rows stay in Config.
+	hardMode = false, -- Hard at the gate. Off: Normal only. The Hard row stays.
 	luckMilestone = false, -- every-10th-roll x2 luck boost and its "x2 Luck in N" meter. Parked Oct 22; shardRolls still counts
 }
 

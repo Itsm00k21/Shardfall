@@ -2951,8 +2951,8 @@ function DungeonService.setDifficulty(player: Player, tier: any)
 	if profile == nil then
 		return reject("Profile is still loading.")
 	end
-	-- Memory only. A refused Hard pick does not change the pad or the save.
-	local accepted, why = HardMode.select(profile.level, tier, HardMode.GATE)
+	-- This player's memory only. A refusal does not write a save or anyone else.
+	local accepted, why = HardMode.select(profile.level, tier, player.UserId)
 	if accepted == nil then
 		return reject(why or HardMode.REFUSED)
 	end
@@ -2962,7 +2962,7 @@ end
 local function enterFromPad(player: Player, dungeonId: any)
 	local profile = DataService.get(player)
 	local level = if profile ~= nil then profile.level else 1
-	local tier, why = HardMode.touch(level, HardMode.GATE)
+	local tier, why = HardMode.touch(level, player.UserId)
 	if tier == nil then
 		pushRun(player, why or HardMode.PAD_REFUSED)
 		return
@@ -3243,8 +3243,7 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
-	-- This server session joins on Normal. Nothing is read from a profile.
-	HardMode.open(HardMode.GATE)
+	-- No server-wide pad tier. Each player joins on Normal in noteJoin.
 	print("[Rootvault] build " .. Build.STAMP .. " spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
@@ -3321,8 +3320,8 @@ function DungeonService.start()
 	end
 
 	local function hook(player: Player)
-		-- Join default is Normal. This does not read or write the profile,
-		-- and it does not clear a pad that is already on Hard.
+		-- This player joins on Normal. Other players' tiers stay as they are.
+		-- Nothing is read from or written to the profile.
 		HardMode.noteJoin(player.UserId)
 		watchIdle(player)
 		player.CharacterAdded:Connect(function()
@@ -3356,6 +3355,7 @@ function DungeonService.start()
 		restartAt[player] = nil
 		idleNoted[player] = nil
 		tickFault[player] = nil
+		HardMode.release(player.UserId)
 	end)
 
 	RunService.Heartbeat:Connect(onHeartbeat)
