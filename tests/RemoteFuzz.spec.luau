@@ -748,6 +748,9 @@ function handlers.Onboard(data, action)
 			Onboarding.starter(profile)
 		else
 			local following = Onboarding.next(profile.onboardStep)
+			if following == "class" and not LaunchGate.on("classes") then
+				following = Onboarding.next("class")
+			end
 			if following == nil then
 				Onboarding.starter(profile)
 			else
