@@ -91,6 +91,8 @@ local function fullRoster(patch: { [string]: any }?): any
 		WAVE_MIXES = Enemies.WAVE_MIXES,
 		WAVE_GAP = Enemies.WAVE_GAP,
 		WAVE_LIFT = Enemies.WAVE_LIFT,
+		MAX_ALIVE = Enemies.MAX_ALIVE,
+		PLATFORM_CAP = Enemies.PLATFORM_CAP,
 		BOSS = Enemies.BOSS,
 		BOSS_ADDS = Enemies.BOSS_ADDS,
 		BOSS_WAVE = Enemies.BOSS_WAVE,
@@ -443,7 +445,8 @@ describe("WaveFlowService", function()
 			expect(WaveFlowService.counter(run)).toEqual({ wave = 3, left = 10 })
 			killLiving(run, sink, 10)
 			expect(WaveFlowService.counter(run)).toEqual({ wave = 4, left = 12 })
-			expect(#built).toEqual(6 + 8 + 10 + 12)
+			-- Waves 1-3 are fully built. Wave 4 builds only the alive cap.
+			expect(#built).toEqual(6 + 8 + 10 + math.min(12, Enemies.MAX_ALIVE))
 			killLiving(run, sink, 12)
 			expect(run.clear).toEqual(false)
 			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 5 })

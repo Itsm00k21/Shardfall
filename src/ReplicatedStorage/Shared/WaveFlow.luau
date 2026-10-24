@@ -6,6 +6,10 @@
 	module does not create parts, fire a remote, read a profile, or
 	spend Robux.
 
+	WaveFlowService passes the alive cap. Spawns past that cap wait on
+	the run queue and join as others die. With no cap, a wave spawns
+	every enemy at once, which is what a direct start() does.
+
 	WaveFlowService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on. A client that requires this file can
 	step a local table. It cannot grant loot or push the counter.
@@ -40,11 +44,18 @@ export type Member = {
 	actor: EnemyRoster.Actor,
 }
 
+export type Pending = {
+	kind: string,
+	slot: number,
+}
+
 export type Run = {
 	wave: number,
 	clear: boolean,
 	nextId: number,
 	members: { Member },
+	queue: { Pending },
+	cap: number?,
 }
 
 local function living(run: Run): number
@@ -55,6 +66,26 @@ local function living(run: Run): number
 		end
 	end
 	return left
+end
+
+local function waiting(run: Run): number
+	if run.queue == nil then
+		return 0
+	end
+	return #run.queue
+end
+
+local function pushMember(members: { Member }, nextId: number, slot: number, kind: string): number?
+	local actor = EnemyRoster.spawn(kind, (slot - 1) * Enemies.WAVE_GAP, 0)
+	if actor == nil then
+		return nil
+	end
+	table.insert(members, {
+		id = nextId,
+		slot = slot,
+		actor = actor,
+	})
+	return nextId + 1
 end
 
 -- Boss first, then adds in WAVE_ORDER. Nil when the mix is not four adds.
@@ -121,39 +152,81 @@ function WaveFlow.plan(wave: number): { string }?
 	return kinds
 end
 
+-- How many of this wave may be alive. Nil or a non-positive cap means
+-- the whole wave. A smaller cap leaves the rest on the queue, in order.
+local function roomFor(run: Run, count: number): number
+	local cap = run.cap
+	if type(cap) ~= "number" or cap ~= cap or cap < 1 or cap >= count then
+		return count
+	end
+	return math.floor(cap)
+end
+
 local function spawnWave(run: Run, wave: number): boolean
 	local kinds = WaveFlow.plan(wave)
 	if kinds == nil then
 		return false
 	end
+	local room = roomFor(run, #kinds)
 	local members = {}
+	local queue: { Pending } = {}
 	local nextId = run.nextId
 	for slot, kind in ipairs(kinds) do
-		local actor = EnemyRoster.spawn(kind, (slot - 1) * Enemies.WAVE_GAP, 0)
-		if actor == nil then
-			return false
+		if #members < room then
+			local advanced = pushMember(members, nextId, slot, kind)
+			if advanced == nil then
+				return false
+			end
+			nextId = advanced
+		else
+			table.insert(queue, {
+				kind = kind,
+				slot = slot,
+			})
 		end
-		table.insert(members, {
-			id = nextId,
-			slot = slot,
-			actor = actor,
-		})
-		nextId += 1
 	end
 	run.nextId = nextId
 	run.wave = wave
 	run.clear = false
 	run.members = members
+	run.queue = queue
 	return true
 end
 
-function WaveFlow.start(): Run?
+-- Pull queued spawns until the cap is full or the queue is empty.
+local function fill(run: Run)
+	local cap = run.cap
+	if type(cap) ~= "number" or cap < 1 then
+		return
+	end
+	local room = math.floor(cap) - living(run)
+	while room > 0 and waiting(run) > 0 do
+		local pending = table.remove(run.queue, 1)
+		if pending == nil then
+			break
+		end
+		local advanced = pushMember(run.members, run.nextId, pending.slot, pending.kind)
+		if advanced == nil then
+			table.insert(run.queue, 1, pending)
+			return
+		end
+		run.nextId = advanced
+		room -= 1
+	end
+end
+
+function WaveFlow.start(cap: number?): Run?
 	local run: Run = {
 		wave = 0,
 		clear = false,
 		nextId = 1,
 		members = {},
+		queue = {},
+		cap = nil,
 	}
+	if type(cap) == "number" and cap == cap and cap >= 1 then
+		run.cap = math.floor(cap)
+	end
 	if not spawnWave(run, 1) then
 		return nil
 	end
@@ -163,7 +236,7 @@ end
 function WaveFlow.counter(run: Run): Counter
 	return {
 		wave = run.wave,
-		left = living(run),
+		left = living(run) + waiting(run),
 	}
 end
 
@@ -213,8 +286,11 @@ function WaveFlow.hurt(run: Run, id: number, raw: number): number
 	if taken <= 0 or member.actor.hp > 0 then
 		return taken
 	end
-	if living(run) > 0 then
-		return taken
+	if living(run) > 0 or waiting(run) > 0 then
+		fill(run)
+		if living(run) > 0 then
+			return taken
+		end
 	end
 	local nextWave = run.wave + 1
 	if not spawnWave(run, nextWave) then

@@ -16,22 +16,25 @@
 	The module is absent on this branch, so the lookup is a no-op.
 
 	Studio can require the module. Lune loads the same file through the
-	relative path when `game` is not a DataModel. The service describes
-	gray blocks. It does not parent them.
+	relative path when `game` is not a DataModel. Gray blocks live in
+	EnemyPool. That module reuses them. This file does not create them.
 ]]
 
 local LaunchGate
 local WaveFlow
 local Enemies
+local EnemyPool
 if game ~= nil and game.GetService ~= nil then
 	local Shared = game:GetService("ReplicatedStorage").Shared
 	LaunchGate = require(Shared.LaunchGate)
 	WaveFlow = require(Shared.WaveFlow)
 	Enemies = require(Shared.Config.Enemies)
+	EnemyPool = require(script.Parent.EnemyPool)
 else
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
 	WaveFlow = require("../../ReplicatedStorage/Shared/WaveFlow")
 	Enemies = require("../../ReplicatedStorage/Shared/Config/Enemies")
+	EnemyPool = require("./EnemyPool")
 end
 
 local WaveFlowService = {}
@@ -55,6 +58,7 @@ export type Sink = {
 	fire: ((any, Payload) -> ())?,
 	build: ((WaveFlow.Box) -> any)?,
 	analytics: ((string, EventDetail) -> ())?,
+	platform: string?,
 }
 
 function WaveFlowService.open(): boolean
@@ -165,12 +169,45 @@ function WaveFlowService.publish(player: any, run: WaveFlow.Run?, fire: ((any, P
 	return deliver(player, payload, fire)
 end
 
-local function pushBoxes(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
-	if build == nil then
-		return
+type Track = {
+	pool: EnemyPool.Pool,
+	shown: { [number]: boolean },
+}
+
+local tracks: { [WaveFlow.Run]: Track } = {}
+
+local function track(run: WaveFlow.Run): Track
+	local found = tracks[run]
+	if found ~= nil then
+		return found
 	end
-	for _, box in ipairs(WaveFlow.boxes(run)) do
-		build(box)
+	local created: Track = {
+		pool = EnemyPool.create(),
+		shown = {},
+	}
+	tracks[run] = created
+	return created
+end
+
+-- Bind a pooled block to each living enemy. Fresh ids are described
+-- once. Dead ids go back to the pool before the next bind, so a queued
+-- spawn reuses a block instead of making another.
+local function present(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
+	local owned = track(run)
+	local living: { [number]: boolean } = {}
+	local boxes = WaveFlow.boxes(run)
+	for _, box in ipairs(boxes) do
+		living[box.id] = true
+	end
+	owned.pool.releaseExcept(living)
+	for _, box in ipairs(boxes) do
+		owned.pool.bind(box.id, box.kind, box)
+		if owned.shown[box.id] ~= true then
+			owned.shown[box.id] = true
+			if build ~= nil then
+				build(box)
+			end
+		end
 	end
 end
 
@@ -185,12 +222,13 @@ function WaveFlowService.start(sink: Sink?): WaveFlow.Run?
 	if not WaveFlowService.open() then
 		return nil
 	end
-	local run = WaveFlow.start()
+	local platform = if sink ~= nil then sink.platform else nil
+	local run = WaveFlow.start(Enemies.aliveCap(platform))
 	if run == nil then
 		return nil
 	end
 	local build = if sink ~= nil then sink.build else nil
-	pushBoxes(run, build)
+	present(run, build)
 	if sink ~= nil then
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
@@ -205,15 +243,36 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	local before = WaveFlow.counter(run)
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
+	local build = if sink ~= nil then sink.build else nil
+	present(run, build)
 	local after = WaveFlow.counter(run)
-	if after.wave ~= before.wave and sink ~= nil then
-		pushBoxes(run, sink.build)
-	end
 	if sink ~= nil and (after.wave ~= before.wave or after.left ~= before.left) then
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
 	noteBoss(sink, run, before.wave, wasBoss)
 	return taken
+end
+
+function WaveFlowService.body(run: WaveFlow.Run?, id: number): EnemyPool.Body?
+	if not WaveFlowService.open() or run == nil or type(id) ~= "number" then
+		return nil
+	end
+	local owned = tracks[run]
+	if owned == nil then
+		return nil
+	end
+	return owned.pool.body(id)
+end
+
+function WaveFlowService.pool(run: WaveFlow.Run?): EnemyPool.Stats?
+	if not WaveFlowService.open() or run == nil then
+		return nil
+	end
+	local owned = tracks[run]
+	if owned == nil then
+		return nil
+	end
+	return owned.pool.stats()
 end
 
 return WaveFlowService
