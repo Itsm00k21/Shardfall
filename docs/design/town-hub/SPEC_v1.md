@@ -1,5 +1,3 @@
-<cursor_untrusted_data_1337 source="CallDynamicTool">
-
 # Town / Hub: "Crater Square" (V1 hub cut down from the live Haven), Spec v1.1
 
 Owner: Prism (design, no code). Builders: Ghost (world + UI), Echo (server hooks, flags). Base: `cursor/live-build-9721` @ `9269e61`. Docs only.
@@ -8,7 +6,7 @@ Nothing here changes code or Config. LaunchGate flag names below are suggestions
 
 **v1.1 changelog (Oct 23, 2026):** renamed "Sundered Haven" → **Crater Square**. The hub is now the live Haven **cut down**, not a new layout: live spawn (0, 30), live Lumen Heart (0, 0), live Armory, live Rootvault arch slot (0, 108) reused as the Shard Gate. Parked districts and the 5 sealed/raid arches are hidden behind LaunchGate flags (nothing deleted). Walk numbers redone (all under 5 s). Gate prompt = Normal + Hard (Lv 5) only. Pull beams added (per-server, not saved, Phase S). Havoc's QA risks folded into §7. Taste call 2 settled (see §11).
 
-Sources (link, don't copy): `Shared/Haven.luau` (`FLOOR_Y = 120`, `WALK_SPEED = 16`, `PLAZA_RADIUS = 52`, `CRYSTAL` height 36 at (0, 0), `SPAWN` (0, 30) looking south, `GATE_RADIUS = 78` crescent of 6 arches around spawn, `COURT_RIM = 96`, `ARMORY` (-38, -35.8), `DISTRICTS` Forge/Market/Guild Hall/Pet Garden/Observatory at 100–200 st); `Shared/LaunchGate.luau` (`SHOW`, `promptOpen`, `dungeonOpen`); `docs/design/DUNGEON_GATE_PLAZA.md` (Ghost, six-arch crescent; its Hard Lv 10 / Nightmare Lv 15 lines are superseded by decision 10, Ghost to update that doc); first-30-seconds spec (#412). Element colors reuse the live arch colors: Ember 255,150,40 · Frost 186,228,255 · Void 150,70,220.
+Sources (link, don't copy): `Shared/Haven.luau` (`FLOOR_Y = 120`, `WALK_SPEED = 16`, `PLAZA_RADIUS = 52`, `CRYSTAL` height 36 at (0, 0), `SPAWN` (0, 30) looking south, `GATE_RADIUS = 78` crescent of 6 arches around spawn, `COURT_RIM = 96`, `ARMORY` (-38, -35.8), `DISTRICTS` Forge/Market/Guild Hall/Pet Garden/Observatory at 100–200 st); `Shared/LaunchGate.luau` (`SHOW`, `promptOpen`, `dungeonOpen`); `docs/design/DUNGEON_GATE_PLAZA.md` (Ghost, six-arch crescent; its Hard Lv 10 / Nightmare Lv 15 lines are superseded by decision 10; that doc was updated in PR #418, https://github.com/Itsm00k21/Shardfall/pull/418); first-30-seconds spec (#412). Element colors reuse the live arch colors: Ember 255,150,40 · Frost 186,228,255 · Void 150,70,220.
 
 ## 1. Goal
 A small, readable V1 hub where a new player sees the Roll altar and the Shard Gate in the very first shot, walks spawn → Roll in ~1.6 s and Roll → Gate in ~3 s, and gets the world's story at a glance: a god-crystal shard fell here and left a crater, shards still rain down, and the Hollow is draining color from the crater lip. Everything not in V1 is hidden, not removed.
@@ -137,11 +135,9 @@ Roblox notes: everything is Parts/MeshParts, Lighting/Atmosphere, Sky, Beams and
 2. ~~Rename the Lumen Heart to "Sundered Heart"?~~ **Settled by Ghost's decisions (Oct 23, 2026):** the hub identity is **Crater Square** (decision 2/3) and the hub is the live Haven cut down, so the landmark keeps its live name **Lumen Heart** with the new cracked look. Kevin can still rename it later.
 3. ~~Muster spot gray-box now or empty?~~ **Gray-box the 4 sockets now (Ghost, Kevin pre-approved).** Decor only, no party logic until Phase 6.
 
-Not a Kevin question: Ghost to update `DUNGEON_GATE_PLAZA.md` (Hard Lv 5, no Nightmare) per decision 10.
+Done: `DUNGEON_GATE_PLAZA.md` now says Hard Lv 5 and no Nightmare (decision 10). It was updated in PR #418 (https://github.com/Itsm00k21/Shardfall/pull/418).
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): hub = Crater Square, small V1 hub cut down from the live Haven; parked districts + 5 sealed gates hidden behind LaunchGate flags (delete nothing); Spawn, Roll and Gate within ~10 s walk. Gate prompt = Normal + Hard (Lv 5), no Nightmare. Pull beams per-server only, not saved, Phase S. → v1.1.
-
-
-</cursor_untrusted_data_1337>
 - 2026-10-23 (Ghost, Kevin pre-approved): taste call 1 = fixed evening sky (ClockTime 18.5); taste call 3 = gray-box the Muster spot now. All §11 questions are now closed.
+- 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): phone check pass, no screen UI in this spec. The Gate dock it opens is #412's (see the review's bottom-slot note R2). The `DUNGEON_GATE_PLAZA.md` follow-up was done in PR #418.
