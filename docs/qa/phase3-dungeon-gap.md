@@ -71,3 +71,11 @@ Stacked on #419. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). `waveArena
 - A ranged enemy inside `retreat` (12 studs) still backs up, and it fires. Point-blank contact deals the config damage. The arena clamp is unchanged.
 - A ranged shot no longer pays damage at the aim point from the firing tick. The server moves the projectile and hits only if that path reaches the target's current position within `SHOT_RADIUS`. The line-of-sight ray uses that current position. Stepping off the path misses.
 - `LEASH_RANGE`, `LEASH_SECONDS`, `LEASH_WINDUP`, and `LEASH_RADIUS` live in `Config/Enemies.luau`. `Enemies.validate` rejects a leash inside the boss melee range, a non-positive duration, or a windup too short to dodge. If the player stays beyond the leash for `LEASH_SECONDS`, the boss marks that spot and slams after `LEASH_WINDUP`. Leaving the radius deals 0. The boss HP is not restored.
+
+## What the boss kite pass adds
+
+Stacked on #425. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). No new flag, remote, profile field, or Robux. `schemaVersion` stays 26.
+
+- `PRESSURE_SECONDS` (4) and `PRESSURE_DECAY` live in `Config/Enemies.luau`. The timer climbs while the boss deals no damage to its target. A damaging tick subtracts the decay. It does not snap to 0. `Enemies.validate` rejects a decay that would clear an armed timer.
+- Outside melee, once pressure is armed, the boss uses Shard Volley: `VOLLEY_WINDUP` (0.8s), then `VOLLEY_SHOTS` (3) shots that lead the target, then `VOLLEY_COOLDOWN` (5s). A line-of-sight block still stops a bolt.
+- The leash slam dashes to its mark at `LEASH_DASH` and finishes on that spot, clamped to `ARENA`. Chase is clamped the same way. The boss never regens.

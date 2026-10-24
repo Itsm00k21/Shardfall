@@ -13,6 +13,14 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Wave-5 boss kite pressure (flag `enemyTypes`, off). After
+  `PRESSURE_SECONDS` (4) with no damage dealt, the timer stays armed
+  and a damaging tick shaves `PRESSURE_DECAY` instead of clearing it.
+  Outside melee the boss fires Shard Volley: `VOLLEY_WINDUP` 0.8s, then
+  3 shots that lead the target, then `VOLLEY_COOLDOWN` 5s. The leash
+  slam dashes at `LEASH_DASH`. The boss is clamped to `ARENA` and does
+  not regen. Numbers live in `Shared/Config/Enemies.luau`. No save
+  fields. `schemaVersion` stays 26. Stacked on #425. (open)
 - Ranged enemies fire inside the 12-stud retreat and still back up. A shot
   damages the target only when the projectile path reaches where they are
   now; a sidestep off that path misses. The wave-5 boss, after
