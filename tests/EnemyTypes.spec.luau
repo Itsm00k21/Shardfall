@@ -47,12 +47,11 @@ local function copyRow(row: any): any
 	return clone
 end
 
-local function rosterWith(id: string, field: string, value: any): any
+local function fullRoster(): any
 	local types = {}
 	for _, kind in ipairs(Enemies.ORDER) do
 		types[kind] = copyRow(Enemies.TYPES[kind])
 	end
-	types[id][field] = value
 	return {
 		ORDER = { "chaser", "ranged", "tank" },
 		TYPES = types,
@@ -60,7 +59,34 @@ local function rosterWith(id: string, field: string, value: any): any
 		STEP_MAX = Enemies.STEP_MAX,
 		PREVIEW_GAP = Enemies.PREVIEW_GAP,
 		PREVIEW_LIFT = Enemies.PREVIEW_LIFT,
+		ARENA = {
+			minX = Enemies.ARENA.minX,
+			maxX = Enemies.ARENA.maxX,
+			minZ = Enemies.ARENA.minZ,
+			maxZ = Enemies.ARENA.maxZ,
+		},
+		SHOT_Y = Enemies.SHOT_Y,
+		LOS_PAD = Enemies.LOS_PAD,
+		WAVE_COUNTS = Enemies.WAVE_COUNTS,
+		WAVE_ORDER = Enemies.WAVE_ORDER,
+		WAVE_MIXES = Enemies.WAVE_MIXES,
+		WAVE_GAP = Enemies.WAVE_GAP,
+		WAVE_LIFT = Enemies.WAVE_LIFT,
+		BOSS = Enemies.BOSS,
+		BOSS_ADDS = Enemies.BOSS_ADDS,
+		BOSS_WAVE = Enemies.BOSS_WAVE,
+		BOSS_ADD_MIX = {
+			chaser = Enemies.BOSS_ADD_MIX.chaser,
+			ranged = Enemies.BOSS_ADD_MIX.ranged,
+			tank = Enemies.BOSS_ADD_MIX.tank,
+		},
 	}
+end
+
+local function rosterWith(id: string, field: string, value: any): any
+	local roster = fullRoster()
+	roster.TYPES[id][field] = value
+	return roster
 end
 
 local function readOk(path: string): boolean
@@ -129,15 +155,42 @@ describe("Config.Enemies V1 types", function()
 		local fastTank = Enemies.validate(rosterWith("tank", "moveSpeed", Enemies.TYPES.chaser.moveSpeed))
 		expect(fastTank).toEqual(false)
 
-		local order = Enemies.validate({
-			ORDER = { "tank", "ranged", "chaser" },
-			TYPES = Enemies.TYPES,
-			SHARED = Enemies.SHARED,
-			STEP_MAX = Enemies.STEP_MAX,
-			PREVIEW_GAP = Enemies.PREVIEW_GAP,
-			PREVIEW_LIFT = Enemies.PREVIEW_LIFT,
-		})
-		expect(order).toEqual(false)
+		local scrambled = fullRoster()
+		scrambled.ORDER = { "tank", "ranged", "chaser" }
+		expect(Enemies.validate(scrambled)).toEqual(false)
+	end)
+
+	it("keeps the arena inside 80 to 100 studs and a real shot ray", function()
+		local span = Enemies.ARENA.maxX - Enemies.ARENA.minX
+		expect(span).toEqual(Enemies.ARENA.maxZ - Enemies.ARENA.minZ)
+		expect(span >= 80 and span <= 100).toBeTrue()
+		expect(Enemies.ARENA.minX).toEqual(-Enemies.ARENA.maxX)
+		expect(Enemies.ARENA.minZ).toEqual(-Enemies.ARENA.maxZ)
+		expect(Enemies.SHOT_Y).toEqual(3)
+		expect(Enemies.LOS_PAD).toEqual(1.5)
+		expect(Enemies.TYPES.ranged.projectileSpeed > 0).toBeTrue()
+
+		local wide = fullRoster()
+		wide.ARENA = { minX = -70, maxX = 70, minZ = -70, maxZ = 70 }
+		expect(Enemies.validate(wide)).toEqual(false)
+
+		local narrow = fullRoster()
+		narrow.ARENA = { minX = -30, maxX = 30, minZ = -30, maxZ = 30 }
+		expect(Enemies.validate(narrow)).toEqual(false)
+
+		local shifted = fullRoster()
+		shifted.ARENA = { minX = -40, maxX = 50, minZ = -45, maxZ = 45 }
+		expect(Enemies.validate(shifted)).toEqual(false)
+
+		local nanRay = fullRoster()
+		nanRay.SHOT_Y = 0 / 0
+		expect(Enemies.validate(nanRay)).toEqual(false)
+
+		local flat = fullRoster()
+		flat.LOS_PAD = 0
+		expect(Enemies.validate(flat)).toEqual(false)
+
+		expect(Enemies.validate(fullRoster())).toEqual(true)
 	end)
 
 	it("leaves rooms and waves on the old roster", function()
@@ -185,7 +238,12 @@ describe("EnemyTypeService", function()
 			hp = 40,
 			cooldown = 0,
 		}
-		expect(EnemyTypeService.step(actor, 20, 4, 1)).toEqual(0)
+		local sawCast = false
+		expect(EnemyTypeService.step(actor, 20, 4, 1, function()
+			sawCast = true
+			return true
+		end)).toEqual(0)
+		expect(sawCast).toEqual(false)
 		expect(actor.x).toEqual(3)
 		expect(actor.z).toEqual(4)
 		expect(EnemyTypeService.hurt(actor, 10)).toEqual(0)
@@ -234,6 +292,105 @@ describe("EnemyTypeService", function()
 			local shot = EnemyTypeService.step(far, 24, 0, 1)
 			expect(shot).toEqual(Enemies.TYPES.ranged.damage)
 			expect(far.x).toBeGreaterThan(0)
+		end)
+	end)
+
+	it("holds a kiting ranged enemy on the arena edge", function()
+		withFlag(true, function()
+			local box = Enemies.ARENA
+			local edge = EnemyTypeService.spawn("ranged", box.maxX - 3, 0)
+			expect(edge ~= nil).toBeTrue()
+			if edge == nil then
+				return
+			end
+			local dealt = EnemyTypeService.step(edge, box.maxX - 13, 0, 1)
+			expect(dealt).toEqual(0)
+			expect(edge.x).toEqual(box.maxX)
+			expect(edge.z).toEqual(0)
+
+			local corner = EnemyTypeService.spawn("ranged", box.maxX - 1, box.maxZ - 1)
+			expect(corner ~= nil).toBeTrue()
+			if corner == nil then
+				return
+			end
+			EnemyTypeService.step(corner, box.maxX - 9, box.maxZ - 9, 1)
+			expect(corner.x).toEqual(box.maxX)
+			expect(corner.z).toEqual(box.maxZ)
+
+			local stuck = EnemyTypeService.spawn("ranged", box.minX, 0)
+			expect(stuck ~= nil).toBeTrue()
+			if stuck == nil then
+				return
+			end
+			local overlap = EnemyTypeService.step(stuck, box.minX, 0, 1)
+			expect(overlap).toEqual(0)
+			expect(stuck.x).toEqual(box.minX)
+			expect(stuck.z).toEqual(0)
+		end)
+	end)
+
+	it("flies a ranged shot at projectile speed and checks line of sight", function()
+		withFlag(true, function()
+			local row = Enemies.TYPES.ranged
+			local service = fs.readFile("src/ServerScriptService/ShardfallServer/EnemyTypeService.luau")
+			expect(string.find(service, "workspace:Raycast(", 1, true) ~= nil).toBeTrue()
+
+			local actor = EnemyTypeService.spawn("ranged", 0, 0)
+			expect(actor ~= nil).toBeTrue()
+			if actor == nil then
+				return
+			end
+			local early = EnemyTypeService.step(actor, 22, 0, 0.05)
+			expect(early).toEqual(0)
+			local shot = actor.shot
+			expect(shot ~= nil).toBeTrue()
+			if shot == nil then
+				return
+			end
+			expect(shot.speed).toEqual(row.projectileSpeed)
+			local span = shot.speed * 0.05
+			expect(shot.x).toBeCloseTo(shot.originX + shot.dirX * span)
+			expect(shot.z).toBeCloseTo(shot.originZ + shot.dirZ * span)
+			expect(shot.remaining).toBeGreaterThan(1)
+
+			local left = shot.remaining
+			local halfDt = (left / shot.speed) * 0.5
+			local mid = EnemyTypeService.step(actor, 22, 0, halfDt)
+			expect(mid).toEqual(0)
+			expect(actor.shot ~= nil).toBeTrue()
+			if actor.shot == nil then
+				return
+			end
+			expect(actor.shot.remaining).toBeCloseTo(left - shot.speed * halfDt, 1e-4)
+
+			local landDt = actor.shot.remaining / actor.shot.speed + 1e-4
+			local hit = EnemyTypeService.step(actor, 22, 0, landDt)
+			expect(hit).toEqual(row.damage)
+			expect(actor.shot).toBeNil()
+
+			local blockedActor = EnemyTypeService.spawn("ranged", 0, 0)
+			expect(blockedActor ~= nil).toBeTrue()
+			if blockedActor == nil then
+				return
+			end
+			local function wall(_x0: number, _z0: number, _x1: number, _z1: number): boolean
+				return true
+			end
+			expect(EnemyTypeService.step(blockedActor, 22, 0, 0.05, wall)).toEqual(0)
+			expect(blockedActor.shot ~= nil).toBeTrue()
+			if blockedActor.shot == nil then
+				return
+			end
+			local blockedDt = blockedActor.shot.remaining / blockedActor.shot.speed + 1e-4
+			expect(EnemyTypeService.step(blockedActor, 22, 0, blockedDt, wall)).toEqual(0)
+			expect(blockedActor.shot).toBeNil()
+
+			local chaser = EnemyTypeService.spawn("chaser", 0, 0)
+			expect(chaser ~= nil).toBeTrue()
+			if chaser == nil then
+				return
+			end
+			expect(EnemyTypeService.step(chaser, 8, 0, 1, wall)).toEqual(Enemies.TYPES.chaser.damage)
 		end)
 	end)
 
