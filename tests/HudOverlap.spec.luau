@@ -32,6 +32,8 @@ local VIEWS = {
 	{ 1920, 1080 },
 	{ 390, 844 },
 	{ 844, 390 },
+	{ 667, 375 },
+	{ 812, 375 },
 }
 
 local world = GuiFake.world()
@@ -66,7 +68,7 @@ local function rectsFor(vx: number, vy: number, touch: boolean): { Named }
 		add("railTips", HudLayout.railTips(vx, vy, margin))
 	end
 	add("toastHost", HudLayout.toastHost(vx, margin))
-	add("equipPrompt", HudLayout.equipPrompt(vx, margin))
+	add("equipPrompt", HudLayout.equipPrompt(vx, margin, vy))
 	add("bar", { x = spot.x, y = spot.y, w = spot.w, h = spot.h })
 	add("barTabs", {
 		x = spot.x + chrome.strip.x,
@@ -110,12 +112,6 @@ local function allowed(a: string, b: string, vx: number, vy: number, touch: bool
 	end
 	if (a == "railTips" and not ONBOARD[b]) or (b == "railTips" and not ONBOARD[a]) then
 		return "hover-only tip beside one rail button; draws over older HUD briefly"
-	end
-	if pair("equipPrompt", "starterList") then
-		return "pre-existing: the starter list dodges the equip prompt on phones only (flagged for Havoc)"
-	end
-	if phone and (pair("equipPrompt", "bar") or pair("equipPrompt", "barTabs")) then
-		return "pre-existing 4px phone overlap of the equip prompt and the bar (flagged for Havoc)"
 	end
 	if (a == "starterList" and ONBOARD[b]) or (b == "starterList" and ONBOARD[a]) then
 		return "the starter list hides while the intro card or goals show"
@@ -395,5 +391,134 @@ describe("Open panels sit above the goals, or the goals hide", function()
 			local needle = 'OnboardHud.coverWhen("' .. source .. '"'
 			expect(string.find(init, needle, 1, true) ~= nil).toBeTrue()
 		end
+	end)
+end)
+
+describe("Havoc #482: landscape phone prompt and toasts", function()
+	it("keeps the equip prompt left of the hotbar with both buttons whole", function()
+		for _, view in ipairs(VIEWS) do
+			local vx, vy = view[1], view[2]
+			local prompt = HudLayout.equipPrompt(vx, 16, vy)
+			-- Never narrower than the toast stack's own width allows (390x844
+			-- portrait is 160 wide before this change; see the PR notes).
+			local host = HudLayout.toastHost(vx, 16)
+			expect(prompt.w >= math.min(HudLayout.PROMPT_MIN_W, host.w)).toBeTrue()
+			expect(prompt.x >= 16).toBeTrue()
+			-- ActionBar forces the thumb cluster under 700 wide or 500 tall,
+			-- so the desktop row only exists on larger views.
+			local forced = vx < 700 or vy < 500
+			local modes = if forced then { true } else { true, false }
+			for _, mobile in ipairs(modes) do
+				local spot = ActionSlots.placement(vx, vy, mobile)
+				local bar = { x = spot.x, y = spot.y, w = spot.w, h = spot.h }
+				expect(HudLayout.overlaps(prompt, bar)).toBeFalse()
+			end
+		end
+		-- 667x375: before this fix the prompt (123..543) covered the bar and
+		-- the Lock/T strip at x451.
+		local phone = HudLayout.equipPrompt(667, 16, 375)
+		expect(phone.x + phone.w <= 451 - UiTheme.PAD).toBeTrue()
+		-- Without a height the old frame is unchanged for older callers.
+		expect(HudLayout.equipPrompt(1512, 16).w).toEqual(420)
+	end)
+
+	it("keeps the toast stack off the folded Goals tab", function()
+		for _, size in ipairs({ { 667, 375 }, { 812, 375 }, { 844, 390 } }) do
+			local layout = HudLayout.onboard(size[1], size[2], true, 4)
+			local host = HudLayout.toastHost(size[1], 16)
+			expect(HudLayout.overlaps(host, layout.goalsTab)).toBeFalse()
+			expect(host.x + host.w <= layout.goalsTab.x - 8).toBeTrue()
+		end
+	end)
+end)
+
+describe("Havoc P3-482-C: the roll reel wins over the goals", function()
+	local CLIENT = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
+
+	it("hides the card and goals while a roll shows, then brings them back", function()
+		local world = GuiFake.world()
+		world.playerGui.Parent = world.player
+		local OnboardHud = world.load("OnboardHud")
+		OnboardHud.start(function()
+			return { ok = true }
+		end)
+		OnboardHud.setCollapsed(false, false)
+		-- Onboarding.STEPS has no roll step today (open, class, swing, dodge,
+		-- door, haven); whatever step is showing, the reel wins.
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
+		local goals = GuiFake.findNamed(onboard, "OnboardGoals")
+		local tab = GuiFake.findNamed(onboard, "GoalsTab")
+		local card = GuiFake.findNamed(onboard, "Continue").Parent
+		local function goalsOn(): boolean
+			return OnboardHud.shown(goals) or OnboardHud.shown(tab)
+		end
+		local rolling = false
+		OnboardHud.coverWhen("roll", function()
+			return rolling
+		end)
+		expect(goalsOn()).toBeTrue()
+		rolling = true
+		OnboardHud.setCovered("roll", true) -- RollReel's setBusy hook
+		expect(goalsOn()).toBeFalse()
+		expect(OnboardHud.shown(card)).toBeFalse()
+		-- busy ends but the result card is still up: still hidden.
+		OnboardHud.setCovered("roll", false)
+		expect(goalsOn()).toBeFalse()
+		-- The result card closes; the Heartbeat recheck restores them.
+		rolling = false
+		world.runService.Heartbeat:_emit(0.25)
+		expect(goalsOn()).toBeTrue()
+		local _, folded = OnboardHud.collapsed()
+		expect(folded).toEqual(false)
+		OnboardHud.coverWhen("roll", function()
+			return false
+		end)
+	end)
+
+	it("wires the reel's real on-screen state into OnboardHud", function()
+		local reel = fs.readFile(CLIENT .. "RollReel.luau")
+		expect(string.find(reel, "isShowing = isShowing", 1, true) ~= nil).toBeTrue()
+		local start = string.find(reel, "local function isShowing", 1, true)
+		expect(start ~= nil).toBeTrue()
+		local body = string.sub(reel, start :: number, (start :: number) + 400)
+		for _, part in ipairs({ "busy", "reel.Visible", "card.Visible", "chestFrame.Visible" }) do
+			expect(string.find(body, part, 1, true) ~= nil).toBeTrue()
+		end
+		local init = fs.readFile(CLIENT .. "init.client.luau")
+		expect(string.find(init, 'OnboardHud.coverWhen("roll"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(init, 'OnboardHud.setCovered("roll", isBusy)', 1, true) ~= nil).toBeTrue()
+	end)
+end)
+
+describe("Equip prompt buttons always fit", function()
+	it("narrows Equip and Keep to share the row under 200 wide", function()
+		for _, view in ipairs(VIEWS) do
+			local vx, vy = view[1], view[2]
+			local prompt = HudLayout.equipPrompt(vx, 16, vy)
+			local yes, no = HudLayout.promptButtons(prompt.w)
+			for _, button in ipairs({ yes, no }) do
+				expect(button.x >= 0 and button.x + button.w <= prompt.w).toBeTrue()
+				expect(button.y + button.h <= prompt.h).toBeTrue()
+				expect(button.h >= UiTheme.TOUCH).toBeTrue()
+			end
+			expect(HudLayout.overlaps(yes, no)).toBeFalse()
+		end
+		local portrait = HudLayout.equipPrompt(390, 16, 844)
+		expect(portrait.w < HudLayout.PROMPT_MIN_W).toBeTrue()
+		local yes, no = HudLayout.promptButtons(portrait.w)
+		expect(no.y).toEqual(yes.y)
+		expect(no.x + no.w <= portrait.w - 8).toBeTrue()
+		expect(yes.w >= 64).toBeTrue() -- "Equip" at MIN_TEXT fits
+		expect(portrait.h).toEqual(HudLayout.PROMPT_LABEL + UiTheme.TOUCH + UiTheme.PAD)
+		expect(HudLayout.promptButtons(420)).toEqual({
+			x = 8,
+			y = HudLayout.PROMPT_LABEL,
+			w = UiTheme.TOUCH * 2,
+			h = UiTheme.TOUCH,
+		})
+		local source =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau")
+		expect(string.find(source, "HudLayout.promptButtons(ask.w)", 1, true) ~= nil).toBeTrue()
 	end)
 end)

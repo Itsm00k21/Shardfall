@@ -85,7 +85,7 @@ local function occupied(vx: number, vy: number, margin: number): { Box }
 		HudLayout.health(margin, vx),
 		HudLayout.pills(vx, margin),
 		HudLayout.toastHost(vx, margin),
-		HudLayout.equipPrompt(vx, margin),
+		HudLayout.equipPrompt(vx, margin, vy),
 		box(rail.x, rail.y, rail.w, rail.h),
 		box(hub.x + hub.w - pad - UiTheme.TOUCH, hub.y + pad, UiTheme.TOUCH, UiTheme.TOUCH),
 	}
@@ -196,7 +196,7 @@ function BannerFit.fit(viewportX: any, viewportY: any, textScale: any): Rect
 	local minWide = math.min(LANE_MIN, math.max(0, vx - pad * 2))
 	local chosen = top
 	if top.w < minWide then
-		local prompt = HudLayout.equipPrompt(vx, margin)
+		local prompt = HudLayout.equipPrompt(vx, margin, vy)
 		local below = prompt.y + prompt.h + pad
 		if below < vy then
 			local lower = measure(vx, vy, below, line, blockers)

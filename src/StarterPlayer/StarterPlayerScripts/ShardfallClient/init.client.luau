@@ -832,6 +832,9 @@ rollReel = RollReel.mount(playerGui, {
 	end,
 	setBusy = function(isBusy: boolean)
 		ui.setBusy(isBusy)
+		-- The Heartbeat recheck brings the goals back once the result
+		-- card closes; this hides them on the same frame the roll starts.
+		OnboardHud.setCovered("roll", isBusy)
 	end,
 	onEquip = function(uid: string)
 		task.spawn(function()
@@ -1620,6 +1623,11 @@ end)
 -- [Ghost] Oct 24 (#482): the Dev Tools panel opens under the goals
 -- column; the goals hide while it is open and come back on close.
 OnboardHud.coverWhen("dev", DebugHud.isOpen)
+-- [Ghost] Oct 24 (Havoc P3-482-C): the roll reel (DisplayOrder 40) wins
+-- over the goals during a roll, including the onboarding roll step.
+OnboardHud.coverWhen("roll", function(): boolean
+	return rollReel ~= nil and rollReel.isShowing()
+end)
 OnboardHud.coverWhen("results", function(): boolean
 	local gui = playerGui:FindFirstChild("WaveArenaResults")
 	local card = if gui ~= nil then gui:FindFirstChild("Card") else nil

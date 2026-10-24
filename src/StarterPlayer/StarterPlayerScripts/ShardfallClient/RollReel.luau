@@ -1296,10 +1296,18 @@ function RollReel.mount(playerGui: PlayerGui, hooks: Hooks)
 	end
 	setOpen(false)
 
+	-- [Ghost] Oct 24 (Havoc P3-482-C): true while a roll or chest is on
+	-- screen (the reel, the result card, the chest), so the onboarding
+	-- card and goals step aside and come back after.
+	local function isShowing(): boolean
+		return busy or reel.Visible or card.Visible or chestFrame.Visible or manyFrame.Visible
+	end
+
 	return {
 		request = request,
 		playChest = playChest,
 		setOpen = setOpen,
+		isShowing = isShowing,
 		setProfile = function(nextProfile: any)
 			profile = nextProfile
 			paint()

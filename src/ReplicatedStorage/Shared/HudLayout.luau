@@ -190,6 +190,11 @@ function HudLayout.rail(viewportY: number, margin: number, count: number, button
 	return rect(margin, y, button, height)
 end
 
+-- The folded "‹ Goals" tab under the top-right column (HudLayout.onboard).
+HudLayout.GOALS_TAB_W = 112
+-- Equip + Keep (two TOUCH*2 buttons) with their pads.
+HudLayout.PROMPT_MIN_W = UiTheme.TOUCH * 4 + 24
+
 function HudLayout.toast(viewportX: number, margin: number): Rect
 	local width = math.min(420, math.max(160, viewportX - 240))
 	local left = math.min(margin, math.max(0, viewportX))
@@ -197,6 +202,10 @@ function HudLayout.toast(viewportX: number, margin: number): Rect
 	-- Leave the counter column (108) plus an 8px gutter.
 	if type(viewportX) == "number" and viewportX > 0 and viewportX < 500 then
 		right = viewportX - margin - 108 - 8
+	elseif type(viewportX) == "number" and viewportX >= 500 and viewportX < 900 then
+		-- [Ghost] Oct 24 (Havoc #482 P2): a landscape phone keeps the
+		-- toasts left of the folded Goals tab under the top-right column.
+		right = math.min(right, viewportX - margin - HudLayout.GOALS_TAB_W - 8)
 	end
 	if right < left then
 		right = left
@@ -227,12 +236,43 @@ function HudLayout.toastHost(viewportX: number, margin: number): Rect
 	return rect(toast.x, toast.y, toast.w, height)
 end
 
--- The Equip / Keep frame, one pad under the toast stack.
-function HudLayout.equipPrompt(viewportX: number, margin: number): Rect
+-- The Equip / Keep frame, one pad under the toast stack. With the
+-- viewport height it also stays left of the action bar: on a landscape
+-- phone the thumb cluster rises into this band (Havoc #482 P1, 667x375).
+function HudLayout.equipPrompt(viewportX: number, margin: number, viewportY: number?): Rect
 	local host = HudLayout.toastHost(viewportX, margin)
 	local gap = UiTheme.PAD
 	local height = HudLayout.PROMPT_LABEL + UiTheme.TOUCH + gap
-	return rect(host.x, host.y + host.h + gap, host.w, height)
+	local box = rect(host.x, host.y + host.h + gap, host.w, height)
+	if type(viewportY) ~= "number" or viewportY ~= viewportY or viewportY <= 0 then
+		return box
+	end
+	local ActionSlots = require("./ActionSlots")
+	for _, mobile in ipairs({ true, false }) do
+		local spot = ActionSlots.placement(viewportX, viewportY, mobile)
+		local bar = rect(spot.x, spot.y, spot.w, spot.h)
+		if HudLayout.overlaps(box, bar) and bar.x > box.x then
+			local right = bar.x - gap
+			local x = box.x
+			if right - x < HudLayout.PROMPT_MIN_W then
+				x = math.max(math.min(margin, viewportX), right - HudLayout.PROMPT_MIN_W)
+			end
+			box = rect(x, box.y, math.max(0, right - x), box.h)
+		end
+	end
+	return box
+end
+
+-- Equip and Keep inside a prompt of width promptW (frame space), side by
+-- side. [Ghost] Oct 24: under PROMPT_MIN_W (390x844 portrait is 160 wide)
+-- both narrow to share the row instead of Keep running off the frame; the
+-- height stays, so nothing under the prompt moves.
+function HudLayout.promptButtons(promptW: number): (Rect, Rect)
+	local pad = 8
+	local top = HudLayout.PROMPT_LABEL
+	local w = math.min(UiTheme.TOUCH * 2, math.floor((math.max(0, promptW) - pad * 3) / 2))
+	w = math.max(0, w)
+	return rect(pad, top, w, UiTheme.TOUCH), rect(pad + w + pad, top, w, UiTheme.TOUCH)
 end
 
 -- Skills sit to the left and above the jump button. The jump rect is in
@@ -778,14 +818,14 @@ function HudLayout.onboard(
 	local pills = column.pills
 	local bar = HudLayout.actionCluster(vx, vy)
 	local host = HudLayout.toastHost(vx, margin)
-	local prompt = HudLayout.equipPrompt(vx, margin)
+	local prompt = HudLayout.equipPrompt(vx, margin, vy)
 	local zone = HudLayout.characterZone(vx, vy)
 	local top = math.max(health.y + health.h, pills.y + pills.h) + gap
 	local bottom = bar.y - gap
 	local cardH = 120
 	local trackW = math.min(240, math.max(168, math.floor(vx * 0.24)))
 	local trackH = HudLayout.goalsHeight(rows)
-	local tabW = 112
+	local tabW = HudLayout.GOALS_TAB_W
 	local tabH = 36
 	local railFit = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, 64, 44, vx)
 	local rail = rect(railFit.x, railFit.y, railFit.w, railFit.h)
