@@ -52,6 +52,7 @@ local PracticeLoot = require(ReplicatedStorage.Shared.PracticeLoot)
 local Progression = require(ReplicatedStorage.Shared.Progression)
 local RaidEchoFight = require(ReplicatedStorage.Shared.RaidEchoFight)
 local Raids = require(ReplicatedStorage.Shared.Raids)
+local DungeonAdvance = require(script.Parent.DungeonAdvance)
 local EchoBossClear = require(script.Parent.EchoBossClear)
 local EchoRetry = require(script.Parent.EchoRetry)
 local WaveFlowService = require(script.Parent.WaveFlowService)
@@ -2985,27 +2986,32 @@ end
 
 function DungeonService.advance(player: Player)
 	local run = runs[player]
-	if run == nil or run.resolving then
+	if run == nil then
 		return reject("You are not in a dungeon.")
 	end
-	if not run.cleared then
-		return reject("Clear this room first.")
-	end
-	run.advanceAt = nil
-	if run.dungeon.endless == true then
-		run.wave += 1
+	-- Clears cleared, advanceAt, and the door offer before the stream
+	-- yield. After it, spawn only if this run is still current.
+	local outcome = DungeonAdvance.advance(run, function()
+		return runs[player]
+	end, function()
 		teleport(player, roomSpawn(run.placeIndex))
-		spawnWave(player, run)
+	end, function(kind: string)
+		if kind == "wave" then
+			spawnWave(player, run)
+		else
+			spawnRoom(player, run)
+		end
+	end)
+	if outcome == "spawned" then
 		return { ok = true, run = publicRun(player) }
 	end
-	if run.roomIndex >= #run.dungeon.rooms then
+	if outcome == "uncleared" then
+		return reject("Clear this room first.")
+	end
+	if outcome == "last" then
 		return reject("That was the last room.")
 	end
-	run.roomIndex += 1
-	run.placeIndex = run.roomIndex
-	teleport(player, roomSpawn(run.placeIndex))
-	spawnRoom(player, run)
-	return { ok = true, run = publicRun(player) }
+	return reject("You are not in a dungeon.")
 end
 
 function DungeonService.leave(player: Player)
@@ -3018,8 +3024,11 @@ function DungeonService.leave(player: Player)
 	if run.resolving then
 		return { ok = true, run = publicRun(player) }
 	end
-	CombatService.revive(player)
-	teleport(player, hubCFrame())
+	-- Mark ending before the hub stream yields. An advance still inside
+	-- RequestStreamAroundAsync must not spawn this run when it resumes.
+	run.resolving = true
+	pcall(CombatService.revive, player)
+	pcall(teleport, player, hubCFrame())
 	destroyRun(player, run)
 	pushRun(player, "Left the Rootvault.")
 	return { ok = true, run = publicRun(player) }
@@ -3582,6 +3591,7 @@ function DungeonService.start()
 	Players.PlayerRemoving:Connect(function(player)
 		local run = runs[player]
 		if run ~= nil then
+			run.resolving = true
 			destroyRun(player, run)
 		end
 		lastCue[player] = nil
