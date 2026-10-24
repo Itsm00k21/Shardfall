@@ -39,6 +39,7 @@ local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
+local BruteDen = require(ReplicatedStorage.Shared.Config.BruteDen)
 local HardMode = require(ReplicatedStorage.Shared.HardMode)
 local EnemyPerf = require(ReplicatedStorage.Shared.Config.EnemyPerf)
 local EnemyPerfHost = require(script.Parent.EnemyPerfHost)
@@ -1903,6 +1904,22 @@ local function finish(player: Player, victory: boolean)
 	end
 end
 
+-- Brute Den only. Same rule as the spring door: unbuffed loadout max,
+-- then one healAmount so an echo bar is not scaled twice. Other rooms
+-- return before any heal. The amount is Config, not a literal here.
+local function healDenClear(player: Player, run: Run)
+	local room = run.dungeon.rooms[run.roomIndex]
+	if room == nil or not BruteDen.applies(run.dungeon.id, room.id) then
+		return
+	end
+	local _, vitality = CombatMath.loadout(DataService.get(player))
+	local amount = BruteDen.clearHeal(vitality.maxHealth)
+	if amount <= 0 then
+		return
+	end
+	CombatService.healAmount(player, amount)
+end
+
 local function beginAdvance(player: Player, run: Run, text: string)
 	run.cleared = true
 	if PracticeLoot.pays(run.practice == true) then
@@ -2215,6 +2232,7 @@ function DungeonService.damageEnemy(
 						return nil
 					end)
 				end
+				healDenClear(player, run)
 				beginAdvance(
 					player,
 					run,
