@@ -1,5 +1,6 @@
-# Rojo / Studio output
-/build/
+# Rojo / Studio output. build/ stays in git so
+# `rojo build -o build/Shardfall.rbxlx` has a directory to write into.
+# Rojo does not create missing parent folders. Place files stay ignored.
 *.rbxl
 *.rbxlx
 sourcemap.json
