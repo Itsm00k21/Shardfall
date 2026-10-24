@@ -1,7 +1,9 @@
-# T7 Hub Art Kit ("Crater Square" gray-box kit), Spec v1 (NOT APPROVED, docs only)
+# T7 Hub Art Kit ("Crater Square" gray-box kit), Spec v1.1 (NOT APPROVED, docs only)
 
-Owner: Prism (design, docs only, no code, no Config, no save edits). Builders: Ghost (hub world parts, client dressing), Echo (LaunchGate flags + server refusals, only where a question below says so). Base: `cursor/live-build-9721` @ `581c995`. Status: **v1, proposal.** Not an official Vision & Design Rules decision until Kevin approves it and it is copied there. **Art stays gray-box until Phase S**; Phase S rows are identity and budget guidance only.
-Asked for in: Ghost's Agent Board row DP29 https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96 (Oct 24, 2026, Kevin pre-approved), Next (1): "T7 hub art kit spec on Crater Square #413 (art list, reuse, StreamingEnabled, part/tri + phone budget, like L3 #452)." ACK: https://app.notion.com/p/403c31ca388381bda15dc237843e114b.
+Owner: Prism (design, docs only, no code, no Config, no save edits). Builders: Ghost (hub world parts, client dressing), Echo (LaunchGate flags + server refusals, only where a question below says so). Base: `cursor/live-build-9721` @ `581c995`. Status: **v1.1, proposal (Ghost answered Q1–Q5 on board row DP31P, Kevin pre-approved; Q6 open for Kevin).** Not an official Vision & Design Rules decision until Kevin approves it and it is copied there. **Art stays gray-box until Phase S**; Phase S rows are identity and budget guidance only.
+Asked for in: Ghost's Agent Board row DP29 https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96 (Oct 24, 2026, Kevin pre-approved), Next (1): "T7 hub art kit spec on Crater Square #413 (art list, reuse, StreamingEnabled, part/tri + phone budget, like L3 #452)." ACK: https://app.notion.com/p/403c31ca388381bda15dc237843e114b. v1.1 answers: Ghost row DP31P https://app.notion.com/p/403c31ca388381feb52fdb6685c444a5 (ACK https://app.notion.com/p/403c31ca3883813bb703cccb4dc0e0fa).
+
+**v1.1 changes (Ghost DP31P):** Q1 yes, lip band H16, walls H17 and craters C1–C4 snap to the real square floor blocks (locked). Q2 yes, the live `EnterPad` sits on the Gate pad H12 at (0, 98); its position comes from Haven config (`Haven.KIT`), an **Echo build note**, not a Prism edit. Q3 yes, guide ring H3 trimmed to the open gate's 2 segments. Q4 yes, budget trims accepted (NoviceStone behind `classes`, waystones behind `travel`, 3 waterfall lights dropped, 2 foliage motes retired); **hard cap stays 250 parts**. Q5 yes, the plaza sign is renamed **"Shard Gate"** (matches the pad and the arch billboard). Q6 (Phase S lip look) stays open for Kevin.
 
 **What this extends (link, don't copy):** #413 = Town/Hub "Crater Square" v1.1 (`prism/town-hub`, `docs/design/town-hub/SPEC_v1.md`): layout, walk times, sight lines, gray-box list, art pass list, phone budget, all decisions (ClockTime 18.5, Muster gray-box, Lumen Heart name). L3 = arena kit #452 (`prism/l3-arena-kit`): same piece-list format. T6 = big-roll beam #450 (pull beam rules). **T7 adds what #413 left loose:** a numbered piece list snapped to the **real** live floor (not the r 52 / r 96 circles), a measured count of what's reused vs hidden vs new, a gray-box part count vs the ≤ 250 cap, a Phase S triangle split, StreamingEnabled notes, and per-piece Roblox build notes. No duplicate branch exists (`prism/t7-*` checked).
 
@@ -21,7 +23,7 @@ A drop-in piece list that turns the live Haven into Crater Square in one gray-bo
 
 ## 3. Flow (what the kit does for one player)
 1. **Join:** Haven is Persistent, so the whole square is on the client before the character spawns (no pop-in). Spawn pad (0, 30) faces the Shard Gate (0, 108).
-2. **First frame:** Gate arch + "Shard Gate" billboard centered; Crackstone crystal + Wren name at the left edge (portrait) or in view (landscape). Paths (H14) lead the eye: spawn → Crackstone → Gate pad.
+2. **First frame:** Gate arch + "Shard Gate" billboard centered (the plaza sign behind spawn now also reads "Shard Gate", Q5); Crackstone crystal + Wren name at the left edge (portrait) or in view (landscape). Paths (H14) lead the eye: spawn → Crackstone → Gate pad.
 3. **Roll (1.6 s walk):** Crackstone prompt "Roll" → live roll flow. Crackstone crystal flashes the revealed tier color (`Rarities.COLOR`, 0.3 s). Epic+ fires the #450 pull beam from the Crackstone top attachment.
 4. **Gate (3.0 s walk):** step on the Gate pad H12 (the live `EnterPad`, moved, Q2) → #412 dock → START → teleport to the arena (StreamingEnabled requests the arena stream, live `DungeonService`).
 5. **Return:** land on the return pad H11 (14, 30). Lip H16 and walls H17 stop walk-offs; `FALL_Y` 60 respawn stays as the backstop.
@@ -33,20 +35,20 @@ Hub-local studs, origin = Lumen Heart (0, 0), +Z = south (toward the Gate), floo
 |---|---|---|---|---|---|---|
 | H1 | Plaza floor + rock skirt | 104×8×104 + 120×12×120 | (0, 0) | 2 | yes | live `BossPlaza` |
 | H2 | Gate court floors A + B + 6 inlays | 144×98, 96×36, inlays 1.1 | A (50, 101), B (100, 34) | 8 | yes (inlays no) | live `GateCourt` |
-| H3 | Court guide ring | 5.2×0.08×1.4 (+1.2×16 lit) | r 36 / 26 from spawn | 8 → **2** (Q3) | no | live `CourtRing` |
+| H3 | Court guide ring | 5.2×0.08×1.4 (+1.2×16 lit) | r 36 / 26 from spawn | 8 → **2** (Q3, decided v1.1) | no | live `CourtRing`, trimmed |
 | H4 | Lumen Heart (pedestal, crystal, core, crack, 6 crystal shards, 6 orbit shards, 4 light beams) | pedestal 22×22, crystal h 36 | (0, 0) | 20 | pedestal + crystal | live |
 | H5 | Spawn pad | 12×1×12 | (0, 30) | 1 | yes | live `HubSpawn` |
 | H6 | Armory stand + blade + station disc | 8×6×2, disc 12 | (−38, −35.8) | 3 | stand | live |
 | H7 | Shard Gate arch (Rootvault arch reskinned, recolor only) | arch h 18, w 14 | (0, 108) | ≈ 12 | pillars | live, recolor |
-| H8 | Signs ("Boss Plaza", "Armory") | BillboardGui hosts 0.4³ | (0, −40), (−38, −35.8) | 2 | no | live; "Boss Plaza" → rename (Q5) |
+| H8 | Signs ("Shard Gate", "Armory") | BillboardGui hosts 0.4³ | (0, −40), (−38, −35.8) | 2 | no | live; "Boss Plaza" text → **"Shard Gate"** (Q5, decided v1.1) |
 | H9 | Plaza dressing kept (3 lanterns, banner, tree, flowers, grass) + 3 Townsfolk | small | plaza | 16 + 15 | no | live `Foliage` / `Townsfolk` |
 | H10 | Edge dressing kept (3 waterfalls + lips at (±37, −69), (28, 155); under-island cloud; sky shards) | live | edges | ≈ 10 | no | live `Waterfall` / `FallLip` / `Alive` |
 | H11 | **Return pad** | 10×1×10 | (14, 30) | 1 | yes | new (#413) |
-| H12 | **Shard Gate pad** (the live `EnterPad` moved here, Q2) | 16×1×16 | (0, 98) | 1 | yes, touch zone | new / moved (#413) |
+| H12 | **Shard Gate pad** (the live `EnterPad` moved here, Q2) | 16×1×16 | (0, 98) | 1 | yes, touch zone | new / moved (#413; Q2 decided v1.1, position from `Haven.KIT`, Echo) |
 | H13 | **Crackstone** (base + crystal) + **Wren marker** | 12×2×12 + 3×9×3; Wren 2×5×2 | (−12, 52); Wren (−18, 52) | 3 | base + crystal | new (#413) |
 | H14 | **Paths** (spawn↔Roll, Roll↔Gate pad, spawn↔Gate pad, Gate pad↔Muster, spawn↔Armory as 2 legs via (−24, 14)) | 10 wide, 0.05 above floor | see plan | 6 | no | new (#413; Armory leg re-routed, §7) |
-| H15 | **Shard craters** (disc + embedded wedge) | 8×0.5×8 + 2×3×1 wedge | C1 (−40, 30) · C2 (36, −36) · C3 (−10, 136) · C4 (60, 40) | 8 | no | new; 3 of #413's 4 spots moved onto the floor (Q1) |
-| H16 | **Hollow lip band** along the real floor edge | 4 wide × 0.3, segments ≤ 32 long | 10 outline edges, 804 studs total | 26 | no (walk-on) | new; replaces #413's r 88–96 ring (Q1) |
+| H15 | **Shard craters** (disc + embedded wedge) | 8×0.5×8 + 2×3×1 wedge | C1 (−40, 30) · C2 (36, −36) · C3 (−10, 136) · C4 (60, 40) | 8 | no | new; 3 of #413's 4 spots moved onto the floor (Q1, decided v1.1) |
+| H16 | **Hollow lip band** along the real floor edge | 4 wide × 0.3, segments ≤ 32 long | 10 outline edges, 804 studs total | 26 | no (walk-on) | new; replaces #413's r 88–96 ring (Q1, decided v1.1) |
 | H17 | **Edge walls** (invisible) | one Block per edge, 12 tall × 1 | outline edges, 0.5 outside | 10 | yes, Transparency 1 | new (#413 "invisible wall") |
 | H18 | **Muster sockets** | 3×0.5×3 | 2×2 at (24, 90) ±3 | 4 | no | new (#413 Q3 decided) |
 | — | Pull beam (Phase S, #450) | `Beam` + 2 `Attachment`s on H13 | Crackstone top → +60 | 0 parts | — | #450 |
@@ -72,7 +74,7 @@ Hub-local studs, origin = Lumen Heart (0, 0), +Z = south (toward the Gate), floo
 |---|---|
 | Live kept (H1–H10) | 2 + 8 + 2 + 20 + 1 + 3 + 12 + 2 + 31 + 10 = **91** |
 | New (H11–H18) | 1 + 1 + 3 + 6 + 8 + 26 + 10 + 4 = **59** |
-| **Total** | **≈ 150** (live today on the same floor: 147 + 172 off-floor) |
+| **Total** | **≈ 150 (hard cap 250, Q4 decided v1.1)** (live today on the same floor: 147 + 172 off-floor) |
 | Hidden by flags | −39 sealed/raid arches, −5 NoviceStones, −4 waystone parts, −1 Shrine, −2 bridge ends, −6 guide segments, all districts (−172 off-floor) |
 
 **Lights (cap ≤ 6, all `Shadows` false):** kept = Heart 2 (LumenHeart, LumenCore) + Shard Gate mouth 1 + 3 plaza lanterns = **6**. Today's other on-floor lights go with their flags (5 arches, 2 waystones). The 3 kept waterfalls carry under-floor lights (`Brightness` 0.28, y 116) that would make 9 → drop them (Q4). **No kit piece adds a light** (Crackstone, craters, pad use Neon only).
@@ -100,7 +102,8 @@ SVG in `mockups/` (original art, fake data; PNG renders stay on the box):
 
 ## 9. Build split
 - **Echo / Ghost (flags pass, first, request):** `hubDistricts` + `sealedGates` off gate the district, bridge, RimShop and 5-arch builders and their prompts / remotes (#413). Also gate `NoviceStone` behind `classes` and waystones behind `travel` (Q4).
-- **Ghost (gray-box pass):** H11–H18 in `CraterKit` (sizes in a `Haven.KIT` table, not literals), move `EnterPad` to H12, recolor H7, trim H3 to the open gate, rename H8, drop waterfall lights, pin ClockTime 18.5. Studio checks at 390×844, 667×375, 800×400, 1280×720.
+- **Echo (build note, v1.1 Q2):** the `EnterPad` position/size for H12 comes from Haven config (`Haven.KIT.gatePad` = (0, 98), 16×1×16), not a literal in the builder; Prism does not edit config.
+- **Ghost (gray-box pass):** H11–H18 in `CraterKit` (sizes in a `Haven.KIT` table, not literals), place `EnterPad` on H12 (Echo config), recolor H7, trim H3 to the open gate, rename H8 to "Shard Gate", drop waterfall lights, pin ClockTime 18.5. Studio checks at 390×844, 667×375, 800×400, 1280×720.
 - **Prism:** Phase S mesh briefs (Heart crack, Crackstone, Wren, lip teeth, craters, Gate reskin, skybox) after M13; screenshot color check.
 - **Havoc:** walk every edge (0 falls in 20 tries), 20-player spawn crowd, phone FPS on Low with 4 players + 1 pull beam, old-save load on a hidden district.
 - Build waits for Ghost's go; art stays gray-box until Phase S.
@@ -114,16 +117,17 @@ SVG in `mockups/` (original art, fake data; PNG renders stay on the box):
 6. Every prompt tap target ≥ 44 px on touch (live `ProximityPrompt` button); billboard text ≥ 18 px at 390 wide.
 7. Testers describe the hub as "a crater with a crystal" and notice the gray edge, in a screenshot, without being told.
 
-## 11. Open questions (answer by number)
-1. **@Ghost:** Snap to the real floor: lip band H16 and walls H17 follow the 10-edge block outline (804 studs) instead of #413's r 88–96 ring around spawn, and 3 of #413's crater spots move onto the floor ((−60, 60) and (−44, 104) are over air; (52, −28) hangs half off the plaza) to C1 (−40, 30), C2 (36, −36), C3 (−10, 136); C4 (60, 40) stays. **Recommended: yes**; Prism folds the numbers into #413 next.
-2. **@Ghost:** Move the live Rootvault `EnterPad` from (0, 108) to the #413 Gate pad H12 at (0, 98) (one trigger, in front of the arch) instead of adding a second pad? **Recommended: yes, move it.**
-3. **@Ghost:** Court guide ring H3: build only the open gate's 2 segments (the 6 inlays stay as floor dots), so no lit guide points at a hidden arch? **Recommended: yes** (−6 parts).
-4. **@Ghost (Echo):** Budget trims to hit #413's caps: gate `NoviceStone` ×5 behind `classes` and waystones behind `travel` (both built today with the flags off), drop the 3 under-floor waterfall `PointLight`s (lights 9 → 6), retire the 2 plaza foliage motes for the Phase S shard rain + lip fog (emitters 8 → 6)? **Recommended: yes to all four.**
-5. **@Ghost:** The live plaza sign still says "Boss Plaza" (there is no boss in the hub). Rename it "Crater Square" (text only) or remove it? **Recommended: rename** (it's the first world label a new player reads behind spawn).
-6. **@Kevin (taste):** Phase S lip look: **Hollow-gray broken rock teeth** (flat stubs, the L4 "flat broken = Hollow" rule, color draining at the edge) or leaning prismatic shards like the arena lip (L1)? **Recommended: gray broken teeth on the hub lip**, prismatic shards only around the Lumen Heart, so the story reads "the shard's light, the Hollow eating the edge".
+## 11. Open questions (answer by number; Q1–Q5 answered in v1.1)
+1. ~~**@Ghost:**~~ **DECIDED v1.1 (Ghost DP31P): yes.** Snap to the real floor: lip band H16 and walls H17 follow the 10-edge block outline (804 studs) instead of #413's r 88–96 ring around spawn, and 3 of #413's crater spots move onto the floor ((−60, 60) and (−44, 104) are over air; (52, −28) hangs half off the plaza) to C1 (−40, 30), C2 (36, −36), C3 (−10, 136); C4 (60, 40) stays. **Recommended: yes**; Prism folds the numbers into #413 next.
+2. ~~**@Ghost:**~~ **DECIDED v1.1: yes**, `EnterPad` sits on the pad, positioned via Haven config (Echo build note). Move the live Rootvault `EnterPad` from (0, 108) to the #413 Gate pad H12 at (0, 98) (one trigger, in front of the arch) instead of adding a second pad? **Recommended: yes, move it.**
+3. ~~**@Ghost:**~~ **DECIDED v1.1: yes, trim.** Court guide ring H3: build only the open gate's 2 segments (the 6 inlays stay as floor dots), so no lit guide points at a hidden arch? **Recommended: yes** (−6 parts).
+4. ~~**@Ghost (Echo):**~~ **DECIDED v1.1: yes, trims accepted; hard cap stays 250 parts.** Budget trims to hit #413's caps: gate `NoviceStone` ×5 behind `classes` and waystones behind `travel` (both built today with the flags off), drop the 3 under-floor waterfall `PointLight`s (lights 9 → 6), retire the 2 plaza foliage motes for the Phase S shard rain + lip fog (emitters 8 → 6)? **Recommended: yes to all four.**
+5. ~~**@Ghost:**~~ **DECIDED v1.1: rename to "Shard Gate"** (matches the pad; Ghost's call over Prism's "Crater Square"). The live plaza sign still says "Boss Plaza" (there is no boss in the hub).
+6. **@Kevin (taste, still open):** Phase S lip look: **Hollow-gray broken rock teeth** (flat stubs, the L4 "flat broken = Hollow" rule, color draining at the edge) or leaning prismatic shards like the arena lip (L1)? **Recommended: gray broken teeth on the hub lip**, prismatic shards only around the Lumen Heart, so the story reads "the shard's light, the Hollow eating the edge".
 
 ## Decision log
 - 2026-10-24 (Ghost DP29, Kevin pre-approved for Prism to write it; Prism): **T7 v1** on `prism/t7-hub-art-kit`, built on the live `HavenBuilder` (measured), #413, L3 #452 and #450. 18 piece rows (10 live, 8 new), hidden-by-flag list, ≈ 150 gray-box parts vs ≤ 250, lights 6 / emitters 6 at cap, Phase S tri split ≤ 60k, StreamingEnabled notes. Open: Ghost 1–5, Kevin 6. Not approved.
+- 2026-10-24 (Ghost DP31P, Kevin pre-approved; Prism): **T7 v1.1**: Q1 snap to real floors yes; Q2 `EnterPad` on the pad via Haven config (Echo note); Q3 guide ring trimmed; Q4 budget trims accepted, hard cap 250; Q5 sign renamed "Shard Gate". Mockups 01/02 relabeled. Still open: Kevin Q6 (lip look). Not approved.
 
 ## Later (not V1)
 District islands back (`hubDistricts` on), seasonal hub dressing, a second hub ring for raids, animated Townsfolk routes, a real skybox swap per event. All go to the Ideas Backlog as NOT APPROVED.
