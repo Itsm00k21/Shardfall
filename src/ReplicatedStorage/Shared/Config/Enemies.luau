@@ -1,17 +1,17 @@
 --!strict
 
 --[[
-	V1 enemy types (roadmap 3.3 and 3.4). Chaser, ranged, and tank.
+	V1 enemy types (roadmap 3.3, 3.4) and the wave-5 boss (3.6).
 
 	Every tunable lives here. EnemyRoster, WaveFlow, and the server
 	services read this file. Dungeons.ENEMIES copies the combat fields
-	so Config.Enemies (the index alias) carries the same three ids.
-	Tuning means editing this module, not the stepper.
+	so Config.Enemies (the index alias) carries the same ids. Tuning
+	means editing this module, not the stepper.
 
 	LaunchGate.SHOW.enemyTypes stays false. Live rooms and
-	Dungeons.waveKinds do not spawn these ids. The 6/8/10/12 list is
-	read only by WaveFlow, and that service no-ops while the flag is
-	off. No Robux. No profile fields.
+	Dungeons.waveKinds do not spawn these ids. Waves and the boss are
+	read only by WaveFlow, which no-ops while the flag is off.
+	No Robux. No profile fields.
 ]]
 
 local Enemies = {}
@@ -119,9 +119,9 @@ Enemies.TYPES = table.freeze({
 	}),
 })
 
--- Roadmap 3.5. Four waves, then stop. Each mix uses chaser, ranged, and
--- tank, and those three counts add up to the wave size. Spawn order is
--- WAVE_ORDER. The live crawl does not read this list.
+-- Roadmap 3.5. Four trash waves, then the boss wave. Each mix uses
+-- chaser, ranged, and tank, and those three counts add up to the wave
+-- size. Spawn order is WAVE_ORDER. The live crawl does not read this list.
 Enemies.WAVE_COUNTS = table.freeze({ 6, 8, 10, 12 })
 Enemies.WAVE_ORDER = table.freeze({ "chaser", "ranged", "tank" })
 Enemies.WAVE_MIXES = table.freeze({
@@ -133,6 +133,38 @@ Enemies.WAVE_MIXES = table.freeze({
 -- Gray-box spacing for one wave. The service does not parent parts.
 Enemies.WAVE_GAP = 6
 Enemies.WAVE_LIFT = 3
+
+-- Roadmap 3.6. Wave 5 is this boss plus BOSS_ADDS. Adds are only the
+-- three V1 types, in WAVE_ORDER. The live crawl still uses Gnarl.
+Enemies.BOSS_WAVE = 5
+Enemies.BOSS_ADDS = 4
+Enemies.BOSS_ADD_MIX = table.freeze({
+	chaser = 2,
+	ranged = 1,
+	tank = 1,
+})
+Enemies.BOSS = table.freeze({
+	id = "boss",
+	name = "Boss",
+	role = "boss",
+	maxHealth = 420,
+	damage = 22,
+	defense = 12,
+	attackSpeed = 0.3,
+	moveSpeed = 5,
+	range = 9,
+	stop = 7,
+	retreat = 0,
+	projectileSpeed = 0,
+	damageTaken = 1,
+	style = "melee" :: Style,
+	minDot = -1,
+	-- Catalog bosses need a phase threshold above 0. The gated flow
+	-- does not run that phase; it only spawns the block and applies hits.
+	phase2At = 0.5,
+	color = table.freeze({ 58, 58, 62 }),
+	size = table.freeze({ 7.5, 9, 7 }),
+})
 
 local REQUIRED = { "chaser", "ranged", "tank" }
 
@@ -292,6 +324,79 @@ local function checkWaves(source: any): (boolean, string)
 	return true, ""
 end
 
+local EXPECTED_ADDS = 4
+local EXPECTED_BOSS_WAVE = 5
+
+-- Wave 5 is one boss plus four adds drawn from chaser, ranged, and tank.
+local function checkBoss(source: any): (boolean, string)
+	if source.BOSS_ADDS ~= EXPECTED_ADDS then
+		return false, "BOSS_ADDS must be 4"
+	end
+	if source.BOSS_WAVE ~= EXPECTED_BOSS_WAVE then
+		return false, "BOSS_WAVE must be 5"
+	end
+	local counts = source.WAVE_COUNTS
+	if type(counts) ~= "table" or keyCount(counts) + 1 ~= source.BOSS_WAVE then
+		return false, "BOSS_WAVE must follow the four trash waves"
+	end
+	local rowOk, rowErr = checkRow("boss", source.BOSS)
+	if not rowOk then
+		return false, rowErr
+	end
+	local boss = source.BOSS
+	if not finite(boss.phase2At) or boss.phase2At <= 0 or boss.phase2At > 1 then
+		return false, "boss.phase2At must be above 0 and at most 1"
+	end
+	if boss.damageTaken ~= 1 then
+		return false, "boss.damageTaken must be 1"
+	end
+	local tank = source.TYPES.tank
+	if type(tank) ~= "table" or not (boss.maxHealth > tank.maxHealth) then
+		return false, "boss health must beat the tank"
+	end
+	if type(boss.size) ~= "table" or type(tank.size) ~= "table" or not (boss.size[2] > tank.size[2]) then
+		return false, "boss block must be taller than the tank"
+	end
+	local mix = source.BOSS_ADD_MIX
+	if type(mix) ~= "table" then
+		return false, "BOSS_ADD_MIX is missing"
+	end
+	local sum = 0
+	for key, value in pairs(mix) do
+		if table.find(REQUIRED, key) == nil then
+			return false, "boss adds must be drawn from chaser, ranged, tank"
+		end
+		if not finite(value) or value < 1 or value ~= math.floor(value) then
+			return false, "boss add " .. tostring(key) .. " count must be a positive integer"
+		end
+		local add = source.TYPES[key]
+		if type(add) ~= "table" or add.id ~= key then
+			return false, "boss add " .. tostring(key) .. " is not a Config enemy"
+		end
+		sum += value
+	end
+	if sum ~= EXPECTED_ADDS then
+		return false, "boss adds must add up to 4"
+	end
+	return true, ""
+end
+
+-- The three types, or the wave-5 boss. Nil for any other id.
+function Enemies.row(kind: string): Row?
+	if type(kind) ~= "string" then
+		return nil
+	end
+	local boss = Enemies.BOSS
+	if boss ~= nil and kind == boss.id then
+		return (boss :: any) :: Row
+	end
+	local found = Enemies.TYPES[kind]
+	if found == nil or found.id ~= kind then
+		return nil
+	end
+	return found
+end
+
 -- Returns false and a reason when a roster or its wave list breaks the
 -- V1 rules. Pass nothing to check this module.
 function Enemies.validate(roster: any?): (boolean, string)
@@ -383,6 +488,10 @@ function Enemies.validate(roster: any?): (boolean, string)
 	local waveOk, waveErr = checkWaves(source)
 	if not waveOk then
 		return false, waveErr
+	end
+	local bossOk, bossErr = checkBoss(source)
+	if not bossOk then
+		return false, bossErr
 	end
 	return true, ""
 end

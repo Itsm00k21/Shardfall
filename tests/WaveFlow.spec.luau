@@ -13,6 +13,7 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local Drops = require("../src/ReplicatedStorage/Shared/Drops")
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Enemies = require("../src/ReplicatedStorage/Shared/Config/Enemies")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
@@ -59,6 +60,52 @@ local function waveRoster(counts: { number }, mixes: { any }): any
 		WAVE_GAP = Enemies.WAVE_GAP,
 		WAVE_LIFT = Enemies.WAVE_LIFT,
 	}
+end
+
+local function fullRoster(patch: { [string]: any }?): any
+	local source = {
+		ORDER = Enemies.ORDER,
+		TYPES = Enemies.TYPES,
+		SHARED = Enemies.SHARED,
+		STEP_MAX = Enemies.STEP_MAX,
+		PREVIEW_GAP = Enemies.PREVIEW_GAP,
+		PREVIEW_LIFT = Enemies.PREVIEW_LIFT,
+		WAVE_COUNTS = Enemies.WAVE_COUNTS,
+		WAVE_ORDER = Enemies.WAVE_ORDER,
+		WAVE_MIXES = Enemies.WAVE_MIXES,
+		WAVE_GAP = Enemies.WAVE_GAP,
+		WAVE_LIFT = Enemies.WAVE_LIFT,
+		BOSS = Enemies.BOSS,
+		BOSS_ADDS = Enemies.BOSS_ADDS,
+		BOSS_WAVE = Enemies.BOSS_WAVE,
+		BOSS_ADD_MIX = {
+			chaser = Enemies.BOSS_ADD_MIX.chaser,
+			ranged = Enemies.BOSS_ADD_MIX.ranged,
+			tank = Enemies.BOSS_ADD_MIX.tank,
+		},
+	}
+	if patch ~= nil then
+		for key, value in pairs(patch) do
+			source[key] = value
+		end
+	end
+	return source
+end
+
+local function copyBoss(): any
+	local copy = {}
+	for key, value in pairs(Enemies.BOSS) do
+		if type(value) == "table" then
+			local inner = {}
+			for index, part in ipairs(value) do
+				inner[index] = part
+			end
+			copy[key] = inner
+		else
+			copy[key] = value
+		end
+	end
+	return copy
 end
 
 local function shippedMixes(): { any }
@@ -137,6 +184,13 @@ describe("Config wave list", function()
 			expect(string.find(source, "Instance.new", 1, true)).toBeNil()
 		end
 		expect(string.find(service, 'LaunchGate.on("enemyTypes")', 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "bossEnter", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "bossDown", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "AnalyticsService", 1, true)).toBeNil()
+		local analyticsFile = pcall(function()
+			fs.readFile("src/ReplicatedStorage/Shared/Analytics.luau")
+		end)
+		expect(analyticsFile).toEqual(false)
 	end)
 
 	it("stores 6, 8, 10, and 12 as mixes of the three types", function()
@@ -161,7 +215,61 @@ describe("Config wave list", function()
 		end
 		expect(WaveFlow.plan(1)).toEqual({ "chaser", "chaser", "chaser", "chaser", "ranged", "tank" })
 		expect(WaveFlow.plan(0)).toBeNil()
-		expect(WaveFlow.plan(5)).toBeNil()
+		expect(WaveFlow.plan(6)).toBeNil()
+	end)
+
+	it("stores the wave-5 boss and four adds drawn from the three types", function()
+		expect(Enemies.BOSS_WAVE).toEqual(5)
+		expect(Enemies.BOSS_ADDS).toEqual(4)
+		expect(Enemies.BOSS.id).toEqual("boss")
+		expect(Enemies.BOSS.role).toEqual("boss")
+		expect(Enemies.BOSS.maxHealth > Enemies.TYPES.tank.maxHealth).toBeTrue()
+		expect(Enemies.BOSS.size[2] > Enemies.TYPES.tank.size[2]).toBeTrue()
+		expect(Enemies.BOSS.phase2At > 0 and Enemies.BOSS.phase2At <= 1).toBeTrue()
+		expect(Enemies.BOSS.damageTaken).toEqual(1)
+		local mix = Enemies.BOSS_ADD_MIX
+		expect(mix.chaser + mix.ranged + mix.tank).toEqual(4)
+		expect(WaveFlow.plan(5)).toEqual({ "boss", "chaser", "chaser", "ranged", "tank" })
+		expect(Enemies.validate(fullRoster())).toEqual(true)
+
+		local _, addsErr = Enemies.validate(fullRoster({ BOSS_ADDS = 2 }))
+		expect(string.find(addsErr, "BOSS_ADDS", 1, true) ~= nil).toBeTrue()
+
+		local _, waveErr = Enemies.validate(fullRoster({ BOSS_WAVE = 4 }))
+		expect(string.find(waveErr, "BOSS_WAVE", 1, true) ~= nil).toBeTrue()
+
+		local shortBoss = copyBoss()
+		shortBoss.maxHealth = Enemies.TYPES.tank.maxHealth
+		local _, healthErr = Enemies.validate(fullRoster({ BOSS = shortBoss }))
+		expect(string.find(healthErr, "boss health", 1, true) ~= nil).toBeTrue()
+
+		local flat = copyBoss()
+		flat.phase2At = 0
+		local _, phaseErr = Enemies.validate(fullRoster({ BOSS = flat }))
+		expect(string.find(phaseErr, "phase2At", 1, true) ~= nil).toBeTrue()
+
+		local _, mixErr = Enemies.validate(fullRoster({
+			BOSS_ADD_MIX = { chaser = 2, ranged = 1, tank = 1, boss = 1 },
+		}))
+		expect(string.find(mixErr, "chaser, ranged, tank", 1, true) ~= nil).toBeTrue()
+
+		local _, sumErr = Enemies.validate(fullRoster({
+			BOSS_ADD_MIX = { chaser = 2, ranged = 1 },
+		}))
+		expect(string.find(sumErr, "add up to 4", 1, true) ~= nil).toBeTrue()
+
+		local catalog = Dungeons.ENEMIES.boss
+		expect(catalog ~= nil).toBeTrue()
+		expect(catalog.boss).toEqual(true)
+		expect(catalog.maxHealth).toEqual(Enemies.BOSS.maxHealth)
+		expect(catalog.phase2At).toEqual(Enemies.BOSS.phase2At)
+		expect(catalog.damage).toEqual(Enemies.BOSS.damage)
+		expect(Dungeons.ENEMIES.chaser.boss).toEqual(false)
+		expect(Dungeons.ENEMIES.ranged.boss).toEqual(false)
+		expect(Dungeons.ENEMIES.tank.boss).toEqual(false)
+		expect(Drops.ENEMIES.boss.role).toEqual("boss")
+		expect(Dungeons.waveKinds(5)).toEqual({ "grandmother_gnarl", "vine_crawler", "spore_bat" })
+		expect(Schema.VERSION).toEqual(26)
 	end)
 
 	it("accepts the shipped list and rejects a broken mix", function()
@@ -203,6 +311,10 @@ end)
 describe("WaveFlowService", function()
 	it("does not spawn, hurt, or publish while the flag is off", function()
 		local sent, sink = watch()
+		local noted = 0
+		sink.analytics = function()
+			noted += 1
+		end
 		local started = WaveFlowService.start(sink)
 		expect(started).toBeNil()
 		expect(#sent).toEqual(0)
@@ -217,6 +329,7 @@ describe("WaveFlowService", function()
 		expect(WaveFlowService.counter(mathRun)).toBeNil()
 		expect(WaveFlowService.publish("hero", mathRun, sink.fire)).toEqual(false)
 		expect(#sent).toEqual(0)
+		expect(noted).toEqual(0)
 		expect(WaveFlow.counter(mathRun).wave).toEqual(1)
 		expect(WaveFlow.counter(mathRun).left).toEqual(6)
 	end)
@@ -299,7 +412,7 @@ describe("WaveFlowService", function()
 		end)
 	end)
 
-	it("walks 8, then 10, then 12, and stops with none left", function()
+	it("walks 8, then 10, then 12, then the boss wave, and stops with none left", function()
 		withFlag(true, function()
 			local sent, sink, built = watch()
 			local run = WaveFlowService.start(sink)
@@ -316,16 +429,99 @@ describe("WaveFlowService", function()
 			expect(WaveFlowService.counter(run)).toEqual({ wave = 4, left = 12 })
 			expect(#built).toEqual(6 + 8 + 10 + 12)
 			killLiving(run, sink, 12)
+			expect(run.clear).toEqual(false)
+			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 5 })
+			expect(#built).toEqual(6 + 8 + 10 + 12 + 5)
+			killLiving(run, sink, 5)
 			expect(run.clear).toEqual(true)
-			expect(WaveFlowService.counter(run)).toEqual({ wave = 4, left = 0 })
-			expect(#built).toEqual(36)
-			expect(sent[#sent].wave).toEqual(4)
+			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 0 })
+			expect(#built).toEqual(41)
+			expect(sent[#sent].wave).toEqual(5)
 			expect(sent[#sent].left).toEqual(0)
-			expect(#sent).toEqual(1 + 36)
+			expect(#sent).toEqual(1 + 41)
 			local stale = WaveFlowService.hurt(run, 1, 100000, sink)
 			expect(stale).toEqual(0)
 			expect(WaveFlowService.counter(run).left).toEqual(0)
-			expect(#sent).toEqual(37)
+			expect(#sent).toEqual(42)
+		end)
+	end)
+
+	it("spawns one gray boss and four adds, and notes the hook on enter and down", function()
+		withFlag(true, function()
+			local sent, sink, built = watch()
+			local events = {}
+			sink.analytics = function(name, detail)
+				local fields = 0
+				for key in pairs(detail) do
+					fields += 1
+					expect(key == "wave" or key == "adds").toBeTrue()
+				end
+				table.insert(events, {
+					name = name,
+					wave = detail.wave,
+					adds = detail.adds,
+					fields = fields,
+				})
+			end
+			local run = WaveFlowService.start(sink)
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			expect(#events).toEqual(0)
+			killLiving(run, sink, 6 + 8 + 10 + 12)
+			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 5 })
+			expect(#events).toEqual(1)
+			expect(events[1].name).toEqual(WaveFlowService.BOSS_ENTER)
+			expect(events[1].name).toEqual("bossEnter")
+			expect(events[1].wave).toEqual(5)
+			expect(events[1].adds).toEqual(4)
+			expect(events[1].fields).toEqual(2)
+			local kinds = {}
+			local bossBox = nil
+			for _, box in ipairs(built) do
+				if box.wave == 5 then
+					table.insert(kinds, box.kind)
+					if box.kind == "boss" then
+						bossBox = box
+					end
+					expect(box.shape).toEqual("block")
+					expect(box.kind == "grandmother_gnarl").toBeFalse()
+				end
+			end
+			expect(kinds).toEqual({ "boss", "chaser", "chaser", "ranged", "tank" })
+			expect(bossBox ~= nil).toBeTrue()
+			if bossBox == nil then
+				return
+			end
+			expect(bossBox.size[2]).toEqual(Enemies.BOSS.size[2])
+			expect(bossBox.size[2] > Enemies.TYPES.tank.size[2]).toBeTrue()
+			expect(bossBox.color[1]).toEqual(Enemies.BOSS.color[1])
+			expect(bossBox.y).toEqual(Enemies.WAVE_LIFT)
+			local paint = Enemies.BOSS.color[1]
+			bossBox.color[1] = 0
+			expect(Enemies.BOSS.color[1]).toEqual(paint)
+			local chip = WaveFlowService.hurt(run, bossBox.id, 10, sink)
+			expect(chip).toEqual(10 * Enemies.BOSS.damageTaken)
+			expect(WaveFlowService.counter(run).left).toEqual(5)
+			expect(#events).toEqual(1)
+			expect(run.clear).toEqual(false)
+			local taken = WaveFlowService.hurt(run, bossBox.id, 100000, sink)
+			expect(taken > 0).toBeTrue()
+			expect(#events).toEqual(2)
+			expect(events[2].name).toEqual(WaveFlowService.BOSS_DOWN)
+			expect(events[2].name).toEqual("bossDown")
+			expect(events[2].wave).toEqual(5)
+			expect(events[2].fields).toEqual(1)
+			expect(run.clear).toEqual(false)
+			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 4 })
+			killLiving(run, sink, 4)
+			expect(run.clear).toEqual(true)
+			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 0 })
+			expect(#events).toEqual(2)
+			expect(sent[#sent].wave).toEqual(5)
+			expect(sent[#sent].left).toEqual(0)
+			expect(sent[#sent].fields).toEqual(2)
 		end)
 	end)
 
@@ -342,6 +538,8 @@ describe("WaveFlowService", function()
 			local body = fs.readFile(path)
 			expect(string.find(body, "WaveCounter", 1, true)).toBeNil()
 			expect(string.find(body, "WaveFlow", 1, true)).toBeNil()
+			expect(string.find(body, "bossEnter", 1, true)).toBeNil()
+			expect(string.find(body, "bossDown", 1, true)).toBeNil()
 		end
 	end)
 end)

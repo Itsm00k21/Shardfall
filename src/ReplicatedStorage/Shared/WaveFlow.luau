@@ -1,9 +1,10 @@
 --!strict
 
 --[[
-	Server math for roadmap 3.5. Wave sizes and mixes come from
-	Config/Enemies.luau. This module does not create parts, fire a
-	remote, read a profile, or spend Robux.
+	Server math for roadmap 3.5 and the wave-5 boss (3.6). Wave sizes,
+	the boss, and the four adds come from Config/Enemies.luau. This
+	module does not create parts, fire a remote, read a profile, or
+	spend Robux.
 
 	WaveFlowService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on. A client that requires this file can
@@ -56,10 +57,48 @@ local function living(run: Run): number
 	return left
 end
 
--- Kinds for one wave, in WAVE_ORDER. Nil when the wave is outside 1..4.
+-- Boss first, then adds in WAVE_ORDER. Nil when the mix is not four adds.
+local function bossPlan(): { string }?
+	local boss = Enemies.BOSS
+	local mix = Enemies.BOSS_ADD_MIX
+	local adds = Enemies.BOSS_ADDS
+	if boss == nil or type(boss.id) ~= "string" or type(mix) ~= "table" or type(adds) ~= "number" then
+		return nil
+	end
+	local kinds = { boss.id }
+	local sum = 0
+	for _, role in ipairs(Enemies.WAVE_ORDER) do
+		local amount = mix[role]
+		if amount == nil then
+			amount = 0
+		end
+		if type(amount) ~= "number" or amount < 0 or amount ~= math.floor(amount) then
+			return nil
+		end
+		for _ = 1, amount do
+			table.insert(kinds, role)
+		end
+		sum += amount
+	end
+	for key in pairs(mix) do
+		if table.find(Enemies.WAVE_ORDER, key) == nil then
+			return nil
+		end
+	end
+	if sum ~= adds or #kinds ~= adds + 1 then
+		return nil
+	end
+	return kinds
+end
+
+-- Kinds for one wave. Trash waves follow WAVE_ORDER. Wave 5 is the boss
+-- plan. Nil when the wave is outside that list.
 function WaveFlow.plan(wave: number): { string }?
 	if type(wave) ~= "number" or wave ~= wave or wave ~= math.floor(wave) then
 		return nil
+	end
+	if wave == Enemies.BOSS_WAVE then
+		return bossPlan()
 	end
 	local mix = Enemies.WAVE_MIXES[wave]
 	local count = Enemies.WAVE_COUNTS[wave]
@@ -133,7 +172,7 @@ function WaveFlow.boxes(run: Run): { Box }
 	for _, member in ipairs(run.members) do
 		local actor = member.actor
 		if actor.hp > 0 then
-			local row = Enemies.TYPES[actor.kind]
+			local row = Enemies.row(actor.kind)
 			if row ~= nil then
 				table.insert(boxes, {
 					shape = "block",
@@ -154,7 +193,7 @@ function WaveFlow.boxes(run: Run): { Box }
 end
 
 -- Damage from the roster. A killing blow on the last enemy opens the
--- next wave, or marks the run clear when wave 4 is empty. A miss, a
+-- next wave. The run is clear when the boss wave is empty. A miss, a
 -- dead id, or a hit that leaves HP up does not change the count.
 function WaveFlow.hurt(run: Run, id: number, raw: number): number
 	if run.clear == true or type(id) ~= "number" then
@@ -178,7 +217,7 @@ function WaveFlow.hurt(run: Run, id: number, raw: number): number
 		return taken
 	end
 	local nextWave = run.wave + 1
-	if Enemies.WAVE_COUNTS[nextWave] == nil or not spawnWave(run, nextWave) then
+	if not spawnWave(run, nextWave) then
 		run.clear = true
 	end
 	return taken
