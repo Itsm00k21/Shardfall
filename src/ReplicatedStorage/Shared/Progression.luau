@@ -7,6 +7,7 @@
 	stops at +100%. Welcome Back and rest XP share that same cap.
 ]]
 
+local HardMode = require("./HardMode")
 local LaunchGate = require("./LaunchGate")
 
 local Progression = {}
@@ -42,8 +43,11 @@ function Progression.unlocked(level: number): { string }
 	local ids = {}
 	for _, row in ipairs(Progression.UNLOCKS) do
 		if level >= row.level then
-			-- The row stays. extraDifficulties (off) is what hides it.
+			-- The rows stay. A closed switch is what hides one.
 			if row.id == "nightmare" and not LaunchGate.on("extraDifficulties") then
+				continue
+			end
+			if row.id == "hard" and HardMode.isHardReal() ~= true then
 				continue
 			end
 			table.insert(ids, row.id)

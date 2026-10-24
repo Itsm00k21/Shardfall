@@ -29,6 +29,7 @@ local ServerScriptService: any
 local DataService: any
 local DevAccess: any
 local LaunchGate: any
+local HardMode: any
 local RunResults: any
 local OnboardingService: any
 local Schema: any
@@ -40,6 +41,7 @@ if studio then
 	DataService = require(script.Parent.DataService)
 	DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 	LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+	HardMode = require(ReplicatedStorage.Shared.HardMode)
 	RunResults = require(ReplicatedStorage.Shared.RunResults)
 	OnboardingService = require(script.Parent.OnboardingService)
 	Schema = require(ReplicatedStorage.Shared.Schema)
@@ -52,6 +54,7 @@ else
 	}
 	DevAccess = require("../../ReplicatedStorage/Shared/DevAccess")
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
+	HardMode = require("../../ReplicatedStorage/Shared/HardMode")
 	RunResults = require("../../ReplicatedStorage/Shared/RunResults")
 	OnboardingService = require("./OnboardingService")
 	Schema = require("../../ReplicatedStorage/Shared/Schema")
@@ -672,7 +675,7 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 		-- Owner, tier, and the account snapshot come from the server.
 		-- The enter payload cannot set them or claim loot.
 		opts.ownerId = player.UserId
-		opts.tier = "normal"
+		opts.tier = if HardMode.isHardReal() then HardMode.sessionTier(player.UserId) else "normal"
 		opts.party = 1
 		opts.account = RunResults.account(DataService.get(player))
 		local run = arena.enter(opts)
@@ -711,7 +714,7 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 		againOpts.receiptId = result.runId
 		againOpts.bagSlots = freeBag(player, config)
 		againOpts.ownerId = player.UserId
-		againOpts.tier = result.tier
+		againOpts.tier = if HardMode.isHardReal() then result.tier else "normal"
 		againOpts.party = 1
 		againOpts.account = RunResults.account(DataService.get(player))
 		local fresh = arena.enter(againOpts)
