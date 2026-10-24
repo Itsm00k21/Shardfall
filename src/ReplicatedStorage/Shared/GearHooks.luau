@@ -548,4 +548,69 @@ function GearHooks.pickEmpty(profile: any, cap: any, tab: any): string?
 	return string.format("No unlocked, unequipped %s in %s%s.", noun, where, tail)
 end
 
+-- Manual bulk salvage (Kevin, Oct 23 clip 9: "auto salvage is there but no
+-- way to manually bulk salvage"). The Bag's "Salvage…" picker offers these
+-- caps. The server's rarity preview (GearSalvage "preview") already
+-- allows any rarity for a manual sweep; Rare is the highest offered here.
+GearHooks.BULK_CAPS = table.freeze({ "Common", "Uncommon", "Rare" })
+GearHooks.BULK_BUTTON = "Salvage…"
+
+-- "Salvage all Common" / "Salvage all Uncommon and below".
+function GearHooks.bulkTitle(cap: any): string
+	local name = if type(cap) == "string" then cap else "Common"
+	if GearHooks.capRank(name) <= 1 then
+		return "Salvage all Common"
+	end
+	return string.format("Salvage all %s and below", name)
+end
+
+-- Client estimate for a picker row before the server answers: every
+-- weapon and armor piece at or below cap that pickBlock lets through
+-- (never locked, favorite or equipped). Matches the server's plan.
+function GearHooks.bulkEstimate(profile: any, cap: any): (number, number)
+	local limit = GearHooks.capRank(cap)
+	if limit <= 0 or type(profile) ~= "table" or type(profile.inventory) ~= "table" then
+		return 0, 0
+	end
+	local count, gain = 0, 0
+	for uid, item in pairs(profile.inventory) do
+		if type(item) == "table" then
+			local rank = GearHooks.capRank(item.rarity)
+			if rank > 0 and rank <= limit then
+				local probe = item
+				if type(probe.uid) ~= "string" and type(uid) == "string" then
+					probe = table.clone(item)
+					probe.uid = uid
+				end
+				if GearHooks.pickBlock(profile, probe) == nil then
+					count += 1
+					gain += Essence.amount(item.rarity) or 0
+				end
+			end
+		end
+	end
+	return count, gain
+end
+
+-- The second line of a picker row: "12 items · +24 Essence", or why the
+-- row is empty.
+function GearHooks.bulkLine(count: any, gain: any): string
+	local n = whole(count) or 0
+	if n <= 0 then
+		return "Nothing to salvage"
+	end
+	return string.format("%d item%s · +%d Essence", n, if n == 1 then "" else "s", whole(gain) or 0)
+end
+
+-- The one line the Auto-salvage popover shows under the cap. A saved cap
+-- above Uncommon is shown (and sent) clamped, so the popover never argues
+-- with its own dropdown.
+function GearHooks.capNote(_profile: any): string
+	return "Auto-salvage goes up to Uncommon at most. Rarer drops are always kept."
+end
+
+-- The widest chip text, so the chip never changes width when it turns on.
+GearHooks.CHIP_WIDEST = "Auto-salvage: ≤ Uncommon"
+GearHooks.CHIP_WIDEST_COMPACT = "Auto: Off"
+
 return GearHooks

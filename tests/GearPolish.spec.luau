@@ -515,6 +515,36 @@ describe("Gear polish: clip 6 Pets page", function()
 		end)
 	end)
 
+	it("clip 9: scrolls the pet list on its own and opens on the equipped pet", function()
+		withFlags(ALL, function()
+			local many = pets()
+			for index = 1, 8 do
+				local uid = string.format("slime%d", index)
+				many[uid] = { uid = uid, name = "Bog Slime " .. index, kind = "Pet", rarity = "Common" }
+			end
+			local world, hub, screen = boot({ pets = many, equipped = { weapon = "spare", armor = {}, pet = "fox" } })
+			hub.open("pets")
+			local list = GuiFake.findNamed(screen, "PetList")
+			expect(list:IsA("ScrollingFrame")).toBeTrue()
+			expect(list.AutomaticCanvasSize == world.enum.AutomaticSize.Y).toBeTrue()
+			-- Sorted by name, Dusk Owl comes first; the detail still opens
+			-- on the worn Moss Fox.
+			expect(GuiFake.findNamed(screen, "PetEquip").Text).toEqual("EQUIPPED")
+			-- Its place survives a repaint (a lock tap repaints the page).
+			list.CanvasPosition = { X = 0, Y = 180 }
+			list:GetPropertyChangedSignal("CanvasPosition"):Fire()
+			GuiFake.activate(GuiFake.findNamed(petCard(screen, "owl"), "Lock"))
+			local again = GuiFake.findNamed(screen, "PetList")
+			expect(again ~= list).toBeTrue()
+			expect(again.CanvasPosition.Y).toEqual(180)
+			-- A pick still wins over the equipped default.
+			GuiFake.activate(petCard(screen, "owl"))
+			expect(GuiFake.findNamed(screen, "PetEquip").Text).toEqual("EQUIP")
+			-- Crack a Pet Shard stays on the page.
+			expect(GuiFake.findNamed(screen, "Crack") ~= nil).toBeTrue()
+		end)
+	end)
+
 	it("shows one EQUIPPED state once a pet is worn, and a second tap unequips", function()
 		withFlags(ALL, function()
 			local _, hub, screen, calls = boot({ pets = pets() })

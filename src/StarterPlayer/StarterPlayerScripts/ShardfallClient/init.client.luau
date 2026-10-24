@@ -1553,6 +1553,35 @@ retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end, applyResult)
+-- [Ghost] Clip 9: the intro and goals came back over the open Bag. Covered
+-- is now read live from each menu's real visible state, so any open menu
+-- keeps them hidden however it was opened.
+OnboardHud.coverWhen("inventory", function(): boolean
+	return inventory ~= nil and inventory.isShown()
+end)
+OnboardHud.coverWhen("hub", function(): boolean
+	return menuHub ~= nil and menuHub.isOpen()
+end)
+OnboardHud.coverWhen("craft", function(): boolean
+	return ui.isOpen()
+end)
+OnboardHud.coverWhen("travel", function(): boolean
+	return travel ~= nil and travel.isOpen()
+end)
+OnboardHud.coverWhen("skills", function(): boolean
+	return ClassHud.isVisible()
+end)
+OnboardHud.coverWhen("raid", function(): boolean
+	return RaidHud.isOpen()
+end)
+OnboardHud.coverWhen("loop", function(): boolean
+	return LoopHud.isOpen()
+end)
+OnboardHud.coverWhen("market", function(): boolean
+	local gui = playerGui:FindFirstChild("ShardfallMarket")
+	local market = if gui ~= nil then gui:FindFirstChild("Market") else nil
+	return market ~= nil and OnboardHud.shown(market)
+end)
 if LaunchGate.on("doors") then
 	DoorHud.start(function(action: string, ...: any)
 		return invoke(action, ...)

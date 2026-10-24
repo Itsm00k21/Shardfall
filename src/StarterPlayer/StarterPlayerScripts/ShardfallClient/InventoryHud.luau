@@ -590,6 +590,9 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local coreOpen = true
 	-- [Ghost] Clip 5: a newly picked item opens its detail at the top.
 	local lastDetailId: string? = nil
+	-- [Ghost] Clip 9: the detail pane opened scrolled down to Shard Core.
+	-- Every pick and every open starts it at the top.
+	local detailTop = false
 	local pendingRarity: string? = nil
 	local pendingFeed: { string }? = nil
 	local tabButtons: { [string]: TextButton } = {}
@@ -1146,11 +1149,13 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 					-- The detail panel follows the tap (desktop).
 					if not stacked() then
 						selectedId = picked
+						detailTop = true
 					end
 					render()
 					return
 				end
 				selectedId = picked
+				detailTop = true
 				render()
 			end)
 			card.InputBegan:Connect(function(input)
@@ -1180,9 +1185,14 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		end
 
 		clearGenerated(detail)
-		if selectedId ~= lastDetailId then
+		if selectedId ~= lastDetailId or detailTop then
 			lastDetailId = selectedId
+			detailTop = false
 			detail.CanvasPosition = Vector2.new(0, 0)
+			-- Again after this frame's rebuild settles the canvas size.
+			task.defer(function()
+				detail.CanvasPosition = Vector2.new(0, 0)
+			end)
 		end
 		local order = 1
 		if stacked() and selectedId ~= nil then
@@ -1892,6 +1902,7 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 		Dropdown.closeAll(root)
 		fitRoot()
 		if open then
+			detailTop = true
 			render()
 		end
 		if callbacks.onVisible ~= nil then
@@ -1961,6 +1972,14 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 
 	function controller.isOpen(): boolean
 		return isOpen
+	end
+
+	-- [Ghost] Clip 9: open and really on screen (the intro card reads this).
+	function controller.isShown(): boolean
+		if not isOpen or not root.Visible then
+			return false
+		end
+		return screen.Enabled
 	end
 
 	function controller.openTab(tab: string)
