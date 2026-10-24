@@ -803,6 +803,9 @@ function Remotes.bind()
 			if action == "skip" then
 				return OnboardingService.skip(player)
 			end
+			if action == "replay" then
+				return OnboardingService.replay(player)
+			end
 			return OnboardingService.advance(player)
 		end)
 	end

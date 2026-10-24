@@ -31,6 +31,7 @@ local RollConfig = require(ReplicatedStorage.Shared.RollConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local SessionGuide = require(ReplicatedStorage.Shared.SessionGuide)
 local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 local Settings = require(ReplicatedStorage.Shared.Settings)
 local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
@@ -203,16 +204,43 @@ local function attachGear(payload: { [string]: any }, drawn: any)
 	payload.merged = true
 end
 
+-- Lowest pool rarity that is still at or above the guide floor.
+-- present() is high to low, so the last match is the cheapest raise.
+local function atLeast(pool: any, floorName: string): string?
+	local need = Rarities.INDEX[floorName]
+	if type(need) ~= "number" then
+		return nil
+	end
+	local best = nil
+	for _, name in ipairs(RarityConfig.present(pool)) do
+		if Rarities.rank(name) >= need then
+			best = name
+		end
+	end
+	return best
+end
+
 -- One draw on an already-paid crack: pick a rarity with pity, mint the
 -- item, save it and move the counters. The caller has spent the tokens
--- and checked the Bag. Returns the capture, or nil and a reason.
-local function drawInto(data: any, pool: any, rng: any): (any?, string?)
+-- and checked the Bag. guideFloor is the server Rare floor for roll3.
+-- Returns the capture, or nil and a reason.
+local function drawInto(data: any, pool: any, rng: any, guideFloor: string?): (any?, string?)
 	local luck = RarityConfig.luckFromProfile(data)
 	-- Legendary pity only. A saved sinceEpic is left untouched.
 	local counters = {
 		sinceLegendary = data.sinceLegendary,
 	}
 	local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
+	if type(guideFloor) == "string" then
+		local wanted = SessionGuide.floorRarity(rarity, guideFloor)
+		if wanted ~= rarity then
+			local raised = atLeast(pool, wanted)
+			if type(raised) == "string" then
+				rarity = raised
+				floor = raised
+			end
+		end
+	end
 	local entry = RarityConfig.chooseEntry(pool, rarity, rng)
 	if type(entry) ~= "table" or type(entry.templateId) ~= "string" then
 		return nil, "That shard has nothing to roll."
@@ -310,6 +338,7 @@ local function crack(
 	end
 
 	local captured: any = nil
+	local guideFree = false
 	local ok, err = DataService.mutate(player, function(data)
 		if not Pools.isUnlocked(pool, data.ascension) then
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
@@ -321,10 +350,18 @@ local function crack(
 				return "Inventory is full."
 			end
 		end
+		-- R2/R3. Free only when the saved step is roll1, roll2, or roll3.
+		-- The step moves in this mutate with the item. No client flag.
+		local guideClaim = nil
+		if currency == Currencies.SHARD then
+			guideClaim = SessionGuide.claimFree(data)
+		end
+		local guideFloor = if guideClaim ~= nil then guideClaim.floor else nil
 		-- A dungeon voucher cracks that area once and does not spend a token.
 		-- It is an earned clear, so it never pays for a Prism roll.
+		-- A guide roll does not spend the voucher either.
 		local usedVoucher = false
-		if currency == Currencies.SHARD then
+		if guideClaim == nil and currency == Currencies.SHARD then
 			local area = (pool :: any).area
 			if type(area) == "string" and type(data.vouchers) == "table" then
 				local stack = data.vouchers[area]
@@ -334,15 +371,23 @@ local function crack(
 				end
 			end
 		end
-		if not usedVoucher then
+		if guideClaim == nil and not usedVoucher then
 			local spent, spendError = Currencies.take(data, currency)
 			if not spent then
 				return spendError or "You cannot pay for that crack."
 			end
 		end
-		local drawn, drawError = drawInto(data, pool, serverRng())
+		local drawn, drawError = drawInto(data, pool, serverRng(), guideFloor)
 		if drawn == nil then
 			return drawError
+		end
+		if type(guideFloor) == "string" and Rarities.INDEX[guideFloor] ~= nil then
+			if Rarities.rank(drawn.rarity) < Rarities.rank(guideFloor) then
+				return "Could not crack that shard."
+			end
+		end
+		if guideClaim ~= nil then
+			guideFree = true
 		end
 		captured = drawn
 		return nil
@@ -382,6 +427,9 @@ local function crack(
 		currency = currency,
 		starterGoalTracker = captured.tracker,
 	}
+	if guideFree then
+		result.guideFree = true
+	end
 	attachGear(result, captured)
 	return result
 end

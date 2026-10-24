@@ -6,9 +6,14 @@
 	A short cold open, then the world teaches one verb at a time. Skip drops
 	the player in Haven with the same starter kit. Returning players never
 	see it again.
+
+	LaunchGate.firstSessionGuide selects the V1 guide steps (open, three
+	rolls, the Gate, wave 1). Off, this module is the cold open it has
+	always been. The starter kit does not change.
 ]]
 
 local LaunchGate = require("./LaunchGate")
+local SessionGuide = require("./SessionGuide")
 
 local Onboarding = {}
 
@@ -25,29 +30,51 @@ Onboarding.STEPS = {
 	{ id = "haven", text = "Haven. The Forge remembers what you carry.", hint = "" },
 }
 
-function Onboarding.step(id: any)
-	if type(id) ~= "string" then
-		return Onboarding.STEPS[1]
+-- The guide owns `open` and its own ids. A legacy step such as "class"
+-- keeps the cold open even when the flag is on, so a save already past
+-- the first card is not rewound.
+local function guideOn(id: any): boolean
+	if not LaunchGate.on("firstSessionGuide") then
+		return false
 	end
-	for _, row in ipairs(Onboarding.STEPS) do
+	if id == nil or id == "open" then
+		return true
+	end
+	return SessionGuide.known(id)
+end
+
+local function rows(id: any)
+	if guideOn(id) then
+		return SessionGuide.steps()
+	end
+	return Onboarding.STEPS
+end
+
+function Onboarding.step(id: any)
+	local list = rows(id)
+	if type(id) ~= "string" then
+		return list[1]
+	end
+	for _, row in ipairs(list) do
 		if row.id == id then
 			return row
 		end
 	end
-	return Onboarding.STEPS[1]
+	return list[1]
 end
 
 function Onboarding.next(id: string): string?
-	for index, row in ipairs(Onboarding.STEPS) do
+	local list = rows(id)
+	for index, row in ipairs(list) do
 		if row.id == id then
-			local following = Onboarding.STEPS[index + 1]
+			local following = list[index + 1]
 			if following == nil then
 				return nil
 			end
 			return following.id
 		end
 	end
-	return Onboarding.STEPS[1].id
+	return list[1].id
 end
 
 -- The starter kit is the same whether they finish or skip.
@@ -76,18 +103,19 @@ function Onboarding.goals(
 	stepId: string,
 	profile: any?
 ): { { id: string, text: string, done: boolean } }
-	local rows = {}
+	local list = rows(stepId)
+	local rowsOut = {}
 	local known = false
-	for _, row in ipairs(Onboarding.STEPS) do
+	for _, row in ipairs(list) do
 		if row.id == stepId then
 			known = true
 		end
 	end
-	local marking = known and stepId ~= Onboarding.STEPS[1].id
+	local marking = known and stepId ~= list[1].id
 	local hasClass = type(profile) == "table"
 		and type(profile.classId) == "string"
 		and profile.classId ~= ""
-	for _, row in ipairs(Onboarding.STEPS) do
+	for _, row in ipairs(list) do
 		if row.id ~= "open" then
 			local done = marking and row.id ~= stepId
 			if row.id == stepId then
@@ -96,14 +124,14 @@ function Onboarding.goals(
 			if row.id == "class" and hasClass then
 				done = true
 			end
-			table.insert(rows, {
+			table.insert(rowsOut, {
 				id = row.id,
 				text = if row.hint ~= "" then row.hint else row.text,
 				done = done,
 			})
 		end
 	end
-	return rows
+	return rowsOut
 end
 
 -- Short names for the collapsed intro pill ("Shardfall: Choose a class").
@@ -129,22 +157,35 @@ end
 
 -- The pill text: the step's short name, or the first goal still to do
 -- when the step's own goal is already done (a class chosen before the
--- save left the class step).
+-- save left the class step). The guide says "Wren:" instead of "Shardfall:".
 function Onboarding.pillText(stepId: any, goals: { { id: string, done: boolean } }?): string
 	local id = Onboarding.step(stepId).id
-	local short: string = Onboarding.SHORT[id] or "Welcome"
+	local onGuide = guideOn(id)
+	local function label(step: string): string
+		if onGuide then
+			local named = SessionGuide.short(step)
+			if type(named) == "string" and named ~= "" then
+				return named
+			end
+		end
+		return Onboarding.SHORT[step] or "Welcome"
+	end
+	local short = label(id)
 	if goals ~= nil then
 		for _, goal in ipairs(goals) do
 			if goal.id == id and goal.done then
 				for _, other in ipairs(goals) do
 					if not other.done then
-						short = Onboarding.SHORT[other.id] or short
+						short = label(other.id)
 						break
 					end
 				end
 				break
 			end
 		end
+	end
+	if onGuide then
+		return "Wren: " .. short
 	end
 	return "Shardfall: " .. short
 end

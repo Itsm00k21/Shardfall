@@ -22,6 +22,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local DataService = require(script.Parent.DataService)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local OnboardingService = require(script.Parent.OnboardingService)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 
 local WaveArenaHost = {}
@@ -591,6 +592,14 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 		end
 		if typeof(events) == "table" and run ~= nil then
 			paint(run, player, config, events)
+			if LaunchGate.on("firstSessionGuide") then
+				for _, event in ipairs(events) do
+					if typeof(event) == "table" and event.name == "waveClear" and event.wave == 1 then
+						OnboardingService.note(player, "wave1")
+						break
+					end
+				end
+			end
 		end
 		local state = stateOf(arena, runs[player], config)
 		finishIfOver(player, runs[player])
