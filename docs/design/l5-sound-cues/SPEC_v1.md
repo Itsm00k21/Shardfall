@@ -1,10 +1,11 @@
-# L5 Sound Cue List, Spec v1.1 (NOT APPROVED, docs only)
+# L5 Sound Cue List, Spec v1.2 (NOT APPROVED, docs only)
 
-Owner: Prism (design, docs only, no code, no config edits, no asset uploads). Builders: Ghost (client playback, `Audio` / `UiSfx` rows), Echo (server events the client listens to). Base: `cursor/live-build-9721`. Status: **v1.1, proposal.** Not an official Vision & Design Rules decision until Kevin approves it and it is copied there.
+Owner: Prism (design, docs only, no code, no config edits, no asset uploads). Builders: Ghost (client playback, `Audio` / `UiSfx` rows), Echo (server events the client listens to). Base: `cursor/live-build-9721`. Status: **v1.2, proposal; Ghost closed Q1 and Q7.** Not an official Vision & Design Rules decision until Kevin approves it and it is copied there.
 Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883812fa966d50ee503d110 (11:55Z Oct 24, 2026, Kevin pre-approved): "L5 sound cue list v1 (hits, roll reveal per rarity, wave start/clear, boss slam; via Audio/UiSfx)."
 v1.1 asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca388381818692c13be76248b2 (Oct 24, 2026, Kevin pre-approved): "sound cue sheet for hits, roll reveal (tier-scaled 0.6-2.2 s), wave start/clear and boss slam, routed through Audio/UiSfx, with volume and priority rules." Folded here (ACK https://app.notion.com/p/403c31ca388381bf9d11f641547b5ccf) instead of a new branch / duplicate PR.
 
 **Changelog**
+- v1.2 (2026-10-24): Ghost's DP29 rulings folded (board row https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96, ACK https://app.notion.com/p/403c31ca388381bda15dc237843e114b, Kevin pre-approved): **Q7 closed, default `rolls.skipAt = "off"`** (Kevin approved the 2.2 s Legendary reveal, so it must play by default; the setting stays for veterans); **Q1 closed, Legendary cue stays 1.8 s** (choir swell + impact + 4-note theme snippet; the 1.0 s alt is dropped). §4b-2, §6a, §7, §10 updated to match.
 - v1.1 (2026-10-24): §4b-2 tier-scaled roll reveal timing (Common 0.6 s → Legendary 2.2 s) reconciled with the live `RollReveal` 1.65 s timeline and v1's cue lengths; §6a explicit volume and priority rules (priority tiers, voice caps + reserve, steal rule, ducking table, per-cue volume, mobile spam caps) routed via `Audio.CUES` / `Audio.cue` and `UiSfx.ids` / `UiSfx.clip`; Q7–Q9 added. Kevin's Q1 (Legendary cue length) stays open.
 - v1 (2026-10-24): cue list for hits, roll reveal per tier, wave start/clear, boss slam (+ volley, enter, clear), UI taps.
 
@@ -14,7 +15,7 @@ Live audio code (read only, `cursor/live-build-9721`; real names, nothing invent
 - `src/ReplicatedStorage/Shared/Audio.luau`: `Audio.GROUPS = { "Music", "SFX", "UI", "Ambience" }`, `Audio.TRACKS` + `Audio.trackFor(zoneId)`, `Audio.CUES` (frozen table: `common, uncommon, rare, epic, legendary, mythic, hit, dodge, perfect, kill, red, yellow, purple, blue`, all `""` today), `Audio.cue(name)` (lowercases the name, returns `nil` unless the id matches `^rbxassetid://%d+$`, so blanks stay silent), `Audio.heard(base, slider)`, `Audio.clampVolume`.
 - `src/ReplicatedStorage/Shared/UiSfx.luau`: `UiSfx.ids` (`open, close, tab, press, click, stinger, confirm, toast`; two built-ins `rbxasset://sounds/switch.wav` and `rbxasset://sounds/electronicpingshort.wav`), `UiSfx.clip(action)` (unknown action → `press`), `UiSfx.volume(master, ui)`. Reduced motion does not mute UI; UI volume 0 does.
 - Callers: `CombatHud.playCue(name)` (Volume 0.6, `SFX` SoundGroup; calls `hit`, the 4 telegraph colors, `dodge`/`perfect`, `kill`); `RollReel` (`Audio.cue(shown.rarity)` at reel stop, fallback ping for Rare+ at 0.5); `MenuHub` `hubFn.playUi(action)` (`UiSfx.clip` + `UiSfx.volume(master, ui)`); `MusicController` builds the 4 SoundGroups. `Settings.luau` audio = `{ master = 1, music = 0.7, sfx = 1, ui = 1 }`.
-- **v1.1 roll reveal read** (`cursor/live-build-9721`): `Shared/RollReveal.luau` `RollReveal.FULL = 1.65` with phase marks `DIM_END 0.15`, `FAST_END 0.6`, `SLOW_END 1.3` (reel stops; `RollReel` plays `Audio.cue(shown.rarity)` at 0.6 volume once `spinProgress ≥ 1`), `GLOW_AT 1.0` (Epic+), `FLASH_AT 1.15` (Legendary+, 2 flashes in 0.5 s), `HOLD_END 1.4`, morph to the card until 1.65; all marks **scale with the duration** (`scaled()`). `RollReveal.duration` = `Settings.rollDuration` (**full 1.65 / short 0.7 / instant 0**, the same for every tier), 0 when `Settings.skipsCutscene(settings, rarity)` (default `rolls.skipAt = "legendary"`), paid ≤ free.
+- **v1.1 roll reveal read** (`cursor/live-build-9721`): `Shared/RollReveal.luau` `RollReveal.FULL = 1.65` with phase marks `DIM_END 0.15`, `FAST_END 0.6`, `SLOW_END 1.3` (reel stops; `RollReel` plays `Audio.cue(shown.rarity)` at 0.6 volume once `spinProgress ≥ 1`), `GLOW_AT 1.0` (Epic+), `FLASH_AT 1.15` (Legendary+, 2 flashes in 0.5 s), `HOLD_END 1.4`, morph to the card until 1.65; all marks **scale with the duration** (`scaled()`). `RollReveal.duration` = `Settings.rollDuration` (**full 1.65 / short 0.7 / instant 0**, the same for every tier), 0 when `Settings.skipsCutscene(settings, rarity)` (live default `rolls.skipAt = "legendary"`; v1.2 ruling changes it to `"off"`, Q7), paid ≤ free.
 - V1 wave enemies + boss numbers: Echo PR #422 `Config/Enemies.luau` (not merged, `LaunchGate.SHOW.enemyTypes = false`); boss attacks per #439 (`VOLLEY_WINDUP` 0.9 s, `LEASH_WINDUP` 1.2 s, `MarkCancel`).
 
 ## 1. Goal
@@ -71,10 +72,10 @@ Today every tier gets the same 1.65 s reveal. v1.1 proposes one reveal length **
 | Uncommon | **0.9 s** | 0.71 s | 0.3 s | 1.01 s | ≤ 9 | none | — |
 | Rare | **1.3 s** | 1.02 s | 0.6 s | 1.62 s | ≤ 12 | none | — |
 | Epic | **1.65 s** (= today's live full length, unchanged) | 1.30 s | 1.0 s | 2.30 s | ≤ 14 | Music → 40% for 1.0 s | glow at 1.0 s |
-| Legendary | **2.2 s** (cap) | 1.73 s | 1.8 s (v1, Kevin's Q1 still open) | 3.53 s | ≤ 16 | Music → 25% for 1.8 s | glow 1.33 s, 2 flashes from 1.53 s |
-- **How the 2.2 s cap fits v1's 1.8 s Legendary cue:** 2.2 s is the **visual** reveal (until the card is fully up), not the sound. The cue starts at the reel stop (1.73 s) and its tail rings **1.33 s over the shown card**, which is where the "I got it" moment is. So both numbers hold: reveal ≤ 2.2 s, Legendary cue 1.8 s (still within v1 §6 "≤ 2 s one-shots"). If Kevin picks the shorter 1.0 s cue in Q1, it ends at 2.73 s and the duck shortens to 1.0 s; the 2.2 s reveal does not change.
+| Legendary | **2.2 s** (cap) | 1.73 s | 1.8 s (Q1 closed v1.2) | 3.53 s | ≤ 16 | Music → 25% for 1.8 s | glow 1.33 s, 2 flashes from 1.53 s |
+- **How the 2.2 s cap fits v1's 1.8 s Legendary cue:** 2.2 s is the **visual** reveal (until the card is fully up), not the sound. The cue starts at the reel stop (1.73 s) and its tail rings **1.33 s over the shown card**, which is where the "I got it" moment is. So both numbers hold: reveal ≤ 2.2 s, Legendary cue 1.8 s (still within v1 §6 "≤ 2 s one-shots"). (v1.2: Q1 closed at 1.8 s by Ghost, so the shorter 1.0 s alt is dropped.)
 - **The ladder still climbs** in both length and loudness: reveal 0.6 → 0.9 → 1.3 → 1.65 → 2.2 s, cue 0.15 → 0.3 → 0.6 → 1.0 → 1.8 s, base volume 0.4 → 0.45 → 0.55 → 0.65 → 0.75 (§4b).
-- **Settings:** `short` = `min(D, 0.7)` (so Common stays 0.6, every other tier 0.7; the cue still plays its full length at the stop); `instant` = 0 (card shows at once, the tier cue plays at the card show); `skipAt` keeps zeroing tiers at or above the gate (see Q7); paid ≤ free stays.
+- **Settings:** `short` = `min(D, 0.7)` (so Common stays 0.6, every other tier 0.7; the cue still plays its full length at the stop); `instant` = 0 (card shows at once, the tier cue plays at the card show); `skipAt` keeps zeroing tiers at or above the gate, but **v1.2 default is `"off"`** (Q7 closed), so every tier, Legendary included, plays its full reveal unless the player picks a gate; paid ≤ free stays.
 - **x10:** one reveal of the **best** tier's D, one cue (§4b rule).
 - **Mythic:** not in V1; keeps today's separate long reveal.
 - **Ticks:** `reel_tick` fires per reel row passed, ≤ 20 starts/s (skip ticks if the reel is faster), pitch rising 0 → +12% into the stop; last tick ≥ 0.06 s before the tier cue so they don't smear.
@@ -136,7 +137,7 @@ Suggested replacements for the 8 clips stay as in G-047.
 | Trigger | Target | Hold | Restore |
 |---|---|---|---|
 | `epic` | Music → 40% | 1.0 s | 0.6 s tween |
-| `legendary` | Music → 25% | 1.8 s (or 1.0 s if Kevin Q1 = short) | 0.6 s |
+| `legendary` | Music → 25% | 1.8 s (Q1 closed) | 0.6 s |
 | `boss_clear` | Music → 30% | 2.0 s | 0.6 s |
 | `boss_enter` | crossfade to `gnarlBoss` bed (`Audio.FADE_SECONDS` 2) | — | — |
 | `boss_slam_windup` → `boss_slam_impact` | **P3 hit pool → 60%** so the slam reads over a crowd | windup + 0.3 s | 0.3 s |
@@ -163,7 +164,7 @@ Ducks never stack: the lowest target wins, the longest hold wins. Sliders still 
 - **Wipe in the same frame as wave clear:** play `run_wipe` only (no `wave_clear`), matching the "loot first, gray fade" order (L1).
 - **Flag off** (`enemyTypes`, `buffDraft`, `waveArena`): cues for those systems never fire; blank rows cost nothing.
 - **Unknown cue names:** `Audio.cue` returns nil (silent); `UiSfx.clip` falls back to `press`. Don't rely on either as a feature.
-- **v1.1 Reveal skipped by settings:** with `skipAt` at or below a tier, D = 0 for that tier (live rule); the tier cue still plays once at the card show so the ladder is never silent.
+- **v1.1 Reveal skipped by settings:** (v1.2: default `skipAt = "off"`, so this only happens after a player opts in.) With `skipAt` at or below a tier, D = 0 for that tier (live rule); the tier cue still plays once at the card show so the ladder is never silent.
 - **v1.1 Roll during a wave (not V1):** rolls are hub-only; if a roll cue and a P1 wave cue ever overlap, both play (both P1) and the Music duck rule applies once.
 - **Licensing:** only Roblox-licensed free Creator Store audio or audio Kevin owns (G-047 flags). No paid assets, no other game's sounds.
 
@@ -183,23 +184,25 @@ Ducks never stack: the lowest target wins, the longest hold wins. Sliders still 
 - [ ] Slam windup sound ends exactly on impact (±50 ms) including after a lag spike.
 - [ ] SFX/UI sliders at 0 silence their groups; reduced motion leaves sounds on.
 - [ ] Every cue is a key in `Audio.CUES` or an action in `UiSfx.ids`; no id is hard-coded at call sites.
+- [ ] (v1.2) Fresh profile (default Settings, `rolls.skipAt = "off"`): a Legendary roll plays the full 2.2 s reveal and the 1.8 s cue; it is not skipped.
 - [ ] (v1.1) Reveal lengths measure 0.6 / 0.9 / 1.3 / 1.65 / 2.2 s (±50 ms) and every tier cue starts on the reel stop (±1 frame).
 - [ ] (v1.1) In a wave-12 party-of-4 stress, a boss slam windup and impact are always heard (P1 reserve), and the hit pool audibly drops under the slam.
 
 ## 11. Open questions (answer by number)
-1. **@Kevin (taste):** Legendary reveal = choir swell + impact + a 4-note main-theme snippet (≈ 1.8 s, Music ducks). Or shorter (1.0 s, no theme)? Recommended: 1.8 s with the snippet; it's the moment players crave. *(v1.1: still open. Either answer fits the 2.2 s visual cap, see §4b-2.)*
+1. ~~**@Kevin (taste):** Legendary reveal = choir swell + impact + a 4-note main-theme snippet (≈ 1.8 s, Music ducks). Or shorter (1.0 s, no theme)? Recommended: 1.8 s with the snippet; it's the moment players crave. *(v1.1: still open.)*~~ **CLOSED v1.2 (Ghost, DP29, Kevin pre-approved): 1.8 s with the snippet.**
 2. **@Kevin (taste):** Wipe sound = soft descending chord (no "fail" sting), matching "always keep loot". Recommended: yes.
 3. **@Ghost:** Keep cue ids only in `Audio.CUES` (rec, it's already the "Config" for ids) or also mirror the per-cue numbers (prio, max, volume, pitch) as a `Config/Audio` table for Echo's Config rule? Recommended: one small `Audio.CUE_RULES` table next to `CUES`, later.
 4. **@Ghost:** Touch voice cap 16 (rec) vs the doc's ~24?
 5. **@Echo:** Do damage payloads already carry `element` and `crit` for the client? If not, add both (read-only fields, no Config change).
 6. **@Ghost:** OK to reuse the built-in `switch.wav` as the `reel_tick` placeholder (RollReel already plays it at 0.35)? Recommended: yes.
-7. **@Ghost:** `Settings` defaults `rolls.skipAt = "legendary"`, and `skipsCutscene` returns true when the tier rank ≥ the gate, so `RollReveal.duration` reads as **0 for Legendary by default** (no reel; the 2.2 s Legendary reveal would only show if a player changes the setting). Intended? Recommended: default `skipAt = "off"` for V1 so new players see the Legendary moment; the setting stays for veterans.
+7. ~~**@Ghost:** `Settings` defaults `rolls.skipAt = "legendary"`, and `skipsCutscene` returns true when the tier rank ≥ the gate, so `RollReveal.duration` reads as **0 for Legendary by default** (no reel; the 2.2 s Legendary reveal would only show if a player changes the setting). Intended? Recommended: default `skipAt = "off"` for V1 so new players see the Legendary moment; the setting stays for veterans.~~ **CLOSED v1.2 (Ghost, DP29): default `rolls.skipAt = "off"`; Kevin approved the 2.2 s Legendary reveal and it must play.** Builder note for Ghost: one-line default change in `Settings.luau` (Prism does not edit it).
 8. **@Ghost:** Where do the 5 reveal lengths live: a `RollReveal.TIER_SECONDS` table (Common 0.6 · Uncommon 0.9 · Rare 1.3 · Epic 1.65 · Legendary 2.2) multiplying the existing scaled marks, or a column next to `Rarities`? Recommended: `RollReveal.TIER_SECONDS`, `RollReveal.duration` picks it instead of the flat 1.65; `short` / `instant` / paid rules unchanged.
 9. **@Ghost:** OK to reserve 4 voices for P1 and 2 for UI inside the 16 / 24 total, and duck the hit pool to 60% under a boss slam? Recommended: yes.
 
 ## Decision log
 - 2026-10-24 (Ghost GO 11:55Z, Kevin pre-approved for Prism to write it; Prism): **L5 v1** cue list for hits, roll reveal per tier, wave start/clear, boss slam (+ volley, enter, clear), UI taps, with priority / voices / volume / pitch / placeholders. Not approved as a Vision & Design Rules decision.
 - 2026-10-24 (Ghost row 403c31ca388381818692c13be76248b2, Kevin pre-approved; Prism): **L5 v1.1** folded on the same branch: tier-scaled reveal 0.6–2.2 s and explicit volume / priority rules. Not approved as a Vision & Design Rules decision.
+- 2026-10-24 (Ghost DP29 row https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96, Kevin pre-approved; Prism): **L5 v1.2** Q1 closed (Legendary cue 1.8 s), Q7 closed (default `rolls.skipAt = "off"`). Still a proposal until Kevin copies it into Vision & Design Rules.
 
 ## Later (not V1)
 "Reduce loud sounds" toggle and captions for key cues (named in `shardfall_audio.md`; not in `Settings.luau`), per-class hit palettes, adaptive music stems per wave, enemy voice barks. All go to the Ideas Backlog marked NOT APPROVED.
