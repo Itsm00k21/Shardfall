@@ -24,6 +24,7 @@ local CombatService = require(script.Parent.CombatService)
 local CraftService = require(script.Parent.CraftService)
 local DataService = require(script.Parent.DataService)
 local DebugService = require(script.Parent.DebugService)
+local GearSalvageService = require(script.Parent.GearSalvageService)
 local DungeonService = require(script.Parent.DungeonService)
 local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
@@ -120,6 +121,7 @@ end
 local PARKED_ACTION: { [string]: string } = {
 	Salvage = "forgeSalvage",
 	BulkSalvage = "forgeSalvage",
+	GearSalvage = "gearSalvage",
 	FusePet = "petEvolution",
 	Trade = "trading",
 	Market = "market",
@@ -230,7 +232,7 @@ function Remotes.bind()
 			local luck = RarityConfig.luckFromProfile(data)
 			return {
 				ok = true,
-				odds = RarityConfig.disclose(pool, luck, if data ~= nil then data.sinceEpic else nil),
+				odds = RarityConfig.disclose(pool, luck, if data ~= nil then data.sinceLegendary else nil),
 			}
 		end)
 	end
@@ -574,6 +576,15 @@ function Remotes.bind()
 				return { ok = false, error = "Unknown rarity." }
 			end
 			return CraftService.salvageRarity(player, rarity)
+		end)
+	end
+
+	functionRemote("GearSalvage").OnServerInvoke = function(player, action, payload)
+		return guard(player, "GearSalvage", function()
+			if type(action) ~= "string" or (payload ~= nil and type(payload) ~= "table") then
+				return { ok = false, error = "Unknown salvage action." }
+			end
+			return GearSalvageService.handle(player, action, payload)
 		end)
 	end
 

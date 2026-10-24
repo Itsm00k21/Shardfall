@@ -15,10 +15,16 @@
 	Pets are separate. A realm above the player's ascension is not offered.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build b6c099e+ client` in Output.
+	still leaves `[Shardfall] build <git sha> client` in Output. Build has no
+	requires; the sha comes from the generated BuildStamp (scripts/stamp.sh).
 ]]
 
-print("[Shardfall] build b6c099e+ client")
+print((function(): string
+	local ok, line = pcall(function()
+		return require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Build")).line("client")
+	end)
+	return if ok then line else "[Shardfall] build unknown client"
+end)())
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -990,6 +996,50 @@ inventory = InventoryHud.start(playerGui, {
 			ui.setStatus(string.format("Salvaged %s %s pieces.", tostring(count), rarity), "ok")
 		end)
 	end,
+	-- Full-bag salvage (#388). GearBar waits on the answer, so this one
+	-- yields instead of spawning. The profile in the answer is applied
+	-- first, so the labels read the server's values.
+	onGear = function(action: string, payload: any): any
+		local ok, result = pcall(function()
+			return invoke("GearSalvage", action, payload)
+		end)
+		if not ok then
+			warn("[Shardfall] " .. tostring(result))
+			return { ok = false, error = "Could not reach the server. Try again." }
+		end
+		applyResult(result)
+		return result
+	end,
+	-- [Ghost] Full-inventory gear panel. Same remotes as the Bag.
+	onUpgrade = function(uid: string)
+		local ok, result = pcall(function()
+			return invoke("UpgradeGear", uid)
+		end)
+		local message = remoteError(ok, result, "Could not upgrade that.")
+		if message ~= nil then
+			ui.setStatus(message, "error")
+			return result
+		end
+		applyResult(result)
+		local note = if type(result) == "table" and type(result.note) == "string" then result.note else nil
+		ui.setStatus(if note ~= nil then "Upgraded " .. note else "Upgraded.", "ok")
+		return result
+	end,
+	-- Shard Core reads and feeds. The feed answer has no profile; the
+	-- panel mirrors essence and level until the next profile push.
+	onCore = function(action: string, uid: string): any
+		if action ~= "FeedShardCore" and action ~= "GetShardCore" then
+			return { ok = false, error = "Unknown Shard Core action." }
+		end
+		local ok, result = pcall(function()
+			return invoke(action, uid)
+		end)
+		if not ok then
+			warn("[Shardfall] " .. tostring(result))
+			return { ok = false, error = "Could not reach the server. Try again." }
+		end
+		return result
+	end,
 	onLock = function(uid: string, locked: boolean)
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -1215,6 +1265,7 @@ inventory = InventoryHud.start(playerGui, {
 			closePanels("inventory")
 		end
 		ui.setCovered(open)
+		OnboardHud.setCovered("inventory", open)
 	end,
 })
 
@@ -1292,6 +1343,11 @@ menuHub = MenuHub.start(playerGui, {
 		return selectedPoolId
 	end,
 	onBag = function()
+		-- [Ghost] One inventory: the Bag key toggles it.
+		if LaunchGate.on("oneInventory") and inventory.isOpen() then
+			inventory.close()
+			return
+		end
 		closePanels("inventory")
 		inventory.open()
 		if menuHub ~= nil then
@@ -1309,6 +1365,8 @@ menuHub = MenuHub.start(playerGui, {
 		if hudShell ~= nil and not open then
 			hudShell.setRail("")
 		end
+		-- [Ghost] Clip 7: the intro card and goals step aside for the hub.
+		OnboardHud.setCovered("hub", open)
 	end,
 	onTab = function(id: string)
 		if hudShell ~= nil then
@@ -1496,6 +1554,35 @@ end
 retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
+end, applyResult)
+-- [Ghost] Clip 9: the intro and goals came back over the open Bag. Covered
+-- is now read live from each menu's real visible state, so any open menu
+-- keeps them hidden however it was opened.
+OnboardHud.coverWhen("inventory", function(): boolean
+	return inventory ~= nil and inventory.isShown()
+end)
+OnboardHud.coverWhen("hub", function(): boolean
+	return menuHub ~= nil and menuHub.isOpen()
+end)
+OnboardHud.coverWhen("craft", function(): boolean
+	return ui.isOpen()
+end)
+OnboardHud.coverWhen("travel", function(): boolean
+	return travel ~= nil and travel.isOpen()
+end)
+OnboardHud.coverWhen("skills", function(): boolean
+	return ClassHud.isVisible()
+end)
+OnboardHud.coverWhen("raid", function(): boolean
+	return RaidHud.isOpen()
+end)
+OnboardHud.coverWhen("loop", function(): boolean
+	return LoopHud.isOpen()
+end)
+OnboardHud.coverWhen("market", function(): boolean
+	local gui = playerGui:FindFirstChild("ShardfallMarket")
+	local market = if gui ~= nil then gui:FindFirstChild("Market") else nil
+	return market ~= nil and OnboardHud.shown(market)
 end)
 if LaunchGate.on("doors") then
 	DoorHud.start(function(action: string, ...: any)

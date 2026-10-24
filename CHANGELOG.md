@@ -21,6 +21,23 @@ its tag to merged and add the merge commit.
   red warning, a 1.5s boss death pause, and a hit flash plus death puff on
   small enemies. `LaunchGate.waveArena` and `WaveArenaConfig.enabled` both
   stay off, so nothing builds or shows until they are turned on. (open)
+- Playtest fixes (Ghost, clips 6 and 7): x10 results no longer badge pets as "Salvaged" (`GearHooks.markBatch` only checked `profile.inventory`; it now never marks pets and only infers for weapons/armor at or under an active auto-salvage cap; the server never salvaged them). Pets page: worn pet shows one EQUIPPED state (second tap unequips), pet cards get the star row and padlock, `equipUid` finds pets for the optimistic flip. Bag detail shows "You have N gold" under an affordable UPGRADE (clip 6 had Gold 250 vs cost 150, so bright was correct). Hero Power adds worn gear's Item Power to the combat score (same scale as card Power, per shardfall_progression.md). Intro: Skip intro always closes the card and applies the answer, Continue at a world step shows a hint instead of a dead click, card and goals hide while the hub or Inventory is open, goals get a backing panel beside the card on wide screens. Header padlock tidied (faint well, thin arch, keyhole). Client only. (open)
+- Gear detail fixes (Ghost, playtest clip 5): the pet detail panel uses the gear header (icon, rarity-coloured name, "Rarity · Pet", padlock), opens scrolled to the top with stats below, and shows one EQUIPPED state or EQUIP; the Lock button is gone (the header padlock locks). Correction to clip 4: UnequipItem is a live remote, so EQUIPPED on gear and pets now unequips on a second tap within 3 s ("Tap again to unequip"). Padlocks are drawn shapes: a muted grey open lock when unlocked, a gold closed lock when locked, on cards and headers. Every gear card shows a star row, including ☆☆☆☆☆ at 0 stars. Hero panel Crit damage reads as a percent (3.42 -> 342%); Attack speed stays a plain number. Accessories keep the old panel. Client only. (open)
+- Gear detail fixes (Ghost, playtest clip 4): UPGRADE dims and says "Need N more gold" when gold is short; Shard Core feeds only the selected weapon (one "Feed N Essence" button, inline confirm, toast "X core Lv N: +perk", new pip and perk row lit), the all-cores picker is gone; Crit Damage shows as a percent (4.51 -> 451%); worn gear shows one EQUIPPED state (no green "Equipped" header, no Unequip button, which called a parked remote). Client only. (open)
+- Roll reveal line (Ghost, #390): a merged dupe reads "Uncommon · 23% · ★ 0 -> ★ 1" (no item name; the title already has it) and an auto-salvaged card reads "Auto-salvaged +N Essence". (open)
+- One inventory (Ghost, #390, Phase 3): with `oneInventory` on (off by default), the Bag rail button, the B key and the hub Bag tab open the full Inventory directly, and the small Bag's "Open full bag" is retired. The Inventory is a centered modal right of the rail and under the HP card (`InventoryLayout`: 88% wide, max 1180x680, phone sheet). It has a header with capacity, Equip Best, Close and "+ Slots" (DevAccess owners only); one tabs row; ONE filter row (Search plus Rarity/Type/Sort `Dropdown`s, no sideways scroll); and the thin `GearBar` action bar. The 4-6 column grid has square-ish cards with a centered icon, a rarity border and tint, a 2-line name, a +level/stars line, an "E" badge and a gold padlock only when locked (faint on hover). The detail panel starts on the equipped weapon and stays filled in Select mode. Auto-salvage moves behind a settings popover: a toggle plus a cap of Common or Uncommon only (client clamp `GearHooks.safeCap`), with a confirm on turning it on or raising the cap. Default Off. Bulk select is a "Select all ≤" dropdown that says why nothing qualifies. Echo server APIs and saves unchanged. (open)
+- Gear UI hooks (Ghost): Bag "Salvage tools" mounts `BagTools` (`gearSalvage`), the details pane shows upgrade-boosted stats via `UpgradeScale.preview` (`upgradeScale`) and the Shard Core on a selected weapon (`shardCore`), a bag-full roll refusal offers "Salvage now" (nudge, then salvageNow with its token), and the reveal card shows `levelText` for a merged dupe. All flags stay off. Builds on #386/#387/#388/#389. (open)
+- Inventory polish (Ghost, #390): a build stamp with the real git sha (`scripts/stamp.sh` writes the gitignored `Shared/BuildStamp.luau`; `scripts/install-hooks.sh` refreshes it after commit/merge/checkout), printed as "[Shardfall] build <sha> server/client". New shared gear panel (`GearDetail`) in the small Bag and the full inventory: the item icon instead of the avatar, title in rarity colour with +level and stars, stat deltas, EQUIP and UPGRADE side by side (dark ink on amber), a padlock, and a collapsible Shard Core card (`CoreCard`: level bar, perk ladder, Feed picker grouped by item with counts and a confirm) that replaces the mounted ShardCore panel. Bag cards get padlock glyphs, rarity-coloured names and a +level/stars line; tips hide on click, scroll, tab change and close and never pin; the grid leaves room for the pinned footer. The Auto-salvage pill is first in the full inventory header and amber while on; the Bag warns when it is on. Clear-card loot names wrap and carry a quantity badge. Echo server APIs and saves unchanged. (open)
+- Gear UI playtest pass (Ghost, #390): salvage moves to the full inventory (`GearBar`: Select mode, "Select all at or below <rarity>", a "Salvage N for +X Essence" bar, Confirm on every salvage, padlocks on cards, protected gear dimmed). The Auto-salvage toggle reads the server profile, sends explicit on/off with its own cap (default Off, "Auto-salvage: Commons and below"), and no longer shares the bulk picker. The small Bag is a preview with one "Open full bag" and a pinned Capacity/Equip Best footer. The inventory title no longer hides under the rail. An x10 roll toasts how many drops were auto-salvaged. Echo server APIs unchanged. (open)
+- Gear Progression Stage C: Shard Core (flag `shardCore`, off). One core per weapon, fed with `profile.gearEssence`. Levels and modest perks live in config. Perks add onto finished Equip totals. (open)
+- Phase 2 Equip server (flag `equip`, off) and Gear Progression Stage A. Gold upgrades scale stats when `upgradeScale` is on (off). Exact duplicates feed stars when `gearLevels` is on (off). Essence overflow stays on `gearEssence`. No second level field. (open)
+- Stage B: favorited gear stays out of salvage, and Salvage selected
+  waits for the same confirm token as salvage-all. [#388] (open)
+- Stage B: salvage weapons and armor into `profile.gearEssence` (1/3/10/40/200).
+  Lock uses `item.locked`. Auto-salvage is off and only converts a new drop.
+  `LaunchGate.gearSalvage` is off. `BagTools.mount` is the client hook. [#388] (open)
+- x10 summary fixes (Ghost, playtest clip 4): every tile shows exactly one outcome (NEW only if the item was not owned before the batch; ★ up a -> b chained across repeats; ★ fed for a dupe that adds star progress; +N Essence at ★5; Copy; Salvaged) and the headline counts the same outcomes. Skip sits at the bottom right of the reveal card, off the Shards pill. The Roll page drops the Junk/Below row, the second Streak/Rolls lines and the plain "Odds" rows (`LaunchGate.rollMenuExtras`, off). Client only. (open)
+- x10 roll reveal (Ghost): each x10 card cracks in at most 0.3 s (`RollSummary.fast` scales the CrackReveal plan) with a Skip button on screen for the whole batch; Skip lands the rest at once. The batch ends on a 10-tile summary grid (`RollSummaryHud`) with NEW / ★ up / auto-salvaged badges, a headline, and "Roll again" / "Close"; it replaces the "Cracked" text list. The milestone banner is now a small toast at the top of the Roll page. Server, odds and prices unchanged. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and
@@ -32,6 +49,29 @@ its tag to merged and add the merge commit.
   broken cross-references. [#374] (merged, d37b2f1)
 
 ### Changed
+- Phase 1.1-1.3, 1.7: rolls core. The live roll now uses the 5-tier Rev 2
+  ladder from `Config/Rarities` (1/2, 1/4, 1/15, 1/100, 1/1000, checked
+  rarest first: Common 69%, Uncommon 23%, Rare 6.6%, Epic 1.00%, Legendary
+  0.10%). One free Legendary pity at 150 (saved in `sinceLegendary`, soft
+  pity +2%/roll from roll 101) with its meter; Epic pity removed (old
+  `sinceEpic` is kept in saves and ignored). Odds list and reveal show real
+  %. Mythic/Secret parked behind `LaunchGate.SHOW.extraTiers` (owned items
+  still load). New `tests/RollOdds.spec.luau` (100k seeded rolls + pity
+  150). Dev Tools: Rolls / Pity rows (+100 Shards, Set pity 149/120, Reset
+  pity). Branch `phase1/rolls-core`. (open)
+- Phase 1 follow-up: the roll reveal now freezes movement for the whole roll
+  (press and server wait, every x10 card, auto chains) and always frees it
+  after (finish, skip, close, error, 12s failsafe); new
+  `tests/RevealLock.spec.luau`. The every-10th-roll x2 luck milestone and its
+  "x2 Luck in N" meter are parked behind `LaunchGate.SHOW.luckMilestone`
+  (off; `shardRolls` still counts). Branch `phase1/rolls-core`. (open)
+- Phase 1 follow-up 2 (Oct 22 retest): the reveal lock now also zeroes the local
+  Humanoid's WalkSpeed/jump for the whole roll (x1, x10, auto) and restores the exact
+  old values on finish, skip, close, leaving the tab, error and the 12s failsafe, so
+  movement stops even when PlayerModule Disable() or the key sink is bypassed (e.g. a
+  server MoveTo). The crack no longer shows a blank "Shard" window/card: the crystal
+  stays visible and the reveal card always has an icon, title, rarity line and a
+  detail line ("Card 3 of 10" while cracking, first two stats once landed).
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
   Damookie21) in `DevAccess.OWNER_IDS`. (open)
 - Docs: replaced the roadmap with the locked V1 roadmap (Phases 0-7, Phase S,
@@ -70,6 +110,10 @@ its tag to merged and add the merge commit.
   a clear "is off" line. [#377] (open)
 
 ### Fixed
+- Bag details: the worn item reads "Equipped", other items say "Compared with
+  <worn item> (equipped)", stats mark = / + / - on shown values, the title
+  shows the forge level, and UPGRADE toasts its result ("Need 1,280 gold")
+  and repaints. [fix/bag-compare] (open)
 - Gnarl's weak spot sits at chest height, and every boss hit says Guarded or
   Weak!. [#359] (merged, e0bc15b)
 - Loot toasts read "Loot: Spore Cap x2" with no stray lead character. [#360]

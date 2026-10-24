@@ -4,9 +4,11 @@
 	Hit math for weapons and armor. No Instances, so tests can run it.
 
 	The equipped weapon supplies Damage, Attack Speed, Crit Chance, and Crit
-	Damage. Those numbers were already rolled and scaled when the item
-	dropped, so this module does not scale them again. Armor supplies HP and
-	Defense. Weapon type (`sword`, `bow`, `staff`, `dagger`, `hammer`) picks
+	Damage. Stars are already in the saved stat.value. Gold upgrades
+	(item.upgrade) multiply damage and armor HP at read time when
+	LaunchGate.upgradeScale is on, through UpgradeScale. They are not
+	written back. Armor also supplies Defense, unscaled. Weapon type
+	(`sword`, `bow`, `staff`, `dagger`, `hammer`) picks
 	melee or a projectile. That tag is also the class-system hook; class
 	weights are applied at roll time, not here.
 
@@ -25,6 +27,7 @@
 ]]
 
 local MeleeConfig = require("./MeleeConfig")
+local UpgradeScale = require("./UpgradeScale")
 
 local CombatMath = {}
 
@@ -239,7 +242,10 @@ function CombatMath.offense(weapon: Gear?, extra: { Gear }?): Offense
 		critDamage = 1
 	end
 
-	local damage = CombatMath.readStat(weapon.stats, "damage", CombatMath.UNARMED.damage)
+	local rolledDamage = CombatMath.readStat(weapon.stats, "damage", nil)
+	local damage = if type(rolledDamage) == "number"
+		then UpgradeScale.apply(rolledDamage, weapon.upgrade)
+		else CombatMath.UNARMED.damage
 	if damage < 1 then
 		damage = 1
 	end
@@ -264,7 +270,11 @@ function CombatMath.vitality(armor: { Gear }): Vitality
 	local health = CombatMath.BASE_HEALTH
 	local defense = 0
 	for _, piece in ipairs(armor) do
-		health += math.max(0, CombatMath.readStat(piece.stats, "health", 0))
+		local rolledHealth = CombatMath.readStat(piece.stats, "health", nil)
+		local gained = if type(rolledHealth) == "number"
+			then UpgradeScale.apply(rolledHealth, piece.upgrade)
+			else 0
+		health += math.max(0, gained)
 		defense += math.max(0, CombatMath.readStat(piece.stats, "defense", 0))
 	end
 	return {

@@ -7,9 +7,9 @@
 	ascension has to be at least the pool's ascension or the server will not
 	roll it. The player sheet is RarityConfig.disclose. Weights only split
 	items inside a chosen rarity. They are not the rarity odds.
-	pityLegendaryAt matches RarityConfig.LEGENDARY_PITY. There is no
-	Legendary guarantee at 50. The crack reads RarityConfig.pick, not this
-	field.
+	pityLegendaryAt matches RarityConfig.LEGENDARY_PITY (150). The crack
+	reads RarityConfig.pick, not this field. Mythic and Secret rows stay
+	in the rosters but do not roll while LaunchGate.extraTiers is off.
 
 	Higher realms (Sunken Reach, Emberforge, Frostveil, Void Rift) are a
 	short placeholder roster: one drop per rarity. Verdant Wilds is the

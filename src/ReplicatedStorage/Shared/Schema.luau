@@ -12,11 +12,20 @@
 
 	Profiles are plain tables: no Color3, no Instance, no functions. That is
 	what DataStores can save and what a RemoteEvent can send.
+
+	Stage B adds gearEssence, autoSalvage, and autoSalvageRarity without a
+	version bump. schemaVersion stays 26 so a v26 server still loads the
+	save. #381's migration list is not on this base. When it lands, register
+	one copy-first step for those three fields. Do not publish a v27
+	document before that list exists: a higher version looks newer, and a
+	v26 server refuses the load. #387 writes the same gearEssence field.
 ]]
 
 local ActionSlots = require("./ActionSlots")
 local Audio = require("./Audio")
 local Classes = require("./Classes")
+local EquipSlots = require("./Config/EquipSlots")
+local ShardCoreConfig = require("./Config/ShardCore")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Loops = require("./Loops")
@@ -198,6 +207,7 @@ export type Item = {
 	locked: boolean?,
 	favorite: boolean?,
 	sockets: number?,
+	upgrade: number?,
 }
 
 export type PityState = {
@@ -239,6 +249,7 @@ export type ProfileData = {
 	pets: { [string]: Item },
 	pity: { [string]: PityState },
 	equipped: Equipped,
+	gearEssence: number,
 	materials: { [string]: number },
 	consumables: { [string]: number },
 	vouchers: { [string]: number },
@@ -271,6 +282,8 @@ export type ProfileData = {
 	lastWeeklyBossWeek: number,
 	chestDuplicates: string,
 	chestSalvageBelow: string,
+	autoSalvage: boolean,
+	autoSalvageRarity: string,
 	pendingChest: any,
 	musicVolume: number,
 	sfxVolume: number,
@@ -322,6 +335,11 @@ export type ProfileData = {
 	actionBars: { [string]: any },
 	codex: { unlocked: { [string]: boolean } },
 	trainingGrove: { [string]: any },
+	-- [ECHO hook] Additive. schemaVersion stays 26. item.upgrade already exists.
+	equipLoadout: { [string]: string },
+	gearEssence: number,
+	-- [ECHO hook] Core level per weapon uid. Missing uid is 0. Items are not written.
+	shardCores: { [string]: number },
 }
 
 function Schema.template(): ProfileData
@@ -345,6 +363,12 @@ function Schema.template(): ProfileData
 			armor = {},
 			accessories = {},
 		},
+		-- [ECHO hook] Phase 2 slots. Empty until the player equips.
+		equipLoadout = EquipSlots.empty(),
+		-- [ECHO hook] Duplicate overflow record. Stage B spends it. Stage C spends it too.
+		gearEssence = 0,
+		-- [ECHO hook] Shard Core levels. Empty until the player feeds a weapon.
+		shardCores = {},
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
 		vouchers = { armory = 0, pets = 0 },
@@ -384,6 +408,9 @@ function Schema.template(): ProfileData
 		lastWeeklyBossWeek = -1,
 		chestDuplicates = "dust",
 		chestSalvageBelow = "",
+		-- Off until the player turns it on. Does not salvage the bag.
+		autoSalvage = false,
+		autoSalvageRarity = "",
 		pendingChest = nil,
 		musicVolume = Audio.DEFAULT_MUSIC,
 		sfxVolume = Audio.DEFAULT_SFX,
@@ -452,6 +479,16 @@ end
 function Schema.xpToNext(level: number): number
 	return Progression.xpToNext(level)
 end
+
+local AUTO_RARITY = {
+	Common = true,
+	Uncommon = true,
+	Rare = true,
+	Epic = true,
+	Legendary = true,
+	Mythic = true,
+	Secret = true,
+}
 
 local function wholeNumber(value: any, fallback: number, minimum: number): number
 	local numberValue = tonumber(value)
@@ -695,6 +732,14 @@ function Schema.reconcile(data: any): ProfileData
 	if type(data.chestSalvageBelow) ~= "string" then
 		data.chestSalvageBelow = ""
 	end
+	if type(data.autoSalvageRarity) ~= "string" or AUTO_RARITY[data.autoSalvageRarity] ~= true then
+		data.autoSalvageRarity = ""
+	end
+	if data.autoSalvage ~= true or data.autoSalvageRarity == "" then
+		data.autoSalvage = false
+	else
+		data.autoSalvage = true
+	end
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
 		if data.craftingLevel >= row.level then
@@ -715,7 +760,11 @@ function Schema.reconcile(data: any): ProfileData
 	then
 		data.equipped.weapon = nil
 	end
-	if type(data.pets) == "table" and data.equipped.pet ~= nil and data.pets[data.equipped.pet] == nil then
+	if
+		type(data.pets) == "table"
+		and data.equipped.pet ~= nil
+		and data.pets[data.equipped.pet] == nil
+	then
 		data.equipped.pet = nil
 	end
 	local armor = {}
@@ -736,6 +785,17 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.equipped.accessories = accessories
+	-- [ECHO hook] Keep a stored loadout. Drop junk. Do not add item.level.
+	if type(data.equipLoadout) ~= "table" then
+		data.equipLoadout = EquipSlots.empty()
+	end
+	data.equipLoadout = EquipSlots.publicCopy(data.equipLoadout)
+	data.gearEssence = wholeNumber(data.gearEssence, 0, 0)
+	if data.gearEssence > 1000000000 then
+		data.gearEssence = 1000000000
+	end
+	-- [ECHO hook] Keep stored core levels. Drop junk. Do not write the items.
+	data.shardCores = ShardCoreConfig.sanitize(data.shardCores)
 	if data.materials == nil or type(data.materials) == "table" then
 		data.materials = Materials.sanitize(data.materials)
 	end
@@ -1192,8 +1252,11 @@ function Schema.migrate(raw: any): (ProfileData?, string?)
 	-- A save that already finished onboarding does not get this kit.
 	-- A new profile stays returning false. Do not copy another account.
 	if version < 23 then
-		raw.firstSession =
-			keepExisting(versionless, raw.firstSession, firstSessionKit().blank(raw.onboardDone == true))
+		raw.firstSession = keepExisting(
+			versionless,
+			raw.firstSession,
+			firstSessionKit().blank(raw.onboardDone == true)
+		)
 		raw.schemaVersion = 23
 		version = 23
 	end
@@ -1381,6 +1444,9 @@ function Schema.snapshot(data: ProfileData)
 			armor = Schema.deepCopy(data.equipped.armor),
 			accessories = Schema.deepCopy(data.equipped.accessories),
 		},
+		equipLoadout = EquipSlots.publicCopy(data.equipLoadout),
+		gearEssence = data.gearEssence,
+		shardCores = ShardCoreConfig.sanitize(data.shardCores),
 		inventoryBonus = data.inventoryBonus,
 		petSlotBonus = data.petSlotBonus,
 		inventoryCap = Schema.inventoryCap(data),
@@ -1415,6 +1481,8 @@ function Schema.snapshot(data: ProfileData)
 		lastWeeklyBossWeek = data.lastWeeklyBossWeek,
 		chestDuplicates = data.chestDuplicates,
 		chestSalvageBelow = data.chestSalvageBelow,
+		autoSalvage = data.autoSalvage,
+		autoSalvageRarity = data.autoSalvageRarity,
 		pendingChest = Schema.deepCopy(data.pendingChest),
 		musicVolume = data.musicVolume,
 		sfxVolume = data.sfxVolume,
