@@ -87,6 +87,17 @@ local function broadcast(name: string, shard: string, rarity: string, crossServe
 	})
 end
 
+-- The beam sends its own RollAnnounce for every tier at or above
+-- Config.BigRoll.MIN_TIER. While that flag is on, skip this older line
+-- for those tiers so the roll fires once. Chests and cross-server mythic
+-- lines still use broadcast. Flag off calls broadcast as before.
+local function broadcastRoll(name: string, shard: string, rarity: string)
+	if LaunchGate.on("bigRollBeam") and BigRollBeam.qualifies(rarity) then
+		return
+	end
+	broadcast(name, shard, rarity, false)
+end
+
 local function publishMythic(name: string, shard: string, rarity: string)
 	local ok, err = pcall(function()
 		local MessagingService = game:GetService("MessagingService")
@@ -485,7 +496,7 @@ local function crack(
 	}
 	local reveal = RarityConfig.reveal(captured.rarity, quick)
 	if reveal.announce then
-		broadcast(player.Name, captured.item.name, captured.rarity, false)
+		broadcastRoll(player.Name, captured.item.name, captured.rarity)
 	end
 	if reveal.crossServer then
 		publishMythic(player.Name, captured.item.name, captured.rarity)
@@ -606,7 +617,7 @@ local function crackBatch(player: Player, poolId: any, total: number)
 		end
 		local reveal = RarityConfig.reveal(drawn.rarity, true)
 		if reveal.announce then
-			broadcast(player.Name, drawn.item.name, drawn.rarity, false)
+			broadcastRoll(player.Name, drawn.item.name, drawn.rarity)
 		end
 		if reveal.crossServer then
 			publishMythic(player.Name, drawn.item.name, drawn.rarity)

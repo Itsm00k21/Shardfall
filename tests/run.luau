@@ -235,6 +235,7 @@ require("./UpgradeScale.spec")
 require("./ShardCore.spec")
 require("./GearSalvage.spec")
 require("./GearPolish.spec")
+require("./BigRollAnnounce.spec")
 require("./BigRollBeam.spec")
 require("./PartyGather.spec")
 
