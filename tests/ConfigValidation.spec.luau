@@ -766,3 +766,38 @@ describe("Config validation: wave arena", function()
 		expect(Config.WaveArena.results.hardLevel).toEqual(5)
 	end)
 end)
+
+describe("Config validation: big roll", function()
+	it("ships an Epic beam threshold and rejects an unknown tier", function()
+		expect(Config.BigRoll.MIN_TIER).toEqual("Epic")
+		expect(Config.BigRoll.QUEUE).toEqual(3)
+		expect(Config.BigRoll.CHAT_MAX).toEqual(4)
+		expect(Config.BigRoll.CHAT_WINDOW).toEqual(30)
+		expect(Config.BigRoll.PLAYER_GAP).toEqual(8)
+		local ok, err = Config.BigRoll.validate(Config.BigRoll)
+		expect(ok).toBeTrue()
+		expect(err).toBeNil()
+		local renamed = {
+			MIN_TIER = "Nope",
+			QUEUE = Config.BigRoll.QUEUE,
+			GAP = Config.BigRoll.GAP,
+			CHAT_MAX = Config.BigRoll.CHAT_MAX,
+			CHAT_WINDOW = Config.BigRoll.CHAT_WINDOW,
+			PLAYER_GAP = Config.BigRoll.PLAYER_GAP,
+			EPIC_BURST = Config.BigRoll.EPIC_BURST,
+			EPIC_WINDOW = Config.BigRoll.EPIC_WINDOW,
+			EPIC_MUTE = Config.BigRoll.EPIC_MUTE,
+			BEAM_HOLD = Config.BigRoll.BEAM_HOLD,
+			BEAM_HEIGHT = Config.BigRoll.BEAM_HEIGHT,
+			FADE = Config.BigRoll.FADE,
+			REVEAL_PAD = Config.BigRoll.REVEAL_PAD,
+			MIN_AFTER = Config.BigRoll.MIN_AFTER,
+			HUB_RADIUS = Config.BigRoll.HUB_RADIUS,
+			SPAWN = Config.BigRoll.SPAWN,
+			FALLBACK = Config.BigRoll.FALLBACK,
+		}
+		local fine, reason = Config.BigRoll.validate(renamed)
+		expect(fine).toBeFalse()
+		expect(reason).toEqual("MIN_TIER")
+	end)
+end)

@@ -60,6 +60,9 @@ Config.WaveArena = require("./WaveArenaConfig")
 -- M10 alive cap and stuck clock. Not a tenth area. The server reads it
 -- only while LaunchGate.enemyPerf is on (off).
 Config.EnemyPerf = require("./EnemyPerf")
+-- T6 big-roll beam. Not a tenth area. The server reads it only while
+-- LaunchGate.bigRollBeam is on (off).
+Config.BigRoll = require("./BigRoll")
 
 Config.AREAS = table.freeze({
 	"Items",

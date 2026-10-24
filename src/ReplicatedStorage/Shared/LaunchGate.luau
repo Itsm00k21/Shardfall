@@ -56,6 +56,7 @@ LaunchGate.SHOW = {
 	enemyPerf = false, -- M10 live-crawl pool, alive cap 22, 30s despawn-respawn, Humanoid state trim
 	firstSessionGuide = false, -- T3 guide (open, roll1-3, gate, wave1). Off: cold open, no free rolls.
 	m12Results = false, -- M12 results payload and Run Again. Off: the arena card stays as it is.
+	bigRollBeam = false, -- T6 big-roll beam and server line. Off: no beam, no announce.
 }
 
 -- World prompt action to the switch that keeps it from being built.

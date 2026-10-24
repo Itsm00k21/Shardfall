@@ -22,6 +22,7 @@ local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
 local DebugTools = require(ReplicatedStorage.Shared.DebugTools)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local DevTools = require(ReplicatedStorage.Shared.DevTools)
+local BigRollBeam = require(ReplicatedStorage.Shared.BigRollBeam)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local Currencies = require(ReplicatedStorage.Shared.Currencies)
 local Pools = require(ReplicatedStorage.Shared.Pools)
@@ -149,6 +150,7 @@ end
 
 Players.PlayerRemoving:Connect(function(player)
 	lastRoll[player.UserId] = nil
+	BigRollBeam.forget(player.UserId)
 end)
 
 local function poolFromClient(poolId: any)
@@ -290,6 +292,87 @@ local function drawInto(data: any, pool: any, rng: any, guideFloor: string?): (a
 	return captured
 end
 
+local function shownName(player: Player): string
+	local display = player.DisplayName
+	if type(display) == "string" and display ~= "" then
+		return display
+	end
+	return player.Name
+end
+
+-- Server character only. A missing root falls back to the Crackstone.
+local function flatPosition(player: Player): (number?, number?)
+	local character = player.Character
+	if character == nil then
+		return nil, nil
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root == nil or root:IsA("BasePart") == false then
+		return nil, nil
+	end
+	return root.Position.X, root.Position.Z
+end
+
+-- Flag off returns before any roll is queued. The rarity is the one this
+-- server just drew. pool id and the skip flag never pick the tier.
+local function considerBigRoll(
+	player: Player,
+	itemName: any,
+	rarity: any,
+	count: number,
+	epicCount: number,
+	quick: boolean
+)
+	if not LaunchGate.on("bigRollBeam") then
+		return
+	end
+	if type(itemName) ~= "string" or type(rarity) ~= "string" then
+		return
+	end
+	local x, z = flatPosition(player)
+	local fact = BigRollBeam.serverRoll({
+		userId = player.UserId,
+		displayName = shownName(player),
+		itemName = itemName,
+		rarity = rarity,
+		count = count,
+		epicCount = epicCount,
+		quick = quick,
+		x = x,
+		z = z,
+	})
+	if fact == nil then
+		return
+	end
+	BigRollBeam.offer(fact, os.clock())
+end
+
+local function noteBigBatch(player: Player, captures: { any })
+	if not LaunchGate.on("bigRollBeam") then
+		return
+	end
+	local best = nil
+	local count = 0
+	local epicCount = 0
+	for _, drawn in ipairs(captures) do
+		local rarity = drawn.rarity
+		if type(rarity) ~= "string" or BigRollBeam.qualifies(rarity) ~= true then
+			continue
+		end
+		count += 1
+		if Rarities.rank(rarity) < Rarities.rank("Legendary") then
+			epicCount += 1
+		end
+		if best == nil or Rarities.rank(rarity) > Rarities.rank(best.rarity) then
+			best = drawn
+		end
+	end
+	if best == nil or type(best.item) ~= "table" then
+		return
+	end
+	considerBigRoll(player, best.item.name, best.rarity, count, epicCount, true)
+end
+
 local function crack(
 	player: Player,
 	poolId: any,
@@ -407,6 +490,8 @@ local function crack(
 	if reveal.crossServer then
 		publishMythic(player.Name, captured.item.name, captured.rarity)
 	end
+	local epicCount = if captured.rarity == "Epic" then 1 else 0
+	considerBigRoll(player, captured.item.name, captured.rarity, 1, epicCount, quick)
 	local result = {
 		ok = true,
 		item = captured.item,
@@ -527,6 +612,7 @@ local function crackBatch(player: Player, poolId: any, total: number)
 			publishMythic(player.Name, drawn.item.name, drawn.rarity)
 		end
 	end
+	noteBigBatch(player, captures)
 	local last = captures[#captures]
 	lastRoll[player.UserId] = {
 		at = os.clock(),
@@ -745,5 +831,17 @@ function RollService.devGrant(player: Player, kind: any)
 	end
 	return { ok = true, message = message }
 end
+
+local function pushBigRoll(payload: any)
+	local remote = announceRemote()
+	if remote == nil or type(payload) ~= "table" then
+		return
+	end
+	remote:FireAllClients(payload)
+end
+
+RunService.Heartbeat:Connect(function()
+	BigRollBeam.pump(os.clock(), pushBigRoll)
+end)
 
 return RollService
