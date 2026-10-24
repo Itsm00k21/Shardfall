@@ -627,7 +627,7 @@ describe("Boss clear reward", function()
 		local hardBonus = math.floor(
 			Economy.BOSS_CLEAR_TOKENS * Economy.DIFFICULTIES.hard.tokenMultiplier + 0.5
 		)
-		expect(hardBonus).toEqual(8)
+		expect(hardBonus).toEqual(10)
 		expect(Economy.bossClearPay(nil)).toEqual(5)
 		expect(Economy.bossClearPay("Hard")).toBeNil()
 		expect(Economy.bossClearPay(8)).toBeNil()

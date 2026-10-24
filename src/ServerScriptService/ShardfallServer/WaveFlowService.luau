@@ -404,13 +404,13 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	if not WaveFlowService.open() or run == nil then
 		return 0
 	end
-	if tracks[run] == nil and run.stopped == true then
-		return 0
-	end
 	local before = WaveFlow.counter(run)
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
 	local build = if sink ~= nil then sink.build else nil
+	-- A stopped run must not rebuild its pool. present returns before
+	-- track() in that case. A failed boss-clear save still reaches
+	-- payClear below, because that reads the run and not the pool.
 	if run.clear ~= true then
 		present(run, build)
 	end

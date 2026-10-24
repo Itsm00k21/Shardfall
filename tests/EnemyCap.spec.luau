@@ -26,6 +26,9 @@ local CAP_WORDS = { "MAX_ALIVE", "PLATFORM_CAP", "aliveCap" }
 local WAVE_SIZES = { 6, 8, 10, 12, 5 }
 
 local function withFlag(on: boolean, body: () -> ())
+	-- Earlier specs start wave runs and never stop them. Drop those tracks
+	-- before this body reads entries().
+	WaveFlowService.onClose()
 	local prior = LaunchGate.SHOW.enemyTypes
 	LaunchGate.SHOW.enemyTypes = on
 	local ok, err = pcall(body)
@@ -66,6 +69,7 @@ local function roster(patch: { [string]: any }?): any
 		},
 		SHOT_Y = Enemies.SHOT_Y,
 		LOS_PAD = Enemies.LOS_PAD,
+		SHOT_RADIUS = Enemies.SHOT_RADIUS,
 		WAVE_COUNTS = Enemies.WAVE_COUNTS,
 		WAVE_ORDER = Enemies.WAVE_ORDER,
 		WAVE_MIXES = Enemies.WAVE_MIXES,
@@ -79,6 +83,24 @@ local function roster(patch: { [string]: any }?): any
 			ranged = Enemies.BOSS_ADD_MIX.ranged,
 			tank = Enemies.BOSS_ADD_MIX.tank,
 		},
+		STUCK_SECONDS = Enemies.STUCK_SECONDS,
+		STUCK_PROGRESS = Enemies.STUCK_PROGRESS,
+		STUCK_NUDGE = Enemies.STUCK_NUDGE,
+		SPAWN_CLEAR = Enemies.SPAWN_CLEAR,
+		LEASH_RANGE = Enemies.LEASH_RANGE,
+		LEASH_SECONDS = Enemies.LEASH_SECONDS,
+		LEASH_WINDUP = Enemies.LEASH_WINDUP,
+		LEASH_RADIUS = Enemies.LEASH_RADIUS,
+		LEASH_DASH = Enemies.LEASH_DASH,
+		PRESSURE_SECONDS = Enemies.PRESSURE_SECONDS,
+		PRESSURE_DECAY = Enemies.PRESSURE_DECAY,
+		VOLLEY_NAME = Enemies.VOLLEY_NAME,
+		VOLLEY_WINDUP = Enemies.VOLLEY_WINDUP,
+		VOLLEY_SHOTS = Enemies.VOLLEY_SHOTS,
+		VOLLEY_COOLDOWN = Enemies.VOLLEY_COOLDOWN,
+		VOLLEY_SPEED = Enemies.VOLLEY_SPEED,
+		VOLLEY_SPREAD = Enemies.VOLLEY_SPREAD,
+		VOLLEY_LEAD_MAX = Enemies.VOLLEY_LEAD_MAX,
 	}
 	if patch ~= nil then
 		for key, value in pairs(patch) do
@@ -146,6 +168,10 @@ describe("Config enemy pool", function()
 			expect(ignored.cap).toBeNil()
 			expect(ignored.queue).toBeNil()
 		end
+		-- This check sits outside withFlag. Clear leftover service runs
+		-- before asserting the pool is empty, including the check after
+		-- the nil close calls.
+		WaveFlowService.onClose()
 		expect(WaveFlowService.entries()).toEqual(0)
 		expect(WaveFlowService.start({ player = "hero" })).toBeNil()
 		WaveFlowService.stop(nil)
