@@ -79,3 +79,15 @@ Stacked on #425. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). No new fla
 - `PRESSURE_SECONDS` (4) and `PRESSURE_DECAY` live in `Config/Enemies.luau`. The timer climbs while the boss deals no damage to its target. A damaging tick subtracts the decay. It does not snap to 0. `Enemies.validate` rejects a decay that would clear an armed timer.
 - Outside melee, once pressure is armed, the boss uses Shard Volley: `VOLLEY_WINDUP` (0.8s), then `VOLLEY_SHOTS` (3) shots that lead the target, then `VOLLEY_COOLDOWN` (5s). A line-of-sight block still stops a bolt.
 - The leash slam dashes to its mark at `LEASH_DASH` and finishes on that spot, clamped to `ARENA`. Chase is clamped the same way. The boss never regens.
+
+## What the boss-clear reward adds
+
+Stacked on #427. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). No new flag, no new remote, no HUD edit, no Robux. `schemaVersion` stays 26.
+
+- The wave-5 clear pays `Economy.BOSS_CLEAR_TOKENS` (5 Roll Tokens, the boss row, not the 11-token full clear) into `shardTokens`. That 5 is the same on every tier. `tokenMultiplier` still scales the 11-token full clear (Hard 17) and does not turn the boss grant into 8. `Economy.validate` rejects a mismatch, a non-positive amount, and any Robux price key.
+- `RunResults` is server to client. `bossClear` is `{ granted, tokens }` copied from the commit result after the save. A failed save, an unsaved table, or a client claim publishes `granted = false` and `0` tokens. The wave counter stays `{ wave, left }`.
+- The grant is server-only and keyed by the run id `WaveFlow` mints with `HttpService:GenerateGUID`. A per-boot `run-N` was the same on every server, so a profile that already remembered `run-1` refused the next clear. Saves that already store `run-N` still load. The grant is written by the caller's save callback before `WaveCounter` is fired. A second commit for that id while the save is in flight does not pay again and does not report saved. If the profile changes during the write, it is saved again before the counter is fired. A failed save removes only that grant's tokens, floored at 0, and that run id. A spend or an earn during the write stays. It does not fire the clear.
+- Remembered run ids are `profile.bossClearRuns`. A missing list loads as `{}`. The list keeps at most `BOSS_CLEAR_RUNS` (16) ids, newest last. This is the one new save field. It is bounded and it does not bump `schemaVersion`.
+- A wipe does not grant and does not remove a grant that was already saved.
+- A blocked line from the boss to the slam mark cancels the mark. The dash does not cross that line and the slam pays 0.
+- Shard Volley windup is `VOLLEY_WINDUP` **0.9s**. The 5s cooldown is unchanged.

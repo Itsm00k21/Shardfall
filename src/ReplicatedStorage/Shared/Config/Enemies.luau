@@ -17,9 +17,11 @@
 	The wave-5 boss cannot be kited for free. Pressure arms after
 	PRESSURE_SECONDS with no damage dealt to its target, and a damaging
 	tick shaves PRESSURE_DECAY off that timer instead of clearing it.
-	Outside melee, an armed boss fires Shard Volley: a windup, then
-	VOLLEY_SHOTS led shots, then VOLLEY_COOLDOWN. The leash slam dashes
-	to its mark. The boss is clamped to ARENA and never regens.
+	Outside melee, an armed boss fires Shard Volley: VOLLEY_WINDUP (0.9s),
+	then VOLLEY_SHOTS led shots, then VOLLEY_COOLDOWN. The leash slam dashes
+	to its mark unless that path is blocked. A blocked path cancels the
+	mark and the dash does not cross it. The boss is clamped to ARENA
+	and never regens.
 ]]
 
 local Enemies = {}
@@ -102,7 +104,7 @@ Enemies.PRESSURE_DECAY = 1.5
 -- VOLLEY_SHOTS shots that lead the target, then the cooldown. Spread is
 -- radians around the lead. LEAD_MAX caps a wild velocity spike.
 Enemies.VOLLEY_NAME = "Shard Volley"
-Enemies.VOLLEY_WINDUP = 0.8
+Enemies.VOLLEY_WINDUP = 0.9
 Enemies.VOLLEY_SHOTS = 3
 Enemies.VOLLEY_COOLDOWN = 5
 Enemies.VOLLEY_SPEED = 64

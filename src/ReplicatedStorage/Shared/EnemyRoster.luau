@@ -8,7 +8,8 @@
 	projectileSpeed. Damage lands only when that path reaches the
 	target's current position and the line of sight is clear. The aim
 	point from the firing tick is not a hit. The wave-5 boss slams
-	after the config leash and dashes onto that mark. Pressure arms
+	after the config leash and dashes onto that mark. A blocked line from
+	the boss to the mark cancels the slam before the dash moves. Pressure arms
 	when the boss has dealt no damage for the config window; dealing
 	damage decays that timer and does not clear it. Outside melee an
 	armed boss fires Shard Volley, three shots that lead the target.
@@ -282,6 +283,7 @@ end
 
 -- Close on the slam mark. The landing tick finishes the dash, then the
 -- arena clamp keeps the boss on the floor. HP is not written here.
+-- The caller cancels the mark first when the path is blocked.
 local function dashTo(actor: Actor, markX: number, markZ: number, stepDt: number, finish: boolean)
 	if finish then
 		actor.x = markX
@@ -299,16 +301,36 @@ local function dashTo(actor: Actor, markX: number, markZ: number, stepDt: number
 	clampArena(actor)
 end
 
+local function pathBlocked(blocked: Cast?, x0: number, z0: number, x1: number, z1: number): boolean
+	if blocked == nil then
+		return false
+	end
+	return blocked(x0, z0, x1, z1) == true
+end
+
 -- Boss only. Time beyond LEASH_RANGE arms a mark. The mark lands after
 -- LEASH_WINDUP if the target is still inside it. During the windup the
--- boss dashes to the mark. HP is never written.
-local function leashSlam(actor: Actor, row: Enemies.Row, targetX: number, targetZ: number, stepDt: number, dist: number): number
+-- boss dashes to the mark. A blocked line to the mark cancels it and
+-- does not move the boss. HP is never written.
+local function leashSlam(
+	actor: Actor,
+	row: Enemies.Row,
+	targetX: number,
+	targetZ: number,
+	stepDt: number,
+	dist: number,
+	blocked: Cast?
+): number
 	local boss = Enemies.BOSS
 	if boss == nil or actor.kind ~= boss.id or row.id ~= boss.id then
 		return 0
 	end
 	local mark = actor.mark
 	if mark ~= nil then
+		if pathBlocked(blocked, actor.x, actor.z, mark.x, mark.z) then
+			actor.mark = nil
+			return 0
+		end
 		mark.left -= stepDt
 		local finishing = mark.left <= 1e-4
 		dashTo(actor, mark.x, mark.z, stepDt, finishing)
@@ -332,12 +354,14 @@ local function leashSlam(actor: Actor, row: Enemies.Row, targetX: number, target
 		held += stepDt
 		actor.leash = held
 		if held >= Enemies.LEASH_SECONDS then
-			actor.mark = {
-				x = targetX,
-				z = targetZ,
-				left = Enemies.LEASH_WINDUP,
-			}
 			actor.leash = 0
+			if not pathBlocked(blocked, actor.x, actor.z, targetX, targetZ) then
+				actor.mark = {
+					x = targetX,
+					z = targetZ,
+					left = Enemies.LEASH_WINDUP,
+				}
+			end
 		end
 	else
 		actor.leash = 0
@@ -515,8 +539,9 @@ end
 
 -- One server tick. Returns the damage this enemy deals to the target.
 -- The number is the config damage, never a value passed in by the caller.
--- `blocked` is the line-of-sight check for a ranged shot and a Shard Volley
--- bolt. Melee ignores it. The boss is clamped to the arena. HP is not raised.
+-- `blocked` is the line-of-sight check for a ranged shot, a Shard Volley
+-- bolt, and the leash dash. A blocked dash cancels the slam mark. Melee
+-- ignores it. The boss is clamped to the arena. HP is not raised.
 function EnemyRoster.step(actor: Actor, targetX: number, targetZ: number, dt: number, blocked: Cast?): number
 	if type(actor) ~= "table" or type(actor.kind) ~= "string" then
 		return 0
@@ -574,7 +599,7 @@ function EnemyRoster.step(actor: Actor, targetX: number, targetZ: number, dt: nu
 		end
 	end
 	if actor.hp > 0 then
-		dealt += leashSlam(actor, row, targetX, targetZ, stepDt, now)
+		dealt += leashSlam(actor, row, targetX, targetZ, stepDt, now, blocked)
 	end
 	if isBoss(actor) and actor.hp > 0 then
 		dealt = bossPressure(actor, row, targetX, targetZ, stepDt, dealt)
