@@ -1,3 +1,5 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
 # Dungeon Look: "Shard Crater", Spec v1.1 — Phase S theme
 
 Owner: Prism (design, no code). Builders: Ghost (world/VFX), Echo (wave/boss/loot hooks). Base: `cursor/live-build-9721` @ `9269e61`. Docs only.
@@ -18,7 +20,7 @@ One arena theme that makes every wave feel like the fallen shard is fighting bac
 2. **Wave start (each wave):** 0.0 s shard veins sweep from the Impact Core outward (0.6 s) → 0.4 s the active rifts flare in the wave's element color (inner Neon plane 0 → 0.2 transparency, burst of 30 particles) → 0.8 s enemies step out of the rift mouths. Existing "Wave n/5" toast plays. If Echo's Config leans a wave toward one element (decision 7), the rifts simply take that color; no extra art.
 3. **Fight:** rifts keep a slow pulse while they still spawn; a rift goes dim when it has spawned its last enemy. Drops land on the floor as small rarity-colored shard motes.
 4. **Wave clear:** last kill → veins flash white (0.25 s) → **loot auto-collect:** every drop on the floor tweens to its owner (0.5 s arc, rarity-colored trail) and the loot chip shows "+N loot · wave n" for 2 s → shard shower from above (40 particles, 1.5 s) → `Lighting` ExposureCompensation +0.3 for 0.8 s.
-5. **Boss entrance (wave 5):** side rifts dim → 1.5 s rumble (dust burst at the N rift base, optional camera shake ≤ 0.3 studs, off on reduced motion) → the N rift's two shard slabs slide apart (Tween 1.0 s) → red-violet Beam + light from the mouth → Hollow Warden walks out (2 s) with a BillboardGui name → 4 adds from E/W rifts. Boss HP bar is existing UI.
+5. **Boss entrance (wave 5):** side rifts dim → 1.5 s rumble (dust burst at the N rift base, camera shake ≤ 0.3 studs (decided yes), off on reduced motion) → the N rift's two shard slabs slide apart (Tween 1.0 s) → red-violet Beam + light from the mouth → Hollow Warden walks out (2 s) with a BillboardGui name → 4 adds from E/W rifts. Boss HP bar is existing UI.
 6. **Run end:** win = loot auto-collect + shard shower ×2 + rifts go gold → results → return to the Crater Square return pad. Wipe = **loot auto-collect first**, then veins fade to gray, chip "All loot kept" → results → return pad. There is no Leave; disconnect, wipe, timeout or the win are the only ways out.
 
 ## 4. Layout
@@ -67,7 +69,7 @@ Camera check: at default zoom the rift tops (20 tall) are visible from the cente
 - Boss dies during its entrance: not possible (invulnerable until slabs open; Echo hook).
 - Wipe: no red "loss" flash; gray fade only (keeps the "always keep loot" tone).
 - **Auto-collect is server-side, once per drop (Havoc risk 1):** wave end and wipe in the same frame, or a player leaving mid-collect, must not dupe. The VFX only plays what the server already granted.
-- **Full Bag never silently drops loot (Havoc risk 1):** the chip says "Bag full · N held for you" and the Bag gets a badge. Where held items live is Echo's call (§11 Q-Echo).
+- **Full Bag never silently drops loot (Havoc risk 1):** the chip says "Bag full · N held for you" and the Bag gets a badge. Held items go to a per-player overflow list (server-owned, Config cap) shown on the results screen (§11 Q4, Echo).
 - **No Leave (Havoc risk 2):** disconnect/wipe/timeout is the only exit; rejoin keeps earned loot exactly once and lands on the return pad, never inside a dead arena.
 - **Hard (Lv 5) entry is checked on the server (Havoc risk 4).**
 - Long runs: enemy and loot-mote pooling needs a leak test (Havoc risk 5); the mote cap above helps.
@@ -101,9 +103,13 @@ Roblox notes: vein "sweep" = a thin Neon ring (MeshPart or ring of parts) whose 
 
 ## 11. Open questions
 1. ~~Arena size Ø90?~~ **Settled by Ghost's decision 1 (Oct 23, 2026): 90 studs across.**
-2. @Kevin: Boss entrance camera shake (tiny, off on reduced motion): yes or no? (Prism pick: yes) — **open**.
-3. @Kevin: Enemy names (Shardling, Prism Wisp, Bulwark, Hollow Warden) are placeholders — keep or rename? (Prism pick: keep) — **open**.
-4. @Echo: When the Bag is full at auto-collect, where do held items go (a per-player overflow list shown on the results screen, or past-cap Bag slots until the player salvages)? The design only needs a count for the chip.
+2. ~~@Kevin: Boss entrance camera shake?~~ **Yes (Ghost, Kevin pre-approved, Oct 23, 2026).** At most 0.3 studs, off on reduced motion. Board row: https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d
+3. ~~@Kevin: Keep or rename enemy names?~~ **Keep Shardling, Prism Wisp, Bulwark, Hollow Warden (Ghost, Kevin pre-approved).**
+4. ~~@Echo: Where do held items go when the Bag is full?~~ **A per-player overflow list (Echo, Oct 23, 2026).** Server-owned, capped in Config, shown on the results screen as the chip count. Never past-cap Bag slots. Keeping it across sessions needs a schema note to Ghost first. Board row: https://app.notion.com/p/403c31ca388381dba1c1f358d0618f00
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): Phase S theme = B, a new original Shard Crater matching Crater Square; Gnarl/Verdant parked. Arena 90 across, 3 edge gates, no Leave, keep all earned loot; floor loot auto-collects at wave end and on wipe. Element-leaning waves are Config-only (Echo). → v1.1.
+
+
+</cursor_untrusted_data_1337>
+- 2026-10-23 (Ghost, Kevin pre-approved): boss-entrance shake = **yes** (off on reduced motion); enemy names kept. (Echo): held full-Bag items go to a per-player overflow list, Config-capped, shown on results. All §11 questions are now closed.
