@@ -1,6 +1,6 @@
-# Hard Mode Selector ("Gate dock toggle + Hard card"), Spec v1
+# Hard Mode Selector ("Gate dock toggle + Hard card"), Spec v1.1
 
-Owner: Prism (design, docs only, no code). Builders: Ghost (Gate dock UI, world tint), Echo (server checks, Config, Hard-only drop list). Base: `cursor/live-build-9721`. Status: proposal, gray-box only (pre-Phase S). Nothing here is approved until Ghost/Kevin say so.
+Owner: Prism (design, docs only, no code). Builders: Ghost (Gate dock UI, world tint), Echo (server checks, Config, Hard-only drop list). Base: `cursor/live-build-9721`. Status: v1.1, Ghost answered Q1, Q2, Q3, Q6 (Oct 24, 2026, Kevin pre-approved); Q4 and Q5 are Kevin taste calls, Prism recommendations recorded as PROVISIONAL. Gray-box only (pre-Phase S). Nothing beyond the answered questions is approved until Ghost/Kevin say so.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca38838192b465db2fbca4fda1, item 1, from canvas item **M14**: "Hard mode selector UX spec (unlocks Lv 5, 2x HP, 1.5x dmg, 2x tokens/fragments, Hard-only Epic+ list; locked state, phone first)". Roadmap **5.4 Hard mode (Lv 5)**.
 
 Sources (link, don't copy):
@@ -45,7 +45,7 @@ At the Shard Gate, a player who has reached Lv 5 can pick Hard in one tap and un
 
 **Locked flow (Lv < 5):** the Hard segment shows 🔒 "Hard · Lv 5" (#412). Tap it: the **locked card** peeks for 4 s: "Hard unlocks at Lv 5 · you're Lv 3", a gold level bar, and the 5 drop tiles as silhouettes (rarity stroke + "?"). Tap the card or wait 4 s to fold it. **In #412 Focus mode (first-ever run)** the card is skipped and only the existing toast "Hard unlocks at Lv 5." plays, so the first 30 seconds stay simple.
 
-**Party flow (leader):** only the leader can switch. If any member is below Lv 5, Hard is locked for the party: the card says "Sam is Lv 3 · all need Lv 5" (lowest member named; if several, "2 players are below Lv 5"). **Members** see the leader's pick read-only (segments at 60% opacity); tapping one gives the toast "The leader picks the difficulty." While Hard is selected, a player below Lv 5 who steps on the pad is refused at the pad (recommended, Q1) and gets the toast "This party is on Hard (Lv 5)."
+**Party flow (leader):** only the leader can switch. If any member is below Lv 5, Hard is locked for the party: the card says "Sam is Lv 3 · all need Lv 5" (lowest member named; if several, "2 players are below Lv 5"). **Members** see the leader's pick read-only (segments at 60% opacity); tapping one gives the toast "The leader picks the difficulty." While Hard is selected, a player below Lv 5 who steps on the pad is refused at the pad (decided, Q1) and gets the toast "This party is on Hard (Lv 5)."
 
 **Unlock moment:** when the account reaches Lv 5 (anywhere), one toast in the lane (info priority): "Hard mode unlocked! Pick it at the Shard Gate." The next time on the pad, the Hard segment pulses gold twice (`newDot` until first tap). The #412-style goal text "Clear Normal to unlock Hard" becomes "Try Hard at the Shard Gate" once.
 
@@ -68,7 +68,7 @@ Full-screen px, same frame as the #420 review (0,0 = screen top-left including t
 
 Rules:
 - Every tap target ≥ 44 px (segments 44 tall, tiles 44×44, START 48 tall). Text ≥ 13 px except caption/badges 11 (#420 R7).
-- **Portrait thumbstick:** the card covers x 88–198 of the thumbstick zone (x 16–198, y 640–794) for at most 4 s, the same way the #412 dock already sits over it. The card Frame is `Active = false`, so a touch that misses a tile still reaches the thumbstick; only the tiles are buttons. It never covers the dock, START, or any combat button (the combat cluster is hidden on the pad, D2). Ghost to confirm, Q6 (same rule Ghost set for the #416 tray).
+- **Portrait thumbstick:** the card covers x 88–198 of the thumbstick zone (x 16–198, y 640–794) for at most 4 s, the same way the #412 dock already sits over it. The card Frame is `Active = false`, so a touch that misses a tile still reaches the thumbstick; only the tiles are buttons. It never covers the dock, START, or any combat button (the combat cluster is hidden on the pad, D2). Q6 decided: OK under the #416 tray rule (tap-to-dismiss, never over combat buttons), provisional until Kevin's phone playtest.
 - The card never covers the live currency pills or HP block (portrait y 115–227, landscape y 68–132).
 - The card opens **next to** the dock, never as a modal, and never blocks START.
 
@@ -85,15 +85,15 @@ Loading: if the Hard-only list hasn't arrived, tiles show `spinner_64` (#397) an
 ## 6. Numbers
 - Unlock: account **Lv 5** (Core Loop §5). Party: **every member** Lv 5 (Core Loop §3).
 - Hard: enemies **2× HP, 1.5× damage**; **2× tokens and fragments**; **Hard-only Epic+ items** (Core Loop §3/§4). Party HP scaling still applies on top: HP × (1 + 0.3 × (players − 1)).
-- All of these are Config values (Echo). Today's repo disagrees (see Sources): `Economy.DIFFICULTIES.hard.levelGate = 10`, `tokenMultiplier = 1.5`; `Rootvault.DIFFICULTIES.hard.hp = 1.5`, `level = 10`; `Progression` unlock at 10. Q2.
+- All of these are Config values (Echo). Today's repo disagrees (see Sources): `Economy.DIFFICULTIES.hard.levelGate = 10`, `tokenMultiplier = 1.5`; `Rootvault.DIFFICULTIES.hard.hp = 1.5`, `level = 10`; `Progression` unlock at 10. Q2 decided: Echo aligns Config to the locked Core Loop (unlock Lv 5, 2× HP, 1.5× dmg, 2× tokens + fragments) and parks the extra rows (`medium`, `nightmare`, `insane`) behind a flag; nothing is deleted.
 - Hard-only list size shown: up to 5 tiles (Epic and Legendary only). Tile order: Legendary first, then Epic, then name.
 - Timings: card in 0.2 s (Quad Out), out 0.2 s, auto-fold 4 s (portrait), pad color tween 0.3 s, unlock pulse 2 × 0.4 s.
-- Colors: Hard accent = danger 230,80,96 (proposal, Q4); selected text 255,170,180; selected fill 74,28,40. Tile strokes = `Rarities.COLOR` Epic 186,96,240 / Legendary 255,196,64.
+- Colors: Hard accent = danger 230,80,96 (PROVISIONAL, Kevin taste call Q4); selected text 255,170,180; selected fill 74,28,40. Tile strokes = `Rarities.COLOR` Epic 186,96,240 / Legendary 255,196,64.
 - Copy: "Normal" · "Hard" · "Lv 5" · "HARD" · "2× HP · 1.5× dmg · 2× tokens/frags" · "Hard-only drops (Epic+) · tap one" · "Hard unlocks at Lv 5 · you're Lv N" · "<Name> is Lv N · all need Lv 5" · "Hard unlocks at Lv 5." · "Hard mode unlocked! Pick it at the Shard Gate." · "The leader picks the difficulty." · "This party is on Hard (Lv 5)." · "Back to Normal: Hard needs Lv 5." · "Hard ×2".
 
 ## 7. Edge cases
 - **Server authority:** the client only sends `{tier = "hard"}`; the server checks level (all members) on select and again on START. A spoofed client can't enter Hard below Lv 5 (#413 §7 Havoc risk 4).
-- **Member drops below the rule mid-countdown** (a new Lv 3 joins while Hard is selected): refused at the pad (Q1 recommended). Alternative if Ghost prefers: the party falls back to Normal and the leader gets the toast "Back to Normal: Sam is Lv 3."
+- **Member drops below the rule mid-countdown** (a new Lv 3 joins while Hard is selected): refused at the pad (decided, Q1): toast "This party is on Hard (Lv 5)." for the joiner; the party keeps Hard.
 - **Leader leaves the pad:** the next member by join order becomes leader (party spec); the tier stays as picked if everyone still qualifies, else falls back to Normal.
 - **Level-up while standing on the pad:** Hard unlocks live (segment animates from locked to idle, `newDot`).
 - **First-ever run (Focus mode, #412):** solo, Normal, 3 s countdown; tapping locked Hard plays the toast only.
@@ -107,8 +107,8 @@ Loading: if the Hard-only list hasn't arrived, tiles show `spinner_64` (#397) an
 SVG in repo (fake data, original art, gray-box world): `mockups/01-locked-phone-390x844.svg` (Lv 3, locked card peek) · `mockups/02-hard-selected-phone-390x844.svg` (Hard selected, tile tapped, red pad) · `mockups/03-hard-landscape-667x375.svg` (party, Hard card right of the dock) · `mockups/04-party-lock-landscape-800x400.svg` (leader view, Sam is Lv 3) · `mockups/05-desktop-1280x720.svg` (keys 1 / 2 / E) · `mockups/06-directions.svg` (A/B/C). The live HUD is dashed; the keep-out is the cyan dashed box. PNG renders are on the box only.
 
 ## 9. Build split
-Roadmap 5.4. Building waits for Ghost's go (and the Q2 Config fix).
-- **Echo (server + Config):** align Hard Config to the Core Loop (Q2); `HARD_ONLY` drop list (Epic+); select/START level checks for every member; Hard multipliers on payouts; refuse low-level joiners on a Hard pad (Q1). Tests: Lv 4 can't start Hard (also with a spoofed remote), party with one Lv 3 can't, payouts are 2×, Hard-only items never drop on Normal.
+Roadmap 5.4. Building waits for Ghost's go (and the Q2 Config alignment, decided: Echo task).
+- **Echo (server + Config):** align Hard Config to the locked Core Loop and park extra rows behind a flag, nothing deleted (Q2 decided); `HARD_ONLY` drop list (Epic+); select/START level checks for every member; Hard multipliers on payouts; refuse low-level joiners on a Hard pad (Q1 decided). Tests: Lv 4 can't start Hard (also with a spoofed remote), party with one Lv 3 can't, payouts are 2×, Hard-only items never drop on Normal.
 - **Ghost (client + world):** Hard segment states, Hard card (portrait transient, landscape/desktop persistent), pad + swirl recolor, wave-counter chip, results line, unlock toast + first-visit pulse, keys 1 / 2.
 - **Prism:** final copy check and a Phase S pass on the Hard accent (pad VFX, enemy rim) after the fun test.
 - **Havoc:** spoofed Hard select, level-up on the pad, leader handoff while Hard is selected, low-level join during countdown.
@@ -122,15 +122,19 @@ Roadmap 5.4. Building waits for Ghost's go (and the Q2 Config fix).
 6. No Nightmare option appears anywhere.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** While Hard is selected, refuse a player below Lv 5 at the pad (recommended: protects the leader's choice), or drop the whole party back to Normal?
-2. **@Ghost:** The repo's Hard numbers don't match the Core Loop (Lv 10 vs 5, 1.5× vs 2× tokens, 1.5× vs 2× HP, plus `medium` / `nightmare` / `insane` rows). Should Echo get a Config task (GitHub issue) to align them? Prism didn't touch Config.
-3. **@Ghost:** Remember the last tier for the session only (no save write), defaulting to Normal on join? Recommended: yes, session only.
-4. **@Kevin (taste):** Hard accent color: danger red 230,80,96 (recommended, reads as "harder" at a glance) or a deep violet that stays closer to the shard palette?
-5. **@Kevin (taste):** Show locked players the Hard-only drops as silhouettes (recommended, a reason to level) or hide the list until Lv 5?
-6. **@Ghost:** On portrait the Hard card covers part of the thumbstick zone (x 88–198) for up to 4 s, tap-to-dismiss, `Active = false` outside the tiles. OK under the same rule as the #416 tray (provisional until Kevin's phone playtest)?
+1. ~~@Ghost: Refuse a Lv < 5 joiner at the pad, or drop the party to Normal?~~ **Refuse at the pad (Ghost, Kevin pre-approved, Oct 24, 2026).** The joiner gets "This party is on Hard (Lv 5)."; the party keeps Hard. Board row: https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953
+2. ~~@Ghost: Config task to align Hard numbers?~~ **Yes (Ghost).** Echo aligns Config to the locked Core Loop: unlock **Lv 5**, **2× HP**, **1.5× damage**, **2× tokens + fragments**. Extra rows (`medium`, `nightmare`, `insane`) are parked behind a flag; nothing is deleted. Prism still doesn't touch Config.
+3. ~~@Ghost: Remember the last tier?~~ **Session only (Ghost).** No save write; every join starts on Normal.
+4. **@Kevin (taste, open):** Hard accent color. **PROVISIONAL (Prism recommendation, used in the mockups until Kevin decides):** danger red 230,80,96. Alternative: a deep violet closer to the shard palette.
+5. **@Kevin (taste, open):** Locked players see Hard-only drops as silhouettes, or hide the list until Lv 5? **PROVISIONAL (Prism recommendation):** silhouettes (rarity stroke + "?"), a reason to level.
+6. ~~@Ghost: Portrait Hard card over the thumbstick zone for up to 4 s?~~ **Yes (Ghost), same rule as the #416 4 s tray:** tap-to-dismiss, `Active = false` outside the tiles, never over a combat button. Provisional until Kevin's phone playtest.
+
+Ghost's questions are all answered. Only Kevin's two taste calls (Q4, Q5) remain; the spec runs on the PROVISIONAL picks until he answers.
 
 ## Decision log
 - 2026-10-24 (Prism): v1 published. Recommends direction A (dock toggle + Hard card). Six open questions (Ghost 1, 2, 3, 6; Kevin 4, 5). Not approved.
+- 2026-10-24 (Ghost, Kevin pre-approved; Kevin can change later; board row https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953): Q1 = refuse Lv < 5 joiners at the pad. Q2 = yes, Echo aligns Config to the locked Core Loop (Lv 5, 2× HP, 1.5× dmg, 2× tokens + fragments), extra rows parked behind a flag, nothing deleted. Q3 = session only, Normal on join. Q6 = yes, #416 tray rule (tap-to-dismiss, never over combat buttons), provisional until Kevin's phone playtest. → v1.1.
+- 2026-10-24 (Prism): Kevin taste calls Q4 (Hard accent: red 230,80,96) and Q5 (locked drops as silhouettes) recorded as PROVISIONAL recommendations, waiting for Kevin.
 
 ## Later (not V1)
 Nightmare / Mythic tiers (Ideas Backlog, NOT APPROVED), per-tier best-wave badges, Hard-only cosmetic pad trails (never power), a "Hard clears" counter on the results screen.
