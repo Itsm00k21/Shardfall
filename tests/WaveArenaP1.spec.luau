@@ -108,6 +108,8 @@ local function rollback(saved: any)
 	saved.receipts = {}
 	saved.ledger = {}
 	saved.arenaMail = nil
+	-- A failed save reverts the run id with the rest of the profile.
+	saved.arenaSettle = nil
 end
 
 describe("Wave arena P1 settlement", function()
