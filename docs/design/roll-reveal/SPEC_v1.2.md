@@ -48,8 +48,8 @@ Reference is the phone portrait 390×844 (pt). All Roll-page children use scale 
 | x1/x10, Auto/Skip toggles | left / right of ROLL | ≥ 88×48 each, gap 8 | stacked |
 | **x10 Skip** (`SkipBatch`) | (1,1) / (1,-16, 1,-16-safe) | **≥ 88×44 on every size** | one size (v1.3; desktop was 72×36 until the phone layout review, F1); v1.1 had 72×30 |
 | x10 summary panel | (0.5,0.5) | phone (1,-24) × auto; desktop 760 × auto | §6 values |
-| Milestone toast | (0.5,0) / top inset 4 | 220×26 | |
-| **Collapse bar** (collapsed page) | (0.5,1) / (0.5,0, 1,-8-safeBottom) on portrait; bottom 14 on landscape phones; bottom 24 on desktop | portrait 250×56 · 667×375 240×56 · 800×400 260×56 · desktop 320×64 | the same slot and sizes as the #412 ROLL bar. Who owns the bottom slot in the hub vs. the arena is in the phone layout review (R2) |
+| Milestone toast | (0.5,0) / top inset 4 | 220×26 | goes through the one toast lane (review D3): max 1 toast on screen, the rest queue; milestone counts as loot/rarity, so it goes before queued info toasts. While this page is open the lane slot sits at its top inset + 4 |
+| **Collapse bar** (collapsed page) | (0.5,1) / (0.5,0, 1,-8-safeBottom) on portrait; bottom 14 on landscape phones; bottom 24 on desktop | portrait 250×56 · 667×375 240×56 · 800×400 260×56 · desktop 320×64 | the same slot and sizes as the #412 ROLL bar. Bottom slot (review D2, decided): in the hub the live combat cluster (skill bar + attack/dodge/jump) hides while this bar is up and comes back when it slides down; in the arena this bar hides |
 Phone landscape 667×375 and 800×400: the crystal stage moves left (0.33, 0.5), and the pips, ROLL and toggles stack in a right column at 0.45w. The x10 summary stays a 5×2 grid, with tile = min(96, (panelW-2·14-4·8)/5, (safeH-150)/2). The height term keeps it from scrolling at 667×375, where the safe height is about 323, so tile = 86. Desktop (≥ 1280 w): the page caps at 1180×680, centered right of the left rail.
 Safe areas: obey `GuiService:GetGuiInset()` and keep 12 px from the notch and home bar.
 
@@ -150,6 +150,7 @@ SVG mockups in `mockups/`: `01-idle.svg`, `02-uncommon.svg`, `09-x10-results.svg
 - 2026-10-23 (Ghost, Kevin pre-approved): Q2 = **yes**, the first-ever roll plays full length with no Auto. All §11 questions are now closed.
 
 - 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F1: Skip is 88×44 on desktop too, so it's really one size. F2: added collapse-bar geometry (the same slot as the #412 ROLL bar). F3: the x10 tile gets a height cap so the 5×2 summary fits 667×375 without scrolling. F4: badges go from 10 to 11 px (h 18) so they're readable on phones. No design change.
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838103a80ad21380d7f451; folded by Prism from the phone layout review rev 1.1, docs/design/phone-layout-review/REVIEW_v1.md §8/§10): D2: in the hub the combat cluster hides while the collapse bar is up; in the arena the collapse bar hides (§4). D3: the milestone and error toasts go through the one toast lane (max 1 on screen, the rest queue, loot/rarity first) (§4).
 
 ## Later (not V1)
 Mythic/Secret reveal (Phase 5 appendix in v1.1), Legendary cross-server announcement, and reduced-motion variants.
