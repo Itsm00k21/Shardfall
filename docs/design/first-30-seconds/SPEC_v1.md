@@ -22,7 +22,8 @@ In the first 30 seconds a new player cracks 3 free shards (the 3rd is a guarante
   4. **Gate dock**, in the same bottom-center slot as the ROLL bar, shown only on the Gate pad. Its chevron collapses it to a 44 px "Shard Gate ›" pill.
 - The rail, Bag, currency pill and GearBar stay hidden until roll 3 resolves. Then they fade in (0.26 s) with a `newDot` on Bag.
 - Also hidden in Focus mode until the hand-off (phone layout review F8): the live portrait + HP block, and the ActionBar's 2×4 skill grid with the attack/dodge/jump/heavy cluster. At every phone size they sit under the Oracle card (top-left) and the ROLL bar (bottom-center). They fade back in with the rail at the hand-off beat (~10 s).
-- **Center keep-out:** no UI inside x 30–70% / y 28–73% of the viewport at any beat, on any size. World-space markers (BillboardGui, Beam) are allowed.
+- **Center keep-out:** no UI inside x 30–70% / y 28–73% of the viewport at any beat, on any size; **on portrait the top is 35%** (phone layout review D1, provisional until Kevin's phone playtest). World-space markers (BillboardGui, Beam) are allowed.
+- **Bottom slot after the hand-off (review D2):** in the hub the live skill bar + attack/dodge/jump/heavy cluster also hides while the ROLL bar or the Gate dock is up, and comes back when the bar slides down or the player walks off the pad. In the arena the collapse bar hides.
 - Leaving: **Skip intro** on the card ends Focus mode and pays the same kit (live behavior, kept). Returning players never see any of this.
 
 ## 3. Flow
@@ -64,7 +65,7 @@ On portrait, "top" is the CoreUISafe top edge: about 99 px on a notched 390×844
 **Center keep-out (px)**
 | Size | x | y |
 |---|---|---|
-| 390×844 | 117–273 | 236–616 |
+| 390×844 | 117–273 | **296**–616 (35%, D1; was 236) |
 | 667×375 | 200–467 | 105–274 |
 | 800×400 | 240–560 | 112–292 |
 | 1280×720 | 384–896 | 202–526 |
@@ -74,12 +75,12 @@ On portrait, "top" is the CoreUISafe top edge: about 99 px on a notched 390×844
 |---|---|---|---|
 | Oracle card | (0,0) / (16, top+4) | (1,-32) × 112 → 358×112 | chevron 44×44 top-right; Skip intro 84×40 visual, 44 hit |
 | Pill (collapsed card) | (0,0) / (16, top+4) | auto 176–240 × 44 | live `IntroPill` |
-| Goal chip | (0,0) / (16, card bottom+8) | 216×44 | collapsed tab 44×44. If card bottom + 8 + 44 would pass the keep-out top (236), as it does on a notched phone (top ≈ 99), the chip starts as the tab and opens to 216×44 when the card folds to the pill at roll 1 (F9) |
+| Goal chip | (0,0) / (16, card bottom+8) | 216×44 | collapsed tab 44×44. If card bottom + 8 + 44 would pass the keep-out top, the chip starts as the tab and opens to 216×44 when the card folds to the pill at roll 1 (F9). Since D1 (top 296) a notched phone fits it (y 223–267), so the chip opens at once. It shows as its tab while a toast is in the lane |
 | ROLL bar | (0.5,1) / (0.5,0, 1,-8-safeBottom) | 250×56 | ring +6 px; label 13 px above |
 | Mini reveal stage | (0.5,1) / above the bar, gap 8 | (1,-32) × 120 | top edge 618 ≥ 616 ✓ |
 | Gate dock | same slot as the ROLL bar | (1,-32) × 64 | START ≥ 92×48 |
 | Hint chip | above the attack button, gap 12 | 150×44 | follows the CombatHud button |
-| Toasts | (0.5,0) / top+4 | 220×26 | #397 toast style |
+| Toasts | the one toast lane (review §4a, D3): x 88–266, y 231–267 | 178×36 | #397 toast style. Max 1 on screen, the rest queue; loot/rarity before info |
 
 **Landscape phone 667×375** (mockup 03)
 | Piece | Position | Size | Notes |
@@ -89,7 +90,7 @@ On portrait, "top" is the CoreUISafe top edge: about 99 px on a notched 390×844
 | Goal chip | (safeLeft + 12, 60) | **184**×44 (was 204, F10); a 44×44 tab while the card is expanded | The expanded card (x 100–460, y 6–94) overlapped a 204 px chip at y 60, so the chip stays a tab (x 12–56) until the card folds to the pill at roll 1. Bottom 104 < 105, and right edge ≤ 196 < 200 |
 | ROLL bar | (0.5,1) / bottom 14 | 240×56 | x 213–453, clear of the thumbstick (≤ 164). The live combat cluster (attack x 379–443, dodge 327–371) would overlap it, so it's hidden in Focus mode (F8) |
 | Mini reveal stage | (1,0) / (-16-safeRight, 8) in FocusTop | 280×84 | top-right. Bottom 92 < 105 ✓ (F12: it must stay in FocusTop; built in CoreUISafe it would drop to y 60–144 and cross the keep-out) |
-| Gate dock | bottom-center, bottom 14 | 318×60 | label 12 px above it at y ≥ 280 |
+| Gate dock | bottom-center, bottom 14 | 318×60 | label 12 px above it at y ≥ 280. The live cluster hides while it's up (D2) |
 | Hint chip | above the attack button | 150×44 | |
 
 **Landscape 800×400** (mockup 04)
@@ -100,7 +101,7 @@ On portrait, "top" is the CoreUISafe top edge: about 99 px on a notched 390×844
 | ROLL bar | bottom-center, bottom 14 | 260×56 |
 | Mini reveal stage | top-right (-16-safeRight, 8) | 300×92 |
 | Gate dock | bottom-center | 340×60 |
-| Hint chip / toasts | above the attack button / top-center | 150×44 / 220×26 |
+| Hint chip / toasts | above the attack button / the toast lane in the top band x 524–784, y 8–44 (D3) | 150×44 / 260×36 |
 
 **Desktop 1280×720 and up** (mockup 05). `UIScale = clamp(min(w/1280, h/720), 1, 1.5)` on the Focus root.
 | Piece | Position | Size |
@@ -218,6 +219,7 @@ Decided by Ghost under Kevin's pre-approval (Oct 23, 2026, board row https://app
 - 2026-10-23 (Echo): Q4 = **yes** (solo, 3 s Config countdown, preloaded arena, 3 s or less). Q5 = **yes** (free server-side tutorial pools, server auto-equip-if-better on existing onboarding state; new save fields go to Ghost first). (Ghost): first roll full length = yes. All §11 questions are now closed.
 
 - 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F7: the coordinate frames are now explicit (full-screen px; FocusTop vs FocusHud; x from TopbarInset). F8: Focus mode also hides the live portrait/HP and the skill bar + combat cluster until the hand-off. F9: on notched portrait phones the goal chip starts as its tab. F10: on landscape the goal chip is a tab while the card is expanded (they overlapped), and the 667×375 chip is 184 wide. F11: arena docking around the live HP block (portrait has one row, so the pill carries the goal; landscape keeps the pill in the top band). F12: the mini stage stays in FocusTop. Layout fixes only; the flow and beats are unchanged.
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838103a80ad21380d7f451; folded by Prism from the phone layout review rev 1.1, docs/design/phone-layout-review/REVIEW_v1.md §8/§10): D1: the portrait keep-out top is 35% (y 296), provisional until Kevin's phone playtest (§2, §4 table, goal chip). D2: after the hand-off, the hub combat cluster hides while the ROLL bar or Gate dock is up (§2). D3: toasts use the one toast lane, max 1 on screen, the rest queue, loot/rarity first (§4 portrait and 800 tables; the 667 lane slot is x 411–651, y 8–44).
 
 ## Later (not V1)
 Voice lines for Wren, a set-bonus tip (Core Loop: only once the player owns 2 items of the same element), party-join during onboarding, and a Pets/Skills tutorial roll.
