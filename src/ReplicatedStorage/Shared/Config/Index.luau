@@ -60,6 +60,9 @@ Config.WaveArena = require("./WaveArenaConfig")
 -- M10 alive cap and stuck clock. Not a tenth area. The server reads it
 -- only while LaunchGate.enemyPerf is on (off).
 Config.EnemyPerf = require("./EnemyPerf")
+-- T4 Gate Ring. Not a tenth area. The server reads it only while
+-- LaunchGate.parties is on (off). Nothing here is a save field.
+Config.PartyGather = require("./PartyGather")
 
 Config.AREAS = table.freeze({
 	"Items",
