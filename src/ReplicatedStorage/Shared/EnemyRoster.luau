@@ -3,10 +3,13 @@
 --[[
 	Server math for the three V1 enemy types and the wave-5 boss.
 	Positions, arena bounds, and damage come from Config/Enemies.luau.
-	A ranged kite is clamped to that arena. A ranged shot travels at
-	projectileSpeed and deals damage only after a line-of-sight check.
-	This module does not create parts, raycast the world, read a
-	profile, or spend Robux.
+	A ranged kite is clamped to that arena. Inside the retreat band the
+	ranged enemy still backs up, and it still fires. A shot travels at
+	projectileSpeed. Damage lands only when that path reaches the
+	target's current position and the line of sight is clear. The aim
+	point from the firing tick is not a hit. The wave-5 boss slams
+	after the config leash. It does not heal. This module does not
+	create parts, raycast the world, read a profile, or spend Robux.
 
 	EnemyTypeService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on, and it owns the world raycast. A client
@@ -32,6 +35,14 @@ export type Shot = {
 	aimZ: number,
 }
 
+-- Telegraph for the boss leash slam. `left` is seconds before it lands.
+-- The mark stays where the target was when the leash expired.
+export type Mark = {
+	x: number,
+	z: number,
+	left: number,
+}
+
 -- True when the segment from the muzzle to the aim point is blocked.
 export type Cast = (number, number, number, number) -> boolean
 
@@ -42,6 +53,8 @@ export type Actor = {
 	hp: number,
 	cooldown: number,
 	shot: Shot?,
+	leash: number?,
+	mark: Mark?,
 }
 
 export type Box = {
@@ -79,6 +92,8 @@ function EnemyRoster.spawn(kind: string, x: number, z: number): Actor?
 		hp = row.maxHealth,
 		cooldown = 0,
 		shot = nil,
+		leash = 0,
+		mark = nil,
 	}
 end
 
@@ -122,9 +137,37 @@ local function clampArena(actor: Actor)
 	actor.z = math.clamp(actor.z, box.minZ, box.maxZ)
 end
 
--- Move one in-flight shot. Damage lands only when it reaches the aim
--- point and the cast says the segment is clear. Nil cast is a clear shot.
-local function advanceShot(actor: Actor, stepDt: number, blocked: Cast?): number
+-- Closest distance from the target to the segment the projectile just flew.
+local function nearPath(x0: number, z0: number, x1: number, z1: number, tx: number, tz: number, radius: number): boolean
+	local dx = x1 - x0
+	local dz = z1 - z0
+	local len2 = dx * dx + dz * dz
+	local t = 0
+	if len2 > 1e-8 then
+		t = ((tx - x0) * dx + (tz - z0) * dz) / len2
+		if t < 0 then
+			t = 0
+		elseif t > 1 then
+			t = 1
+		end
+	end
+	local px = x0 + dx * t
+	local pz = z0 + dz * t
+	local ox = tx - px
+	local oz = tz - pz
+	return ox * ox + oz * oz <= radius * radius
+end
+
+-- Move one in-flight shot. Damage lands when the path reaches the target's
+-- current position and the cast says that segment is clear. Reaching the
+-- old aim point is not a hit. Nil cast is a clear shot.
+local function advanceShot(
+	actor: Actor,
+	stepDt: number,
+	blocked: Cast?,
+	targetX: number,
+	targetZ: number
+): number
 	local shot = actor.shot
 	if shot == nil then
 		return 0
@@ -140,23 +183,73 @@ local function advanceShot(actor: Actor, stepDt: number, blocked: Cast?): number
 	if step < 0 then
 		step = 0
 	end
+	local x0, z0 = shot.x, shot.z
 	shot.x += shot.dirX * step
 	shot.z += shot.dirZ * step
 	shot.remaining -= step
-	if shot.remaining > 1e-4 then
+	local expired = shot.remaining <= 1e-4
+	local reached = finite(targetX)
+		and finite(targetZ)
+		and nearPath(x0, z0, shot.x, shot.z, targetX, targetZ, Enemies.SHOT_RADIUS)
+	if not reached and not expired then
 		return 0
 	end
 	local damage = shot.damage
 	local originX, originZ = shot.originX, shot.originZ
-	local aimX, aimZ = shot.aimX, shot.aimZ
 	actor.shot = nil
+	if not reached then
+		return 0
+	end
 	if not finite(actor.hp) or actor.hp <= 0 or not finite(damage) or damage <= 0 then
 		return 0
 	end
-	if blocked ~= nil and blocked(originX, originZ, aimX, aimZ) == true then
+	if blocked ~= nil and blocked(originX, originZ, targetX, targetZ) == true then
 		return 0
 	end
 	return damage
+end
+
+-- Boss only. Time beyond LEASH_RANGE arms a mark. The mark lands after
+-- LEASH_WINDUP if the target is still inside it. HP is never written.
+local function leashSlam(actor: Actor, row: Enemies.Row, targetX: number, targetZ: number, stepDt: number, dist: number): number
+	local boss = Enemies.BOSS
+	if boss == nil or actor.kind ~= boss.id or row.id ~= boss.id then
+		return 0
+	end
+	local mark = actor.mark
+	if mark ~= nil then
+		mark.left -= stepDt
+		if mark.left > 1e-4 then
+			return 0
+		end
+		local markX, markZ = mark.x, mark.z
+		actor.mark = nil
+		local gap = math.sqrt((targetX - markX) * (targetX - markX) + (targetZ - markZ) * (targetZ - markZ))
+		if gap <= Enemies.LEASH_RADIUS then
+			return row.damage
+		end
+		return 0
+	end
+	local held = 0
+	local saved = actor.leash
+	if type(saved) == "number" and saved == saved and saved > 0 and saved ~= math.huge then
+		held = saved
+	end
+	if dist > Enemies.LEASH_RANGE then
+		held += stepDt
+		actor.leash = held
+		if held >= Enemies.LEASH_SECONDS then
+			actor.mark = {
+				x = targetX,
+				z = targetZ,
+				left = Enemies.LEASH_WINDUP,
+			}
+			actor.leash = 0
+		end
+	else
+		actor.leash = 0
+	end
+	return 0
 end
 
 local function launch(actor: Actor, row: Enemies.Row, aimX: number, aimZ: number, aimDist: number, aimDx: number, aimDz: number)
@@ -193,7 +286,7 @@ function EnemyRoster.step(actor: Actor, targetX: number, targetZ: number, dt: nu
 	end
 	local stepDt = math.min(dt, Enemies.STEP_MAX)
 	local dist, dx, dz = distance(actor.x, actor.z, targetX, targetZ)
-	-- A tick that opens inside the retreat band is a kite. No shot that tick.
+	-- Inside retreat the ranged enemy backs up. It can still fire this tick.
 	local kiting = row.retreat > 0 and dist < row.retreat
 	if kiting then
 		if dist == 0 then
@@ -214,21 +307,24 @@ function EnemyRoster.step(actor: Actor, targetX: number, targetZ: number, dt: nu
 			actor.cooldown = 0
 		end
 	end
-	local dealt = advanceShot(actor, stepDt, blocked)
+	local dealt = advanceShot(actor, stepDt, blocked, targetX, targetZ)
 	local now, aimDx, aimDz = distance(actor.x, actor.z, targetX, targetZ)
-	local inBand = not kiting and now <= row.range and (row.retreat <= 0 or now >= row.retreat)
+	local inBand = now <= row.range and (row.style == "projectile" or row.retreat <= 0 or now >= row.retreat)
 	if actor.shot == nil and inBand and actor.cooldown <= 0 and actor.hp > 0 then
 		actor.cooldown = 1 / row.attackSpeed
 		if row.style == "projectile" then
 			if now > 1e-4 and row.projectileSpeed > 0 then
 				launch(actor, row, targetX, targetZ, now, aimDx, aimDz)
-				dealt += advanceShot(actor, stepDt, blocked)
+				dealt += advanceShot(actor, stepDt, blocked, targetX, targetZ)
 			elseif blocked == nil or blocked(actor.x, actor.z, targetX, targetZ) ~= true then
 				dealt += row.damage
 			end
 		else
 			dealt += row.damage
 		end
+	end
+	if actor.hp > 0 then
+		dealt += leashSlam(actor, row, targetX, targetZ, stepDt, now)
 	end
 	return dealt
 end

@@ -13,6 +13,13 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Ranged enemies fire inside the 12-stud retreat and still back up. A shot
+  damages the target only when the projectile path reaches where they are
+  now; a sidestep off that path misses. The wave-5 boss, after
+  `LEASH_RANGE` / `LEASH_SECONDS` in `Shared/Config/Enemies.luau`, throws a
+  telegraphed slam (`LEASH_WINDUP`, `LEASH_RADIUS`) the player can step out
+  of. The boss does not heal. Flag `enemyTypes` stays off. No save fields.
+  `schemaVersion` stays 26. Stacked on #419. (open)
 - Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
   4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
   count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns

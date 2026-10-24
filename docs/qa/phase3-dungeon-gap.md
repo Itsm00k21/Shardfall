@@ -63,3 +63,11 @@ Server boss on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked 
 - Stats and the adds count: `Enemies.BOSS`, `Enemies.BOSS_ADDS` (4), and `Enemies.BOSS_ADD_MIX` in `src/ReplicatedStorage/Shared/Config/Enemies.luau`. The mix is chaser, ranged, and tank only. `Enemies.validate` rejects a count other than 4, a mix that names something else, or a boss that is not taller and healthier than the tank.
 - Wave 5 of `WaveFlow` / `WaveFlowService` spawns that boss plus the four adds as gray blocks. The service does not parent parts. `init.server` does not require it. Live `waveKinds(5)` is still Gnarl plus two adds.
 - `bossEnter` fires when wave 5 becomes active. `bossDown` fires when that boss reaches 0 HP. Both go to `Shared.Analytics.event` when that module exists, or to `sink.analytics` when a caller passes one. The analytics module is not in this branch, so a normal boot does not log. No new remote. No client file reads the names. No profile write. `schemaVersion` stays 26.
+
+## What the enemy p2 pass adds
+
+Stacked on #419. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). `waveArena` stays false. No new flag, remote, profile field, or Robux. `schemaVersion` stays 26.
+
+- A ranged enemy inside `retreat` (12 studs) still backs up, and it fires. Point-blank contact deals the config damage. The arena clamp is unchanged.
+- A ranged shot no longer pays damage at the aim point from the firing tick. The server moves the projectile and hits only if that path reaches the target's current position within `SHOT_RADIUS`. The line-of-sight ray uses that current position. Stepping off the path misses.
+- `LEASH_RANGE`, `LEASH_SECONDS`, `LEASH_WINDUP`, and `LEASH_RADIUS` live in `Config/Enemies.luau`. `Enemies.validate` rejects a leash inside the boss melee range, a non-positive duration, or a windup too short to dodge. If the player stays beyond the leash for `LEASH_SECONDS`, the boss marks that spot and slams after `LEASH_WINDUP`. Leaving the radius deals 0. The boss HP is not restored.
