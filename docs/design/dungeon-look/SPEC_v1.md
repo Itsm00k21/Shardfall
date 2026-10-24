@@ -1,5 +1,3 @@
-<cursor_untrusted_data_1337 source="CallDynamicTool">
-
 # Dungeon Look: "Shard Crater", Spec v1.1 — Phase S theme
 
 Owner: Prism (design, no code). Builders: Ghost (world/VFX), Echo (wave/boss/loot hooks). Base: `cursor/live-build-9721` @ `9269e61`. Docs only.
@@ -35,7 +33,7 @@ Map: `mockups/01-arena-topdown.svg`. Origin = arena center.
 | Party sockets | 4, 6 apart at z +30 | drop-in points; rejoin also lands here |
 | Ceiling | none (open sky) | same broken prismatic sky as Crater Square, darker, with sparse falling shard streaks |
 
-Camera check: at default zoom the rift tops (20 tall) are visible from the center on 800×400 and 667×375; on 390×844 portrait at least the nearest rift. See `mockups/02-wave-start-800x400.svg` (also shows the loot chips top-right, outside the keep-out).
+Camera check: at default zoom the rift tops (20 tall) are visible from the center on 800×400 and 667×375; on 390×844 portrait at least the nearest rift. See `mockups/02-wave-start-800x400.svg` (also shows the loot chips top-right, outside the keep-out; §6 has the exact sizes per viewport).
 
 ## 5. States
 - **Rift:** sealed (dark, 0.9 transparency inner) · spawning (element color, pulse 1 Hz) · spent (dim) · boss (slabs open, red-violet).
@@ -47,7 +45,7 @@ Camera check: at default zoom the rift tops (20 tall) are visible from the cente
 ## 6. Numbers
 - Floor Ø90 (decision 1), lip Ø100, 14 tall; rifts 16×20; lip shards 18.
 - Wave start 0.8 s from veins to first enemy; wave clear effects 1.5 s (auto-collect 0.5 s inside that); boss entrance 4.5 s total (no gameplay waits longer than the existing wave break).
-- Loot chip: 220×30 (36 on phones), top-right under the wave toast, 2 s, stacks max 2.
+- Loot chip: 2 s, stacks max 2, text ≥ 13. Size and place (phone layout review F14): **landscape phones** go in the top-right notice column, from 8 px right of the center keep-out to 16 px inside the safe right edge (667×375: 176×36; 800×400: 216×36), stacked under the #416 held-draft pill when it's showing. **Portrait 390×844:** it goes through the live toast host (top-center under the HP block). There isn't a free corner: the currency pills fill the top-right down to y 227, and the keep-out starts at 236. See the phone layout review, Q3. **Desktop:** 220×30, top-right under the currency pills. The wave toast stays top-center; the chip is never "under" it.
 - Enemy heights: chaser 3, ranged 4 (floats 3 up), tank 7, boss 14 studs.
 
 ### Phone performance budget (arena + max wave 12 enemies + party of 4)
@@ -109,7 +107,5 @@ Roblox notes: vein "sweep" = a thin Neon ring (MeshPart or ring of parts) whose 
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): Phase S theme = B, a new original Shard Crater matching Crater Square; Gnarl/Verdant parked. Arena 90 across, 3 edge gates, no Leave, keep all earned loot; floor loot auto-collects at wave end and on wipe. Element-leaning waves are Config-only (Echo). → v1.1.
-
-
-</cursor_untrusted_data_1337>
 - 2026-10-23 (Ghost, Kevin pre-approved): boss-entrance shake = **yes** (off on reduced motion); enemy names kept. (Echo): held full-Bag items go to a per-player overflow list, Config-capped, shown on results. All §11 questions are now closed.
+- 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): loot chip sizes and places set per viewport (F14). It used to say "top-right under the wave toast", but the wave toast is top-center, and a 220 px chip at the top-right crossed the landscape keep-out. No design change.
