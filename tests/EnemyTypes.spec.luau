@@ -630,7 +630,7 @@ describe("EnemyTypeService", function()
 		expect(Enemies.VOLLEY_NAME).toEqual("Shard Volley")
 		expect(Enemies.PRESSURE_SECONDS).toEqual(4)
 		expect(Enemies.PRESSURE_DECAY < Enemies.PRESSURE_SECONDS).toBeTrue()
-		expect(Enemies.VOLLEY_WINDUP).toEqual(0.8)
+		expect(Enemies.VOLLEY_WINDUP).toEqual(0.9)
 		expect(Enemies.VOLLEY_SHOTS).toEqual(3)
 		expect(Enemies.VOLLEY_COOLDOWN).toEqual(5)
 		expect(Enemies.LEASH_DASH > Enemies.BOSS.moveSpeed).toBeTrue()
@@ -817,6 +817,208 @@ describe("Havoc boss kites", function()
 				return minX, maxZ - cursor
 			end)
 			expect(boss ~= nil).toBeTrue()
+		end)
+	end)
+end)
+
+describe("Havoc boss-kite gaps", function()
+	it("stepping inside the leash every 2.9s still takes damage", function()
+		withFlag(true, function()
+			local boss = EnemyTypeService.spawn("boss", 0, 0)
+			expect(boss ~= nil).toBeTrue()
+			if boss == nil then
+				return
+			end
+			expect(EnemyTypeService.hurt(boss, 40)).toEqual(40)
+			local hp = boss.hp
+			local step = 0.1
+			local period = math.floor(2.9 / step + 0.5)
+			expect(period * step).toBeCloseTo(2.9, 1e-6)
+			local insideDist = (Enemies.BOSS.range + Enemies.LEASH_RANGE) * 0.5
+			local outsideDist = Enemies.LEASH_RANGE + 4
+			expect(insideDist < Enemies.LEASH_RANGE).toBeTrue()
+			expect(insideDist > Enemies.BOSS.range).toBeTrue()
+			local dealt = 0
+			local ticks = math.floor(HAVOC_WINDOW / step)
+			for tick = 1, ticks do
+				local dist = outsideDist
+				if tick % period == 0 then
+					dist = insideDist
+				end
+				dealt += EnemyTypeService.step(boss, boss.x + dist, boss.z, step)
+				expect(inArena(boss)).toBeTrue()
+				if tick <= period * 2 then
+					expect(boss.mark).toBeNil()
+				end
+			end
+			expect(dealt > 0).toBeTrue()
+			expect(boss.hp).toEqual(hp)
+		end)
+	end)
+
+	it("spaces Shard Volley windups 5s apart at a 0.9s cue", function()
+		expect(Enemies.VOLLEY_WINDUP).toEqual(0.9)
+		expect(Enemies.VOLLEY_COOLDOWN).toEqual(5)
+		withFlag(true, function()
+			local boss = EnemyTypeService.spawn("boss", 0, 0)
+			expect(boss ~= nil).toBeTrue()
+			if boss == nil then
+				return
+			end
+			expect(EnemyTypeService.hurt(boss, 40)).toEqual(40)
+			local hp = boss.hp
+			local hold = (Enemies.BOSS.range + Enemies.LEASH_RANGE) * 0.5
+			local starts = {}
+			local step = 0.1
+			local ticks = math.floor(16 / step)
+			for tick = 1, ticks do
+				local had = boss.volley ~= nil
+				local px = boss.x + hold
+				local pz = boss.z
+				if boss.bolts ~= nil then
+					pz += 40
+				end
+				EnemyTypeService.step(boss, px, pz, step)
+				if not had and boss.volley ~= nil then
+					expect(boss.volley.left).toEqual(Enemies.VOLLEY_WINDUP)
+					table.insert(starts, tick * step)
+				end
+				expect(boss.hp).toEqual(hp)
+				expect(inArena(boss)).toBeTrue()
+			end
+			expect(#starts >= 3).toBeTrue()
+			for index = 2, #starts do
+				expect(starts[index] - starts[index - 1]).toBeCloseTo(Enemies.VOLLEY_COOLDOWN, 0.11)
+			end
+		end)
+	end)
+
+	it("leads Shard Volley and a sidestep dodges the bolts", function()
+		withFlag(true, function()
+			local boss = EnemyTypeService.spawn("boss", 0, 0)
+			expect(boss ~= nil).toBeTrue()
+			if boss == nil then
+				return
+			end
+			expect(EnemyTypeService.hurt(boss, 40)).toEqual(40)
+			local hp = boss.hp
+			local radius = (Enemies.BOSS.range + Enemies.LEASH_RANGE) * 0.5
+			local angle = 0
+			local speed = Haven.WALK_SPEED
+			local fired = false
+			local aimX = 0
+			local aimZ = 0
+			local atX = 0
+			local atZ = 0
+			local t = 0
+			while not fired and t < 12 do
+				angle += (speed / radius) * 0.1
+				local px = boss.x + math.cos(angle) * radius
+				local pz = boss.z + math.sin(angle) * radius
+				local had = boss.bolts ~= nil
+				EnemyTypeService.step(boss, px, pz, 0.1)
+				if not had and boss.bolts ~= nil then
+					fired = true
+					local bolts = boss.bolts
+					expect(bolts ~= nil and #bolts >= 2).toBeTrue()
+					if bolts ~= nil then
+						aimX = bolts[2].aimX
+						aimZ = bolts[2].aimZ
+					end
+					atX = px
+					atZ = pz
+				end
+				t += 0.1
+			end
+			expect(fired).toBeTrue()
+			local lead = math.sqrt((aimX - atX) * (aimX - atX) + (aimZ - atZ) * (aimZ - atZ))
+			expect(lead > 1).toBeTrue()
+			local dx = aimX - boss.x
+			local dz = aimZ - boss.z
+			local span = math.sqrt(dx * dx + dz * dz)
+			expect(span > 1).toBeTrue()
+			local dodgeX = boss.x + (-dz / span) * 40
+			local dodgeZ = boss.z + (dx / span) * 40
+			local dealt = 0
+			local guard = 0
+			while boss.bolts ~= nil and guard < 30 do
+				dealt += EnemyTypeService.step(boss, dodgeX, dodgeZ, 0.05)
+				guard += 1
+			end
+			expect(boss.bolts).toBeNil()
+			expect(dealt).toEqual(0)
+			expect(boss.hp).toEqual(hp)
+			expect(inArena(boss)).toBeTrue()
+		end)
+	end)
+
+	it("cancels the slam mark when the dash path is blocked", function()
+		withFlag(true, function()
+			local function kite(actor: any, seconds: number)
+				local left = seconds
+				while left > 1e-6 do
+					local dt = math.min(Enemies.STEP_MAX, left)
+					local ahead = Enemies.LEASH_RANGE + Enemies.BOSS.moveSpeed * dt + 2
+					expect(EnemyTypeService.step(actor, actor.x + ahead, 0, dt)).toEqual(0)
+					left -= dt
+				end
+			end
+
+			local boss = EnemyTypeService.spawn("boss", 0, 0)
+			expect(boss ~= nil).toBeTrue()
+			if boss == nil then
+				return
+			end
+			expect(EnemyTypeService.hurt(boss, 40)).toEqual(40)
+			local hp = boss.hp
+			kite(boss, Enemies.LEASH_SECONDS)
+			local mark = boss.mark
+			expect(mark ~= nil).toBeTrue()
+			if mark == nil then
+				return
+			end
+			local markX = mark.x
+			local markZ = mark.z
+			expect(EnemyTypeService.step(boss, markX, markZ, 0.1)).toEqual(0)
+			expect(boss.mark ~= nil).toBeTrue()
+			local stoppedX = boss.x
+			local stoppedZ = boss.z
+			expect(stoppedX ~= markX or stoppedZ ~= markZ).toBeTrue()
+			local function blocked()
+				return true
+			end
+			expect(EnemyTypeService.step(boss, markX, markZ, 0.5, blocked)).toEqual(0)
+			expect(boss.mark).toBeNil()
+			expect(boss.x).toEqual(stoppedX)
+			expect(boss.z).toEqual(stoppedZ)
+			expect(boss.hp).toEqual(hp)
+
+			local walled = EnemyTypeService.spawn("boss", 0, 0)
+			expect(walled ~= nil).toBeTrue()
+			if walled == nil then
+				return
+			end
+			expect(EnemyTypeService.hurt(walled, 40)).toEqual(40)
+			kite(walled, Enemies.LEASH_SECONDS)
+			local wallMark = walled.mark
+			expect(wallMark ~= nil).toBeTrue()
+			if wallMark == nil then
+				return
+			end
+			local originX = walled.x
+			local mid = (originX + wallMark.x) / 2
+			expect(originX < mid and wallMark.x > mid).toBeTrue()
+			local function plane(x0: number, _z0: number, x1: number, _z1: number): boolean
+				local left = math.min(x0, x1)
+				local right = math.max(x0, x1)
+				return left < mid and right > mid
+			end
+			local dealt = EnemyTypeService.step(walled, wallMark.x, wallMark.z, 0.1, plane)
+			expect(dealt).toEqual(0)
+			expect(walled.mark).toBeNil()
+			expect(walled.x).toEqual(originX)
+			expect(walled.x < mid).toBeTrue()
+			expect(walled.hp).toEqual(Enemies.BOSS.maxHealth - 40)
 		end)
 	end)
 end)

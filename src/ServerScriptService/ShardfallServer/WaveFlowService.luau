@@ -8,13 +8,25 @@
 	step, and publish do nothing: no gray box, no damage, no counter push,
 	no boss event, no nudge, no respawn. init.server does not call this
 	module, so a normal boot never starts a run. The counter remote is
-	server to client only. There is no profile write. The watchdog does
-	not fire a remote and does not build a HUD line.
+	server to client only. There is no profile write from the watchdog.
+	The watchdog does not fire a remote and does not build a HUD line.
+
+	A boss-wave clear can pay Roll Tokens when the caller passes a
+	profile and a persist callback. persist runs before the counter is
+	fired. The callback must save and must not tell the client. A
+	second clear for that run while the save is in flight does not pay
+	again and does not fire. With no profile, the counter behaves as
+	before and nothing is paid. The flag still has to be on. Boot does
+	not call this module.
+
+	RunResults is a second server-to-client event. Its bossClear card
+	is copied from the commit result after the save returns. A failed
+	or unsaved grant is granted false. The client cannot supply the card.
 
 	bossEnter and bossDown go to an analytics hook when one exists.
 	That hook is ReplicatedStorage.Shared.Analytics.event, or the
-	sink.analytics function a caller passes. Neither path writes a save.
-	The module is absent on this branch, so the lookup is a no-op.
+	sink.analytics function a caller passes. The analytics module is
+	absent on this branch, so the lookup is a no-op.
 
 	Studio can require the module. Lune loads the same file through the
 	relative path when `game` is not a DataModel. The service describes
@@ -24,26 +36,39 @@
 local LaunchGate
 local WaveFlow
 local Enemies
+local BossClearReward
 if game ~= nil and game.GetService ~= nil then
 	local Shared = game:GetService("ReplicatedStorage").Shared
 	LaunchGate = require(Shared.LaunchGate)
 	WaveFlow = require(Shared.WaveFlow)
 	Enemies = require(Shared.Config.Enemies)
+	BossClearReward = require(Shared.BossClearReward)
 else
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
 	WaveFlow = require("../../ReplicatedStorage/Shared/WaveFlow")
 	Enemies = require("../../ReplicatedStorage/Shared/Config/Enemies")
+	BossClearReward = require("../../ReplicatedStorage/Shared/BossClearReward")
 end
 
 local WaveFlowService = {}
 
 WaveFlowService.REMOTE = "WaveCounter"
+WaveFlowService.RESULTS = "RunResults"
 WaveFlowService.BOSS_ENTER = "bossEnter"
 WaveFlowService.BOSS_DOWN = "bossDown"
 
 export type Payload = {
 	wave: number,
 	left: number,
+}
+
+export type BossClearCard = {
+	granted: boolean,
+	tokens: number,
+}
+
+export type Results = {
+	bossClear: BossClearCard,
 }
 
 export type EventDetail = {
@@ -56,6 +81,13 @@ export type Sink = {
 	fire: ((any, Payload) -> ())?,
 	build: ((WaveFlow.Box) -> any)?,
 	analytics: ((string, EventDetail) -> ())?,
+	-- Server profile. Absent means the clear is not paid.
+	profile: any?,
+	-- Save the profile. Must return true only after the write sticks.
+	-- Must not tell the client. Called before fire on a boss clear.
+	persist: ((any) -> boolean)?,
+	-- RunResults. Separate from the wave counter.
+	results: ((any, Results) -> ())?,
 }
 
 function WaveFlowService.open(): boolean
@@ -153,6 +185,44 @@ local function deliver(player: any, payload: Payload, fire: ((any, Payload) -> (
 	return true
 end
 
+local function deliverResults(player: any, payload: Results, fire: ((any, Results) -> ())?): boolean
+	if fire ~= nil then
+		fire(player, payload)
+		return true
+	end
+	if game == nil or game.GetService == nil then
+		return false
+	end
+	if typeof(player) ~= "Instance" or not player:IsA("Player") or player.Parent == nil then
+		return false
+	end
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+	if folder == nil then
+		return false
+	end
+	local remote = folder:FindFirstChild(WaveFlowService.RESULTS)
+	if remote == nil or not remote:IsA("RemoteEvent") then
+		return false
+	end
+	remote:FireClient(player, payload)
+	return true
+end
+
+-- One table. bossClear is the saved grant, not a client claim.
+function WaveFlowService.publishResults(player: any, result: any, fire: ((any, Results) -> ())?): boolean
+	if not WaveFlowService.open() or player == nil then
+		return false
+	end
+	local card = BossClearReward.card(result)
+	local payload = {
+		bossClear = {
+			granted = card.granted,
+			tokens = card.tokens,
+		},
+	}
+	return deliverResults(player, payload, fire)
+end
+
 -- One table, two fields. Callers cannot add a third field to the wire.
 function WaveFlowService.publish(player: any, run: WaveFlow.Run?, fire: ((any, Payload) -> ())?): boolean
 	if not WaveFlowService.open() or run == nil or player == nil then
@@ -173,6 +243,24 @@ local function pushBoxes(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
 	for _, box in ipairs(WaveFlow.boxes(run)) do
 		build(box)
 	end
+end
+
+-- Save the boss-clear grant before the caller fires the counter.
+-- The second return is the commit result. RunResults is built from that.
+-- No profile means there is nothing to pay and the counter may still go out.
+local function payClear(sink: Sink, run: WaveFlow.Run): (boolean, BossClearReward.Result?)
+	if sink.profile == nil or run.clear ~= true or run.wave ~= Enemies.BOSS_WAVE then
+		return true, nil
+	end
+	if run.rewarded == true then
+		return true, nil
+	end
+	local result = BossClearReward.commit(sink.profile, run.id, sink.persist)
+	if result.saved == true then
+		run.rewarded = true
+		return true, result
+	end
+	return false, result
 end
 
 function WaveFlowService.counter(run: WaveFlow.Run?): WaveFlow.Counter?
@@ -207,10 +295,18 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
 	local after = WaveFlow.counter(run)
-	if after.wave ~= before.wave and sink ~= nil then
-		pushBoxes(run, sink.build)
+	local needsPay = sink ~= nil and sink.profile ~= nil and run.clear == true and run.rewarded ~= true
+	local paid = true
+	if needsPay and sink ~= nil then
+		local result: BossClearReward.Result? = nil
+		paid, result = payClear(sink, run)
+		WaveFlowService.publishResults(sink.player, result, sink.results)
 	end
-	if sink ~= nil and (after.wave ~= before.wave or after.left ~= before.left) then
+	local changed = after.wave ~= before.wave or after.left ~= before.left
+	if sink ~= nil and paid and (changed or needsPay) then
+		if after.wave ~= before.wave then
+			pushBoxes(run, sink.build)
+		end
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
 	noteBoss(sink, run, before.wave, wasBoss)
