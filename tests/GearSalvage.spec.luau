@@ -73,6 +73,16 @@ local function withFlag(on: boolean, fn: () -> ())
 	end
 end
 
+local function withCore(on: boolean, fn: () -> ())
+	local previous = LaunchGate.SHOW.shardCore
+	LaunchGate.SHOW.shardCore = on
+	local ok, err = pcall(fn)
+	LaunchGate.SHOW.shardCore = previous
+	if not ok then
+		error(err, 0)
+	end
+end
+
 describe("Essence amounts", function()
 	it("matches the overflow table and the 1e9 cap", function()
 		expect(GearSalvage.FIELD).toEqual("gearEssence")
@@ -441,6 +451,7 @@ describe("Gear salvage", function()
 
 			local wrong = GearSalvage.applyAction(data, 42, "confirm", { token = "es-9-9" }, 1000)
 			expect(wrong.ok).toEqual(false)
+			expect(wrong.expired).toEqual(true)
 			expect(data.inventory.common ~= nil).toBeTrue()
 			local done =
 				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1020)
@@ -467,6 +478,7 @@ describe("Gear salvage", function()
 			local late =
 				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1021)
 			expect(late.ok).toEqual(false)
+			expect(late.expired).toEqual(true)
 			expect(data.inventory.common ~= nil).toBeTrue()
 			local still =
 				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1020)
@@ -487,7 +499,10 @@ describe("Gear salvage", function()
 			local again = GearSalvage.applyAction(data, 42, "preview", { rarity = "Common" }, 50)
 			data.gearEssence = GearSalvage.CAP
 			local full = GearSalvage.applyAction(data, 42, "confirm", { token = again.token }, 50)
+			expect(full.ok).toEqual(false)
+			expect(full.reason).toEqual("essence_cap")
 			expect(full.error).toEqual("Essence is full.")
+			expect(full.expired).toBeNil()
 			expect(data.inventory.next ~= nil).toBeTrue()
 			expect(data.inventory.extra ~= nil).toBeTrue()
 			expect(data.gearEssence).toEqual(GearSalvage.CAP)
@@ -550,6 +565,10 @@ describe("Gear salvage", function()
 		expect(data).toEqual(shot)
 		local state = GearSalvage.applyAction(data, 42, "state", {}, 10)
 		expect(state.error).toEqual("That is closed.")
+		local counted = GearSalvage.applyAction(data, 42, "counts", {}, 10)
+		expect(counted.ok).toEqual(false)
+		expect(counted.error).toEqual("That is closed.")
+		expect(counted.token).toBeNil()
 		expect(data).toEqual(shot)
 	end)
 
@@ -576,6 +595,195 @@ describe("Gear salvage", function()
 		expect(granted).toEqual(true)
 		expect(line).toEqual("+500 Essence (now 500).")
 		expect(empty.gearEssence).toEqual(500)
+	end)
+end)
+
+describe("Essence salvage counts", function()
+	it("reads picker rows in one call and deletes nothing", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			put(data, sword("star", "Common", { favorite = true }))
+			put(data, sword("locked", "Uncommon", { locked = true }))
+			put(data, sword("worn", "Common"))
+			data.equipped.weapon = "worn"
+			local helm = sword("helm", "Uncommon")
+			helm.kind = "Armor"
+			put(data, helm)
+			data.equipped.armor.helm = "helm"
+			put(data, sword("cored", "Uncommon"))
+			data.shardCores.cored = 2
+			put(data, sword("rare", "Rare"))
+			local pet = sword("pet", "Common")
+			pet.kind = "Pet"
+			put(data, pet)
+			local shot = Schema.deepCopy(data)
+			local result = GearSalvage.applyAction(data, 42, "counts", {
+				rarities = { "Common", "Uncommon", "Rare" },
+			}, 1000)
+			expect(result.ok).toEqual(true)
+			expect(result.token).toBeNil()
+			expect(result.order).toEqual({ "Common", "Uncommon", "Rare" })
+			expect(result.counts.Common).toEqual({ count = 1, gain = 1 })
+			expect(result.Common).toEqual(result.counts.Common)
+			expect(result.counts.Uncommon).toEqual({ count = 2, gain = 4 })
+			expect(result.counts.Rare).toEqual({ count = 3, gain = 14 })
+			expect(data).toEqual(shot)
+			local defaults = GearSalvage.applyAction(data, 42, "counts", {}, 1000)
+			expect(defaults.ok).toEqual(true)
+			expect(defaults.counts.Rare.gain).toEqual(14)
+			expect(data.inventory.cored ~= nil).toBeTrue()
+			expect(data.shardCores.cored).toEqual(2)
+			expect(Schema.VERSION).toEqual(26)
+		end)
+	end)
+
+	it("rate-limits counts and leaves a preview token alone", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			local preview =
+				GearSalvage.applyAction(data, 42, "preview", { rarity = "Common" }, 1000)
+			expect(preview.token ~= nil).toBeTrue()
+			local capacity = Essence.COUNTS.capacity
+			for _ = 1, capacity do
+				local row = GearSalvage.applyAction(data, 42, "counts", {}, 1000)
+				expect(row.ok).toEqual(true)
+				expect(row.token).toBeNil()
+			end
+			local blocked = GearSalvage.applyAction(data, 42, "counts", {}, 1000)
+			expect(blocked.ok).toEqual(false)
+			expect(blocked.error).toEqual("Slow down a moment.")
+			expect(data.inventory.plain ~= nil).toBeTrue()
+			expect(data.gearEssence).toEqual(0)
+			local later = GearSalvage.applyAction(data, 42, "counts", {}, 1001)
+			expect(later.ok).toEqual(true)
+			local done =
+				GearSalvage.applyAction(data, 42, "confirm", { token = preview.token }, 1000)
+			expect(done.ok).toEqual(true)
+			expect(data.inventory.plain).toBeNil()
+			expect(data.gearEssence).toEqual(1)
+			local bad = GearSalvage.applyAction(data, 42, "counts", {
+				rarities = { "Common", "nope" },
+			}, 1002)
+			expect(bad.ok).toEqual(false)
+			expect(bad.error).toEqual("Unknown rarity.")
+		end)
+	end)
+
+	it("warns about a Shard Core only while the flag is on, and still salvages it", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("plain", "Common"))
+			put(data, sword("cored", "Rare"))
+			put(data, sword("other", "Epic"))
+			data.shardCores.cored = 3
+			data.shardCores.other = 1
+			put(data, sword("star", "Common", { favorite = true }))
+			put(data, sword("worn", "Rare"))
+			data.equipped.weapon = "worn"
+			data.shardCores.worn = 4
+			local hidden =
+				GearSalvage.applyAction(data, 42, "preview", { rarity = "Rare" }, 70)
+			expect(hidden.ok).toEqual(true)
+			expect(hidden.warning).toBeNil()
+			expect(hidden.cored).toBeNil()
+			expect(hidden.uids).toEqual({ "cored", "plain" })
+			expect(data.inventory.cored ~= nil).toBeTrue()
+			expect(data.equipped.weapon).toEqual("worn")
+
+			withCore(true, function()
+				local sweep =
+					GearSalvage.applyAction(data, 42, "preview", { rarity = "Rare" }, 80)
+				expect(sweep.ok).toEqual(true)
+				expect(sweep.uids).toEqual({ "cored", "plain" })
+				expect(sweep.warning).toEqual("That weapon has a Shard Core.")
+				expect(sweep.cored).toEqual({ { uid = "cored", level = 3 } })
+				local protected = false
+				for _, row in ipairs(sweep.skipped) do
+					if row.uid == "cored" or row.uid == "other" then
+						protected = true
+					end
+					if row.uid == "worn" then
+						expect(row.reason).toEqual("Unequip it before salvaging.")
+					end
+					if row.uid == "star" then
+						expect(row.reason).toEqual("That item is a favorite.")
+					end
+				end
+				expect(protected).toEqual(false)
+				expect(data.inventory.cored ~= nil).toBeTrue()
+				local done =
+					GearSalvage.applyAction(data, 42, "confirm", { token = sweep.token }, 80)
+				expect(done.ok).toEqual(true)
+				expect(done.warning).toEqual("That weapon has a Shard Core.")
+				expect(done.cored).toEqual({ { uid = "cored", level = 3 } })
+				expect(data.inventory.cored).toBeNil()
+				expect(data.inventory.plain).toBeNil()
+				expect(data.inventory.other ~= nil).toBeTrue()
+				expect(data.inventory.star.favorite).toEqual(true)
+				expect(data.inventory.worn ~= nil).toBeTrue()
+				expect(data.equipped.weapon).toEqual("worn")
+				expect(data.gearEssence).toEqual(11)
+				expect(data.shardCores.cored).toEqual(3)
+				expect(data.shardCores.worn).toEqual(4)
+
+				local both = GearSalvage.applyAction(data, 9, "salvage", {
+					uids = { "other", "cored" },
+				}, 90)
+				expect(both.ok).toEqual(false)
+				put(data, sword("cored", "Rare"))
+				local listed = GearSalvage.applyAction(data, 9, "preview", {
+					uids = { "other", "cored" },
+				}, 90)
+				expect(listed.ok).toEqual(true)
+				expect(listed.warning).toEqual("2 weapons have a Shard Core.")
+				expect(listed.cored).toEqual({
+					{ uid = "cored", level = 3 },
+					{ uid = "other", level = 1 },
+				})
+				expect(data.inventory.other ~= nil).toBeTrue()
+				local spent =
+					GearSalvage.applyAction(data, 9, "confirm", { token = listed.token }, 90)
+				expect(spent.ok).toEqual(true)
+				expect(spent.warning).toEqual("2 weapons have a Shard Core.")
+				expect(data.inventory.other).toBeNil()
+				expect(data.inventory.cored).toBeNil()
+				expect(data.inventory.worn ~= nil).toBeTrue()
+				expect(data.equipped.weapon).toEqual("worn")
+			end)
+			expect(LaunchGate.on("shardCore")).toEqual(false)
+		end)
+	end)
+
+	it("refuses a grant that would pass the Essence cap", function()
+		withFlag(true, function()
+			local data = fresh()
+			put(data, sword("room", "Common"))
+			put(data, sword("wide", "Uncommon"))
+			data.gearEssence = GearSalvage.CAP - 1
+			local fit = GearSalvage.applyAction(data, 42, "preview", {
+				uids = { "room" },
+			}, 10)
+			local took = GearSalvage.applyAction(data, 42, "confirm", { token = fit.token }, 10)
+			expect(took.ok).toEqual(true)
+			expect(data.gearEssence).toEqual(GearSalvage.CAP)
+			expect(data.inventory.room).toBeNil()
+			expect(data.inventory.wide ~= nil).toBeTrue()
+
+			local look = GearSalvage.applyAction(data, 42, "preview", {
+				uids = { "wide" },
+			}, 11)
+			expect(look.ok).toEqual(true)
+			local before = Schema.deepCopy(data.inventory)
+			local full = GearSalvage.applyAction(data, 42, "confirm", { token = look.token }, 11)
+			expect(full.ok).toEqual(false)
+			expect(full.reason).toEqual(Essence.CAP_REASON)
+			expect(full.expired).toBeNil()
+			expect(data.inventory).toEqual(before)
+			expect(data.gearEssence).toEqual(GearSalvage.CAP)
+			expect(data.equipped.weapon).toBeNil()
+		end)
 	end)
 end)
 

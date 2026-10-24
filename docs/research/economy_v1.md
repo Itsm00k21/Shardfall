@@ -71,7 +71,9 @@ Essence to buy the next level:
 | 3 → 4 | 100 | +5% crit damage (`crit_damage` +0.05) |
 | 4 → 5 | 250 | +1 luck (`luck` +1) |
 
-A full core costs **410** Essence. The crit-damage perk adds **0.05** to the finished multiplier (1.50 becomes 1.55). It does not multiply the finished stat.
+A full core costs **410** Essence. That number is `Config.ShardCore.FULL_COST`. The crit-damage perk adds **0.05** to the finished multiplier (1.50 becomes 1.55). It does not multiply the finished stat.
+
+A weapon that already has a core is not kept out of salvage. While `shardCore` is on, the salvage preview and the confirm payload include a warning (`That weapon has a Shard Core.`). The piece is still deleted on confirm. Equipped, locked, and favorite gear stay. While the flag is off, that warning is absent.
 
 Perks are applied once, after Equip has finished its totals (base, gear, elements, and whatever upgrade or star scale is on). While `shardCore` is off, that add does not run. They are small. None of them is required to clear. Pets have no core.
 
