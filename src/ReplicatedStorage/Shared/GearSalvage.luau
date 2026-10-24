@@ -37,10 +37,14 @@
 	salvaged. Favorited gear (item.favorite) is never salvaged.
 	An explicit list fails with "That item is a favorite." and
 	deletes nothing. A rarity sweep skips that piece and reports
-	the skip. A weapon with a Shard Core is not protected. While
-	LaunchGate.shardCore is on, the preview and the confirm carry
-	a warning, and the piece can still be salvaged. While that
-	flag is off, the warning is absent. Nothing here is for sale.
+	the skip. While LaunchGate.shardCore is on, a weapon whose
+	core is level 1 or higher is skipped by a rarity sweep and by
+	auto-salvage, with ShardCore.BULK_SKIP. An explicit uid list
+	still previews a warning, and confirm deletes that weapon.
+	While the flag is off, the skip and the warning are absent.
+	The first counts or state reply in a session can include
+	ShardCore.HELP. That line lives in module memory, not the save.
+	Nothing here is for sale.
 
 	Salvage selected and salvage-all both preview first. The preview
 	stores a token and deletes nothing. confirm (and salvageNow)
@@ -104,10 +108,12 @@ local pending: { [string]: Pending } = {}
 local books: { [string]: { [string]: boolean } } = {}
 local bookOrder: { [string]: { string } } = {}
 local countBuckets: { [string]: CountBucket } = {}
+-- Who has already been shown ShardCore.HELP. Not written to the profile.
+local helpSeen: { [string]: boolean } = {}
 local serial = 0
 local BOOK_MAX = 128
 
-local CORE_ONE = "That weapon has a Shard Core."
+local CORE_ONE = ShardCore.BULK_SKIP
 
 local function ownerKey(ownerId: any): string?
 	if type(ownerId) ~= "number" or ownerId ~= ownerId then
@@ -153,7 +159,7 @@ end
 local FAVORITE = "That item is a favorite."
 
 -- Nil when this piece may be salvaged. Equipped, locked, and favorited stay.
--- A Shard Core does not block the piece. The confirm payload warns instead.
+-- A Shard Core does not block an explicit uid list. The confirm warns.
 local function blockReason(profile: any, item: any): string?
 	if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
 		if item.locked == true then
@@ -171,6 +177,24 @@ local function blockReason(profile: any, item: any): string?
 		return "Unequip it before salvaging."
 	end
 	return nil
+end
+
+-- Rarity sweeps and auto-salvage only. Off while shardCore is off.
+local function coreSweepReason(profile: any, item: any, uid: any): string?
+	if not LaunchGate.on("shardCore") then
+		return nil
+	end
+	if type(item) ~= "table" or item.kind ~= "Weapon" then
+		return nil
+	end
+	local id = uid
+	if type(id) ~= "string" then
+		id = item.uid
+	end
+	if type(id) ~= "string" then
+		return nil
+	end
+	return ShardCore.bulkSkipReason(ShardCore.levelOf(profile, id))
 end
 
 local function readBalance(value: any): number
@@ -393,6 +417,9 @@ function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, strin
 			if rank ~= nil and cap ~= nil and rank <= cap and pay ~= nil then
 				local blocked = blockReason(profile, item)
 				if blocked == nil then
+					blocked = coreSweepReason(profile, item, uid)
+				end
+				if blocked == nil then
 					table.insert(uids, uid)
 				else
 					table.insert(skipped, { uid = uid, reason = blocked })
@@ -405,15 +432,15 @@ function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, strin
 		return left.uid < right.uid
 	end)
 	if #uids == 0 then
-		local onlyFavorites = #skipped > 0
+		local only = if #skipped > 0 then skipped[1].reason else nil
 		for _, row in ipairs(skipped) do
-			if row.reason ~= FAVORITE then
-				onlyFavorites = false
+			if row.reason ~= only then
+				only = nil
 				break
 			end
 		end
-		if onlyFavorites then
-			return nil, FAVORITE, skipped
+		if only == FAVORITE or only == ShardCore.BULK_SKIP then
+			return nil, only, skipped
 		end
 		return nil, "Nothing of that rarity can be salvaged.", skipped
 	end
@@ -572,6 +599,9 @@ function GearSalvage.receive(profile: any, item: any)
 		return keep()
 	end
 	local blocked = blockReason(profile, item)
+	if blocked == nil then
+		blocked = coreSweepReason(profile, item, item.uid)
+	end
 	if blocked ~= nil then
 		local held = keep()
 		held.reason = blocked
@@ -607,7 +637,31 @@ function GearSalvage._reset()
 	for key in pairs(countBuckets) do
 		countBuckets[key] = nil
 	end
+	for key in pairs(helpSeen) do
+		helpSeen[key] = nil
+	end
 	serial = 0
+end
+
+-- Drop the once-per-session line so the next join can see it again.
+function GearSalvage.forgetHelp(ownerId: any)
+	local key = ownerKey(ownerId)
+	if key ~= nil then
+		helpSeen[key] = nil
+	end
+end
+
+-- HELP the first time this id asks while shardCore is on. Not a save.
+function GearSalvage.takeHelp(ownerId: any): string?
+	return ShardCore.takeHelp(helpSeen, ownerId, LaunchGate.on("shardCore"))
+end
+
+local function attachHelp(ownerId: any, result: { [string]: any })
+	local line = GearSalvage.takeHelp(ownerId)
+	if line ~= nil then
+		result.help = line
+	end
+	return result
 end
 
 -- Weapons in this list whose core is at least 1. They stay in the list.
@@ -786,7 +840,7 @@ local function counts(profile: any, ownerId: any, rawRarities: any, now: any)
 	for _, rarity in ipairs(list) do
 		result[rarity] = rows[rarity]
 	end
-	return pack(profile, result)
+	return attachHelp(ownerId, pack(profile, result))
 end
 
 local function storePlan(owner: string, plan: { [string]: any }, now: number): string
@@ -955,7 +1009,7 @@ function GearSalvage.applyAction(profile: any, ownerId: any, action: any, payloa
 		return fail("Nothing here is for sale.")
 	end
 	if action == "state" then
-		return pack(profile, {})
+		return attachHelp(ownerId, pack(profile, {}))
 	end
 	if action == "lock" then
 		local ok, why = GearSalvage.setLock(profile, body.uid, body.locked)

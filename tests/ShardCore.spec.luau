@@ -19,6 +19,7 @@ local EquipSlots = require("../src/ReplicatedStorage/Shared/Config/EquipSlots")
 local EquipStats = require("../src/ReplicatedStorage/Shared/Config/EquipStats")
 local GearLevels = require("../src/ReplicatedStorage/Shared/Config/GearLevels")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
+local GearSalvage = require("../src/ReplicatedStorage/Shared/GearSalvage")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local ShardCore = require("../src/ReplicatedStorage/Shared/Config/ShardCore")
 local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
@@ -439,6 +440,51 @@ describe("Shard Core remotes", function()
 		expect(later.weapons[1].level).toEqual(1)
 	end)
 
+	it("returns the help line once per session and does not save it", function()
+		GearSalvage._reset()
+		local previous = LaunchGate.SHOW.shardCore
+		LaunchGate.SHOW.shardCore = true
+		local ok, err = pcall(function()
+			local data = profile()
+			data.schemaVersion = 26
+			data.gearEssence = 5
+			data.inventory.w1 = weapon("w1", 0)
+			local shot = Schema.deepCopy(data)
+			local reads = { 0 }
+			local bound = deps(data, true, reads)
+			local first = Remotes.handle({
+				action = "GetShardCore",
+				userId = 11,
+				now = 1,
+			}, bound, {})
+			expect(first.ok).toEqual(true)
+			expect(first.help).toEqual(ShardCore.HELP)
+			expect(data).toEqual(shot)
+			local second = Remotes.handle({
+				action = "GetShardCore",
+				userId = 11,
+				now = 2,
+			}, bound, {})
+			expect(second.ok).toEqual(true)
+			expect(second.help).toBeNil()
+			expect(data).toEqual(shot)
+			expect(Schema.VERSION).toEqual(26)
+			GearSalvage.forgetHelp(11)
+			local again = Remotes.handle({
+				action = "GetShardCore",
+				userId = 11,
+				now = 3,
+			}, bound, {})
+			expect(again.help).toEqual(ShardCore.HELP)
+			expect(data.schemaVersion).toEqual(26)
+		end)
+		LaunchGate.SHOW.shardCore = previous
+		GearSalvage._reset()
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	it("refuses a pet without writing", function()
 		local data = profile()
 		data.gearEssence = 40
@@ -486,6 +532,10 @@ describe("Shard Core client", function()
 		expect(lines.weapons[1].label).toEqual("Bramble Fang  Lv 0")
 		expect(lines.perks[1].text).toEqual("Lv 1  +1% crit chance")
 		expect(lines.perks[1].unlocked).toEqual(false)
+		expect(lines.help).toEqual("")
+		local tipped = ShardCore.preview(data, nil)
+		tipped.help = ShardCore.HELP
+		expect(View.lines(tipped).help).toEqual(ShardCore.HELP)
 		expect(lines.perks[2].text).toEqual("Lv 2  +2% shard find")
 		data.inventory.pet = { uid = "pet", kind = "Pet", name = "Hound" }
 		local only = ShardCore.preview(data, nil)
@@ -714,6 +764,14 @@ describe("Shard Core client", function()
 			end,
 			invoke = function(action, itemId)
 				table.insert(calls, { action, itemId })
+				if action == "GetShardCore" then
+					return {
+						ok = true,
+						help = ShardCore.HELP,
+						essence = 0,
+						weapons = {},
+					}
+				end
 				if action == "FeedShardCore" then
 					fed = itemId
 					return {
@@ -740,13 +798,18 @@ describe("Shard Core client", function()
 		expect(shown.root.Parent).toEqual(parent)
 		expect(find(shown.root, "Essence").Text).toEqual("Essence: 100")
 		expect(find(shown.root, "Feed").Text).toEqual("Feed 5 Essence")
+		expect(find(shown.root, "Help").Text).toEqual(ShardCore.HELP)
+		expect(find(shown.root, "Help").Visible).toEqual(true)
 		expect(find(shown.root, "bow") ~= nil).toBeTrue()
 		expect(find(shown.root, "fang") ~= nil).toBeTrue()
-		expect(#calls).toEqual(0)
+		expect(#calls).toEqual(1)
+		expect(calls[1][1]).toEqual("GetShardCore")
 		shown.setWeapon("fang")
+		expect(#calls).toEqual(1)
 		find(shown.root, "Feed").MouseButton1Click:Fire()
 		expect(fed).toEqual("fang")
-		expect(calls[1][1]).toEqual("FeedShardCore")
+		expect(calls[2][1]).toEqual("FeedShardCore")
+		expect(find(shown.root, "Help").Visible).toEqual(true)
 		expect(find(shown.root, "Essence").Text).toEqual("Essence: 95")
 		expect(data.inventory.fang.upgrade).toEqual(8)
 		expect(data.inventory.bow.upgrade).toEqual(1)

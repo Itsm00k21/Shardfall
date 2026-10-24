@@ -24,6 +24,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Config = require("../src/ReplicatedStorage/Shared/Config/Index")
+local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local Materials = require("../src/ReplicatedStorage/Shared/Materials")
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Stats = require("../src/ReplicatedStorage/Shared/Stats")
@@ -659,6 +660,35 @@ describe("Config validation: cross-references", function()
 			total += cost
 		end
 		expect(total).toEqual(Config.ShardCore.FULL_COST)
+	end)
+
+	it("protects a fed core from bulk salvage and shows help once per session", function()
+		expect(Config.ShardCore.BULK_SKIP).toEqual("That weapon has a Shard Core.")
+		expect(Config.ShardCore.HELP).toEqual("Essence feeds a weapon's Shard Core.")
+		expect(Config.ShardCore.bulkSkipReason(nil)).toBeNil()
+		expect(Config.ShardCore.bulkSkipReason(0)).toBeNil()
+		expect(Config.ShardCore.bulkSkipReason(0.2)).toBeNil()
+		expect(Config.ShardCore.bulkSkipReason(-1)).toBeNil()
+		expect(Config.ShardCore.bulkSkipReason("1")).toBeNil()
+		expect(Config.ShardCore.bulkSkipReason(1)).toEqual(Config.ShardCore.BULK_SKIP)
+		expect(Config.ShardCore.bulkSkipReason(1.9)).toEqual(Config.ShardCore.BULK_SKIP)
+		expect(Config.ShardCore.bulkSkipReason(5)).toEqual(Config.ShardCore.BULK_SKIP)
+		local session = {}
+		expect(Config.ShardCore.takeHelp(session, 4, false)).toBeNil()
+		expect(next(session)).toBeNil()
+		expect(Config.ShardCore.takeHelp(session, 4, true)).toEqual(Config.ShardCore.HELP)
+		expect(session["4"]).toEqual(true)
+		expect(Config.ShardCore.takeHelp(session, 4, true)).toBeNil()
+		expect(Config.ShardCore.takeHelp(session, 5, true)).toEqual(Config.ShardCore.HELP)
+		expect(Config.ShardCore.takeHelp(session, "nope", true)).toBeNil()
+		expect(session.nope).toBeNil()
+		expect(Config.ShardCore.takeHelp(nil, 6, true)).toBeNil()
+		local profile = Schema.template()
+		local shot = Schema.deepCopy(profile)
+		expect(Config.ShardCore.takeHelp(session, 4, true)).toBeNil()
+		expect(profile).toEqual(shot)
+		expect(profile.schemaVersion).toEqual(26)
+		expect(Schema.VERSION).toEqual(26)
 	end)
 
 	it("keeps live difficulties inside the V1 difficulty list", function()

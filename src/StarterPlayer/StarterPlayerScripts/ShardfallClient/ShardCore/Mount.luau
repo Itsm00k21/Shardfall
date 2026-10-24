@@ -45,6 +45,9 @@
 	The list is owned weapons only (kind == "Weapon"). Pets are omitted.
 	Feed is server-authoritative: the button calls FeedShardCore, and
 	the server spends profile.gearEssence.
+
+	The first time this session, GetShardCore may include help. The
+	panel shows that line and does not remember it in a save.
 ]]
 
 local View = require("./View")
@@ -124,6 +127,8 @@ function Mount.mount(parent: any, hooks: any): any
 	local alive = true
 	local allowFeed = false
 	local lastProfile: any = nil
+	local helpText = ""
+	local askedHelp = false
 	local refreshState: (any) -> () = function() end
 	local minText = 14
 	local cornerRadius = 10
@@ -159,6 +164,21 @@ function Mount.mount(parent: any, hooks: any): any
 	pad.PaddingRight = UDim.new(0, 8)
 	pad.Parent = root
 
+	local help = Instance.new("TextLabel")
+	help.Name = "Help"
+	help.BackgroundTransparency = 1
+	help.Size = UDim2.new(1, 0, 0, 36)
+	help.Font = Enum.Font.BuilderSans
+	help.TextSize = minText
+	help.TextWrapped = true
+	help.TextXAlignment = Enum.TextXAlignment.Left
+	help.TextYAlignment = Enum.TextYAlignment.Top
+	help.TextColor3 = rgb(theme, "muted")
+	help.Text = ""
+	help.Visible = false
+	help.LayoutOrder = 2
+	help.Parent = root
+
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
@@ -180,14 +200,14 @@ function Mount.mount(parent: any, hooks: any): any
 	essence.TextXAlignment = Enum.TextXAlignment.Left
 	essence.TextColor3 = rgb(theme, "gold")
 	essence.Text = "Essence: 0"
-	essence.LayoutOrder = 2
+	essence.LayoutOrder = 3
 	essence.Parent = root
 
 	local weapons = Instance.new("Frame")
 	weapons.Name = "Weapons"
 	weapons.BackgroundTransparency = 1
 	weapons.Size = UDim2.new(1, 0, 0, 96)
-	weapons.LayoutOrder = 3
+	weapons.LayoutOrder = 4
 	weapons.Parent = root
 	listLayout(weapons)
 
@@ -195,7 +215,7 @@ function Mount.mount(parent: any, hooks: any): any
 	perks.Name = "Perks"
 	perks.BackgroundTransparency = 1
 	perks.Size = UDim2.new(1, 0, 0, 110)
-	perks.LayoutOrder = 4
+	perks.LayoutOrder = 5
 	perks.Parent = root
 	listLayout(perks)
 
@@ -208,7 +228,7 @@ function Mount.mount(parent: any, hooks: any): any
 	status.TextXAlignment = Enum.TextXAlignment.Left
 	status.TextColor3 = rgb(theme, "muted")
 	status.Text = "No weapon to feed."
-	status.LayoutOrder = 5
+	status.LayoutOrder = 6
 	status.Parent = root
 
 	local feed = Instance.new("TextButton")
@@ -221,7 +241,7 @@ function Mount.mount(parent: any, hooks: any): any
 	feed.TextSize = minText
 	feed.TextColor3 = rgb(theme, "text")
 	feed.Text = "Feed"
-	feed.LayoutOrder = 6
+	feed.LayoutOrder = 7
 	feed.Active = false
 	feed.Parent = root
 	corner(feed, cornerRadius)
@@ -250,9 +270,40 @@ function Mount.mount(parent: any, hooks: any): any
 		return remote:InvokeServer(itemId)
 	end
 
+	local function rememberHelp(result: any)
+		if type(result) == "table" and type(result.help) == "string" and result.help ~= "" then
+			helpText = result.help
+		end
+	end
+
+	local function applyHelp(state: any)
+		if type(state) ~= "table" then
+			return
+		end
+		if type(state.help) == "string" and state.help ~= "" then
+			askedHelp = true
+			helpText = state.help
+			return
+		end
+		if helpText ~= "" then
+			state.help = helpText
+			return
+		end
+		if askedHelp then
+			return
+		end
+		askedHelp = true
+		rememberHelp(callRemote("GetShardCore", nil))
+		if helpText ~= "" then
+			state.help = helpText
+		end
+	end
+
 	local function paint(state: any)
 		local lines = View.lines(state)
 		title.Text = lines.title
+		help.Text = lines.help
+		help.Visible = lines.help ~= ""
 		essence.Text = lines.essenceText
 		status.Text = lines.status
 		feed.Text = lines.feedText
@@ -328,6 +379,8 @@ function Mount.mount(parent: any, hooks: any): any
 			state = config.preview(lastProfile, selected)
 		else
 			local result = callRemote("GetShardCore", nil)
+			askedHelp = true
+			rememberHelp(result)
 			if type(given.onResult) == "function" then
 				given.onResult(result)
 			end
@@ -335,6 +388,7 @@ function Mount.mount(parent: any, hooks: any): any
 				state = result
 			end
 		end
+		applyHelp(state)
 		paint(state)
 	end
 

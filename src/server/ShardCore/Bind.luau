@@ -35,6 +35,7 @@ function Bind.start()
 	local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 	local DataService = require(script.Parent.Parent.DataService)
 	local config = require(ReplicatedStorage.Shared.Config.ShardCore)
+	local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 	local folder = ReplicatedStorage:FindFirstChild("Remotes")
 	if folder == nil then
 		warn("[ShardCore] Remotes folder missing")
@@ -97,6 +98,7 @@ function Bind.start()
 	hook("FeedShardCore", "FeedShardCore", 1)
 	Players.PlayerRemoving:Connect(function(player)
 		Rate.forget(buckets, player.UserId)
+		GearSalvage.forgetHelp(player.UserId)
 	end)
 	started = true
 end
