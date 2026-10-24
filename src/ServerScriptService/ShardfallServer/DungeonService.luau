@@ -31,6 +31,7 @@ local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local DungeonConfig = require(ReplicatedStorage.Shared.DungeonConfig)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local ElementGlow = require(ReplicatedStorage.Shared.ElementGlow)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local cueModule = ReplicatedStorage.Shared
 local CodexCues = require(cueModule.CodexCues)
@@ -644,6 +645,37 @@ local function pushRun(player: Player, text: string?)
 	})
 end
 
+-- Element color from Config, parented only when forEnemy returns a spec.
+-- The warm Rim stays the default. Two Highlights on one adornee fight,
+-- so the Rim is disabled while the element glow is the one that draws.
+local function applyElementGlow(part: BasePart, host: Instance, glow: ElementGlow.Visual)
+	local color = Color3.fromRGB(glow.color[1], glow.color[2], glow.color[3])
+	local mark = Instance.new("Highlight")
+	mark.Name = glow.name
+	mark.Adornee = host
+	mark.FillColor = color
+	mark.OutlineColor = color
+	mark.FillTransparency = glow.fillTransparency
+	mark.OutlineTransparency = glow.outlineTransparency
+	if glow.depthMode == "Occluded" then
+		mark.DepthMode = Enum.HighlightDepthMode.Occluded
+	else
+		mark.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	end
+	mark.Parent = host
+	local rim = host:FindFirstChild("Rim")
+	if rim ~= nil and rim:IsA("Highlight") then
+		rim.Enabled = false
+	end
+	local light = Instance.new("PointLight")
+	light.Name = glow.lightName
+	light.Color = color
+	light.Brightness = glow.lightBrightness
+	light.Range = glow.lightRange
+	light.Shadows = false
+	light.Parent = part
+end
+
 local function paintEnemy(enemy: Enemy)
 	enemy.part:SetAttribute("ShardfallHp", enemy.hp)
 	enemy.part:SetAttribute("ShardfallMax", enemy.maxHp)
@@ -874,7 +906,13 @@ local function clearSpawn(rig: Instance, run: Run, localX: number, localZ: numbe
 	warn(string.format("[Rootvault] spawn still blocked at %.0f, %.0f", x, z))
 end
 
-local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?): Enemy?
+local function spawnEnemy(
+	run: Run,
+	kind: string,
+	offset: Vector3,
+	wave: number?,
+	spawnIndex: number?
+): Enemy?
 	local definition = Dungeons.enemy(kind)
 	if definition == nil then
 		return nil
@@ -993,6 +1031,12 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	highlight.OutlineTransparency = Dungeons.RIM.outlineTransparency
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	highlight.Parent = rimHost
+	local ordinal = if type(spawnIndex) == "number" then spawnIndex else 1
+	local glow = ElementGlow.forEnemy(ordinal, LaunchGate.on("elementGlow"))
+	if glow ~= nil then
+		applyElementGlow(part, rimHost, glow)
+		part:SetAttribute("ShardfallElement", glow.elementId)
+	end
 	enemyBar(part, definition.name, color, ModelFactory.barLift(kind))
 	local enemy: Enemy = {
 		id = id,
@@ -1085,7 +1129,7 @@ local function spawnRoom(player: Player, run: Run)
 	end
 	for index, kind in ipairs(room.enemies) do
 		local offset = SPAWNS[((index - 1) % #SPAWNS) + 1]
-		spawnEnemy(run, kind, offset)
+		spawnEnemy(run, kind, offset, nil, index)
 	end
 	local text = string.format("%s  ·  %s", run.dungeon.name, room.name)
 	if bossRoom then
@@ -1106,7 +1150,7 @@ local function spawnWave(player: Player, run: Run)
 	local kinds = Dungeons.waveKinds(run.wave)
 	for index, kind in ipairs(kinds) do
 		local offset = SPAWNS[((index - 1) % #SPAWNS) + 1]
-		spawnEnemy(run, kind, offset, run.wave)
+		spawnEnemy(run, kind, offset, run.wave, index)
 	end
 	local text = string.format("%s  ·  Wave %d", run.dungeon.name, run.wave)
 	if Dungeons.isBossWave(run.wave) then
@@ -1862,6 +1906,9 @@ function DungeonService.damageEnemy(
 		end
 	end
 	if enemy.hp <= 0 then
+		-- The rig stays as Remains until the wave clears. Drop the element
+		-- Highlight now so dead enemies do not pile up toward the 31 cap.
+		ElementGlow.detach(ModelFactory.adorn(enemy.part), enemy.part)
 		if enemy.boss and run.echoFight ~= nil then
 			local fight = run.echoFight
 			-- This copy is down. Stacks stay until every member still

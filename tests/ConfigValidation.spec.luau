@@ -644,6 +644,38 @@ describe("Config validation: cross-references", function()
 		end
 	end)
 
+	it("gives every element a color a phone can read", function()
+		local glow = Config.Elements.GLOW
+		expect(type(glow) == "table").toBeTrue()
+		expect(glow.fillTransparency >= 0 and glow.fillTransparency <= 0.55).toBeTrue()
+		expect(glow.outlineTransparency >= 0 and glow.outlineTransparency <= 0.1).toBeTrue()
+		expect(glow.lightBrightness >= 1).toBeTrue()
+		expect(glow.lightRange >= Config.Dungeons.CAMERA_MAX_ZOOM).toBeTrue()
+		expect(glow.depthMode).toEqual("AlwaysOnTop")
+		local seen: { [string]: boolean } = {}
+		for _, id in ipairs(Config.Elements.ORDER) do
+			local color = Config.Elements.LIST[id].color
+			if type(color) ~= "table" or #color ~= 3 then
+				fail("Elements." .. id .. " needs a 3-channel color")
+			end
+			for _, channel in ipairs(color) do
+				local whole = isFinite(channel) and channel >= 0 and channel <= 255 and channel == math.floor(channel)
+				if not whole then
+					fail("Elements." .. id .. " has a color channel outside 0..255")
+				end
+			end
+			local peak = math.max(color[1], color[2], color[3])
+			if peak < 200 then
+				fail("Elements." .. id .. " color is too dim to read at phone zoom")
+			end
+			local key = string.format("%d,%d,%d", color[1], color[2], color[3])
+			if seen[key] then
+				fail("Elements." .. id .. " repeats color " .. key)
+			end
+			seen[key] = true
+		end
+	end)
+
 	it("pays a positive whole Essence amount for every live rarity", function()
 		local seen = {}
 		for _, id in ipairs(Config.Live.Rarities.ORDER) do
