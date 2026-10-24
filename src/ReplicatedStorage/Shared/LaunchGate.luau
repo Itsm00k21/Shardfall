@@ -53,6 +53,7 @@ LaunchGate.SHOW = {
 	hardMode = false, -- Hard at the gate. Off: Normal only. The Hard row stays.
 	luckMilestone = false, -- every-10th-roll x2 luck boost and its "x2 Luck in N" meter. Parked Oct 22; shardRolls still counts
 	elementGlow = false, -- enemy body glow in the server-assigned element color (Config/Elements)
+	enemyPerf = false, -- M10 live-crawl pool, alive cap 22, 30s despawn-respawn, Humanoid state trim
 }
 
 -- World prompt action to the switch that keeps it from being built.

@@ -40,6 +40,8 @@ local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
 local HardMode = require(ReplicatedStorage.Shared.HardMode)
+local EnemyPerf = require(ReplicatedStorage.Shared.Config.EnemyPerf)
+local EnemyPerfHost = require(script.Parent.EnemyPerfHost)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
@@ -52,6 +54,7 @@ local RaidEchoFight = require(ReplicatedStorage.Shared.RaidEchoFight)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local EchoBossClear = require(script.Parent.EchoBossClear)
 local EchoRetry = require(script.Parent.EchoRetry)
+local WaveFlowService = require(script.Parent.WaveFlowService)
 local RunTick = require(script.Parent.RunTick)
 local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
@@ -101,6 +104,9 @@ type Enemy = {
 	hover: number,
 	color: Color3,
 	part: BasePart,
+	-- Set only while LaunchGate.enemyPerf is on.
+	perfClock: EnemyPerf.Clock?,
+	perfStuck: boolean?,
 }
 
 type Run = {
@@ -142,6 +148,9 @@ type Run = {
 	-- tuneRaid moved this member off a wing. No kill mark was written.
 	-- They do not hold the shared reset for the room they left.
 	echoJumped: boolean?,
+	-- M10 pool. Nil while enemyPerf is off, so a live run never allocates it.
+	perf: EnemyPerf.Pool?,
+	perfOrders: { { kind: string, offset: Vector3, wave: number? } }?,
 }
 
 type Restart = {
@@ -817,15 +826,35 @@ end
 
 local function clearEnemies(run: Run)
 	run.puddles = nil
+	local perfOn = LaunchGate.on("enemyPerf")
+	local pool = run.perf
 	for _, enemy in pairs(run.enemies) do
 		local model = enemy.part.Parent
-		if model ~= nil and model:IsA("Model") then
-			model:Destroy()
-		else
-			enemy.part:Destroy()
+		local parked = false
+		if perfOn and pool ~= nil and model ~= nil and model:IsA("Model") then
+			local keep = EnemyPerf.stash(pool, enemy.kind)
+			if keep then
+				parked = EnemyPerfHost.park(enemy.kind, model)
+				if not parked then
+					EnemyPerf.unstash(pool, enemy.kind)
+				end
+			end
+		end
+		if not parked then
+			if model ~= nil and model:IsA("Model") then
+				model:Destroy()
+			else
+				enemy.part:Destroy()
+			end
 		end
 	end
 	run.enemies = {}
+	if pool ~= nil then
+		EnemyPerf.wipe(pool)
+	end
+	if run.perfOrders ~= nil then
+		table.clear(run.perfOrders)
+	end
 	if run.sunbeam ~= nil then
 		run.sunbeam:Destroy()
 		run.sunbeam = nil
@@ -906,12 +935,35 @@ local function clearSpawn(rig: Instance, run: Run, localX: number, localZ: numbe
 	warn(string.format("[Rootvault] spawn still blocked at %.0f, %.0f", x, z))
 end
 
+-- Same living-enemy rule as aliveCount. Spawn runs before that helper.
+local function countLiving(run: Run): number
+	local count = 0
+	for _, enemy in pairs(run.enemies) do
+		if enemy.hp > 0 then
+			count += 1
+		end
+	end
+	return count
+end
+
+local function ensurePerf(run: Run): EnemyPerf.Pool
+	local pool = run.perf
+	if pool == nil then
+		pool = EnemyPerf.newPool()
+		pool.alive = countLiving(run)
+		run.perf = pool
+		run.perfOrders = {}
+	end
+	return pool
+end
+
 local function spawnEnemy(
 	run: Run,
 	kind: string,
 	offset: Vector3,
 	wave: number?,
-	spawnIndex: number?
+	spawnIndex: number?,
+	heldAction: ("fresh" | "reuse")?
 ): Enemy?
 	local definition = Dungeons.enemy(kind)
 	if definition == nil then
@@ -929,6 +981,28 @@ local function spawnEnemy(
 			Dungeons.FLOOR_SIZE / 2
 		)
 		offset = Vector3.new(cx, offset.Y, cz)
+	end
+	local claimed: ("fresh" | "reuse")? = nil
+	if LaunchGate.on("enemyPerf") then
+		if heldAction == "fresh" or heldAction == "reuse" then
+			claimed = heldAction
+		else
+			local action = EnemyPerf.claim(ensurePerf(run), kind)
+			if action == "queued" then
+				local orders = run.perfOrders
+				if orders == nil then
+					orders = {}
+					run.perfOrders = orders
+				end
+				table.insert(orders, {
+					kind = kind,
+					offset = offset,
+					wave = wave,
+				})
+				return nil
+			end
+			claimed = if action == "reuse" then "reuse" else "fresh"
+		end
 	end
 	nextEnemyId += 1
 	local id = "e" .. tostring(nextEnemyId)
@@ -972,22 +1046,38 @@ local function spawnEnemy(
 			display = room.name
 		end
 	end
-	local rigOk, rigOrErr = pcall(function()
-		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, display)
-	end)
 	local part: BasePart
-	if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
-		part = rigOrErr :: BasePart
-	else
-		local reason = if rigOk then "no recipe" else tostring(rigOrErr)
-		warn(string.format("[Rootvault] %s rig failed (%s); anchored marker only", kind, reason))
-		-- Small, anchored, and non-colliding. The old fallback was a full-size
-		-- Grass block, which is what a failed rig looked like in play.
-		part = makePart(display, Vector3.new(1.2, 1.2, 1.2), rootCFrame, color, run.folder, false)
+	local reusedPart = if claimed == "reuse" then EnemyPerfHost.take(kind) else nil
+	if reusedPart ~= nil then
+		part = reusedPart
+		local reusedModel = part.Parent
+		if reusedModel ~= nil then
+			reusedModel.Parent = run.folder
+		end
+		part.CFrame = rootCFrame
+		part.Anchored = true
+		part.CanCollide = false
 		part.CanTouch = false
 		part.CanQuery = true
-		part.Massless = true
-		part:SetAttribute("ShardfallRigFailed", true)
+		part.Transparency = 1
+		part.Name = display
+	else
+		local rigOk, rigOrErr = pcall(function()
+			return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, display)
+		end)
+		if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
+			part = rigOrErr :: BasePart
+		else
+			local reason = if rigOk then "no recipe" else tostring(rigOrErr)
+			warn(string.format("[Rootvault] %s rig failed (%s); anchored marker only", kind, reason))
+			-- Small, anchored, and non-colliding. The old fallback was a full-size
+			-- Grass block, which is what a failed rig looked like in play.
+			part = makePart(display, Vector3.new(1.2, 1.2, 1.2), rootCFrame, color, run.folder, false)
+			part.CanTouch = false
+			part.CanQuery = true
+			part.Massless = true
+			part:SetAttribute("ShardfallRigFailed", true)
+		end
 	end
 	local host = part.Parent
 	local rigModel = if host ~= nil and host:IsA("Model") then host else nil
@@ -1012,6 +1102,9 @@ local function spawnEnemy(
 		if pieces < 2 then
 			warn(string.format("[Rootvault] %s rig has %d parts", kind, pieces))
 		end
+	end
+	if LaunchGate.on("enemyPerf") and rigModel ~= nil then
+		EnemyPerfHost.prepare(rigModel)
 	end
 	part:SetAttribute(
 		"ShardfallName",
@@ -1075,12 +1168,15 @@ local function spawnEnemy(
 	}
 	paintEnemy(enemy)
 	run.enemies[id] = enemy
+	if LaunchGate.on("enemyPerf") then
+		enemy.perfClock = EnemyPerf.begin(part.Position.X, part.Position.Z, os.clock())
+	end
 	if enemy.boss and run.echoFight ~= nil then
 		local room = run.dungeon.rooms[run.roomIndex]
 		local bossId = if room ~= nil then room.id else enemy.kind
 		RaidEchoFight.notePull(run.echoFight, bossId)
 	end
-	if enemy.boss then
+	if enemy.boss and run.sunbeam == nil then
 		local beam = makePart(
 			"Sunbeam",
 			Vector3.new(definition.safeRadius * 2, 0.4, definition.safeRadius * 2),
@@ -1109,6 +1205,55 @@ local function spawnEnemy(
 		placeSunbeam(run)
 	end
 	return enemy
+end
+
+-- Park the rig and, if a spawn was waiting on the cap, bring that one in.
+-- The caller already decided this enemy is leaving the field. No loot.
+local function perfRetire(run: Run, enemy: Enemy)
+	-- A pool created on this call has not counted a corpse (hp already 0).
+	local created = run.perf == nil
+	local pool = ensurePerf(run)
+	if created and enemy.hp <= 0 then
+		pool.alive += 1
+	end
+	local outcome = EnemyPerf.retire(pool, enemy.kind)
+	local model = enemy.part.Parent
+	local parked = false
+	if outcome.keep and model ~= nil and model:IsA("Model") then
+		parked = EnemyPerfHost.park(enemy.kind, model)
+		if not parked then
+			EnemyPerf.unstash(pool, enemy.kind)
+		end
+	end
+	if not parked then
+		if model ~= nil and model:IsA("Model") then
+			model:Destroy()
+		else
+			enemy.part:Destroy()
+		end
+	end
+	run.enemies[enemy.id] = nil
+	if outcome.nextKind == nil or outcome.nextAction == nil then
+		return
+	end
+	local orders = run.perfOrders
+	local order = if orders ~= nil then table.remove(orders, 1) else nil
+	if order == nil then
+		return
+	end
+	spawnEnemy(run, order.kind, order.offset, order.wave, nil, outcome.nextAction)
+end
+
+-- Biggest-wave stall. Despawn, then respawn on a clear pad. Not a kill.
+local function unstickEnemy(run: Run, enemy: Enemy)
+	local kind = enemy.kind
+	local wave = if run.dungeon.endless == true then run.wave else nil
+	local stuckX = enemy.part.Position.X
+	local stuckZ = enemy.part.Position.Z
+	perfRetire(run, enemy)
+	local originX, _, originZ = Dungeons.roomOrigin(run.placeIndex)
+	local padX, padZ = EnemyPerf.respawnPad(stuckX - originX, stuckZ - originZ, Dungeons.ENEMY_SPAWNS)
+	spawnEnemy(run, kind, Vector3.new(padX, 0, padZ), wave)
 end
 
 local function spawnRoom(player: Player, run: Run)
@@ -1751,13 +1896,7 @@ end
 
 -- Living enemies in this room. A party wipe counts players, not this.
 local function aliveCount(run: Run): number
-	local count = 0
-	for _, enemy in pairs(run.enemies) do
-		if enemy.hp > 0 then
-			count += 1
-		end
-	end
-	return count
+	return countLiving(run)
 end
 
 local function clearNamed(folder: Instance, name: string)
@@ -1861,6 +2000,9 @@ function DungeonService.damageEnemy(
 	paintEnemy(enemy)
 	if enemy.hp > 0 then
 		enemy.part:SetAttribute("ShardfallFlinchUntil", now + CombatFeel.FLINCH_SECONDS)
+		if LaunchGate.on("enemyPerf") then
+			enemy.perfClock = EnemyPerf.begin(enemy.part.Position.X, enemy.part.Position.Z, now)
+		end
 	end
 	pcall(ModelFactory.flash, enemy.part)
 	if enemy.hp > 0 then
@@ -1993,13 +2135,17 @@ function DungeonService.damageEnemy(
 		then
 			LoopService.progress(player, "glade", 1)
 		end
-		pcall(ModelFactory.dissolve, enemy.part)
-		enemy.part.Name = "Remains"
-		enemy.part:SetAttribute("ShardfallName", "")
-		enemy.part.Transparency = 1
-		local bar = enemy.part:FindFirstChild("ShardfallBar")
-		if bar ~= nil then
-			bar:Destroy()
+		if LaunchGate.on("enemyPerf") then
+			perfRetire(run, enemy)
+		else
+			pcall(ModelFactory.dissolve, enemy.part)
+			enemy.part.Name = "Remains"
+			enemy.part:SetAttribute("ShardfallName", "")
+			enemy.part.Transparency = 1
+			local bar = enemy.part:FindFirstChild("ShardfallBar")
+			if bar ~= nil then
+				bar:Destroy()
+			end
 		end
 		if aliveCount(run) == 0 then
 			-- The boss died while an add was still up, so the seat stayed
@@ -2283,6 +2429,27 @@ local function tickEnemy(
 	end
 	moveEnemy(enemy, hrp.Position, dt, run.placeIndex, run.dungeon.floorSize)
 	pcall(ModelFactory.step, enemy.part, now, true)
+	if
+		LaunchGate.on("enemyPerf")
+		and run.dungeon.endless == true
+		and EnemyPerf.isBiggest(Dungeons.waveCount(run.wave), Dungeons.WAVE_MAX_COUNT)
+	then
+		local position = enemy.part.Position
+		local distance =
+			CombatMath.planarDistance(position.X, position.Z, hrp.Position.X, hrp.Position.Z)
+		local hold = math.max(2, enemy.range * 0.65)
+		local clock = enemy.perfClock
+		if clock == nil then
+			clock = EnemyPerf.begin(position.X, position.Z, now)
+		end
+		local nextClock, stalled =
+			EnemyPerf.observe(clock, position.X, position.Z, now, distance > hold)
+		enemy.perfClock = nextClock
+		enemy.perfStuck = stalled
+		if stalled then
+			return
+		end
+	end
 
 	if enemy.boss and enemy.phase == 1 then
 		if now < enemy.weakUntil then
@@ -2534,6 +2701,23 @@ local function tickOne(player: Player, run: Run, step: number, now: number)
 			break
 		end
 		tickEnemy(player, run, enemy, hrp, step, now)
+	end
+	if LaunchGate.on("enemyPerf") and runs[player] ~= nil and not run.resolving and not run.cleared then
+		local stuckIds = {}
+		for id, enemy in pairs(run.enemies) do
+			if enemy.perfStuck == true and enemy.hp > 0 then
+				table.insert(stuckIds, id)
+			end
+		end
+		for _, id in ipairs(stuckIds) do
+			local enemy = run.enemies[id]
+			if enemy ~= nil and enemy.hp > 0 then
+				unstickEnemy(run, enemy)
+			end
+			if runs[player] == nil or run.resolving then
+				break
+			end
+		end
 	end
 	if runs[player] ~= nil and not run.resolving and not run.cleared then
 		tickPuddles(player, run, hrp, now)
@@ -3128,6 +3312,12 @@ local function retryPull(fight: RaidEchoFight.Fight)
 	for member, memberRun in pairs(runs) do
 		if memberRun.echoFight == fight and memberRun.resolving ~= true then
 			table.insert(party, member)
+		end
+	end
+	for _, member in ipairs(party) do
+		local waveRun = WaveFlowService.runFor(member)
+		if waveRun ~= nil then
+			WaveFlowService.wipe(waveRun)
 		end
 	end
 	-- Every guard goes up before any Destroy or stream yield. A hit on

@@ -690,6 +690,23 @@ describe("Config validation: cross-references", function()
 		expect(Config.Essence.amount("nope")).toBeNil()
 	end)
 
+	it("caps live enemies at 22 and refuses a stuck clock over 30 seconds", function()
+		expect(Config.EnemyPerf.ALIVE_CAP).toEqual(22)
+		expect(Config.EnemyPerf.STUCK_SECONDS).toEqual(30)
+		local ok, err = Config.EnemyPerf.validate(Config.EnemyPerf)
+		expect(ok).toBeTrue()
+		expect(err).toBeNil()
+		local capped = {
+			ALIVE_CAP = 8,
+			STUCK_SECONDS = Config.EnemyPerf.STUCK_SECONDS,
+			STUCK_PROGRESS = Config.EnemyPerf.STUCK_PROGRESS,
+			DISABLED_STATES = Config.EnemyPerf.DISABLED_STATES,
+		}
+		local fine, reason = Config.EnemyPerf.validate(capped)
+		expect(fine).toBeFalse()
+		expect(reason).toEqual("ALIVE_CAP")
+	end)
+
 	it("keeps live difficulties inside the V1 difficulty list", function()
 		for id in pairs(Config.Live.Difficulties) do
 			expect(Config.Economy.DIFFICULTIES[id] ~= nil).toBeTrue()

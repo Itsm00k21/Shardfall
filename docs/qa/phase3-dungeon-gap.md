@@ -61,7 +61,7 @@ Server flow on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked 
 Server boss on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked on #417. Does not edit #382, #409, or #389.
 
 - Stats and the adds count: `Enemies.BOSS`, `Enemies.BOSS_ADDS` (4), and `Enemies.BOSS_ADD_MIX` in `src/ReplicatedStorage/Shared/Config/Enemies.luau`. The mix is chaser, ranged, and tank only. `Enemies.validate` rejects a count other than 4, a mix that names something else, or a boss that is not taller and healthier than the tank.
-- Wave 5 of `WaveFlow` / `WaveFlowService` spawns that boss plus the four adds as gray blocks. The service does not parent parts. `init.server` does not require it. Live `waveKinds(5)` is still Gnarl plus two adds.
+- Wave 5 of `WaveFlow` / `WaveFlowService` spawns that boss plus the four adds as gray blocks. The service does not parent parts. `init.server` requires `WaveFlowService` so `PlayerRemoving` and `BindToClose` connect, and it does not start a run. Live `waveKinds(5)` is still Gnarl plus two adds.
 - `bossEnter` fires when wave 5 becomes active. `bossDown` fires when that boss reaches 0 HP. Both go to `Shared.Analytics.event` when that module exists, or to `sink.analytics` when a caller passes one. The analytics module is not in this branch, so a normal boot does not log. No new remote. No client file reads the names. No profile write. `schemaVersion` stays 26.
 
 ## What the stuck check adds
@@ -105,6 +105,6 @@ Stacked on #427. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). No new fla
 
 Server pool on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked on #419. Does not edit #382, #409, or #389.
 
-- Gray blocks are reused by `EnemyPool`. A death parks the block. The next spawn takes it back and clears health, target, projectile, every attribute, and every child. Release does not destroy the block. `WaveFlowService.stop` destroys that run's parts and drops its track entry. clear, wipe, `PlayerRemoving`, and `BindToClose` all call stop. `init.server` does not require the service or the pool.
-- This branch does not cap alive enemies. There is no `MAX_ALIVE`, no `PLATFORM_CAP`, and no spawn queue. A wave of 12 spawns 12. `left` on `WaveCounter` is the number still alive. The same remote fields, `{ wave, left }`. No new remote. No client file reads it. The alive cap for the live crawl is #433 (`enemyPerf`), which is not in this branch.
+- Gray blocks are reused by `EnemyPool`. A death parks the block. The next spawn takes it back and clears health, target, projectile, every attribute, and every child. Release does not destroy the block. `WaveFlowService.stop` destroys that run's parts, marks the run stopped, releases its perf slots, and drops its track entry. clear, wipe, `PlayerRemoving`, and `BindToClose` all call stop. `init.server` requires the service and does not require the pool. A party wipe in `DungeonService` calls `WaveFlowService.wipe`.
+- One alive cap, `Config.EnemyPerf.ALIVE_CAP` 22. The wave run does not store its own cap or a spawn queue. A wave of 12 spawns 12, because 12 is under 22. `left` on `WaveCounter` is the number still alive. The same remote fields, `{ wave, left }`. No new remote. No client file reads it. The only stuck watchdog is the 30 second clock on the live crawl.
 - No profile write. `schemaVersion` stays 26. Live `waveKinds` is unchanged. A normal boot does not start a run, so the pool creates nothing.

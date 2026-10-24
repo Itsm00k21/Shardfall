@@ -57,6 +57,9 @@ Config.GearLevels = require("./GearLevels")
 Config.ShardCore = require("./ShardCore")
 -- Phase 3 wave arena. Extra table, not a tenth area. Ships with enabled false.
 Config.WaveArena = require("./WaveArenaConfig")
+-- M10 alive cap and stuck clock. Not a tenth area. The server reads it
+-- only while LaunchGate.enemyPerf is on (off).
+Config.EnemyPerf = require("./EnemyPerf")
 
 Config.AREAS = table.freeze({
 	"Items",

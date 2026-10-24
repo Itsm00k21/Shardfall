@@ -61,14 +61,15 @@ its tag to merged and add the merge commit.
   telegraphed slam (`LEASH_WINDUP`, `LEASH_RADIUS`) the player can step out
   of. The boss does not heal. Flag `enemyTypes` stays off. No save fields.
   `schemaVersion` stays 26. Stacked on #419. (open)
+- Havoc DP22 fold-in: the gray-box pool from #422 (`0549c8d`) is merged onto the M10 branch. `stop` marks the run stopped so a later hurt cannot rebuild the pool. A party wipe calls `WaveFlowService.wipe`. Boot requires `WaveFlowService` so PlayerRemoving and BindToClose connect. WaveFlow claims and releases through `EnemyPerf` (one cap, 22; one 30s watchdog). `waveArena`, `enemyTypes`, and `enemyPerf` stay off. Schema stays 26. (open)
+- M10 enemy performance (flag `enemyPerf`, off): live-crawl enemies despawn and respawn if they make no progress for 30 seconds on the biggest wave, rigs are pooled, unused Humanoid states are disabled with `SetStateEnabled`, and `Config.EnemyPerf.ALIVE_CAP` is 22 (validation rejects any other cap or a clock over 30). No save fields. Schema stays 26. One cap and one watchdog. (open)
 - Phase 3 enemy pool (flag `enemyTypes`, off): gray-box blocks go into
   `EnemyPool` and are reused. A death parks the block. The next spawn
   clears health, target, projectile, every attribute, and every child.
   `WaveFlowService.stop` destroys that run's parts. clear, wipe,
   PlayerRemoving, and BindToClose call it, so a finished run does not
-  keep the pool. This branch does not cap how many are alive. The alive
-  cap stays with #433 (`enemyPerf`). No HUD edit, no save write,
-  `schemaVersion` stays 26. Stacked on the wave-5 boss. (open)
+  keep the pool. The only alive cap is `EnemyPerf` at 22. No HUD edit,
+  no save write, `schemaVersion` stays 26. Stacked on the wave-5 boss. (open)
 - Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
   4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
   count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns
