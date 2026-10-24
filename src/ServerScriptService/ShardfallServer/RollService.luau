@@ -161,13 +161,55 @@ local function poolFromClient(poolId: any)
 	return pool
 end
 
+-- [ECHO hook] gearLevels. Off: insert as today. On: an exact duplicate
+-- spends no Bag slot and feeds Stars (not item.upgrade). ★5 records Essence.
+local function gearSpare(data: any): boolean
+	if not LaunchGate.on("gearLevels") then
+		return false
+	end
+	local Accept = require(script.Parent.GearLevels.Accept)
+	return Accept.spareRoom(data, true)
+end
+
+local function gearPlace(data: any, item: any, place: ((any) -> ())?): (any?, string?)
+	local insert = place or function(row: any)
+		Schema.insertItem(data, row)
+	end
+	if not LaunchGate.on("gearLevels") then
+		insert(item)
+		return nil, nil
+	end
+	local Accept = require(script.Parent.GearLevels.Accept)
+	local GearLevels = require(ReplicatedStorage.Shared.Config.GearLevels)
+	local Stars = require(ReplicatedStorage.Shared.Stars)
+	local landing = Accept.accept(data, item, true, GearLevels, nil, Stars)
+	if landing.merged ~= true then
+		if Schema.countItems(data) >= Schema.inventoryCap(data) then
+			return nil, "Inventory is full."
+		end
+		insert(landing.item)
+	end
+	return landing, nil
+end
+
+local function attachGear(payload: { [string]: any }, drawn: any)
+	if type(drawn) ~= "table" or drawn.merged ~= true then
+		return
+	end
+	payload.oldLevel = drawn.oldLevel
+	payload.newLevel = drawn.newLevel
+	payload.essence = drawn.essence
+	payload.levelText = drawn.levelText
+	payload.merged = true
+end
+
 -- One draw on an already-paid crack: pick a rarity with pity, mint the
 -- item, save it and move the counters. The caller has spent the tokens
 -- and checked the Bag. Returns the capture, or nil and a reason.
 local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 	local luck = RarityConfig.luckFromProfile(data)
+	-- Legendary pity only. A saved sinceEpic is left untouched.
 	local counters = {
-		sinceEpic = data.sinceEpic,
 		sinceLegendary = data.sinceLegendary,
 	}
 	local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
@@ -181,34 +223,43 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		now = os.time(),
 		poolId = pool.id,
 	}, rng)
-	-- [ECHO hook] Auto-salvage a new drop only. A duplicate is Stage A's call.
-	local arrival = GearSalvage.receive(data, item)
-	if arrival.kept ~= false then
-		Schema.insertItem(data, item)
+	-- [ECHO hook] Stage A merges an exact duplicate first. Auto-salvage (#388)
+	-- only sees a new drop that Stage A did not merge.
+	local arrival = { kept = true, gained = 0 }
+	local landing, placeError = gearPlace(data, item, function(row: any)
+		arrival = GearSalvage.receive(data, row)
+		if arrival.kept ~= false then
+			Schema.insertItem(data, row)
+		end
+	end)
+	if placeError ~= nil then
+		return nil, placeError
+	end
+	if type(landing) == "table" and landing.merged == true and type(landing.item) == "table" then
+		item = landing.item
 	end
 	RarityConfig.advance(counters, item.rarity, floor)
-	data.sinceEpic = counters.sinceEpic
 	data.sinceLegendary = counters.sinceLegendary
 	data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
 	StarterGoalPay.grant(data, "rolls", nil)
-	-- The per-pool pity bucket is an old save field. The live counters
-	-- are sinceEpic and sinceLegendary. Do not increment the bucket.
-	local capture = {
+	-- The per-pool pity bucket is an old save field. The live counter is
+	-- sinceLegendary. Do not increment the bucket.
+	local captured = {
 		item = item,
 		pityTriggered = pityTriggered,
 		rarity = item.rarity,
 		fillerSeed = fillerSeed,
 		luck = luck,
 		rollIndex = data.shardRolls,
-		sinceEpic = data.sinceEpic,
 		sinceLegendary = data.sinceLegendary,
 		tracker = StarterGoalPay.tracker(data),
 	}
+	attachGear(captured, landing)
 	if arrival.kept == false then
-		capture.autoSalvaged = true
-		capture.essenceGained = arrival.gained
+		captured.autoSalvaged = true
+		captured.essenceGained = arrival.gained
 	end
-	return capture
+	return captured
 end
 
 -- drawInto already stored these on the capture. A single crack returns
@@ -276,8 +327,11 @@ local function crack(
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
 		end
 		-- Bag room is checked before anything is spent.
+		-- [ECHO hook] A full bag can still take an exact duplicate.
 		if Schema.countItems(data) >= Schema.inventoryCap(data) then
-			return "Inventory is full."
+			if not gearSpare(data) then
+				return "Inventory is full."
+			end
 		end
 		-- A dungeon voucher cracks that area once and does not spend a token.
 		-- It is an earned clear, so it never pays for a Prism roll.
@@ -332,16 +386,15 @@ local function crack(
 		quick = quick,
 		pityTriggered = captured.pityTriggered,
 		pity = {
-			sinceEpic = captured.sinceEpic,
 			sinceLegendary = captured.sinceLegendary,
-			epicAt = RarityConfig.EPIC_PITY,
 			legendaryAt = RarityConfig.LEGENDARY_PITY,
 			shardRolls = captured.rollIndex,
-			left = RollConfig.pityLeft(captured.sinceEpic),
+			left = RollConfig.pityLeft(captured.sinceLegendary),
 		},
 		currency = currency,
 		starterGoalTracker = captured.tracker,
 	}
+	attachGear(result, captured)
 	copyAutoSalvage(result, captured)
 	return result
 end
@@ -352,12 +405,10 @@ end
 
 local function pityView(drawn: any)
 	return {
-		sinceEpic = drawn.sinceEpic,
 		sinceLegendary = drawn.sinceLegendary,
-		epicAt = RarityConfig.EPIC_PITY,
 		legendaryAt = RarityConfig.LEGENDARY_PITY,
 		shardRolls = drawn.rollIndex,
-		left = RollConfig.pityLeft(drawn.sinceEpic),
+		left = RollConfig.pityLeft(drawn.sinceLegendary),
 	}
 end
 
@@ -382,6 +433,10 @@ local function crackBatch(player: Player, poolId: any, total: number)
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
 		end
 		local free = Schema.inventoryCap(data) - Schema.countItems(data)
+		-- [ECHO hook] Tokens still block. A duplicate does not need a free slot.
+		if gearSpare(data) then
+			free = math.max(free, total)
+		end
 		local blocked = RollConfig.batchBlock(data.shardTokens, free, total)
 		if blocked ~= nil then
 			return blocked
@@ -411,6 +466,7 @@ local function crackBatch(player: Player, poolId: any, total: number)
 			pityTriggered = drawn.pityTriggered,
 			pity = pityView(drawn),
 		}
+		attachGear(row, drawn)
 		copyAutoSalvage(row, drawn)
 		table.insert(items, row)
 		if Rarities.rank(drawn.rarity) > Rarities.rank(captures[best].rarity) then
@@ -484,6 +540,7 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 			fillerSeed = result.fillerSeed,
 			pity = result.pity,
 		}
+		attachGear(row, result)
 		copyAutoSalvage(row, result)
 		table.insert(items, row)
 		lastPity = result.pity

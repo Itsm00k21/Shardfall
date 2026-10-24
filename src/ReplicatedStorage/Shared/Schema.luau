@@ -24,6 +24,8 @@
 local ActionSlots = require("./ActionSlots")
 local Audio = require("./Audio")
 local Classes = require("./Classes")
+local EquipSlots = require("./Config/EquipSlots")
+local ShardCoreConfig = require("./Config/ShardCore")
 local CraftingLevel = require("./CraftingLevel")
 local Materials = require("./Materials")
 local Loops = require("./Loops")
@@ -205,6 +207,7 @@ export type Item = {
 	locked: boolean?,
 	favorite: boolean?,
 	sockets: number?,
+	upgrade: number?,
 }
 
 export type PityState = {
@@ -332,6 +335,11 @@ export type ProfileData = {
 	actionBars: { [string]: any },
 	codex: { unlocked: { [string]: boolean } },
 	trainingGrove: { [string]: any },
+	-- [ECHO hook] Additive. schemaVersion stays 26. item.upgrade already exists.
+	equipLoadout: { [string]: string },
+	gearEssence: number,
+	-- [ECHO hook] Core level per weapon uid. Missing uid is 0. Items are not written.
+	shardCores: { [string]: number },
 }
 
 function Schema.template(): ProfileData
@@ -355,8 +363,12 @@ function Schema.template(): ProfileData
 			armor = {},
 			accessories = {},
 		},
-		-- Duplicate overflow record. Stage B spends it. Default 0.
+		-- [ECHO hook] Phase 2 slots. Empty until the player equips.
+		equipLoadout = EquipSlots.empty(),
+		-- [ECHO hook] Duplicate overflow record. Stage B spends it. Stage C spends it too.
 		gearEssence = 0,
+		-- [ECHO hook] Shard Core levels. Empty until the player feeds a weapon.
+		shardCores = {},
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
 		vouchers = { armory = 0, pets = 0 },
@@ -785,10 +797,17 @@ function Schema.reconcile(data: any): ProfileData
 		end
 	end
 	data.equipped.accessories = accessories
+	-- [ECHO hook] Keep a stored loadout. Drop junk. Do not add item.level.
+	if type(data.equipLoadout) ~= "table" then
+		data.equipLoadout = EquipSlots.empty()
+	end
+	data.equipLoadout = EquipSlots.publicCopy(data.equipLoadout)
 	data.gearEssence = wholeNumber(data.gearEssence, 0, 0)
 	if data.gearEssence > 1000000000 then
 		data.gearEssence = 1000000000
 	end
+	-- [ECHO hook] Keep stored core levels. Drop junk. Do not write the items.
+	data.shardCores = ShardCoreConfig.sanitize(data.shardCores)
 	if data.materials == nil or type(data.materials) == "table" then
 		data.materials = Materials.sanitize(data.materials)
 	end
@@ -1437,7 +1456,9 @@ function Schema.snapshot(data: ProfileData)
 			armor = Schema.deepCopy(data.equipped.armor),
 			accessories = Schema.deepCopy(data.equipped.accessories),
 		},
+		equipLoadout = EquipSlots.publicCopy(data.equipLoadout),
 		gearEssence = data.gearEssence,
+		shardCores = ShardCoreConfig.sanitize(data.shardCores),
 		inventoryBonus = data.inventoryBonus,
 		petSlotBonus = data.petSlotBonus,
 		inventoryCap = Schema.inventoryCap(data),

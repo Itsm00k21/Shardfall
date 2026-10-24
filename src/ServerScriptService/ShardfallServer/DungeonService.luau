@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
+local Build = require(ReplicatedStorage.Shared.Build)
 local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local DungeonConfig = require(ReplicatedStorage.Shared.DungeonConfig)
@@ -3201,7 +3202,7 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
-	print("[Rootvault] build b6c099e+ spawner=ModelFactory boss=Grandmother Gnarl")
+	print("[Rootvault] build " .. Build.STAMP .. " spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
 	end)

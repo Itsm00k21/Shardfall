@@ -63,13 +63,67 @@ function DebugService.run(player: Player, action: any)
 		local DungeonService = require(script.Parent.DungeonService)
 		return withMessage(DungeonService.setBossPhase(player, 2), "Boss set to phase 2.")
 	end
-	-- [ECHO hook] Stage B. essence and salvagefill only. #387 uses equip, geardupe, and fillbag.
-	if action == "essence" or action == "salvagefill" then
+	-- [ECHO hook] Equip and Stage A dev buttons. LaunchGate already refused them.
+	if action == "equip" then
+		return require(script.Parent.EquipService.Bind).devEquipOwned(player)
+	end
+	-- [ECHO hook] Stage C. Grants Essence onto profile.gearEssence. Items stay as they are.
+	if action == "essence" then
+		local CoreDev = require(script.Parent.ShardCore.Dev)
+		local CoreConfig = require(ReplicatedStorage.Shared.Config.ShardCore)
+		local note = ""
+		local granted, err = DataService.mutate(player, function(data)
+			local applied, text = CoreDev.grant(data, CoreConfig)
+			if not applied then
+				return text
+			end
+			note = text
+			return nil
+		end)
+		if not granted then
+			return reject(err or "Could not do that.")
+		end
+		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
+	end
+	if action == "geardupe" or action == "fillbag" then
+		local GearDev = require(script.Parent.GearLevels.Dev)
+		local GearLevels = require(ReplicatedStorage.Shared.Config.GearLevels)
+		local ItemBases = require(ReplicatedStorage.Shared.ItemBases)
+		local Schema = require(ReplicatedStorage.Shared.Schema)
+		local Stars = require(ReplicatedStorage.Shared.Stars)
+		local note = ""
+		local ok, err = DataService.mutate(player, function(data)
+			local applied, text
+			if action == "geardupe" then
+				applied, text = GearDev.grantDupe(
+					data,
+					ItemBases.all(),
+					GearLevels,
+					Schema.inventoryCap(data),
+					Stars
+				)
+			else
+				applied, text = GearDev.fillBag(data, ItemBases.all(), Schema.inventoryCap(data))
+			end
+			if not applied then
+				return text
+			end
+			note = text
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not do that.")
+		end
+		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
+	end
+	-- [ECHO hook] Stage B (#388). salvageEssence grants +500. salvagefill fills the bag.
+	-- essence is the Stage C grant above.
+	if action == "salvageEssence" or action == "salvagefill" then
 		local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 		local note = ""
 		local ok, err = DataService.mutate(player, function(data)
 			local applied, text
-			if action == "essence" then
+			if action == "salvageEssence" then
 				applied, text = GearSalvage.debugGrant(data)
 			else
 				applied, text = GearSalvage.debugFill(data, os.time())

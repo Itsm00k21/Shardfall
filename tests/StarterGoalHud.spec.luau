@@ -308,7 +308,7 @@ describe("StarterGoalHud mount", function()
 		)
 		local client =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau")
-		local stampLine = 'print("[Shardfall] build ' .. Build.STAMP .. ' client")'
+		local stampLine = '.line("client")'
 		expect(string.find(client, stampLine, 1, true)).toBeGreaterThan(0)
 		local _, mounts = string.gsub(client, "StarterGoalHud.start", "")
 		expect(mounts).toEqual(1)

@@ -194,6 +194,27 @@
         },
         "HavenPrompt": {
           "$className": "RemoteEvent"
+        },
+        "EquipSlot": {
+          "$className": "RemoteFunction"
+        },
+        "UnequipSlot": {
+          "$className": "RemoteFunction"
+        },
+        "GetEquip": {
+          "$className": "RemoteFunction"
+        },
+        "EquipChanged": {
+          "$className": "RemoteEvent"
+        },
+        "GetShardCore": {
+          "$className": "RemoteFunction"
+        },
+        "FeedShardCore": {
+          "$className": "RemoteFunction"
+        },
+        "ShardCoreChanged": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -210,7 +231,16 @@
       "$className": "ServerScriptService",
       "$ignoreUnknownInstances": false,
       "ShardfallServer": {
-        "$path": "src/ServerScriptService/ShardfallServer"
+        "$path": "src/ServerScriptService/ShardfallServer",
+        "EquipService": {
+          "$path": "src/server/EquipService"
+        },
+        "GearLevels": {
+          "$path": "src/server/GearLevels"
+        },
+        "ShardCore": {
+          "$path": "src/server/ShardCore"
+        }
       }
     },
     "StarterPlayer": {

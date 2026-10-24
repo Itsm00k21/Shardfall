@@ -901,11 +901,18 @@ end)
 
 -- Loads RollService the way Studio would, with the real salvage rules and
 -- a profile mutate that keeps the same table. Random always misses, so a
--- draw is Common unless Epic pity fires.
+-- draw is Common unless Legendary pity fires. A saved sinceEpic is ignored.
 local function loadRollService(current: { profile: any })
 	local guid = 0
 	local function node(name: string)
 		local inst = { Name = name, ClassName = "ModuleScript" }
+		-- Live announces a Legendary. The harness has no Remotes folder.
+		function inst:FindFirstChild(_child: string)
+			return nil
+		end
+		function inst:IsA(_className: string)
+			return false
+		end
 		setmetatable(inst, {
 			__index = function(_self, key)
 				return node(tostring(key))
@@ -1077,10 +1084,12 @@ local function rollPlayer(userId: number)
 	}
 end
 
-local function salvageProfile(sinceEpic: number)
+local function salvageProfile(sinceLegendary: number)
 	local data = Schema.template()
 	data.shardTokens = 50
-	data.sinceEpic = sinceEpic
+	-- Old Epic meter. Live rolls ignore it. The batch below proves that.
+	data.sinceEpic = 45
+	data.sinceLegendary = sinceLegendary
 	data.autoSalvage = true
 	data.autoSalvageRarity = "Common"
 	return data
@@ -1186,7 +1195,8 @@ describe("Auto-salvaged x10 batch", function()
 			expect(current.profile.inventory[single.item.uid]).toBeNil()
 			expect(current.profile.gearEssence).toEqual(1)
 
-			current.profile = salvageProfile(45)
+			-- 145 + four misses lands the fifth crack on Legendary pity 150.
+			current.profile = salvageProfile(145)
 			local batch = roll.rollMany(batchPlayer, "verdant_armory", 10)
 			expect(batch.ok).toEqual(true)
 			expect(batch.count).toEqual(10)
@@ -1195,7 +1205,7 @@ describe("Auto-salvaged x10 batch", function()
 			local kept = 0
 			for index, row in ipairs(batch.items) do
 				if index == 5 then
-					expect(row.rarity).toEqual("Epic")
+					expect(row.rarity).toEqual("Legendary")
 					expect(row.autoSalvaged).toBeNil()
 					expect(row.essenceGained).toBeNil()
 					expect(current.profile.inventory[row.item.uid]).toEqual(row.item)
@@ -1212,6 +1222,7 @@ describe("Auto-salvaged x10 batch", function()
 			expect(kept).toEqual(1)
 			expect(current.profile.gearEssence).toEqual(9)
 			expect(current.profile.shardTokens).toEqual(41)
+			expect(current.profile.sinceEpic).toEqual(45)
 			expect(Schema.countItems(current.profile)).toEqual(1)
 		end)
 

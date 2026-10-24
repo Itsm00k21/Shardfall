@@ -105,21 +105,23 @@ function RollLoop.seconds(
 	return base
 end
 
-function RollLoop.nextEpic(sinceEpic: any): number
+-- Rolls left before the free Legendary guarantee (Phase 1.3: the only
+-- pity). 0 means the guarantee is spent on the next roll.
+function RollLoop.nextLegendary(sinceLegendary: any): number
 	local since = 0
-	if type(sinceEpic) == "number" and sinceEpic == sinceEpic and sinceEpic > 0 then
-		since = math.floor(sinceEpic)
+	if type(sinceLegendary) == "number" and sinceLegendary == sinceLegendary and sinceLegendary > 0 then
+		since = math.floor(sinceLegendary)
 	end
-	local left = RarityConfig.EPIC_PITY - since
+	local left = RarityConfig.LEGENDARY_PITY - since
 	if left < 0 then
 		return 0
 	end
 	return left
 end
 
-function RollLoop.nearGuarantee(sinceEpic: any): boolean
-	local left = RollLoop.nextEpic(sinceEpic)
-	return left <= math.floor(RarityConfig.EPIC_PITY * RollConfig.NEAR_SHARE)
+function RollLoop.nearGuarantee(sinceLegendary: any): boolean
+	local left = RollLoop.nextLegendary(sinceLegendary)
+	return left <= math.floor(RarityConfig.LEGENDARY_PITY * RollConfig.NEAR_SHARE)
 end
 
 function RollLoop.tint(elapsed: number, duration: number, rarity: string): string?
