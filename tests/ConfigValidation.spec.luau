@@ -680,4 +680,10 @@ describe("Config validation: wave arena", function()
 		checkNumbers("WaveArena.arena", arena.arena)
 		checkNumbers("WaveArena.gates", arena.gates)
 	end)
+
+	it("caps remembered arena run ids at a positive whole number", function()
+		local keep = Config.WaveArena.settleKeep
+		expect(isPositiveInt(keep)).toBeTrue()
+		expect(keep).toEqual(50)
+	end)
 end)

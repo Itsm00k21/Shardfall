@@ -9,9 +9,11 @@
 	A full Bag holds the rest for this session only, up to overflowCap.
 	Past that cap the salvage value is banked on the run, not deleted.
 	commit() pays tokens and turns held overflow into Essence once per
-	receipt. It does not write a new profile field.
+	run id. The profile keeps a short list of those ids. It does not
+	write a receipt key per drop, and it does not write a mail field.
 ]]
 
+local ArenaSettle = require("../../ReplicatedStorage/Shared/ArenaSettle")
 local Essence = require("../../ReplicatedStorage/Shared/Config/Essence")
 local GearSalvage = require("../../ReplicatedStorage/Shared/GearSalvage")
 local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
@@ -207,20 +209,29 @@ function Loot.essenceDue(run: any): number
 	return total
 end
 
--- Copies grants onto a profile table. A receipt that is already set adds nothing.
+-- Copies grants onto a profile table once per run id.
 -- Overflow becomes Essence. The profile does not gain a mail field.
-function Loot.commit(profile: any, run: any): { tokens: number, essence: number, bag: number }
+-- Receipts are not written. A run id already in the settle list adds nothing.
+function Loot.commit(profile: any, run: any, config: any?): { tokens: number, essence: number, bag: number }
 	local result = { tokens = 0, essence = 0, bag = 0 }
 	if typeof(profile) ~= "table" or typeof(run) ~= "table" or typeof(run.grantList) ~= "table" then
 		return result
-	end
-	if typeof(profile.receipts) ~= "table" then
-		profile.receipts = {}
 	end
 	if typeof(profile.ledger) ~= "table" then
 		profile.ledger = {}
 	end
 	profile.arenaMail = nil
+	local cap = ArenaSettle.keep(config)
+	local id = ArenaSettle.runId(run)
+	profile.arenaSettle = ArenaSettle.sanitize(profile.arenaSettle, cap)
+	if ArenaSettle.has(profile.arenaSettle, id) then
+		-- The run is already marked. Drop leftover per-drop keys for it.
+		ArenaSettle.dropOld(profile, id)
+		return result
+	end
+	if ArenaSettle.consumeOld(profile, id, cap) then
+		return result
+	end
 	local wallet = profile.shardTokens
 	if not finite(wallet) or wallet < 0 then
 		wallet = 0
@@ -228,40 +239,35 @@ function Loot.commit(profile: any, run: any): { tokens: number, essence: number,
 		wallet = math.floor(wallet)
 	end
 	local essence = 0
-	local prefix = "arena:" .. tostring(run.receiptId or "run") .. ":"
 	for _, grant in ipairs(run.grantList) do
-		local key = prefix .. tostring(grant.key)
-		if profile.receipts[key] ~= true then
-			profile.receipts[key] = true
-			local add = grant.tokens or 0
-			if finite(add) and add > 0 then
-				add = math.floor(add)
-				wallet += add
-				result.tokens += add
-			else
-				add = 0
+		local add = grant.tokens or 0
+		if finite(add) and add > 0 then
+			add = math.floor(add)
+			wallet += add
+			result.tokens += add
+		else
+			add = 0
+		end
+		if grant.where == "bag" then
+			result.bag += 1
+		end
+		if grant.where == "overflow" or grant.where == "bank" then
+			local salvage = grant.essence or 0
+			if finite(salvage) and salvage > 0 then
+				essence += math.floor(salvage)
 			end
-			if grant.where == "bag" then
-				result.bag += 1
-			end
-			if grant.where == "overflow" or grant.where == "bank" then
-				local salvage = grant.essence or 0
-				if finite(salvage) and salvage > 0 then
-					essence += math.floor(salvage)
-				end
-			end
-			if add > 0 then
-				table.insert(profile.ledger, {
-					reason = "arena_" .. tostring(grant.kind or "loot"),
-					currency = "shardTokens",
-					amount = add,
-					balance = wallet,
-					id = grant.dropId,
-				})
-			end
-			while #profile.ledger > 20 do
-				table.remove(profile.ledger, 1)
-			end
+		end
+		if add > 0 then
+			table.insert(profile.ledger, {
+				reason = "arena_" .. tostring(grant.kind or "loot"),
+				currency = "shardTokens",
+				amount = add,
+				balance = wallet,
+				id = grant.dropId,
+			})
+		end
+		while #profile.ledger > 20 do
+			table.remove(profile.ledger, 1)
 		end
 	end
 	if essence > 0 then
@@ -278,6 +284,7 @@ function Loot.commit(profile: any, run: any): { tokens: number, essence: number,
 		end
 	end
 	profile.shardTokens = wallet
+	ArenaSettle.remember(profile, id, cap)
 	return result
 end
 
