@@ -260,12 +260,17 @@ WaveArenaConfig.path = table.freeze({
 
 -- Core Loop Hard for this arena. Normal stats stay the base. The fight
 -- and the purse read this row. It matches Economy.DIFFICULTIES.hard:
--- 2× HP, 1.5× damage, 2× tokens, 2× fragments. Nothing here is paid.
+-- 2× HP, 1.5× damage, 2× tokens, 2× fragments.
+-- clearHeal is the den-clear heal (CLEAR_HEAL) for this row: 10% of max HP
+-- when a non-boss wave empties. Other tiers keep the heal they already
+-- had. The server reads it only while HardMode.isHardReal() is true.
+-- Nothing here is paid.
 WaveArenaConfig.hard = table.freeze({
 	hpMultiplier = 2,
 	damageMultiplier = 1.5,
 	tokenMultiplier = 2,
 	fragmentMultiplier = 2,
+	clearHeal = 0.1,
 })
 
 local HARD_BANNED = { robux = true, productId = true, cost = true, skip = true, price = true }
@@ -296,6 +301,9 @@ function WaveArenaConfig.validate(source: any?): (boolean, string)
 	end
 	if hard.fragmentMultiplier ~= 2 then
 		return false, "hard fragments are 2×"
+	end
+	if hard.clearHeal ~= 0.1 then
+		return false, "hard clear heal is 10%"
 	end
 	return true, ""
 end

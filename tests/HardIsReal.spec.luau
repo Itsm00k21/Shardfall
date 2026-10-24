@@ -92,6 +92,7 @@ describe("Arena Hard multipliers", function()
 		expect(hard.damageMultiplier).toEqual(1.5)
 		expect(hard.tokenMultiplier).toEqual(2)
 		expect(hard.fragmentMultiplier).toEqual(2)
+		expect(hard.clearHeal).toEqual(0.1)
 		expect(hard.hpMultiplier).toEqual(econ.hpMultiplier)
 		expect(hard.damageMultiplier).toEqual(econ.damageMultiplier)
 		expect(hard.tokenMultiplier).toEqual(econ.tokenMultiplier)
@@ -116,6 +117,18 @@ describe("Arena Hard multipliers", function()
 			},
 		}
 		expect(WaveArenaConfig.validate(paid)).toEqual(false)
+		local springSized = {
+			hard = {
+				hpMultiplier = 2,
+				damageMultiplier = 1.5,
+				tokenMultiplier = 2,
+				fragmentMultiplier = 2,
+				clearHeal = 0.2,
+			},
+		}
+		local healOk, healWhy = WaveArenaConfig.validate(springSized)
+		expect(healOk).toEqual(false)
+		expect(healWhy).toEqual("hard clear heal is 10%")
 		expect(Schema.VERSION).toEqual(26)
 		expect(LaunchGate.SHOW.hardMode).toEqual(false)
 		expect(LaunchGate.SHOW.waveArena).toEqual(false)
@@ -190,6 +203,49 @@ describe("Hard is real", function()
 		local host = fs.readFile("src/ServerScriptService/ShardfallServer/WaveArenaHost.luau")
 		expect(string.find(host, "HardMode.isHardReal()", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, "HardMode.sessionTier(player.UserId)", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("restores 10% of max HP when a Hard wave clears", function()
+		withHard(true, function()
+			local options = arenaOptions("hard")
+			local run = WaveArena.enter(options)
+			expect(run ~= nil).toBeTrue()
+			expect(run.tier).toEqual("hard")
+			expect(WaveArenaConfig.hard.clearHeal).toEqual(0.1)
+			run.player.hp = 100
+			WaveArena.skip(run, options)
+			local restored = math.floor(run.player.maxHp * WaveArenaConfig.hard.clearHeal)
+			expect(restored).toEqual(20)
+			expect(run.player.hp).toEqual(100 + restored)
+		end)
+		expect(LaunchGate.SHOW.hardMode).toEqual(false)
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
+	end)
+
+	it("leaves a Normal clear on the HP it already had", function()
+		local function woundedClear(tier: string): any
+			local options = arenaOptions(tier)
+			local run = WaveArena.enter(options)
+			expect(run ~= nil).toBeTrue()
+			run.player.hp = 100
+			WaveArena.skip(run, options)
+			return run
+		end
+
+		withHard(true, function()
+			local normal = woundedClear("normal")
+			expect(normal.tier).toEqual("normal")
+			expect(normal.player.hp).toEqual(100)
+		end)
+
+		withHard(false, function()
+			local run = woundedClear("hard")
+			expect(run.tier).toEqual("normal")
+			expect(run.player.hp).toEqual(100)
+		end)
+
+		expect(LaunchGate.SHOW.hardMode).toEqual(false)
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
 	end)
 end)
 

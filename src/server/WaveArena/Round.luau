@@ -248,6 +248,44 @@ local function scaleCount(amount: number, multiplier: any, live: boolean): numbe
 	return HardMode.scalePay(amount, multiplier)
 end
 
+-- Den-clear heal. Hard restores clearHeal of max HP when a non-boss wave
+-- empties, and only while that run is live Hard. Every other tier is left
+-- on the HP it already had. A positive max heals at least 1. The result
+-- never climbs past max HP.
+local function clearHealAmount(maxHp: any, fraction: any): number
+	if not finite(maxHp) or maxHp <= 0 then
+		return 0
+	end
+	if not finite(fraction) or fraction <= 0 then
+		return 0
+	end
+	local amount = math.floor(maxHp * fraction)
+	if amount < 1 then
+		return 1
+	end
+	return amount
+end
+
+local function healClear(run: any, config: any)
+	if hasBoss(run) or not hardLive(run) then
+		return
+	end
+	local player = run.player
+	if typeof(player) ~= "table" then
+		return
+	end
+	local hp = player.hp
+	local maxHp = player.maxHp
+	if not finite(hp) or hp <= 0 or not finite(maxHp) or maxHp <= 0 then
+		return
+	end
+	local amount = clearHealAmount(maxHp, hardRow(config).clearHeal)
+	if amount <= 0 then
+		return
+	end
+	player.hp = math.min(maxHp, hp + amount)
+end
+
 local function payPurse(run: any, config: any, events: { any }): boolean
 	if run.paid[run.wave] == true then
 		return false
@@ -437,6 +475,7 @@ local function finishWave(run: any, config: any, events: { any })
 		emit(events, { kind = "bossDown", hold = run.hold })
 		return
 	end
+	healClear(run, config)
 	sweep(run, config, events, true)
 	local nextWave = run.wave + 1
 	if Waves.def(nextWave, config) == nil or not spawnInto(run, nextWave, config) then
@@ -875,6 +914,7 @@ function Round.skip(run: any, options: any?): (any, { any })
 		end
 	end
 	noteClear(run, events)
+	healClear(run, cfg)
 	sweep(run, cfg, events, true)
 	local nextWave = run.wave + 1
 	if Waves.def(nextWave, cfg) == nil or not spawnInto(run, nextWave, cfg) then
