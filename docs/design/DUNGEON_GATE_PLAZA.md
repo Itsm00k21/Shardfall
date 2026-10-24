@@ -149,11 +149,11 @@ The floor added outside the 104-stud plaza uses `Haven.LAYER` and `Haven.coplana
 
 ## Gate spec
 
-Recommended level is one number, the level a new player needs before this gate is the right next place. Difficulty inside a gate stays on the prompt the game already has. The billboard does not list Normal, Hard, and Nightmare as three destinations.
+Recommended level is one number, the level a new player needs before this gate is the right next place. Difficulty inside a gate stays on the prompt the game already has. The billboard does not list Normal and Hard as separate destinations. V1 has two difficulties, Normal and Hard (Lv 5); there is no Nightmare (decision 10, Oct 23, 2026).
 
 | order | gate | arch | color | biome | billboard | party line | lock |
 |---|---|---|---|---|---|---|---|
-| 1 | Rootvault | A split trunk, two bent piers, a low thorn lintel. Mouth reads as a gap in a hedge. | `(64, 196, 96)` | Choked wood. Wet stone, dark leaf, one pale shaft. | `Rootvault` / `Lv 1 · Solo` | Solo. Second prompt on the right pier: `Waves`. | Open from level 1. Hard is level 10 and Nightmare is level 15, chosen after Enter. |
+| 1 | Rootvault | A split trunk, two bent piers, a low thorn lintel. Mouth reads as a gap in a hedge. | `(64, 196, 96)` | Choked wood. Wet stone, dark leaf, one pale shaft. | `Rootvault` / `Lv 1 · Solo` | Solo. Second prompt on the right pier: `Waves`. | Open from level 1. Hard opens at level 5, chosen after Enter. No Nightmare in V1. |
 | 2 | The Heartwood | The same trunks, blackened, with an amber crack through the lintel. Taller by 4 studs so it marks the raid without leaving the row. | `(92, 140, 72)` body, crack `(214, 140, 64)` | The wood after the fire. Ash, sap, no flowers. | `Heartwood` / `Lv 15 · 4–8` | `Finder` on the glow. `Practice` on the right pier, solo, the line `tip_37` already uses. | Closed until level 15. Reason on the seal: `Opens at level 15.` Story before Normal stays inside the raid screen. |
 | 3 | Tidecrypt | A salt-crystal arch, two leaning slabs, a thin lintel. | `(50, 150, 255)` taken down to `(36, 96, 140)` | Drowned stone. Tide sheen. No foam toys. | `Tidecrypt` / `Lv 20 · Sealed` | `4–8` once it exists. | `Sunken Reach is sealed.` Level 20 from the realm table. `ascension` 1 is not the painted level. |
 | 4 | Emberforge | Black slag piers, a cracked lintel, heat only in the seams. | `(255, 150, 40)` in the seams, stone `(28, 26, 28)` | A forge that has gone cold. | `Emberforge` / `Lv 30 · Sealed` | `4–8` later. The raid name in the raids doc is The Crucible. The arch keeps the realm name. | `Emberforge is sealed.` |
@@ -162,7 +162,7 @@ Recommended level is one number, the level a new player needs before this gate i
 
 Lock copy is one sentence a phone can read without opening a prompt. An open gate leaves the seal off and lights its inlay stone. A locked gate keeps the seal, dims the glow to transparency 0.75, and leaves the inlay dark.
 
-Rootvault's recommended level stays 1 for the whole beta. The subline gains `· Hard` at level 10 and `· Nightmare` at level 15 so the arch tells the truth about what Enter will offer. It still does not become three arches.
+Rootvault's recommended level stays 1 for the whole beta. The subline gains `· Hard` at level 5 so the arch tells the truth about what Enter will offer. There is no Nightmare in V1. It still does not become two arches.
 
 ### Vendors on the rim
 
@@ -250,3 +250,6 @@ Acceptance:
 - With the day cycle at noon, the neon mouth still reads. With particles stripped, the seal still reads.
 - A portrait pass from the pad shows one open name, the inlay, and an empty lane. A turn to the right brings the sealed gates in without a prop in the way.
 - The townsfolk loops and the south floater are outside every lane.
+
+## Change log
+- 2026-10-23 (Prism, per Ghost's decision 10, Kevin pre-approved): difficulty is Normal + Hard (Lv 5) only; Nightmare removed. Matches the Gate dock in the first-30-seconds spec (#412) and Crater Square (#413).
