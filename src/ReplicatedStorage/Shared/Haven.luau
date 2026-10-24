@@ -226,7 +226,7 @@ Haven.PORTALS = {
 		level = 20,
 		height = 18,
 		subline = "Lv 20 · Sealed",
-		message = "Sunken Reach is sealed.",
+		message = "Tidecrypt is sealed.",
 	},
 	{
 		id = "ember",
