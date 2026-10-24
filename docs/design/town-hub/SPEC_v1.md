@@ -1,127 +1,141 @@
-# Town / Hub Redesign ("Sundered Haven"), Spec v1
+# Town / Hub: "Crater Square" (V1 hub cut down from the live Haven), Spec v1.1
 
-Owner: Prism (design, no code). Builders: Ghost (world + UI), Echo (server hooks). Base: `cursor/live-build-9721` @ `9269e61`. Docs only.
-Asked for in: Agent Board "Prism: overnight queue: Town redesign + dungeon look specs" (https://app.notion.com/p/403c31ca38838160b0afc69d00631416). Roadmap 3.1 (Shard Gate pad near spawn), Phase 6 (party).
-**Building waits for Kevin's OK after his fun test (Phase S).** Nothing here changes code or Config.
+Owner: Prism (design, no code). Builders: Ghost (world + UI), Echo (server hooks, flags). Base: `cursor/live-build-9721` @ `9269e61`. Docs only.
+Asked for in: Agent Board "Prism: overnight queue: Town redesign + dungeon look specs" (https://app.notion.com/p/403c31ca38838160b0afc69d00631416). Aligned to Ghost's Kevin-approved decisions row (https://app.notion.com/p/403c31ca38838189b1c5ed1249a17e57), decisions 2, 3, 8, 10. Roadmap 3.1 (Shard Gate pad near spawn), Phase 6 (party).
+Nothing here changes code or Config. LaunchGate flag names below are suggestions for Ghost/Echo.
 
-Sources (link, don't copy): live hub `HavenBuilder` + `Shared/Haven.luau` (`FLOOR_Y = 120`, `WALK_SPEED = 16`, Lumen Heart at (0,0), Armory stand at (-26,18)); `docs/design/DUNGEON_GATE_PLAZA.md` (Ghost, Oct 17, six-arch plaza parked); first-30-seconds spec (`prism/first-30-seconds`, Wren left / Gate right in the first shot, about 30 studs walk to the Gate). Element colors reuse the live Haven arch colors: Ember 255,150,40 · Frost 186,228,255 · Void 150,70,220.
+**v1.1 changelog (Oct 23, 2026):** renamed "Sundered Haven" → **Crater Square**. The hub is now the live Haven **cut down**, not a new layout: live spawn (0, 30), live Lumen Heart (0, 0), live Armory, live Rootvault arch slot (0, 108) reused as the Shard Gate. Parked districts and the 5 sealed/raid arches are hidden behind LaunchGate flags (nothing deleted). Walk numbers redone (all under 5 s). Gate prompt = Normal + Hard (Lv 5) only. Pull beams added (per-server, not saved, Phase S). Havoc's QA risks folded into §7. Taste call 2 settled (see §11).
+
+Sources (link, don't copy): `Shared/Haven.luau` (`FLOOR_Y = 120`, `WALK_SPEED = 16`, `PLAZA_RADIUS = 52`, `CRYSTAL` height 36 at (0, 0), `SPAWN` (0, 30) looking south, `GATE_RADIUS = 78` crescent of 6 arches around spawn, `COURT_RIM = 96`, `ARMORY` (-38, -35.8), `DISTRICTS` Forge/Market/Guild Hall/Pet Garden/Observatory at 100–200 st); `Shared/LaunchGate.luau` (`SHOW`, `promptOpen`, `dungeonOpen`); `docs/design/DUNGEON_GATE_PLAZA.md` (Ghost, six-arch crescent; its Hard Lv 10 / Nightmare Lv 15 lines are superseded by decision 10, Ghost to update that doc); first-30-seconds spec (#412). Element colors reuse the live arch colors: Ember 255,150,40 · Frost 186,228,255 · Void 150,70,220.
 
 ## 1. Goal
-A small, readable hub where a new player sees the Roll altar and the Shard Gate in the very first shot, walks spawn → Roll in ~2 s and Roll → Gate in ~4 s, and instantly gets the world's story: a god-crystal shattered, its shards rain down, and the Hollow is draining color from the edges.
+A small, readable V1 hub where a new player sees the Roll altar and the Shard Gate in the very first shot, walks spawn → Roll in ~1.6 s and Roll → Gate in ~3 s, and gets the world's story at a glance: a god-crystal shard fell here and left a crater, shards still rain down, and the Hollow is draining color from the crater lip. Everything not in V1 is hidden, not removed.
 
 ## 2. Where it lives
-- World only: replaces the `HavenBuilder` blockout layout at floor y 120 (same model name, Persistent). The six-arch plaza stays parked (Gate Plaza doc); the far realm arches are out of V1.
+- World only: the live `HavenBuilder` hub at floor y 120 (same model, Persistent), **cut down** to the plaza (r 52 around the Lumen Heart) plus the live gate court (rim r 96 around spawn). That footprint is **Crater Square**.
+- Hidden behind LaunchGate flags (built only when the flag is on; nothing deleted): the 5 district islands and their bridges (Forge, Market, Guild Hall, Pet Garden, Observatory), the 5 non-V1 arches (Heartwood raid, Tidecrypt, Emberforge, Frostveil, Void Rift), Shop, Shrine, Training Grove (`grove`, already off), the 5 class stones (`classes`, already off). Suggested new flags: `hubDistricts`, `sealedGates`.
+- The live Rootvault arch slot (0, 108) is reskinned as the **Shard Gate** into the new wave arena (old Rootvault Waves + room crawl parked per decision 4).
 - Screen UI unchanged: existing ROLL bar (56 px), Bag button, rail. World prompts are `ProximityPrompt` + `BillboardGui`.
-- Theme name: **Sundered Haven**. Landmark: **the Sundered Heart** (replaces the Lumen Heart in place, same origin).
+- Theme name: **Crater Square**. Landmark: the live **Lumen Heart** (name kept, see §11 Q2), now the crater's centerpiece.
 
 ## 3. Flow
-1. Spawn on a 14×14 pad at (0, 64), facing north. Camera sees: the Sundered Heart center-back, the Crackstone (Roll) front-left with Oracle Wren, the Shard Gate arch front-right.
-2. Walk 35 st (2.2 s) to the **Crackstone** at (-26, 40) → ProximityPrompt "Roll" opens the roll flow (existing).
-3. Walk 57 st (3.6 s) to the **Shard Gate pad** at (30, 30) → standing on the pad opens the existing Gate dock (first-30 spec) → START → teleport to the arena.
-4. Optional: **Kit Rack** at (-34, 4) (Bag / equip prompt, opens the existing Bag). **Muster Ring** at (46, 6), 16 st from the Gate pad (Phase 6 party gather; gray-box ring only in V1, no function).
-5. Returning from a run: arrive on a return pad beside spawn at (14, 64) (not on the Gate pad, so no accidental re-entry).
+1. Spawn on the live pad at (0, 30), facing south (live `SPAWN.lookZ`). First shot: Crackstone + Oracle Wren front-left, Shard Gate arch dead ahead (68 st). The Lumen Heart is behind the camera; its 36-st crystal shows when the player turns.
+2. Walk 25 st (1.6 s) to the **Crackstone** at (-12, 52) → ProximityPrompt "Roll" opens the roll flow (existing). Epic/Legendary results fire a **pull beam** (§5).
+3. Walk 48 st (3.0 s) to the **Shard Gate pad** at (0, 98) in front of the arch → standing on the pad opens the existing Gate dock (first-30 spec): **Normal** and **Hard (Lv 5)** only, Hard shows a lock + "Lv 5" below level 5. No Nightmare. START → teleport to the arena.
+4. Optional: **Armory** (live, (-38, -35.8), equip stand; opens the existing Bag/equip). **Muster spot** at (24, 90), 26 st from the Gate pad, reserved for Phase 6 party gather (see §11 Q3).
+5. Returning from a run (win, wipe, or rejoin): arrive on the **return pad** at (14, 30) beside spawn, never on the Gate pad, so no accidental re-entry.
 
 ## 4. Layout
-Origin = Heart center (0, 0), +z = south (toward spawn). All on floor y 120. Map: `mockups/01-topdown-map.svg`.
+Origin = Lumen Heart (0, 0), +z = south. All on floor y 120. Map: `mockups/01-topdown-map.svg`.
 
-| Thing | Center (x, z) | Size (studs) | Notes |
-|---|---|---|---|
-| Plaza disc | (0, 0) | Ø180 walkable | rim band r 90–100 is the Hollow edge, invisible wall at r 98 |
-| Sundered Heart | (0, 0) | pedestal Ø28 × 3; crystal 64 tall | 5–7 floating broken shards at 20–60 high, slow bob |
-| Spawn pad | (0, 64) | 14 × 14 | faces north (LookVector -Z) |
-| Crackstone (Roll) | (-26, 40) | altar Ø12, crystal 9 tall | Oracle Wren stands at (-32, 40) |
-| Shard Gate pad | (30, 30) | pad Ø16; arch 18 tall, 14 wide | arch faces spawn (rotated ~215°) |
-| Kit Rack (Bag) | (-34, 4) | 10 × 4 stand, mirror shard 8 tall | |
-| Muster Ring | (46, 6) | Ø18 ring, 4 sockets | Phase 6, decor only in V1 |
-| Return pad | (14, 64) | 10 × 10 | |
-| Shard craters ×4 | (-55,-40) (60,-45) (-60,40) (10,-70) | Ø8 each | landmarks / orientation |
-| Paths | spawn↔Roll, Roll↔Gate, spawn↔Gate, Roll↔Rack, Gate↔Muster | 10 wide | lighter slate so the route reads |
+| Thing | Center (x, z) | Size (studs) | Source | Notes |
+|---|---|---|---|---|
+| Plaza | (0, 0) | r 52 | live | inner crater floor |
+| Gate court | around spawn (0, 30) | rim r 96 | live `COURT_RIM` | crater lip band r 88–96 is the Hollow-gray edge; invisible wall at r 96 |
+| Lumen Heart | (0, 0) | pedestal 22×22, crystal 36 tall | live | art pass adds a crack + 5–6 orbiting broken shards at r 18–20 |
+| Spawn pad | (0, 30) | live | live | looks south (+Z) at the Gate |
+| Return pad | (14, 30) | 10 × 10 | new | |
+| Crackstone (Roll) | (-12, 52) | altar Ø12, crystal 9 tall | new | Oracle Wren at (-18, 52) |
+| Shard Gate arch | (0, 108) | arch 18 tall, 14 wide | live Rootvault slot | reskinned; subline `Lv 1 · Normal / Hard` |
+| Shard Gate pad | (0, 98) | Ø16 | new | dock trigger (existing EnterPad logic) |
+| Armory | (-38, -35.8) | live | live | equip stand |
+| Muster spot | (24, 90) | Ø18 | reserved | Phase 6, empty or gray-box (§11 Q3) |
+| Hidden arch slots ×5 | crescent bearings 12°–60°, r 78 from spawn | | live, hidden | flag `sealedGates` off; slot left as plain floor (art pass may add rubble decor) |
+| Shard craters ×4 | (-60, 60) (52, -28) (-44, 104) (60, 40) | Ø8 | new | decor / orientation |
+| Paths | spawn↔Roll, Roll↔Gate pad, spawn↔Gate pad, spawn↔Armory, Gate pad↔Muster | 10 wide | new | lighter slate so the route reads |
 
-**Walk times** (WalkSpeed 16): spawn→Roll 35 st / 2.2 s · Roll→Gate 57 st / 3.6 s · spawn→Gate 45 st / 2.8 s · Roll→Rack 37 st / 2.3 s. All far under the 10 s cap.
+**Walk times** (WalkSpeed 16): spawn→Roll 25 st / 1.6 s · Roll→Gate pad 48 st / 3.0 s · spawn→Gate pad 68 st / 4.2 s · spawn→Armory 76 st / 4.7 s. All under the ~10 s cap (decision 2). The Armory path passes the Heart pedestal with 6 st clearance.
 
-**Sight lines:** from spawn, the Heart is dead ahead; Roll at -33° and Gate at +34° from the camera's forward, so both fit the ~70° landscape cone. In the narrow ~40° portrait cone, the Heart and the Gate arch top are visible; the Crackstone sits just outside the cone, so its 9-st crystal + Wren's BillboardGui name must peek in from the left edge (see mockup 02). Nothing tall stands between spawn and Roll/Gate (no part over 2 st high inside the spawn triangle).
+**Sight lines:** from spawn the Gate is dead ahead (0°) and the Crackstone is ~29° left, so both fit the ~70° landscape cone. In the ~40° portrait cone the Gate arch and its billboard are centered; the Crackstone sits just outside, so its 9-st crystal + Wren's BillboardGui name peek in from the left edge (mockup 02). No part over 2 st tall inside the spawn → Roll → Gate triangle.
 
 **Phone camera checks** (default zoom ~12.5 st, mockups 02–03):
-- 390×844 portrait: Heart + Gate arch + Gate billboard visible; Crackstone label at left edge; nothing crosses the center keep-out (x 30–70%, y 28–73%) except the world.
-- 667×375 / 800×400 landscape: all three (Heart, Roll, Gate) visible on spawn.
+- 390×844 portrait: Gate arch + "Shard Gate · 4 s" billboard visible; Crackstone + Wren label at left edge; no screen UI inside the center keep-out (x 30–70%, y 28–73%).
+- 667×375 / 800×400 landscape: Crackstone and Gate both visible on spawn.
 - Desktop 1280×720: same as landscape with more sky.
-- BillboardGui labels: `MaxDistance` 80, `AlwaysOnTop` false, text ≥ 18 px at 390 wide.
+- BillboardGui labels: `MaxDistance` 80 (Gate 96, live `NAMEPLATE_DISTANCE`), `AlwaysOnTop` false, text ≥ 18 px at 390 wide.
 
 ## 5. States
-- **Gate pad:** idle (slow violet swirl) · player on pad (gold rim, dock opens) · countdown (swirl speeds up, 3 s) · party in Muster (Phase 6, later).
+- **Gate pad:** idle (slow violet swirl) · player on pad (gold rim, dock opens: Normal / Hard Lv 5) · countdown (swirl speeds up, 3 s) · party gathering (Phase 6, later).
 - **Crackstone:** idle glow · free rolls left (gold pulse + "FREE" billboard, new players) · rolling (crystal flashes in the revealed rarity color, 0.3 s).
-- **Heart:** constant. Shards bob; one shard "falls" into a random crater every 20–30 s (Tween + burst), purely decor.
-- **Hollow rim:** static gray band + fog particles; no damage, no gameplay.
+- **Pull beam (Phase S):** on an Epic or Legendary roll, a vertical `Beam` in the rarity color (Epic 186,96,240 · Legendary 255,196,64) rises 60 st from the Crackstone for 2.5 s, plus a one-line server toast "<name> pulled a Legendary!". **Per-server only, not saved, no list, no ranking** (decision 8). Max 1 beam at a time; extra pulls queue at 1 s spacing (cap 3 queued, rest dropped).
+- **Lumen Heart:** constant. Shards bob; one shard "falls" into a random crater every 20–30 s (tween + burst), decor only.
+- **Hollow lip:** static gray band + fog particles; no damage, no gameplay.
 
 ## 6. Numbers
-- Plaza Ø180 + rim to Ø200. Floor y 120. WalkSpeed 16 (live).
-- Heart 64 tall; Gate arch 18; Crackstone 9; Kit Rack mirror 8; nothing else over 12 inside r 60.
+- Crater Square = plaza r 52 + court rim r 96. Floor y 120. WalkSpeed 16 (live).
+- Heart 36 (live); Gate arch 18 (live); Crackstone 9; nothing else over 12 inside the spawn triangle.
 - Shard rain: 1 world emitter over the Heart, Rate 6, Lifetime 3–4, Size 0.4–0.8.
-- Shard fall event: every 20–30 s.
+- Shard fall event: every 20–30 s. Pull beam: 2.5 s, 1 at a time.
 
-### Phone performance budget (whole hub, target low-end phone)
+### Phone performance budget (whole visible hub, low-end phone)
 | Budget | Cap |
 |---|---|
-| Parts + MeshParts | ≤ 900 (gray box ≤ 250) |
+| Parts + MeshParts (flags off) | ≤ 900 (gray box ≤ 250) |
 | Triangles (meshes) | ≤ 60k total; Heart ≤ 8k |
 | Lights | ≤ 6 PointLight/SurfaceLight, `Shadows = false` on all; 0 SpotLights |
 | ParticleEmitters | ≤ 6, sum of Rate ≤ 40, live particles ≤ 250 |
-| Beams | ≤ 3 (onboarding beam reuses one) |
-| Textures | ≤ 8 unique; prefer SurfaceAppearance-free plastic/neon/glass |
+| Beams | ≤ 4 (onboarding path beam + 1 pull beam + 2 spare) |
+| Textures | ≤ 8 unique |
 | Unions | 0 (use MeshParts) |
-Glass material only on the Heart and Crackstone crystal (Glass is costly on phones; fallback Neon + 0.3 Transparency on low quality).
+Hiding districts/arches by not building them (flag off) is what makes this budget reachable; hidden ≠ Transparency 1.
 
 ## 7. Edge cases
-- 20+ players at spawn: spawn pad 14×14 + return pad keep the Gate pad clear; Gate pad triggers only for the local player.
-- Player walks off the rim: invisible wall at r 98; if they fall anyway (exploits), `FallenPartsDestroyHeight` respawn on spawn pad.
-- Low graphics quality: emitters auto-thin (Roblox), Heart Glass → Neon fallback.
-- New player never finds Roll: first-30 spec pointer + Wren line; Crackstone is 35 st away and lit.
-- Phone portrait where Crackstone is off-frame: billboard at left edge + world Beam from first-30 spec.
+- 20+ players at spawn: return pad beside spawn keeps the Gate pad clear; Gate pad triggers only for the local player.
+- Player walks off the lip: invisible wall at r 96; if they fall anyway, live `FALL_Y` respawn on the spawn pad.
+- **Hidden content must be closed on the server too (Havoc risk 3):** with a flag off, the district/arch is not built *and* its remote/teleport refuses (`LaunchGate.promptOpen` / `dungeonOpen`), not just hidden parts. A save whose last location points at a hidden district or a parked dungeon loads on the spawn pad.
+- **Gate difficulty (Havoc risk 4):** the dock greys Hard below Lv 5, but the server re-checks level on START.
+- Pull beams: per-server, nothing written to the save (decision 8); a player who leaves mid-beam just ends it.
+- Low graphics quality: emitters auto-thin, Heart Glass → Neon fallback.
+- New player never finds Roll: first-30 spec pointer + Wren line; Crackstone is 25 st away and lit.
 - Streaming: hub model Persistent (live) so landmarks never pop.
 
 ## 8. Mockups
-SVG (in repo): `mockups/01-topdown-map.svg` (map, studs, walk times, sight cones, landmarks) · `mockups/02-spawn-shot-phone-390x844.svg` · `mockups/03-spawn-shot-landscape-667x375.svg`.
+SVG (in repo): `mockups/01-topdown-map.svg` (map, studs, walk times, sight cones, hidden content dashed) · `mockups/02-spawn-shot-phone-390x844.svg` · `mockups/03-spawn-shot-landscape-667x375.svg`. PNG renders are on the box only.
 Fake data. Original art: no reference game's art, layout or names.
 
-### Theme: the Sundered Heart (original)
-- **Shattered god-crystal:** one tall split crystal (two leaning halves with a bright gap), broken pieces floating around it.
-- **Shards raining down:** thin light streaks falling over the plaza, slow and sparse; craters with embedded shards mark where big ones landed.
-- **Broken prismatic sky:** a deep violet sky with "crack" lines in pink/cyan/white edges (a skybox decal set, or a few large Neon Beam strips high in the sky).
-- **Color draining at the Hollow:** saturation steps down by ring: center parts full color → r 60–90 muted → rim r 90–100 gray (RGB ~110,110,116) with gray fog particles. Strongest in the SW "Hollow creep" wedge.
+### Theme: Crater Square (original)
+- **The crater:** the plaza is the bowl where a god-crystal shard struck; the court rim is the crater lip, slightly raised, cracked outward.
+- **Lumen Heart:** the live crystal, art pass adds a bright crack and floating broken pieces, so it reads as "what's left of the shard".
+- **Shards raining down:** thin light streaks over the square; 4 small craters with embedded shards.
+- **Broken prismatic sky:** deep violet with pink/cyan/white "crack" lines (Sky decals or a few high Neon Beam strips).
+- **Color draining at the Hollow:** saturation steps down by ring: center full color → r 60–88 muted → lip r 88–96 gray (RGB ~110,110,116) + gray fog.
 
 ## 9. Build split
-**Gray-box pass (Ghost, after Kevin's OK)** — plain Parts, SmoothPlastic, colors only:
+**Flags pass (Ghost/Echo, first):** add `hubDistricts` + `sealedGates` (off) and gate the matching builders, prompts and remotes; nothing deleted. Park Rootvault Waves/room crawl per decision 4.
+**Gray-box pass (Ghost)** — plain Parts, SmoothPlastic, colors only:
 | # | Part | Shape/size | Color (RGB) |
 |---|---|---|---|
-| 1 | Plaza floor | Block segments forming Ø180 (no cylinders, per HavenBuilder note) | 58,48,86 |
-| 2 | Rim band r90–100 | Blocks | 46,46,52 |
-| 3 | Invisible wall | 24 thin blocks at r 98, Transparency 1 | — |
-| 4 | Heart pedestal | 28×3×28 block (octagon of blocks ok) | 42,36,64 |
-| 5 | Heart crystal | 2 wedge stacks, 64 tall | 200,180,255, Neon |
-| 6 | Spawn pad + SpawnLocation | 14×1×14 | 255,196,64 trim |
-| 7 | Crackstone | 12×2×12 base + 3×9×3 crystal | 120,210,255 |
-| 8 | Wren marker | 2×5×2 block | 255,255,255 |
-| 9 | Gate pad | 16×1×16 + arch (3 blocks) 14w×18h | 255,196,64 / 180,140,255 |
-| 10 | Kit Rack | 10×6×4 + 1×8×4 mirror | 108,226,154 |
-| 11 | Muster ring | 4 sockets 3×0.5×3 | 200,180,255 |
-| 12 | Return pad | 10×1×10 | 120,210,255 |
-| 13 | Paths | 10-wide blocks, 0.1 above floor | 75,63,112 |
-| 14 | Craters | 4 × 8×0.5×8 + 1 small wedge | 124,111,176 |
-Prompts: Crackstone "Roll", Kit Rack "Bag", Gate pad touch zone (existing EnterPad logic).
+| 1 | Crater lip band r 88–96 | Blocks | 46,46,52 |
+| 2 | Invisible wall | thin blocks at r 96, Transparency 1 | — |
+| 3 | Return pad | 10×1×10 at (14, 30) | 120,210,255 |
+| 4 | Crackstone | 12×2×12 base + 3×9×3 crystal at (-12, 52) | 120,210,255 |
+| 5 | Wren marker | 2×5×2 at (-18, 52) | 255,255,255 |
+| 6 | Gate pad | 16×1×16 at (0, 98) | 255,196,64 |
+| 7 | Shard Gate arch | live Rootvault arch, recolor | 180,140,255 body / 255,196,64 edge |
+| 8 | Paths | 10-wide blocks, 0.05 above floor (`Haven.LAYER`) | 75,63,112 |
+| 9 | Craters | 4 × 8×0.5×8 + 1 small wedge | 124,111,176 |
+| 10 | Muster spot (if Q3 = gray-box) | 4 sockets 3×0.5×3 | 200,180,255 |
+Prompts: Crackstone "Roll", Armory (live), Gate pad touch zone (existing EnterPad logic).
 
-**Art pass (later):** 1) Heart MeshPart (split crystal, ≤ 8k tris) + floating shard meshes (≤ 400 tris each) · 2) Crackstone mesh + Wren model · 3) Gate arch mesh with inner Neon swirl (Texture scroll) · 4) prismatic sky (Sky decals or high Beams) · 5) shard rain emitter + fall-event burst · 6) saturation ring re-color of floor tiles + rim fog emitter · 7) crater meshes · 8) Lighting: `Atmosphere` Density 0.32, Color 150,130,200, Decay 90,80,120, Haze 1.5; `Lighting.Ambient` 70,60,100; ClockTime fixed 18.5 (or keep day cycle — open question); `Bloom` Intensity 0.6, Threshold 1.6.
+**Art pass (Phase S):** 1) Heart crack + floating shard meshes (≤ 400 tris each) · 2) Crackstone mesh + Wren model · 3) Shard Gate arch reskin with inner Neon swirl (Texture scroll) · 4) prismatic sky · 5) shard rain emitter + fall-event burst · 6) pull beam (`Beam` + 2 Attachments, Width 3, LightEmission 1) · 7) saturation ring re-color + lip fog · 8) crater meshes · 9) Lighting: `Atmosphere` Density 0.32, Color 150,130,200, Decay 90,80,120, Haze 1.5; `Lighting.Ambient` 70,60,100; ClockTime fixed 18.5 or day cycle (§11 Q1); `Bloom` Intensity 0.6, Threshold 1.6.
 
 Roblox notes: everything is Parts/MeshParts, Lighting/Atmosphere, Sky, Beams and world ParticleEmitters. "Color draining" is per-part color, not a post effect (ColorCorrection is global and would gray the whole screen).
 
 ## 10. Pass criteria
-- [ ] From spawn at 390×844 the Heart and Gate are visible; at 667×375 all of Heart, Crackstone, Gate.
-- [ ] Spawn→Roll ≤ 10 s (target 2.2 s) and Roll→Gate ≤ 10 s (target 3.6 s), timed on foot.
-- [ ] No world part blocks the spawn→Roll or Roll→Gate line.
-- [ ] Performance budget table met (Studio MicroProfiler / stats on a phone emulator).
-- [ ] No screen UI added; touch targets that exist stay ≥ 44 px.
-- [ ] Theme reads in a screenshot: shattered crystal, falling shards, cracked sky, gray edge.
+- [ ] From spawn at 390×844 the Gate arch + billboard are visible and Wren's label peeks in left; at 667×375 both Crackstone and Gate.
+- [ ] Spawn→Roll ≤ 10 s (target 1.6 s) and Roll→Gate ≤ 10 s (target 3.0 s), timed on foot.
+- [ ] With flags off: no district, sealed arch, Shop, Shrine, Grove or class stone is built, and their remotes refuse; old saves load on spawn.
+- [ ] Gate dock shows Normal + Hard (Lv 5) only; no Nightmare anywhere.
+- [ ] Pull beam shows for everyone on the server and nothing is saved.
+- [ ] Performance budget met; no screen UI added; touch targets stay ≥ 44 px.
+- [ ] Theme reads in a screenshot: crater, falling shards, cracked sky, gray lip.
 
 ## 11. Open questions (Kevin)
-1. Fixed evening time (ClockTime 18.5, best for the cracked sky) or keep the live day cycle?
-2. Rename the Lumen Heart to "Sundered Heart" in-world, or keep the Lumen Heart name with the new look?
-3. Muster Ring: gray-box it now (decor) so the space is reserved, or leave the spot empty until Phase 6?
+1. Fixed evening time (ClockTime 18.5, best for the cracked sky) or keep the live day cycle? (Prism pick: evening) — **open**.
+2. ~~Rename the Lumen Heart to "Sundered Heart"?~~ **Settled by Ghost's decisions (Oct 23, 2026):** the hub identity is **Crater Square** (decision 2/3) and the hub is the live Haven cut down, so the landmark keeps its live name **Lumen Heart** with the new cracked look. Kevin can still rename it later.
+3. Muster spot: gray-box 4 sockets now (decor) so the space is reserved, or leave the spot empty until Phase 6? (Prism pick: gray-box) — **open**.
+
+Not a Kevin question: Ghost to update `DUNGEON_GATE_PLAZA.md` (Hard Lv 5, no Nightmare) per decision 10.
+
+## Decision log
+- 2026-10-23 (Ghost, Kevin pre-approved): hub = Crater Square, small V1 hub cut down from the live Haven; parked districts + 5 sealed gates hidden behind LaunchGate flags (delete nothing); Spawn, Roll and Gate within ~10 s walk. Gate prompt = Normal + Hard (Lv 5), no Nightmare. Pull beams per-server only, not saved, Phase S. → v1.1.
