@@ -404,6 +404,9 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	if not WaveFlowService.open() or run == nil then
 		return 0
 	end
+	if run.stopped == true and run.clear ~= true then
+		return 0
+	end
 	local before = WaveFlow.counter(run)
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
