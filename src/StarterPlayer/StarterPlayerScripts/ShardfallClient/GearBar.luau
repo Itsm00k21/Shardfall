@@ -21,8 +21,10 @@
 	Uncommon (GearHooks.safeCap); a saved Rare+ cap shows in the chip as it
 	is, the popover shows it clamped to Uncommon with one plain line, and
 	opening the popover while it is on sends the clamp once so the server
-	matches the dropdown. A refused press leaves
-	the label on the server's value and shows the reason. The chip keeps
+	matches the dropdown. A refused clamp is not marked sent: the pill
+	stays on the server's value, the reason shows, and the next open
+	tries again. A refused press leaves the label on the server's value
+	and shows the reason. The chip keeps
 	one width on or off so it never shoves Select.
 
 	bulk     "BulkPicker" (Clip 9): "Salvage…" in the row on Weapons and
@@ -666,7 +668,8 @@ function GearBar.mount(parent: Instance, opts: Opts)
 
 	-- A saved Rare+ cap that is on: opening the popover sends the clamp
 	-- once, quietly, so the server stops salvaging what the dropdown says
-	-- it keeps. Mounting and repaints never send.
+	-- it keeps. Mounting and repaints never send. A refused clamp is not
+	-- treated as sent, so the next open of the pill tries again.
 	local clampSent = false
 	clampCap = function()
 		local profile = opts.getProfile()
@@ -674,7 +677,13 @@ function GearBar.mount(parent: Instance, opts: Opts)
 			return
 		end
 		clampSent = true
-		call("auto", { enabled = true, rarity = GearHooks.safeCap(GearHooks.autoCapName(profile)) }, function(_) end)
+		call("auto", { enabled = true, rarity = GearHooks.safeCap(GearHooks.autoCapName(profile)) }, function(result)
+			local stillUnsafe = GearHooks.capUnsafe(opts.getProfile())
+			if type(result) ~= "table" or result.ok ~= true or stillUnsafe then
+				clampSent = false
+				opts.onStatus(message(result, "Could not change auto-salvage."), "error")
+			end
+		end)
 	end
 
 	-- Bulk picker: one server preview per row, one at a time.

@@ -536,6 +536,10 @@ describe("Gear polish: clip 6 Pets page", function()
 			GuiFake.activate(GuiFake.findNamed(petCard(screen, "owl"), "Lock"))
 			local again = GuiFake.findNamed(screen, "PetList")
 			expect(again ~= list).toBeTrue()
+			-- Written before AutomaticCanvasSize applies, so it is not
+			-- restored yet. The canvas-size signal is what puts it back.
+			expect(again.CanvasPosition == nil).toBeTrue()
+			again:GetPropertyChangedSignal("AbsoluteCanvasSize"):Fire()
 			expect(again.CanvasPosition.Y).toEqual(180)
 			-- A pick still wins over the equipped default.
 			GuiFake.activate(petCard(screen, "owl"))
