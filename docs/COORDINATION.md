@@ -62,6 +62,8 @@ Before pushing code:
 - `lune run tests/run`
 - `rojo build -o /tmp/Shardfall.rbxlx` when modules or `default.project.json` changed.
 
+GitHub Actions runs the first two commands on every pull request and on every push to `cursor/live-build-9721`. The workflow is `.github/workflows/gates.yml`. It checks out the repo, installs the tools pinned in `rokit.toml` with Rokit, then runs `selene src` and `lune run tests/run`. Either command exiting non-zero fails the job. That job does not run StyLua and does not use secrets.
+
 Add tests for new rules. Stylua: tabs, column width 100.
 
 ## Handoff
