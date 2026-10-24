@@ -14,7 +14,8 @@
 
 	Party state stays in memory. No profile write and no teleport.
 	The wave arena has its own flag. A finished countdown locks the roster
-	and prints it. Players stay in the hub.
+	and prints it. A Normal lock names the player who kept it Normal.
+	Players stay in the hub. There is no lock card in the client.
 ]]
 
 local studio = game ~= nil and game.GetService ~= nil
@@ -284,7 +285,23 @@ function PartyGatherHost.start(): Folder?
 		end
 		local ticked = gather.tick(state, now, options)
 		for _, event in ipairs(ticked) do
-			if event.kind == "start" then
+			if event.kind == "lock" then
+				local keeper = event.keptNormal
+				if type(keeper) == "string" and keeper ~= "" then
+					print(string.format(
+						"[Shardfall] party gather lock n=%d tier=%s kept=%s",
+						event.n or 0,
+						tostring(event.tier),
+						keeper
+					))
+				else
+					print(string.format(
+						"[Shardfall] party gather lock n=%d tier=%s",
+						event.n or 0,
+						tostring(event.tier)
+					))
+				end
+			elseif event.kind == "start" then
 				print(string.format(
 					"[Shardfall] party gather start n=%d tier=%s mult=%.1f",
 					event.n or 0,
