@@ -1,3 +1,5 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
 # Roll Screen + Shard Crack Reveal: Spec v1.3
 
 
@@ -142,8 +144,11 @@ SVG mockups in `mockups/`: `01-idle.svg`, `02-uncommon.svg`, `09-x10-results.svg
 
 ## 11. Open questions
 1. ~~@Ghost: collapse bar or close fully?~~ **Collapse to the 56 px ROLL-only bar (Ghost).**
-2. @Kevin (with Kevin via Ghost): on a first-ever roll, force full length with no Auto? (yes/no)
+2. ~~@Kevin: on a first-ever roll, force full length with no Auto?~~ **Yes (Ghost, Kevin pre-approved, Oct 23, 2026).** The first-ever roll always plays at full length with no Auto, as §7 already says. Kevin can change it later. Board row: https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d
 3. ~~@Ghost: best-tile tie-break?~~ **NEW tile, then earliest roll (Ghost).**
+
+## Decision log
+- 2026-10-23 (Ghost, Kevin pre-approved): Q2 = **yes**, the first-ever roll plays full length with no Auto. All §11 questions are now closed.
 
 ## Later (not V1)
 Mythic/Secret reveal (Phase 5 appendix in v1.1), Legendary cross-server announcement, and reduced-motion variants.
@@ -192,3 +197,6 @@ Everything here must render with stock Roblox UI.
 | spinner_64 | 64×64 | loading |
 | lock_icon | 32×32 | locked tab |
 | crystal mesh (option A) | ≤ 500 tris | MeshPart for the ViewportFrame |
+
+
+</cursor_untrusted_data_1337>
