@@ -522,3 +522,171 @@ describe("Equip prompt buttons always fit", function()
 		expect(string.find(source, "HudLayout.promptButtons(ask.w)", 1, true) ~= nil).toBeTrue()
 	end)
 end)
+
+-- [Ghost] Clip 7 (Kevin): the Bag preview sat over the grid and Equip
+-- Best; "Dodge!" sat on Jump; toasts drew over the Rootvault cleared card.
+local CombatCluster = require("../src/ReplicatedStorage/Shared/CombatCluster")
+local HeavyChip = require("../src/ReplicatedStorage/Shared/HeavyChip")
+local HubStyle = require("../src/ReplicatedStorage/Shared/HubStyle")
+
+describe("HUD overlap (Clip 7): Bag open, Dodge! hint, result card", function()
+	local function inside(inner: Rect, outer: Rect): boolean
+		return inner.x >= outer.x
+			and inner.y >= outer.y
+			and inner.x + inner.w <= outer.x + outer.w
+			and inner.y + inner.h <= outer.y + outer.h
+	end
+
+	it("Bag open: grid, Equip Best footer and preview never overlap, on every view", function()
+		local problems = {}
+		for _, view in ipairs(VIEWS) do
+			local vx, vy = view[1], view[2]
+			local margin = UiTheme.safeMargin()
+			local hub = HudLayout.hub(vx, vy, margin, 3)
+			local body = HudLayout.hubBody(hub.w, hub.h)
+			local cols = HubStyle.bagColumns(body.w, body.h, true)
+			local page = { x = 0, y = 0, w = body.w, h = body.h }
+			local parts: { Named } = {
+				{ name = "grid", rect = cols.grid },
+				{ name = "foot", rect = cols.foot },
+			}
+			if cols.previewShown then
+				table.insert(parts, { name = "preview", rect = cols.preview })
+			end
+			for i = 1, #parts do
+				if not inside(parts[i].rect, page) then
+					table.insert(
+						problems,
+						string.format("%dx%d %s off the page", vx, vy, parts[i].name)
+					)
+				end
+				for j = i + 1, #parts do
+					if HudLayout.overlaps(parts[i].rect, parts[j].rect) then
+						table.insert(
+							problems,
+							string.format("%dx%d %s x %s", vx, vy, parts[i].name, parts[j].name)
+						)
+					end
+				end
+			end
+			-- The panel itself stays on screen with the Bag open.
+			local panel = { x = hub.x, y = hub.y, w = hub.w, h = hub.h }
+			if not inside(panel, { x = 0, y = 0, w = vx, h = vy }) then
+				table.insert(problems, string.format("%dx%d hub panel off screen", vx, vy))
+			end
+			if cols.previewShown then
+				-- A decent figure: the worn viewport fits its column and is
+				-- never a postage stamp.
+				local worn = HubStyle.wornHeight(cols.preview.h)
+				if worn < 96 or worn + 56 > cols.preview.h then
+					table.insert(
+						problems,
+						string.format("%dx%d worn %d in %d", vx, vy, worn, cols.preview.h)
+					)
+				end
+			end
+		end
+		if #problems > 0 then
+			print(table.concat(problems, "\n"))
+		end
+		expect(#problems).toEqual(0)
+	end)
+
+	it("Kevin's 1024x500 and 1920x1080 Bags are two columns with a big figure", function()
+		for _, view in ipairs({ { 1024, 500 }, { 1920, 1080 } }) do
+			local hub = HudLayout.hub(view[1], view[2], UiTheme.safeMargin(), 3)
+			local body = HudLayout.hubBody(hub.w, hub.h)
+			local cols = HubStyle.bagColumns(body.w, body.h, true)
+			expect(cols.side).toBeTrue()
+			expect(cols.previewShown).toBeTrue()
+			expect(cols.preview.x >= cols.grid.x + cols.grid.w).toBeTrue()
+			expect(cols.foot.w).toEqual(cols.grid.w)
+			expect(cols.preview.h).toEqual(body.h)
+			expect(HubStyle.wornHeight(cols.preview.h) >= 260).toBeTrue()
+		end
+	end)
+
+	it("Dodge! hint clears Dodge, Jump, Swing, Heavy and the slot bar on every view", function()
+		local problems = {}
+		for _, view in ipairs(VIEWS) do
+			local vx, vy = view[1], view[2]
+			for _, touch in ipairs({ false, true }) do
+				local mobile = touch or vx < 700 or vy < 500
+				local heavyShown = HeavyChip.show(mobile)
+				local cluster = CombatCluster.place(vx, vy, nil, mobile)
+				local bar = ActionSlots.placement(vx, vy, mobile)
+				local hint = CombatCluster.hintRect(vx, vy, mobile, heavyShown)
+				local others: { Named } = {
+					{ name = "dodge", rect = cluster.dodge },
+					{ name = "jump", rect = cluster.jump },
+					{ name = "attack", rect = cluster.attack },
+					{ name = "bar", rect = { x = bar.x, y = bar.y, w = bar.w, h = bar.h } },
+				}
+				if heavyShown then
+					table.insert(others, { name = "heavy", rect = cluster.heavy })
+				end
+				for _, other in ipairs(others) do
+					if HudLayout.overlaps(hint, other.rect) then
+						table.insert(
+							problems,
+							string.format(
+								"%dx%d %s: hint x %s",
+								vx,
+								vy,
+								if touch then "touch" else "mouse",
+								other.name
+							)
+						)
+					end
+				end
+				if not inside(hint, { x = 0, y = 0, w = vx, h = vy }) then
+					table.insert(problems, string.format("%dx%d hint off screen", vx, vy))
+				end
+			end
+		end
+		if #problems > 0 then
+			print(table.concat(problems, "\n"))
+		end
+		expect(#problems).toEqual(0)
+	end)
+
+	it("result card + toast: the card draws above the toast lane wherever they meet", function()
+		local combat =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
+		local shell =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau")
+		local onboard =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/OnboardHud.luau")
+		local resultOrder = tonumber(string.match(combat, "CombatHud%.RESULT_ORDER = (%d+)"))
+		local toastOrder = tonumber(string.match(shell, "screen%.DisplayOrder = (%d+)"))
+		expect(resultOrder).toEqual(50)
+		expect(toastOrder).toEqual(30)
+		expect(string.find(combat, "card.Parent = resultGui", 1, true) ~= nil).toBeTrue()
+		expect(string.find(onboard, "DisplayOrder = 95", 1, true) ~= nil).toBeTrue()
+		-- The intro pill (95) is above the card, so it must fold under it.
+		local init =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau")
+		expect(
+			string.find(init, 'OnboardHud.coverWhen("clearCard", CombatHud.resultShowing)', 1, true)
+				~= nil
+		).toBeTrue()
+		-- Pairwise: where the card (340 wide, centred at 38% x 45%) meets
+		-- the toast lane, the card's band wins.
+		local met = 0
+		for _, view in ipairs(VIEWS) do
+			local vx, vy = view[1], view[2]
+			local card = {
+				x = math.floor(vx * 0.38 - 170),
+				y = math.floor(vy * 0.45 - 110),
+				w = 340,
+				h = 220,
+			}
+			local toast = HudLayout.toastHost(vx, UiTheme.safeMargin())
+			if HudLayout.overlaps(card, toast) then
+				met += 1
+				expect(resultOrder > toastOrder).toBeTrue()
+			end
+		end
+		expect(met >= 0).toBeTrue()
+	end)
+end)

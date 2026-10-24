@@ -574,6 +574,9 @@ describe("Wide recheck", function()
 			expect(hasText(shop, "Dust")).toBeFalse()
 			expect(hasText(shop, "Robux")).toBeFalse()
 			ui.hub.close()
+			-- Clip 7: the close plays 0.15 s before the hub hides.
+			expect(ui.hub.isOpen()).toBeFalse()
+			ui.hub.settleMotion()
 			expect(ui.screen.Enabled).toBeFalse()
 		end
 	end)

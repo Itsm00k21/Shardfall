@@ -467,6 +467,19 @@ local function apply(rows: { Row })
 	end
 end
 
+-- [Ghost] Clip 7: done and total for the rows on screen, so the Goals tab
+-- counts the same list.
+function StarterGoalHud.counts(result: any): (number, number)
+	local rows = StarterGoalHud.rows(result)
+	local done = 0
+	for _, row in ipairs(rows) do
+		if row.progress >= row.goal then
+			done += 1
+		end
+	end
+	return done, #rows
+end
+
 -- True while any source asked the list to stay hidden.
 function StarterGoalHud.isSuppressed(): boolean
 	for _, on in pairs(suppressed) do

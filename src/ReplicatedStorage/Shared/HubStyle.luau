@@ -255,7 +255,12 @@ function HubStyle.bestGear(profile: any, _extra: any?): { string }
 	local best: { [string]: any } = {}
 	for _, item in pairs(profile.inventory) do
 		local bucket = gearBucket(item)
-		if bucket ~= nil and type(item) == "table" and type(item.uid) == "string" and item.uid ~= "" then
+		if
+			bucket ~= nil
+			and type(item) == "table"
+			and type(item.uid) == "string"
+			and item.uid ~= ""
+		then
 			local current = best[bucket]
 			if current == nil or InventoryView.powerOf(item) > InventoryView.powerOf(current) then
 				best[bucket] = item
@@ -328,7 +333,12 @@ function HubStyle.petStats(pet: any): { { label: string, value: string } }
 		return rows
 	end
 	local function add(label: string, value: any)
-		if type(value) == "number" and value == value and value > -math.huge and value < math.huge then
+		if
+			type(value) == "number"
+			and value == value
+			and value > -math.huge
+			and value < math.huge
+		then
 			table.insert(rows, { label = label, value = tostring(math.floor(value)) })
 		elseif type(value) == "string" and value ~= "" then
 			table.insert(rows, { label = label, value = value })
@@ -447,6 +457,77 @@ function HubStyle.bagStage(width: any, height: any, _extra: any?)
 		loadout = loadout,
 		slots = 8,
 	}
+end
+
+-- [Ghost] Clip 7 (Kevin, Oct 24): the Bag is two columns. The grid and
+-- its Equip Best footer own the left column; the worn preview owns the
+-- right column, full height, so it never sits over a card or the footer.
+-- Kevin's 1024x500 bag page is 577 wide, so two columns hold down to 440;
+-- below that the three stack (grid, footer, preview), and the preview
+-- folds away only when the page cannot give it a 96px figure.
+-- pageW and pageH are the real bag page size (MenuHub reads AbsoluteSize).
+HubStyle.BAG_FOOT_H = 44 + 8 * 2
+HubStyle.BAG_GAP = 8
+HubStyle.BAG_PREVIEW_MIN = 200
+HubStyle.BAG_PREVIEW_MAX = 360
+HubStyle.BAG_PREVIEW_SHARE = 0.36
+HubStyle.BAG_SIDE_MIN_W = 440
+-- 96 (smallest figure) + the Equipped line and padding (56).
+HubStyle.BAG_STACK_PREVIEW_MIN_H = 152
+
+function HubStyle.bagColumns(pageW: any, pageH: any, previewOn: boolean?)
+	local w = span(pageW, 720, 120)
+	local h = span(pageH, 420, 120)
+	local gap = HubStyle.BAG_GAP
+	local footH = HubStyle.BAG_FOOT_H
+	local wantPreview = previewOn ~= false
+	if not wantPreview then
+		return {
+			w = w,
+			h = h,
+			side = false,
+			grid = { x = 0, y = 0, w = w, h = math.max(0, h - footH) },
+			foot = { x = 0, y = math.max(0, h - footH), w = w, h = footH },
+			preview = { x = 0, y = h, w = w, h = 0 },
+			previewShown = false,
+		}
+	end
+	if w >= HubStyle.BAG_SIDE_MIN_W then
+		local previewW = math.floor(w * HubStyle.BAG_PREVIEW_SHARE + 0.5)
+		previewW = math.clamp(previewW, HubStyle.BAG_PREVIEW_MIN, HubStyle.BAG_PREVIEW_MAX)
+		local gridW = w - previewW - gap
+		return {
+			w = w,
+			h = h,
+			side = true,
+			grid = { x = 0, y = 0, w = gridW, h = math.max(0, h - footH) },
+			foot = { x = 0, y = math.max(0, h - footH), w = gridW, h = footH },
+			preview = { x = gridW + gap, y = 0, w = previewW, h = h },
+			previewShown = true,
+		}
+	end
+	local rest = h - footH - gap
+	local previewH = math.floor(rest * 0.45)
+	if previewH < HubStyle.BAG_STACK_PREVIEW_MIN_H then
+		return HubStyle.bagColumns(w, h, false)
+	end
+	local gridH = rest - previewH
+	return {
+		w = w,
+		h = h,
+		side = false,
+		grid = { x = 0, y = 0, w = w, h = gridH },
+		foot = { x = 0, y = gridH, w = w, h = footH },
+		preview = { x = 0, y = gridH + footH + gap, w = w, h = previewH },
+		previewShown = true,
+	}
+end
+
+-- Worn viewport height inside the preview column: whatever the column has
+-- after the "Equipped" line and padding, kept between 96 and 420.
+function HubStyle.wornHeight(previewH: any): number
+	local h = span(previewH, 300, 0)
+	return math.clamp(h - 4 - 28 - 8 * 3, 96, 420)
 end
 
 function HubStyle.petStage(width: any, height: any, _extra: any?)

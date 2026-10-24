@@ -460,7 +460,8 @@ end
 -- loot toast, not the gold banner.
 CombatFeel.LOOT_PREFIX = "Loot: "
 function CombatFeel.isLootLine(text: any): boolean
-	return type(text) == "string" and string.sub(text, 1, #CombatFeel.LOOT_PREFIX) == CombatFeel.LOOT_PREFIX
+	return type(text) == "string"
+		and string.sub(text, 1, #CombatFeel.LOOT_PREFIX) == CombatFeel.LOOT_PREFIX
 end
 
 function CombatFeel.hintOnBanner(text: string): boolean
@@ -481,6 +482,31 @@ function CombatFeel.hintOnBanner(text: string): boolean
 		return false
 	end
 	return true
+end
+
+-- [Ghost] Clip 7: "No target in range." is a short hint. It shows for
+-- 0.7 s, fades in 0.25 s, and a repeat inside HINT_REPEAT seconds is
+-- skipped instead of restarting the clock (swinging at air kept it up).
+CombatFeel.SHORT_HINTS = table.freeze({ ["No target in range."] = true })
+CombatFeel.HINT_REPEAT = 3
+
+export type HintPlan = { show: boolean, hold: number, fade: number }
+
+function CombatFeel.hintPlan(text: any, lastText: any, lastAt: any, now: any): HintPlan
+	local trimmed = if type(text) == "string" then string.match(text, "^%s*(.-)%s*$") or "" else ""
+	if trimmed == "" then
+		return { show = false, hold = 0, fade = 0 }
+	end
+	if CombatFeel.SHORT_HINTS[trimmed] ~= true then
+		return { show = true, hold = 1.6, fade = 0.45 }
+	end
+	local since = if type(lastAt) == "number" and type(now) == "number"
+		then now - lastAt
+		else math.huge
+	if lastText == trimmed and since >= 0 and since < CombatFeel.HINT_REPEAT then
+		return { show = false, hold = 0, fade = 0 }
+	end
+	return { show = true, hold = 0.7, fade = 0.25 }
 end
 
 function CombatFeel.teachCue(seen: number): boolean

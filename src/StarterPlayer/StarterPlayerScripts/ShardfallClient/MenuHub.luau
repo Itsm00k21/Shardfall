@@ -36,6 +36,8 @@ local UserInputService = game:GetService("UserInputService")
 
 local ActionDrag = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ActionDrag"))
 local ActionSlots = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ActionSlots"))
+-- Prism PANEL_STYLE Secondary button top color (hubFn.button).
+local HUB_SECONDARY = { 52, 58, 72 }
 local BagBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagBoard"))
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
@@ -168,6 +170,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.openScale.Name = "OpenScale"
 	hubState.openScale.Scale = 1
 	hubState.openScale.Parent = hubState.panel
+	-- [Ghost] Clip 7: a body-colored veil over the panel fades out on open
+	-- and in on close, so the window fades as well as scales.
+	hubState.veil = Instance.new("Frame")
+	hubState.veil.Name = "OpenVeil"
+	hubState.veil.Size = UDim2.fromScale(1, 1)
+	hubState.veil.BackgroundColor3 = Color3.fromRGB(16, 14, 38)
+	hubState.veil.BackgroundTransparency = 1
+	hubState.veil.BorderSizePixel = 0
+	hubState.veil.Active = false
+	hubState.veil.Visible = false
+	hubState.veil.ZIndex = 60
+	hubState.veil.Parent = hubState.panel
 	hubState.panelCorner = Instance.new("UICorner")
 	hubState.panelCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 	hubState.panelCorner.Parent = hubState.panel
@@ -2597,6 +2611,49 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 	end
 
+	-- [Ghost] Clip 7: a real button (Prism PANEL_STYLE "Secondary"):
+	-- centered bold label, 48 tall, corner 10, a top-to-bottom gradient
+	-- 52,58,72 -> 40,46,58. Rows stay for lists; actions use this.
+	function hubFn.button(
+		parent: Instance,
+		text: string,
+		order: number,
+		fn: (() -> ())?
+	): TextButton
+		local fill = Color3.fromRGB(HUB_SECONDARY[1], HUB_SECONDARY[2], HUB_SECONDARY[3])
+		local button = Instance.new("TextButton")
+		button.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH + 4)
+		button.BackgroundColor3 = fill
+		button.BorderSizePixel = 0
+		button.Font = headerFont()
+		button.TextSize = 16
+		button.TextXAlignment = Enum.TextXAlignment.Center
+		button.TextColor3 = rgb("text")
+		button.Text = text
+		button.LayoutOrder = order
+		button.AutoButtonColor = false
+		button.Parent = parent
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 10)
+		corner.Parent = button
+		local shade = Instance.new("UIGradient")
+		shade.Rotation = 90
+		shade.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(197, 203, 204))
+		shade.Parent = button
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 1
+		stroke.Color = Color3.fromRGB(255, 206, 96)
+		stroke.Transparency = 0.6
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = button
+		hubFn.setRest(button, fill)
+		hubFn.motion(button)
+		if fn ~= nil then
+			hubFn.bindActivated(button, fn)
+		end
+		return button
+	end
+
 	function hubFn.row(parent: Instance, text: string, order: number, fn: (() -> ())?): TextButton
 		local button = Instance.new("TextButton")
 		button.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
@@ -2869,17 +2926,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 	end
 
-	function hubFn.mountWorn(parent: Instance)
+	function hubFn.mountWorn(parent: Instance, height: number?)
 		local viewport = Instance.new("ViewportFrame")
 		viewport.Name = "Worn"
 		viewport.BackgroundColor3 = rgb("header")
-		viewport.Size = UDim2.new(1, 0, 0, 140)
+		-- [Ghost] Clip 7: the preview column sizes the character
+		-- (HubStyle.wornHeight); 140 was a thumbnail.
+		viewport.Size = UDim2.new(1, 0, 0, height or 140)
 		viewport.LayoutOrder = 0
 		viewport.Parent = parent
+		local wornCorner = Instance.new("UICorner")
+		wornCorner.CornerRadius = UDim.new(0, 12)
+		wornCorner.Parent = viewport
 		local world = Instance.new("WorldModel")
 		world.Name = "World"
 		world.Parent = viewport
 		local wornCam = Instance.new("Camera")
+		wornCam.FieldOfView = HeroView.WORN_FOV
 		wornCam.CFrame = CFrame.new(Vector3.new(0, 2.2, -6.2), Vector3.new(0, 2, 0))
 		wornCam.Parent = viewport
 		viewport.CurrentCamera = wornCam
@@ -2908,20 +2971,62 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local action = HeroView.place(built, model ~= nil, viewport.Parent ~= nil)
 			if action == "parent" then
 				model.Parent = world
+				-- Frame the whole body from its real bounds, so a tall
+				-- column shows a big character instead of empty sky.
+				local boxed, boxCf, boxSize = pcall(function()
+					return model:GetBoundingBox()
+				end)
+				if boxed and boxCf ~= nil and boxSize ~= nil then
+					local size = viewport.AbsoluteSize
+					local aspect = if size.Y > 0 then size.X / size.Y else 1
+					local distance =
+						HeroView.frameDistance(boxSize.Y, boxSize.X, aspect, HeroView.WORN_FOV)
+					local center = boxCf.Position
+					wornCam.CFrame = CFrame.new(center + Vector3.new(0, 0, -distance), center)
+				end
 			elseif action == "destroy" then
 				model:Destroy()
 			end
 		end)
 	end
 
-	-- The detail pane sits over part of the bag page (bagStage). Shrink the
-	-- card list to the grid area while the pane shows, so no card row hides
-	-- under it, and give the full page back when it hides.
+	-- The detail pane is the Bag's preview column (HubStyle.bagColumns).
 	-- Bag cards go compact while the detail pane is open (task 18, option 1).
 	function hubFn.bagCompact(): boolean
 		return hubState.detail ~= nil and hubState.detail.Visible and hubState.shownId == "bag"
 	end
 
+	-- [Ghost] Clip 7: the real bag page size. Falls back to the hub body
+	-- before the first layout pass.
+	function hubFn.bagPageSize(): (number, number)
+		local page = if hubState.bag ~= nil then hubState.bag.Parent else nil
+		local w, h = 0, 0
+		if page ~= nil and page:IsA("GuiObject") then
+			w = page.AbsoluteSize.X
+			h = page.AbsoluteSize.Y
+		end
+		if w < 120 or h < 120 then
+			local vx, vy = hubFn.view()
+			local box = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
+			local inner = HudLayout.hubBody(box.w, box.h)
+			if w < 120 then
+				w = inner.w
+			end
+			if h < 120 then
+				h = inner.h
+			end
+		end
+		return w, h
+	end
+
+	function hubFn.bagColumns()
+		local w, h = hubFn.bagPageSize()
+		local previewOn = hubState.detail ~= nil and hubState.detail.Visible
+		return HubStyle.bagColumns(w, h, previewOn)
+	end
+
+	-- Grid, footer, and preview each get their own rect from
+	-- HubStyle.bagColumns, so nothing is drawn over anything else.
 	function hubFn.fitBagList()
 		local list = hubState.bag
 		if list == nil or hubState.detail == nil then
@@ -2935,36 +3040,45 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.bagCompactPainted = hubFn.bagCompact()
 			task.defer(hubFn.paintBag)
 		end
-		-- Leave room for the pinned BagFoot, or the last card row sits
-		-- under it and reads as cut off.
-		local footH = if list.Parent ~= nil
-				and list.Parent:FindFirstChild("BagFoot") ~= nil
-			then UiTheme.TOUCH + UiTheme.PAD * 2
-			else 0
-		if not hubState.detail.Visible then
-			list.Size = UDim2.new(1, 0, 1, -footH)
-			return
+		local cols = hubFn.bagColumns()
+		local foot = if list.Parent ~= nil then list.Parent:FindFirstChild("BagFoot") else nil
+		local gridH = if foot ~= nil then cols.grid.h else cols.grid.h + cols.foot.h
+		list.Position = UDim2.fromOffset(cols.grid.x, cols.grid.y)
+		list.Size = UDim2.fromOffset(cols.grid.w, math.max(80, gridH))
+		if foot ~= nil and foot:IsA("GuiObject") then
+			foot.AnchorPoint = Vector2.new(0, 0)
+			foot.Position = UDim2.fromOffset(cols.foot.x + UiTheme.PAD, cols.foot.y + UiTheme.PAD)
+			foot.Size = UDim2.fromOffset(math.max(0, cols.foot.w - UiTheme.PAD * 2), UiTheme.TOUCH)
 		end
-		local box = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
-		local gap = 8
-		if box.detail.x > 0 then
-			list.Size = UDim2.new(0, math.max(80, box.detail.x - gap), 1, -footH)
-		else
-			list.Size = UDim2.new(1, 0, 0, math.max(80, box.detail.y - gap))
+		if hubState.detail.Visible and hubState.shownId == "bag" then
+			hubFn.placeDetail()
 		end
 	end
 
 	function hubFn.placeDetail()
-		local detailBox = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
-		hubState.detail.Position = UDim2.fromOffset(detailBox.detail.x, detailBox.detail.y)
-		hubState.detail.Size = UDim2.fromOffset(detailBox.detail.w, detailBox.detail.h)
+		local w, h = hubFn.bagPageSize()
+		local cols = HubStyle.bagColumns(w, h, true)
+		hubState.detail.Position = UDim2.fromOffset(cols.preview.x, cols.preview.y)
+		hubState.detail.Size = UDim2.fromOffset(cols.preview.w, cols.preview.h)
+		return cols
+	end
+
+	-- Back only means something on an item's detail. The worn preview has
+	-- nowhere to go back to, so it starts at the top of the column.
+	function hubFn.setDetailBack(on: boolean)
+		hubState.detailBack.Visible = on
+		local top = if on then UiTheme.TOUCH + 12 else 4
+		hubState.detailList.Position = UDim2.fromOffset(0, top)
+		hubState.detailList.Size = UDim2.new(1, 0, 1, -top)
 	end
 
 	function hubFn.paintWorn()
 		hubFn.clear(hubState.detailList)
-		hubFn.mountWorn(hubState.detailList)
-		hubFn.line(hubState.detailList, "Equipped", 2, rgb("text"))
-		hubFn.placeDetail()
+		hubFn.setDetailBack(false)
+		local cols = hubFn.placeDetail()
+		hubFn.mountWorn(hubState.detailList, HubStyle.wornHeight(cols.preview.h))
+		local equippedLine = hubFn.line(hubState.detailList, "Equipped", 2, rgb("text"))
+		equippedLine.TextXAlignment = Enum.TextXAlignment.Center
 		hubState.detail.Visible = (hubState.shownId == "bag" or hubState.shownId == "sets")
 			and hubState.detailHidden ~= true
 		hubFn.fitBagList()
@@ -2978,6 +3092,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.paintWorn()
 			return
 		end
+		hubFn.setDetailBack(true)
 		-- [Ghost] The shared gear panel: the item's icon (not the avatar),
 		-- stats with compare marks, EQUIP and UPGRADE side by side, the
 		-- padlock, and the Shard Core card. The avatar stays on paintWorn.
@@ -3322,7 +3437,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		name.Text = tostring(item.name or "Item")
 		name.Parent = card
 		-- [Ghost] +level and stars under the name (full) or beside the
-		-- icon (compact), in gold.
+		-- icon (compact). Stars take the rarity color (Clip 7).
 		local levelText = GearHooks.levelLine(item)
 		if levelText ~= "" then
 			local level = Instance.new("TextLabel")
@@ -3339,9 +3454,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			level.Font = headerFont()
 			level.TextSize = UiTheme.MIN_TEXT
-			level.TextColor3 = rgb("gold")
+			-- [Ghost] Clip 7: stars in the item's rarity color.
+			local starR, starG, starB = GearHooks.starColor(item)
+			level.TextColor3 = Color3.fromRGB(starR, starG, starB)
 			level.TextTruncate = Enum.TextTruncate.AtEnd
-			level.Text = levelText
+			level.RichText = true
+			level.Text = GearHooks.levelRich(item)
 			level.ZIndex = 6
 			level.Parent = card
 		end
@@ -4309,9 +4427,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 		end
 		if not LaunchGate.on("oneInventory") then
-			hubFn.row(actions, "Open full bag", 3, function()
+			local openFull = hubFn.button(actions, "Open full bag", 3, function()
 				hooks.onBag()
 			end)
+			openFull.Name = "OpenFullBag"
 		end
 		-- [Ghost] Auto-salvage is a live setting in the save. When it is on,
 		-- say so here too; the switch itself is in the full inventory.
@@ -4400,53 +4519,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.itemCard(host, item, index, "item")
 			end
 		end
-		local vx, vy = hubFn.view()
-		local hubBox = HudLayout.hub(vx, vy, UiTheme.safeMargin(), hubFn.pillsShown())
-		local hubInner = HudLayout.hubBody(hubBox.w, hubBox.h)
-		local slotGap = 4
-		local slotBudget = hubInner.w - slotGap * (ActionSlots.COUNT - 1)
-		local slotW = math.floor(slotBudget / ActionSlots.COUNT)
-		if slotW < UiTheme.TOUCH then
-			slotW = UiTheme.TOUCH
-		end
-		local loadout = Instance.new("ScrollingFrame")
-		loadout.Name = "Loadout"
-		loadout.BackgroundColor3 = rgb("header")
-		loadout.BorderSizePixel = 0
-		loadout.ScrollBarThickness = 4
-		loadout.ScrollingEnabled = true
-		loadout.AutomaticCanvasSize = Enum.AutomaticSize.X
-		loadout.CanvasSize = UDim2.fromOffset(0, UiTheme.TOUCH)
-		loadout.ScrollingDirection = Enum.ScrollingDirection.X
-		loadout.ClipsDescendants = true
-		loadout.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
-		loadout.LayoutOrder = 12
-		loadout.Parent = hubState.bag
-		local loadoutCorner = Instance.new("UICorner")
-		loadoutCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
-		loadoutCorner.Parent = loadout
-		local loadoutLayout = Instance.new("UIListLayout")
-		loadoutLayout.FillDirection = Enum.FillDirection.Horizontal
-		loadoutLayout.Padding = UDim.new(0, slotGap)
-		loadoutLayout.Parent = loadout
-		local face = ActionSlots.face()
-		for index = 1, ActionSlots.COUNT do
-			local slotButton = Instance.new("TextButton")
-			slotButton.Name = "Slot" .. tostring(index)
-			slotButton.Size = UDim2.fromOffset(slotW, UiTheme.TOUCH)
-			slotButton.BackgroundColor3 = Color3.fromRGB(face.fill[1], face.fill[2], face.fill[3])
-			slotButton.Font = headerFont()
-			slotButton.TextSize = UiTheme.MIN_TEXT
-			slotButton.TextColor3 = rgb("text")
-			slotButton.Text = tostring(index)
-			slotButton.AutoButtonColor = false
-			slotButton.LayoutOrder = index
-			slotButton.Parent = loadout
-			local slotCorner = Instance.new("UICorner")
-			slotCorner.CornerRadius = UDim.new(0, 6)
-			slotCorner.Parent = slotButton
-			hubFn.bindActivated(slotButton, function() end)
-		end
+		-- [Ghost] Clip 7: no 1-8 slot strip in the Bag (Prism BAG spec).
+		-- The action bar owns the slots; here it read as stray numbers.
 		-- The footer is pinned under the scrolling list, on the page, so a
 		-- long grid or a repaint after a roll cannot push it out of view.
 		local page = hubState.bag.Parent
@@ -7643,29 +7717,103 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return length
 	end
 
-	function hubFn.playOpenMotion(fromClosed: boolean)
-		if hubState.openTween ~= nil then
-			hubState.openTween:Cancel()
-			hubState.openTween = nil
+	function hubFn.stopOpenMotion()
+		for _, key in ipairs({ "openTween", "veilTween", "dimTween" }) do
+			local running = hubState[key]
+			if running ~= nil then
+				running:Cancel()
+				hubState[key] = nil
+			end
 		end
+		hubState.motionGen = (hubState.motionGen or 0) + 1
+	end
+
+	-- Open: scale 0.94 -> 1 and the veil fades off, 0.18 s Quart Out.
+	function hubFn.playOpenMotion(fromClosed: boolean)
+		hubFn.stopOpenMotion()
+		hubState.veil.Visible = false
+		hubState.veil.BackgroundTransparency = 1
 		if not fromClosed then
 			hubState.openScale.Scale = 1
 			return
 		end
 		hubFn.playUi("open")
-		local length = hubFn.panelMotion()
+		local length = UiMotion.hubOpen(UiMotion.reduced(hubState.draft))
 		if length <= 0 then
 			hubState.openScale.Scale = 1
 			return
 		end
-		hubState.openScale.Scale = 0.96
-		local tween = TweenService:Create(
-			hubState.openScale,
-			TweenInfo.new(length, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ Scale = 1 }
-		)
-		hubState.openTween = tween
-		tween:Play()
+		local info = TweenInfo.new(length, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+		hubState.openScale.Scale = UiMotion.HUB_OPEN_SCALE
+		hubState.veil.Visible = true
+		hubState.veil.BackgroundTransparency = 0
+		local dimTarget = hubState.backdrop.BackgroundTransparency
+		hubState.backdrop.BackgroundTransparency = 1
+		local generation = hubState.motionGen
+		hubState.openTween = TweenService:Create(hubState.openScale, info, { Scale = 1 })
+		hubState.veilTween =
+			TweenService:Create(hubState.veil, info, { BackgroundTransparency = 1 })
+		hubState.dimTween =
+			TweenService:Create(hubState.backdrop, info, { BackgroundTransparency = dimTarget })
+		hubState.veilTween.Completed:Connect(function()
+			if generation == hubState.motionGen then
+				hubState.veil.Visible = false
+			end
+		end)
+		hubState.openTween:Play()
+		hubState.veilTween:Play()
+		hubState.dimTween:Play()
+	end
+
+	-- What a closed hub looks like. Runs at once, or when the close
+	-- motion ends (and again from a timer in case a tween never reports).
+	function hubFn.finishClose()
+		if hubState.route.open then
+			return
+		end
+		hubFn.stopOpenMotion()
+		hubState.closing = false
+		hubState.screen.Enabled = false
+		hubState.shadow.Visible = false
+		hubState.panel.Visible = false
+		hubState.panel.Interactable = true
+		hubState.veil.Visible = false
+		hubState.veil.BackgroundTransparency = 1
+		hubState.openScale.Scale = 1
+		hubState.backdrop.BackgroundTransparency = 1
+		hooks.onDim(false)
+	end
+
+	-- Close: scale to 0.96 while the veil and the dim fade, 0.15 s, then
+	-- hide. Reopening during it cancels it.
+	function hubFn.playCloseMotion()
+		hubFn.stopOpenMotion()
+		local length = UiMotion.hubClose(UiMotion.reduced(hubState.draft))
+		if length <= 0 then
+			hubFn.finishClose()
+			return
+		end
+		hubState.closing = true
+		hubState.panel.Interactable = false
+		hubState.veil.Visible = true
+		local info = TweenInfo.new(length, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+		local generation = hubState.motionGen
+		hubState.openTween =
+			TweenService:Create(hubState.openScale, info, { Scale = UiMotion.HUB_CLOSE_SCALE })
+		hubState.veilTween =
+			TweenService:Create(hubState.veil, info, { BackgroundTransparency = 0 })
+		hubState.dimTween =
+			TweenService:Create(hubState.backdrop, info, { BackgroundTransparency = 1 })
+		local function done()
+			if generation == hubState.motionGen then
+				hubFn.finishClose()
+			end
+		end
+		hubState.openTween.Completed:Connect(done)
+		task.delay(length + 0.1, done)
+		hubState.openTween:Play()
+		hubState.veilTween:Play()
+		hubState.dimTween:Play()
 	end
 
 	function hubFn.apply(state: UiRouter.State)
@@ -7674,12 +7822,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.classDismissed = true
 		end
 		hubState.route = state
-		hubState.backdrop.BackgroundTransparency = 1 - state.dim
 		hubState.backdrop.Modal = state.open
 		hubFn.setWorldInput(hubFn.worldModeFor(state))
-		hubState.screen.Enabled = state.open
-		hubState.shadow.Visible = state.open
-		hubState.panel.Visible = state.open
+		local closingNow = wasOpen and not state.open
+		if state.open or not closingNow then
+			hubState.backdrop.BackgroundTransparency = 1 - state.dim
+			hubState.screen.Enabled = state.open
+			hubState.shadow.Visible = state.open
+			hubState.panel.Visible = state.open
+		end
+		if state.open then
+			hubState.closing = false
+			hubState.panel.Interactable = true
+		end
 		if not state.open then
 			hubFn.padClear()
 		end
@@ -7692,10 +7847,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.stopRollChain()
 			if wasOpen then
 				hubFn.playUi("close")
+				hubFn.playCloseMotion()
+			else
+				hubFn.playOpenMotion(false)
 			end
-			hubFn.playOpenMotion(false)
 		end
-		hooks.onDim(state.open)
+		if state.open or not hubState.closing then
+			hooks.onDim(state.open)
+		end
 	end
 
 	function hubFn.close()
@@ -8223,6 +8382,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		-- hub is hidden must not hold combat input.
 		isOpen = function(): boolean
 			return hubState.route.open and hubState.screen.Enabled
+		end,
+		-- Ends a running close motion now (tests; the fake tweens never
+		-- complete).
+		settleMotion = function()
+			hubFn.finishClose()
 		end,
 		current = function(): string
 			return hubFn.pageFor(hubState.route)

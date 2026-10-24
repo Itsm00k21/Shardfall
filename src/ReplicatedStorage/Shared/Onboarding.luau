@@ -50,6 +50,17 @@ local function rows(id: any)
 	return Onboarding.STEPS
 end
 
+-- [Ghost] Clip 7: steps that only make sense in the hub. Inside a
+-- dungeon run their card and "Shardfall: Keep swinging" pill fold away
+-- (there are no saplings in the Rootvault); dodge and the guide's wave
+-- steps still show.
+Onboarding.HUB_ONLY =
+	table.freeze({ open = true, class = true, swing = true, door = true, haven = true })
+
+function Onboarding.quietInRun(id: any): boolean
+	return type(id) == "string" and Onboarding.HUB_ONLY[id] == true
+end
+
 function Onboarding.step(id: any)
 	local list = rows(id)
 	if type(id) ~= "string" then

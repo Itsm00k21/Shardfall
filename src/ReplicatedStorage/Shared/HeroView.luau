@@ -43,4 +43,22 @@ function HeroView.place(built: any, hasModel: any, viewportAlive: any, _extra: a
 	return "skip"
 end
 
+-- [Ghost] Clip 7: the Bag's worn preview frames the whole body. A narrow
+-- field of view keeps the character from looking fish-eyed in a tall
+-- column. frameDistance is how far back the camera sits so a body of
+-- height h and width w fits the viewport with 12% air. Pure.
+HeroView.WORN_FOV = 40
+HeroView.WORN_AIR = 1.12
+
+function HeroView.frameDistance(height: any, width: any, aspect: any, fov: any): number
+	local h = if type(height) == "number" and height == height and height > 0 then height else 5
+	local w = if type(width) == "number" and width == width and width > 0 then width else 2
+	local a = if type(aspect) == "number" and aspect == aspect and aspect > 0.1 then aspect else 1
+	local f = if type(fov) == "number" and fov > 1 and fov < 170 then fov else HeroView.WORN_FOV
+	local half = math.tan(math.rad(f) / 2)
+	local byHeight = (h * HeroView.WORN_AIR / 2) / half
+	local byWidth = (w * HeroView.WORN_AIR / 2) / (half * a)
+	return math.max(byHeight, byWidth) + w / 2
+end
+
 return HeroView
