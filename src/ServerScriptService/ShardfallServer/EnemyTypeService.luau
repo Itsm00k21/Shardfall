@@ -6,9 +6,10 @@
 	LaunchGate.SHOW.enemyTypes ships false. While it is off, spawn, step,
 	hurt, and present do nothing: no movement, no damage, no gray box.
 	init.server does not call this module, so a normal boot never builds
-	a part. While the flag is on, a ranged shot is checked with a
+	a part. 	While the flag is on, a ranged shot is checked with a
 	Workspace raycast against the target's current position before
-	damage. There is no remote and no profile write.
+	damage. Boss Shard Volley bolts use that same cast. There is no
+	remote and no profile write.
 
 	Studio can require the module. Lune loads the same file through the
 	relative path when `game` is not a DataModel.

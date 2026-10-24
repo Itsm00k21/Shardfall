@@ -16,6 +16,7 @@ local Config = require("../src/ReplicatedStorage/Shared/Config/Index")
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Enemies = require("../src/ReplicatedStorage/Shared/Config/Enemies")
 local EnemyTypeService = require("../src/ServerScriptService/ShardfallServer/EnemyTypeService")
+local Haven = require("../src/ReplicatedStorage/Shared/Haven")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 
@@ -72,6 +73,16 @@ local function fullRoster(): any
 		LEASH_SECONDS = Enemies.LEASH_SECONDS,
 		LEASH_WINDUP = Enemies.LEASH_WINDUP,
 		LEASH_RADIUS = Enemies.LEASH_RADIUS,
+		LEASH_DASH = Enemies.LEASH_DASH,
+		PRESSURE_SECONDS = Enemies.PRESSURE_SECONDS,
+		PRESSURE_DECAY = Enemies.PRESSURE_DECAY,
+		VOLLEY_NAME = Enemies.VOLLEY_NAME,
+		VOLLEY_WINDUP = Enemies.VOLLEY_WINDUP,
+		VOLLEY_SHOTS = Enemies.VOLLEY_SHOTS,
+		VOLLEY_COOLDOWN = Enemies.VOLLEY_COOLDOWN,
+		VOLLEY_SPEED = Enemies.VOLLEY_SPEED,
+		VOLLEY_SPREAD = Enemies.VOLLEY_SPREAD,
+		VOLLEY_LEAD_MAX = Enemies.VOLLEY_LEAD_MAX,
 		WAVE_COUNTS = Enemies.WAVE_COUNTS,
 		WAVE_ORDER = Enemies.WAVE_ORDER,
 		WAVE_MIXES = Enemies.WAVE_MIXES,
@@ -608,6 +619,200 @@ describe("EnemyTypeService", function()
 			end)
 			expect(built ~= nil).toBeTrue()
 			expect(names).toEqual(IDS)
+		end)
+	end)
+
+	it("rejects a pressure timer that hard-resets and a volley that is not Shard Volley", function()
+		expect(Enemies.VOLLEY_NAME).toEqual("Shard Volley")
+		expect(Enemies.PRESSURE_SECONDS).toEqual(4)
+		expect(Enemies.PRESSURE_DECAY < Enemies.PRESSURE_SECONDS).toBeTrue()
+		expect(Enemies.VOLLEY_WINDUP).toEqual(0.8)
+		expect(Enemies.VOLLEY_SHOTS).toEqual(3)
+		expect(Enemies.VOLLEY_COOLDOWN).toEqual(5)
+		expect(Enemies.LEASH_DASH > Enemies.BOSS.moveSpeed).toBeTrue()
+		expect(Enemies.validate()).toEqual(true)
+
+		local wipe = fullRoster()
+		wipe.PRESSURE_DECAY = Enemies.PRESSURE_SECONDS
+		local _, wipeErr = Enemies.validate(wipe)
+		expect(string.find(wipeErr, "PRESSURE_DECAY", 1, true) ~= nil).toBeTrue()
+
+		local early = fullRoster()
+		early.PRESSURE_SECONDS = 0
+		local _, earlyErr = Enemies.validate(early)
+		expect(string.find(earlyErr, "PRESSURE_SECONDS", 1, true) ~= nil).toBeTrue()
+
+		local snap = fullRoster()
+		snap.VOLLEY_WINDUP = 0
+		local _, snapErr = Enemies.validate(snap)
+		expect(string.find(snapErr, "VOLLEY_WINDUP", 1, true) ~= nil).toBeTrue()
+
+		local pair = fullRoster()
+		pair.VOLLEY_SHOTS = 2
+		local _, pairErr = Enemies.validate(pair)
+		expect(string.find(pairErr, "VOLLEY_SHOTS", 1, true) ~= nil).toBeTrue()
+
+		local spam = fullRoster()
+		spam.VOLLEY_COOLDOWN = 0
+		local _, spamErr = Enemies.validate(spam)
+		expect(string.find(spamErr, "VOLLEY_COOLDOWN", 1, true) ~= nil).toBeTrue()
+
+		local crawl = fullRoster()
+		crawl.LEASH_DASH = Enemies.BOSS.moveSpeed
+		local _, crawlErr = Enemies.validate(crawl)
+		expect(string.find(crawlErr, "LEASH_DASH", 1, true) ~= nil).toBeTrue()
+
+		local renamed = fullRoster()
+		renamed.VOLLEY_NAME = "Bolt"
+		local _, nameErr = Enemies.validate(renamed)
+		expect(string.find(nameErr, "Shard Volley", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("pressure arms after 4s with no damage and a hit decays it", function()
+		withFlag(true, function()
+			local boss = EnemyTypeService.spawn("boss", 0, 0)
+			expect(boss ~= nil).toBeTrue()
+			if boss == nil then
+				return
+			end
+			local chipped = EnemyTypeService.hurt(boss, 40)
+			expect(chipped).toEqual(40)
+			local hp = boss.hp
+			local hold = (Enemies.BOSS.range + Enemies.LEASH_RANGE) * 0.5
+			local guard = 0
+			while (boss.pressure < Enemies.PRESSURE_SECONDS or boss.volley == nil) and guard < 80 do
+				expect(EnemyTypeService.step(boss, boss.x + hold, boss.z, 0.1)).toEqual(0)
+				expect(boss.hp).toEqual(hp)
+				guard += 1
+			end
+			expect(boss.pressure >= Enemies.PRESSURE_SECONDS).toBeTrue()
+			expect(boss.volley ~= nil).toBeTrue()
+			if boss.volley == nil then
+				return
+			end
+			expect(boss.volley.left).toEqual(Enemies.VOLLEY_WINDUP)
+			local armed = boss.pressure
+			local hit = EnemyTypeService.step(boss, boss.x + 2, boss.z, 0.1)
+			expect(hit).toEqual(Enemies.BOSS.damage)
+			expect(boss.hp).toEqual(hp)
+			expect(boss.pressure > 0).toBeTrue()
+			expect(boss.pressure).toBeCloseTo(armed - Enemies.PRESSURE_DECAY, 1e-4)
+			expect(boss.pressure < armed).toBeTrue()
+
+			local wind = boss.volley
+			expect(wind ~= nil).toBeTrue()
+			if wind == nil then
+				return
+			end
+			local left = wind.left
+			local bursts = 0
+			while wind.left > 0 and bursts < 20 do
+				expect(EnemyTypeService.step(boss, boss.x + hold, boss.z, 0.1)).toEqual(0)
+				bursts += 1
+			end
+			expect(left > 0).toBeTrue()
+			expect(boss.volley).toBeNil()
+			local bolts = boss.bolts
+			expect(bolts ~= nil).toBeTrue()
+			if bolts ~= nil then
+				expect(#bolts).toEqual(Enemies.VOLLEY_SHOTS)
+			end
+			expect(boss.hp).toEqual(hp)
+		end)
+	end)
+end)
+
+-- Havoc's three kites. Each keeps the player out of melee. 30s is the window.
+-- The boss must deal damage and stay inside the arena, and a chipped bar must not rise.
+local HAVOC_WINDOW = 30
+local HAVOC_STEP = 0.1
+
+local function inArena(actor: any): boolean
+	local box = Enemies.ARENA
+	return actor.x >= box.minX and actor.x <= box.maxX and actor.z >= box.minZ and actor.z <= box.maxZ
+end
+
+local function havoc(move: (number, number, number, number) -> (number, number)): any
+	local boss = EnemyTypeService.spawn("boss", 0, 0)
+	expect(boss ~= nil).toBeTrue()
+	if boss == nil then
+		return nil
+	end
+	local taken = EnemyTypeService.hurt(boss, 40)
+	expect(taken).toEqual(40)
+	local hp = boss.hp
+	expect(hp).toEqual(Enemies.BOSS.maxHealth - 40)
+	local dealt = 0
+	local t = 0
+	while t < HAVOC_WINDOW - 1e-6 do
+		local dt = math.min(HAVOC_STEP, HAVOC_WINDOW - t)
+		local px, pz = move(t, boss.x, boss.z, dt)
+		dealt += EnemyTypeService.step(boss, px, pz, dt)
+		expect(inArena(boss)).toBeTrue()
+		t += dt
+	end
+	expect(boss.hp).toEqual(hp)
+	expect(dealt > 0).toBeTrue()
+	return boss
+end
+
+describe("Havoc boss kites", function()
+	it("circle-kite takes damage within 30s and the boss stays inside", function()
+		withFlag(true, function()
+			local theta = 0
+			local radius = (Enemies.BOSS.range + Enemies.LEASH_RANGE) * 0.5
+			local boss = havoc(function(_t: number, bx: number, bz: number, dt: number): (number, number)
+				theta += (Haven.WALK_SPEED / radius) * dt
+				return bx + math.cos(theta) * radius, bz + math.sin(theta) * radius
+			end)
+			expect(boss ~= nil).toBeTrue()
+		end)
+	end)
+
+	it("straight retreat takes damage within 30s and the boss stays inside", function()
+		withFlag(true, function()
+			local radius = (Enemies.BOSS.range + Enemies.LEASH_RANGE) * 0.5
+			local boss = havoc(function(_t: number, bx: number, bz: number, _dt: number): (number, number)
+				return bx + radius, bz
+			end)
+			expect(boss ~= nil).toBeTrue()
+			if boss == nil then
+				return
+			end
+			expect(boss.x).toBeCloseTo(Enemies.ARENA.maxX, 1e-3)
+		end)
+	end)
+
+	it("edge and corner kite takes damage within 30s and the boss stays inside", function()
+		withFlag(true, function()
+			local box = Enemies.ARENA
+			local inset = 3
+			local minX = box.minX + inset
+			local maxX = box.maxX - inset
+			local minZ = box.minZ + inset
+			local maxZ = box.maxZ - inset
+			local width = maxX - minX
+			local height = maxZ - minZ
+			local lap = 2 * (width + height)
+			local along = 0
+			local boss = havoc(function(_t: number, _bx: number, _bz: number, dt: number): (number, number)
+				along = (along + Haven.WALK_SPEED * dt) % lap
+				local cursor = along
+				if cursor < width then
+					return minX + cursor, minZ
+				end
+				cursor -= width
+				if cursor < height then
+					return maxX, minZ + cursor
+				end
+				cursor -= height
+				if cursor < width then
+					return maxX - cursor, maxZ
+				end
+				cursor -= width
+				return minX, maxZ - cursor
+			end)
+			expect(boss ~= nil).toBeTrue()
 		end)
 	end)
 end)
