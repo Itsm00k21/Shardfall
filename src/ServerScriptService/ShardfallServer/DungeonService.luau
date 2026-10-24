@@ -44,6 +44,8 @@ local HardMode = require(ReplicatedStorage.Shared.HardMode)
 local EnemyPerf = require(ReplicatedStorage.Shared.Config.EnemyPerf)
 local EnemyPerfHost = require(script.Parent.EnemyPerfHost)
 local Haven = require(ReplicatedStorage.Shared.Haven)
+local HubRescue = require(ReplicatedStorage.Shared.HubRescue)
+local WaveArenaConfig = require(ReplicatedStorage.Shared.Config.WaveArenaConfig)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
 local VerdantLook = require(ReplicatedStorage.Shared.VerdantLook)
@@ -175,6 +177,10 @@ local echoBossOwed: { [RaidEchoFight.Fight]: number } = {}
 local echoRevived: { [RaidEchoFight.Fight]: { [string]: boolean } } = {}
 local touchAt: { [Player]: number } = {}
 local fallAt: { [Player]: number } = {}
+-- Set while a fall rescue is still inside RequestStreamAroundAsync.
+-- That call yields for up to 5 seconds and must not run on the heartbeat.
+local fallStream: { [Player]: boolean } = {}
+local waveArenaHost: any = nil
 local farmOn: { [Player]: boolean } = {}
 local farmSince: { [Player]: number } = {}
 local restartAt: { [Player]: Restart } = {}
@@ -329,6 +335,37 @@ local function teleport(player: Player, cframe: CFrame)
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		hrp.Anchored = anchored
 	end
+end
+
+-- The stream yield lives in teleport. Spawn it so the heartbeat can keep
+-- ticking the other players while this character waits for the floor.
+local function fallTeleport(player: Player, cframe: CFrame)
+	if fallStream[player] == true then
+		return
+	end
+	fallStream[player] = true
+	task.spawn(function()
+		local ok, err = pcall(teleport, player, cframe)
+		fallStream[player] = nil
+		if not ok then
+			warn("[Shardfall] fall rescue failed: " .. tostring(err))
+		end
+	end)
+end
+
+local function arenaRunning(player: Player): boolean
+	if LaunchGate.on("waveArena") ~= true then
+		return false
+	end
+	if waveArenaHost == nil then
+		waveArenaHost = require(script.Parent.WaveArenaHost)
+	end
+	return waveArenaHost.inRun(player) == true
+end
+
+local function arenaCFrame(): CFrame
+	local origin = WaveArenaConfig.arena.origin
+	return CFrame.new(origin.x, origin.y + 3, origin.z)
 end
 
 local function makePart(
@@ -2769,16 +2806,37 @@ local function tickHub(player: Player, now: number)
 	if runs[player] ~= nil or player.Parent == nil then
 		return
 	end
+	-- Arena runs are not dungeon runs. Skip the hub rescue while the
+	-- wave-arena flag is on so a gap in the arena wall cannot send them home.
+	if HubRescue.destination(LaunchGate.on("waveArena") == true, arenaRunning(player), true) == "arena" then
+		return
+	end
 	local hrp = rootPart(player)
 	if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
 		return
 	end
-	if (fallAt[player] or 0) > now then
+	if fallStream[player] == true or (fallAt[player] or 0) > now then
 		return
 	end
 	fallAt[player] = now + 2
 	print("[Shardfall] " .. player.Name .. " fell off Haven; returning to HubSpawn")
-	teleport(player, hubCFrame())
+	fallTeleport(player, hubCFrame())
+end
+
+local function rescueArena(player: Player, now: number)
+	if player.Parent == nil then
+		return
+	end
+	local hrp = rootPart(player)
+	if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
+		return
+	end
+	if fallStream[player] == true or (fallAt[player] or 0) > now then
+		return
+	end
+	fallAt[player] = now + 2
+	print("[Shardfall] " .. player.Name .. " fell out of the arena; returning to the arena")
+	fallTeleport(player, arenaCFrame())
 end
 
 -- A tick fault destroys the run. It does not call finish or grant,
@@ -2827,7 +2885,12 @@ local function onHeartbeat(dt: number)
 		end
 	end
 	for _, player in ipairs(Players:GetPlayers()) do
-		local hubOk, hubErr = pcall(tickHub, player, now)
+		local hubOk, hubErr
+		if HubRescue.destination(LaunchGate.on("waveArena") == true, arenaRunning(player), true) == "arena" then
+			hubOk, hubErr = pcall(rescueArena, player, now)
+		else
+			hubOk, hubErr = pcall(tickHub, player, now)
+		end
 		if not hubOk then
 			faultPlayer(player, hubErr)
 		end
@@ -3619,6 +3682,7 @@ function DungeonService.start()
 		echoJoinHold[player] = nil
 		touchAt[player] = nil
 		fallAt[player] = nil
+		fallStream[player] = nil
 		farmOn[player] = nil
 		restartAt[player] = nil
 		idleNoted[player] = nil
