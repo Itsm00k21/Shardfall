@@ -1,6 +1,4 @@
-<cursor_untrusted_data_1337 source="CallDynamicTool">
-
-# Pick-1-of-3 Buffs ("Shard Draft"), Spec v1
+# Pick-1-of-3 Buffs ("Shard Draft"), Spec v1.1
 
 Owner: Prism (design). Builders: Ghost (UI + VFX), Echo (server + Config). Base: `cursor/live-build-9721` @ `581c995`. Docs only, no code.
 Asked for in: Ghost's Kevin-approved decisions row, decision 5 (https://app.notion.com/p/403c31ca38838189b1c5ed1249a17e57): "Prism specs the pick-1-of-3 buffs (5.1) now, as design only. **Building waits for the fun test.**"
@@ -64,6 +62,8 @@ Viewport px with `ScreenInsets = CoreUISafeInsets`. **Center keep-out** (x 30–
 | Tray (from pill) | top band 366×(3×52), y 100, stacked | top band 547×58, y 46, 3 × 157×48 | top band 600×58, y 46 | top band 640×64, y 52 |
 | Buff strip pill | (12, 52), 44 tall | (12, 52) | (12, 52) | (12, 52); list 236 wide below |
 | Resonance toast | top center under header area, 300×52, y 120 | top-right, 300×52 | top-right | top-right 320×52 |
+
+Dock rule (Q5, Ghost): (12, 52) is the default. If a live arena HUD item (wave counter, HP bar) occupies the top-left, the strip anchors 8 px under that item's bottom edge at the same x, and never moves into the center keep-out.
 
 Rules: whole card is the tap target (≥ 116×196 on the smallest phone). Card text ≤ 3 short lines: name (15–18 px bold), main effect (12–14 px, tier-tinted), sub line (11–13 px muted). Footer chip "+1 <Element> pip". On landscape the draft row is clear of the attack button (bottom-right) and of the thumbstick (bottom-left); the tray sits in the top band for the same reason. Portrait tray stacks 3 rows of 366×48 under the pill, still above y 236.
 
@@ -145,15 +145,18 @@ SVG (in repo, fake data, original art): `mockups/01-pick-phone-390x844.svg` (pic
 7. A Resonance pip visibly turns on a set-bonus tier at least once in a typical run.
 
 ## 11. Open questions (answer by number)
-1. @Kevin: Resonance (2 pips of one element = +1 matching item for set bonuses, max +2) — yes, or keep buffs fully separate from set bonuses? (Prism pick: yes)
-2. @Kevin: Card names (Kindle, Flashburn, Ignite, Cinder Heart, Rime Hide, Frostguard, Chill Touch, Glacier Heart, Quickcut, Shard Sense, Hollow Mark, Rift Echo) — keep or rename? (Prism pick: keep)
+1. ~~@Kevin: Resonance yes, or keep buffs separate?~~ **Yes (Ghost under Kevin's pre-approval, Oct 23, 2026; Kevin can change later).** 2 pips of one element = +1 matching item for set bonuses, max +2 per element. Board row: https://app.notion.com/p/403c31ca3883815687a3f85a05f4323e
+2. ~~@Kevin: Card names keep or rename?~~ **Keep all 12 (Ghost under Kevin's pre-approval).** Kindle, Flashburn, Ignite, Cinder Heart, Rime Hide, Frostguard, Chill Touch, Glacier Heart, Quickcut, Shard Sense, Hollow Mark, Rift Echo.
 3. ~~@Echo: 8 s break and held-offer auto-take?~~ **Yes (Echo, Oct 23, 2026).** 8 s break is a Config value; a held offer auto-takes the highest rarity, ties go to the first card, decided on the server. Board row: https://app.notion.com/p/403c31ca388381dba1c1f358d0618f00
 4. ~~@Echo: Shard Sense run-drops only, luck cap in Config?~~ **Yes (Echo).** Shard Sense touches run drops only, never RollService; the cap lives in Config with a validation test and is tuned after the fun test.
-5. @Ghost: Buff strip at (12, 52) under the Roblox menu — any clash with the live HUD in the arena? (yes/no)
+5. ~~@Ghost: Buff strip at (12, 52), any clash?~~ **OK provisionally (Ghost).** Rule: if any live arena HUD item (wave counter, HP) sits top-left, the strip docks directly under it and never enters the center keep-out. See §4.
+
+All questions answered. This spec is closed (direction A, Shard Draft). Building still waits for the fun test.
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): Prism specs pick-1-of-3 buffs (5.1) now, design only; building waits for the fun test. Prism recommends direction A (Shard Draft); not approved yet.
 - 2026-10-23 (Echo): Q3 = **yes** (8 s Config break; held offer auto-takes highest rarity, ties to first card, server-decided). Q4 = **yes** (run drops only, never RollService; Config cap + validation test). Q1, Q2 (Kevin) and Q5 (Ghost) are still open.
+- 2026-10-23 (Ghost, Kevin pre-approved; Kevin can change later): Q1 Resonance = **yes** (max +2). Q2 = **keep all 12 card names**. Q5 = (12, 52) OK provisionally; strip docks under any top-left arena HUD item (wave counter, HP), never in the keep-out. Spec closed → v1.1.
 
 ## Later (not V1)
 5.2 Fusion cards (two buffs combine, e.g. Ember + Frost = "Steam"), element-leaning offers matching the wave's element (would pair with decision 7's Config-only element waves), a draft-history Codex page, cosmetic card backs (never power).
@@ -183,6 +186,3 @@ Stock Roblox UI only. No blur or glassmorphism (BlurEffect blurs the 3D world, n
 | el_ember_128, el_frost_128, el_void_128 | 128×128 | element icons on cards, tray, strip |
 | card_glyph_* ×12 | 128×128 | optional per-card glyph (V1 can ship with the element icon only) |
 | glow_soft_256, shard_frag_a/b/c, spinner_64 | as in #397 | reused |
-
-
-</cursor_untrusted_data_1337>
