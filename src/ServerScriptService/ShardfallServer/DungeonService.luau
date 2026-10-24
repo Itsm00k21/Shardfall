@@ -338,13 +338,19 @@ end
 
 -- The stream yield lives in teleport. Spawn it so the heartbeat can keep
 -- ticking the other players while this character waits for the floor.
+-- recover clears Anchored after the move, including when the move throws
+-- or teleport puts the previous anchored state back.
 local function fallTeleport(player: Player, cframe: CFrame)
 	if fallStream[player] == true then
 		return
 	end
 	fallStream[player] = true
 	task.spawn(function()
-		local ok, err = pcall(teleport, player, cframe)
+		local ok, err = HubRescue.recover(function()
+			return rootPart(player)
+		end, function()
+			teleport(player, cframe)
+		end)
 		fallStream[player] = nil
 		if not ok then
 			warn("[Shardfall] fall rescue failed: " .. tostring(err))
@@ -2810,7 +2816,8 @@ local function rescueArena(player: Player, now: number)
 		return
 	end
 	local hrp = rootPart(player)
-	if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
+	local line = HubRescue.fallLine("arena", Haven.FALL_Y, WaveArenaConfig.arena.origin.y)
+	if hrp == nil or not HubRescue.pastLine(hrp.Position.Y, line) then
 		return
 	end
 	if fallStream[player] == true or (fallAt[player] or 0) > now then
