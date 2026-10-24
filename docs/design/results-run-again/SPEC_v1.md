@@ -1,6 +1,6 @@
-# Results Screen + Run Again ("Results wings"), Spec v1
+# Results Screen + Run Again ("Results wings"), Spec v1.1
 
-Owner: Prism (design, docs only, no code). Builders: Ghost (client results UI, teleports), Echo (results payload, payouts). Base: `cursor/live-build-9721`. Status: proposal, gray-box only (pre-Phase S). Nothing here is approved until Ghost/Kevin say so.
+Owner: Prism (design, docs only, no code). Builders: Ghost (client results UI, teleports), Echo (results payload, payouts). Base: `cursor/live-build-9721`. Status: **v1.1, direction A chosen by Ghost** (Kevin pre-approved, Agent Board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f, Oct 24, 2026). Ghost questions 1–4 are decided; Kevin taste call 5 stays **PROVISIONAL**. Gray-box only (pre-Phase S). Not an official Vision & Design Rules decision until Kevin approves it.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953, from canvas item **M12**: "Results screen + Run Again spec". Roadmap **4.2** ("Results screen: waves cleared, loot grid, best wave") and **4.3** ("Run Again button + back-to-roll shortcut"). Phase 4 done-when: "Full loop works with no dead ends: roll → equip → run → reward → roll."
 
 Sources (link, don't copy):
@@ -21,13 +21,15 @@ Mockup: `mockups/07-directions.svg`.
 
 **Recommendation: A.** It's the only one that keeps the center clear and makes Run Again a single tap, and it shows the reward where the player earned it. The rest of this spec is A.
 
+**Decided (Ghost, Oct 24, 2026, Kevin pre-approved): A.**
+
 ## 1. Goal
 After a run (clear or wipe), a player understands in about 3 seconds how far they got, what they earned and whether they beat their best, and can either run again or go roll their new tokens in one tap. No dead ends: every exit leads back into the loop.
 
 ## 2. Where it lives
-- **Screen (Ghost):** a new `ResultsWings` UI in the arena, shown at run end. It replaces the `CombatHud` victory card for the V1 arena (Ghost decides how to retire the old card, Q4; Prism doesn't edit `CombatHud`, `HudLayout` or any Ghost-owned file). While it's up, the live HP block, currency pills, rail and combat cluster hide (the run is over). The Roblox thumbstick stays, so a player who folds the wings can walk.
+- **Screen (Ghost):** a new `ResultsWings` UI in the arena, shown at run end. It replaces the `CombatHud` victory card for the V1 arena. **Q4 decided:** the old card is retired **behind a flag** when the V1 arena flag flips, and **nothing is deleted** (the card and its code stay in the repo). Prism doesn't edit `CombatHud`, `HudLayout` or any Ghost-owned file. While it's up, the live HP block, currency pills, rail and combat cluster hide (the run is over). The Roblox thumbstick stays, so a player who folds the wings can walk.
 - **Loot tiles:** reuse `Shared/ResultsGrid.luau` merge + "+N" rules; tile size per viewport in §4.
-- **Server (Echo):** one `RunResults` snapshot per player (personal loot) at run end: `{ outcome = "cleared" | "wiped", tier, wavesCleared, total, seconds, kills, tokens, fragments, multiplier, xp, levelAfter, xpFrac, loot = { {id, name, tier, count, hardOnly} }, bestWave, newBest, rollsReady }`. Payouts are already granted by the server (#384) before the snapshot; the UI shows, never grants.
+- **Server (Echo):** one `RunResults` snapshot per player (personal loot) at run end: `{ outcome = "cleared" | "wiped", tier, wavesCleared, total, seconds, kills, tokens, fragments, multiplier, xp, levelAfter, xpFrac, loot = { {id, name, tier, count, hardOnly} }, bestWave, newBest, rollsReady }`. `bestWave` / `newBest` are **session-only** for V1 (Q2 decided): kept in server memory per player per tier, never written to the save (schema stays 26; a saved best-wave field is parked). Payouts are already granted by the server (#384) before the snapshot; the UI shows, never grants.
 - **Teleports (Ghost):** RUN AGAIN and ROLL (§3). Run state lives in memory only.
 - **Not here:** sharing/screenshots, leaderboards, Robux offers, "double your loot" prompts, chests. None of these appear on the results screen.
 
@@ -39,10 +41,10 @@ After a run (clear or wipe), a player understands in about 3 seconds how far the
 | 3 | Tap a loot tile | The caption line shows "<name> · <tier>" (+ "· Hard only"); the tile gets a gold 3 px stroke. No popup. | — |
 | 4 | Tap the "+N" tile | The loot row becomes a horizontal scroll with every tile; no new panel. | — |
 | 5a | Tap **RUN AGAIN** (solo) | Button reads "Starting… 3" with a small "Cancel" link under it; after 3 s a fresh run starts in a new arena copy with the **same tier** (Hard only if still allowed). No hub trip. | new run, re-checks the tier rule |
-| 5b | Tap **RUN AGAIN** (party) | Recommended (Q1): you go to the hub **Gate pad** and take a slot by tap order; the party re-forms there (party spec rules: leader by join order, 15 s countdown, 5 s late-join bump). Button reads "Going to the Gate…". | teleport to pad, join |
+| 5b | Tap **RUN AGAIN** (party) | **Decided (Q1):** party Run Again goes back through the hub **Gate pad countdown**. You go to the pad and take a slot by tap order; the party re-forms there (party spec rules: leader by join order, 15 s countdown, 5 s late-join bump). Button reads "Going to the Gate…". No direct arena restart for parties in V1. | teleport to pad, join |
 | 6 | Tap **ROLL** | Teleport to the hub and open the Roll page (#397) directly. Badge "N rolls ready" (= tokens ÷ roll cost). With 0 rolls the button is dim and reads "need N more", and still works (it opens the Roll page so the player sees the cost). | teleport |
 | 7 | Tap the chevron | Both wings fold (0.25 s) to one 56 px bar: "CLEARED · 5/5 · +24 tokens · 12 items" + RUN AGAIN. Tap the bar's chevron to unfold. | — |
-| 8 | No tap for 30 s | Line over the bar: "Back to the hub in N" for the last 10 s, then teleport to the hub (Q3). | teleport |
+| 8 | No tap for 30 s | **Decided (Q3): 30 s auto-return with a visible timer.** From the moment the wings land, a 3 px drain bar + "Hub in N" sits in the loot wing header (and over the folded bar as "Back to the hub in N"), counting the whole 30 s. Any tap on the results UI resets it to 30. At 0: teleport to the hub. | teleport, server-timed (`returnAt`) |
 
 **Wipe:** same screen. Title "WIPED ON WAVE 3" (danger color), sub-line "You keep everything you earned." No penalty, no "failed" wording, no retry upsell. **First run (#412 Focus mode):** same screen, ROLL is the highlighted button once ("Roll your tokens!" toast in the lane), because the first loop's goal is roll → run → roll.
 
@@ -61,7 +63,7 @@ Full-screen px, same frame as the #420 review (0,0 = screen top-left including t
 | ROLL | 136×64, x 226–362, y 714–778 | 156×48, y 301–349 | 192×48 | 328×48 "ROLL · N rolls ready [R]" |
 | Collapse chevron | 44×44 in the stats wing title row | 44×44 in the loot wing header | same | same, key C |
 | Collapsed bar | x 16–374, y 746–802 (358×56): chevron 44, summary, RUN AGAIN 144×44 | x 174–492, y 301–361 (#420 bottom-center slot) | x 230–570, y 326–386 | x 450–830, y 632–696 |
-| Auto-return line | centered above the bar, 11 px | same | same | same |
+| Auto-return timer (v1.1, always visible) | 3 px drain bar x 28–362, y 626 + "Hub in N" 10 px right-aligned at y 642 in the loot wing header (the tile caption moves to the left of that row) | drain bar under the loot header (x 483–583, y 100) + "Hub in N" left of the chevron | same pattern | same pattern; folded bar: "Back to the hub in N" + drain bar above it |
 
 Checks:
 - Every button ≥ 44 px tall (RUN AGAIN 52–64, ROLL 48–64, chevron 44, tiles 48–64). Text ≥ 13 px except badges/captions at 10–11 (R7).
@@ -82,12 +84,12 @@ Error: if `RunResults` doesn't arrive in 3 s, show the wings with "Results are o
 - Waves: 5 (Config). Shown as cleared / total, e.g. 5/5, 2/5 on a wipe.
 - Rewards: Roll Tokens + Fragments from Config (#384); Hard = ×2 (Core Loop), shown as a HARD ×2 tag, never as a separate bonus line. XP and level from the existing XP flow.
 - Rolls ready = floor(tokens ÷ roll cost) from Config.
-- Best wave: per tier (Normal / Hard). Needs a save field that doesn't exist yet (Q2).
+- Best wave: per tier (Normal / Hard), **session-only** (Q2 decided; label "SESSION BEST"). The first run of a session shows the value with no NEW BEST badge; later runs show NEW BEST when they beat it. No save field (schema stays 26).
 - Run Again countdown: 3 s solo (cancelable). Party: Gate pad rules (15 s from the first player, 5 s late-join bump).
-- Auto-return: 30 s idle, last 10 s shown (Q3).
+- Auto-return: 30 s idle, timer visible for the full 30 s, any tap resets (Q3 decided).
 - Timings: wings in 0.3 s, out 0.25 s, counters 0.6 s, tile pop 0.05 s stagger (max 0.5 s total), Legendary pulse 2 × 0.3 s.
 - Colors: Hard accent danger 230,80,96 (**PROVISIONAL**, Kevin taste call, Hard spec Q4); wipe title danger; clear title gold; NEW BEST ok 110,210,140; tile strokes `Rarities.COLOR`.
-- Copy: "SHARD CRATER CLEARED" / "CLEARED" (landscape) · "WIPED ON WAVE N" · "You keep everything you earned." · "WAVES" · "BEST WAVE" / "BEST" · "KILLS" · "NEW BEST" · "Roll Tokens" · "Fragments" · "HARD ×2" · "XP +N · Lv N" · "LOOT · N items" · "RUN AGAIN" · "Starting… N" · "Cancel" · "Going to the Gate…" · "ROLL" · "N rolls ready" · "need N more" · "Back to the hub in N" · "No drops this run. Your tokens still count." · "Results are on the way…".
+- Copy: "SHARD CRATER CLEARED" / "CLEARED" (landscape) · "WIPED ON WAVE N" · "You keep everything you earned." · "WAVES" · "SESSION BEST" · "KILLS" · "NEW BEST" · "Roll Tokens" · "Fragments" · "HARD ×2" · "XP +N · Lv N" · "LOOT · N items" · "RUN AGAIN" · "Starting… N" · "Cancel" · "Going to the Gate…" · "ROLL" · "N rolls ready" · "need N more" · "Back to the hub in N" · "No drops this run. Your tokens still count." · "Results are on the way…".
 
 ## 7. Edge cases
 - **Server authority:** rewards are granted before the snapshot; the UI can't grant, double or re-roll anything. RUN AGAIN re-checks the tier rule (Hard needs Lv 5 for every member) on the server.
@@ -101,12 +103,12 @@ Error: if `RunResults` doesn't arrive in 3 s, show the wings with "Results are o
 - **Performance:** two Frames, ≤ 13 tiles, one world emitter burst; tweens only.
 
 ## 8. Mockups
-SVG in repo (fake data, original art, gray-box arena): `mockups/01-cleared-phone-390x844.svg` (Hard clear, NEW BEST, ×2 tags) · `mockups/02-wipe-phone-390x844.svg` (wipe on wave 3, ROLL dim) · `mockups/03-collapsed-phone-390x844.svg` (folded bar + auto-return line) · `mockups/04-cleared-landscape-667x375.svg` (wings left/right, keep-out clear) · `mockups/05-cleared-landscape-800x400.svg` (Normal solo) · `mockups/06-desktop-1280x720.svg` (keys Space / R / C) · `mockups/07-directions.svg` (A/B/C). The keep-out is the cyan dashed box. PNG renders are on the box only.
+SVG in repo (fake data, original art, gray-box arena). v1.1 re-rendered all six screens with "SESSION BEST" and the always-visible hub timer. `mockups/01-cleared-phone-390x844.svg` (Hard clear, NEW BEST, ×2 tags) · `mockups/02-wipe-phone-390x844.svg` (wipe on wave 3, ROLL dim) · `mockups/03-collapsed-phone-390x844.svg` (folded bar + auto-return line) · `mockups/04-cleared-landscape-667x375.svg` (wings left/right, keep-out clear) · `mockups/05-cleared-landscape-800x400.svg` (Normal solo) · `mockups/06-desktop-1280x720.svg` (keys Space / R / C) · `mockups/07-directions.svg` (A/B/C). The keep-out is the cyan dashed box. PNG renders are on the box only.
 
 ## 9. Build split
 Roadmap 4.2 / 4.3. Building waits for Ghost's go and the #384 payouts flag.
-- **Echo (server):** `RunResults` snapshot (personal), payouts granted first, `rollsReady`, best-wave compare (Q2), RUN AGAIN entry: solo restart in a fresh arena copy with a tier re-check; party → Gate pad join (Q1); 30 s idle return (Q3); analytics `run_again` and `results_roll` events (Roadmap metric "Run Again rate"). Tests: rewards never granted twice, wipe keeps loot, Hard re-check on RUN AGAIN, no save write when Q2 says session only.
-- **Ghost (client):** `ResultsWings` (2 wings + folded bar), reuse `ResultsGrid`, hide the live HUD during results, teleports, keys Space / R / C, retire the old victory card for the V1 arena (Q4), toast-lane wait while unfolded.
+- **Echo (server):** `RunResults` snapshot (personal), payouts granted first, `rollsReady`, session-only best-wave compare in memory (Q2, no save write), RUN AGAIN entry: solo restart in a fresh arena copy with a tier re-check; party → Gate pad countdown (Q1); 30 s idle return with a server `returnAt` (Q3); analytics `run_again` and `results_roll` events (Roadmap metric "Run Again rate"). Tests: rewards never granted twice, wipe keeps loot, Hard re-check on RUN AGAIN, no save write when Q2 says session only.
+- **Ghost (client):** `ResultsWings` (2 wings + folded bar), reuse `ResultsGrid`, hide the live HUD during results, teleports, keys Space / R / C, retire the old victory card behind a flag for the V1 arena, deleting nothing (Q4), toast-lane wait while unfolded.
 - **Prism:** final copy check; Phase S pass (victory pose, Legendary burst, title art).
 - **Havoc:** spam RUN AGAIN, RUN AGAIN + disconnect, party where one member picks ROLL, Hard re-check after a member levels down/leaves, 30 s idle.
 
@@ -120,13 +122,16 @@ Roadmap 4.2 / 4.3. Building waits for Ghost's go and the #384 payouts flag.
 7. Kevin's Phase 4 checks: "After a run, do you want to roll right away?" and "Do you want to run again?" both get a yes from most testers.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** RUN AGAIN in a party: send players to the hub Gate pad so the party re-forms there with the existing party rules (recommended, no new party logic; "Run it back" stays a Later idea), or restart the same party directly from the arena?
-2. **@Ghost:** Best wave needs a per-tier save field (schema is 26; nothing stores it today). Ask Echo for a reviewed save field (needs Kevin's OK as a save change), or show "best this session" only for V1 gray box (recommended until the save change is approved)?
-3. **@Ghost:** Auto-return to the hub after 30 s idle on the results screen (recommended), or stay until the player taps?
-4. **@Ghost:** The wings replace the `CombatHud` victory card for the V1 arena. Retire the old card behind a flag (nothing deleted) when the V1 arena flag flips? Recommended: yes.
-5. **@Kevin (taste):** Which button wins? Recommended: RUN AGAIN is the big gold button and ROLL is violet with the "N rolls ready" count, except on the very first run when ROLL is highlighted once. Also title wording: "SHARD CRATER CLEARED" (recommended) or "VICTORY!".
+1. ~~**@Ghost:** Party RUN AGAIN?~~ **Decided (Ghost, Oct 24, 2026, Kevin pre-approved): party Run Again goes back through the Gate pad countdown.** "Run it back" from the arena stays a Later idea (NOT APPROVED). See §3 step 5b.
+2. ~~**@Ghost:** Best wave save field?~~ **Decided: best wave is session-only for V1.** Schema stays 26; the saved field is parked (a future save change needs Kevin's OK). See §2, §6.
+3. ~~**@Ghost:** Auto-return?~~ **Decided: yes, 30 s auto-return with a visible timer.** See §3 step 8 and §4.
+4. ~~**@Ghost:** Retire the CombatHud victory card?~~ **Decided: retire it behind a flag, delete nothing.** See §2.
+5. **@Kevin (taste, PROVISIONAL):** Which button wins? Recommended: RUN AGAIN is the big gold button and ROLL is violet with the "N rolls ready" count, except on the very first run when ROLL is highlighted once. Also title wording: "SHARD CRATER CLEARED" (recommended) or "VICTORY!". The spec ships the recommendation until Kevin says otherwise.
+
+All Ghost questions are closed.
 
 ## Decision log
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f): direction **A**. Q1 = party Run Again goes back through the Gate pad countdown. Q2 = best wave session-only for V1 (schema stays 26, saved field parked). Q3 = yes, 30 s auto-return with a visible timer. Q4 = retire the CombatHud victory card behind a flag, delete nothing. Q5 (Kevin taste) stays PROVISIONAL. Mockups re-rendered. → v1.1.
 - 2026-10-24 (Prism): v1 published. Recommends direction A (Results wings). Five open questions (Ghost 1–4; Kevin 5). Not approved. The Hard colors use the Hard accent that is still a PROVISIONAL Kevin taste call (Hard spec Q4).
 
 ## Later (not V1)
