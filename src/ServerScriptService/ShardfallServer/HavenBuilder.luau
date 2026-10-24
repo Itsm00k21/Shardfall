@@ -520,6 +520,10 @@ local function island(
 	model.Name = name
 	model.Parent = parent
 	disc(model, "Ground", x, FLOOR_TOP, z, radius * 2, 8, top, topMaterial, true)
+	-- The skirt hangs 8 studs under the walk and sticks out 8 studs past the rim.
+	-- A solid skirt is a ledge the default jump cannot climb, and the hub
+	-- rescue does not fire until the player is far below the island. The rock
+	-- stays visible. Walking off the rim falls through it.
 	disc(
 		model,
 		"Rock",
@@ -530,7 +534,7 @@ local function island(
 		12,
 		Color3.fromRGB(92, 86, 78),
 		Enum.Material.Rock,
-		true
+		false
 	)
 	return model
 end
