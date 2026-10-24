@@ -76,7 +76,7 @@ describe("Haven", function()
 			expect(type(portal.dress) == "string").toBeTrue()
 			expect(type(portal.level) == "number").toBeTrue()
 			expect(string.find(portal.subline :: string, tostring(portal.level), 1, true) ~= nil).toBeTrue()
-			if Haven.gateLit(portal) then
+			if Haven.gateOpen(portal) then
 				table.insert(lit, portal.id)
 				expect(string.find(Haven.gatePlate(portal), "Sealed", 1, true)).toBeNil()
 			else
@@ -108,7 +108,7 @@ describe("Haven", function()
 		local openIds = {}
 		for _, portal in ipairs(Haven.PORTALS) do
 			local open = Haven.gateOpen(portal)
-			expect(Haven.gateLit(portal)).toEqual(open)
+			expect(Haven.gateLit(portal)).toEqual(Haven.gateShownOpen(portal))
 			if open then
 				table.insert(openIds, portal.id)
 			end
@@ -160,12 +160,13 @@ describe("Haven", function()
 		expect(Haven.gatePlate(shut)).toEqual("Lv 15")
 	end)
 
-	it("seals Heartwood with Opens later while raids are off", function()
+	it("seals Heartwood with Heartwood opens later. while raids are off", function()
 		local heart = Haven.portal("heartwood")
 		expect(LaunchGate.on("raids")).toEqual(false)
 		expect(Haven.gateOpen(heart)).toEqual(true)
 		expect(Haven.gateShownOpen(heart)).toEqual(false)
-		expect(Haven.gateShownPlate(heart)).toEqual("Opens later")
+		expect(Haven.gateLit(heart)).toEqual(Haven.gateShownOpen(heart))
+		expect(Haven.gateShownPlate(heart)).toEqual("Heartwood opens later.")
 		expect(Haven.gateShownOpen(Haven.portal("rootvault"))).toEqual(true)
 		expect(Haven.gateShownPlate(Haven.portal("rootvault"))).toEqual("Lv 1 · Solo")
 		expect(Haven.gateShownOpen(Haven.portal("tidecrypt"))).toEqual(false)
@@ -178,7 +179,31 @@ describe("Haven", function()
 		expect(plate).toEqual("Lv 15 · 4–8")
 		expect(LaunchGate.on("raids")).toEqual(false)
 		expect(Haven.gateShownOpen(heart)).toEqual(false)
+		expect(Haven.gateLit(heart)).toEqual(false)
 		expect(Haven.gateOpen(heart)).toEqual(true)
+	end)
+
+	it("keeps gateLit as a deprecated alias of gateShownOpen", function()
+		expect(LaunchGate.SHOW.raids).toEqual(false)
+		for _, portal in ipairs(Haven.PORTALS) do
+			expect(Haven.gateLit(portal)).toEqual(Haven.gateShownOpen(portal))
+		end
+		local heart = Haven.portal("heartwood")
+		expect(Haven.gateLit(heart)).toEqual(false)
+		expect(Haven.gateOpen(heart)).toEqual(true)
+		LaunchGate.SHOW.raids = true
+		local lit = Haven.gateLit(heart)
+		local shown = Haven.gateShownOpen(heart)
+		LaunchGate.SHOW.raids = false
+		expect(lit).toEqual(shown)
+		expect(lit).toEqual(true)
+		expect(Haven.gateLit(heart)).toEqual(Haven.gateShownOpen(heart))
+		expect(LaunchGate.on("raids")).toEqual(false)
+		local source = require("@lune/fs").readFile("src/ReplicatedStorage/Shared/Haven.luau")
+		expect(string.find(source, "function Haven.gateLit", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "function Haven.gateShownOpen", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "return Haven.gateShownOpen(portal)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "Deprecated alias of Haven.gateShownOpen", 1, true) ~= nil).toBeTrue()
 	end)
 
 	it("gives every live dungeon exactly one arch", function()

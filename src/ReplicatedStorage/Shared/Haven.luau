@@ -175,7 +175,7 @@ Haven.DISTRICTS = {
 -- Content open versus sealed is Haven.gateOpen. The built arch uses
 -- Haven.gateShownOpen: Rootvault is open, Heartwood is open only while
 -- raids are on, and the other four stay sealed. With raids off the orange
--- Heartwood mouth is sealed and labeled Opens later. `color` is the mouth
+-- Heartwood mouth is sealed and labeled "Heartwood opens later." `color` is the mouth
 -- accent the light already uses.
 Haven.PORTALS = {
 	{
@@ -339,12 +339,6 @@ function Haven.gateOpen(portal: Place): boolean
 	return false
 end
 
--- True when the gate's content is live. The hub paints gateShownOpen, so a
--- parked Heartwood raid stays dark until raids are on.
-function Haven.gateLit(portal: Place): boolean
-	return Haven.gateOpen(portal)
-end
-
 -- The arch the player sees. Heartwood's content is live, but while the
 -- raids switch is off the orange mouth is sealed so it does not read as a door.
 function Haven.gateShownOpen(portal: Place): boolean
@@ -352,6 +346,12 @@ function Haven.gateShownOpen(portal: Place): boolean
 		return false
 	end
 	return Haven.gateOpen(portal)
+end
+
+-- Deprecated alias of Haven.gateShownOpen. Older callers still resolve.
+-- Do not delete this name.
+function Haven.gateLit(portal: Place): boolean
+	return Haven.gateShownOpen(portal)
 end
 
 -- An open plate names the level and the party. A sealed plate keeps its line.
@@ -373,10 +373,11 @@ function Haven.gatePlate(portal: Place): string
 	return "Sealed"
 end
 
--- Plate on the built arch. Heartwood says Opens later until raids are on.
+-- Plate, prompt, and toast on the built arch. Heartwood says this exact
+-- line until raids are on.
 function Haven.gateShownPlate(portal: Place): string
 	if portal.id == Dungeons.HEARTWOOD_ID and not LaunchGate.on("raids") then
-		return "Opens later"
+		return "Heartwood opens later."
 	end
 	return Haven.gatePlate(portal)
 end
