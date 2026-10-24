@@ -26,6 +26,10 @@ its tag to merged and add the merge commit.
   pay the same run twice, tell the client early, or roll back a grant
   that landed while it was writing. `bossClearRuns` stays capped at 16.
   `schemaVersion` stays 26. No new save field. (open)
+- Server `RunResults` includes `bossClear { granted, tokens }` copied
+  from the saved grant. A failed or unsaved save publishes granted
+  false. The boss row stays 5 Roll Tokens on every tier. Hard does not
+  add a bonus. `schemaVersion` stays 26. (open)
 - The leash slam cancels its mark when the dash path is blocked, so the
   boss does not cross that line. Shard Volley windup is `VOLLEY_WINDUP`
   0.9s in `Config/Enemies`. Flag `enemyTypes` stays off. (open)

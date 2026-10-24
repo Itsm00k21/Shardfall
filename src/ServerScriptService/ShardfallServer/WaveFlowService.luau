@@ -17,6 +17,10 @@
 	before and nothing is paid. The flag still has to be on. Boot does
 	not call this module.
 
+	RunResults is a second server-to-client event. Its bossClear card
+	is copied from the commit result after the save returns. A failed
+	or unsaved grant is granted false. The client cannot supply the card.
+
 	bossEnter and bossDown go to an analytics hook when one exists.
 	That hook is ReplicatedStorage.Shared.Analytics.event, or the
 	sink.analytics function a caller passes. The analytics module is
@@ -47,12 +51,22 @@ end
 local WaveFlowService = {}
 
 WaveFlowService.REMOTE = "WaveCounter"
+WaveFlowService.RESULTS = "RunResults"
 WaveFlowService.BOSS_ENTER = "bossEnter"
 WaveFlowService.BOSS_DOWN = "bossDown"
 
 export type Payload = {
 	wave: number,
 	left: number,
+}
+
+export type BossClearCard = {
+	granted: boolean,
+	tokens: number,
+}
+
+export type Results = {
+	bossClear: BossClearCard,
 }
 
 export type EventDetail = {
@@ -70,6 +84,8 @@ export type Sink = {
 	-- Save the profile. Must return true only after the write sticks.
 	-- Must not tell the client. Called before fire on a boss clear.
 	persist: ((any) -> boolean)?,
+	-- RunResults. Separate from the wave counter.
+	results: ((any, Results) -> ())?,
 }
 
 function WaveFlowService.open(): boolean
@@ -167,6 +183,44 @@ local function deliver(player: any, payload: Payload, fire: ((any, Payload) -> (
 	return true
 end
 
+local function deliverResults(player: any, payload: Results, fire: ((any, Results) -> ())?): boolean
+	if fire ~= nil then
+		fire(player, payload)
+		return true
+	end
+	if game == nil or game.GetService == nil then
+		return false
+	end
+	if typeof(player) ~= "Instance" or not player:IsA("Player") or player.Parent == nil then
+		return false
+	end
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+	if folder == nil then
+		return false
+	end
+	local remote = folder:FindFirstChild(WaveFlowService.RESULTS)
+	if remote == nil or not remote:IsA("RemoteEvent") then
+		return false
+	end
+	remote:FireClient(player, payload)
+	return true
+end
+
+-- One table. bossClear is the saved grant, not a client claim.
+function WaveFlowService.publishResults(player: any, result: any, fire: ((any, Results) -> ())?): boolean
+	if not WaveFlowService.open() or player == nil then
+		return false
+	end
+	local card = BossClearReward.card(result)
+	local payload = {
+		bossClear = {
+			granted = card.granted,
+			tokens = card.tokens,
+		},
+	}
+	return deliverResults(player, payload, fire)
+end
+
 -- One table, two fields. Callers cannot add a third field to the wire.
 function WaveFlowService.publish(player: any, run: WaveFlow.Run?, fire: ((any, Payload) -> ())?): boolean
 	if not WaveFlowService.open() or run == nil or player == nil then
@@ -190,20 +244,21 @@ local function pushBoxes(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
 end
 
 -- Save the boss-clear grant before the caller fires the counter.
+-- The second return is the commit result. RunResults is built from that.
 -- No profile means there is nothing to pay and the counter may still go out.
-local function payClear(sink: Sink, run: WaveFlow.Run): boolean
+local function payClear(sink: Sink, run: WaveFlow.Run): (boolean, BossClearReward.Result?)
 	if sink.profile == nil or run.clear ~= true or run.wave ~= Enemies.BOSS_WAVE then
-		return true
+		return true, nil
 	end
 	if run.rewarded == true then
-		return true
+		return true, nil
 	end
 	local result = BossClearReward.commit(sink.profile, run.id, sink.persist)
 	if result.saved == true then
 		run.rewarded = true
-		return true
+		return true, result
 	end
-	return false
+	return false, result
 end
 
 function WaveFlowService.counter(run: WaveFlow.Run?): WaveFlow.Counter?
@@ -241,7 +296,9 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	local needsPay = sink ~= nil and sink.profile ~= nil and run.clear == true and run.rewarded ~= true
 	local paid = true
 	if needsPay and sink ~= nil then
-		paid = payClear(sink, run)
+		local result: BossClearReward.Result? = nil
+		paid, result = payClear(sink, run)
+		WaveFlowService.publishResults(sink.player, result, sink.results)
 	end
 	local changed = after.wave ~= before.wave or after.left ~= before.left
 	if sink ~= nil and paid and (changed or needsPay) then

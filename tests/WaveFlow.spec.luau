@@ -583,6 +583,7 @@ describe("WaveFlowService", function()
 		for _, path in ipairs(luaFiles("src/StarterPlayer")) do
 			local body = fs.readFile(path)
 			expect(string.find(body, "WaveCounter", 1, true)).toBeNil()
+			expect(string.find(body, "RunResults", 1, true)).toBeNil()
 			expect(string.find(body, "WaveFlow", 1, true)).toBeNil()
 			expect(string.find(body, "bossEnter", 1, true)).toBeNil()
 			expect(string.find(body, "bossDown", 1, true)).toBeNil()

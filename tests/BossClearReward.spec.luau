@@ -580,6 +580,144 @@ describe("Boss clear reward", function()
 		end)
 	end)
 
+	it("publishes RunResults from the saved grant and pays 5 on every tier", function()
+		expect(Schema.VERSION).toEqual(26)
+		expect(Economy.BOSS_CLEAR_RUNS).toEqual(16)
+		expect(Economy.BOSS_CLEAR_TOKENS).toEqual(5)
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
+		local hardBonus = math.floor(
+			Economy.BOSS_CLEAR_TOKENS * Economy.DIFFICULTIES.hard.tokenMultiplier + 0.5
+		)
+		expect(hardBonus).toEqual(8)
+		expect(Economy.bossClearPay(nil)).toEqual(5)
+		expect(Economy.bossClearPay("Hard")).toBeNil()
+		expect(Economy.bossClearPay(8)).toBeNil()
+
+		for _, tier in ipairs(Economy.DIFFICULTY_ORDER) do
+			expect(Economy.bossClearPay(tier)).toEqual(5)
+			local profile = Schema.template()
+			local before = profile.shardTokens
+			local id = string.format("00000000-0000-4000-8000-%012x", Economy.DIFFICULTIES[tier].order)
+			local paid = BossClearReward.commit(profile, id, function()
+				return true
+			end, tier)
+			expect(paid.saved).toEqual(true)
+			expect(paid.granted).toEqual(true)
+			expect(paid.tokens).toEqual(5)
+			expect(profile.shardTokens).toEqual(before + 5)
+			expect(BossClearReward.card(paid)).toEqual({ granted = true, tokens = 5 })
+		end
+
+		local refused = Schema.template()
+		local beforeRefuse = refused.shardTokens
+		local badTier = BossClearReward.commit(refused, "run-11", function()
+			return true
+		end, "Hard")
+		expect(badTier.saved).toEqual(false)
+		expect(badTier.granted).toEqual(false)
+		expect(refused.shardTokens).toEqual(beforeRefuse)
+		expect(BossClearReward.card(badTier)).toEqual({ granted = false, tokens = 0 })
+
+		local failed = BossClearReward.commit(Schema.template(), "run-6", function()
+			return false
+		end)
+		expect(failed.saved).toEqual(false)
+		expect(BossClearReward.card(failed)).toEqual({ granted = false, tokens = 0 })
+		expect(BossClearReward.card({ granted = true, tokens = 99 })).toEqual({ granted = false, tokens = 0 })
+		expect(BossClearReward.card({ saved = false, granted = true, tokens = 5 })).toEqual({
+			granted = false,
+			tokens = 0,
+		})
+		expect(BossClearReward.card({ bossClear = { granted = true, tokens = 40 } })).toEqual({
+			granted = false,
+			tokens = 0,
+		})
+		local saved = BossClearReward.commit(Schema.template(), "run-6", function()
+			return true
+		end)
+		expect(BossClearReward.card(saved)).toEqual({ granted = true, tokens = 5 })
+		expect(WaveFlowService.publishResults("hero", saved, function()
+			error("flag off")
+		end)).toEqual(false)
+
+		local service = fs.readFile("src/ServerScriptService/ShardfallServer/WaveFlowService.luau")
+		expect(string.find(service, "BossClearReward.card", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, 'WaveFlowService.RESULTS = "RunResults"', 1, true) ~= nil).toBeTrue()
+
+		withFlag(true, function()
+			expect(WaveFlowService.RESULTS).toEqual("RunResults")
+			local claim = { granted = true, tokens = 40 }
+			local posted = {}
+			expect(WaveFlowService.publishResults("hero", claim, function(_player, payload)
+				table.insert(posted, payload)
+			end)).toEqual(true)
+			expect(posted[1]).toEqual({ bossClear = { granted = false, tokens = 0 } })
+
+			local profile = Schema.template()
+			local before = profile.shardTokens
+			local cards = {}
+			local sent = {}
+			local allow = false
+			local sink = {
+				player = "hero",
+				profile = profile,
+				claim = claim,
+				fire = function(_player, payload)
+					table.insert(sent, payload.left)
+				end,
+				results = function(_player, payload)
+					local names = {}
+					for key in pairs(payload) do
+						table.insert(names, key)
+					end
+					table.sort(names)
+					expect(names).toEqual({ "bossClear" })
+					local inner = {}
+					for key in pairs(payload.bossClear) do
+						table.insert(inner, key)
+					end
+					table.sort(inner)
+					expect(inner).toEqual({ "granted", "tokens" })
+					table.insert(cards, {
+						granted = payload.bossClear.granted,
+						tokens = payload.bossClear.tokens,
+					})
+				end,
+				persist = function()
+					return allow
+				end,
+			}
+			local run = WaveFlowService.start(sink)
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			local guard = 0
+			while run.clear ~= true and guard < 80 do
+				local boxes = WaveFlow.boxes(run)
+				expect(#boxes > 0).toBeTrue()
+				expect(WaveFlowService.hurt(run, boxes[1].id, 100000, sink) > 0).toBeTrue()
+				guard += 1
+			end
+			expect(run.clear).toEqual(true)
+			expect(run.rewarded).toEqual(false)
+			expect(profile.shardTokens).toEqual(before)
+			expect(#cards).toEqual(1)
+			expect(cards[1]).toEqual({ granted = false, tokens = 0 })
+			expect(sent[#sent] ~= 0).toBeTrue()
+
+			allow = true
+			local fires = #sent
+			expect(WaveFlowService.hurt(run, 1, 1, sink)).toEqual(0)
+			expect(cards[#cards]).toEqual({ granted = true, tokens = 5 })
+			expect(#sent).toEqual(fires + 1)
+			expect(sent[#sent]).toEqual(0)
+			expect(profile.shardTokens).toEqual(before + 5)
+			expect(run.rewarded).toEqual(true)
+		end)
+	end)
+
 	it("does not pay while the flag is off", function()
 		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
 		local profile = Schema.template()

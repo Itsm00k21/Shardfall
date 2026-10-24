@@ -22,7 +22,12 @@
 	cannot roll that grant back.
 
 	Nothing here reads a product id or spends Robux. The client cannot
-	pass an amount. Waves 1-4 are not paid here.
+	pass an amount. Waves 1-4 are not paid here. Every tier pays the
+	boss row (5). A Hard multiplier does not raise it.
+
+	card() is the RunResults bossClear table. It is built from a commit
+	result that already saved. A failed save, an unsaved table, or a
+	client claim becomes granted false and 0 tokens.
 ]]
 
 local Economy = require("./Config/Economy")
@@ -35,6 +40,11 @@ export type Result = {
 	already: boolean,
 	tokens: number,
 	saved: boolean,
+}
+
+export type Card = {
+	granted: boolean,
+	tokens: number,
 }
 
 local function outcome(granted: boolean, already: boolean, tokens: number, saved: boolean): Result
@@ -135,12 +145,26 @@ local function copyRuns(value: any): { string }
 	return copy
 end
 
-local function bossTokens(): number?
-	local ok = Economy.validate()
-	if ok ~= true then
-		return nil
+local function bossTokens(tier: any): number?
+	return Economy.bossClearPay(tier)
+end
+
+-- RunResults.bossClear. Saved grant only. Unsaved, failed, and a client
+-- claim all publish as not granted.
+function BossClearReward.card(result: any): Card
+	local empty = { granted = false, tokens = 0 }
+	if type(result) ~= "table" or result.saved ~= true or result.granted ~= true then
+		return empty
 	end
-	return Economy.BOSS_CLEAR_TOKENS
+	local tokens = result.tokens
+	local cap = Economy.BOSS_CLEAR_TOKENS
+	if type(tokens) ~= "number" or tokens ~= tokens or tokens < 0 or tokens ~= math.floor(tokens) then
+		return empty
+	end
+	if type(cap) ~= "number" or tokens > cap then
+		return empty
+	end
+	return { granted = true, tokens = tokens }
 end
 
 type Pending = {
@@ -275,7 +299,7 @@ end
 -- One grant for this run id. persist runs before this returns saved.
 -- An in-flight call does not pay again and does not report saved.
 -- A table, a Robux field, or an amount on the id is refused.
-function BossClearReward.commit(profile: any, runId: any, persist: ((any) -> boolean)?): Result
+function BossClearReward.commit(profile: any, runId: any, persist: ((any) -> boolean)?, tier: any): Result
 	if type(profile) ~= "table" or type(runId) ~= "string" then
 		return refused()
 	end
@@ -299,7 +323,7 @@ function BossClearReward.commit(profile: any, runId: any, persist: ((any) -> boo
 	if BossClearReward.seen(profile, runId) then
 		return outcome(false, true, 0, true)
 	end
-	local amount = bossTokens()
+	local amount = bossTokens(tier)
 	if amount == nil then
 		return refused()
 	end

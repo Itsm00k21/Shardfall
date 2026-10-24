@@ -8,7 +8,7 @@
 	Roll Tokens per wave on Normal: 1, 1, 2, 2, then 5 for the boss wave.
 	A Normal clear pays 11. Harder difficulties multiply the whole clear and
 	round half up (13.75 -> 14, 16.5 -> 17). This boss grant pays the boss
-	row only (5), not the 11.
+	row only (5), on every tier. Hard does not turn that 5 into 8.
 
 	Roll Tokens are the live shardTokens save field. The grant-once run ids
 	need their own bounded list (bossClearRuns) because the ledger is shared
@@ -138,6 +138,21 @@ function Economy.validate(source: any?): (boolean, string)
 		end
 	end
 	return true, ""
+end
+
+-- Boss row only. tokenMultiplier scales the 11-token clear, not this.
+-- nil is the flat boss row. A known tier is still 5. Anything else pays nothing.
+function Economy.bossClearPay(tier: any): number?
+	local ok = Economy.validate()
+	if ok ~= true then
+		return nil
+	end
+	if tier ~= nil then
+		if type(tier) ~= "string" or Economy.DIFFICULTIES[tier] == nil then
+			return nil
+		end
+	end
+	return Economy.BOSS_CLEAR_TOKENS
 end
 
 return table.freeze(Economy)
