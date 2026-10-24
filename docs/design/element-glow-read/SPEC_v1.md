@@ -1,6 +1,6 @@
-# Element Glow Read ("Outline-led"): Ember / Frost / Void on enemies, Spec v1
+# Element Glow Read ("Outline-led"): Ember / Frost / Void on enemies, Spec v1.1
 
-Owner: Prism (design, docs only, no code). Builders: Echo (server glow in `DungeonService` + `Config/Elements`), Ghost (client pip on the enemy bar, if Q2 yes). Base: `cursor/live-build-9721`. Status: **v1, waiting on Ghost** (Ghost GO on the Agent Board, Kevin pre-approved: https://app.notion.com/p/403c31ca38838155a532f79564499765, Oct 24, 2026). Gray-box only (pre-Phase S). Element colors stay **PROVISIONAL** for Kevin. Not an official Vision & Design Rules decision until Kevin approves it.
+Owner: Prism (design, docs only, no code). Builders: Echo (server glow in `DungeonService` + `Config/Elements`), Ghost (client pip on the enemy bar, if Q2 yes). Base: `cursor/live-build-9721`. Status: **v1.1, Ghost answered Q1, Q2, Q5, Q6, Q7** (board row https://app.notion.com/p/403c31ca3883819d821fe59c27a3d730, Oct 24, 2026, Kevin pre-approved). v1 came from Ghost's GO row https://app.notion.com/p/403c31ca38838155a532f79564499765. Q3 and Q4 (Ember vs orange, Void vs Epic) are Kevin taste calls, now studied in the **Element color separation study** (`prism/element-color-study`, `docs/design/element-color-study/`). Gray-box only (pre-Phase S). Element colors stay **PROVISIONAL** for Kevin. Not an official Vision & Design Rules decision until Kevin approves it.
 Asked for in: Ghost's board row: "element glow read spec for #432 (incl. P2-432-1 fallback)". Roadmap **2.3** (elements) and **3.x** (wave readability).
 
 Sources (link, don't copy):
@@ -29,20 +29,20 @@ On a 390×844 phone at crawl zoom 18, with 3–8 enemies alive, a new player can
 
 ## 2. Where it lives
 - **Server (Echo, #432 follow-up):** `Config/Elements` numbers (§6), `applyElementGlow` (outline color = tinted element color), **remove glow + light on death** (not at wave clear), and the **glow budget** (§4). The warm `Rim` is re-enabled for an enemy that has no glow slot. Nothing saved, no remote added, schema stays 26.
-- **Client (Ghost, if Q2 yes):** a 12×12 element **pip** at the left end of the existing enemy bar (`enemyBar` BillboardGui), read from the `ShardfallElement` attribute, plus a 1 px element-color `UIStroke` on the bar. Display-only. Prism doesn't edit Ghost-owned UI files.
-- **Not here:** element damage/resists (Roadmap 2.3 stats), boss element (Q5), Phase S VFX (element particles, shader-like rims), any Robux.
+- **Client (Ghost, Q2 decided: pip yes, no bar stroke):** a 12×12 element **pip** at the left end of the existing enemy bar (`enemyBar` BillboardGui), read from the `ShardfallElement` attribute. **No bar stroke** (v1.1). Display-only. Prism doesn't edit Ghost-owned UI files.
+- **Not here:** element damage/resists (Roadmap 2.3 stats), boss element glow (Q5 decided: none in v1), Phase S VFX (element particles, shader-like rims), any Robux.
 
 ## 3. Flow
 | Step | Trigger | What the player sees |
 |---|---|---|
 | 1 | Flag `elementGlow` off (ships this way) | Today's warm Rim on every enemy. No pips, no lights. Zero element pixels. |
 | 2 | Enemy spawns, glow slot free | Highlight pops in over 0.15 s (Fill 1 → 0.5, Outline 1 → 0), ground pool light fades in. Pip shows on the bar. |
-| 3 | Enemy spawns, glow budget full | Warm Rim (as today) + pip + element-stroked bar. No light. |
-| 3b | Enemy spawns, enemy Highlight ceiling (18) full (only with #433's cap 22) | No Highlight at all: pip + element-stroked bar only. |
+| 3 | Enemy spawns, glow budget full | Warm Rim (as today) + pip. No light. |
+| 3b | Enemy spawns, enemy Highlight ceiling (18) full (only with #433's cap 22) | No Highlight at all: pip only. |
 | 4 | An enemy with a glow dies | Glow fades out in 0.15 s (Fill/Outline → 1, light Brightness → 0), then the Highlight and light are **destroyed**. The slot is free. |
 | 5 | Slot freed | The **oldest alive enemy without a glow** gets it (one swap per frame): Rim disabled, glow pops in (step 2). |
 | 6 | Wave clear | Nothing left to clean (everything was removed at death). |
-| 7 | Boss wave | Boss keeps its own gold-stroked look and Rim (no element glow, Q5); adds glow normally within the budget. |
+| 7 | Boss wave | Boss keeps its own gold-stroked look and Rim (no element glow in v1, Q5 decided); adds glow normally within the budget. |
 
 ## 4. Layout
 World visuals are 3D and may cross the center keep-out (that rule is for UI panels). The pip is world UI on the enemy bar, so it moves with the enemy.
@@ -52,11 +52,10 @@ World visuals are 3D and may cross the center keep-out (that rule is for UI pane
 | Enemy on screen at zoom 18 | ~40–46 px tall | ~36 px | ~38 px | ~60 px |
 | Highlight outline | Roblox fixed width (~1–2 px), weight comes from transparency 0 + the light tint | same | same | same |
 | Pip (BillboardGui child) | 12×12 at the bar's left end, 4 px gap | 12×12 | 12×12 | 14×14 |
-| Bar stroke | 1 px element color | same | same | same |
 | Glow budget | **6** (touch) | 6 | 6 | **12** (keyboard/mouse) |
 | Ground pool lights | max **4** (touch) | 4 | 4 | 12 |
 
-Highlight count rule (fixes P2-432-1): **every alive enemy has at most 1 Highlight** (element glow *or* warm Rim, never both); **every dead enemy has 0**. **Enemy Highlight ceiling = 18** (glow + Rim together), leaving 13 of Roblox's 31 for players, loot, the boss and other systems. At today's 3–8 alive this never binds. With #433's alive cap 22, enemies 19–22 get **no Highlight**: they read by the pip + element-stroked bar only, and gain a Rim/glow as soon as one frees. Mockup `08-cap-fallback.svg`.
+Highlight count rule (fixes P2-432-1): **every alive enemy has at most 1 Highlight** (element glow *or* warm Rim, never both); **every dead enemy has 0**. **Enemy Highlight ceiling = 18** (glow + Rim together), leaving 13 of Roblox's 31 for players, loot, the boss and other systems. At today's 3–8 alive this never binds. With #433's alive cap 22, enemies 19–22 get **no Highlight**: they read by the pip only, and gain a Rim/glow as soon as one frees. Mockup `08-cap-fallback.svg`.
 Checks: nothing tappable is added (pip is display-only; no 44 px target needed). No UI panel is added, so the keep-out at all 4 sizes is unchanged.
 
 ## 5. States
@@ -66,24 +65,23 @@ Checks: nothing tappable is added (pip is display-only; no 44 px target needed).
 | Rim | on | disabled | on | — | destroyed with the glow (P2) |
 | PointLight | none | range 10, brightness 1.5 (if under the light cap) | none | Brightness → 0 | destroyed (P3-432-1) |
 | Pip | none | shape + color | shape + color | fades with the bar | gone |
-| Bar stroke | none | none | 1 px element color | — | gone |
 Loading: if `ShardfallElement` isn't set yet, show no pip (never a wrong one). Error: unknown id → no glow, warm Rim (matches `ElementGlow.visual` returning nil).
 
 ## 6. Numbers
-- **Fill colors (PROVISIONAL, Kevin):** keep #432: Ember **255,112,36**, Frost **92,214,255**, Void **196,92,255**.
+- **Fill colors (PROVISIONAL, Kevin; options in the element color study):** keep #432 until Kevin picks: Ember **255,112,36**, Frost **92,214,255**, Void **196,92,255**.
 - **Outline colors (new, rec A):** element color lerped 45% to white: Ember **255,176,134**, Frost **165,232,255**, Void **222,165,255**. The lighter rim reads on the dark crater floor and on the violet sky; the fill carries the hue.
 - `GLOW`: `fillTransparency` 0.28 → **0.5**; `outlineTransparency` **0** (keep); `lightBrightness` 3 → **1.5**; `lightRange` 22 → **10** (a pool under the enemy, not a floor wash); `depthMode` **AlwaysOnTop** (keep: enemies behind pillars still read).
-- Budget knobs (Echo names them, Config only): glow max **6 touch / 12 desktop**; light max **4 touch / 12 desktop**; enemy Highlight ceiling (glow + Rim) **18** on every device. Over the ceiling: pip + bar stroke only.
+- Budget knobs (Echo names them, Config only): glow max **6 touch / 12 desktop**; light max **4 touch / 12 desktop**; enemy Highlight ceiling (glow + Rim) **18** on every device. Over the ceiling: pip only. All three knobs OK'd by Ghost (Q6).
 - Tweens: in 0.15 s (Quad Out), out 0.15 s (Quad In). One slot hand-off per frame.
 - Pip shapes: Ember = flame triangle, Frost = crystal diamond, Void = ring. 12×12, 1 px ink 20,16,28 stroke.
-- Grayscale check (luma): Ember ≈ 145, Frost ≈ 180, Void ≈ 142. Ember and Void are close in gray, so the **shape pip is required** for colorblind reads (Q2).
+- Grayscale check (luma): Ember ≈ 145, Frost ≈ 180, Void ≈ 142. Ember and Void are close in gray, so the **shape pip is required** for colorblind reads (Q2 decided: yes).
 
 ## 7. Edge cases
-- **Ember vs boss telegraph orange (255,120,40):** nearly the same hue. They stay apart by shape (telegraphs are flat floor lanes/rings with white rims and chevrons; Ember is a lit body with a light-tint rim) and by the smaller light (rec A's range 10 keeps Ember pools from looking like slam rings). Q3 asks Kevin whether to shift one of them anyway.
-- **Void vs Epic (186,96,240):** same family. Context separates them (Epic is on loot tiles, drops and UI; Void is on enemies). Q4.
+- **Ember vs boss telegraph orange (255,120,40):** nearly the same hue. They stay apart by shape (telegraphs are flat floor lanes/rings with white rims and chevrons; Ember is a lit body with a light-tint rim) and by the smaller light (rec A's range 10 keeps Ember pools from looking like slam rings). Q3 (Kevin) is now worked out with swatches and colorblind checks in the element color study.
+- **Void vs Epic (186,96,240):** same family. Context separates them (Epic is on loot tiles, drops and UI; Void is on enemies). Q4 (Kevin), see the element color study.
 - **Frost vs gate cyan (120,210,255):** gates are static arch parts; OK.
 - **Hard:** colors and weights don't change on Hard (Hard accent v1.1 is HUD-only, no sky tint).
-- **Spawn-order elements (P3-432-3):** the same enemy type can change color between waves. Fine for a read test; Q1 asks whether to map element by enemy type before the flag goes on.
+- **Element source (P3-432-3, Q1 decided):** the target is **element by enemy type in Config**, so players learn each enemy's element. #432's spawn-order pick **stays for v1**; per-type mapping is a **later Echo task**. Until then the same enemy type can change color between waves, which is fine for the read test.
 - **#422 arena path (P3-432-2):** the glow only exists on the Rootvault spawn path. The budget and death rules must cover the #422 arena path too when it gets glows (Echo).
 - **Low graphics:** Highlights still draw; lights may be culled. The pip and outline carry the read without lights.
 - **Party of 4:** Highlights are per enemy, not per viewer, so the count doesn't scale with players.
@@ -96,7 +94,8 @@ SVG in repo (fake data, original art, gray-box crater). `mockups/01-wave4-phone-
 ## 9. Build split
 Before `elementGlow` is ever turned on. Building waits for Ghost's go.
 - **Echo (server, #432 follow-up):** Config numbers (§6), tinted outline color, destroy Highlight + light on death with a 0.15 s fade (P2-432-1, P3-432-1), the glow budget + oldest-first hand-off, warm Rim back on for over-budget enemies, the same rules on the #422 arena path (P3-432-2). Tests: alive enemy has ≤ 1 Highlight; dead has 0; glow count ≤ budget; enemy Highlights ≤ 18 with 22 alive (#433); flag off builds nothing.
-- **Ghost (client, Q2):** element pip + bar stroke on the enemy bar from `ShardfallElement`.
+- **Ghost (client, Q2 decided):** element pip on the enemy bar from `ShardfallElement`. No bar stroke.
+- **#428 Wave HUD buff pips (Q7 decided):** read the same `Config/Elements` colors (Prism folds this into #428's spec).
 - **Prism:** Phase S pass (element particles, pip art) after the fun test; check Kevin's color call.
 - **Havoc:** 8 alive on a phone, kill 20 in a row in one wave (Highlights never stack), 22-enemy stress, Low graphics, flag flip mid-wave.
 
@@ -108,16 +107,19 @@ Before `elementGlow` is ever turned on. Building waits for Ghost's go.
 5. Colorblind check (grayscale capture): elements are still named correctly from the pips.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** Element by spawn order (#432 today) or by enemy type (P3-432-3) before the flag goes on? Recommended: by enemy type in Config, so a player learns "the blue ones are Frost".
-2. **@Ghost:** Add the 12 px element pip + 1 px bar stroke on the enemy bar (client, display-only)? Recommended: yes; it's the colorblind read and the over-budget fallback.
-3. **@Kevin (taste, PROVISIONAL):** Ember 255,112,36 sits next to the telegraph orange 255,120,40. Keep both (shape separates them, recommended for gray-box) or shift Ember redder (e.g. 255,84,40) or the telegraph to violet-white (telegraphs Q6)?
-4. **@Kevin (taste, PROVISIONAL):** Void 196,92,255 is close to Epic 186,96,240. Keep (context separates enemies from loot, recommended) or push Void toward magenta (e.g. 222,80,255)?
-5. **@Ghost:** Boss element glow: none in v1 (recommended; the boss keeps its own look and telegraphs), or one element per boss?
-6. **@Ghost:** Glow budget 6 touch / 12 desktop, light cap 4 / 12, and an enemy Highlight ceiling of 18 (needed once #433's alive cap 22 is on), as Config knobs: OK? (Havoc's stress estimate says lights are the real per-frame cost.)
-7. **@Ghost (FYI):** Wave HUD #428 buff pips use 255,140,70 / 120,210,255 / 186,96,240. Recommend they read the same `Config/Elements` colors so a Frost buff and a Frost enemy match. I'll fold that into #428 when you say so.
+1. ~~@Ghost: Element by spawn order or by enemy type?~~ **By enemy type in Config (Ghost, Oct 24, 2026):** players learn each enemy's element. #432's spawn-order pick stays for v1; per-type is a later Echo task.
+2. ~~@Ghost: Pip + bar stroke on the enemy bar?~~ **Pip yes, no bar stroke (Ghost).**
+3. **@Kevin (taste, PROVISIONAL):** Ember 255,112,36 vs orange (telegraph 255,120,40, Legendary 255,196,64, UI warn 255,168,48). Options and a recommendation are in the element color study (`docs/design/element-color-study/`). #432's color stays until Kevin picks.
+4. **@Kevin (taste, PROVISIONAL):** Void 196,92,255 vs Epic 186,96,240. Options and a recommendation are in the element color study. #432's color stays until Kevin picks.
+5. ~~@Ghost: Boss element glow?~~ **None in v1 (Ghost).**
+6. ~~@Ghost: Budgets as Config knobs?~~ **OK (Ghost):** glow 6 touch / 12 desktop, lights 4 / 12, enemy Highlight ceiling 18.
+7. ~~@Ghost: #428 buff pips read Config/Elements colors?~~ **Yes (Ghost).** Prism folds it into #428's spec.
+
+Ghost's questions are all answered. Only Kevin's two color calls (Q3, Q4) remain.
 
 ## Decision log
 - 2026-10-24 (Prism): v1 published from Ghost's GO (board row https://app.notion.com/p/403c31ca38838155a532f79564499765, Kevin pre-approved). Recommends direction A (outline-led: fill 0.5, light-tint outline, range-10 pool, shape pip). Includes the P2-432-1 fix (≤ 1 Highlight per alive enemy, 0 per dead, glow budget 6/12 with warm-Rim + pip fallback, enemy Highlight ceiling 18 for #433's cap 22). Seven open questions (Ghost 1, 2, 5, 6, 7; Kevin 3, 4). Not approved.
+- 2026-10-24 (Ghost, Kevin pre-approved; board row https://app.notion.com/p/403c31ca3883819d821fe59c27a3d730): Q1 = element by enemy type in Config is the target, #432's spawn order stays for v1, per-type is a later Echo task. Q2 = pip yes, **no bar stroke**. Q5 = no boss glow in v1. Q6 = budgets 6/12, lights 4/12, ceiling 18 OK. Q7 = #428 buff pips use Config/Elements colors. → **v1.1**: bar stroke removed from §2–§6, §9 and the build notes; over-ceiling fallback is pip only; mockups 02 and 08 re-rendered without the bar stroke. Q3/Q4 moved to the element color study for Kevin.
 
 ## Later (not V1)
 Element particles on enemies (Ember sparks, Frost motes, Void wisps), element hit flashes, a per-element death pop, element weakness hints on the pip. All go to the Ideas Backlog as NOT APPROVED.
@@ -132,7 +134,7 @@ Stock Roblox only. No blur, no post-processing, no custom shaders. The mockups a
 | Warm Rim | existing `Rim` `Highlight`; `Enabled = false` while a glow draws, `true` when over budget |
 | Death | tween Fill/Outline → 1 and light Brightness → 0 (0.15 s Quad In), then `Destroy()` the glow, the Rim and the light **before** the corpse fade (`DungeonService` death path, ~:1987) |
 | Budget | server table of enemies with a glow and with a Rim; on spawn: glow if glow count < max, else Rim if enemy Highlights < 18, else none; on death: free, then give it to the oldest alive enemy without one (≤ 1 per `Heartbeat`) |
-| Pip (client) | inside the enemy bar `BillboardGui`: `ImageLabel` 12×12 (or `Frame` + `UICorner`/rotated `Frame` for gray-box shapes) + `UIStroke` 1 ink; bar `UIStroke` 1 px element color; `Visible` from `ShardfallElement` |
+| Pip (client) | inside the enemy bar `BillboardGui`: `ImageLabel` 12×12 (or `Frame` + `UICorner`/rotated `Frame` for gray-box shapes) + `UIStroke` 1 ink; `Visible` from `ShardfallElement`. No bar `UIStroke` (v1.1) |
 
 ### Image assets to upload (PNG, transparent)
 | Asset | Size | Use |
