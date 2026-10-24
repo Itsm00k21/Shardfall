@@ -39,9 +39,10 @@ Config.Rarities = require("./Rarities")
 Config.Elements = require("./Elements")
 Config.SetBonuses = require("../RelicSets")
 Config.Dungeons = Dungeons
--- Includes the V1 chaser, ranged, and tank rows from Config/Enemies.luau.
--- Wave sizes for roadmap 3.5 live in that file too. LaunchGate.enemyTypes
--- stays off, so live waves do not spawn them and the counter stays quiet.
+-- Includes the V1 chaser, ranged, tank, and wave-5 boss from
+-- Config/Enemies.luau. Wave sizes and the boss adds live in that file
+-- too. LaunchGate.enemyTypes stays off, so live waves do not spawn them
+-- and the counter stays quiet.
 Config.Enemies = Dungeons.ENEMIES
 Config.Rewards = require("../Drops")
 Config.Economy = require("./Economy")

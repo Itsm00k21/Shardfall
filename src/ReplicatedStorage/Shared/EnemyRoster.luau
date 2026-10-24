@@ -1,11 +1,12 @@
 --!strict
 
 --[[
-	Server math for the three V1 enemy types. Positions, arena bounds,
-	and damage come from Config/Enemies.luau. A ranged kite is clamped
-	to that arena. A ranged shot travels at projectileSpeed and deals
-	damage only after a line-of-sight check. This module does not create
-	parts, raycast the world, read a profile, or spend Robux.
+	Server math for the three V1 enemy types and the wave-5 boss.
+	Positions, arena bounds, and damage come from Config/Enemies.luau.
+	A ranged kite is clamped to that arena. A ranged shot travels at
+	projectileSpeed and deals damage only after a line-of-sight check.
+	This module does not create parts, raycast the world, read a
+	profile, or spend Robux.
 
 	EnemyTypeService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on, and it owns the world raycast. A client
@@ -59,11 +60,7 @@ local function finite(value: any): boolean
 end
 
 local function rowOf(kind: string): Enemies.Row?
-	local row = Enemies.TYPES[kind]
-	if row == nil or row.id ~= kind then
-		return nil
-	end
-	return row
+	return Enemies.row(kind)
 end
 
 function EnemyRoster.order(): { string }

@@ -13,6 +13,13 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
+  4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
+  count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns
+  the gray blocks only while the flag is on, and sends `bossEnter` /
+  `bossDown` when `Shared.Analytics.event` exists (that module is not
+  in the tree). No HUD edit, no save write, `schemaVersion` stays 26.
+  Stacked on the wave flow. (open)
 - Phase 3 wave flow (flag `enemyTypes`, off): waves of 6, 8, 10, and 12.
   Each wave mixes chaser, ranged, and tank. Counts and mixes live in
   `Shared/Config/Enemies.luau`. `WaveFlowService` pushes `{ wave, left }`

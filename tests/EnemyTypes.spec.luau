@@ -72,6 +72,14 @@ local function fullRoster(): any
 		WAVE_MIXES = Enemies.WAVE_MIXES,
 		WAVE_GAP = Enemies.WAVE_GAP,
 		WAVE_LIFT = Enemies.WAVE_LIFT,
+		BOSS = Enemies.BOSS,
+		BOSS_ADDS = Enemies.BOSS_ADDS,
+		BOSS_WAVE = Enemies.BOSS_WAVE,
+		BOSS_ADD_MIX = {
+			chaser = Enemies.BOSS_ADD_MIX.chaser,
+			ranged = Enemies.BOSS_ADD_MIX.ranged,
+			tank = Enemies.BOSS_ADD_MIX.tank,
+		},
 	}
 end
 

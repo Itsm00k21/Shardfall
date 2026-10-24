@@ -855,8 +855,8 @@ function Dungeons.progressNote(ascension: any): string?
 end
 
 -- V1 types (Config/Enemies). Copied onto the catalog so Config.Enemies
--- lists them. Rooms and waveKinds do not spawn them. The flag is
--- LaunchGate.enemyTypes, and it stays off.
+-- lists them, including the wave-5 boss. Rooms and waveKinds do not
+-- spawn them. The flag is LaunchGate.enemyTypes, and it stays off.
 do
 	local V1Enemies = require("./Config/Enemies")
 
@@ -896,6 +896,37 @@ do
 	for _, id in ipairs(V1Enemies.ORDER) do
 		Dungeons.ENEMIES[id] = v1Enemy(id)
 	end
+
+	local bossRow = V1Enemies.BOSS
+	assert(bossRow ~= nil, "V1 boss missing")
+	local bossStyle: "melee" | "projectile" = "melee"
+	if bossRow.style == "projectile" then
+		bossStyle = "projectile"
+	end
+	local sharedBoss = V1Enemies.SHARED
+	Dungeons.ENEMIES[bossRow.id] = {
+		id = bossRow.id,
+		name = bossRow.name,
+		maxHealth = bossRow.maxHealth,
+		damage = bossRow.damage,
+		defense = bossRow.defense,
+		attackSpeed = bossRow.attackSpeed,
+		moveSpeed = bossRow.moveSpeed,
+		range = bossRow.range,
+		style = bossStyle,
+		minDot = bossRow.minDot,
+		projectileSpeed = bossRow.projectileSpeed,
+		hover = sharedBoss.hover,
+		boss = true,
+		phase2At = bossRow.phase2At,
+		weakSeconds = sharedBoss.weakSeconds,
+		armoredMultiplier = sharedBoss.armoredMultiplier,
+		fogInterval = sharedBoss.fogInterval,
+		fogDamage = sharedBoss.fogDamage,
+		safeRadius = sharedBoss.safeRadius,
+		color = { bossRow.color[1], bossRow.color[2], bossRow.color[3] },
+		size = { bossRow.size[1], bossRow.size[2], bossRow.size[3] },
+	}
 end
 
 for _, enemy in pairs(Dungeons.ENEMIES) do

@@ -79,11 +79,12 @@ Drops.ENEMIES = {
 	-- Elite, not boss: the Waves Mireoak pays the realm rare, not a boss part.
 	mireoak = { realm = "verdant", role = "elite" },
 	-- V1 roster. Live rooms and waveKinds do not spawn them, so a live run
-	-- does not pay these. The gated 6/8/10/12 flow can name them while
-	-- enemyTypes is on, and that flow does not grant drops.
+	-- does not pay these. The gated flow can name them while enemyTypes
+	-- is on, and that flow does not grant drops.
 	chaser = { realm = "verdant", role = "normal" },
 	ranged = { realm = "verdant", role = "normal" },
 	tank = { realm = "verdant", role = "normal" },
+	boss = { realm = "verdant", role = "boss" },
 } :: { [string]: EnemyDrop }
 
 -- Extra forage on top of the realm bundle. Living Vine is a Vine Crawler
