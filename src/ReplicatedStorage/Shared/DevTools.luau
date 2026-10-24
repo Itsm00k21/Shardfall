@@ -226,14 +226,9 @@ export type Rect = { x: number, y: number, w: number, h: number }
 function DevTools.layout(viewportX: number, viewportY: number, margin: number): (Rect, Rect)
 	local vx = if type(viewportX) == "number" and viewportX >= 200 then viewportX else 1280
 	local vy = if type(viewportY) == "number" and viewportY >= 200 then viewportY else 800
-	local pills = HudLayout.pills(vx, margin)
-	local buttonW, buttonH = 56, 32
-	local button = {
-		x = vx - margin - buttonW,
-		y = pills.y + pills.h + 8,
-		w = buttonW,
-		h = buttonH,
-	}
+	-- HudLayout.topRight reserves this slot for every view (Oct 24).
+	local button = HudLayout.devButton(vx, margin)
+	local buttonH = button.h
 	local width = math.min(300, vx - margin * 2)
 	local top = button.y + buttonH + 8
 	-- Leave the bottom band for the action bar and skills.
