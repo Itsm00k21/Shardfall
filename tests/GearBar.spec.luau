@@ -270,6 +270,47 @@ describe("GearBar: auto-salvage labels", function()
 		end)
 	end)
 
+	it("a refused clamp is not treated as sent, so the pill tries again", function()
+		withFlag(function()
+			local profile = bag()
+			profile.autoSalvage = true
+			profile.autoSalvageRarity = "Rare"
+			local invoke, calls, hold = server(profile)
+			local _, parent, statuses = mount(profile, invoke)
+			hold(true)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			expect(#calls).toEqual(1)
+			expect(calls[1][2]).toEqual({ enabled = true, rarity = "Uncommon" })
+			expect(profile.autoSalvageRarity).toEqual("Rare")
+			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: ≤ Rare  ⚙")
+			expect(statuses[#statuses][2]).toEqual("error")
+			expect(statuses[#statuses][1]).toEqual("Too fast. Try again in a moment.")
+			-- Closing and opening the pill retries. The failed clamp did not stick.
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			expect(#calls).toEqual(2)
+			expect(profile.autoSalvageRarity).toEqual("Rare")
+			hold(false)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			expect(#calls).toEqual(3)
+			expect(profile.autoSalvageRarity).toEqual("Uncommon")
+			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: ≤ Uncommon  ⚙")
+			local errors = 0
+			for _, row in ipairs(statuses) do
+				if row[2] == "error" then
+					errors += 1
+				end
+			end
+			-- Two refusals, and the successful clamp stays quiet.
+			expect(errors).toEqual(2)
+			-- Landed. Another open does not send.
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			expect(#calls).toEqual(3)
+		end)
+	end)
+
 	it("a saved Rare cap that is off is shown clamped and never sent", function()
 		withFlag(function()
 			local profile = bag()

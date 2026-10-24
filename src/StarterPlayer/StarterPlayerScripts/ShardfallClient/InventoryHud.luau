@@ -746,7 +746,16 @@ function InventoryHud.start(playerGui: PlayerGui, callbacks: Callbacks)
 				if callbacks.onChestOptions == nil then
 					return
 				end
-				local steps = { "", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }
+				-- Off, Common, Uncommon, then Off. Uncommon is the cap.
+				-- A saved Rare+ value steps down to Uncommon instead of
+				-- climbing toward Mythic.
+				local steps = { "", "Common", "Uncommon" }
+				local capRank = Rarities.INDEX["Uncommon"]
+				local currentRank = Rarities.INDEX[salvage]
+				if currentRank ~= nil and capRank ~= nil and currentRank > capRank then
+					callbacks.onChestOptions(mode, "Uncommon")
+					return
+				end
 				local index = 1
 				for stepIndex, step in ipairs(steps) do
 					if step == salvage then
