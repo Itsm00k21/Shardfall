@@ -1,5 +1,3 @@
-<cursor_untrusted_data_1337 source="CallDynamicTool">
-
 # Shardfall: Bag Salvage… flow + Shard Core panel, Build Spec v1.1
 
 **Status:** Draft for Ghost (UI) and Echo (server). Docs only, with no code and no flags.
@@ -25,7 +23,7 @@
 **V1 now (this spec):**
 - The Bag's **Salvage…** picker (3 rarity rows) → **confirm** (with a breakdown and the protected count) → **success** (Essence count-up).
 - The **Shard Core card** for the selected weapon (CoreCard in the detail pane): the Essence balance, Lv pips, the perk ladder, Feed → inline confirm → toast.
-- **Collapse** for both: the salvage sheet becomes a 44 px pill, and the core card becomes its 64 px header.
+- **Collapse** for both: the salvage sheet becomes a 44 px pill, and the core card becomes its 44 px header.
 - Edge cases (fast taps, an expired preview, server refusals, Essence full, an empty Bag) and the phone layouts.
 
 **Later (scope creep, not in V1):**
@@ -94,7 +92,7 @@ All sizes are in px at 1× unless marked as scale. **On phones, GearBar row cont
 | Piece | Desktop (1280×720+) | Phone portrait 390×844 | Phone landscape 667×375 | Phone landscape 800×400 |
 |---|---|---|---|---|
 | Salvage sheet anchor | Inside the Bag window, AnchorPoint (1,1), Position UDim2(1,-10,1,-10): bottom-right, over the detail column, never over the grid's middle third | Bottom sheet: AnchorPoint (0.5,1), Position UDim2(0.5,0,1,-8) inside the Bag window | Side sheet: AnchorPoint (1,0.5), Position UDim2(1,-8,0.5,0) inside the Bag window | Same as 667×375 |
-| Sheet size | W 340, H auto (max 0.6 × Bag height, then scroll) | W = Bag width − 8 (≈ 366), H auto, max 0.5 × viewport (422), top edge never above y 422 | W 300, H = Bag height − 16, scrolls | W 320, H = Bag height − 16, scrolls |
+| Sheet size | W 340, H auto (max 0.6 × Bag height, then scroll) | W = Bag width − 8 (≈ 366), H auto, max 0.5 × viewport (422), top edge never above y 422 | W 300, H = Bag height − 16. The body scrolls, and the footer (Cancel / Salvage N, 44) is **pinned** to the bottom | W 320, same as 667×375 (pinned footer) |
 | Collapsed pill | 44 tall, W 340, same anchor | 44 tall, W = sheet W, same anchor | 44 tall, W 300, AnchorPoint (1,1) bottom-right | 44 tall, W 320, bottom-right |
 | Picker row | 52 tall, full width, gap 8 | 52 | 52 | 52 |
 | Confirm buttons | 2 side by side, each (W−28−8)/2 × 44 | (≈169) × 44 | (≈132) × 44 | (≈142) × 44 |
@@ -109,6 +107,7 @@ All sizes are in px at 1× unless marked as scale. **On phones, GearBar row cont
 Notes:
 - On a portrait phone the Bag already covers the character, so "off center" here means the sheet lives in the **lower half** of the Bag and the grid stays readable above it (mockup 01).
 - On landscape phones the side sheet covers the **detail column**, not the grid (the pack keeps detail on the right in landscape).
+- Landscape phones (phone layout review F6): with the safe height near 323, the confirm view (title, question, chips, protected box, warning, buttons ≈ 260 px) is taller than the sheet's body. Only the body scrolls, and the Cancel / Salvage N footer never scrolls out of view.
 - Echo flagged `HudLayout.luau:708` (the card crossing center on narrow screens) in 6378950270. This spec doesn't depend on it, but Ghost should fix it before the Bag is checked at 667×375.
 
 ## 5. States
@@ -238,6 +237,4 @@ Echo decides: salvage at the Essence cap (refuse at 0 gain, or delete with clamp
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d): Q1 = **yes**, protect Shard Core Lv 1+ weapons from bulk salvage. Q2 = **yes**, keep "Salvage all Rare and below". Q4 = **A** cyan pips. Q7 = **A** help line once per session. The salvage tip ships (Ghost decision 1). Total core cost stays **410 Essence**, tuned in Config after playtest. All §11 questions are now closed.
-
-
-</cursor_untrusted_data_1337>
+- 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F5: the core card collapses to its **44 px** header (the Scope line said 64, but §4 and the code say 44). F6: landscape sheets pin the Cancel / Salvage N footer while the body scrolls. No design change.
