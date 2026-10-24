@@ -12,6 +12,10 @@
 	card, so a rollback is not stuck. Skip pays the saved step's tokens
 	once either way, except a flag-off open step, which owes 0. Replay
 	writes nothing.
+
+	LaunchGate.classes off: the cold open does not stop on the class card.
+	A save already sitting there moves to the next step. On, only a class
+	pick leaves it. Neither path pays the starter kit.
 ]]
 
 -- Lune has no DataModel. Studio requires go through ReplicatedStorage.
@@ -44,6 +48,24 @@ local OnboardingService = {}
 local watching = false
 local padCarry = 0
 
+-- The class card stays in the cold-open list. While the classes switch
+-- is off, nothing can pick one, so that card is not a step.
+local function afterClass(): string?
+	local following = Onboarding.next("class")
+	if type(following) ~= "string" or following == "" or following == "class" then
+		return nil
+	end
+	return following
+end
+
+local function nextStep(id: string): string?
+	local following = Onboarding.next(id)
+	if following == "class" and not LaunchGate.on("classes") then
+		return afterClass()
+	end
+	return following
+end
+
 local function move(data, eventId: string)
 	if data.onboardDone == true then
 		return
@@ -56,7 +78,7 @@ local function move(data, eventId: string)
 	if SessionGuide.freeStep(eventId) then
 		return
 	end
-	local following = Onboarding.next(data.onboardStep)
+	local following = nextStep(data.onboardStep)
 	if following == nil then
 		Onboarding.starter(data)
 		return
@@ -68,6 +90,23 @@ local function grantKit(data)
 	if data.onboardDone == true then
 		FirstSessionKit.grant(data)
 	end
+end
+
+-- A profile parked on the class card moves on while classes are off.
+-- Flag on, this writes nothing: the class pick is still the note.
+function OnboardingService.skipParkedClass(data): boolean
+	if LaunchGate.on("classes") then
+		return false
+	end
+	if type(data) ~= "table" or data.onboardDone == true or data.onboardStep ~= "class" then
+		return false
+	end
+	local following = afterClass()
+	if following == nil then
+		return false
+	end
+	data.onboardStep = following
+	return true
 end
 
 function OnboardingService.applyNote(data, eventId: string)
@@ -181,6 +220,23 @@ function OnboardingService.start()
 	watching = true
 	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
+	-- Join still pushes a save that stopped on the class card. Move it
+	-- before the player is stuck there. Flag on does not write.
+	dataService().onChanged(function(player, snapshot)
+		if LaunchGate.on("classes") then
+			return
+		end
+		if type(snapshot) ~= "table" or snapshot.onboardDone == true then
+			return
+		end
+		if snapshot.onboardStep ~= "class" then
+			return
+		end
+		dataService().mutate(player, function(data)
+			OnboardingService.skipParkedClass(data)
+			return nil
+		end)
+	end)
 	RunService.Heartbeat:Connect(function(dt)
 		if not LaunchGate.on("firstSessionGuide") then
 			return
