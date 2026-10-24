@@ -24,6 +24,10 @@ local DevTools = {}
 
 DevTools.PREFIX = "[Dev]"
 DevTools.BUTTON_TEXT = "Dev"
+-- [Ghost] Oct 24 (#482 clip): above the onboarding card and goals (95) so
+-- the open panel is never drawn under them; under the banner (100) and
+-- the loading screen (110). OnboardHud also hides while it is open.
+DevTools.DISPLAY_ORDER = 96
 DevTools.TITLE = "Dev Tools (owner only)"
 
 export type Entry = { id: string, label: string, remote: string, arg: string }

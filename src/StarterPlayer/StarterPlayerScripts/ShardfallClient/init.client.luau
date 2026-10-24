@@ -1574,6 +1574,9 @@ end, {
 	apply = function(result: any)
 		applyResult(result)
 	end,
+	changed = function(open: boolean)
+		OnboardHud.setCovered("dev", open)
+	end,
 })
 local function retireChrome(name: string)
 	local gui = playerGui:FindFirstChild(name)
@@ -1613,6 +1616,14 @@ OnboardHud.coverWhen("raid", function(): boolean
 end)
 OnboardHud.coverWhen("loop", function(): boolean
 	return LoopHud.isOpen()
+end)
+-- [Ghost] Oct 24 (#482): the Dev Tools panel opens under the goals
+-- column; the goals hide while it is open and come back on close.
+OnboardHud.coverWhen("dev", DebugHud.isOpen)
+OnboardHud.coverWhen("results", function(): boolean
+	local gui = playerGui:FindFirstChild("WaveArenaResults")
+	local card = if gui ~= nil then gui:FindFirstChild("Card") else nil
+	return card ~= nil and OnboardHud.shown(card)
 end)
 OnboardHud.coverWhen("market", function(): boolean
 	local gui = playerGui:FindFirstChild("ShardfallMarket")

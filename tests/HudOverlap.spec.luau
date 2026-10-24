@@ -291,3 +291,109 @@ describe("Hotbar tabs and empty slots", function()
 		expect(string.find(source, 'tabStrip.Name = "TabStrip"', 1, true) ~= nil).toBeTrue()
 	end)
 end)
+
+describe("Open panels sit above the goals, or the goals hide", function()
+	local CLIENT = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
+	local ONBOARD_ORDER = 95
+
+	local function start()
+		local world = GuiFake.world()
+		world.playerGui.Parent = world.player
+		local OnboardHud = world.load("OnboardHud")
+		OnboardHud.start(function()
+			return { ok = true }
+		end)
+		OnboardHud.setCollapsed(false, false)
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
+		return world, OnboardHud, onboard
+	end
+
+	-- Goals are "in the way" only if a goals piece is on screen.
+	local function goalsShowing(OnboardHud: any, onboard: any): boolean
+		local goals = GuiFake.findNamed(onboard, "OnboardGoals")
+		local tab = GuiFake.findNamed(onboard, "GoalsTab")
+		return OnboardHud.shown(goals) or OnboardHud.shown(tab)
+	end
+
+	it("the Dev Tools panel really lands on the goals at Kevin's 1024x500", function()
+		local _, frame = DevTools.layout(1024, 500, 16)
+		local layout = HudLayout.onboard(1024, 500, false, 4)
+		-- Why the dynamic rule is needed: the static column cannot hold both.
+		expect(HudLayout.overlaps(frame, layout.tracker)).toBeTrue()
+	end)
+
+	it("Dev panel open: goals hidden; closed: goals back as they were", function()
+		local _, OnboardHud, onboard = start()
+		local devOpen = false
+		OnboardHud.coverWhen("dev", function()
+			return devOpen
+		end)
+		expect(goalsShowing(OnboardHud, onboard)).toBeTrue()
+		devOpen = true
+		OnboardHud.setCovered("dev", true) -- the DebugHud changed hook
+		expect(goalsShowing(OnboardHud, onboard)).toBeFalse()
+		expect(OnboardHud.shown(GuiFake.findNamed(onboard, "Continue"))).toBeFalse()
+		devOpen = false
+		OnboardHud.setCovered("dev", false)
+		expect(goalsShowing(OnboardHud, onboard)).toBeTrue()
+		local _, goalsFolded = OnboardHud.collapsed()
+		expect(goalsFolded).toEqual(false) -- restored, not left folded
+		OnboardHud.coverWhen("dev", function()
+			return false
+		end)
+	end)
+
+	it("hub menu open: goals hidden; closed: back", function()
+		local world, OnboardHud, onboard = start()
+		local hubOpen = false
+		OnboardHud.coverWhen("hub", function()
+			return hubOpen
+		end)
+		expect(goalsShowing(OnboardHud, onboard)).toBeTrue()
+		hubOpen = true
+		world.runService.Heartbeat:_emit(0.25) -- no callback: the recheck catches it
+		expect(goalsShowing(OnboardHud, onboard)).toBeFalse()
+		hubOpen = false
+		world.runService.Heartbeat:_emit(0.25)
+		expect(goalsShowing(OnboardHud, onboard)).toBeTrue()
+		OnboardHud.coverWhen("hub", function()
+			return false
+		end)
+	end)
+
+	it("Dev Tools draws above the onboarding UI and wires open/close", function()
+		expect(DevTools.DISPLAY_ORDER > ONBOARD_ORDER).toBeTrue()
+		expect(DevTools.DISPLAY_ORDER < 100).toBeTrue() -- under the banner
+		local onboard = fs.readFile(CLIENT .. "OnboardHud.luau")
+		expect(string.find(onboard, "DisplayOrder = " .. ONBOARD_ORDER, 1, true) ~= nil).toBeTrue()
+		local debugHud = fs.readFile(CLIENT .. "DebugHud.luau")
+		expect(string.find(debugHud, "DisplayOrder = DevTools.DISPLAY_ORDER", 1, true) ~= nil).toBeTrue()
+		expect(string.find(debugHud, "setOpen(not panel.Visible)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(debugHud, "setOpen(false)", 1, true) ~= nil).toBeTrue()
+		local init = fs.readFile(CLIENT .. "init.client.luau")
+		expect(string.find(init, 'OnboardHud.coverWhen("dev", DebugHud.isOpen)', 1, true) ~= nil).toBeTrue()
+		expect(string.find(init, 'OnboardHud.setCovered("dev", open)', 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("every full panel or menu under the onboarding UI hides it", function()
+		local init = fs.readFile(CLIENT .. "init.client.luau")
+		-- Panels drawn below DisplayOrder 95 that can sit where the card or
+		-- goals are. Each must have a coverWhen source.
+		for _, source in ipairs({
+			"inventory",
+			"hub",
+			"craft",
+			"travel",
+			"skills",
+			"raid",
+			"loop",
+			"market",
+			"results",
+			"dev",
+		}) do
+			local needle = 'OnboardHud.coverWhen("' .. source .. '"'
+			expect(string.find(init, needle, 1, true) ~= nil).toBeTrue()
+		end
+	end)
+end)
