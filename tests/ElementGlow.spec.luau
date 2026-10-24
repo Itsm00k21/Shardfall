@@ -95,4 +95,41 @@ describe("Element glow", function()
 		local waveBody = slice(dungeon, "local function spawnWave", "local function storyEcho")
 		expect(string.find(waveBody, "spawnEnemy(run, kind, offset, run.wave, index)", 1, true) ~= nil).toBeTrue()
 	end)
+
+	it("drops the element Highlight when the enemy dies and leaves the rim", function()
+		local function piece(name: string, className: string)
+			local item = { Name = name, ClassName = className, destroyed = false }
+			function item:IsA(class: string): boolean
+				return class == className
+			end
+			function item:Destroy()
+				item.destroyed = true
+			end
+			return item
+		end
+		local function holder(children: { [string]: any })
+			return {
+				FindFirstChild = function(_self, name: string)
+					return children[name]
+				end,
+			}
+		end
+		local glow = piece(Elements.GLOW.name, "Highlight")
+		local rim = piece("Rim", "Highlight")
+		local light = piece(Elements.GLOW.lightName, "PointLight")
+		local host = holder({ [Elements.GLOW.name] = glow, Rim = rim })
+		local part = holder({ [Elements.GLOW.lightName] = light })
+		ElementGlow.detach(host, part)
+		expect(glow.destroyed).toEqual(true)
+		expect(light.destroyed).toEqual(true)
+		expect(rim.destroyed).toEqual(false)
+		ElementGlow.detach(holder({}), holder({}))
+		ElementGlow.detach(nil, nil)
+
+		local dungeon = fs.readFile("src/ServerScriptService/ShardfallServer/DungeonService.luau")
+		local death = slice(dungeon, "if enemy.hp <= 0 then", "pcall(ModelFactory.dissolve, enemy.part)")
+		local drop = string.find(death, "ElementGlow.detach(ModelFactory.adorn(enemy.part), enemy.part)", 1, true)
+		expect(drop ~= nil).toBeTrue()
+		expect(string.find(death, "enemy.part.Name = \"Remains\"", 1, true)).toBeNil()
+	end)
 end)

@@ -122,4 +122,30 @@ function ElementGlow.forEnemy(spawnIndex: number, enabled: boolean): Visual?
 	return ElementGlow.visual(ElementGlow.assign(spawnIndex), true)
 end
 
+local function destroyNamed(owner: any, name: any, className: string)
+	if owner == nil or type(name) ~= "string" or type(owner.FindFirstChild) ~= "function" then
+		return
+	end
+	local child = owner:FindFirstChild(name)
+	if child == nil or type(child.IsA) ~= "function" or not child:IsA(className) then
+		return
+	end
+	if type(child.Destroy) == "function" then
+		child:Destroy()
+	end
+end
+
+-- Death keeps the rig as Remains until the next wave. Destroy the glow
+-- Highlight immediately so a corpse does not hold a slot in the 31 cap.
+-- The warm Rim is left alone. A missing glow is a no-op. Works on a real
+-- Instance (userdata) and on a test stand-in.
+function ElementGlow.detach(host: any, part: any)
+	local glow = Elements.GLOW
+	if type(glow) ~= "table" then
+		return
+	end
+	destroyNamed(host, glow.name, "Highlight")
+	destroyNamed(part, glow.lightName, "PointLight")
+end
+
 return ElementGlow

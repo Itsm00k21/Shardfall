@@ -1900,6 +1900,9 @@ function DungeonService.damageEnemy(
 		end
 	end
 	if enemy.hp <= 0 then
+		-- The rig stays as Remains until the wave clears. Drop the element
+		-- Highlight now so dead enemies do not pile up toward the 31 cap.
+		ElementGlow.detach(ModelFactory.adorn(enemy.part), enemy.part)
 		if enemy.boss and run.echoFight ~= nil then
 			local fight = run.echoFight
 			-- This copy is down. Stacks stay until every member still
