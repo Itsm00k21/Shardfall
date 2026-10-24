@@ -1,5 +1,7 @@
 # Wave HUD ("Stack chip + boss bar"), Spec v1.2
 
+> **v2 (Oct 24, 2026, DP40P): see `SPEC_v2.md`.** It re-bases this spec on the live arena HUD at `a28a5e2`: §4 placement, the break timer state and the 50% phase tick are superseded there. Everything else here still stands.
+
 Owner: Prism (design, docs only, no code). Builders: Ghost (client HUD), Echo (server payloads). Base: `cursor/live-build-9721`. Status: **v1.2** (element colors folded in + Hard red final, Ghost row https://app.notion.com/p/403c31ca388381919fdfd588508d2143, Oct 24, 2026, Kevin pre-approved). v1.1: **direction A chosen by Ghost** (Kevin pre-approved, Agent Board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f, Oct 24, 2026). Ghost questions 1–4 are decided; Kevin taste call 5 stays **PROVISIONAL**. Gray-box only (pre-Phase S). Not an official Vision & Design Rules decision until Kevin approves it.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953, from canvas item **M6**: "Wave HUD spec (wave counter, next-wave timer, boss bar, HARD chip)". Roadmap **3.5** ("wave counter on screen"), **3.6** (boss + 4 adds on wave 5), **5.1** (8 s draft break), **5.4** (Hard).
 
