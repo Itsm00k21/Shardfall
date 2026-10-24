@@ -17,8 +17,10 @@ its tag to merged and add the merge commit.
   with 3 edge gates, enemy types 1-3, waves 6/8/10/12 then a boss and 4 adds.
   No Leave. A run ends on clear, wipe, timeout, or disconnect, and the player
   keeps every earned drop once. Ground chips auto-collect at wave end and on
-  wipe. A full Bag sends the overflow to `profile.arenaMail` (additive,
-  schemaVersion stays 26) instead of deleting it. Stuck enemies teleport or
+  wipe. A full Bag holds overflow for the session only (`overflowCap` in
+  config). At run end or disconnect that overflow is salvaged into existing
+  `gearEssence` at the normal salvage rates, once. No `arenaMail` field.
+  schemaVersion stays 26. Stuck enemies teleport or
   despawn. Pickup radius stays 12 studs. Boss HP bar, camera room, slam after
   the red warning, 1.5s boss death pause, hit flash and death puff. Metrics
   add gateSpent, waveClear, and bossEnter. `LaunchGate.waveArena` and

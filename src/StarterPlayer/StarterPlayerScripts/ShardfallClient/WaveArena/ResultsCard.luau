@@ -3,8 +3,8 @@
 --[[
 	[ECHO hook] Results card. It stays hidden during the death hold, because
 	the server snapshot's card is nil until that pause ends. There is no
-	Leave button. The server sends the player home. Tokens on the card
-	are not written here.
+	Leave button. The server sends the player home. Tokens and Essence
+	are not written here. Overflow rows are the session list.
 ]]
 
 local ResultsCard = {}
@@ -32,9 +32,18 @@ function ResultsCard.lines(card: any): { string }
 		string.format("Tokens %d", tokens),
 		string.format("Fragments %d", fragments),
 	}
-	local mail = loot.mailbox
-	if typeof(mail) == "table" and #mail > 0 then
-		table.insert(lines, string.format("Mailbox %d", #mail))
+	local overflow = loot.overflow
+	if typeof(overflow) == "table" then
+		for _, row in ipairs(overflow) do
+			if typeof(row) == "table" then
+				local count = if type(row.count) == "number" then row.count else 1
+				table.insert(lines, string.format("%s x%d", tostring(row.id), count))
+			end
+		end
+	end
+	local essence = if type(loot.essence) == "number" then loot.essence else 0
+	if essence > 0 then
+		table.insert(lines, string.format("Essence %d", essence))
 	end
 	return lines
 end

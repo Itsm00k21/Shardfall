@@ -657,6 +657,7 @@ describe("Config validation: wave arena", function()
 		expect(arena.gates.count).toEqual(3)
 		expect(isFinite(arena.timeout) and arena.timeout > 0).toBeTrue()
 		expect(isPositiveInt(arena.loot.bagSlots)).toBeTrue()
+		expect(isPositiveInt(arena.loot.overflowCap)).toBeTrue()
 		local sum = 0
 		expect(#arena.loot.waveTokens).toEqual(#Config.Economy.WAVES)
 		for index, amount in ipairs(arena.loot.waveTokens) do
@@ -672,6 +673,9 @@ describe("Config validation: wave arena", function()
 			local drop = arena.loot.drops[kind]
 			checkId("WaveArena.loot." .. kind, drop.id)
 			checkNumbers("WaveArena.loot." .. kind, drop)
+			if Config.Essence.amount(drop.rarity) == nil then
+				fail("WaveArena.loot." .. kind .. " rarity is not a salvage rarity")
+			end
 		end
 		checkNumbers("WaveArena.arena", arena.arena)
 		checkNumbers("WaveArena.gates", arena.gates)

@@ -47,6 +47,8 @@ describe("Phase 3 arena hooks", function()
 		expect(string.find(host, "remoteOk", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, "session.teleport", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, "moveX = 0", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "bagSlots", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "DataService.get", 1, true) ~= nil).toBeTrue()
 		local card = fs.readFile(
 			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/WaveArena/ResultsCard.luau"
 		)
@@ -75,9 +77,16 @@ describe("Phase 3 arena hooks", function()
 		local lines = ResultsCard.lines({
 			cleared = true,
 			wavesCleared = 5,
-			loot = { tokens = 11, fragments = 4 },
+			loot = {
+				tokens = 11,
+				fragments = 4,
+				overflow = { { id = "shard_chip", count = 2 } },
+				essence = 2,
+			},
 		})
 		expect(lines[1]).toEqual("Cleared")
 		expect(lines[3]).toEqual("Tokens 11")
+		expect(lines[5]).toEqual("shard_chip x2")
+		expect(lines[6]).toEqual("Essence 2")
 	end)
 end)

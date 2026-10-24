@@ -13,6 +13,7 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local Essence = require("../src/ReplicatedStorage/Shared/Config/Essence")
 local Loot = require("../src/server/WaveArena/Loot")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local Session = require("../src/server/WaveArena/Session")
@@ -83,10 +84,10 @@ end
 local function profile(): any
 	return {
 		shardTokens = 4,
+		gearEssence = 7,
 		inventory = {},
 		pets = {},
 		receipts = {},
-		arenaMail = {},
 		ledger = {},
 	}
 end
@@ -131,12 +132,14 @@ describe("Wave arena settle", function()
 		expect(done.position).toEqual("hub")
 		expect(run.reason).toEqual("disconnect")
 		expect(saved.shardTokens).toEqual(5)
-		expect(saved.arenaMail[1].fragments).toEqual(2)
+		expect(saved.gearEssence).toEqual(7)
+		expect(saved.arenaMail).toBeNil()
+		expect(run.earned.fragments).toEqual(2)
 		local again = Session.exit(saved, run, "wipe", options)
 		expect(again.position).toEqual("hub")
 		expect(saved.shardTokens).toEqual(5)
-		expect(saved.arenaMail[1].count).toEqual(2)
-		expect(saved.arenaMail[1].fragments).toEqual(2)
+		expect(saved.gearEssence).toEqual(7)
+		expect(again.grant.essence).toEqual(0)
 	end)
 
 	it("collects a chip once on wipe and does not pay the uncleared purse", function()
@@ -158,57 +161,83 @@ describe("Wave arena settle", function()
 		Session.exit(saved, run, "wipe", options)
 		Session.exit(saved, run, "disconnect", options)
 		expect(saved.shardTokens).toEqual(4)
-		expect(saved.arenaMail[1].fragments).toEqual(1)
-		expect(saved.arenaMail[1].count).toEqual(1)
-		expect(saved.arenaMail[1].where).toEqual("bag")
+		expect(saved.gearEssence).toEqual(7)
+		expect(saved.arenaMail).toBeNil()
+		expect(#run.earned.drops).toEqual(1)
+		expect(run.earned.fragments).toEqual(1)
 	end)
 
-	it("sends a full bag to the mailbox and does not drop the chip", function()
+	it("salvages a full bag into Essence once on leave, disconnect, and wipe", function()
+		local rate = Essence.amount("Common")
+		expect(rate).toEqual(1)
+		for _, reason in ipairs({ "leave", "disconnect", "wipe" }) do
+			local config = fightConfig()
+			config.loot.bagSlots = 0
+			config.loot.overflowCap = 40
+			local options = opened(config)
+			options.receiptId = "full-" .. reason
+			local run = WaveArena.enter(options) :: any
+			WaveArena.step(run, 0.5, { attack = true }, options)
+			local saved = profile()
+			local done = Session.exit(saved, run, reason, options)
+			expect(run.reason).toEqual(reason)
+			expect(run.earned.fragments).toEqual(1)
+			expect(run.earned.tokens).toEqual(0)
+			expect(#run.earned.drops).toEqual(0)
+			expect(#run.earned.overflow).toEqual(1)
+			expect(run.earned.overflow[1].id).toEqual("shard_chip")
+			expect(run.earned.overflow[1].count).toEqual(1)
+			expect(run.card.loot.overflow[1].id).toEqual("shard_chip")
+			expect(run.card.loot.essence).toEqual(rate)
+			expect(done.grant.essence).toEqual(rate)
+			expect(saved.gearEssence).toEqual(7 + rate)
+			expect(saved.shardTokens).toEqual(4)
+			expect(saved.arenaMail).toBeNil()
+			expect(next(saved.inventory) == nil).toBeTrue()
+			local again = Session.exit(saved, run, "disconnect", options)
+			expect(again.grant.essence).toEqual(0)
+			expect(again.grant.tokens).toEqual(0)
+			expect(saved.gearEssence).toEqual(7 + rate)
+			expect(saved.shardTokens).toEqual(4)
+			expect(run.earned.fragments).toEqual(1)
+		end
+	end)
+
+	it("uses the salvage table and keeps value past the overflow cap", function()
 		local config = fightConfig()
 		config.loot.bagSlots = 0
+		config.loot.overflowCap = 1
+		config.waves = { { count = 3, kind = "chaser" } }
+		local drops = {}
+		for kind, row in pairs(WaveArenaConfig.loot.drops) do
+			drops[kind] = table.clone(row)
+		end
+		drops.chaser.rarity = "Rare"
+		config.loot.drops = drops
+		local rare = Essence.amount("Rare")
+		expect(rare).toEqual(10)
 		local options = opened(config)
+		options.receiptId = "capped"
 		local run = WaveArena.enter(options) :: any
 		WaveArena.step(run, 0.5, { attack = true }, options)
-		WaveArena.settle(run, "wipe", options)
-		expect(#run.earned.drops).toEqual(0)
-		expect(#run.earned.mailbox).toEqual(1)
-		expect(run.earned.fragments).toEqual(1)
-
+		WaveArena.step(run, 0.5, { attack = true }, options)
+		expect(#run.ground).toEqual(2)
+		expect(run.earned.fragments).toEqual(0)
+		WaveArena.settle(run, "leave", options)
+		expect(run.earned.fragments).toEqual(2)
+		expect(#run.earned.overflow).toEqual(1)
+		expect(run.earned.overflow[1].count).toEqual(1)
+		expect(run.earned.pendingEssence).toEqual(rare)
+		expect(run.card.loot.essence).toEqual(rare * 2)
+		expect(run.card.loot.overflow[1].id).toEqual("shard_chip")
 		local saved = profile()
-		local grant = Loot.commit(saved, run, 0)
-		expect(grant.mailed).toEqual(1)
-		expect(grant.bag).toEqual(0)
-		expect(saved.arenaMail[1].where).toEqual("mailbox")
-		expect(saved.arenaMail[1].fragments).toEqual(1)
-		local repeatGrant = Loot.commit(saved, run, 0)
-		expect(repeatGrant.mailed).toEqual(0)
-		expect(saved.arenaMail[1].count).toEqual(1)
-
-		local packed = profile()
-		for index = 1, 100 do
-			packed.inventory["slot" .. tostring(index)] = { uid = "slot" .. tostring(index) }
-		end
-		local bagRun = {
-			receiptId = "bag-full",
-			grantList = {
-				{
-					key = "drop:1",
-					kind = "drop",
-					dropId = "shard_chip",
-					tokens = 0,
-					fragments = 3,
-					wave = 1,
-					where = "bag",
-				},
-			},
-		}
-		local flipped = Loot.commit(packed, bagRun, 100)
-		expect(flipped.mailed).toEqual(1)
-		expect(flipped.bag).toEqual(0)
-		expect(packed.arenaMail[1].where).toEqual("mailbox")
-		expect(packed.arenaMail[1].fragments).toEqual(3)
-		Loot.commit(packed, bagRun, 100)
-		expect(packed.arenaMail[1].count).toEqual(1)
+		local grant = Loot.commit(saved, run)
+		expect(grant.essence).toEqual(rare * 2)
+		expect(saved.gearEssence).toEqual(7 + rare * 2)
+		expect(saved.arenaMail).toBeNil()
+		Loot.commit(saved, run)
+		expect(saved.gearEssence).toEqual(7 + rare * 2)
+		expect(run.earned.fragments).toEqual(2)
 	end)
 
 	it("keeps loot once on rejoin and never restores the arena", function()
@@ -220,14 +249,16 @@ describe("Wave arena settle", function()
 		local left = Session.exit(saved, run, "disconnect", options)
 		expect(left.inArena).toEqual(false)
 		expect(left.position).toEqual("hub")
-		expect(saved.arenaMail[1].fragments).toEqual(1)
+		expect(run.earned.fragments).toEqual(1)
+		expect(saved.gearEssence).toEqual(7)
+		expect(saved.arenaMail).toBeNil()
 		local back = Session.rejoin(saved, run, "arena")
 		expect(back.inArena).toEqual(false)
 		expect(back.position).toEqual("hub")
 		expect(back.stranded).toEqual(false)
 		expect(saved.shardTokens).toEqual(4)
-		expect(saved.arenaMail[1].fragments).toEqual(1)
-		expect(saved.arenaMail[1].count).toEqual(1)
+		expect(saved.gearEssence).toEqual(7)
+		expect(run.earned.fragments).toEqual(1)
 	end)
 
 	it("refuses remotes and the arena teleport unless the server flag is on", function()
@@ -269,36 +300,24 @@ describe("Wave arena settle", function()
 		expect(card.loot.fragments).toEqual(1)
 	end)
 
-	it("keeps schemaVersion 26 and copies arena mail", function()
+	it("keeps schemaVersion 26 and drops arena mail", function()
 		expect(Schema.VERSION).toEqual(26)
-		expect(#Schema.template().arenaMail).toEqual(0)
-		local row = {
-			id = "shard_chip",
-			fragments = 3,
-			tokens = 1,
-			count = 2,
-			where = "mailbox",
-			wave = 4,
-		}
+		expect(Schema.template().arenaMail).toBeNil()
 		local migrated = Schema.migrate({
 			schemaVersion = 26,
 			gold = 1,
-			arenaMail = { row, { id = "" }, "junk" },
+			gearEssence = 4,
+			arenaMail = { { id = "shard_chip", fragments = 3, where = "mailbox" } },
 		})
 		expect(migrated ~= nil).toBeTrue()
 		local data = migrated :: any
 		expect(data.schemaVersion).toEqual(26)
 		expect(data.gold).toEqual(1)
-		expect(#data.arenaMail).toEqual(1)
-		expect(data.arenaMail[1].id).toEqual("shard_chip")
-		expect(data.arenaMail[1].fragments).toEqual(3)
-		expect(data.arenaMail[1].where).toEqual("mailbox")
-		expect(data.arenaMail[1].count).toEqual(2)
-		local snap = Schema.snapshot(data)
-		snap.arenaMail[1].fragments = 9
-		expect(data.arenaMail[1].fragments).toEqual(3)
+		expect(data.gearEssence).toEqual(4)
+		expect(data.arenaMail).toBeNil()
+		expect(Schema.snapshot(data).arenaMail).toBeNil()
 		local junk = Schema.migrate({ schemaVersion = 26, gold = 1, arenaMail = "nope" })
-		expect(#(junk :: any).arenaMail).toEqual(0)
+		expect((junk :: any).arenaMail).toBeNil()
 		expect((junk :: any).schemaVersion).toEqual(26)
 	end)
 end)

@@ -123,7 +123,8 @@ local function cardOf(run: any, reason: string): any
 			tokens = run.earned.tokens,
 			fragments = run.earned.fragments,
 			drops = table.clone(run.earned.drops),
-			mailbox = table.clone(run.earned.mailbox),
+			overflow = table.clone(run.earned.overflow),
+			essence = Loot.essenceDue(run),
 		},
 	}
 end
@@ -143,14 +144,21 @@ local function showResults(run: any, reason: string, events: { any })
 	emit(events, run.card)
 end
 
-local function bagCap(config: any): number
+local function bagLimit(run: any, config: any): number
+	if finite(run.bagSlots) and run.bagSlots >= 0 then
+		return math.floor(run.bagSlots)
+	end
 	return Loot.bagCap(config)
 end
 
 local function placeDrop(run: any, drop: any, config: any, events: { any }, auto: boolean): boolean
-	local where = Loot.take(run.earned, drop, bagCap(config))
+	local where = Loot.take(run.earned, drop, bagLimit(run, config), Loot.overflowCap(config))
 	if where == nil then
 		return false
+	end
+	local salvage = 0
+	if where == "overflow" or where == "bank" then
+		salvage = Loot.rate(drop.rarity)
 	end
 	Loot.remember(run, "drop:" .. tostring(drop.uid), {
 		kind = "drop",
@@ -158,7 +166,9 @@ local function placeDrop(run: any, drop: any, config: any, events: { any }, auto
 		tokens = drop.tokens or 0,
 		fragments = drop.fragments or 0,
 		wave = drop.wave,
+		rarity = drop.rarity,
 		where = where,
+		essence = salvage,
 	})
 	emit(events, {
 		kind = "pickup",
@@ -169,12 +179,13 @@ local function placeDrop(run: any, drop: any, config: any, events: { any }, auto
 		auto = auto,
 		where = where,
 	})
-	if where == "mailbox" then
+	if where == "overflow" or where == "bank" then
 		emit(events, {
 			kind = "overflow",
 			id = drop.uid,
 			dropId = drop.dropId,
-			where = "mailbox",
+			where = where,
+			essence = salvage,
 		})
 	end
 	return true
@@ -269,6 +280,7 @@ local function dropFor(run: any, enemy: any, config: any, events: { any })
 		dropId = payload.dropId,
 		tokens = payload.tokens,
 		fragments = payload.fragments,
+		rarity = payload.rarity,
 		x = enemy.x,
 		z = enemy.z,
 		wave = run.wave,
@@ -611,7 +623,7 @@ function Round.enter(options: any?): any
 		hold = 0,
 		enemies = {},
 		ground = {},
-		earned = { tokens = 0, fragments = 0, drops = {}, mailbox = {}, bagCount = 0 },
+		earned = { tokens = 0, fragments = 0, drops = {}, overflow = {}, bagCount = 0, pendingEssence = 0 },
 		paid = {},
 		grantKeys = {},
 		grantList = {},
@@ -633,6 +645,7 @@ function Round.enter(options: any?): any
 		receiptId = if typeof(options) == "table" and type(options.receiptId) == "string"
 			then options.receiptId
 			else "run",
+		bagSlots = Loot.bagCap(cfg),
 		origin = cfg.arena.origin,
 		player = {
 			x = stand.x,
@@ -647,6 +660,9 @@ function Round.enter(options: any?): any
 			cooldown = 0,
 		},
 	}
+	if typeof(options) == "table" and finite(options.bagSlots) and options.bagSlots >= 0 then
+		run.bagSlots = math.min(run.bagSlots, math.floor(options.bagSlots))
+	end
 	if not spawnInto(run, waveIndex, cfg) then
 		return nil
 	end
@@ -723,7 +739,13 @@ function Round.step(run: any, dt: any, input: any, options: any?): (any, { any }
 end
 
 local function knownReason(reason: any): string
-	if reason == "wipe" or reason == "timeout" or reason == "disconnect" or reason == "clear" then
+	if
+		reason == "wipe"
+		or reason == "timeout"
+		or reason == "disconnect"
+		or reason == "clear"
+		or reason == "leave"
+	then
 		return reason
 	end
 	return "disconnect"

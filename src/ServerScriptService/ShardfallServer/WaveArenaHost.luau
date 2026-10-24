@@ -62,6 +62,48 @@ local function options(config: any): any
 	}
 end
 
+local function occupied(data: any): number
+	local held = 0
+	if type(data) ~= "table" then
+		return 0
+	end
+	if type(data.inventory) == "table" then
+		for _ in pairs(data.inventory) do
+			held += 1
+		end
+	end
+	if type(data.pets) == "table" then
+		for _ in pairs(data.pets) do
+			held += 1
+		end
+	end
+	return held
+end
+
+-- Free Bag slots for this session. A missing profile holds every drop as
+-- overflow so a full bag cannot delete it.
+local function freeBag(player: Player, config: any): number
+	local data = DataService.get(player)
+	if data == nil then
+		return 0
+	end
+	local free = Schema.inventoryCap(data) - occupied(data)
+	if free < 0 then
+		free = 0
+	end
+	local configured = 100
+	if type(config) == "table" and type(config.loot) == "table" and type(config.loot.bagSlots) == "number" then
+		configured = math.floor(config.loot.bagSlots)
+		if configured < 0 then
+			configured = 0
+		end
+	end
+	if configured < free then
+		return configured
+	end
+	return free
+end
+
 local function colorOf(value: any): Color3
 	if typeof(value) ~= "table" then
 		return Color3.fromRGB(160, 160, 160)
@@ -386,7 +428,7 @@ local function grant(player: Player, run: any)
 		run.receiptId = tostring(player.UserId)
 	end
 	local ok, err = DataService.mutate(player, function(data)
-		lootModule().commit(data, run, Schema.inventoryCap(data))
+		lootModule().commit(data, run)
 		return nil
 	end)
 	if not ok then
@@ -471,6 +513,7 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 	end
 	if action == "enter" then
 		opts.receiptId = tostring(player.UserId) .. ":" .. tostring(os.clock())
+		opts.bagSlots = freeBag(player, config)
 		local run = arena.enter(opts)
 		if run == nil then
 			return { ok = false, error = "Could not enter the arena." }

@@ -173,17 +173,19 @@ WaveArenaConfig.player = table.freeze({
 })
 
 -- Chips sit on the ground. Wave tokens match the economy sheet.
--- bagSlots is how many chips fit before the rest go to the mailbox.
--- A full Bag never deletes a drop.
+-- bagSlots is how many chips fit in the Bag. The rest are held for this
+-- session only, up to overflowCap, then salvaged into Essence at run end.
+-- rarity uses the normal salvage table. Nothing here is written as a new save field.
 WaveArenaConfig.loot = table.freeze({
 	pickupRadius = 12,
 	bagSlots = 100,
+	overflowCap = 40,
 	drops = table.freeze({
-		chaser = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0 }),
-		ranged = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0 }),
-		tank = table.freeze({ id = "shard_chip", fragments = 2, tokens = 0 }),
-		add = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0 }),
-		boss = table.freeze({ id = "boss_core", fragments = 4, tokens = 0 }),
+		chaser = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0, rarity = "Common" }),
+		ranged = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0, rarity = "Common" }),
+		tank = table.freeze({ id = "shard_chip", fragments = 2, tokens = 0, rarity = "Common" }),
+		add = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0, rarity = "Common" }),
+		boss = table.freeze({ id = "boss_core", fragments = 4, tokens = 0, rarity = "Common" }),
 	}),
 	waveTokens = table.freeze({ 1, 1, 2, 2, 5 }),
 })
