@@ -1350,19 +1350,27 @@ describe("HavenBuilder", function()
 			end
 			if portal.id == "heartwood" then
 				local raidPrompts = 0
+				local later = nil
 				for _, child in ipairs(arch:GetDescendants()) do
 					if child:IsA("ProximityPrompt") then
 						raidPrompts += 1
+						if child:GetAttribute("HavenAction") == "soon" then
+							later = child
+						end
 					end
 				end
 				expect(LaunchGate.on("raids")).toEqual(false)
-				expect(raidPrompts).toEqual(0)
+				expect(raidPrompts).toEqual(1)
+				expect(later ~= nil and later.ActionText == "Opens later").toBeTrue()
+				expect(later:GetAttribute("HavenMessage")).toEqual("Opens later")
+				expect(later.MaxActivationDistance).toEqual(Haven.GATE_REACH)
 				expect(arch:FindFirstChild("PillarL") ~= nil).toBeTrue()
 				expect(arch:FindFirstChild("PillarR") ~= nil).toBeTrue()
 				expect(arch:FindFirstChild("Lintel") ~= nil).toBeTrue()
 				expect(arch:FindFirstChild("Glow") ~= nil).toBeTrue()
 				expect(arch:FindFirstChild("EnterPad")).toBeNil()
-				expect(arch:FindFirstChild("Seal")).toBeNil()
+				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
+				expect(arch:GetAttribute("GateSealed")).toEqual(true)
 			elseif prompt == nil or prompt.MaxActivationDistance ~= Haven.GATE_REACH then
 				error(portal.id .. " prompt reach is not the gate reach", 2)
 			elseif portal.id == "rootvault" then
@@ -1702,7 +1710,10 @@ describe("HavenBuilder", function()
 			if inkSum(title.TextColor3) < 680 then
 				error(portal.id .. " title ink is too dim", 2)
 			end
-			if subline == nil or subline.Text ~= portal.subline then
+			local expectedLine = if portal.id == "heartwood" and not LaunchGate.on("raids")
+				then "Opens later"
+				else portal.subline
+			if subline == nil or subline.Text ~= expectedLine then
 				error(portal.id .. " subline is missing", 2)
 			end
 			if subline.Font.__enum ~= "Enum.Font.BuilderSansBold" then
@@ -1712,7 +1723,7 @@ describe("HavenBuilder", function()
 			if glow == nil then
 				error(portal.id .. " has no mouth", 2)
 			end
-			if not Haven.gateOpen(portal) then
+			if not Haven.gateShownOpen(portal) then
 				expect(glow.Transparency).toEqual(0.75)
 				expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
 			else
@@ -1761,6 +1772,7 @@ describe("HavenBuilder", function()
 		expect(math.abs(heartArch.PillarL.Size.Y - rootArch.PillarL.Size.Y - 4) < 0.05).toBeTrue()
 		local waves = nil
 		local heartPrompts = 0
+		local later = nil
 		for _, child in ipairs(rootArch:GetDescendants()) do
 			if child:IsA("ProximityPrompt") and child:GetAttribute("HavenAction") == "waves" then
 				waves = child
@@ -1769,6 +1781,12 @@ describe("HavenBuilder", function()
 		for _, child in ipairs(heartArch:GetDescendants()) do
 			if child:IsA("ProximityPrompt") then
 				heartPrompts += 1
+				local action = child:GetAttribute("HavenAction")
+				if action == "heartwood" or action == "practice" then
+					error("Heartwood still offers a raid prompt", 2)
+				elseif action == "soon" then
+					later = child
+				end
 			end
 		end
 		if waves == nil or waves.Parent.Name ~= "PillarL" or waves.ActionText ~= "Waves" then
@@ -1776,8 +1794,10 @@ describe("HavenBuilder", function()
 		end
 		expect(waves.MaxActivationDistance).toEqual(Haven.PIER_REACH)
 		expect(LaunchGate.on("raids")).toEqual(false)
-		expect(heartPrompts).toEqual(0)
+		expect(heartPrompts).toEqual(1)
+		expect(later ~= nil and later.ActionText == "Opens later").toBeTrue()
 		expect(heartArch:FindFirstChild("PillarL") ~= nil).toBeTrue()
+		expect(heartArch:FindFirstChild("Seal") ~= nil).toBeTrue()
 
 		local inlays = findAll(hub, "Inlay")
 		expect(#inlays).toEqual(6)
@@ -1789,10 +1809,10 @@ describe("HavenBuilder", function()
 		expect(inlays[1]:GetAttribute("GateId")).toEqual("rootvault")
 		expect(inlays[1]:GetAttribute("GateLit")).toEqual(true)
 		expect(inlays[2]:GetAttribute("GateId")).toEqual("heartwood")
-		expect(inlays[2]:GetAttribute("GateLit")).toEqual(true)
-		expect(inlays[2].Color.R).toEqual(214)
-		expect(inlays[2].Color.G).toEqual(140)
-		expect(inlays[2].Color.B).toEqual(64)
+		expect(inlays[2]:GetAttribute("GateLit")).toEqual(false)
+		expect(inlays[2].Color.R).toEqual(90)
+		expect(inlays[2].Color.G).toEqual(90)
+		expect(inlays[2].Color.B).toEqual(96)
 		for index = 3, #inlays do
 			expect(inlays[index]:GetAttribute("GateLit")).toEqual(false)
 		end
@@ -1934,7 +1954,7 @@ describe("HavenBuilder", function()
 			if glow == nil or glow.Material.__enum ~= "Enum.Material.Neon" or glow.Transparency >= 1 then
 				error(portal.id .. " neon mouth does not read", 2)
 			end
-			if not Haven.gateOpen(portal) then
+			if not Haven.gateShownOpen(portal) then
 				expect(light.Enabled).toEqual(false)
 				expect(light.Brightness).toEqual(0)
 				expect(glow.Transparency).toEqual(0.75)
@@ -2040,9 +2060,10 @@ describe("HavenBuilder", function()
 				end
 			end
 		end
-		-- Six ring ticks, plus one path toward each open gate.
-		expect(guides).toEqual(8)
-		expect(litGuides).toEqual(4)
+		-- Six ring ticks, plus one path toward each shown-open gate.
+		-- Heartwood stays dark while raids are off, so only Rootvault adds a path.
+		expect(guides).toEqual(7)
+		expect(litGuides).toEqual(2)
 
 		for i = 1, #promptHosts do
 			for j = i + 1, #promptHosts do
@@ -2093,13 +2114,13 @@ describe("HavenBuilder", function()
 		local heart = findNamed(hub, "heartwood")
 		local heartGlow = heart:FindFirstChild("Glow")
 		local heartLight = heartGlow:FindFirstChild("PointLight")
-		expect(heartLight.Enabled).toEqual(true)
-		requireNear(heartLight.Brightness, 0.425, 0.002, "heartwood pulse")
-		expect(heartGlow.Transparency).toEqual(0.35)
+		expect(heartLight.Enabled).toEqual(false)
+		expect(heartLight.Brightness).toEqual(0)
+		expect(heartGlow.Transparency).toEqual(0.75)
 		expect(heartGlow.Color.R).toEqual(214)
 		expect(heartGlow.Color.G).toEqual(140)
 		expect(heartGlow.Color.B).toEqual(64)
-		expect(heart:FindFirstChild("Seal")).toBeNil()
+		expect(heart:FindFirstChild("Seal") ~= nil).toBeTrue()
 		local mouth = rootGlow.CFrame.Position
 		builder.stepGates(0, {
 			{ x = mouth.X, z = mouth.Z, reduced = false },
@@ -2116,9 +2137,9 @@ describe("HavenBuilder", function()
 			{ x = heartAt.X, z = heartAt.Z + 6, reduced = false },
 		})
 		expect(heartLight.Enabled).toEqual(true)
-		requireNear(heartLight.Brightness, 0.605, 0.002, "heartwood approach")
-		requireNear(heartGlow.Transparency, 0.2, 0.002, "heartwood approach neon")
-		expect(heart:FindFirstChild("Seal")).toBeNil()
+		expect(heartLight.Brightness).toEqual(builder.SEALED_NEAR)
+		requireNear(heartGlow.Transparency, 0.62, 0.002, "heartwood sealed approach")
+		expect(heart:FindFirstChild("Seal") ~= nil).toBeTrue()
 		local tide = findNamed(hub, "tidecrypt")
 		local tideGlow = tide:FindFirstChild("Glow")
 		local tideLight = tideGlow:FindFirstChild("PointLight")
@@ -2154,13 +2175,13 @@ describe("HavenBuilder", function()
 				end
 			end
 			local live = false
-			if portal.id == "heartwood" and not LaunchGate.on("raids") then
-				if prompt ~= nil then
-					error("heartwood mouth still has a raid prompt", 2)
-				end
-				live = true
-			elseif prompt == nil then
+			if prompt == nil then
 				error(portal.id .. " mouth has no prompt", 2)
+			elseif portal.id == "heartwood" and not LaunchGate.on("raids") then
+				if prompt:GetAttribute("HavenAction") ~= "soon" or prompt.ActionText ~= "Opens later" then
+					error("heartwood mouth is not the Opens later prompt", 2)
+				end
+				live = false
 			else
 				live = prompt:GetAttribute("HavenAction") ~= "soon"
 			end
@@ -2199,7 +2220,11 @@ describe("HavenBuilder", function()
 				if litSegment then
 					error(portal.id .. " sealed prompt lights a ring segment", 2)
 				end
-				if type(plate) ~= "string" or string.find(plate, "Sealed", 1, true) == nil then
+				if portal.id == "heartwood" and not LaunchGate.on("raids") then
+					if plate ~= "Opens later" then
+						error("heartwood sealed plate does not say Opens later", 2)
+					end
+				elseif type(plate) ~= "string" or string.find(plate, "Sealed", 1, true) == nil then
 					error(portal.id .. " sealed name plate dropped Sealed", 2)
 				end
 			end
@@ -2313,24 +2338,42 @@ describe("HavenBuilder", function()
 		expect(plate.BackgroundTransparency < 0.2).toBeTrue()
 	end)
 
-	it("leaves the Heartwood arch and omits Finder and Practice while raids are closed", function()
+	it("seals the Heartwood arch and says Opens later while raids are closed", function()
 		expect(LaunchGate.on("raids")).toEqual(false)
 		local builder, _heartbeats, _workspace = loadBuilder()
 		local hub = instance("Model")
 		hub.Name = "Haven"
 		builder.build(hub)
 		local arch = findNamed(hub, "heartwood")
+		expect(arch:GetAttribute("GateSealed")).toEqual(true)
 		expect(arch:FindFirstChild("PillarL") ~= nil).toBeTrue()
 		expect(arch:FindFirstChild("PillarR") ~= nil).toBeTrue()
 		expect(arch:FindFirstChild("Lintel") ~= nil).toBeTrue()
 		expect(arch:FindFirstChild("Glow") ~= nil).toBeTrue()
-		expect(arch:FindFirstChild("Seal")).toBeNil()
+		expect(arch:FindFirstChild("Seal") ~= nil).toBeTrue()
 		expect(arch:FindFirstChild("EnterPad")).toBeNil()
+		local glow = arch:FindFirstChild("Glow")
+		expect(glow.Transparency).toEqual(0.75)
+		local later = nil
 		for _, child in ipairs(arch:GetDescendants()) do
 			if child:IsA("ProximityPrompt") then
-				error("Heartwood still has a " .. tostring(child.ActionText) .. " prompt", 2)
+				local action = child:GetAttribute("HavenAction")
+				if action == "heartwood" or action == "practice" then
+					error("Heartwood still has a " .. tostring(child.ActionText) .. " prompt", 2)
+				end
+				if action == "soon" then
+					later = child
+				end
+			elseif child:IsA("TextLabel") and child.Name == "Subline" then
+				expect(child.Text).toEqual("Opens later")
 			end
 		end
+		expect(later ~= nil).toBeTrue()
+		expect(later.ActionText).toEqual("Opens later")
+		expect(later.ObjectText).toEqual("Heartwood")
+		expect(later:GetAttribute("HavenMessage")).toEqual("Opens later")
+		expect(later.Parent).toEqual(glow)
+		expect(later.MaxActivationDistance).toEqual(Haven.GATE_REACH)
 		local root = findNamed(hub, "rootvault")
 		local enter = nil
 		local waves = nil
@@ -2343,5 +2386,59 @@ describe("HavenBuilder", function()
 		end
 		expect(enter ~= nil and enter.ActionText == "Enter").toBeTrue()
 		expect(waves ~= nil and waves.ActionText == "Waves").toBeTrue()
+	end)
+
+	it("keeps Finder and Practice on an open Heartwood arch while raids are on", function()
+		expect(LaunchGate.SHOW.raids).toEqual(false)
+		LaunchGate.SHOW.raids = true
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Haven"
+		local built, err = pcall(function()
+			builder.build(hub)
+		end)
+		LaunchGate.SHOW.raids = false
+		if not built then
+			error(err, 0)
+		end
+		expect(LaunchGate.on("raids")).toEqual(false)
+		local arch = findNamed(hub, "heartwood")
+		expect(arch:GetAttribute("GateSealed")).toEqual(false)
+		expect(arch:FindFirstChild("Seal")).toBeNil()
+		expect(arch:FindFirstChild("EnterPad")).toBeNil()
+		local glow = arch:FindFirstChild("Glow")
+		expect(glow.Transparency).toEqual(0.35)
+		local finder = nil
+		local practice = nil
+		local later = nil
+		local plate = nil
+		for _, child in ipairs(arch:GetDescendants()) do
+			if child:IsA("ProximityPrompt") then
+				local action = child:GetAttribute("HavenAction")
+				if action == "heartwood" then
+					finder = child
+				elseif action == "practice" then
+					practice = child
+				elseif action == "soon" then
+					later = child
+				end
+			elseif child:IsA("TextLabel") and child.Name == "Subline" then
+				plate = child
+			end
+		end
+		expect(finder ~= nil and finder.ActionText == "Finder" and finder.Parent == glow).toBeTrue()
+		expect(practice ~= nil and practice.ActionText == "Practice" and practice.Parent.Name == "PillarL").toBeTrue()
+		expect(later).toBeNil()
+		expect(plate.Text).toEqual("Lv 15 · 4–8")
+		local lit = false
+		for _, child in ipairs(findAll(hub, "Inlay")) do
+			if child:GetAttribute("GateId") == "heartwood" then
+				lit = child:GetAttribute("GateLit") == true
+				expect(child.Color.R).toEqual(214)
+				expect(child.Color.G).toEqual(140)
+				expect(child.Color.B).toEqual(64)
+			end
+		end
+		expect(lit).toEqual(true)
 	end)
 end)
