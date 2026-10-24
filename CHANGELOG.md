@@ -30,6 +30,9 @@ its tag to merged and add the merge commit.
   from the saved grant. A failed or unsaved save publishes granted
   false. The boss row stays 5 Roll Tokens on every tier. Hard does not
   add a bonus. `schemaVersion` stays 26. (open)
+- A failed boss-clear save subtracts only that grant (5 tokens, floored
+  at 0) and removes only that run id. Tokens spent or earned while the
+  save was failing stay. `schemaVersion` stays 26. (open)
 - The leash slam cancels its mark when the dash path is blocked, so the
   boss does not cross that line. Shard Volley windup is `VOLLEY_WINDUP`
   0.9s in `Config/Enemies`. Flag `enemyTypes` stays off. (open)

@@ -157,6 +157,44 @@ describe("Boss clear reward", function()
 		expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
 	end)
 
+	it("drops only the grant when a spend and an earn happen during a failed save", function()
+		expect(Schema.VERSION).toEqual(26)
+		expect(Economy.BOSS_CLEAR_RUNS).toEqual(16)
+		local profile = Schema.template()
+		local before = profile.shardTokens
+		profile.bossClearRuns = { "run-1" }
+		local earned = 7
+		local spent = 4
+		local id = "dddddddd-eeee-4fff-8000-00000000000a"
+		local failed = BossClearReward.commit(profile, id, function(data)
+			data.shardTokens += earned
+			data.shardTokens -= spent
+			table.insert(data.bossClearRuns, "run-9")
+			return false
+		end)
+		expect(failed.saved).toEqual(false)
+		expect(failed.granted).toEqual(false)
+		expect(BossClearReward.card(failed)).toEqual({ granted = false, tokens = 0 })
+		expect(profile.shardTokens).toEqual(before + earned - spent)
+		expect(BossClearReward.seen(profile, id)).toEqual(false)
+		expect(BossClearReward.seen(profile, "run-1")).toEqual(true)
+		expect(BossClearReward.seen(profile, "run-9")).toEqual(true)
+
+		local broke = Schema.template()
+		broke.bossClearRuns = { "run-2" }
+		local low = "dddddddd-eeee-4fff-8000-00000000000b"
+		local emptied = BossClearReward.commit(broke, low, function(data)
+			data.shardTokens = 1
+			return false
+		end)
+		expect(emptied.saved).toEqual(false)
+		expect(emptied.granted).toEqual(false)
+		expect(broke.shardTokens).toEqual(0)
+		expect(BossClearReward.seen(broke, low)).toEqual(false)
+		expect(BossClearReward.seen(broke, "run-2")).toEqual(true)
+		expect(BossClearReward.card(emptied)).toEqual({ granted = false, tokens = 0 })
+	end)
+
 	it("pays once across disconnect, rejoin, and wipe", function()
 		local memory = Schema.template()
 		local before = memory.shardTokens

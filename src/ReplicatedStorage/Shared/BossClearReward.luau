@@ -11,8 +11,9 @@
 
 	commit mutates, then calls persist. The caller tells the client only
 	after commit returns saved. persist must not tell the client itself.
-	A failed persist puts the wallet and the run list back when nothing
-	newer landed during that write.
+	A failed persist subtracts only this grant's tokens, floored at 0,
+	and removes only this run id. A spend or an earn during that write
+	stays. The pre-clear wallet is not restored.
 
 	A second commit for the same id while persist is still in flight
 	does not pay again and does not report saved. A different id that
@@ -170,8 +171,6 @@ end
 type Pending = {
 	tokens: number,
 	stamp: number,
-	previousTokens: any,
-	previousRuns: { string },
 }
 
 type Lane = {
@@ -207,22 +206,18 @@ local function confirm(lane: Lane, stamp: number)
 	end
 end
 
--- A failed write with no newer grant puts this profile back. One pending
--- row restores the exact wallet. Several rows give back only what they
--- added, so an outside change made during the write stays.
+-- A failed write drops only the grants that did not save. Subtract those
+-- tokens from the wallet now, floored at 0, and remove only those run ids.
+-- One pending grant is the same rule: this grant's tokens, this run id.
+-- A spend or an earn during the write stays. The pre-clear snapshot does not.
 local function undoPending(profile: any, lane: Lane)
-	local only: Pending? = nil
-	local count = 0
 	local claw = 0
+	local count = 0
 	for _, row in pairs(lane.pending) do
 		count += 1
-		only = row
 		claw += row.tokens
 	end
-	if count == 1 and only ~= nil then
-		profile.shardTokens = only.previousTokens
-		profile.bossClearRuns = only.previousRuns
-	elseif count > 1 then
+	if count > 0 then
 		local left = wallet(profile) - claw
 		if left < 0 then
 			left = 0
@@ -290,8 +285,6 @@ local function reserved(profile: any, lane: Lane, runId: string, paid: number): 
 	lane.pending[runId] = {
 		tokens = grant,
 		stamp = lane.serial,
-		previousTokens = previousTokens,
-		previousRuns = previousRuns,
 	}
 	return true
 end
