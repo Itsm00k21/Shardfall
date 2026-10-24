@@ -1,0 +1,142 @@
+# Roll Screen + Shard Crack Reveal: Spec v1.2
+
+
+> **Mockup images:** the GitHub connector can only commit text, so the image files named in §8 aren't in this commit yet. They'll be added to this folder (or attached to the PR) in a follow-up.
+
+Owner: Prism (design). Builders: Ghost (UI), Echo (server). Base: `cursor/live-build-9721` @ `49bd902`.
+Supersedes v1.1. Changes in v1.2:
+- Skip is at least 44 px tall on phones.
+- The x10 summary is a 5×2 grid with a best-tile highlight (both approved by Ghost in #15 comment 6379856660).
+- Tier-scaled timings kept (Kevin approved; Ghost to add them in RollReveal, 6378886198).
+- The spec no longer depends on where the roll page lives (MenuHub or its own module).
+
+Chrome comes from PR #392 `docs/ui/reference/STYLE.md`. Rarity colors come from `Shared/Rarities.luau` `Rarities.rgb`. Tiers and odds come from `Shared/Config/Rarities.luau`.
+
+## 1. Goal
+The player taps ROLL and, in under a second for common pulls (about 2 s for Legendary), sees what they got and how rare it is, with no confusion and no waiting.
+
+## 2. Where it lives
+- The **Roll page** (a tab of the main menu). The spec doesn't care which file hosts it. Ghost picks the host, and everything below is anchored to the Roll page's root frame.
+- Open: the Roll tab or rail button. Collapse: the header chevron folds the page to a 56 px bar docked at the bottom (ROLL button only). Close: the X at top-right.
+- Kevin's rule: the crystal and reveal sit in the page, not over the character. When the page is collapsed, nothing covers screen center.
+
+## 3. Flow
+1. Idle. The player picks a tab (Weapons / Armor / Pets / Skills) and x1 or x10.
+2. Tap ROLL. The client asks the server. ROLL goes disabled (buttonDim) and the tabs lock.
+3. **x1:** Charge → Burst → Reveal at the tier timing (§6). Any tap jumps to Reveal. Another tap on the reveal returns to Idle.
+4. **x10:** each card plays a 0.3 s mini crack (`RollSummary.STEP`). **Skip** is visible the whole batch, and tapping it jumps to the summary. The batch ends on the **x10 summary** (5×2). **Roll again** repeats x10, and **Close** returns to Idle.
+5. Cancel/back: the X or Back on the summary = Close. A tap or back during a reveal = skip to the result, never cancel the roll (the server already paid).
+6. Not enough currency: ROLL shakes, the currency amount flashes danger, and no request is sent.
+
+## 4. Layout
+Reference is the phone portrait 390×844 (pt). All Roll-page children use scale + offset.
+| Piece | Anchor / Position | Size | Notes |
+|---|---|---|---|
+| Currency pill | (1,0) / (1,-12, 0,12) | auto × 40 | `+` hit box ≥ 44×44 |
+| Tabs row | (0.5,0) / (0.5,0, 0,60) | (1,-24) × 44 | 4 equal, gap 6, labels shorten when narrow |
+| Crystal stage | (0.5,0.42) | min(0.7w, 0.38h) square | idle bob ±4 px / 2 s |
+| Pity arc | right of crystal | 64×64 | "112/150" |
+| Pip strip | (0.5,0) below crystal | (1,-48) × 56 | 5 pips 40 px + labels; "i" hit box 44 |
+| ROLL | (0.5,1) / (0.5,0, 1,-24-safe) | 0.55w × 72 (phone) / 96 (tall) | never < 44 tall |
+| x1/x10, Auto/Skip toggles | left / right of ROLL | ≥ 88×48 each, gap 8 | stacked |
+| **x10 Skip** (`SkipBatch`) | (1,1) / (1,-16, 1,-16-safe) | **phone ≥ 96×44**, desktop 72×36 | v1.1 had 72×30 |
+| x10 summary panel | (0.5,0.5) | phone (1,-24) × auto; desktop 760 × auto | §6 values |
+| Milestone toast | (0.5,0) / top inset 4 | 220×26 | |
+Phone landscape 667×375 and 800×400: the crystal stage moves left (0.33, 0.5), and the pips, ROLL and toggles stack in a right column at 0.45w. The x10 summary stays a 5×2 grid, with tile = min(96, (panelW-2·14-4·8)/5). Desktop (≥ 1280 w): the page caps at 1180×680, centered right of the left rail.
+Safe areas: obey `GuiService:GetGuiInset()` and keep 12 px from the notch and home bar.
+
+## 5. States
+| State | Look |
+|---|---|
+| Empty | not used (the roll page always has a crystal) |
+| Loading | ROLL shows a spinner glyph and is disabled. The crystal pulses slowly. After 5 s: "Still rolling…" |
+| Normal | Idle as in mockup `01-idle-phone.jpg` |
+| Full (bag full) | ROLL is enabled. The server returns its full-bag reply, and the "Salvage now" nudge (`GearHooks.SALVAGE_NOW`, live) appears above ROLL |
+| Error | toast with the server text, ROLL is re-enabled, nothing is charged |
+| Locked | tab locked: padlock + muted label, tap = "Unlocks at …" toast |
+| Disabled | while rolling: tabs and toggles dim (buttonDim 54,46,78) |
+
+## 6. Numbers
+### Tiers (Config/Rarities.luau) and colors (Rarities.rgb)
+| Tier | RGB | Odds | Cracks |
+|---|---|---|---|
+| Common | 168,168,176 | 1 in 2 | 0 |
+| Uncommon | 64,186,98 | 1 in 4 | 1 |
+| Rare | 72,142,255 | 1 in 15 | 2 |
+| Epic | 186,96,240 | 1 in 100 | 3 |
+| Legendary | 255,196,64 | 1 in 1,000 | 4 |
+Pity: Legendary only. Soft from roll 101 (+2%/roll), hard at 150 (`Rarities.PITY`). The meter reads "N/150".
+
+### x1 timings (s), tier-scaled. Ghost adds these in RollReveal
+| Tier | Charge | Burst | Hold | Total |
+|---|---|---|---|---|
+| Common | 0.15 | 0.10 | 0.30 | 0.55 |
+| Uncommon | 0.25 | 0.12 | 0.33 | 0.70 |
+| Rare | 0.35 | 0.15 | 0.40 | 0.90 |
+| Epic | 0.60 | 0.20 | 0.50 | 1.30 |
+| Legendary | 1.00 (+0.2 dim) | 0.35 flash + 0.1 punch | 0.85 | 2.20 |
+Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and Rare.
+
+### x10
+- Each card takes at most 0.3 s. Skip is always visible.
+- Summary: a 5×2 grid in roll order.
+  - Panel: 30,26,44, corner 12, gold stroke 2 (255,205,90).
+  - Tiles: square, corner 8, fill = rarity mixed 22% into 40,34,58, border 2 in the rarity color.
+  - Badges: corner 4, h 16, text 10, ink 24,18,32. NEW 120,220,140 · ★ up 255,205,90 · Salvaged 230,120,110.
+  - Roll again: 255,205,90, text 24,18,32. Close: 58,52,80, text 240,236,250. Both h 44, corner 8, BuilderSansBold 16.
+- **Best tile** (approved): the highest rarity in the batch (on a tie, the first one).
+  - Border becomes gold 255,205,90 at thickness 3.
+  - An outer glow of 6 px in gold at 0.4 transparency.
+  - A "BEST" badge at top-right in 255,205,90.
+  - It pulses once (scale 1.0 → 1.06 → 1.0 over 0.4 s) when the summary opens.
+
+### Chrome and type
+- Colors: bg 16,14,24 · panel 28,24,40 · row 40,34,58 · text 240,236,248 · muted 176,168,198 · button 108,78,196 · buttonDim 54,46,78 · gold 255,196,64 · ink 32,22,10 · danger 230,80,96.
+- Skip: fill 20,24,32, text 244,240,252, BuilderSansBold 15, corner 8.
+- Fonts: BuilderSansBold (titles, buttons, names), BuilderSans (body), BuilderSansExtraBold (the ROLL word). Text ≥ 14 except badges (10).
+- Corners: CORNER 10, buttons 8, popups 12. PAD 8.
+
+### Exact text
+"ROLL" · "x1" · "x10" · "Auto" · "Skip" · "x10 Results" · "Roll again" · "Close" · "BEST" · "NEW" · "★ up" · "Salvaged" · "1 in N" banner · "Not enough Shards."
+
+## 7. Edge cases
+- Double-tap ROLL: the first tap disables the button, and the second tap is ignored until Idle.
+- Fast taps during x10 jump to the summary, never skip the summary itself.
+- Server refuses or times out after 5 s: toast "Could not roll. Try again.", ROLL re-enabled, nothing charged.
+- Bag full: the server's reply plus the "Salvage now" nudge. No crack plays.
+- Auto-salvaged drops show the Salvaged badge in the summary and on the x1 result ("Auto-salvaged +N Essence", `GearHooks`).
+- First time: the first roll is always played at full length (no Auto). A 1-line hint "Tap to skip" shows during the first charge.
+- Reduced motion (Settings): no screen punch or shake. Timings stay the same.
+
+## 8. Mockups
+| File | State |
+|---|---|
+| `01-idle-phone.jpg` | Idle, phone portrait, 5 pips |
+| `02-uncommon-phone.jpg` | x1 Uncommon reveal, phone portrait |
+| `09-x10-results-phone-390x844.jpg` | x10 summary 5×2, square tiles, best tile, phone (PIL rebuild) |
+| `09-x10-results-desktop.jpg` | x10 summary, desktop 1600×900 |
+Legendary and landscape frames will be drawn in v1.3.
+
+## 9. Build split
+- **Ghost (UI):**
+  - Roll page layout and states.
+  - Per-tier durations in `RollReveal`.
+  - `SkipBatch` sized to ≥ 96×44 on phones.
+  - The 5×2 grid and best tile in `RollSummaryHud`.
+  - Collapse bar and the toast.
+- **Echo (server):** none new. Keep the roll reply's rarity, `autoSalvaged`, `essenceGained`, and NEW / ★ up flags per batch row.
+
+## 10. Pass criteria (playtest)
+1. A Common x1 finishes in under 0.6 s and a Legendary takes about 2.2 s. A tap skips either at any moment.
+2. On a 390×844 phone, Skip during x10 is at least 44 px tall and reachable with a thumb.
+3. The x10 summary is a 5×2 grid of square tiles with the best tile gold-highlighted, plus working Roll again and Close.
+4. Pips show the 5 tiers with 1/2, 1/4, 1/15, 1/100 and 1/1K labels in the `Rarities.rgb` colors.
+5. When collapsed, the Roll page leaves screen center clear at 390×844, 667×375 and 800×400.
+
+## 11. Open questions
+1. @Ghost: does the collapse bar (56 px, ROLL only) suit the Roll page host, or should Roll close fully instead?
+2. @Kevin: on a first-ever roll, force full length with no Auto? (yes/no)
+3. @Ghost: should the best-tile tie-break be the first roll or the NEW tile? (pick)
+
+## Later (not V1)
+Mythic/Secret reveal (Phase 5 appendix in v1.1), Legendary cross-server announcement, and reduced-motion variants.
