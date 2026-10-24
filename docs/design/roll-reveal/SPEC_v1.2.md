@@ -1,5 +1,3 @@
-<cursor_untrusted_data_1337 source="CallDynamicTool">
-
 # Roll Screen + Shard Crack Reveal: Spec v1.3
 
 
@@ -48,10 +46,11 @@ Reference is the phone portrait 390×844 (pt). All Roll-page children use scale 
 | Pip strip | (0.5,0) below crystal | (1,-48) × 56 | 5 pips 40 px + labels; "i" hit box 44 |
 | ROLL | (0.5,1) / (0.5,0, 1,-24-safe) | 0.55w × 72 (phone) / 96 (tall) | never < 44 tall |
 | x1/x10, Auto/Skip toggles | left / right of ROLL | ≥ 88×48 each, gap 8 | stacked |
-| **x10 Skip** (`SkipBatch`) | (1,1) / (1,-16, 1,-16-safe) | **phone ≥ 88×44**, desktop 72×36 | one size (v1.3); v1.1 had 72×30 |
+| **x10 Skip** (`SkipBatch`) | (1,1) / (1,-16, 1,-16-safe) | **≥ 88×44 on every size** | one size (v1.3; desktop was 72×36 until the phone layout review, F1); v1.1 had 72×30 |
 | x10 summary panel | (0.5,0.5) | phone (1,-24) × auto; desktop 760 × auto | §6 values |
 | Milestone toast | (0.5,0) / top inset 4 | 220×26 | |
-Phone landscape 667×375 and 800×400: the crystal stage moves left (0.33, 0.5), and the pips, ROLL and toggles stack in a right column at 0.45w. The x10 summary stays a 5×2 grid, with tile = min(96, (panelW-2·14-4·8)/5). Desktop (≥ 1280 w): the page caps at 1180×680, centered right of the left rail.
+| **Collapse bar** (collapsed page) | (0.5,1) / (0.5,0, 1,-8-safeBottom) on portrait; bottom 14 on landscape phones; bottom 24 on desktop | portrait 250×56 · 667×375 240×56 · 800×400 260×56 · desktop 320×64 | the same slot and sizes as the #412 ROLL bar. Who owns the bottom slot in the hub vs. the arena is in the phone layout review (R2) |
+Phone landscape 667×375 and 800×400: the crystal stage moves left (0.33, 0.5), and the pips, ROLL and toggles stack in a right column at 0.45w. The x10 summary stays a 5×2 grid, with tile = min(96, (panelW-2·14-4·8)/5, (safeH-150)/2). The height term keeps it from scrolling at 667×375, where the safe height is about 323, so tile = 86. Desktop (≥ 1280 w): the page caps at 1180×680, centered right of the left rail.
 Safe areas: obey `GuiService:GetGuiInset()` and keep 12 px from the notch and home bar.
 
 ## 5. States
@@ -91,7 +90,7 @@ Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and
 - Summary: a 5×2 grid in roll order.
   - Panel: 30,26,44, corner 12, gold stroke 2 (255,205,90).
   - Tiles: square, corner 8, fill = rarity mixed 22% into 40,34,58, border 2 in the rarity color.
-  - Badges: corner 4, h 16, text 10, ink 24,18,32. NEW 120,220,140 · ★ up 255,205,90 · Salvaged 230,120,110.
+  - Badges: corner 4, h 18, text 11, ink 24,18,32. NEW 120,220,140 · ★ up 255,205,90 · Salvaged 230,120,110.
   - Roll again: 255,205,90, text 24,18,32. Close: 58,52,80, text 240,236,250. Both h 44, corner 8, BuilderSansBold 16.
 - **Best tile** (approved): the highest rarity in the batch. Tie-break (decided): a **NEW** tile wins; if still tied, the earliest roll.
   - Border becomes gold 255,205,90 at thickness 3.
@@ -102,7 +101,7 @@ Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and
 ### Chrome and type
 - Colors: bg 16,14,24 · panel 28,24,40 · row 40,34,58 · text 240,236,248 · muted 176,168,198 · button 108,78,196 · buttonDim 54,46,78 · gold 255,196,64 · ink 32,22,10 · danger 230,80,96.
 - Skip: fill 20,24,32, text 244,240,252, BuilderSansBold 15, corner 8.
-- Fonts: BuilderSansBold (titles, buttons, names), BuilderSans (body), BuilderSansExtraBold (the ROLL word). Text ≥ 14 except badges (10).
+- Fonts: BuilderSansBold (titles, buttons, names), BuilderSans (body), BuilderSansExtraBold (the ROLL word). Text ≥ 14 except badges (11).
 - Corners: CORNER 10, buttons 8, popups 12. PAD 8.
 
 ### Exact text
@@ -150,6 +149,8 @@ SVG mockups in `mockups/`: `01-idle.svg`, `02-uncommon.svg`, `09-x10-results.svg
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): Q2 = **yes**, the first-ever roll plays full length with no Auto. All §11 questions are now closed.
 
+- 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F1: Skip is 88×44 on desktop too, so it's really one size. F2: added collapse-bar geometry (the same slot as the #412 ROLL bar). F3: the x10 tile gets a height cap so the 5×2 summary fits 667×375 without scrolling. F4: badges go from 10 to 11 px (h 18) so they're readable on phones. No design change.
+
 ## Later (not V1)
 Mythic/Secret reveal (Phase 5 appendix in v1.1), Legendary cross-server announcement, and reduced-motion variants.
 
@@ -176,7 +177,7 @@ Everything here must render with stock Roblox UI.
 | Tier pips | `Frame` + `UICorner` (0.5 scale = circle) + `UIStroke` 2; lit = BackgroundTransparency 0, dim = 0.6 |
 | Result banner | `Frame` + `UICorner` 10 + `UIStroke` (tier color) + 2 TextLabels |
 | ROLL button | `TextButton` + `UICorner` 8 + `UIStroke` gold 2 + `UIGradient` (light top → base) + `ImageLabel` shard_icon |
-| Toggles, Skip | `TextButton` + `UICorner` 8; Skip `Size` ≥ (0,88,0,44) on phone |
+| Toggles, Skip | `TextButton` + `UICorner` 8; Skip `Size` ≥ (0,88,0,44) on every size |
 | x10 summary | `Frame` panel + `UIGridLayout` (CellSize derived from width/5, CellPadding 8, FillDirectionMaxCells 5) + per-tile `UIAspectRatioConstraint` 1.0 |
 | Tile | `Frame` + `UICorner` 8 + `UIStroke` 2 + `ImageLabel` icon + `TextLabel` name + badge `Frame`/`TextLabel` (corner 4) |
 | Best tile | `UIStroke` gold 3 + `ImageLabel` glow_soft_256 behind (ZIndex −1) + `UIScale` pulse 1→1.06→1 |
@@ -197,6 +198,3 @@ Everything here must render with stock Roblox UI.
 | spinner_64 | 64×64 | loading |
 | lock_icon | 32×32 | locked tab |
 | crystal mesh (option A) | ≤ 500 tris | MeshPart for the ViewportFrame |
-
-
-</cursor_untrusted_data_1337>
