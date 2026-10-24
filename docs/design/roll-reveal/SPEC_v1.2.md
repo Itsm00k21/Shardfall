@@ -1,10 +1,17 @@
-# Roll Screen + Shard Crack Reveal: Spec v1.2
+# Roll Screen + Shard Crack Reveal: Spec v1.3
 
 
-> **Mockup images:** the GitHub connector can only commit text, so the image files named in §8 aren't in this commit yet. They'll be added to this folder (or attached to the PR) in a follow-up.
+> **Mockups:** SVG mockups are in `mockups/` (folded in from closed PR #399). The JPG names in §8 are Prism's local renders.
 
 Owner: Prism (design). Builders: Ghost (UI), Echo (server). Base: `cursor/live-build-9721` @ `49bd902`.
-Supersedes v1.1. Changes in v1.2:
+Supersedes v1.2 (file name kept so PR links stay valid). Changes in v1.3, from Ghost's answers in #15 comment 6380154154:
+- **One Skip size:** at least **88×44** on phones (replaces the 96×44 / 88×44 mismatch).
+- **Roll page collapses** to the 56 px ROLL-only bar (decided; it does not close fully).
+- **Best-tile tie-break:** the **NEW** tile wins, then the earliest roll.
+- Tier timings 0.55 / 0.70 / 0.90 / 1.30 / 2.20 s confirmed (Kevin approved ~0.6 s to 2.2 s).
+- SVG mockups from #399 added, including `10-x10-best-tile`.
+
+Changes in v1.2:
 - Skip is at least 44 px tall on phones.
 - The x10 summary is a 5×2 grid with a best-tile highlight (both approved by Ghost in #15 comment 6379856660).
 - Tier-scaled timings kept (Kevin approved; Ghost to add them in RollReveal, 6378886198).
@@ -17,7 +24,7 @@ The player taps ROLL and, in under a second for common pulls (about 2 s for Lege
 
 ## 2. Where it lives
 - The **Roll page** (a tab of the main menu). The spec doesn't care which file hosts it. Ghost picks the host, and everything below is anchored to the Roll page's root frame.
-- Open: the Roll tab or rail button. Collapse: the header chevron folds the page to a 56 px bar docked at the bottom (ROLL button only). Close: the X at top-right.
+- Open: the Roll tab or rail button. Collapse (**decided**, Ghost): the header chevron folds the page to a 56 px bar docked at the bottom (ROLL button only). Close: the X at top-right.
 - Kevin's rule: the crystal and reveal sit in the page, not over the character. When the page is collapsed, nothing covers screen center.
 
 ## 3. Flow
@@ -39,7 +46,7 @@ Reference is the phone portrait 390×844 (pt). All Roll-page children use scale 
 | Pip strip | (0.5,0) below crystal | (1,-48) × 56 | 5 pips 40 px + labels; "i" hit box 44 |
 | ROLL | (0.5,1) / (0.5,0, 1,-24-safe) | 0.55w × 72 (phone) / 96 (tall) | never < 44 tall |
 | x1/x10, Auto/Skip toggles | left / right of ROLL | ≥ 88×48 each, gap 8 | stacked |
-| **x10 Skip** (`SkipBatch`) | (1,1) / (1,-16, 1,-16-safe) | **phone ≥ 96×44**, desktop 72×36 | v1.1 had 72×30 |
+| **x10 Skip** (`SkipBatch`) | (1,1) / (1,-16, 1,-16-safe) | **phone ≥ 88×44**, desktop 72×36 | one size (v1.3); v1.1 had 72×30 |
 | x10 summary panel | (0.5,0.5) | phone (1,-24) × auto; desktop 760 × auto | §6 values |
 | Milestone toast | (0.5,0) / top inset 4 | 220×26 | |
 Phone landscape 667×375 and 800×400: the crystal stage moves left (0.33, 0.5), and the pips, ROLL and toggles stack in a right column at 0.45w. The x10 summary stays a 5×2 grid, with tile = min(96, (panelW-2·14-4·8)/5). Desktop (≥ 1280 w): the page caps at 1180×680, centered right of the left rail.
@@ -84,7 +91,7 @@ Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and
   - Tiles: square, corner 8, fill = rarity mixed 22% into 40,34,58, border 2 in the rarity color.
   - Badges: corner 4, h 16, text 10, ink 24,18,32. NEW 120,220,140 · ★ up 255,205,90 · Salvaged 230,120,110.
   - Roll again: 255,205,90, text 24,18,32. Close: 58,52,80, text 240,236,250. Both h 44, corner 8, BuilderSansBold 16.
-- **Best tile** (approved): the highest rarity in the batch (on a tie, the first one).
+- **Best tile** (approved): the highest rarity in the batch. Tie-break (decided): a **NEW** tile wins; if still tied, the earliest roll.
   - Border becomes gold 255,205,90 at thickness 3.
   - A gold glow sprite behind the tile (`ImageLabel` `glow_soft_256`, ImageColor3 255,205,90, ImageTransparency 0.4, size tile+16). No blur or drop shadow: Roblox can't render them.
   - A "BEST" badge at top-right in 255,205,90.
@@ -115,13 +122,13 @@ Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and
 | `02-uncommon-phone.jpg` | x1 Uncommon reveal, phone portrait |
 | `09-x10-results-phone-390x844.jpg` | x10 summary 5×2, square tiles, best tile, phone (PIL rebuild) |
 | `09-x10-results-desktop.jpg` | x10 summary, desktop 1600×900 |
-Legendary and landscape frames will be drawn in v1.3.
+SVG mockups in `mockups/`: `01-idle.svg`, `02-uncommon.svg`, `09-x10-results.svg`, `10-x10-best-tile.svg`. Legendary and landscape frames come in a later rev.
 
 ## 9. Build split
 - **Ghost (UI):**
   - Roll page layout and states.
   - Per-tier durations in `RollReveal`.
-  - `SkipBatch` sized to ≥ 96×44 on phones.
+  - `SkipBatch` sized to ≥ 88×44 on phones.
   - The 5×2 grid and best tile in `RollSummaryHud`.
   - Collapse bar and the toast.
 - **Echo (server):** none new. Keep the roll reply's rarity, `autoSalvaged`, `essenceGained`, and NEW / ★ up flags per batch row.
@@ -134,9 +141,9 @@ Legendary and landscape frames will be drawn in v1.3.
 5. When collapsed, the Roll page leaves screen center clear at 390×844, 667×375 and 800×400.
 
 ## 11. Open questions
-1. @Ghost: does the collapse bar (56 px, ROLL only) suit the Roll page host, or should Roll close fully instead?
-2. @Kevin: on a first-ever roll, force full length with no Auto? (yes/no)
-3. @Ghost: should the best-tile tie-break be the first roll or the NEW tile? (pick)
+1. ~~@Ghost: collapse bar or close fully?~~ **Collapse to the 56 px ROLL-only bar (Ghost).**
+2. @Kevin (with Kevin via Ghost): on a first-ever roll, force full length with no Auto? (yes/no)
+3. ~~@Ghost: best-tile tie-break?~~ **NEW tile, then earliest roll (Ghost).**
 
 ## Later (not V1)
 Mythic/Secret reveal (Phase 5 appendix in v1.1), Legendary cross-server announcement, and reduced-motion variants.
@@ -164,7 +171,7 @@ Everything here must render with stock Roblox UI.
 | Tier pips | `Frame` + `UICorner` (0.5 scale = circle) + `UIStroke` 2; lit = BackgroundTransparency 0, dim = 0.6 |
 | Result banner | `Frame` + `UICorner` 10 + `UIStroke` (tier color) + 2 TextLabels |
 | ROLL button | `TextButton` + `UICorner` 8 + `UIStroke` gold 2 + `UIGradient` (light top → base) + `ImageLabel` shard_icon |
-| Toggles, Skip | `TextButton` + `UICorner` 8; Skip `Size` ≥ (0,96,0,44) on phone |
+| Toggles, Skip | `TextButton` + `UICorner` 8; Skip `Size` ≥ (0,88,0,44) on phone |
 | x10 summary | `Frame` panel + `UIGridLayout` (CellSize derived from width/5, CellPadding 8, FillDirectionMaxCells 5) + per-tile `UIAspectRatioConstraint` 1.0 |
 | Tile | `Frame` + `UICorner` 8 + `UIStroke` 2 + `ImageLabel` icon + `TextLabel` name + badge `Frame`/`TextLabel` (corner 4) |
 | Best tile | `UIStroke` gold 3 + `ImageLabel` glow_soft_256 behind (ZIndex −1) + `UIScale` pulse 1→1.06→1 |
