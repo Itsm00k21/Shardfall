@@ -11,22 +11,62 @@
 	time step is ignored. Rejoin does not spawn in the arena.
 	When m12Results is on, recall() sends a results player home at
 	returnAt and clears that run unless a newer run already started.
+	A save in flight sets run.settling so the next heartbeat cannot
+	start another UpdateAsync for that run. A failed save leaves the
+	run seated so the retry can pay.
 
 	The arena modules use require-by-string. init.luau resolves from the
 	parent folder (./WaveArena/Child), which matches Lune and the Luau
 	init-path rule. WaveArenaSrc in default.project.json mirrors that tree.
 ]]
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
+-- Lune has no DataModel. Studio requires go through the service tree.
+local studio = game ~= nil and game.GetService ~= nil
 
-local DataService = require(script.Parent.DataService)
-local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
-local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
-local RunResults = require(ReplicatedStorage.Shared.RunResults)
-local OnboardingService = require(script.Parent.OnboardingService)
-local Schema = require(ReplicatedStorage.Shared.Schema)
+local Players: any
+local ReplicatedStorage: any
+local ServerScriptService: any
+local DataService: any
+local DevAccess: any
+local LaunchGate: any
+local RunResults: any
+local OnboardingService: any
+local Schema: any
+
+if studio then
+	Players = game:GetService("Players")
+	ReplicatedStorage = game:GetService("ReplicatedStorage")
+	ServerScriptService = game:GetService("ServerScriptService")
+	DataService = require(script.Parent.DataService)
+	DevAccess = require(ReplicatedStorage.Shared.DevAccess)
+	LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+	RunResults = require(ReplicatedStorage.Shared.RunResults)
+	OnboardingService = require(script.Parent.OnboardingService)
+	Schema = require(ReplicatedStorage.Shared.Schema)
+else
+	Players = {
+		PlayerAdded = { Connect = function() end },
+		GetPlayers = function()
+			return {}
+		end,
+	}
+	DevAccess = require("../../ReplicatedStorage/Shared/DevAccess")
+	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
+	RunResults = require("../../ReplicatedStorage/Shared/RunResults")
+	OnboardingService = require("./OnboardingService")
+	Schema = require("../../ReplicatedStorage/Shared/Schema")
+	DataService = {
+		get = function(_player)
+			return nil
+		end,
+		save = function(_player)
+			return false
+		end,
+		teleportHold = function(_player)
+			return nil
+		end,
+	}
+end
 
 local WaveArenaHost = {}
 
@@ -35,26 +75,41 @@ local views: { [Player]: Folder } = {}
 local inArena: { [Player]: boolean } = {}
 local settlements = { done = {} :: { [string]: boolean } }
 local presented = false
+-- Lune specs cannot write WaveArenaConfig.enabled; the module is frozen.
+local luneEnabled = false
 
 local function sourceRoot(): Instance
 	return ServerScriptService:WaitForChild("WaveArenaSrc"):WaitForChild("server")
 end
 
 local function modules(): (any, any)
-	local server = sourceRoot()
-	local arena = require(server:WaitForChild("WaveArena") :: ModuleScript)
-	local config = require(ReplicatedStorage.Shared.Config.WaveArenaConfig)
-	return arena, config
+	if studio then
+		local server = sourceRoot()
+		local arena = require(server:WaitForChild("WaveArena") :: ModuleScript)
+		local config = require(ReplicatedStorage.Shared.Config.WaveArenaConfig)
+		return arena, config
+	end
+	local arena = require("../../server/WaveArena")
+	local config = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
+	local copy = table.clone(config)
+	copy.enabled = luneEnabled
+	return arena, copy
 end
 
 local function sessionModule(): any
-	local arena = sourceRoot():WaitForChild("WaveArena")
-	return require(arena:WaitForChild("Session") :: ModuleScript)
+	if studio then
+		local arena = sourceRoot():WaitForChild("WaveArena")
+		return require(arena:WaitForChild("Session") :: ModuleScript)
+	end
+	return require("../../server/WaveArena/Session")
 end
 
 local function settleModule(): any
-	local arena = sourceRoot():WaitForChild("WaveArena")
-	return require(arena:WaitForChild("Settle") :: ModuleScript)
+	if studio then
+		local arena = sourceRoot():WaitForChild("WaveArena")
+		return require(arena:WaitForChild("Settle") :: ModuleScript)
+	end
+	return require("../../server/WaveArena/Settle")
 end
 
 local function open(): boolean
@@ -171,11 +226,11 @@ local function pivot(player: Player, x: number, y: number, z: number)
 end
 
 local function hubReturn(player: Player)
-	local hub = workspace:FindFirstChild("HubSpawn", true)
 	local character = player.Character
 	if character == nil then
 		return
 	end
+	local hub = workspace:FindFirstChild("HubSpawn", true)
 	if hub ~= nil and hub:IsA("BasePart") then
 		character:PivotTo(hub.CFrame + Vector3.new(0, 4, 0))
 		return
@@ -447,6 +502,11 @@ function WaveArenaHost.settle(player: Player, reason: string): string
 	if typeof(run) ~= "table" then
 		return "again"
 	end
+	-- Heartbeat, disconnect, and shutdown can land while save yields.
+	-- One UpdateAsync owns this run until it returns.
+	if run.settling == true then
+		return "retry"
+	end
 	if not open() then
 		return "off"
 	end
@@ -477,7 +537,12 @@ function WaveArenaHost.settle(player: Player, reason: string): string
 		local saved = DataService.save(player)
 		return saved == true
 	end
-	local status = Settle.finish(settlements, data, run, reason, options(config), save)
+	run.settling = true
+	local ok, status = pcall(Settle.finish, settlements, data, run, reason, options(config), save)
+	run.settling = false
+	if not ok then
+		error(status, 0)
+	end
 	RunResults.markPaid(run, status)
 	if status == "paid" or status == "again" then
 		if not RunResults.stay(reason) then
@@ -549,12 +614,15 @@ function WaveArenaHost.recall(now: any)
 	end
 	for _, player in ipairs(pending) do
 		local run = runs[player]
-		if typeof(run) == "table" then
+		-- Skip a save that is still writing. Clearing here would drop
+		-- the run the in-flight settle still has to finish.
+		if typeof(run) == "table" and run.settling ~= true then
 			local seat = { run = run, inArena = inArena[player] }
 			if RunResults.releaseSeat(seat, now) == "hub" then
 				local reason = if type(run.reason) == "string" then run.reason else "clear"
-				WaveArenaHost.settle(player, reason)
-				if runs[player] == run then
+				local status = WaveArenaHost.settle(player, reason)
+				-- "retry" keeps the seat so the next heartbeat can pay.
+				if runs[player] == run and status ~= "retry" then
 					runs[player] = nil
 					inArena[player] = nil
 					clearView(player)
@@ -717,6 +785,40 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 		return result
 	end
 	return { ok = false, error = "Unknown arena action." }
+end
+
+-- Lune only. Studio ignores these. A spec seats one run and replaces the
+-- profile read and the save so a yielding save can be counted.
+function WaveArenaHost._open(on: boolean)
+	if studio then
+		return
+	end
+	luneEnabled = on == true
+end
+
+function WaveArenaHost._seat(player: any, run: any)
+	if studio then
+		return
+	end
+	if run == nil then
+		runs[player] = nil
+		inArena[player] = nil
+		return
+	end
+	runs[player] = run
+	inArena[player] = true
+end
+
+function WaveArenaHost._profile(getProfile: any, saveProfile: any)
+	if studio then
+		return
+	end
+	if getProfile ~= nil then
+		DataService.get = getProfile
+	end
+	if saveProfile ~= nil then
+		DataService.save = saveProfile
+	end
 end
 
 return WaveArenaHost
