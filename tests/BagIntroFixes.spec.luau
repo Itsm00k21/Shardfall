@@ -83,7 +83,7 @@ local function server(profile: any)
 	return invoke, calls
 end
 
-local function mountBar(profile: any, invoke: any, tabName: string?)
+local function mountBar(profile: any, invoke: any, tabName: any)
 	local world = GuiFake.world()
 	local GearBar = world.load("GearBar")
 	local parent = world.playerGui
@@ -98,6 +98,9 @@ local function mountBar(profile: any, invoke: any, tabName: string?)
 			table.insert(statuses, { text, kind })
 		end,
 		getTab = function()
+			if type(tabName) == "function" then
+				return tabName()
+			end
 			return tabName
 		end,
 	})
@@ -152,6 +155,29 @@ describe("Clip 9: manual bulk salvage", function()
 			expect(button.Visible).toBeFalse()
 			local _, other = mountBar(profile, invoke, "pets")
 			expect(GuiFake.findNamed(other, "BulkSalvage").Visible).toBeFalse()
+		end)
+	end)
+
+	it("hides Select off Weapons and Armor and leaves Select mode on a tab switch", function()
+		withFlag(function()
+			local profile = bag()
+			local invoke = server(profile)
+			local where = "weapons"
+			local handle, parent = mountBar(profile, invoke, function()
+				return where
+			end)
+			local select = GuiFake.findNamed(parent, "SelectMode")
+			expect(select.Visible).toBeTrue()
+			GuiFake.activate(select)
+			expect(select.Text).toEqual("Done")
+			where = "pets"
+			handle.refresh()
+			expect(select.Visible).toBeFalse()
+			expect(GuiFake.findNamed(parent, "BulkSalvage").Visible).toBeFalse()
+			where = "weapons"
+			handle.refresh()
+			expect(select.Visible).toBeTrue()
+			expect(select.Text).toEqual("Select")
 		end)
 	end)
 

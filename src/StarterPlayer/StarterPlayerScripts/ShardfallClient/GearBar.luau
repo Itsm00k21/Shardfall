@@ -504,7 +504,18 @@ function GearBar.mount(parent: Instance, opts: Opts)
 			autoButton.Size = UDim2.fromOffset(widthFor(GearHooks.CHIP_WIDEST .. "  ⚙") + 18, GearBar.CONTROL_H)
 		end
 		local where = tab()
-		bulkButton.Visible = not selecting and (where == nil or where == "weapons" or where == "armor")
+		-- [Ghost] Clip 11: Select on Pets greyed every pet as "Not gear" and
+		-- doubled the warnings. Select only lives on tabs that can salvage,
+		-- and leaving one drops Select mode.
+		local gearTab = where == nil or where == "weapons" or where == "armor"
+		if selecting and not gearTab then
+			selecting = false
+			table.clear(selected)
+			confirm.Visible = false
+			token = nil
+		end
+		selectButton.Visible = gearTab
+		bulkButton.Visible = not selecting and gearTab
 		bulkButton.Size = UDim2.fromOffset(if compact then 84 else widthFor(GearHooks.BULK_BUTTON), GearBar.CONTROL_H)
 		if compact and not selecting and bulkButton.Visible then
 			-- A big Essence number would push the row sideways on a phone;
