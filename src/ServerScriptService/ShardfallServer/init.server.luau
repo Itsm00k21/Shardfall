@@ -139,6 +139,35 @@ begin("CombatHooks", function()
 end)
 
 -- Profiles first. A receipt read, trade audit, or messaging hang must not skip this.
+-- Arena settlement is idempotent per run id. Save, teleport, disconnect, and
+-- shutdown all call it. The require stays behind the flag.
+if LaunchGate.on("waveArena") then
+	DataService.beforeSave(function(player, reason)
+		require(script.WaveArenaHost).settle(player, reason)
+	end)
+end
+game:BindToClose(function()
+	if not LaunchGate.on("waveArena") then
+		return
+	end
+	local ok, err = pcall(function()
+		require(script.WaveArenaHost).shutdown()
+	end)
+	if not ok then
+		warn("[Shardfall] WaveArena shutdown:", err)
+	end
+end)
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	if not LaunchGate.on("waveArena") then
+		return
+	end
+	local ok, err = pcall(function()
+		require(script.WaveArenaHost).disconnect(player)
+	end)
+	if not ok then
+		warn("[Shardfall] WaveArena disconnect:", err)
+	end
+end)
 begin("DataService", function()
 	DataService.start()
 end)
@@ -188,6 +217,13 @@ begin("TradeService", function()
 end)
 begin("MarketService", function()
 	MarketService.start()
+end)
+begin("WaveArena", function()
+	-- [ECHO hook] present builds nothing unless both switches are on.
+	if not LaunchGate.on("waveArena") then
+		return
+	end
+	require(script.WaveArenaHost).present()
 end)
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()

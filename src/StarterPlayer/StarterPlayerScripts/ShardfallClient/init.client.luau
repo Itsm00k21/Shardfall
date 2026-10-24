@@ -1535,6 +1535,8 @@ end)
 if LaunchGate.on("wildCapture") then
 	CaptureHud.start(invoke)
 end
+-- [ECHO hook] Wave arena UI. start() draws nothing while waveArena is off.
+require(script.WaveArena).start()
 PetHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)

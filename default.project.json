@@ -198,6 +198,9 @@
         "HavenPrompt": {
           "$className": "RemoteEvent"
         },
+        "WaveArena": {
+          "$className": "RemoteFunction"
+        },
         "EquipSlot": {
           "$className": "RemoteFunction"
         },
@@ -243,6 +246,12 @@
         },
         "ShardCore": {
           "$path": "src/server/ShardCore"
+        }
+      },
+      "WaveArenaSrc": {
+        "$className": "Folder",
+        "server": {
+          "$path": "src/server"
         }
       }
     },

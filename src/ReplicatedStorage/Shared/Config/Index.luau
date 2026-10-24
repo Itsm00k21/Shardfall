@@ -55,6 +55,8 @@ Config.EquipSlots = require("./EquipSlots")
 Config.EquipStats = require("./EquipStats")
 Config.GearLevels = require("./GearLevels")
 Config.ShardCore = require("./ShardCore")
+-- Phase 3 wave arena. Extra table, not a tenth area. Ships with enabled false.
+Config.WaveArena = require("./WaveArenaConfig")
 
 Config.AREAS = table.freeze({
 	"Items",

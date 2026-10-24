@@ -19,6 +19,7 @@
 	one copy-first step for those three fields. Do not publish a v27
 	document before that list exists: a higher version looks newer, and a
 	v26 server refuses the load. #387 writes the same gearEssence field.
+	Arena overflow is not a save field. schemaVersion stays 26.
 ]]
 
 local ActionSlots = require("./ActionSlots")
@@ -796,6 +797,8 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	-- [ECHO hook] Keep stored core levels. Drop junk. Do not write the items.
 	data.shardCores = ShardCoreConfig.sanitize(data.shardCores)
+	-- Arena overflow is session-only. Drop a stale key so it is not saved.
+	data.arenaMail = nil
 	if data.materials == nil or type(data.materials) == "table" then
 		data.materials = Materials.sanitize(data.materials)
 	end
