@@ -34,6 +34,7 @@ local GoldShop = require("../src/ReplicatedStorage/Shared/GoldShop")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Loops = require("../src/ReplicatedStorage/Shared/Loops")
 local Onboarding = require("../src/ReplicatedStorage/Shared/Onboarding")
+local SessionGuide = require("../src/ReplicatedStorage/Shared/SessionGuide")
 local Pets = require("../src/ReplicatedStorage/Shared/Pets")
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Quality = require("../src/ReplicatedStorage/Shared/Quality")
@@ -714,9 +715,14 @@ function handlers.UpgradeGear(data, uid)
 end
 
 function handlers.Onboard(data, action)
+	if action == "replay" then
+		return { ok = true }
+	end
 	if action == "skip" then
 		local saved, err = mutate(data, function(profile)
 			if profile.onboardDone ~= true then
+				local tokens = SessionGuide.unusedRollTokens(profile)
+				SessionGuide.grantTokens(profile, tokens)
 				Onboarding.starter(profile)
 			end
 			FirstSessionKit.grant(profile)
