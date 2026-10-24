@@ -420,8 +420,9 @@ describe("HubInput", function()
 		hub.open("bag")
 		screen = screenOf(world)
 		expect(GuiFake.findNamed(screen, "Pills") ~= nil).toBeTrue()
-		expect(GuiFake.findNamed(screen, "Slot1") ~= nil).toBeTrue()
-		expect(GuiFake.findNamed(screen, "Slot8") ~= nil).toBeTrue()
+		-- Clip 7 / Prism BAG spec: no 1-8 slot strip inside the Bag.
+		expect(GuiFake.findNamed(screen, "Loadout")).toBeNil()
+		expect(GuiFake.findNamed(screen, "Slot1")).toBeNil()
 		GuiFake.activate(GuiFake.findNamed(screen, "Card"))
 		local upgrade = false
 		for _, child in ipairs(screen:GetDescendants()) do
@@ -436,7 +437,10 @@ describe("HubInput", function()
 		expect(GuiFake.findNamed(screen, "PetDetail") ~= nil).toBeTrue()
 		local crackRow = false
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and string.find(child.Text, "Crack a Pet Shard", 1, true) ~= nil then
+			if
+				child:IsA("TextButton")
+				and string.find(child.Text, "Crack a Pet Shard", 1, true) ~= nil
+			then
 				crackRow = true
 			end
 		end
@@ -565,7 +569,12 @@ describe("HubInput", function()
 		local screen = screenOf(world)
 		local broke = nil
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_bag" then
+			if
+				child:IsA("TextButton")
+				and child.Name == "Buy"
+				and child.Parent ~= nil
+				and child.Parent.Name == "Offer_bag"
+			then
 				broke = child
 			end
 		end
@@ -577,7 +586,12 @@ describe("HubInput", function()
 		expect(calls[#calls][2]).toEqual("You need more Gold.")
 		local tonic = nil
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_tonic" then
+			if
+				child:IsA("TextButton")
+				and child.Name == "Buy"
+				and child.Parent ~= nil
+				and child.Parent.Name == "Offer_tonic"
+			then
 				tonic = child
 			end
 		end
@@ -611,7 +625,12 @@ describe("HubInput", function()
 		local screen = screenOf(world)
 		local bag = nil
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_bag" then
+			if
+				child:IsA("TextButton")
+				and child.Name == "Buy"
+				and child.Parent ~= nil
+				and child.Parent.Name == "Offer_bag"
+			then
 				bag = child
 			end
 		end
@@ -700,7 +719,10 @@ describe("HubInput", function()
 		expect(overlaps).toEqual(false)
 		local styled = false
 		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and string.find(child.Text, "Open full bag", 1, true) ~= nil then
+			if
+				child:IsA("TextButton")
+				and string.find(child.Text, "Open full bag", 1, true) ~= nil
+			then
 				expect(child:FindFirstChildOfClass("UICorner") ~= nil).toBeTrue()
 				styled = true
 			end
@@ -878,10 +900,14 @@ describe("HubInput", function()
 		press("ButtonA")
 		expect(hub.isOpen()).toEqual(false)
 		local before = #slots
-		world.binds.ShardfallActionBarPad("ShardfallActionBarPad", world.enum.UserInputState.Begin, {
-			KeyCode = world.enum.KeyCode.DPadUp,
-			UserInputType = world.enum.UserInputType.Gamepad1,
-		})
+		world.binds.ShardfallActionBarPad(
+			"ShardfallActionBarPad",
+			world.enum.UserInputState.Begin,
+			{
+				KeyCode = world.enum.KeyCode.DPadUp,
+				UserInputType = world.enum.UserInputType.Gamepad1,
+			}
+		)
 		expect(#slots).toEqual(before + 1)
 		expect(slots[#slots][1]).toEqual("UseActionSlot")
 		expect(slots[#slots][2]).toEqual(1)
@@ -901,7 +927,8 @@ describe("HubInput", function()
 		press("ButtonX")
 		expect(hub.isOpen()).toEqual(false)
 		expect(heavies).toEqual(1)
-		local combat = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
+		local combat =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau")
 		local heavyAt = string.find(combat, "Keybinds.GAMEPAD.heavy", 1, true)
 		expect(heavyAt ~= nil).toBeTrue()
 		local swingAt = string.find(combat, "CombatHud.swing(true)", heavyAt :: number, true)
@@ -909,10 +936,14 @@ describe("HubInput", function()
 		hub.open("roll")
 		expect(world.binds.ShardfallMenuSink ~= nil).toBeTrue()
 		local openBefore = #slots
-		world.binds.ShardfallActionBarPad("ShardfallActionBarPad", world.enum.UserInputState.Begin, {
-			KeyCode = world.enum.KeyCode.DPadDown,
-			UserInputType = world.enum.UserInputType.Gamepad1,
-		})
+		world.binds.ShardfallActionBarPad(
+			"ShardfallActionBarPad",
+			world.enum.UserInputState.Begin,
+			{
+				KeyCode = world.enum.KeyCode.DPadDown,
+				UserInputType = world.enum.UserInputType.Gamepad1,
+			}
+		)
 		expect(#slots).toEqual(openBefore)
 		expect(GuiFake.findNamed(screenOf(world), "PadRing").Parent.Name).toEqual("Close")
 		press("DPadDown")
@@ -936,7 +967,11 @@ describe("HubInput", function()
 			for _ = 1, 48 do
 				press("DPadDown")
 				openRing = GuiFake.findNamed(screenOf(world), "PadRing")
-				if openRing ~= nil and openRing.Parent ~= nil and openRing.Parent.Name == "Roll" then
+				if
+					openRing ~= nil
+					and openRing.Parent ~= nil
+					and openRing.Parent.Name == "Roll"
+				then
 					rollButton = openRing.Parent
 					break
 				end
@@ -957,7 +992,11 @@ describe("HubInput", function()
 		screen = screenOf(world)
 		ring = GuiFake.findNamed(screen, "PadRing")
 		for _ = 1, 12 do
-			if ring.Parent ~= nil and ring.Parent.Parent ~= nil and ring.Parent.Parent.Name == "List" then
+			if
+				ring.Parent ~= nil
+				and ring.Parent.Parent ~= nil
+				and ring.Parent.Parent.Name == "List"
+			then
 				break
 			end
 			press("DPadDown")
@@ -1018,7 +1057,8 @@ describe("HubInput", function()
 	end)
 
 	it("drops padPress and padTarget when a rebuilt list destroys its rows", function()
-		local source = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local source =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		local clearAt = string.find(source, "function hubFn.clear(host: Instance)", 1, true)
 		expect(clearAt ~= nil).toBeTrue()
 		local nextFn = string.find(source, "\n\tfunction hubFn.", (clearAt :: number) + 1, true)
@@ -1077,7 +1117,8 @@ describe("HubInput", function()
 	end)
 
 	it("clears restColor and keeps PadRing when a rebuilt page drops its rows", function()
-		local source = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local source =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		local clearAt = string.find(source, "function hubFn.clear(host: Instance)", 1, true)
 		expect(clearAt ~= nil).toBeTrue()
 		local nextFn = string.find(source, "\n\tfunction hubFn.", (clearAt :: number) + 1, true)
@@ -1230,6 +1271,10 @@ describe("HubInput", function()
 		end
 		expect(#rolled(calls)).toEqual(3)
 		GuiFake.emit(backdrop, "Activated")
+		-- Clip 7: closed at once for input, hidden when the 0.15 s close ends.
+		expect(hub.isOpen()).toEqual(false)
+		expect(GuiFake.findNamed(screen, "OpenVeil").Visible).toEqual(true)
+		hub.settleMotion()
 		expect(screen.Enabled).toEqual(false)
 		expect(panel.Visible).toEqual(false)
 	end)
@@ -1348,7 +1393,9 @@ describe("HubInput", function()
 			expect(progress ~= nil).toBeTrue()
 			local meters = 0
 			for _, host in ipairs(progress:GetChildren()) do
-				if host:IsA("Frame") and (host.Name == "EpicPity" or host.Name == "LegendaryPity") then
+				if
+					host:IsA("Frame") and (host.Name == "EpicPity" or host.Name == "LegendaryPity")
+				then
 					meters += 1
 					local lock = host:FindFirstChild("Lock")
 					local count = host:FindFirstChild("PityCount")
@@ -1423,7 +1470,10 @@ describe("HubInput", function()
 		expect(rejectedSeen[1]).toEqual("Equipped")
 		expect(#rejectedCalls).toEqual(1)
 		expect(GuiFake.findNamed(screenOf(rejectedWorld), "Equip").Text).toEqual("Equip")
-		expect(string.find(labelText(screenOf(rejectedWorld), "Milestone"), "Could not equip", 1, true) ~= nil).toBeTrue()
+		expect(
+			string.find(labelText(screenOf(rejectedWorld), "Milestone"), "Could not equip", 1, true)
+				~= nil
+		).toBeTrue()
 	end)
 
 	it("hides the hub tab column and gives the page that width", function()
@@ -1438,87 +1488,98 @@ describe("HubInput", function()
 		expect(body.Size.X.Offset >= panel.Size.X.Offset - 16).toBeTrue()
 	end)
 
-	it("walks skip, the starter shards, the first crack, equip, the tonic, and an upgrade", function()
-		local world = GuiFake.world()
-		world.playerGui.Parent = world.player
-		local calls = {}
-		local OnboardHud = world.load("OnboardHud")
-		OnboardHud.start(function(name: string, action: string)
-			table.insert(calls, { name, action })
-			return { ok = true }
-		end)
-		OnboardHud.setProfile({
-			onboardDone = false,
-			onboardStep = "open",
-		})
-		local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
-		local skip = GuiFake.findNamed(onboard, "Skip")
-		expect(skip.Text).toEqual("Skip intro")
-		expect(skip.Parent.Visible).toEqual(true)
-		GuiFake.activate(skip)
-		expect(calls[1][1]).toEqual("Onboard")
-		expect(calls[1][2]).toEqual("skip")
-		OnboardHud.setProfile({
-			onboardDone = true,
-			onboardStep = "haven",
-		})
-		expect(skip.Parent.Visible).toEqual(false)
-
-		local MenuHub = world.load("MenuHub")
-		local hub = MenuHub.start(world.playerGui, {
-			invoke = function(name: string, ...)
-				table.insert(calls, { name, ... })
+	it(
+		"walks skip, the starter shards, the first crack, equip, the tonic, and an upgrade",
+		function()
+			local world = GuiFake.world()
+			world.playerGui.Parent = world.player
+			local calls = {}
+			local OnboardHud = world.load("OnboardHud")
+			OnboardHud.start(function(name: string, action: string)
+				table.insert(calls, { name, action })
 				return { ok = true }
-			end,
-			onBag = function() end,
-			onMarket = function() end,
-			onDim = function() end,
-			onToast = function() end,
-		})
-		local hubScreen = GuiFake.findNamed(world.playerGui, "ShardfallHub")
-		expect(onboard.DisplayOrder > hubScreen.DisplayOrder).toBeTrue()
-		local data = profile()
-		data.shardTokens = 10
-		data.gold = 400
-		hub.setProfile(data)
-		hub.open("roll")
-		local screen = screenOf(world)
-		expect(labelText(screen, "ShardTokens")).toEqual(HubStyle.shardCount(10))
-		GuiFake.emit(GuiFake.findNamed(screen, "Roll"), "Activated")
-		expect(calls[#calls][1]).toEqual("RollShard")
+			end)
+			OnboardHud.setProfile({
+				onboardDone = false,
+				onboardStep = "open",
+			})
+			local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
+			local skip = GuiFake.findNamed(onboard, "Skip")
+			expect(skip.Text).toEqual("Skip intro")
+			expect(skip.Parent.Visible).toEqual(true)
+			GuiFake.activate(skip)
+			expect(calls[1][1]).toEqual("Onboard")
+			expect(calls[1][2]).toEqual("skip")
+			OnboardHud.setProfile({
+				onboardDone = true,
+				onboardStep = "haven",
+			})
+			expect(skip.Parent.Visible).toEqual(false)
 
-		hub.open("bag")
-		screen = screenOf(world)
-		GuiFake.activate(GuiFake.findNamed(screen, "Equip"))
-		expect(calls[#calls][1]).toEqual("EquipItem")
-		expect(calls[#calls][2]).toEqual("sword")
+			local MenuHub = world.load("MenuHub")
+			local hub = MenuHub.start(world.playerGui, {
+				invoke = function(name: string, ...)
+					table.insert(calls, { name, ... })
+					return { ok = true }
+				end,
+				onBag = function() end,
+				onMarket = function() end,
+				onDim = function() end,
+				onToast = function() end,
+			})
+			local hubScreen = GuiFake.findNamed(world.playerGui, "ShardfallHub")
+			expect(onboard.DisplayOrder > hubScreen.DisplayOrder).toBeTrue()
+			local data = profile()
+			data.shardTokens = 10
+			data.gold = 400
+			hub.setProfile(data)
+			hub.open("roll")
+			local screen = screenOf(world)
+			expect(labelText(screen, "ShardTokens")).toEqual(HubStyle.shardCount(10))
+			GuiFake.emit(GuiFake.findNamed(screen, "Roll"), "Activated")
+			expect(calls[#calls][1]).toEqual("RollShard")
 
-		hub.open("shop")
-		local tonic = nil
-		for _, child in ipairs(screenOf(world):GetDescendants()) do
-			if child:IsA("TextButton") and child.Name == "Buy" and child.Parent ~= nil and child.Parent.Name == "Offer_tonic" then
-				tonic = child
+			hub.open("bag")
+			screen = screenOf(world)
+			GuiFake.activate(GuiFake.findNamed(screen, "Equip"))
+			expect(calls[#calls][1]).toEqual("EquipItem")
+			expect(calls[#calls][2]).toEqual("sword")
+
+			hub.open("shop")
+			local tonic = nil
+			for _, child in ipairs(screenOf(world):GetDescendants()) do
+				if
+					child:IsA("TextButton")
+					and child.Name == "Buy"
+					and child.Parent ~= nil
+					and child.Parent.Name == "Offer_tonic"
+				then
+					tonic = child
+				end
 			end
-		end
-		expect(tonic ~= nil).toBeTrue()
-		GuiFake.activate(tonic)
-		expect(calls[#calls][1]).toEqual("BuyGoldShop")
-		expect(calls[#calls][2]).toEqual("tonic")
+			expect(tonic ~= nil).toBeTrue()
+			GuiFake.activate(tonic)
+			expect(calls[#calls][1]).toEqual("BuyGoldShop")
+			expect(calls[#calls][2]).toEqual("tonic")
 
-		hub.open("bag")
-		screen = screenOf(world)
-		GuiFake.activate(GuiFake.findNamed(screen, "Card"))
-		local upgrade = nil
-		for _, child in ipairs(screen:GetDescendants()) do
-			if child:IsA("TextButton") and string.find(child.Text, "UPGRADE", 1, true) ~= nil then
-				upgrade = child
+			hub.open("bag")
+			screen = screenOf(world)
+			GuiFake.activate(GuiFake.findNamed(screen, "Card"))
+			local upgrade = nil
+			for _, child in ipairs(screen:GetDescendants()) do
+				if
+					child:IsA("TextButton")
+					and string.find(child.Text, "UPGRADE", 1, true) ~= nil
+				then
+					upgrade = child
+				end
 			end
+			expect(upgrade ~= nil).toBeTrue()
+			GuiFake.activate(upgrade)
+			expect(calls[#calls][1]).toEqual("UpgradeGear")
+			expect(calls[#calls][2]).toEqual("sword")
 		end
-		expect(upgrade ~= nil).toBeTrue()
-		GuiFake.activate(upgrade)
-		expect(calls[#calls][1]).toEqual("UpgradeGear")
-		expect(calls[#calls][2]).toEqual("sword")
-	end)
+	)
 
 	it("drives a gamepad from Close through Roll, Bag, Forge, Pets, and the Gold shop", function()
 		local world = GuiFake.world()
@@ -1659,7 +1720,10 @@ describe("HubInput", function()
 		expect(hasText(screenOf(world), "40 Gold")).toBeTrue()
 		expect(hasText(screenOf(world), "250 Gold")).toBeTrue()
 		local tonic = seek(function(button)
-			return button:IsA("TextButton") and button.Name == "Buy" and button.Parent ~= nil and button.Parent.Name == "Offer_tonic"
+			return button:IsA("TextButton")
+				and button.Name == "Buy"
+				and button.Parent ~= nil
+				and button.Parent.Name == "Offer_tonic"
 		end)
 		expect(tonic ~= nil).toBeTrue()
 		press("ButtonA")
@@ -1743,7 +1807,12 @@ describe("HubInput", function()
 		for _ = 1, 120 do
 			local stroke = ring()
 			local parent = if stroke ~= nil then stroke.Parent else nil
-			if parent ~= nil and parent.Name == "Bag" and parent.Parent ~= nil and parent.Parent.Name == "Rail" then
+			if
+				parent ~= nil
+				and parent.Name == "Bag"
+				and parent.Parent ~= nil
+				and parent.Parent.Name == "Rail"
+			then
 				found = parent
 				break
 			end

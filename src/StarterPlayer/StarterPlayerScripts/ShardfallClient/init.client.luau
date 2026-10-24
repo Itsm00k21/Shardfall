@@ -448,6 +448,7 @@ local function presentStarterGoals(profile: any)
 	end
 	paintedStarterGoals = key
 	StarterGoalHud.present(tracker)
+	OnboardHud.setStarterGoals(StarterGoalHud.counts(tracker))
 end
 
 local function applyProfile(profile: any, saving: any)
@@ -1596,6 +1597,10 @@ end, applyResult)
 OnboardHud.onShownChange(function(shown: boolean)
 	StarterGoalHud.setSuppressed("onboard", shown)
 end)
+-- [Ghost] Clip 7: the Goals tab folds and unfolds the starter list.
+OnboardHud.onStarterFold(function(folded: boolean)
+	StarterGoalHud.setSuppressed("tab", folded)
+end)
 -- [Ghost] Clip 9: the intro and goals came back over the open Bag. Covered
 -- is now read live from each menu's real visible state, so any open menu
 -- keeps them hidden however it was opened.
@@ -1633,6 +1638,12 @@ OnboardHud.coverWhen("results", function(): boolean
 	local card = if gui ~= nil then gui:FindFirstChild("Card") else nil
 	return card ~= nil and OnboardHud.shown(card)
 end)
+-- [Ghost] Clip 7: the "Rootvault cleared" / "Defeated" card (CombatHud,
+-- its own gui at DisplayOrder 50) folds the intro card and pill, which
+-- drew over it at 95. In a dungeon run, hub-only steps (swing: "Keep
+-- swinging") fold too; there are no saplings in the Rootvault.
+OnboardHud.coverWhen("clearCard", CombatHud.resultShowing)
+OnboardHud.coverWhen("run", OnboardHud.runQuiet)
 OnboardHud.coverWhen("market", function(): boolean
 	local gui = playerGui:FindFirstChild("ShardfallMarket")
 	local market = if gui ~= nil then gui:FindFirstChild("Market") else nil
@@ -1654,7 +1665,9 @@ CombatHud.start(remotes :: Instance, {
 		end
 	end,
 	onRun = function(run)
-		CombatStage.setInRun(type(run) == "table" and run.active == true)
+		local runActive = type(run) == "table" and run.active == true
+		CombatStage.setInRun(runActive)
+		OnboardHud.setInRun(runActive)
 		ui.setRun(run)
 		musicController.syncRun(run)
 		DoorHud.setRun(run)

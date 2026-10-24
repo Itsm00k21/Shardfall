@@ -33,6 +33,7 @@
 
 local Essence = require("./Config/Essence")
 local InventoryView = require("./InventoryView")
+local UiTheme = require("./UiTheme")
 
 local GearHooks = {}
 
@@ -340,7 +341,9 @@ function GearHooks.coreGroups(preview: any, selectedUid: any): { CoreGroup }
 	local byKey: { [string]: CoreGroup } = {}
 	for _, row in ipairs(preview.weapons) do
 		if type(row) == "table" and type(row.uid) == "string" then
-			local name = if type(row.name) == "string" and row.name ~= "" then row.name else "Weapon"
+			local name = if type(row.name) == "string" and row.name ~= ""
+				then row.name
+				else "Weapon"
 			local rarity = if type(row.rarity) == "string" then row.rarity else ""
 			local level = whole(row.level) or 0
 			local key = string.format("%s|%s|%d", name, rarity, level)
@@ -396,7 +399,11 @@ function GearHooks.coreGroups(preview: any, selectedUid: any): { CoreGroup }
 end
 
 function GearHooks.coreHeader(level: any): string
-	return string.format("Shard Core  Lv %d/%d", math.min(whole(level) or 0, GearHooks.CORE_CAP), GearHooks.CORE_CAP)
+	return string.format(
+		"Shard Core  Lv %d/%d",
+		math.min(whole(level) or 0, GearHooks.CORE_CAP),
+		GearHooks.CORE_CAP
+	)
 end
 
 -- costs: Echo's ShardCore.COST. Returns the line and whether a feed fits.
@@ -431,12 +438,58 @@ function GearHooks.levelLine(item: any): string
 	return table.concat(parts, "  ")
 end
 
+-- [Ghost] Clip 7: the same line as RichText for the Bag card. +level in
+-- gold, earned stars in the item's rarity color (lifted for the dark
+-- card), the stars still to earn in that color at low strength. Every
+-- card used to show the same five gold outlines.
+GearHooks.STAR_DIM = 0.6
+
+local function hex(red: number, green: number, blue: number): string
+	return string.format("#%02X%02X%02X", red, green, blue)
+end
+
+function GearHooks.starColor(item: any): (number, number, number)
+	local rarity = if type(item) == "table" and type(item.rarity) == "string"
+		then item.rarity
+		else "Common"
+	local red, green, blue = UiTheme.rarityColor(rarity)
+	return UiTheme.lift(red, green, blue)
+end
+
+function GearHooks.levelRich(item: any): string
+	if type(item) ~= "table" then
+		return ""
+	end
+	local parts = {}
+	local level = whole(tonumber(item.upgrade)) or 0
+	if level > 0 then
+		table.insert(parts, string.format('<font color="#FFCE60">+%d</font>', level))
+	end
+	local stars = math.min(5, whole(tonumber(item.stars)) or 0)
+	local color = hex(GearHooks.starColor(item))
+	local row = ""
+	if stars > 0 then
+		row ..= string.format('<font color="%s">%s</font>', color, string.rep("★", stars))
+	end
+	if stars < 5 then
+		row ..= string.format(
+			'<font color="%s" transparency="%.2f">%s</font>',
+			color,
+			GearHooks.STAR_DIM,
+			string.rep("☆", 5 - stars)
+		)
+	end
+	table.insert(parts, row)
+	return table.concat(parts, "  ")
+end
+
 -- Auto-salvage safety (Kevin, Oct 23). The client offers and sends only
 -- these caps. A saved Rare+ cap is shown as-is (never rewritten quietly)
 -- and the settings popover offers to lower it.
 GearHooks.AUTO_SAFE = table.freeze({ "Common", "Uncommon" })
 
-local CAP_RANK = { Common = 1, Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5, Mythic = 6, Secret = 7 }
+local CAP_RANK =
+	{ Common = 1, Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5, Mythic = 6, Secret = 7 }
 
 function GearHooks.capRank(rarity: any): number
 	return if type(rarity) == "string" and CAP_RANK[rarity] ~= nil then CAP_RANK[rarity] else 0
@@ -459,7 +512,11 @@ end
 
 -- The {enabled, rarity} a popover change sends, clamped. want.rarity is
 -- what the player picked; nil keeps the saved (clamped) cap.
-function GearHooks.autoWant(profile: any, enabled: boolean, rarity: any): { enabled: boolean, rarity: string }
+function GearHooks.autoWant(
+	profile: any,
+	enabled: boolean,
+	rarity: any
+): { enabled: boolean, rarity: string }
 	local pick = if rarity ~= nil then rarity else GearHooks.autoCapName(profile)
 	return { enabled = enabled == true, rarity = GearHooks.safeCap(pick) }
 end
@@ -476,7 +533,10 @@ function GearHooks.autoAsk(profile: any, want: any): string?
 		return string.format("Auto-salvage will destroy new %s and lower drops. Turn on?", cap)
 	end
 	if GearHooks.capRank(cap) > GearHooks.capRank(current) then
-		return string.format("Auto-salvage will destroy new %s and lower drops. Raise the cap?", cap)
+		return string.format(
+			"Auto-salvage will destroy new %s and lower drops. Raise the cap?",
+			cap
+		)
 	end
 	return nil
 end
@@ -508,7 +568,11 @@ function GearHooks.pickEmpty(profile: any, cap: any, tab: any): string?
 	local locked, worn, fav = 0, 0, 0
 	for uid, item in pairs(inventory) do
 		if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
-			if (kind == nil or item.kind == kind) and GearHooks.capRank(item.rarity) <= limit and GearHooks.capRank(item.rarity) > 0 then
+			if
+				(kind == nil or item.kind == kind)
+				and GearHooks.capRank(item.rarity) <= limit
+				and GearHooks.capRank(item.rarity) > 0
+			then
 				any += 1
 				local probe = item
 				if type(probe.uid) ~= "string" then
@@ -599,7 +663,12 @@ function GearHooks.bulkLine(count: any, gain: any): string
 	if n <= 0 then
 		return "Nothing to salvage"
 	end
-	return string.format("%d item%s · +%d Essence", n, if n == 1 then "" else "s", whole(gain) or 0)
+	return string.format(
+		"%d item%s · +%d Essence",
+		n,
+		if n == 1 then "" else "s",
+		whole(gain) or 0
+	)
 end
 
 -- The one line the Auto-salvage popover shows under the cap. A saved cap

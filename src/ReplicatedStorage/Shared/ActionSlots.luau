@@ -773,6 +773,47 @@ function ActionSlots.look(bar: any, index: number): string
 	return "empty"
 end
 
+-- [Ghost] Clip 7 (Kevin): Nightbriar was equipped and the bar showed
+-- eight empty slots. When slot 1 is empty it shows the equipped weapon
+-- (ItemWeapon art, rarity border, the weapon's name in the tip) and a
+-- press there swings it (the normal light attack). Display only: the
+-- saved bar is unchanged and nothing new goes to the server.
+export type WeaponFace = {
+	uid: string,
+	name: string,
+	rarity: string,
+	art: string,
+	border: { number },
+}
+
+function ActionSlots.weaponFace(bar: any, index: number, profile: any): WeaponFace?
+	if index ~= 1 or type(profile) ~= "table" or type(profile.equipped) ~= "table" then
+		return nil
+	end
+	local slots = if type(bar) == "table" and type(bar.slots) == "table" then bar.slots else {}
+	local slot = slots[1]
+	if type(slot) == "table" and slot.kind ~= nil and slot.kind ~= "empty" then
+		return nil
+	end
+	local uid = profile.equipped.weapon
+	if type(uid) ~= "string" or uid == "" then
+		return nil
+	end
+	local item = itemOf(profile, uid)
+	if type(item) ~= "table" then
+		return nil
+	end
+	local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
+	local red, green, blue = UiTheme.rarityColor(rarity)
+	return {
+		uid = uid,
+		name = if type(item.name) == "string" and item.name ~= "" then item.name else "Weapon",
+		rarity = rarity,
+		art = "ItemWeapon",
+		border = { red, green, blue },
+	}
+end
+
 -- Transparency added to an empty slot's frame and key badge, by look.
 ActionSlots.FADE = table.freeze({ filled = 0, next = 0.35, empty = 0.65 })
 

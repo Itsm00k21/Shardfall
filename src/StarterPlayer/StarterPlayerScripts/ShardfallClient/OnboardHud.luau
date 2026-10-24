@@ -70,6 +70,12 @@ local goalsCollapsed = false
 -- HudLayout's foldGoals picks the start state for the view.
 local goalsChosen = false
 local shownListeners: { (boolean) -> () } = {}
+-- [Ghost] Clip 7: the starter-goal list (StarterGoalHud) and its fold.
+local starterDone = 0
+local starterTotal = 0
+local starterFolded = false
+local onboardTabText = "‹ Goals"
+local starterFoldListeners: { (boolean) -> () } = {}
 local lastShown: boolean? = nil
 
 -- Steps the Continue button can move on its own. Every other step is
@@ -395,6 +401,14 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 		OnboardHud._show()
 	end)
 	tab.MouseButton1Click:Connect(function()
+		if OnboardHud._tabMode == "starter" then
+			starterFolded = not starterFolded
+			for _, callback in ipairs(starterFoldListeners) do
+				pcall(callback, starterFolded)
+			end
+			OnboardHud._show()
+			return
+		end
 		goalsCollapsed = false
 		goalsChosen = true
 		OnboardHud._show()
@@ -474,6 +488,66 @@ end
 OnboardHud._layout = nil :: (() -> ())?
 OnboardHud._show = function() end :: () -> ()
 
+export type TabInput = {
+	covered: boolean,
+	active: boolean,
+	onboardShown: boolean,
+	onboardCollapsed: boolean,
+	onboardHasGoals: boolean,
+	starterDone: number,
+	starterTotal: number,
+	starterFolded: boolean,
+}
+export type TabState = { visible: boolean, mode: string, text: string }
+
+-- [Ghost] Clip 7 (Kevin): the top-right tab stayed "Goals 0/4" (the intro
+-- goals) while the list on screen was the starter goals, and it vanished
+-- for good once the intro closed. The tab now counts the list the player
+-- can see: the starter goals whenever the intro card and intro goals are
+-- off screen (including after the intro is done), the intro goals only
+-- while they are folded and there is no starter list. Never both (Prism
+-- HUD_ZONE_MAP Z4). Pure.
+function OnboardHud.tabState(input: TabInput): TabState
+	if input.covered then
+		return { visible = false, mode = "none", text = "" }
+	end
+	if input.starterTotal > 0 and not input.onboardShown then
+		local arrow = if input.starterFolded then "‹" else "›"
+		return {
+			visible = true,
+			mode = "starter",
+			text = string.format("%s Goals %d/%d", arrow, input.starterDone, input.starterTotal),
+		}
+	end
+	if input.active and input.onboardCollapsed and input.onboardHasGoals then
+		return { visible = true, mode = "onboard", text = "" }
+	end
+	return { visible = false, mode = "none", text = "" }
+end
+
+-- init passes the starter-goal rows' counts on every repaint.
+function OnboardHud.setStarterGoals(done: number, total: number)
+	starterDone = math.max(0, math.floor(tonumber(done) or 0))
+	starterTotal = math.max(0, math.floor(tonumber(total) or 0))
+	if starterTotal == 0 and starterFolded then
+		starterFolded = false
+		for _, callback in ipairs(starterFoldListeners) do
+			pcall(callback, false)
+		end
+	end
+	OnboardHud._show()
+end
+
+-- Called with true when the tab folds the starter list, false to show it.
+function OnboardHud.onStarterFold(callback: (boolean) -> ())
+	table.insert(starterFoldListeners, callback)
+end
+
+function OnboardHud.tabMode(): string
+	return OnboardHud._tabMode
+end
+OnboardHud._tabMode = "none"
+
 local function show()
 	local frame = card
 	local panel = goalPanel
@@ -489,11 +563,23 @@ local function show()
 	if introPill ~= nil then
 		introPill.Visible = active and cardCollapsed
 	end
+	local nowShown = frame.Visible or panel.Visible
 	local tab = goalsTab
 	if tab ~= nil then
-		tab.Visible = active and hasGoals and goalsCollapsed
+		local state = OnboardHud.tabState({
+			covered = isCovered(),
+			active = stepId ~= nil and not dismissed,
+			onboardShown = nowShown,
+			onboardCollapsed = goalsCollapsed,
+			onboardHasGoals = hasGoals,
+			starterDone = starterDone,
+			starterTotal = starterTotal,
+			starterFolded = starterFolded,
+		})
+		OnboardHud._tabMode = state.mode
+		tab.Visible = state.visible
+		tab.Text = if state.mode == "starter" then state.text else onboardTabText
 	end
-	local nowShown = frame.Visible or panel.Visible
 	if nowShown ~= lastShown then
 		lastShown = nowShown
 		for _, callback in ipairs(shownListeners) do
@@ -519,6 +605,23 @@ function OnboardHud.setCovered(source: string, on: boolean)
 		covered[source] = on == true
 	end
 	show()
+end
+
+-- The current step id, or nil once onboarding is done.
+function OnboardHud.stepId(): string?
+	return stepId
+end
+
+-- [Ghost] Clip 7: init reports dungeon runs here. runQuiet is the
+-- coverWhen check: in a run, hub-only steps fold away.
+local inRun = false
+function OnboardHud.setInRun(on: boolean)
+	inRun = on == true
+	OnboardHud._show()
+end
+
+function OnboardHud.runQuiet(): boolean
+	return inRun and Onboarding.quietInRun(stepId)
 end
 
 -- Collapse state for tests and the Studio check.
@@ -572,7 +675,8 @@ function OnboardHud.setProfile(profile: any)
 	end
 	local tab = goalsTab
 	if tab ~= nil then
-		tab.Text = string.format("‹ Goals %d/%d", done, total)
+		onboardTabText = string.format("‹ Goals %d/%d", done, total)
+		tab.Text = onboardTabText
 	end
 	local introPill = pill
 	if introPill ~= nil then

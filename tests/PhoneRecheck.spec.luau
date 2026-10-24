@@ -76,7 +76,14 @@ local function tap(box: Rect): boolean
 end
 
 local function railOf(vx: number, vy: number): Rect
-	local fit = HudLayout.railFit(vy, UiTheme.safeMargin(), HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
+	local fit = HudLayout.railFit(
+		vy,
+		UiTheme.safeMargin(),
+		HudLayout.RAIL_COUNT,
+		UiTheme.TAP,
+		UiTheme.TOUCH,
+		vx
+	)
 	return { x = fit.x, y = fit.y, w = fit.w, h = fit.h }
 end
 
@@ -434,6 +441,9 @@ describe("Phone recheck", function()
 			expect(hasText(shop, "Dust")).toBeFalse()
 			expect(hasText(shop, "Robux")).toBeFalse()
 			ui.hub.close()
+			-- Clip 7: the close plays 0.15 s before the hub hides.
+			expect(ui.hub.isOpen()).toBeFalse()
+			ui.hub.settleMotion()
 			expect(ui.screen.Enabled).toBeFalse()
 		end
 	end)

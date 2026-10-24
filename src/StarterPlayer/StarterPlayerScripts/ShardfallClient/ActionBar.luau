@@ -716,6 +716,29 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	showTip = function(index: number)
 		local bar = currentBar()
 		local slot = bar.slots[index]
+		local weapon = ActionSlots.weaponFace(bar, index, profile)
+		if weapon ~= nil then
+			tipTitle.Text = weapon.name
+			tipBody.Text = weapon.rarity .. " weapon, equipped.\nPress to swing."
+			local button = buttons[index]
+			local tipH = 76
+			tooltip.Size = UDim2.fromOffset(SkillTip.WIDTH, tipH)
+			local screenW = screen.AbsoluteSize.X
+			local tipX = button.AbsolutePosition.X
+				- screen.AbsolutePosition.X
+				+ button.AbsoluteSize.X / 2
+				- SkillTip.WIDTH / 2
+			if screenW > SkillTip.WIDTH then
+				tipX = math.clamp(tipX, 8, screenW - SkillTip.WIDTH - 8)
+			end
+			tooltip.Position = UDim2.fromOffset(
+				tipX,
+				button.AbsolutePosition.Y - screen.AbsolutePosition.Y - tipH - 8
+			)
+			tooltip.Visible = true
+			tipIndex = index
+			return
+		end
 		if slot == nil or slot.kind == "empty" then
 			tooltip.Visible = false
 			tipIndex = nil
@@ -766,9 +789,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			local lockText = button:FindFirstChild("LockText")
 			local border = button:FindFirstChild("Border")
 			local tint = button:FindFirstChild("Tint")
+			local weapon = ActionSlots.weaponFace(bar, index, profile)
 			local letter, color = ActionSlots.glyph(id, slot)
 			local liftedR, liftedG, liftedB = UiTheme.lift(color[1], color[2], color[3])
-			local artKey = ActionSlots.art(id, slot)
+			local artKey = if weapon ~= nil then weapon.art else ActionSlots.art(id, slot)
 			local artId = if artKey ~= nil then IconAssets[artKey] else nil
 			local art = button:FindFirstChild("Art")
 			if art ~= nil and art:IsA("ImageLabel") then
@@ -802,7 +826,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			end
 			-- [Ghost] Oct 24: empty slots fade so eight blank hexes do not
 			-- read as unfinished. The next free slot stays half bright.
-			local look = ActionSlots.look(bar, index)
+			local look = if weapon ~= nil then "weapon" else ActionSlots.look(bar, index)
 			local fade = ActionSlots.FADE[look] or 0
 			button:SetAttribute("Look", look)
 			local bindBadge = button:FindFirstChild("Bind")
@@ -820,8 +844,10 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			if hexFrame ~= nil and hexFrame:IsA("ImageLabel") then
 				hexFrame.ImageTransparency = fade
 				-- Items and consumables keep a soft rarity tint on the frame.
-				if slot.kind == "item" or slot.kind == "consumable" then
-					local row = ActionSlots.border(slot, profile)
+				if weapon ~= nil or slot.kind == "item" or slot.kind == "consumable" then
+					local row = if weapon ~= nil
+						then weapon.border
+						else ActionSlots.border(slot, profile)
 					hexFrame.ImageColor3 = Color3.fromRGB(
 						math.floor(255 + (row[1] - 255) * 0.45),
 						math.floor(255 + (row[2] - 255) * 0.45),
@@ -834,6 +860,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 			if border ~= nil and border:IsA("UIStroke") then
 				if index == picked then
 					border.Color = Color3.fromRGB(255, 255, 255)
+				elseif weapon ~= nil then
+					border.Color = rgb(weapon.border)
 				else
 					border.Color = rgb(ActionSlots.border(slot, profile))
 				end
@@ -956,6 +984,11 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		flashUntil[index] = os.clock() + 0.12
 		local bar = currentBar()
 		local slot = bar.slots[index]
+		if ActionSlots.weaponFace(bar, index, profile) ~= nil then
+			callbacks.onLight()
+			paint()
+			return
+		end
 		if slot == nil or slot.kind == "empty" then
 			paint()
 			return
@@ -1120,8 +1153,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		jump.Size = UDim2.fromOffset(cluster.jump.w, cluster.jump.h)
 		interact.Position = UDim2.fromOffset(chips.interact.x, chips.interact.y)
 		interact.Size = UDim2.fromOffset(chips.interact.w, chips.interact.h)
-		dodgeHint.Position = UDim2.fromOffset(cluster.dodge.x, math.max(0, cluster.dodge.y - 32))
-		dodgeHint.Size = UDim2.fromOffset(math.max(cluster.dodge.w, 88), 28)
+		local hintSpot = CombatCluster.hintRect(size.X, size.Y, mobile, HeavyChip.show(mobile))
+		dodgeHint.Position = UDim2.fromOffset(hintSpot.x, hintSpot.y)
+		dodgeHint.Size = UDim2.fromOffset(hintSpot.w, hintSpot.h)
 		dodgeHint.Text = if dodgeCue then CodexCues.HINT else ""
 		dodgeHint.Visible = dodgeCue
 		local bind = dodge:FindFirstChild("Bind")

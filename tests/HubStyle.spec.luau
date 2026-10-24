@@ -41,13 +41,24 @@ describe("HubStyle", function()
 		expect(HubStyle.classArt("")).toBeNil()
 		expect(HubStyle.classArt(nil)).toBeNil()
 		expect(HubStyle.classArt("nobody")).toBeNil()
-		local hub = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
+		local hub =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		expect(string.find(hub, "HubStyle.classArt(entry.id)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "HubStyle.classArt(classId)", 1, true) ~= nil).toBeTrue()
 	end)
 
 	it("gives the rail's tabs the rail's painted art in the hub column", function()
-		for _, id in ipairs({ "hero", "bag", "pets", "roll", "shop", "settings", "raids", "market", "pass" }) do
+		for _, id in ipairs({
+			"hero",
+			"bag",
+			"pets",
+			"roll",
+			"shop",
+			"settings",
+			"raids",
+			"market",
+			"pass",
+		}) do
 			local key = HubStyle.TAB_ART[id]
 			expect(string.sub(IconAssets[key] or "", 1, 13)).toEqual("rbxassetid://")
 		end
@@ -108,11 +119,14 @@ describe("HubStyle", function()
 		expect(HubStyle.barScale(0)).toEqual(0.04)
 		expect(HubStyle.petPerk({ ability = "Auto-collect drops" })).toEqual("Auto-collect drops")
 		expect(HubStyle.petPerk({ role = "Striker" })).toEqual("Striker")
-		expect(HubStyle.petStats({ level = 25, bond = 3, role = "Striker" })[1].label).toEqual("Level")
+		expect(HubStyle.petStats({ level = 25, bond = 3, role = "Striker" })[1].label).toEqual(
+			"Level"
+		)
 		expect(HubStyle.inPill({ kind = "Weapon" }, "Weapons")).toBeTrue()
 		expect(HubStyle.inPill({ kind = "Weapon" }, "Pets")).toBeFalse()
 		expect(HubStyle.inPill({ kind = "Pet" }, "All")).toBeTrue()
-		local vest = { kind = "Armor", slot = "chest", weaponType = "sword", name = "Woven Bark Vest" }
+		local vest =
+			{ kind = "Armor", slot = "chest", weaponType = "sword", name = "Woven Bark Vest" }
 		expect(HubStyle.inPill(vest, "Weapons")).toBeFalse()
 		expect(HubStyle.inPill(vest, "Armor")).toBeTrue()
 		expect(HubStyle.inPill(vest, "Items")).toBeFalse()
@@ -194,7 +208,9 @@ describe("HubStyle", function()
 		expect(string.find(hub, 'Name = "Pedestal"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, 'Name = "OddsBars"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, 'Name = "CrackRow"', 1, true) ~= nil).toBeTrue()
-		expect(string.find(hub, 'Name = "Loadout"', 1, true) ~= nil).toBeTrue()
+		-- Clip 7: the Bag's 1-8 strip is gone (Prism BAG spec).
+		expect(string.find(hub, 'Name = "Loadout"', 1, true)).toBeNil()
+		expect(string.find(hub, "HubStyle.bagColumns", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, 'Name = "PetDetail"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "Crack a Pet Shard", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "HubStyle.CRACK_ONE", 1, true) ~= nil).toBeTrue()

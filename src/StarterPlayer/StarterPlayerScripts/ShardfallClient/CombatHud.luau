@@ -62,7 +62,19 @@ local attackRemote: RemoteEvent? = nil
 local dodgeRemote: RemoteEvent? = nil
 local allowShake = true
 local walletLabel: TextLabel? = nil
+local resultRef: Frame? = nil
 local pendingWallet: { number }? = nil
+
+-- [Ghost] Clip 7: true while the clear/defeat card is on screen. init
+-- folds the intro card and pill under it (OnboardHud.coverWhen).
+function CombatHud.resultShowing(): boolean
+	local card = resultRef
+	return card ~= nil and card.Visible and card.Parent ~= nil
+end
+
+-- The result card's own band: above the HUD shell and its toasts (30),
+-- under panels (80) and prompts (90). Prism HUD_ZONE_MAP "results 50".
+CombatHud.RESULT_ORDER = 50
 
 local function paintWallet(gold: number, tokens: number, gems: number)
 	local label = walletLabel
@@ -300,13 +312,39 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	cueEdge.Visible = false
 	cueEdge.ZIndex = 2
 	cueEdge.Parent = screen
-	local cueStroke = Instance.new("UIStroke")
-	cueStroke.Name = "Pulse"
-	cueStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	cueStroke.Thickness = 5
-	cueStroke.Color = Color3.fromRGB(220, 64, 56)
-	cueStroke.Transparency = 0.35
-	cueStroke.Parent = cueEdge
+	-- [Ghost] Clip 7: the cue was a 5px stroke round the whole screen.
+	-- This gui does not ignore the topbar inset, so its top edge drew a
+	-- thin red line right under the Roblox buttons. Two soft side glows
+	-- carry the same cue with no line across the top.
+	local cueSides: { Frame } = {}
+	for _, side in ipairs({ "Left", "Right" }) do
+		local glow = Instance.new("Frame")
+		glow.Name = side
+		glow.AnchorPoint = Vector2.new(if side == "Left" then 0 else 1, 0)
+		glow.Position = UDim2.fromScale(if side == "Left" then 0 else 1, 0)
+		glow.Size = UDim2.new(0, 28, 1, 0)
+		glow.BackgroundColor3 = Color3.fromRGB(220, 64, 56)
+		glow.BackgroundTransparency = 0.35
+		glow.BorderSizePixel = 0
+		glow.Active = false
+		glow.ZIndex = 2
+		glow.Parent = cueEdge
+		local fade = Instance.new("UIGradient")
+		fade.Rotation = if side == "Left" then 0 else 180
+		fade.Transparency = NumberSequence.new(0, 1)
+		fade.Parent = glow
+		table.insert(cueSides, glow)
+	end
+	local function cueColor(color: Color3)
+		for _, glow in ipairs(cueSides) do
+			glow.BackgroundColor3 = color
+		end
+	end
+	local function cueAlpha(transparency: number)
+		for _, glow in ipairs(cueSides) do
+			glow.BackgroundTransparency = transparency
+		end
+	end
 
 	local combatHint = Instance.new("TextLabel")
 	combatHint.Name = "CombatHint"
@@ -365,10 +403,20 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	local cuesSeen = 0
 	local cueUntil = 0
 	local hintToken = 0
+	local lastHint = ""
+	local lastHintAt = -math.huge
 	local function showCombatHint(text: string)
+		local shown = if type(text) == "string" then text else ""
+		local plan = CombatFeel.hintPlan(shown, lastHint, lastHintAt, os.clock())
+		if shown ~= "" and not plan.show then
+			return
+		end
+		if shown ~= "" then
+			lastHint = string.match(shown, "^%s*(.-)%s*$") or shown
+			lastHintAt = os.clock()
+		end
 		hintToken += 1
 		local token = hintToken
-		local shown = if type(text) == "string" then text else ""
 		combatHint.Text = shown
 		combatHint.TextTransparency = 0
 		combatHint.BackgroundTransparency = 0.15
@@ -378,7 +426,14 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		end
 		local fade = TweenService:Create(
 			combatHint,
-			TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 1.6),
+			TweenInfo.new(
+				plan.fade,
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.In,
+				0,
+				false,
+				plan.hold
+			),
 			{ TextTransparency = 1, BackgroundTransparency = 1 }
 		)
 		fade.Completed:Connect(function()
@@ -469,6 +524,11 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	end
 	player.CharacterAdded:Connect(watchCharacter)
 
+	local resultGui = Instance.new("ScreenGui")
+	resultGui.Name = "ShardfallResult"
+	resultGui.ResetOnSpawn = false
+	resultGui.DisplayOrder = CombatHud.RESULT_ORDER
+	resultGui.Parent = screen.Parent
 	local card = Instance.new("Frame")
 	card.Name = "Result"
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -478,7 +538,8 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 	card.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	card.BorderSizePixel = 0
 	card.Visible = false
-	card.Parent = screen
+	card.Parent = resultGui
+	resultRef = card
 	local cardCorner = Instance.new("UICorner")
 	cardCorner.CornerRadius = UDim.new(0, 12)
 	cardCorner.Parent = card
@@ -682,7 +743,8 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 		end
 		table.insert(
 			lines,
-			string.format("Shard tokens  %d", numberFrom(payload, "shardTokens") or 0)
+			-- [Ghost] Clip 7: the wallet pill says "Shards"; so does the card.
+			string.format("Shards  %d", numberFrom(payload, "shardTokens") or 0)
 		)
 		table.insert(lines, string.format("XP  %d", numberFrom(payload, "xp") or 0))
 		table.insert(lines, ResultsGrid.voucherLine(payload.voucher))
@@ -845,7 +907,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 			if CombatFeel.teachCue(lesson) then
 				local rgb = CombatFeel.TELEGRAPHS[colorName]
 				if rgb ~= nil then
-					cueStroke.Color = Color3.fromRGB(rgb.rgb[1], rgb.rgb[2], rgb.rgb[3])
+					cueColor(Color3.fromRGB(rgb.rgb[1], rgb.rgb[2], rgb.rgb[3]))
 				end
 				cueUntil = os.clock()
 					+ (numberFrom(payload, "seconds") or CombatFeel.TELEGRAPH_NORMAL)
@@ -1006,7 +1068,7 @@ function CombatHud.start(remotes: Instance, callbacks: Callbacks)
 				cueEdge.Visible = false
 			else
 				local pulse = 0.25 + 0.75 * math.abs(math.sin(now * 8))
-				cueStroke.Transparency = 1 - pulse
+				cueAlpha(1 - pulse)
 			end
 		end
 		if now < flashUntil then

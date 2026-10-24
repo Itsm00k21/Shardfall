@@ -112,4 +112,63 @@ function CombatCluster.place(
 	}
 end
 
+-- [Ghost] Clip 7 (Kevin): the "Dodge!" chip sat 32px above Dodge at
+-- 88px wide, so it ran over Jump (and Shift's own face on a phone where
+-- Heavy sits above Dodge). It now takes the first spot that clears every
+-- shown button and the slot bar: above Dodge, right-aligned to it; left
+-- of Dodge; then above the whole cluster. Pure.
+CombatCluster.HINT_W = 88
+CombatCluster.HINT_H = 28
+
+function CombatCluster.hintRect(
+	width: any,
+	height: any,
+	phone: boolean?,
+	heavyShown: boolean?
+): Rect
+	local w = axis(width, 1280)
+	local h = axis(height, 720)
+	local mobile = phone == true or w < 700 or h < 500
+	local cluster = CombatCluster.place(w, h, nil, phone)
+	local bar = ActionSlots.placement(w, h, mobile)
+	local hw, hh, gap, margin = CombatCluster.HINT_W, CombatCluster.HINT_H, 4, 8
+	local dodge = cluster.dodge
+	local blockers: { Rect } = { cluster.attack, cluster.dodge, cluster.jump }
+	if heavyShown == true then
+		table.insert(blockers, cluster.heavy)
+	end
+	local top = math.min(cluster.attack.y, cluster.dodge.y, cluster.jump.y)
+	if heavyShown == true then
+		top = math.min(top, cluster.heavy.y)
+	end
+	local candidates: { Rect } = {
+		{ x = dodge.x + dodge.w - hw, y = dodge.y - gap - hh, w = hw, h = hh },
+		{ x = dodge.x - gap - hw, y = dodge.y + math.floor((dodge.h - hh) / 2), w = hw, h = hh },
+		{ x = dodge.x + dodge.w - hw, y = top - gap - hh, w = hw, h = hh },
+	}
+	local function clear(rect: Rect): boolean
+		if
+			rect.x < margin
+			or rect.y < margin
+			or rect.x + rect.w > w - margin
+			or rect.y + rect.h > h - margin
+		then
+			return false
+		end
+		for _, other in ipairs(blockers) do
+			if ActionSlots.overlaps(rect, other) then
+				return false
+			end
+		end
+		return not overlaps(rect, bar)
+	end
+	for _, rect in ipairs(candidates) do
+		if clear(rect) then
+			return rect
+		end
+	end
+	local last = candidates[3]
+	return { x = math.max(margin, last.x), y = math.max(margin, last.y), w = hw, h = hh }
+end
+
 return CombatCluster
