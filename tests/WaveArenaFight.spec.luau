@@ -18,6 +18,7 @@ local Camera = require("../src/server/WaveArena/Camera")
 local Enemies = require("../src/server/WaveArena/Enemies")
 local DevTools = require("../src/ReplicatedStorage/Shared/DevTools")
 local Economy = require("../src/ReplicatedStorage/Shared/Config/Economy")
+local Haven = require("../src/ReplicatedStorage/Shared/Haven")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Spawns = require("../src/server/WaveArena/Spawns")
 local WaveArena = require("../src/server/WaveArena")
@@ -154,6 +155,11 @@ describe("Wave arena fight gate", function()
 		expect(math.sqrt(dx * dx + dz * dz) < 30).toBeTrue()
 		expect(shown.pad.position[3] > 30).toBeTrue()
 		expect(shown.pad.position[2] > 120 and shown.pad.position[2] < 124).toBeTrue()
+		-- Shard Gate prompt reach is 12. The Grove post prompt reach is 8.
+		local grove = Haven.GROVE
+		local dx = shown.pad.position[1] - grove.x
+		local dz = shown.pad.position[3] - grove.z
+		expect(math.sqrt(dx * dx + dz * dz) > 12 + 8).toBeTrue()
 	end)
 end)
 
