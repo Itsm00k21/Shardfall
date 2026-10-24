@@ -1,6 +1,6 @@
-# Party Gather Spot ("Gate Ring"), Spec v1
+# Party Gather Spot ("Gate Ring"), Spec v1.1
 
-Owner: Prism (design, docs only, no code). Builders: Ghost (world slots, Gate dock UI), Echo (party server state). Base: `cursor/live-build-9721`. Status: proposal, gray-box only (pre-Phase S). Nothing here is approved until Ghost/Kevin say so.
+Owner: Prism (design, docs only, no code). Builders: Ghost (world slots, Gate dock UI), Echo (party server state). Base: `cursor/live-build-9721`. Status: v1.1, Ghost answered Q1, Q3, Q4, Q5 (Oct 24, 2026, Kevin pre-approved); Q2 is a Kevin taste call, Prism recommendation recorded as PROVISIONAL. Gray-box only (pre-Phase S). Nothing beyond the answered questions is approved until Ghost/Kevin say so.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca38838192b465db2fbca4fda1, item 2, from canvas item **T4**: "Party gather spot spec (room for 4 by the Gate pad, name slots, Friends-only toggle, no prompt overlap)". Roadmap Phase 6 (party).
 
 Sources (link, don't copy):
@@ -26,7 +26,7 @@ Up to 4 players gather at the Shard Gate in one step, can see who is in (names o
 - **World (Ghost):** 4 slot discs on the existing Gate pad (0, 98) in Crater Square (#413), plus 4 `BillboardGui` name tags. No new part outside the pad. **No ProximityPrompt on the pad or the slots, and none within 12 studs of the pad center** (the "prompt-free zone"). Join and leave = the existing pad touch zone (EnterPad logic, #413 §9).
 - **Screen (Ghost):** the existing #412 Gate dock (bottom-center slot) gains a **Friends-only toggle** (44×44, leader only) and a party label with 4 pips. Members see a read-only dock. Toasts go through the one toast lane (#420 D3).
 - **Server (Echo, Phase 6):** party state in memory only (Roadmap Phase 6: "Run and party state in memory only"): slot order, leader, Friends-only flag, tier, countdown. Nothing saved.
-- **#413 Muster spot (24, 90):** with A it has no job. Recommendation: hide it behind a LaunchGate flag (`musterSpot`, off; nothing deleted). Q1.
+- **#413 Muster spot (24, 90):** with A it has no job. Decided (Q1): hide it behind a LaunchGate flag (`musterSpot`, off; nothing deleted).
 
 ## 3. Flow
 | Step | Trigger | What players see | Server |
@@ -40,7 +40,7 @@ Up to 4 players gather at the Shard Gate in one step, can see who is in (names o
 | 7 | Anyone walks off the pad | Their slot goes dark, name fades (0.2 s), later joiners keep their slots (no reshuffle). Leader leaves → next by join order becomes leader (★ moves, toast "You lead the party." for them). Last player leaves → party ends, countdown resets. | update party |
 | 8 | After the run | Players return to the return pad (14, 30) (#413), never onto the Gate pad. The party ends; to go again, step back on the pad (Later: "Run it back", Ideas Backlog). | clear party |
 
-**Countdown rules** (Core Loop 15 s): starts when the first player steps on, doesn't restart when others join; if someone joins with < 5 s left, it bumps to 5 s (once per joiner) so they can see the dock (Q3). 4/4 doesn't auto-start early; the leader can tap START any time. The first-ever run stays solo with a 3 s countdown (#412).
+**Countdown rules** (Core Loop 15 s): starts when the first player steps on, doesn't restart when others join; if someone joins with < 5 s left, it bumps to 5 s (once per joiner) so they can see the dock (Q3 decided). 4/4 doesn't auto-start early; the leader can tap START any time. The first-ever run stays solo with a 3 s countdown (#412).
 
 **Busy pad:** while a party is on the pad (countdown running), players beyond 4 see "Full" tags; the pad frees as soon as the party teleports (≤ 15 s). There is no queue (Core Loop). With 3–4 arena copies per server, a busy copy count shows as the toast "All Gates busy, back in a moment." (rare).
 
@@ -54,7 +54,7 @@ Up to 4 players gather at the Shard Gate in one step, can see who is in (names o
 | Slot 3 / 4 | (-5, 102) / (5, 102) | Ø4 | far row; all slots inside the pad (r 6.4 < 8) |
 | Name tags | above each slot's player head, `StudsOffset` (0, 3.5, 0) from the HRP; empty slot: on the disc, (0, 0.6, 0) | 3.6 × 1 studs (`Size` UDim2 scale) | `MaxDistance` 60, `AlwaysOnTop` false (stays off the HP bar), text ≥ 13 px at 390 wide |
 | Prompt-free zone | r 12 around (0, 98) | — | no ProximityPrompt inside. The Crackstone "Roll" prompt (-12, 52) is 47 studs away; the return pad (14, 30) 69 studs; the Muster spot (24, 90) is flagged off (Q1) |
-| Gate arch prompt | none (Q4) | — | START is the dock button / E key. If Ghost keeps an arch prompt, it must be outside the r 12 zone (behind the arch, z ≥ 110 is only 12 from the center, so it would need z ≥ 111 and `MaxActivationDistance` ≤ 4) |
+| Gate arch prompt | none (Q4 decided) | — | START is the dock button / E key. If Ghost keeps an arch prompt, it must be outside the r 12 zone (behind the arch, z ≥ 110 is only 12 from the center, so it would need z ≥ 111 and `MaxActivationDistance` ≤ 4) |
 
 Slot spacing is 10 studs side to side and 8 front to back, so 4 R15 avatars (about 2.5 studs wide) never touch, and the far tags sit higher on screen than the near tags at the default phone zoom (no tag overlap, mockup 02).
 
@@ -81,9 +81,9 @@ Rules: every tap target ≥ 44 px; the toggle is 44×44 with an "ON/OFF" 8 px ca
 Loading: if the party state is late, the dock shows the solo layout with a `spinner_64` in place of the pips. Error: a refused join or failed start shows a toast with the server text.
 
 ## 6. Numbers
-- Party 1–4 (Core Loop). Slots 4. Countdown 15 s (Core Loop; Config), join bump to 5 s if < 5 s left (proposal, Q3). First-ever run: solo, 3 s (#412).
+- Party 1–4 (Core Loop). Slots 4. Countdown 15 s (Core Loop; Config), join bump to 5 s if < 5 s left (decided, Q3). First-ever run: solo, 3 s (#412).
 - Slot discs Ø4, 0.2 tall, at (±5, 94) and (±5, 102). Prompt-free zone r 12. Name tag `MaxDistance` 60.
-- Friends-only default: **OFF** (proposal, Q2 taste call). Friends = Roblox friends (`Player:IsFriendsWith`, cached per session on join).
+- Friends-only default: **OFF** (PROVISIONAL, Kevin taste call Q2). Friends = Roblox friends (`Player:IsFriendsWith`, cached per session on join).
 - Timings: slot light 0.2 s, name fade 0.2 s, refused flash 0.6 s, start sweep 0.4 s.
 - Copy: "Shard Gate · Solo · starts in N" · "Shard Gate · Party n/4 · starts in N" · "Leader <name> picks · <tier> · Friends only · N" · "Open" · "Friends only" · "Full" · "Waiting" · "Friends-only party. Wait for the next Gate." · "You lead the party." · "All Gates busy, back in a moment."
 
@@ -105,7 +105,7 @@ SVG in repo (fake data, original art, gray-box world): `mockups/01-topdown-gate-
 ## 9. Build split
 Phase 6. Gray-box now is optional (the slots are 4 discs on the existing pad).
 - **Echo (server):** in-memory party state (slots, leader, Friends-only, tier, countdown), join/leave from the pad touch zone with 0.5 s grace, friend check, Hard level check, start → one arena copy for the slot list. Tests: 5th player refused, Friends-only refuses a non-friend, leader handoff, countdown bump, nothing written to the save.
-- **Ghost (world + client):** 4 slot discs + name tags on the pad, Friends-only toggle + party label/pips in the Gate dock, member read-only dock, toasts, F key; flag the #413 Muster spot off (Q1); remove/keep any arch prompt out of the r 12 zone (Q4).
+- **Ghost (world + client):** 4 slot discs + name tags on the pad, Friends-only toggle + party label/pips in the Gate dock, member read-only dock, toasts, F key; flag the #413 Muster spot off (Q1 decided, `musterSpot` off, nothing deleted); no arch prompt at all (Q4 decided).
 - **Prism:** Phase S look for the slots (shard-shaped sockets, gate-cyan glow) after the fun test.
 - **Havoc:** join/leave spam, Friends-only race, leader leaves during "Starting…", 4 players + 1 spectator on the pad edge.
 
@@ -118,14 +118,18 @@ Phase 6. Gray-box now is optional (the slots are 4 discs on the existing pad).
 6. 4 players start together in one arena copy every time (20 tries).
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** Direction A puts the party on the Gate pad. What happens to the #413 Muster gray box at (24, 90)? Recommended: hide it behind a `musterSpot` flag (off, nothing deleted). Alternative: keep it as decor.
-2. **@Kevin (taste):** Friends-only default **OFF** (recommended: strangers can team up, more social) or ON (safer, quieter)? And friends of the leader only (recommended) or friends of any member?
-3. **@Ghost:** Countdown: keep 15 s from the first player and bump to 5 s when someone joins with < 5 s left (recommended), or restart the 15 s on every join?
-4. **@Ghost:** Does the Gate keep any ProximityPrompt? Recommended: none; START is the dock button and the E key. If one stays, it moves outside the r 12 prompt-free zone.
-5. **@Ghost:** Leader handoff by join order (recommended) or to whoever stands on slot 1?
+1. ~~@Ghost: What happens to the #413 Muster gray box at (24, 90)?~~ **Hide it behind a `musterSpot` flag (off, nothing deleted) (Ghost, Kevin pre-approved, Oct 24, 2026).** Board row: https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953
+2. **@Kevin (taste, open):** Friends-only default OFF or ON, and friends of the leader only or of any member? **PROVISIONAL (Prism recommendation, used until Kevin decides):** default **OFF**, leader's friends only.
+3. ~~@Ghost: Countdown rule?~~ **Keep 15 s from the first player; bump to 5 s on a late join (< 5 s left) (Ghost).**
+4. ~~@Ghost: Does the Gate keep any ProximityPrompt?~~ **No ProximityPrompt (Ghost).** START is the dock button and the E key; the r 12 prompt-free zone stands.
+5. ~~@Ghost: Leader handoff?~~ **By join order (Ghost).**
+
+Ghost's questions are all answered. Only Kevin's taste call (Q2) remains; the spec runs on the PROVISIONAL pick until he answers.
 
 ## Decision log
 - 2026-10-24 (Prism): v1 published. Recommends direction A (Gate Ring). Five open questions (Ghost 1, 3, 4, 5; Kevin 2). Not approved.
+- 2026-10-24 (Ghost, Kevin pre-approved; Kevin can change later; board row https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953): Q1 = `musterSpot` flag off, nothing deleted. Q3 = keep 15 s from the first player, bump to 5 s on a late join. Q4 = no ProximityPrompt. Q5 = leader handoff by join order. → v1.1.
+- 2026-10-24 (Prism): Kevin taste call Q2 (Friends-only default OFF, leader's friends only) recorded as PROVISIONAL, waiting for Kevin.
 
 ## Later (not V1)
 "Run it back" (party stays together after the results screen), invites from the friends list (direction C's good part), party emotes on the slots, cosmetic slot skins (never power). All go to the Ideas Backlog as NOT APPROVED.
