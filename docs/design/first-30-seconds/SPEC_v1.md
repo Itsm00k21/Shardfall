@@ -221,6 +221,8 @@ Decided by Ghost under Kevin's pre-approval (Oct 23, 2026, board row https://app
 - 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F7: the coordinate frames are now explicit (full-screen px; FocusTop vs FocusHud; x from TopbarInset). F8: Focus mode also hides the live portrait/HP and the skill bar + combat cluster until the hand-off. F9: on notched portrait phones the goal chip starts as its tab. F10: on landscape the goal chip is a tab while the card is expanded (they overlapped), and the 667×375 chip is 184 wide. F11: arena docking around the live HP block (portrait has one row, so the pill carries the goal; landscape keeps the pill in the top band). F12: the mini stage stays in FocusTop. Layout fixes only; the flow and beats are unchanged.
 - 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838103a80ad21380d7f451; folded by Prism from the phone layout review rev 1.1, docs/design/phone-layout-review/REVIEW_v1.md §8/§10): D1: the portrait keep-out top is 35% (y 296), provisional until Kevin's phone playtest (§2, §4 table, goal chip). D2: after the hand-off, the hub combat cluster hides while the ROLL bar or Gate dock is up (§2). D3: toasts use the one toast lane, max 1 on screen, the rest queue, loot/rarity first (§4 portrait and 800 tables; the 667 lane slot is x 411–651, y 8–44).
 
+- 2026-10-24 (Prism): T3 first-session guide ("Wren's Trail", 5 steps, ends ≤ 2:00) published as `FIRST_SESSION_GUIDE_T3_v1.md` on this branch. It extends beats 30 s–2:00 and changes nothing above.
+
 ## Later (not V1)
 Voice lines for Wren, a set-bonus tip (Core Loop: only once the player owns 2 items of the same element), party-join during onboarding, and a Pets/Skills tutorial roll.
 
