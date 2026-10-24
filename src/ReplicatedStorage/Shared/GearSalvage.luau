@@ -37,13 +37,14 @@
 	salvaged. Favorited gear (item.favorite) is never salvaged.
 	An explicit list fails with "That item is a favorite." and
 	deletes nothing. A rarity sweep skips that piece and reports
-	the skip. While LaunchGate.shardCore is on, a weapon whose
-	core is level 1 or higher is skipped by a rarity sweep and by
-	auto-salvage, with ShardCore.BULK_SKIP. An explicit uid list
-	still previews a warning, and confirm deletes that weapon.
-	While the flag is off, the skip and the warning are absent.
-	The first counts or state reply in a session can include
-	ShardCore.HELP. That line lives in module memory, not the save.
+	the skip. A weapon whose core is level 1 or higher is skipped
+	by a rarity sweep and by auto-salvage, with ShardCore.BULK_SKIP.
+	That skip does not read LaunchGate.shardCore. An explicit uid
+	list can still delete the weapon. While the flag is on, that
+	list previews a warning and confirm deletes it. While the flag
+	is off, the warning is absent. The first counts or state reply
+	in a session can include ShardCore.HELP, and only while the
+	flag is on. That line lives in module memory, not the save.
 	Nothing here is for sale.
 
 	Salvage selected and salvage-all both preview first. The preview
@@ -179,11 +180,8 @@ local function blockReason(profile: any, item: any): string?
 	return nil
 end
 
--- Rarity sweeps and auto-salvage only. Off while shardCore is off.
+-- Rarity sweeps and auto-salvage only. The core flag does not lift this.
 local function coreSweepReason(profile: any, item: any, uid: any): string?
-	if not LaunchGate.on("shardCore") then
-		return nil
-	end
 	if type(item) ~= "table" or item.kind ~= "Weapon" then
 		return nil
 	end

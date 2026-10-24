@@ -73,7 +73,7 @@ Essence to buy the next level:
 
 A full core costs **410** Essence. That number is `Config.ShardCore.FULL_COST`. The crit-damage perk adds **0.05** to the finished multiplier (1.50 becomes 1.55). It does not multiply the finished stat.
 
-While `shardCore` is on, a rarity sweep and auto-salvage skip a weapon whose core is level 1 or higher and report `That weapon has a Shard Core.` An explicit salvage still previews that warning (or `N weapons have a Shard Core.`) and confirm deletes the weapon. While the flag is off, the skip and the warning are absent. Equipped, locked, and favorite gear stay either way. The first `counts`, `state`, or `GetShardCore` reply in a session can include `Essence feeds a weapon's Shard Core.` That line is session memory only. `schemaVersion` stays 26.
+A rarity sweep and auto-salvage skip a weapon whose core is level 1 or higher and report `That weapon has a Shard Core.` That skip does not depend on `shardCore`. An explicit salvage can still delete the weapon. While the flag is on, the preview and confirm include a warning (`That weapon has a Shard Core.` or `N weapons have a Shard Core.`). While the flag is off, the warning is absent and the weapon is still left out of the sweep. Equipped, locked, and favorite gear stay either way. The first `counts`, `state`, or `GetShardCore` reply in a session can include `Essence feeds a weapon's Shard Core.`, and only while `shardCore` is on. That line is session memory only. `schemaVersion` stays 26.
 
 Perks are applied once, after Equip has finished its totals (base, gear, elements, and whatever upgrade or star scale is on). While `shardCore` is off, that add does not run. They are small. None of them is required to clear. Pets have no core.
 

@@ -11,10 +11,10 @@
 	counts is a token-free read of the picker rows. It shares this
 	remote, so the GearSalvage rate limit applies, and GearSalvage
 	keeps a second bucket for counts alone. It deletes nothing.
-	While LaunchGate.shardCore is on, a rarity sweep and auto-salvage
-	skip a weapon whose core is level 1 or higher. An explicit uid
-	list still carries the warning, and confirm deletes that weapon.
-	The first counts or state reply in a session may include help.
+	A rarity sweep and auto-salvage skip a weapon whose core is
+	level 1 or higher even while LaunchGate.shardCore is off.
+	An explicit uid list can still delete it. The warning and the
+	once-per-session help line are added only while that flag is on.
 	That line is not saved.
 
 	nudge and salvageNow are the API Ghost can call from the Roll tab.
