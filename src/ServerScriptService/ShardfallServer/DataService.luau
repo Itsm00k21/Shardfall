@@ -84,6 +84,9 @@ type Record = {
 	-- Bumped at the start of each mutate. A restore is valid only while
 	-- this is still the generation that copied the backup.
 	mutateGeneration: number,
+	-- True for the whole mutator, including a yield. A second mutate on
+	-- this profile is rejected so it cannot spend or grant on top.
+	mutating: boolean,
 }
 
 type Listener = (Player, any, boolean) -> ()
@@ -186,10 +189,18 @@ function DataService.mutate(
 	if record.closing then
 		return false, "Profile is closing for a teleport."
 	end
+	-- Roll, salvage, and equip all enter through here. A yielded mutate
+	-- used to let the next remote run on the same table and keep both
+	-- writes when the first one later failed.
+	if record.mutating then
+		return false, "Profile is busy."
+	end
+	record.mutating = true
 	record.mutateGeneration += 1
 	local generation = record.mutateGeneration
 	local backup = Schema.deepCopy(record.data)
 	local ok, result = pcall(mutator, record.data)
+	record.mutating = false
 	local restore = ProfileLoad.mutateShouldRestore(generation, record.mutateGeneration)
 	if not ok then
 		if restore then
@@ -358,6 +369,7 @@ local function load(player: Player): (boolean, string?)
 		closing = false,
 		ephemeral = false,
 		mutateGeneration = 0,
+		mutating = false,
 	}
 	records[player] = record
 	local studio = RunService:IsStudio()
@@ -1014,7 +1026,25 @@ function DataService.start()
 	game:BindToClose(function()
 		shuttingDown = true
 		local pending = 0
+		-- GetPlayers() can already be empty while records still hold the
+		-- last mutate. Snapshot first, then release each loaded profile
+		-- once. A second spawn would write the same save twice.
+		local targets = {}
+		local seen: { [Player]: boolean } = {}
+		local function queue(player: Player)
+			if seen[player] then
+				return
+			end
+			seen[player] = true
+			table.insert(targets, player)
+		end
 		for _, player in ipairs(Players:GetPlayers()) do
+			queue(player)
+		end
+		for player in pairs(records) do
+			queue(player)
+		end
+		for _, player in ipairs(targets) do
 			pending += 1
 			task.spawn(function()
 				local ok, err = pcall(DataService.release, player)
