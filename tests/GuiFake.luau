@@ -961,6 +961,7 @@ function GuiFake.world()
 		"HudShell",
 		"StarterGoalHud",
 		"OnboardHud",
+		"RollSummaryHud",
 	}) do
 		local moduleScript = newInstance("ModuleScript")
 		moduleScript.Name = name
@@ -1094,6 +1095,7 @@ function GuiFake.world()
 				or moduleName == "HudShell"
 				or moduleName == "StarterGoalHud"
 				or moduleName == "OnboardHud"
+				or moduleName == "RollSummaryHud"
 			then
 				return loadClient(moduleName)
 			end

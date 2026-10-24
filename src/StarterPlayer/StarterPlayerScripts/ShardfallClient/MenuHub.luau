@@ -64,6 +64,7 @@ local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local RollSpot = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSpot"))
+local RollSummary = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSummary"))
 local RollScreen = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollScreen"))
 local RollConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollConfig"))
 local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShardBoard"))
@@ -77,6 +78,7 @@ local PadFocus = require(script.Parent:WaitForChild("PadFocus"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
+local RollSummaryView = require(script.Parent:WaitForChild("RollSummaryHud"))
 
 local MenuHub = {}
 
@@ -343,6 +345,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.replayResult = nil
 	hubState.batchLeft = {}
 	hubState.summaryItems = {}
+	-- [Ghost] item -> RollSummary tile, filled as each x10 card lands.
+	hubState.summaryMeta = setmetatable({}, { __mode = "k" })
+	hubState.batchSkip = false
+	hubState.batchRows = setmetatable({}, { __mode = "k" })
 	hubState.batching = false
 	hubState.pendingFace = nil
 	hubState.crackNamed = false
@@ -1448,6 +1454,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.replayResult = nil
 		hubState.batchLeft = {}
 		hubState.batching = false
+		hubState.batchSkip = false
+		hubFn.paintSkip()
 		hubState.pendingCount = 1
 		hubState.pendingFace = nil
 		hubState.crackNamed = false
@@ -1780,21 +1788,85 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.reelCenter = hubFn.reelWindow("Center", 0.28, 0.44)
 	hubState.reelRight = hubFn.reelWindow("Right", 0.72, 0.28)
 	hubState.reelCenter.Text = "Roll"
+	-- [Ghost] The milestone is a small toast at the top of the Roll page
+	-- (Kevin, Oct 23), not a banner over the reel.
 	hubState.reelMilestone = Instance.new("TextLabel")
 	hubState.reelMilestone.Name = "Milestone"
-	hubState.reelMilestone.Size = UDim2.fromScale(1, 1)
+	hubState.reelMilestone.AnchorPoint = Vector2.new(0.5, 0)
+	hubState.reelMilestone.Position = UDim2.new(0.5, 0, 0, 4)
+	hubState.reelMilestone.Size = UDim2.fromOffset(220, 26)
 	hubState.reelMilestone.BackgroundColor3 = rgb("gold")
+	hubState.reelMilestone.BackgroundTransparency = 0.05
 	hubState.reelMilestone.Font = headerFont()
-	hubState.reelMilestone.TextSize = 20
+	hubState.reelMilestone.TextSize = 14
 	hubState.reelMilestone.TextColor3 = rgb("ink")
+	hubState.reelMilestone.TextTruncate = Enum.TextTruncate.AtEnd
 	hubState.reelMilestone.Text = ""
 	hubState.reelMilestone.Visible = false
 	hubState.reelMilestone.Active = false
-	hubState.reelMilestone.ZIndex = 9
-	hubState.reelMilestone.Parent = hubState.reelHost
+	hubState.reelMilestone.ZIndex = 12
+	hubState.reelMilestone:SetAttribute("Toast", true)
+	hubState.reelMilestone.Parent = hubState.rollPage
 	hubState.milestoneCorner = Instance.new("UICorner")
-	hubState.milestoneCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	hubState.milestoneCorner.CornerRadius = UDim.new(0, 13)
 	hubState.milestoneCorner.Parent = hubState.reelMilestone
+
+	-- [Ghost] x10: Skip stays on screen for the whole batch; the batch ends
+	-- on the summary grid.
+	hubState.batchSkipButton = Instance.new("TextButton")
+	hubState.batchSkipButton.Name = "SkipBatch"
+	-- Bottom right of the reveal card (the card sits 96 px off the page
+	-- bottom), clear of the Shards wallet pill in the top right.
+	hubState.batchSkipButton.AnchorPoint = Vector2.new(1, 1)
+	hubState.batchSkipButton.Position = UDim2.new(1, -20, 1, -104)
+	hubState.batchSkipButton.Size = UDim2.fromOffset(72, 30)
+	hubState.batchSkipButton.BackgroundColor3 = rgb("body")
+	hubState.batchSkipButton.Font = headerFont()
+	hubState.batchSkipButton.TextSize = 15
+	hubState.batchSkipButton.TextColor3 = rgb("text")
+	hubState.batchSkipButton.Text = RollSummary.SKIP .. " »"
+	hubState.batchSkipButton.AutoButtonColor = true
+	hubState.batchSkipButton.Visible = false
+	hubState.batchSkipButton.ZIndex = 13
+	hubState.batchSkipButton.Parent = hubState.rollPage
+	local skipCorner = Instance.new("UICorner")
+	skipCorner.CornerRadius = UDim.new(0, 8)
+	skipCorner.Parent = hubState.batchSkipButton
+	hubState.rollSummary = RollSummaryView.mount(hubState.screen)
+	hubState.batchSkipButton.Activated:Connect(function()
+		hubFn.skipBatch()
+	end)
+
+	function hubFn.paintSkip()
+		hubState.batchSkipButton.Visible = hubState.batching == true
+	end
+
+	-- Skip the rest of the batch: every card left lands at once, then the
+	-- summary shows. Nothing is skipped on the server; the rolls already happened.
+	function hubFn.skipBatch()
+		if hubState.batching ~= true then
+			return
+		end
+		hubState.batchSkip = true
+		if hubState.activeReveal ~= nil then
+			hubFn.skipReveal()
+		end
+	end
+
+	function hubFn.showSummary()
+		if #hubState.summaryItems == 0 then
+			return
+		end
+		local tiles = RollSummary.tiles(hubState.summaryItems, hubState.summaryMeta)
+		local view = hubState.screen.AbsoluteSize
+		hubState.rollSummary.show(tiles, {
+			view = view,
+			phone = RollScreen.isPhone(view.X),
+			onAgain = function()
+				hubFn.applyControl("TimesTen")
+			end,
+		})
+	end
 	hubState.shardStone = Instance.new("Frame")
 	hubState.shardStone.Name = "Shard"
 	hubState.shardStone.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1989,6 +2061,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.toastToken += 1
 		local token = hubState.toastToken
 		hubState.reelMilestone.Text = text
+		hubState.reelMilestone.Size =
+			UDim2.fromOffset(math.clamp(utf8.len(text) or #text, 8, 48) * 8 + 28, 26)
 		hubState.reelMilestone.Visible = true
 		hubFn.playUi("toast")
 		task.delay(1.8, function()
@@ -4893,8 +4967,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn)
 
+		-- [Ghost] Kevin, clip 4: the roll page reads streak bar, Gear/Pet tabs,
+		-- crystal + ODDS, pity bar, then the buttons. The old junk row and the
+		-- repeated Streak/Rolls/Odds lines stay behind rollMenuExtras (off).
+		local cleanMenu = not LaunchGate.on("rollMenuExtras")
 		local junkRow = Instance.new("Frame")
 		junkRow.Name = "Junk"
+		junkRow.Visible = not cleanMenu
 		junkRow.BackgroundTransparency = 1
 		junkRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
 		junkRow.LayoutOrder = 5
@@ -4934,13 +5013,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		hubFn.line(
-			hubState.roll,
-			UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
-			6,
-			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		)
-		hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		if not cleanMenu then
+			hubFn.line(
+				hubState.roll,
+				UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
+				6,
+				rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
+			)
+			hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		end
 		local bestText = "Best pull  —"
 		if type(hubState.bestPull) == "table" then
 			bestText = string.format(
@@ -5231,7 +5312,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.legendaryFillShown = nextLegendaryFill
 		hubState.legendaryFlashRoll = nextLegendarySeen
 		local oddsRow = progressRow("Odds")
-		if oddsRow ~= nil then
+		if oddsRow ~= nil and cleanMenu then
+			-- Only the pity bar: drop the reserved "Odds" strip under it.
+			progressHost.Size = UDim2.fromOffset(progress.w, math.max(0, oddsRow.y - 6))
+		end
+		if oddsRow ~= nil and not cleanMenu then
 			local oddsHost = Instance.new("Frame")
 			oddsHost.Name = "Odds"
 			oddsHost.BackgroundColor3 = rgb("header")
@@ -5267,6 +5352,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		oddsLines.Size = UDim2.fromScale(1, 0)
 		oddsLines.AutomaticSize = Enum.AutomaticSize.Y
 		oddsLines.LayoutOrder = 13
+		oddsLines.Visible = not cleanMenu
 		oddsLines.Parent = hubState.roll
 		local oddsLayout = Instance.new("UIListLayout")
 		oddsLayout.Padding = UDim.new(0, 4)
@@ -5304,18 +5390,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubFn.line(hubState.roll, "Last 10", 31, rgb("gold"))
 		hubFn.divider(hubState.roll, 32)
-		if #hubState.summaryItems > 0 then
-			hubFn.line(hubState.roll, "Cracked", 40, rgb("gold"))
-			for index, item in ipairs(hubState.summaryItems) do
-				local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
-				hubFn.line(
-					hubState.roll,
-					string.format("%s  %s", tostring(item.name or "Shard"), rarity),
-					40 + index,
-					hubFn.rarityColor3(rarity)
-				)
-			end
-		end
+		-- [Ghost] The x10 "Cracked" text list is gone: the batch ends on the
+		-- RollSummary grid instead.
 		if #recent == 0 then
 			hubFn.line(hubState.roll, "No rolls yet.", 33, rgb("muted"))
 		else
@@ -5407,6 +5483,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if hubState.rollBusy then
 				return
 			end
+			hubState.rollSummary.hide()
 			hubState.pendingCount = 10
 			hubState.summaryItems = {}
 			hubState.batchLeft = {}
@@ -5664,11 +5741,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if hubState.batching then
 			hubState.batching = false
+			hubState.batchSkip = false
+			hubFn.paintSkip()
 			hubState.pendingCount = 1
 			hubState.loop = RollLoop.idle()
 			hubFn.releaseRoll()
 			hubFn.setPulse(true)
 			hubFn.paintRoll()
+			hubFn.showSummary()
 			return
 		end
 		local finished = RollLoop.finish(hubState.loop)
@@ -5747,6 +5827,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if hubState.pendingCount > 1 then
 					local count = hubState.pendingCount
 					hubState.pendingCount = 1
+					-- [Ghost] What Kevin owned BEFORE the batch: the reply's profile
+					-- already holds every drop, so NEW is judged against this.
+					local ownedBefore = RollLoop.ownedTemplates(hubState.profile, nil)
 					local batchOk, batch = pcall(hooks.invoke, "RollShards", poolId, count)
 					if generation ~= hubState.revealToken then
 						hubState.rollBusy = false
@@ -5761,7 +5844,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						and #batch.items > 0
 					then
 						hubState.batching = true
+						hubState.batchSkip = false
+						hubFn.paintSkip()
 						hubState.summaryItems = {}
+						-- The summary reads NEW / ★ up / auto-salvaged off the batch row.
+						hubState.batchRows = setmetatable({}, { __mode = "k" })
+						for _, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" then
+								hubState.batchRows[row.item] = row
+							end
+						end
+						-- One outcome per tile, stars chained per copy through the batch.
+						local planned = RollSummary.batch(batch.items, ownedBefore)
+						for index, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" and planned[index] ~= nil then
+								hubState.summaryMeta[row.item] = planned[index]
+							end
+						end
 						hubState.batchLeft = {}
 						for index = 2, #batch.items do
 							table.insert(hubState.batchLeft, batch.items[index])
@@ -5780,6 +5879,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						ok = true
 					else
 						hubState.batching = false
+						hubFn.paintSkip()
 						ok = batchOk
 						result = batch
 					end
@@ -5893,6 +5993,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if type(item.uid) == "string" then item.uid else nil
 			)
 			hubState.activeNew = RollLoop.isNew(item.templateId, owned)
+			local plannedTile = if hubState.batching then hubState.summaryMeta[item] else nil
+			if plannedTile ~= nil then
+				-- [Ghost] The reveal card agrees with the summary tile.
+				hubState.activeNew = plannedTile.isNew
+			end
 			hubState.activeUpgrade = RollLoop.isUpgrade(hubState.profile, item)
 			hubState.activeItem = item
 			hubState.bestPull = RollLoop.best(hubState.bestPull, item)
@@ -5947,6 +6052,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			}
 			if hubState.batching then
 				table.insert(hubState.summaryItems, item)
+				if hubState.summaryMeta[item] == nil then
+					local source = hubState.batchRows[item] or result
+					hubState.summaryMeta[item] = RollSummary.row(item, source, hubState.activeNew)
+				end
 			end
 			hubState.crackNamed = false
 			hubState.crackSounded = false
@@ -5968,7 +6077,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				card.rarity,
 				hubFn.crackMode(card.rarity, quick or hubState.batching)
 			)
-			duration = plan.seconds
+			-- [Ghost] x10 cards take <= RollSummary.STEP each; Skip lands the rest now.
+			if hubState.batching then
+				plan = RollSummary.fast(plan)
+			end
+			duration = if hubState.batching and hubState.batchSkip then 0 else plan.seconds
 			if duration <= 0 then
 				hubFn.paintReel(slots, #slots)
 				hubState.revealCard.BackgroundColor3 = color
@@ -5995,9 +6108,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						)
 					)
 				end
-				if RollLoop.stinger(card.rarity, reduced) then
+				-- Skipped x10 cards land silently; the summary says the rest.
+				local quiet = hubState.batchSkip == true
+				if not quiet and RollLoop.stinger(card.rarity, reduced) then
 					hubFn.playUi("stinger")
-				elseif not reduced and (pace.tier or 0) >= 3 then
+				elseif not quiet and not reduced and (pace.tier or 0) >= 3 then
 					hubFn.playUi("confirm")
 				end
 				hubFn.finishReveal()
