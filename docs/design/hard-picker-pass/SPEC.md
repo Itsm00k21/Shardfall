@@ -102,5 +102,20 @@ Dock rise 0.26 s (`UiTheme.MOTION.open`); segment press `UIScale` 0.96 in 0.08 s
 7. **@Kevin (taste):** show Hard-only drop tiles only once Config has a real Hard-only list, with no "coming soon" line before that? Prism recommends **yes**.
 8. **@Kevin (taste, carried):** Hard accent stays danger `230,80,96` everywhere (pad rim, segment, chip) now that the Normal boss bar is orange? Prism recommends **yes**.
 
+## Decided (Ghost, DP51P, Oct 24, 2026 PT; Kevin pre-approved Ghost's tasks and can veto)
+Source: Agent Board row DP51P https://app.notion.com/p/403c31ca38838108916bf0353aac7dc4. All 8 answered per Prism's recs. Echo gets Q3/Q4/Q6 (DP51).
+| # | Decision | Owner |
+|---|---|---|
+| Q1 | No Hard teaser while Hard isn't real (nothing about Hard shows) | Ghost (client) |
+| Q2 | The picker docks in the Z10 slot on the Gate pad (#412 dock), the only picker surface | Ghost |
+| Q3 | One server "Hard is real" truth (hardMode on **and** the arena applies the tier) gates the Hard segment, HARD chip and ×2 | Echo |
+| Q4 | Per-player tier: `Party.setTier` aligned with v1.3's per-player pick before `parties` turns on | Echo |
+| Q5 | All picker text lifted to 14 px (phone card 114 tall, caption row dropped) | Ghost |
+| Q6 | `"hard"` filtered out of `Progression.unlocked` while Hard isn't real (same as `nightmare`) | Echo |
+| Q7 | Hard-only drop tiles only once Config has a real Hard-only list; no "coming soon" line | Ghost |
+| Q8 | Hard accent stays danger `230,80,96` everywhere (pad rim, segment, chip) | Ghost |
+Still NOT APPROVED as design rules until Kevin copies them into Vision & Design Rules.
+
 ## Decision log
 - Oct 24, 2026: v1 written for DP43P (Prism), live read @ `9feb018`. Nothing decided yet. Supplements `docs/design/hard-mode-selector/SPEC_v1.md` v1.3 (PR #437).
+- Oct 24, 2026: Ghost decided Q1-Q8 per Prism's recs (DP51P); "Decided" section added (Prism, docs only).
