@@ -340,6 +340,51 @@ local function oldLine(itemName: string): { [string]: any }
 	}
 end
 
+local function legendaryNames(result: any): { string }
+	local names = {}
+	local items = result.items
+	if type(items) ~= "table" then
+		return names
+	end
+	for _, row in ipairs(items) do
+		if type(row) == "table" and row.rarity == "Legendary" and type(row.item) == "table" then
+			local name = row.item.name
+			if type(name) == "string" then
+				table.insert(names, name)
+			end
+		end
+	end
+	return names
+end
+
+local function beamLine(itemName: string): string
+	return string.format("★ **Ada** pulled a **LEGENDARY** %s!", itemName)
+end
+
+-- The harness RNG cannot land two Legendaries in one x10 (pity fires
+-- once). This swaps the live pick for the length of one example, then
+-- puts it back even when the example fails.
+local function withPlan(plan: { string }, fn: (() -> ()) -> ())
+	local saved = RarityConfig.pick
+	local cursor = 0
+	RarityConfig.pick = function(_pool: any, _luck: number, _pity: any, _rng: any): (string, boolean, string?)
+		cursor += 1
+		local rarity = plan[cursor]
+		if type(rarity) ~= "string" then
+			rarity = "Common"
+		end
+		return rarity, false, nil
+	end
+	local function rewind()
+		cursor = 0
+	end
+	local ok, err = pcall(fn, rewind)
+	RarityConfig.pick = saved
+	if not ok then
+		error(err, 0)
+	end
+end
+
 local function withFlag(on: boolean, fn: () -> ())
 	local previous = LaunchGate.SHOW.bigRollBeam
 	LaunchGate.SHOW.bigRollBeam = on
@@ -540,6 +585,65 @@ describe("Legendary RollAnnounce", function()
 				expect(row.overflow).toBeNil()
 				expect(string.find(row.text, "more big rolls", 1, true)).toBeNil()
 			end
+		end)
+		expect(LaunchGate.SHOW.bigRollBeam).toEqual(false)
+		expect(Schema.VERSION).toEqual(26)
+	end)
+
+	it("fires one RollAnnounce per Legendary when an x10 lands two", function()
+		local plan = {
+			"Legendary",
+			"Common",
+			"Common",
+			"Common",
+			"Common",
+			"Legendary",
+			"Common",
+			"Common",
+			"Common",
+			"Common",
+		}
+		withPlan(plan, function(rewind: () -> ())
+			withFlag(true, function()
+				rewind()
+				local result = world.service.rollMany(world.player, POOL, 10)
+				expect(result.ok).toEqual(true)
+				local names = legendaryNames(result)
+				expect(#names).toEqual(2)
+				expect(#world.rows).toEqual(0)
+				pump()
+				expect(#world.rows).toEqual(2)
+				for index, itemName in ipairs(names) do
+					local row = world.rows[index]
+					expect(row.kind).toEqual("bigRoll")
+					expect(row.rarity).toEqual("Legendary")
+					expect(row.count).toEqual(1)
+					expect(row.epicCount).toEqual(0)
+					expect(row.beam).toEqual(true)
+					expect(row.userId).toEqual(41)
+					expect(row.crossServer).toEqual(false)
+					expect(row.overflow).toBeNil()
+					expect(row.text).toEqual(beamLine(itemName))
+					expect(string.find(row.text, "more", 1, true)).toBeNil()
+					expect(string.find(row.text, "rolled", 1, true)).toBeNil()
+				end
+			end)
+			withFlag(false, function()
+				rewind()
+				local result = world.service.rollMany(world.player, POOL, 10)
+				expect(result.ok).toEqual(true)
+				local names = legendaryNames(result)
+				expect(#names).toEqual(2)
+				expect(#world.rows).toEqual(2)
+				expect(world.rows[1]).toEqual(oldLine(names[1]))
+				expect(world.rows[2]).toEqual(oldLine(names[2]))
+				pump()
+				expect(#world.rows).toEqual(2)
+				expect(world.rows[1]).toEqual(oldLine(names[1]))
+				expect(world.rows[2]).toEqual(oldLine(names[2]))
+				expect(world.rows[1].kind).toBeNil()
+				expect(world.rows[2].kind).toBeNil()
+			end)
 		end)
 		expect(LaunchGate.SHOW.bigRollBeam).toEqual(false)
 		expect(Schema.VERSION).toEqual(26)

@@ -6,43 +6,25 @@
 	A player on the pad takes the lowest free slot. Slot order does not
 	reshuffle when someone leaves. The leader is the earliest joiner still
 	here. Friends-only blocks new people who are not the leader's friends
-	and does not kick anyone already in. Hard needs every member at the
-	configured level. Nothing here writes a profile.
+	and does not kick anyone already in. Each member picks Normal or Hard
+	for themselves. The run is Hard only when Hard is real and every
+	member picked Hard at the configured level. Nothing here writes a profile.
 ]]
 
-local function sharedRoot()
-	if game ~= nil and game.GetService ~= nil then
-		local folder = script.Parent
-		if folder ~= nil and folder.Name == "server" then
-			return require(folder:WaitForChild("SharedRequire"))
-		end
-		if folder ~= nil and folder.Parent ~= nil then
-			return require(folder.Parent:WaitForChild("SharedRequire"))
-		end
-		error("SharedRequire is not beside this module")
+-- Shared modules. Studio walks script to the server folder. Lune uses ./SharedRoot.
+local SharedRequire
+if game ~= nil and game.GetService ~= nil then
+	local server = script:FindFirstAncestor("server")
+	if server == nil then
+		error("SharedRequire is not under server")
 	end
-	local source = debug.info(1, "s")
-	local marker = "src/server/"
-	local at = string.find(source, marker, 1, true)
-	if at == nil then
-		error("SharedRequire could not see src/server in " .. source)
-	end
-	local rest = string.sub(source, at + #marker)
-	local _, slashes = string.gsub(rest, "/", "")
-	if slashes == 0 then
-		return require("./SharedRequire")
-	end
-	local prefix = ""
-	local parent = string.char(46, 46)
-	for _ = 1, slashes do
-		prefix ..= parent .. "/"
-	end
-	return require(prefix .. "SharedRequire")
+	SharedRequire = require(server:WaitForChild("SharedRoot"))
+else
+	SharedRequire = require("./SharedRoot")
 end
 
-local SharedRequire = sharedRoot()
-
 local PartyGatherConfig = SharedRequire.module("Config/PartyGather")
+local HardMode = SharedRequire.module("HardMode")
 
 local Party = {}
 
@@ -51,6 +33,7 @@ export type Member = {
 	name: string,
 	slot: number,
 	level: number,
+	tier: string,
 	joinedAt: number,
 	pendingLeave: number?,
 }
@@ -188,14 +171,19 @@ local function nearestFree(state: State, actor: Actor, config: any): number?
 	return best
 end
 
-local function ranksOk(state: State, config: any): boolean
+-- The run tier. Hard only when the shared check is on and every member
+-- picked Hard at the level gate. One Normal pick keeps the run Normal.
+local function runTier(state: State, config: any): string
+	if HardMode.isHardReal() ~= true or #state.members == 0 then
+		return "Normal"
+	end
 	local need = config.party.hardLevel
 	for _, member in ipairs(state.members) do
-		if member.level < need then
-			return false
+		if member.tier ~= "Hard" or type(member.level) ~= "number" or member.level < need then
+			return "Normal"
 		end
 	end
-	return true
+	return "Hard"
 end
 
 local function copyMember(member: Member): Member
@@ -204,16 +192,19 @@ local function copyMember(member: Member): Member
 		name = member.name,
 		slot = member.slot,
 		level = member.level,
+		tier = member.tier,
 		joinedAt = member.joinedAt,
 		pendingLeave = nil,
 	}
 end
 
-local function enforceTier(state: State, config: any, events: { Event })
-	if state.tier == "Hard" and not ranksOk(state, config) then
-		state.tier = "Normal"
-		table.insert(events, { kind = "tier", tier = "Normal", reason = "level" })
+local function refreshTier(state: State, config: any, events: { Event })
+	local nextTier = runTier(state, config)
+	if state.tier == nextTier then
+		return
 	end
+	state.tier = nextTier
+	table.insert(events, { kind = "tier", tier = nextTier, reason = "party" })
 end
 
 local function removeAt(state: State, index: number, config: any, events: { Event })
@@ -230,7 +221,7 @@ local function removeAt(state: State, index: number, config: any, events: { Even
 	if wasLeader then
 		table.insert(events, { kind = "leader", userId = state.members[1].userId })
 	end
-	enforceTier(state, config, events)
+	refreshTier(state, config, events)
 end
 
 local function refuse(events: { Event }, actor: Actor, reason: string, slot: number?)
@@ -246,6 +237,7 @@ local function beginStart(state: State, now: number, config: any, events: { Even
 	state.phase = "starting"
 	state.startingEnds = now + config.party.startSweep
 	state.countdownEnds = nil
+	refreshTier(state, config, events)
 	table.insert(events, { kind = "lock", n = #state.members, tier = state.tier })
 end
 
@@ -291,16 +283,6 @@ function Party.observe(state: State, actor: Actor, now: number, config: any?): {
 			return events
 		end
 	end
-	if state.tier == "Hard" then
-		if actor.levelKnown ~= true then
-			return events
-		end
-		local level = if type(actor.level) == "number" then actor.level else 1
-		if level < cfg.party.hardLevel then
-			refuse(events, actor, "level", nearestFree(state, actor, cfg))
-			return events
-		end
-	end
 	local fresh = #state.members == 0
 	local name = if type(actor.name) == "string" and actor.name ~= "" then actor.name else "Player"
 	local level = if type(actor.level) == "number" then actor.level else 1
@@ -309,6 +291,7 @@ function Party.observe(state: State, actor: Actor, now: number, config: any?): {
 		name = name,
 		slot = slotId,
 		level = level,
+		tier = "Normal",
 		joinedAt = now,
 		pendingLeave = nil,
 	})
@@ -341,6 +324,7 @@ function Party.observe(state: State, actor: Actor, now: number, config: any?): {
 		slot = slotId,
 		n = #state.members,
 	})
+	refreshTier(state, cfg, events)
 	return events
 end
 
@@ -385,20 +369,28 @@ function Party.setTier(state: State, userId: number, tier: string, config: any?)
 		table.insert(events, { kind = "refuse", userId = userId, reason = "phase" })
 		return events
 	end
-	if leaderId(state) ~= userId then
-		table.insert(events, { kind = "refuse", userId = userId, reason = "leader" })
+	local member = findMember(state, userId)
+	if member == nil then
+		table.insert(events, { kind = "refuse", userId = userId, reason = "member" })
 		return events
 	end
 	if tier ~= "Normal" and tier ~= "Hard" then
 		table.insert(events, { kind = "refuse", userId = userId, reason = "tier" })
 		return events
 	end
-	if tier == "Hard" and not ranksOk(state, cfg) then
-		table.insert(events, { kind = "refuse", userId = userId, reason = "level" })
-		return events
+	if tier == "Hard" then
+		if HardMode.isHardReal() ~= true then
+			table.insert(events, { kind = "refuse", userId = userId, reason = "closed" })
+			return events
+		end
+		if member.level < cfg.party.hardLevel then
+			table.insert(events, { kind = "refuse", userId = userId, reason = "level" })
+			return events
+		end
 	end
-	state.tier = tier
+	member.tier = tier
 	table.insert(events, { kind = "tier", userId = userId, tier = tier })
+	refreshTier(state, cfg, events)
 	return events
 end
 

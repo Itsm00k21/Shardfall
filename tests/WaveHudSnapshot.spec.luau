@@ -5,8 +5,8 @@
 
 	In the arena: enemiesLeft, addsLeft, bossName or "Wave n/n", the
 	difficulty tier, isHardReal, and secondsLeft. Outside: the same fields
-	at rest, and nil while the arena switch is off. Hard does not scale
-	yet. schemaVersion stays 26. Nothing is saved.
+	at rest, and nil while the arena switch is off. isHardReal follows
+	HardMode.isHardReal(). schemaVersion stays 26. Nothing is saved.
 ]]
 
 local fs = require("@lune/fs")
@@ -17,6 +17,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Hud = require("../src/server/WaveArena/Hud")
+local HardMode = require("../src/ReplicatedStorage/Shared/HardMode")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local WaveArena = require("../src/server/WaveArena")
@@ -64,7 +65,8 @@ describe("Wave HUD snapshot", function()
 		expect(LaunchGate.on("hardMode")).toEqual(false)
 		expect(WaveArenaConfig.enabled).toEqual(false)
 		local source = fs.readFile("src/server/WaveArena/Hud.luau")
-		expect(string.find(source, "local HARD_IS_REAL = false", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "HardMode.isHardReal()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "local HARD_IS_REAL = false", 1, true)).toBeNil()
 		expect(string.find(source, "isHardReal = true", 1, true)).toBeNil()
 	end)
 
@@ -213,7 +215,9 @@ describe("Wave HUD snapshot", function()
 		expect(hud.bossName).toBeNil()
 		expect(hud.label).toEqual("Wave 1/5")
 		expect(hud.text).toEqual("Wave 1 / 5")
-		expect(hud.difficulty).toEqual("hard")
+		-- A hard request stays Normal while the flag is off.
+		expect(wave.tier).toEqual("normal")
+		expect(hud.difficulty).toEqual("normal")
 		expect(hud.isHardReal).toEqual(false)
 		expect(hud.secondsLeft).toEqual(90)
 		expect(hud.phase).toEqual("fight")
@@ -226,13 +230,41 @@ describe("Wave HUD snapshot", function()
 		expect(bossHud.addsLeft).toEqual(4)
 		expect(bossHud.bossName).toEqual("Boss")
 		expect(bossHud.label).toBeNil()
-		expect(bossHud.difficulty).toEqual("hard")
+		expect(boss.tier).toEqual("normal")
+		expect(bossHud.difficulty).toEqual("normal")
 		expect(bossHud.isHardReal).toEqual(false)
 		expect(bossHud.secondsLeft).toEqual(90)
 		expect(bossHud.boss.shown).toEqual(true)
 		expect(LaunchGate.SHOW.waveArena).toEqual(false)
 		expect(LaunchGate.SHOW.hardMode).toEqual(false)
 		expect(WaveArenaConfig.enabled).toEqual(false)
+		expect(Schema.VERSION).toEqual(26)
+	end)
+
+	it("reads isHardReal from HardMode, true only while the flag and the hard row agree", function()
+		local previous = LaunchGate.SHOW.hardMode
+		local function restore()
+			LaunchGate.SHOW.hardMode = previous
+		end
+		local config = enabled()
+		local run = fight({ tier = "hard" })
+		local ok, err = pcall(function()
+			expect(HardMode.applies(WaveArenaConfig.hard)).toEqual(true)
+			LaunchGate.SHOW.hardMode = false
+			expect(HardMode.isHardReal()).toEqual(false)
+			expect(Hud.snapshot(run, true, config).isHardReal).toEqual(false)
+			expect(Hud.snapshot({ inArena = false, tier = "hard" }, true, config).isHardReal).toEqual(false)
+			LaunchGate.SHOW.hardMode = true
+			expect(HardMode.isHardReal()).toEqual(true)
+			expect(Hud.snapshot(run, true, config).isHardReal).toEqual(true)
+			expect(Hud.snapshot({ inArena = false, tier = "hard" }, true, config).isHardReal).toEqual(true)
+		end)
+		restore()
+		if not ok then
+			error(err, 0)
+		end
+		expect(LaunchGate.SHOW.hardMode).toEqual(false)
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
 		expect(Schema.VERSION).toEqual(26)
 	end)
 end)

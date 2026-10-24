@@ -47,7 +47,7 @@ function Validate.problems(config: any): { string }
 	if typeof(gate) ~= "table" or gate.id ~= "rootvault" then
 		table.insert(problems, "gate")
 	end
-	if pad.x ~= -10 or pad.y ~= 120 or pad.z ~= 108 or pad.radius ~= 8 then
+	if pad.x ~= -18 or pad.y ~= 120 or pad.z ~= 100 or pad.radius ~= 8 then
 		table.insert(problems, "pad")
 	end
 	if not finite(pad.thickness) or pad.thickness <= 0 or pad.thickness > 2 then
@@ -60,11 +60,47 @@ function Validate.problems(config: any): { string }
 	if config.promptFreeRadius ~= 12 or pad.radius >= config.promptFreeRadius then
 		table.insert(problems, "prompt radius")
 	end
-	if typeof(gate) == "table" and finite(gate.x) and finite(gate.z) and finite(pad.x) and finite(pad.z) and finite(pad.radius) then
-		local dist = length(pad.x - gate.x, pad.z - gate.z)
-		-- Near the mouth, and the disc does not cover the arch.
-		if dist <= 0 or dist > 16 or dist < pad.radius + 2 then
-			table.insert(problems, "near gate")
+	local clear = config.clearance
+	local piers = if typeof(clear) == "table" then clear.pierLocalX else nil
+	if
+		typeof(clear) ~= "table"
+		or clear.laneExtra ~= 3
+		or clear.pierHalf ~= 1.25
+		or clear.mouthHalfX ~= 4
+		or clear.mouthHalfZ ~= 0.3
+		or typeof(piers) ~= "table"
+		or piers[1] ~= -5.25
+		or piers[2] ~= 5.25
+	then
+		table.insert(problems, "clearance")
+	end
+	if
+		typeof(clear) == "table"
+		and typeof(gate) == "table"
+		and finite(gate.x)
+		and finite(gate.z)
+		and finite(pad.x)
+		and finite(pad.z)
+		and finite(pad.radius)
+	then
+		-- Centre-to-lane distance. The disc edge stays laneExtra studs off x = gate.x.
+		if finite(clear.laneExtra) and math.abs(pad.x - gate.x) < pad.radius + clear.laneExtra then
+			table.insert(problems, "lane")
+		end
+		if finite(clear.pierHalf) and typeof(piers) == "table" then
+			for _, localX in ipairs(piers) do
+				if finite(localX) and length(pad.x - (gate.x + localX), pad.z - gate.z) < pad.radius + clear.pierHalf then
+					table.insert(problems, "pier")
+					break
+				end
+			end
+		end
+		if finite(clear.mouthHalfX) and finite(clear.mouthHalfZ) then
+			local dx = math.max(math.abs(pad.x - gate.x) - clear.mouthHalfX, 0)
+			local dz = math.max(math.abs(pad.z - gate.z) - clear.mouthHalfZ, 0)
+			if length(dx, dz) < pad.radius then
+				table.insert(problems, "mouth")
+			end
 		end
 	end
 	if party.min ~= 1 or party.cap ~= 4 or party.countdown ~= 15 then

@@ -5,37 +5,17 @@
 	2, or 3 for each slot. The boss wave stays one boss and its adds.
 ]]
 
-local function sharedRoot()
-	if game ~= nil and game.GetService ~= nil then
-		local folder = script.Parent
-		if folder ~= nil and folder.Name == "server" then
-			return require(folder:WaitForChild("SharedRequire"))
-		end
-		if folder ~= nil and folder.Parent ~= nil then
-			return require(folder.Parent:WaitForChild("SharedRequire"))
-		end
-		error("SharedRequire is not beside this module")
+-- Shared modules. Studio walks script to the server folder. Lune uses ./SharedRoot.
+local SharedRequire
+if game ~= nil and game.GetService ~= nil then
+	local server = script:FindFirstAncestor("server")
+	if server == nil then
+		error("SharedRequire is not under server")
 	end
-	local source = debug.info(1, "s")
-	local marker = "src/server/"
-	local at = string.find(source, marker, 1, true)
-	if at == nil then
-		error("SharedRequire could not see src/server in " .. source)
-	end
-	local rest = string.sub(source, at + #marker)
-	local _, slashes = string.gsub(rest, "/", "")
-	if slashes == 0 then
-		return require("./SharedRequire")
-	end
-	local prefix = ""
-	local parent = string.char(46, 46)
-	for _ = 1, slashes do
-		prefix ..= parent .. "/"
-	end
-	return require(prefix .. "SharedRequire")
+	SharedRequire = require(server:WaitForChild("SharedRoot"))
+else
+	SharedRequire = require("./SharedRoot")
 end
-
-local SharedRequire = sharedRoot()
 
 local WaveArenaConfig = SharedRequire.module("Config/WaveArenaConfig")
 local Waves = require("./Waves")

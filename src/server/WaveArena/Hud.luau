@@ -6,50 +6,27 @@
 
 	A fight snapshot also carries the wave HUD: living enemies and adds,
 	the boss name or a "Wave n/n" label, the difficulty tier, whether Hard
-	really scales, and the seconds left on the run clock. Hard does not
-	scale wave combat yet, so isHardReal stays false and the client keeps
-	the HARD chip hidden. Nothing here is saved.
+	really scales, and the seconds left on the run clock. isHardReal is
+	HardMode.isHardReal(). The hardMode flag ships off, so the HARD chip
+	stays hidden. Nothing here is saved.
 ]]
 
-local function sharedRoot()
-	if game ~= nil and game.GetService ~= nil then
-		local folder = script.Parent
-		if folder ~= nil and folder.Name == "server" then
-			return require(folder:WaitForChild("SharedRequire"))
-		end
-		if folder ~= nil and folder.Parent ~= nil then
-			return require(folder.Parent:WaitForChild("SharedRequire"))
-		end
-		error("SharedRequire is not beside this module")
+-- Shared modules. Studio walks script to the server folder. Lune uses ./SharedRoot.
+local SharedRequire
+if game ~= nil and game.GetService ~= nil then
+	local server = script:FindFirstAncestor("server")
+	if server == nil then
+		error("SharedRequire is not under server")
 	end
-	local source = debug.info(1, "s")
-	local marker = "src/server/"
-	local at = string.find(source, marker, 1, true)
-	if at == nil then
-		error("SharedRequire could not see src/server in " .. source)
-	end
-	local rest = string.sub(source, at + #marker)
-	local _, slashes = string.gsub(rest, "/", "")
-	if slashes == 0 then
-		return require("./SharedRequire")
-	end
-	local prefix = ""
-	local parent = string.char(46, 46)
-	for _ = 1, slashes do
-		prefix ..= parent .. "/"
-	end
-	return require(prefix .. "SharedRequire")
+	SharedRequire = require(server:WaitForChild("SharedRoot"))
+else
+	SharedRequire = require("./SharedRoot")
 end
 
-local SharedRequire = sharedRoot()
-
 local WaveArenaConfig = SharedRequire.module("Config/WaveArenaConfig")
+local HardMode = SharedRequire.module("HardMode")
 
 local Hud = {}
-
--- Wave combat still uses the base hp and damage. Economy's Hard
--- multipliers are not applied, so a Hard tier is not a real scale.
-local HARD_IS_REAL = false
 
 function Hud.bossBar(run: any): any
 	if typeof(run) ~= "table" or typeof(run.enemies) ~= "table" then
@@ -147,7 +124,7 @@ local function outside(run: any): any
 		bossName = nil,
 		label = nil,
 		difficulty = difficulty,
-		isHardReal = HARD_IS_REAL,
+		isHardReal = HardMode.isHardReal(),
 		secondsLeft = nil,
 	}
 end
@@ -178,7 +155,7 @@ function Hud.snapshot(run: any, open: boolean, config: any?): any
 		bossName = bossName,
 		label = label,
 		difficulty = difficultyOf(run),
-		isHardReal = HARD_IS_REAL,
+		isHardReal = HardMode.isHardReal(),
 		secondsLeft = timeLeft(run, config),
 	}
 end

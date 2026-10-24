@@ -60,6 +60,44 @@ describe("Studio require paths", function()
 		expect(WaveArena.hubPad(nil)).toBeNil()
 		expect(Gather.plan(nil)).toBeNil()
 
+		local root = SharedRequire.module("Config/WaveArenaConfig")
+		expect(root.enabled).toEqual(false)
+		local viaWave = require("../src/server/WaveArena/SharedRoot")
+		local viaParty = require("../src/server/PartyGather/SharedRoot")
+		expect(viaWave.module("LaunchGate").on("waveArena")).toEqual(false)
+		expect(viaParty.module("LaunchGate").on("parties")).toEqual(false)
+		expect(viaWave.module).toEqual(SharedRequire.module)
+		expect(viaParty.module).toEqual(SharedRequire.module)
+
+		local function requireTree(dir: string)
+			require("../" .. dir)
+			for _, name in ipairs(fs.readDir(dir)) do
+				if string.sub(name, -5) == ".luau" and name ~= "init.luau" then
+					require("../" .. dir .. "/" .. string.sub(name, 1, -6))
+				end
+			end
+		end
+		requireTree("src/server/WaveArena")
+		requireTree("src/server/PartyGather")
+
+		local copies = {}
+		for _, path in ipairs(luaFiles("src/server")) do
+			local body = fs.readFile(path)
+			if string.find(body, "local function sharedRoot", 1, true) ~= nil then
+				table.insert(copies, path)
+			end
+			if string.find(body, "debug.info", 1, true) ~= nil then
+				table.insert(copies, path .. " debug.info")
+			end
+		end
+		if #copies > 0 then
+			error(table.concat(copies, "\n"), 0)
+		end
+		expect(#copies).toEqual(0)
+		local helper = fs.readFile("src/server/SharedRoot.luau")
+		expect(string.find(helper, "require(\"./SharedRequire\")", 1, true) ~= nil).toBeTrue()
+		expect(string.find(helper, "debug.info", 1, true)).toBeNil()
+
 		local hits = {}
 		for _, path in ipairs(luaFiles("src/server")) do
 			local lineNo = 0

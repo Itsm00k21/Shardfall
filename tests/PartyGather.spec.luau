@@ -86,14 +86,11 @@ describe("Party gather config", function()
 		expect(PartyGather.gate.x).toEqual(gate.x)
 		expect(PartyGather.gate.z).toEqual(gate.z)
 		expect(PartyGather.pad.y).toEqual(Haven.FLOOR_Y)
-		local dx = PartyGather.pad.x - gate.x
-		local dz = PartyGather.pad.z - gate.z
-		local dist = math.sqrt(dx * dx + dz * dz)
-		expect(dist).toEqual(10)
-		expect(dist).toBeGreaterThan(PartyGather.pad.radius)
+		expect(PartyGather.pad.x).toEqual(-18)
+		expect(PartyGather.pad.z).toEqual(100)
 		expect(Haven.SPAWN.x).toEqual(gate.x)
-		expect(math.abs(PartyGather.pad.x - Haven.SPAWN.x)).toBeGreaterThan(PartyGather.pad.radius)
-		expect(Gather.inPromptZone(gate.x, gate.z, PartyGather)).toBeTrue()
+		-- The mouth sits outside the prompt-free radius, so the arch is not in the silence zone.
+		expect(Gather.inPromptZone(gate.x, gate.z, PartyGather)).toBeFalse()
 		local other = heartwood()
 		expect(Gather.inPromptZone(other.x, other.z, PartyGather)).toBeFalse()
 	end)
@@ -101,7 +98,7 @@ describe("Party gather config", function()
 	it("does not hide or suppress a Haven portal prompt in the gather zone", function()
 		local actions = { "rootvault", "waves", "heartwood", "practice", "soon" }
 		local gate = rootvault()
-		expect(Gather.inPromptZone(gate.x, gate.z, PartyGather)).toBeTrue()
+		expect(Gather.inPromptZone(gate.x, gate.z, PartyGather)).toBeFalse()
 		for _, portal in ipairs(Haven.PORTALS) do
 			for _, action in ipairs(actions) do
 				expect(Gather.suppressPrompt(action, portal.x, portal.z, PartyGather)).toBeFalse()
@@ -109,7 +106,9 @@ describe("Party gather config", function()
 		end
 		expect(Gather.suppressPrompt("rootvault", PartyGather.pad.x, PartyGather.pad.z, PartyGather)).toBeFalse()
 		expect(Gather.suppressPrompt("waves", gate.x, gate.z, PartyGather)).toBeFalse()
-		expect(Gather.suppressPrompt(nil, gate.x, gate.z, PartyGather)).toBeTrue()
+		-- The mouth is outside the zone, so an untagged prompt there stays up.
+		-- The same prompt on the pad is silenced.
+		expect(Gather.suppressPrompt(nil, gate.x, gate.z, PartyGather)).toBeFalse()
 		expect(Gather.suppressPrompt("", PartyGather.pad.x, PartyGather.pad.z, PartyGather)).toBeTrue()
 		local other = heartwood()
 		expect(Gather.suppressPrompt(nil, other.x, other.z, PartyGather)).toBeFalse()
@@ -191,6 +190,62 @@ describe("Party gather config", function()
 		end
 	end)
 
+	it("keeps the disc clear of the pier and the mouth strip", function()
+		local gate = rootvault()
+		local pad = PartyGather.pad
+		local clear = PartyGather.clearance
+		expect(gate.bearing).toEqual(0)
+		expect(clear.pierHalf).toEqual(1.25)
+		expect(clear.mouthHalfX).toEqual(4)
+		expect(clear.mouthHalfZ).toEqual(0.3)
+		local function away(x: number, z: number): number
+			local dx = pad.x - x
+			local dz = pad.z - z
+			return math.sqrt(dx * dx + dz * dz)
+		end
+		for _, localX in ipairs(clear.pierLocalX) do
+			local pierX = gate.x + localX
+			expect(away(pierX, gate.z)).toBeGreaterThan(pad.radius + clear.pierHalf)
+		end
+		local mouthDx = math.max(math.abs(pad.x - gate.x) - clear.mouthHalfX, 0)
+		local mouthDz = math.max(math.abs(pad.z - gate.z) - clear.mouthHalfZ, 0)
+		local mouthDist = math.sqrt(mouthDx * mouthDx + mouthDz * mouthDz)
+		expect(mouthDist).toBeGreaterThan(pad.radius)
+
+		local onPier = table.clone(PartyGather)
+		local pierPad = table.clone(PartyGather.pad)
+		pierPad.x = gate.x + clear.pierLocalX[1]
+		pierPad.z = gate.z
+		onPier.pad = pierPad
+		expect(table.find(Gather.problems(onPier), "pier") ~= nil).toBeTrue()
+
+		local onMouth = table.clone(PartyGather)
+		local mouthPad = table.clone(PartyGather.pad)
+		mouthPad.x = gate.x
+		mouthPad.z = gate.z
+		onMouth.pad = mouthPad
+		expect(table.find(Gather.problems(onMouth), "mouth") ~= nil).toBeTrue()
+		expect(LaunchGate.SHOW.parties).toEqual(false)
+	end)
+
+	it("keeps the lane margin at least the pad radius plus 3", function()
+		local gate = rootvault()
+		local pad = PartyGather.pad
+		expect(PartyGather.clearance.laneExtra).toEqual(3)
+		expect(Haven.SPAWN.x).toEqual(gate.x)
+		expect(Haven.SPAWN.z < gate.z).toBeTrue()
+		local lane = math.abs(pad.x - Haven.SPAWN.x)
+		expect(lane >= pad.radius + PartyGather.clearance.laneExtra).toBeTrue()
+		local tight = table.clone(PartyGather)
+		local tightPad = table.clone(PartyGather.pad)
+		tightPad.x = gate.x - (pad.radius + 2)
+		tightPad.z = pad.z
+		tight.pad = tightPad
+		expect(table.find(Gather.problems(tight), "lane") ~= nil).toBeTrue()
+		expect(Schema.VERSION).toEqual(26)
+		expect(LaunchGate.SHOW.parties).toEqual(false)
+	end)
+
 	it("rejects a pad that covers the gate mouth", function()
 		local bad = table.clone(PartyGather)
 		local pad = table.clone(PartyGather.pad)
@@ -198,7 +253,35 @@ describe("Party gather config", function()
 		pad.z = PartyGather.gate.z
 		bad.pad = pad
 		local problems = Gather.problems(bad)
-		expect(table.find(problems, "pad") ~= nil or table.find(problems, "near gate") ~= nil).toBeTrue()
+		expect(table.find(problems, "mouth") ~= nil).toBeTrue()
+	end)
+
+	it("tags every ProximityPrompt created under src", function()
+		local function walk(dir: string, found: { string })
+			for _, name in ipairs(fs.readDir(dir)) do
+				local path = dir .. "/" .. name
+				if fs.isDir(path) then
+					walk(path, found)
+				elseif string.sub(name, -5) == ".luau" then
+					local source = fs.readFile(path)
+					if string.find(source, 'Instance.new("ProximityPrompt")', 1, true) ~= nil then
+						table.insert(found, path)
+						if string.find(source, "PartyGatherPrompt.tag", 1, true) == nil then
+							error(path .. " creates a ProximityPrompt without PartyGatherPrompt.tag", 2)
+						end
+					end
+				end
+			end
+		end
+		local found: { string } = {}
+		walk("src", found)
+		table.sort(found)
+		expect(table.find(found, "src/ServerScriptService/ShardfallServer/HavenBuilder.luau") ~= nil).toBeTrue()
+		expect(table.find(found, "src/ServerScriptService/ShardfallServer/PropService.luau") ~= nil).toBeTrue()
+		expect(table.find(found, "src/ServerScriptService/ShardfallServer/WaveArenaHost.luau") ~= nil).toBeTrue()
+		expect(#found >= 3).toBeTrue()
+		expect(Schema.VERSION).toEqual(26)
+		expect(LaunchGate.SHOW.parties).toEqual(false)
 	end)
 
 	it("ships the flag off and builds no prompt", function()
@@ -378,28 +461,44 @@ describe("Party gather rules", function()
 	end)
 
 	it("requires level 5 for Hard and locks the roster when the clock ends", function()
-		local options = opened()
-		local state = Gather.new(PartyGather)
-		Gather.observe(state, onPad(1, "Ada", true, 10), 0, options)
-		Gather.observe(state, onPad(2, "Bea", true, 4), 1, options)
-		local denied = Gather.setTier(state, 1, "Hard", options)
-		expect(denied[1].reason).toEqual("level")
-		expect(state.tier).toEqual("Normal")
-		Gather.drop(state, 2, options)
-		expect(Gather.setTier(state, 1, "Hard", options)[1].tier).toEqual("Hard")
-		local low = Gather.observe(state, onPad(3, "Cal", true, 4), 2, options)
-		expect(low[1].reason).toEqual("level")
-		expect(#state.members).toEqual(1)
-		local locked = Gather.tick(state, 15, options)
-		expect(locked[1].kind).toEqual("lock")
-		expect(state.phase).toEqual("starting")
-		local started = Gather.tick(state, 15.4, options)
-		expect(started[1].kind).toEqual("start")
-		expect(started[1].n).toEqual(1)
-		expect(started[1].tier).toEqual("Hard")
-		expect(started[1].mult).toEqual(1)
-		expect(#started[1].roster).toEqual(1)
-		expect(#state.members).toEqual(0)
-		expect(state.phase).toEqual("idle")
+		local previous = LaunchGate.SHOW.hardMode
+		LaunchGate.SHOW.hardMode = true
+		local ok, err = pcall(function()
+			local options = opened()
+			local state = Gather.new(PartyGather)
+			Gather.observe(state, onPad(1, "Ada", true, 10), 0, options)
+			Gather.observe(state, onPad(2, "Bea", true, 4), 1, options)
+			local picked = Gather.setTier(state, 1, "Hard", options)
+			expect(picked[1].tier).toEqual("Hard")
+			expect(state.members[1].tier).toEqual("Hard")
+			expect(state.tier).toEqual("Normal")
+			local denied = Gather.setTier(state, 2, "Hard", options)
+			expect(denied[1].reason).toEqual("level")
+			expect(state.members[2].tier).toEqual("Normal")
+			Gather.drop(state, 2, options)
+			expect(state.tier).toEqual("Hard")
+			local low = Gather.observe(state, onPad(3, "Cal", true, 4), 2, options)
+			expect(low[1].kind).toEqual("join")
+			expect(state.tier).toEqual("Normal")
+			Gather.drop(state, 3, options)
+			expect(state.tier).toEqual("Hard")
+			expect(#state.members).toEqual(1)
+			local locked = Gather.tick(state, 15, options)
+			expect(locked[1].kind).toEqual("lock")
+			expect(state.phase).toEqual("starting")
+			local started = Gather.tick(state, 15.4, options)
+			expect(started[1].kind).toEqual("start")
+			expect(started[1].n).toEqual(1)
+			expect(started[1].tier).toEqual("Hard")
+			expect(started[1].mult).toEqual(1)
+			expect(#started[1].roster).toEqual(1)
+			expect(started[1].roster[1].tier).toEqual("Hard")
+			expect(#state.members).toEqual(0)
+			expect(state.phase).toEqual("idle")
+		end)
+		LaunchGate.SHOW.hardMode = previous
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end)
