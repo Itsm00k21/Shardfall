@@ -14,6 +14,13 @@
 	Dungeons.waveKinds do not spawn these ids. Waves and the boss are
 	read only by WaveFlow, which no-ops while the flag is off.
 	No Robux. No profile fields.
+
+	The wave-5 boss cannot be kited for free. Pressure arms after
+	PRESSURE_SECONDS with no damage dealt to its target, and a damaging
+	tick shaves PRESSURE_DECAY off that timer instead of clearing it.
+	Outside melee, an armed boss fires Shard Volley: a windup, then
+	VOLLEY_SHOTS led shots, then VOLLEY_COOLDOWN. The leash slam dashes
+	to its mark. The boss is clamped to ARENA and never regens.
 ]]
 
 local Enemies = {}
@@ -78,11 +85,30 @@ Enemies.SHOT_RADIUS = 2
 
 -- Wave-5 boss leash. Staying farther than LEASH_RANGE for LEASH_SECONDS
 -- starts a slam. LEASH_WINDUP is the telegraph. LEASH_RADIUS is the mark
--- the player can step out of. The boss does not heal when this fires.
+-- the player can step out of. LEASH_DASH is how fast the boss closes on
+-- that mark during the windup. The boss does not heal when this fires.
 Enemies.LEASH_RANGE = 24
 Enemies.LEASH_SECONDS = 3
 Enemies.LEASH_WINDUP = 1.2
 Enemies.LEASH_RADIUS = 4
+Enemies.LEASH_DASH = 40
+
+-- No damage dealt to the target fills this timer. It arms at
+-- PRESSURE_SECONDS. A tick that deals damage subtracts PRESSURE_DECAY
+-- and does not snap the timer back to zero.
+Enemies.PRESSURE_SECONDS = 4
+Enemies.PRESSURE_DECAY = 1.5
+
+-- Shard Volley. Outside melee, once pressure is armed: windup, then
+-- VOLLEY_SHOTS shots that lead the target, then the cooldown. Spread is
+-- radians around the lead. LEAD_MAX caps a wild velocity spike.
+Enemies.VOLLEY_NAME = "Shard Volley"
+Enemies.VOLLEY_WINDUP = 0.8
+Enemies.VOLLEY_SHOTS = 3
+Enemies.VOLLEY_COOLDOWN = 5
+Enemies.VOLLEY_SPEED = 64
+Enemies.VOLLEY_SPREAD = 0.12
+Enemies.VOLLEY_LEAD_MAX = 24
 
 Enemies.ORDER = table.freeze({ "chaser", "ranged", "tank" })
 
@@ -552,6 +578,73 @@ local function checkLeash(source: any): (boolean, string)
 			return false, "LEASH_RANGE must fit inside the arena"
 		end
 	end
+	local dashOk, dashErr = checkNumber("LEASH_DASH", source.LEASH_DASH, 0.05)
+	if not dashOk then
+		return false, dashErr
+	end
+	if source.LEASH_DASH > 90 then
+		return false, "LEASH_DASH is above 90"
+	end
+	if type(boss) ~= "table" or not finite(boss.moveSpeed) or source.LEASH_DASH <= boss.moveSpeed then
+		return false, "LEASH_DASH must beat the boss move speed"
+	end
+	return true, ""
+end
+
+-- Pressure and Shard Volley. A decay that wipes an armed timer is a
+-- hard reset, and a volley that is not three led shots is not this cast.
+local function checkPressure(source: any): (boolean, string)
+	local secondsOk, secondsErr = checkNumber("PRESSURE_SECONDS", source.PRESSURE_SECONDS, 2)
+	if not secondsOk then
+		return false, secondsErr
+	end
+	if source.PRESSURE_SECONDS > 8 then
+		return false, "PRESSURE_SECONDS is above 8"
+	end
+	local decayOk, decayErr = checkNumber("PRESSURE_DECAY", source.PRESSURE_DECAY, 0.05)
+	if not decayOk then
+		return false, decayErr
+	end
+	if source.PRESSURE_DECAY >= source.PRESSURE_SECONDS then
+		return false, "PRESSURE_DECAY must not clear an armed timer"
+	end
+	if source.VOLLEY_NAME ~= "Shard Volley" then
+		return false, "VOLLEY_NAME must be Shard Volley"
+	end
+	local windOk, windErr = checkNumber("VOLLEY_WINDUP", source.VOLLEY_WINDUP, 0.3)
+	if not windOk then
+		return false, windErr
+	end
+	if source.VOLLEY_WINDUP > 3 then
+		return false, "VOLLEY_WINDUP is above 3"
+	end
+	if source.VOLLEY_SHOTS ~= 3 then
+		return false, "VOLLEY_SHOTS must be 3"
+	end
+	local coolOk, coolErr = checkNumber("VOLLEY_COOLDOWN", source.VOLLEY_COOLDOWN, 2)
+	if not coolOk then
+		return false, coolErr
+	end
+	if source.VOLLEY_COOLDOWN > 12 then
+		return false, "VOLLEY_COOLDOWN is above 12"
+	end
+	local speedOk, speedErr = checkNumber("VOLLEY_SPEED", source.VOLLEY_SPEED, 40)
+	if not speedOk then
+		return false, speedErr
+	end
+	if source.VOLLEY_SPEED > 120 then
+		return false, "VOLLEY_SPEED is above 120"
+	end
+	if not finite(source.VOLLEY_SPREAD) or source.VOLLEY_SPREAD < 0 or source.VOLLEY_SPREAD > 0.5 then
+		return false, "VOLLEY_SPREAD must be from 0 to 0.5"
+	end
+	local leadOk, leadErr = checkNumber("VOLLEY_LEAD_MAX", source.VOLLEY_LEAD_MAX, 12)
+	if not leadOk then
+		return false, leadErr
+	end
+	if source.VOLLEY_LEAD_MAX > 36 then
+		return false, "VOLLEY_LEAD_MAX is above 36"
+	end
 	return true, ""
 end
 
@@ -681,6 +774,10 @@ function Enemies.validate(roster: any?): (boolean, string)
 	local leashOk, leashErr = checkLeash(source)
 	if not leashOk then
 		return false, leashErr
+	end
+	local pressureOk, pressureErr = checkPressure(source)
+	if not pressureOk then
+		return false, pressureErr
 	end
 	return true, ""
 end
