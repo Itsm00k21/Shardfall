@@ -1,4 +1,4 @@
-# HUD Zone Map v1: one zone per element, one toast lane, a left-rail safe area (NOT APPROVED, docs only)
+# HUD Zone Map v1.1: one zone per element, one toast lane, a left-rail safe area (NOT APPROVED, docs only)
 
 Owner: Prism (design, docs only: no code, no Config, no flag flips). Builder: Ghost (client HUD, `HudLayout`, UiAudit DP42). Base: `cursor/live-build-9721` @ **`8cb42ff`** (audit file:line refs are from `a28a5e2`; no client or shared UI file changed between the two). Date: Oct 24, 2026 (PT).
 Asked for in: Ghost's Agent Board row DP41P https://app.notion.com/p/403c31ca388381999e16eb0137b3af5a (deliverable 2). ACK: https://app.notion.com/p/403c31ca388381ec9523ef97de82e8c3. Context: Havoc's QA lane DP41 (seed list) https://app.notion.com/p/403c31ca388381438c83e2d2641c44ea, UiAudit DP42 https://app.notion.com/p/403c31ca388381dc8592f7b330a6a7a6. Kevin pre-approved Ghost's tasks. Nothing here is official until Kevin approves it and it is copied into Vision & Design Rules.
@@ -166,5 +166,41 @@ Touch: every tappable element is ≥ 44 px (rail 64/48/44, Z4 tab 44, toggles 44
 6. **@Kevin:** on landscape phones, accept the toast lane crossing the keep-out's top-left corner (no other free band at 375 px)? Prism recommends **yes, max 2 cards**.
 7. **@Havoc:** repro seed 4 (tutorial over rail) at Kevin's Studio window size with Output, since the layout math doesn't produce it (§2).
 
+## Addendum v1.1 (Oct 24, 2026, PT): Wave HUD calls folded in (DP43P)
+Source: Ghost's Agent Board row DP43P https://app.notion.com/p/403c31ca3883817d8f60c884c3fb20e8 (Ghost decided per Prism's recs, Kevin pre-approved Ghost's tasks, Kevin can veto). Specs: Wave HUD v2 (`prism/wave-hud`, #428), results v1.2 (#464), goals tracker v1.1 (#465). Ghost's DP43P numbering is used below. This addendum only adds the run state; §1–§11 stay as written. Mockup: `mockups/11-zone-map-run-state.svg`.
+
+**Decided (Ghost):**
+| # | Call | Zone effect |
+|---|---|---|
+| Q1 | Hide the currency pills during a run (`phase` `fight`/`deathHold`); a **run chip** takes their slot | Z3 becomes the run chip in a run |
+| Q2 | Portrait: boss bar sits under HP; the toast host moves **1 card lower** on wave 5 | 390×844 Z7 under Z1, Z6 from y 124, Z8 moves +44 |
+| Q5 | Starter goals tracker (#465) is its **folded tab** during runs | Z4 = tab only in a run |
+| Q7 | Park the break timer; show a **1.0 s "CLEAR n/5"** gold flash | inside the run chip, no new rect |
+| Q8 | Time-out keep line shows **"8:00"** | results card copy (#464), no HUD rect |
+| Q10 | Normal boss HP bar **orange `230,120,70`**; red stays Hard-only | Z7 fill |
+| Q11 | **Plain HARD chip** (no skull). Provisional, Kevin can veto | Z3 sub-slot, see below |
+
+**Run-state rects (safe-area px), additive to §4:**
+| Piece | 1920×1080 | 390×844 | 667×375 | 800×400 |
+|---|---|---|---|---|
+| Run chip (Z3 slot, Q1) | x 1744–1904, y 16–60 (160×44) | x 266–374, y 16–60 (108×44) | x 531–651, y 16–60 | x 664–784, y 16–60 |
+| HARD chip (Q11, under the run chip, right-aligned, display-only) | x 1852–1904, y 64–86 (52×22) | x 322–374, y 64–86 | x 599–651, y 64–86 | x 732–784, y 64–86 |
+| Z7 boss bar (wave 5, Q2/Q10) | x 760–1160, y 16–60 (unchanged) | **x 16–258, y 80–116** (under Z1) | x 311–523, y 20–56 (pills slot, left of the chip) | x 308–656, y 20–56 |
+| Z6 toast lane while the boss bar is up | unchanged (y 76–212) | **x 16–258, y 124–212** (2 × 40, Q2) | unchanged (y 80–168) | unchanged |
+| Z8 prompt while the boss bar is up | unchanged | **x 16–258, y 216–292** (+44) | unchanged | unchanged |
+| Z4 in a run (Q5) | tab only, x 1760–1904, y 64–108; **y 92–136 while the HARD chip shows** | tab only, x 266–374, y 136–180 (clear of the HARD chip) | tab x 543–651, y 64–108; y 92–136 with HARD | tab x 676–784, y 64–108; y 92–136 with HARD |
+Checks (same script as §10): none of these enter the keep-out or `RAIL_SAFE`; the run chip and Z4 tab stay ≥ 44 tall (tap targets); the HARD chip and boss bar are `Active = false` (display only). Text in the chip, bar and HARD chip is **14 px** (`MIN_TEXT_PX`); Wave HUD v2's 13 px chip line and 11 px boss name move up to 14 (the landscape boss name truncates with "…" before it goes under 14).
+
+**Copy:** run chip "WAVE n/5" → "CLEAR n/5" (gold, 1.0 s) on wave 1–4 clear, then "WAVE n+1/5"; boss bar name from `WaveArenaConfig.boss.name` once in the snapshot (Echo Q3), until then "BOSS"; HARD chip "HARD" (ink `32,22,10` on danger `230,80,96`).
+
+**DisplayOrder:** run chip, HARD chip and boss bar are the run band (40, §9). No change to the ladder.
+
+**Echo dependencies (not specced as code here; Ghost routes them, DP43):**
+- **Q3** `Hud.snapshot` gets `left`, `adds`, `boss.name` and the "Wave %d/%d" text. Until then the chip shows "WAVE n/5" only.
+- **Q4** `tier` in the snapshot; the **HARD chip draws only once Hard really scales the arena** (today `WaveArenaHost.luau:675` hard-sets `opts.tier = "normal"` @ `9feb018`, and no WaveArena file reads `hpMultiplier`). Until then the HARD chip rect stays empty and Z4's tab stays at y 64.
+- **Q6** red countdown in the chip for the last 60 s of 480 s, needs `secondsLeft`. Same chip rect, no new zone.
+- **Q9** hide the ×2 tags now; Hard multipliers go into the arena before `hardMode` flips.
+
 ## Decision log
 - Oct 24, 2026: v1 written for DP41P (Prism). Nothing decided yet.
+- Oct 24, 2026: v1.1 (Prism, DP43P): Ghost's Wave HUD calls Q1/Q2/Q5/Q7/Q8/Q10/Q11 folded as a run-state addendum + mockup 11; Echo items Q3/Q4/Q6/Q9 noted as dependencies. Still NOT APPROVED until copied into Vision & Design Rules.
