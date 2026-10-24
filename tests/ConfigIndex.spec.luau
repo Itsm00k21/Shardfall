@@ -84,19 +84,31 @@ describe("Config V1 economy", function()
 		expect(total).toEqual(11)
 	end)
 
-	it("has the 5 difficulty multipliers in order", function()
-		local multipliers = {}
-		local clears = {}
-		for order, id in ipairs(Config.Economy.DIFFICULTY_ORDER) do
-			local row = Config.Economy.DIFFICULTIES[id]
-			expect(row.order).toEqual(order)
-			table.insert(multipliers, row.tokenMultiplier)
-			table.insert(
-				clears,
-				math.floor(Config.Economy.NORMAL_CLEAR_TOKENS * row.tokenMultiplier + 0.5)
-			)
-		end
-		expect(multipliers).toEqual({ 1, 1.25, 1.5, 2, 3 })
-		expect(clears).toEqual({ 11, 14, 17, 22, 33 })
+	it("keeps Hard on the Core Loop and still lists the parked rows", function()
+		local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
+		expect(Config.Economy.DIFFICULTY_ORDER).toEqual({
+			"normal",
+			"medium",
+			"hard",
+			"nightmare",
+			"insane",
+		})
+		local hard = Config.Economy.DIFFICULTIES.hard
+		expect(hard.levelGate).toEqual(5)
+		expect(hard.hpMultiplier).toEqual(2)
+		expect(hard.damageMultiplier).toEqual(1.5)
+		expect(hard.tokenMultiplier).toEqual(2)
+		expect(hard.fragmentMultiplier).toEqual(2)
+		expect(math.floor(Config.Economy.NORMAL_CLEAR_TOKENS * hard.tokenMultiplier + 0.5)).toEqual(22)
+		expect(Config.Economy.DIFFICULTIES.normal.tokenMultiplier).toEqual(1)
+		expect(Config.Economy.DIFFICULTIES.medium.tokenMultiplier).toEqual(1.25)
+		expect(Config.Economy.DIFFICULTIES.medium.levelGate).toEqual(5)
+		expect(Config.Economy.DIFFICULTIES.nightmare.tokenMultiplier).toEqual(2)
+		expect(Config.Economy.DIFFICULTIES.nightmare.levelGate).toEqual(15)
+		expect(Config.Economy.DIFFICULTIES.insane.tokenMultiplier).toEqual(3)
+		expect(Config.Economy.DIFFICULTIES.insane.levelGate).toEqual(20)
+		expect(LaunchGate.on("extraDifficulties")).toEqual(false)
+		expect(Config.Live.Difficulties.hard.hp).toEqual(hard.hpMultiplier)
+		expect(Config.Live.Difficulties.hard.level).toEqual(hard.levelGate)
 	end)
 end)

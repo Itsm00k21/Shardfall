@@ -69,7 +69,8 @@ describe("Progression", function()
 			expect(Progression.recap(1, 4, 2, 41)).toEqual(
 				"This session: +3 levels, 2 Epics, 41% to your Relic Set"
 			)
-			expect(Progression.unlocked(10)[4]).toEqual("hard")
+			expect(Progression.unlocked(5)[3]).toEqual("hard")
+			expect(Progression.unlocked(4)[2]).toBeNil()
 		end)
 		LaunchGate.SHOW.chests = false
 		if not ok then

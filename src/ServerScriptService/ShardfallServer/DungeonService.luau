@@ -38,6 +38,7 @@ local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
+local HardMode = require(ReplicatedStorage.Shared.HardMode)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
@@ -1478,6 +1479,11 @@ local function grant(
 	local bonus = CombatMath.bonusGold(rolled.gold, goldFind)
 	local levels = 0
 	local xpShown = rolled.xp
+	-- Heartwood pays its own raid row. Rootvault and Waves use Config.
+	local tokenGrant = rolled.shardTokens
+	if run.dungeon.id ~= Dungeons.HEARTWOOD_ID then
+		tokenGrant = HardMode.tokens(run.difficulty, rolled.shardTokens)
+	end
 	local ok, err = DataService.mutate(player, function(data)
 		local elapsed = 0
 		if farmSince[player] ~= nil then
@@ -1490,7 +1496,7 @@ local function grant(
 		end
 		data.gold += paid
 		Economy.log(data, "dungeon_clear", "gold", paid, data.gold)
-		data.shardTokens += rolled.shardTokens
+		data.shardTokens += tokenGrant
 		local xpGain = rolled.xp
 		if run.dungeon.endless ~= true and run.dungeon.id == Dungeons.ROOTVAULT_ID then
 			local today = Loops.dayNumber(os.time())
@@ -1585,8 +1591,8 @@ local function grant(
 	if dismissIn == nil then
 		local bits =
 			{ string.format("+%d gold", rolled.gold + bonus), string.format("+%d XP", xpShown) }
-		if rolled.shardTokens > 0 then
-			table.insert(bits, string.format("+%d tokens", rolled.shardTokens))
+		if tokenGrant > 0 then
+			table.insert(bits, string.format("+%d tokens", tokenGrant))
 		end
 		fx(player, {
 			kind = "hint",
@@ -1598,7 +1604,7 @@ local function grant(
 			dungeonName = run.dungeon.name,
 			gold = rolled.gold,
 			bonusGold = bonus,
-			shardTokens = rolled.shardTokens,
+			shardTokens = tokenGrant,
 			xp = xpShown,
 			levels = levels,
 			materials = lines,
@@ -2631,7 +2637,16 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 	if dungeon.id == Dungeons.HEARTWOOD_ID and raidMode == nil then
 		return reject("Pick Story or Normal.")
 	end
-	local diff = Rootvault.difficulty(difficulty)
+	-- Rootvault and Waves. A missing tier joins on Normal. Hard under
+	-- Lv 5 is refused here again so a spoofed remote cannot skip the pad.
+	local tierId: string? = nil
+	if raidMode == nil then
+		local accepted, tierWhy = HardMode.accept(profile.level, difficulty)
+		if accepted == nil then
+			return reject(tierWhy or HardMode.REFUSED)
+		end
+		tierId = accepted
+	end
 	if raidMode ~= nil then
 		local allowed, why = PracticeLoot.levelGate(profile.level)
 		if not allowed then
@@ -2640,8 +2655,6 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		if raidMode.id == "normal" and profile.raidStory ~= true then
 			return reject("Clear Story once before Normal.")
 		end
-	elseif (profile.level or 1) < diff.level then
-		return reject(string.format("Level %d opens %s.", diff.level, diff.id))
 	end
 	if activeFolder == nil then
 		return reject("The dungeon world is still loading.")
@@ -2672,7 +2685,7 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		yielding = false,
 		walking = false,
 		loot = {},
-		difficulty = if raidMode ~= nil then raidMode.id else diff.id,
+		difficulty = if raidMode ~= nil then raidMode.id else (tierId :: string),
 		offer = nil,
 		eliteNext = false,
 		shrine = "",
@@ -2933,7 +2946,38 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 	return DungeonService.advance(player)
 end
 
+function DungeonService.setDifficulty(player: Player, tier: any)
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
+	end
+	-- Memory only. A refused Hard pick does not change the pad or the save.
+	local accepted, why = HardMode.select(profile.level, tier, HardMode.GATE)
+	if accepted == nil then
+		return reject(why or HardMode.REFUSED)
+	end
+	return { ok = true, tier = accepted }
+end
+
+local function enterFromPad(player: Player, dungeonId: any)
+	local profile = DataService.get(player)
+	local level = if profile ~= nil then profile.level else 1
+	local tier, why = HardMode.touch(level, HardMode.GATE)
+	if tier == nil then
+		pushRun(player, why or HardMode.PAD_REFUSED)
+		return
+	end
+	local result = DungeonService.enter(player, dungeonId, tier)
+	if result.ok ~= true then
+		pushRun(player, result.error)
+	end
+end
+
 function DungeonService.action(player: Player, action: string, dungeonId: any, extra: any)
+	if action == "difficulty" then
+		local requested = if type(extra) == "string" then extra else dungeonId
+		return DungeonService.setDifficulty(player, requested)
+	end
 	if action == "enter" then
 		return DungeonService.enter(player, dungeonId, extra)
 	end
@@ -2990,10 +3034,7 @@ local function bindTouchRoot(world: Instance)
 				if runs[player] ~= nil then
 					return
 				end
-				local result = DungeonService.enter(player, descendant:GetAttribute("EnterDungeon"))
-				if result.ok ~= true then
-					pushRun(player, result.error)
-				end
+				enterFromPad(player, descendant:GetAttribute("EnterDungeon"))
 			end)
 		end
 	end
@@ -3202,6 +3243,8 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
+	-- This server session joins on Normal. Nothing is read from a profile.
+	HardMode.open(HardMode.GATE)
 	print("[Rootvault] build " .. Build.STAMP .. " spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
@@ -3241,10 +3284,7 @@ function DungeonService.start()
 		if runs[player] ~= nil then
 			return
 		end
-		local result = DungeonService.enter(player, Dungeons.ROOTVAULT_ID)
-		if result.ok ~= true then
-			pushRun(player, result.error)
-		end
+		enterFromPad(player, Dungeons.ROOTVAULT_ID)
 	end)
 
 	local function watchIdle(player: Player)
@@ -3281,6 +3321,9 @@ function DungeonService.start()
 	end
 
 	local function hook(player: Player)
+		-- Join default is Normal. This does not read or write the profile,
+		-- and it does not clear a pad that is already on Hard.
+		HardMode.noteJoin(player.UserId)
 		watchIdle(player)
 		player.CharacterAdded:Connect(function()
 			placeCharacter(player)
