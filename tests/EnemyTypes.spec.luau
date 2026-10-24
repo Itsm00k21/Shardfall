@@ -72,8 +72,6 @@ local function fullRoster(): any
 		WAVE_MIXES = Enemies.WAVE_MIXES,
 		WAVE_GAP = Enemies.WAVE_GAP,
 		WAVE_LIFT = Enemies.WAVE_LIFT,
-		MAX_ALIVE = Enemies.MAX_ALIVE,
-		PLATFORM_CAP = Enemies.PLATFORM_CAP,
 		BOSS = Enemies.BOSS,
 		BOSS_ADDS = Enemies.BOSS_ADDS,
 		BOSS_WAVE = Enemies.BOSS_WAVE,

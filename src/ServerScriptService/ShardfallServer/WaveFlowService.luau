@@ -58,7 +58,6 @@ export type Sink = {
 	fire: ((any, Payload) -> ())?,
 	build: ((WaveFlow.Box) -> any)?,
 	analytics: ((string, EventDetail) -> ())?,
-	platform: string?,
 }
 
 function WaveFlowService.open(): boolean
@@ -190,8 +189,8 @@ local function track(run: WaveFlow.Run): Track
 end
 
 -- Bind a pooled block to each living enemy. Fresh ids are described
--- once. Dead ids go back to the pool before the next bind, so a queued
--- spawn reuses a block instead of making another.
+-- once. Dead ids go back to the pool before the next bind, so a later
+-- wave reuses a block instead of making another.
 local function present(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
 	local owned = track(run)
 	local living: { [number]: boolean } = {}
@@ -222,8 +221,7 @@ function WaveFlowService.start(sink: Sink?): WaveFlow.Run?
 	if not WaveFlowService.open() then
 		return nil
 	end
-	local platform = if sink ~= nil then sink.platform else nil
-	local run = WaveFlow.start(Enemies.aliveCap(platform))
+	local run = WaveFlow.start()
 	if run == nil then
 		return nil
 	end

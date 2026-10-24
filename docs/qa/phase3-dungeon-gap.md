@@ -64,11 +64,10 @@ Server boss on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked 
 - Wave 5 of `WaveFlow` / `WaveFlowService` spawns that boss plus the four adds as gray blocks. The service does not parent parts. `init.server` does not require it. Live `waveKinds(5)` is still Gnarl plus two adds.
 - `bossEnter` fires when wave 5 becomes active. `bossDown` fires when that boss reaches 0 HP. Both go to `Shared.Analytics.event` when that module exists, or to `sink.analytics` when a caller passes one. The analytics module is not in this branch, so a normal boot does not log. No new remote. No client file reads the names. No profile write. `schemaVersion` stays 26.
 
-## What the alive cap adds
+## What the enemy pool adds
 
-Server cap on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked on #419. Does not edit #382, #409, or #389.
+Server pool on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked on #419. Does not edit #382, #409, or #389.
 
-- `Enemies.MAX_ALIVE` is 8. `Enemies.PLATFORM_CAP.mobile` is 4 and is optional: a roster with no `PLATFORM_CAP` still validates. `Enemies.validate` rejects a missing cap, a non-integer, or a platform cap above `MAX_ALIVE`.
-- `WaveFlowService` passes that cap into the wave. Alive enemies never go past it. The rest wait on the run queue and spawn when one dies. `left` on `WaveCounter` still counts the ones that are waiting, so a wave of 12 still reports 12. The same remote fields, `{ wave, left }`. No new remote. No client file reads it.
 - Gray blocks are reused by `EnemyPool`. A death parks the block. The next spawn takes it back and clears health, target, and projectile. The pool does not call `Destroy`. `init.server` does not require the service or the pool.
-- No profile write. `schemaVersion` stays 26. Live `waveKinds` is unchanged. The phone number applies when the caller passes `platform = "mobile"`. A normal boot does not start a run, so neither cap spawns anything.
+- This branch does not cap alive enemies. There is no `MAX_ALIVE`, no `PLATFORM_CAP`, and no spawn queue. A wave of 12 spawns 12. `left` on `WaveCounter` is the number still alive. The same remote fields, `{ wave, left }`. No new remote. No client file reads it. The alive cap for the live crawl is #433 (`enemyPerf`), which is not in this branch.
+- No profile write. `schemaVersion` stays 26. Live `waveKinds` is unchanged. A normal boot does not start a run, so the pool creates nothing.

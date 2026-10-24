@@ -13,12 +13,12 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
-- Phase 3 enemy cap (flag `enemyTypes`, off): `Shared/Config/Enemies.luau`
-  sets `MAX_ALIVE` (8) and an optional phone cap (`PLATFORM_CAP.mobile`, 4).
-  `WaveFlowService` keeps that many alive and queues the rest until one
-  dies. Gray-box blocks are pooled and reused; health, target, and
-  projectile reset. No HUD edit, no save write, `schemaVersion` stays 26.
-  Stacked on the wave-5 boss. (open)
+- Phase 3 enemy pool (flag `enemyTypes`, off): gray-box blocks go into
+  `EnemyPool` and are reused. A death parks the block. The next spawn
+  clears health, target, and projectile. This branch does not cap how
+  many are alive and does not queue the rest. The alive cap stays with
+  #433 (`enemyPerf`). No HUD edit, no save write, `schemaVersion` stays
+  26. Stacked on the wave-5 boss. (open)
 - Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
   4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
   count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns

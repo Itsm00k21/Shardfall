@@ -12,7 +12,7 @@
 	LaunchGate.SHOW.enemyTypes stays false. Live rooms and
 	Dungeons.waveKinds do not spawn these ids. Waves and the boss are
 	read only by WaveFlow, which no-ops while the flag is off.
-	MAX_ALIVE is how many of those can be up at once. No Robux.
+	This file does not cap how many can be alive. No Robux.
 	No profile fields.
 ]]
 
@@ -150,14 +150,6 @@ Enemies.WAVE_MIXES = table.freeze({
 Enemies.WAVE_GAP = 6
 Enemies.WAVE_LIFT = 3
 
--- Alive at once. Wave 4 is 12, so the rest wait until one dies.
--- PLATFORM_CAP is optional. A missing key uses MAX_ALIVE. Phones pass
--- "mobile" and then use the lower number. No profile field.
-Enemies.MAX_ALIVE = 8
-Enemies.PLATFORM_CAP = table.freeze({
-	mobile = 4,
-})
-
 -- Roadmap 3.6. Wave 5 is this boss plus BOSS_ADDS. Adds are only the
 -- three V1 types, in WAVE_ORDER. The live crawl still uses Gnarl.
 Enemies.BOSS_WAVE = 5
@@ -191,7 +183,6 @@ Enemies.BOSS = table.freeze({
 })
 
 local REQUIRED = { "chaser", "ranged", "tank" }
-local CAP_PLATFORMS = { "mobile", "desktop", "console" }
 
 local function finite(value: any): boolean
 	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
@@ -454,64 +445,6 @@ local function checkBoss(source: any): (boolean, string)
 	return true, ""
 end
 
--- MAX_ALIVE is required. PLATFORM_CAP is optional; each override is an
--- integer from 1 through MAX_ALIVE, keyed by mobile, desktop, or console.
-local function checkCap(source: any): (boolean, string)
-	local ok, err = checkNumber("MAX_ALIVE", source.MAX_ALIVE, 1)
-	if not ok then
-		return false, err
-	end
-	if source.MAX_ALIVE ~= math.floor(source.MAX_ALIVE) then
-		return false, "MAX_ALIVE must be an integer"
-	end
-	local overrides = source.PLATFORM_CAP
-	if overrides == nil then
-		return true, ""
-	end
-	if type(overrides) ~= "table" then
-		return false, "PLATFORM_CAP must be a table"
-	end
-	for key, value in pairs(overrides) do
-		if type(key) ~= "string" or table.find(CAP_PLATFORMS, key) == nil then
-			return false, "PLATFORM_CAP key must be mobile, desktop, or console"
-		end
-		local capOk, capErr = checkNumber("PLATFORM_CAP." .. key, value, 1)
-		if not capOk then
-			return false, capErr
-		end
-		if value ~= math.floor(value) then
-			return false, "PLATFORM_CAP." .. key .. " must be an integer"
-		end
-		if value > source.MAX_ALIVE then
-			return false, "PLATFORM_CAP." .. key .. " is above MAX_ALIVE"
-		end
-	end
-	return true, ""
-end
-
--- The alive cap for one platform. Nil, or a platform with no row, uses
--- MAX_ALIVE. A bad override falls back to MAX_ALIVE too.
-function Enemies.aliveCap(platform: string?): number
-	local cap = Enemies.MAX_ALIVE
-	if type(cap) ~= "number" or cap ~= cap or cap < 1 then
-		return 1
-	end
-	cap = math.floor(cap)
-	local overrides = Enemies.PLATFORM_CAP
-	if type(platform) ~= "string" or type(overrides) ~= "table" then
-		return cap
-	end
-	local special = overrides[platform]
-	if type(special) ~= "number" or special ~= special or special < 1 then
-		return cap
-	end
-	special = math.floor(special)
-	if special > cap then
-		return cap
-	end
-	return special
-end
-
 -- The three types, or the wave-5 boss. Nil for any other id.
 function Enemies.row(kind: string): Row?
 	if type(kind) ~= "string" then
@@ -630,10 +563,6 @@ function Enemies.validate(roster: any?): (boolean, string)
 	local bossOk, bossErr = checkBoss(source)
 	if not bossOk then
 		return false, bossErr
-	end
-	local capOk, capErr = checkCap(source)
-	if not capOk then
-		return false, capErr
 	end
 	return true, ""
 end
