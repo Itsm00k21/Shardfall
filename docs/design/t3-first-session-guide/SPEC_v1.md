@@ -1,6 +1,6 @@
 # T3 First-Session Guide ("Crack your first shard → the Gate"), Spec v1
 
-Owner: Prism (design, docs only: no code, no Config, no save edits). Builders: Ghost (OnboardHud, HUD, world markers), Echo (Onboarding / OnboardingService server steps). Base: `cursor/live-build-9721`. Status: **proposal, not approved.**
+Owner: Prism (design, docs only: no code, no Config, no save edits). Builders: Ghost (OnboardHud, HUD, world markers), Echo (Onboarding / OnboardingService server steps). Base: `cursor/live-build-9721`. Status: **v1.1, all 7 questions decided** by Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (Oct 24, 2026 12:50Z, Kevin's design calls pre-approved to Ghost). Build still waits for M13. Not an official Vision & Design Rules decision until Kevin copies it there.
 Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883813bb309d78b13d87259 (Oct 24, 2026 12:32Z, Kevin pre-approved). ACK: https://app.notion.com/p/403c31ca38838177ab48faab126dd578.
 **Pass target:** a brand-new player reaches the Shard Gate pad in **under 2 minutes with no help**.
 
@@ -93,7 +93,7 @@ Checks: every tap target ≥ 44 px; the card, pill and chip/tab all collapse; no
 | Element | Idle | Press | New | Done | Hidden |
 |---|---|---|---|---|---|
 | Wren card | bg 16,14,24, stroke gold 1 @0.5, left accent 4 px button 108,78,196, wren_64 portrait | Continue: button color → 88,62,170, `UIScale` 0.96 | slides in 0.26 s; text swap fades 0.15 s | — | menu open, during a reveal (auto-collapses to pill), after Skip |
-| Pill | "Shardfall: <SHORT>" gold 255,214,120, stroke 108,78,196 @0.3 | 0.96 → opens card | `newDot` 230,64,78 on a new Wren line | fades at `onboardDone` | menu open |
+| Pill | "Wren: <SHORT>" (Q6 decided) gold 255,214,120, stroke 108,78,196 @0.3 | 0.96 → opens card | `newDot` 230,64,78 on a new Wren line | fades at `onboardDone` | menu open |
 | Goal chip | ◆ + text 13 px | folds to tab | — | ✓ ok 110,210,140 + gold stroke 1.2 s | in the arena on portrait (pill carries it, #412) |
 | ROLL bar | FREE ×n badge, gold ring pulse 1.0 s loop | disabled while a roll resolves | rises 0.26 s Back Out | slides down after roll 3 | menus, steps 4–5 |
 | Edge arrow | cyan 120,210,255 stroke 2, arrow rotated to the pad | tap = camera turns toward the pad (0.4 s) | fades in 0.2 s | hides when the pad is on screen | pad on screen / on the pad |
@@ -151,15 +151,19 @@ SVG in `mockups/` (fake data, original art; PNG renders stay on the box):
 7. No Robux or purchase prompt appears before the pad.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** This file becomes the T3 spec of record. Should the earlier `FIRST_SESSION_GUIDE_T3_v1.md` on #412 be marked "superseded by t3-first-session-guide/SPEC_v1.md" (Prism adds one line on #412), with its steps 4–5 (buff pick, wave 2) moved to Later? **Recommended: yes.**
-2. **@Ghost:** Keep the live first id `"open"` (so `goals()` and the "Goals N/5" tab need no change) instead of #412's `spawn` name? **Recommended: keep `open`.**
-3. **@Ghost:** The 3 free rolls run from the ROLL bar at spawn (#412, fastest), with the Crackstone prompt as a second way in, rather than making the player walk to the Crackstone first (+1.6 s + a prompt hold)? **Recommended: ROLL bar at spawn.**
-4. **@Ghost:** OK to add the "Take me there" auto-walk button at +30 s idle on the Gate step (client `MoveTo`, any input cancels)? It's what makes "under 2 min with no help" a guarantee. **Recommended: yes.**
-5. **@Echo via @Ghost:** Server `note("gate")` from the pad touch check (not a client remote), so the pass point can't be faked? **Recommended: yes.**
-6. **@Kevin (taste):** Pill prefix "Shardfall: Crack a shard" (live) or **"Wren: Crack a shard"** so the guide has a face? **Recommended: "Wren:".**
-7. **@Kevin (taste):** "Replay guide" in Settings for V1 (points only, grants nothing), or leave it out of V1? **Recommended: include; it's client-only and cheap.**
+All 7 are **Decided (Ghost 12:50Z)**, Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (Oct 24, 2026 12:50Z, Kevin's design calls pre-approved to Ghost). Build still waits for M13.
+1. ~~Supersede #412's T3 draft?~~ **Decided (Ghost 12:50Z): yes.** This file is the T3 spec of record; `FIRST_SESSION_GUIDE_T3_v1.md` on #412 gets a "Superseded by #449" note at the top. Nothing is deleted; its steps 4–5 (buff pick, wave 2) move to Later.
+2. ~~Keep the live id `"open"`?~~ **Decided (Ghost 12:50Z): keep `open`.** `goals()` and the "Goals N/5" tab stay unchanged.
+3. ~~ROLL bar at spawn?~~ **Decided (Ghost 12:50Z): yes.** The 3 free rolls run from the ROLL bar at spawn; the Crackstone prompt stays a second way in (same free-roll flow, no double roll).
+4. ~~"Take me there" at +30 s?~~ **Decided (Ghost 12:50Z): yes.** Client `MoveTo`, any input cancels, 8 s timeout falls back to the edge arrow (§7).
+5. ~~Server `note("gate")`?~~ **Decided (Ghost 12:50Z): yes.** The server checks the pad (touch check); the client arrow and Beam are cosmetic only and can't advance the step.
+6. ~~Pill prefix?~~ **Decided (Ghost 12:50Z, Kevin's call pre-approved to Ghost): "Wren:" pill.** SHORT copy reads "Wren: Crack a shard", "Wren: Follow the arrow", etc. (§6 SHORT column gets the "Wren: " prefix instead of "Shardfall: ").
+7. ~~Replay guide in V1?~~ **Decided (Ghost 12:50Z, Kevin's call pre-approved to Ghost): ships in V1, grants nothing.** Points only (§3.3): no free rolls, no kit, no `onboardStep` or save write.
+
+No open questions remain on this spec.
 
 ## Decision log
+- 2026-10-24 (Ghost 12:50Z, board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29, Kevin's calls pre-approved to Ghost): **v1.1.** Q1 yes (#449 supersedes #412's T3 file; note added on #412, nothing deleted). Q2 keep `open`. Q3 ROLL bar at spawn. Q4 Take me there at +30 s. Q5 server checks the pad, client arrow cosmetic. Q6 "Wren:" pill. Q7 Replay guide ships in V1, grants nothing. Build waits for M13.
 - 2026-10-24 (Prism): v1 on `prism/t3-first-session-guide`, built on #412 (beats 0–30 s) and #413 (walk times). Ends at the Gate pad (pass point). Open: Ghost 1–5, Kevin 6–7. Not approved.
 
 ## Later (not V1)
