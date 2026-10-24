@@ -89,14 +89,38 @@ describe("Party gather config", function()
 		local dist = math.sqrt(dx * dx + dz * dz)
 		expect(dist).toEqual(10)
 		expect(dist).toBeGreaterThan(PartyGather.pad.radius)
+		expect(Haven.SPAWN.x).toEqual(gate.x)
+		expect(math.abs(PartyGather.pad.x - Haven.SPAWN.x)).toBeGreaterThan(PartyGather.pad.radius)
 		expect(Gather.inPromptZone(gate.x, gate.z, PartyGather)).toBeTrue()
 		local other = heartwood()
 		expect(Gather.inPromptZone(other.x, other.z, PartyGather)).toBeFalse()
 	end)
 
+	it("does not hide or suppress a Haven portal prompt in the gather zone", function()
+		local actions = { "rootvault", "waves", "heartwood", "practice", "soon" }
+		local gate = rootvault()
+		expect(Gather.inPromptZone(gate.x, gate.z, PartyGather)).toBeTrue()
+		for _, portal in ipairs(Haven.PORTALS) do
+			for _, action in ipairs(actions) do
+				expect(Gather.suppressPrompt(action, portal.x, portal.z, PartyGather)).toBeFalse()
+			end
+		end
+		expect(Gather.suppressPrompt("rootvault", PartyGather.pad.x, PartyGather.pad.z, PartyGather)).toBeFalse()
+		expect(Gather.suppressPrompt("waves", gate.x, gate.z, PartyGather)).toBeFalse()
+		expect(Gather.suppressPrompt(nil, gate.x, gate.z, PartyGather)).toBeTrue()
+		expect(Gather.suppressPrompt("", PartyGather.pad.x, PartyGather.pad.z, PartyGather)).toBeTrue()
+		local other = heartwood()
+		expect(Gather.suppressPrompt(nil, other.x, other.z, PartyGather)).toBeFalse()
+		local host = fs.readFile("src/ServerScriptService/ShardfallServer/PartyGatherHost.luau")
+		expect(string.find(host, "suppressPrompt", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "descendant.Enabled = false", 1, true) ~= nil).toBeTrue()
+		expect(LaunchGate.SHOW.parties).toEqual(false)
+	end)
+
 	it("rejects a pad that covers the gate mouth", function()
 		local bad = table.clone(PartyGather)
 		local pad = table.clone(PartyGather.pad)
+		pad.x = PartyGather.gate.x
 		pad.z = PartyGather.gate.z
 		bad.pad = pad
 		local problems = Gather.problems(bad)
@@ -219,6 +243,34 @@ describe("Party gather rules", function()
 		expect(#state.members).toEqual(2)
 		local allowed = Gather.observe(state, onPad(4, "Dee", true), 2, options)
 		expect(allowed[1].kind).toEqual("join")
+	end)
+
+	it("starts by a fixed deadline when players hop in and out", function()
+		local options = opened()
+		local state = Gather.new(PartyGather)
+		Gather.observe(state, onPad(1, "Ada"), 0, options)
+		local deadline = PartyGather.party.countdown + PartyGather.party.deadlineExtra
+		expect(PartyGather.party.deadlineExtra).toEqual(10)
+		expect(state.countdownEnds).toEqual(PartyGather.party.countdown)
+		expect(state.countdownCap).toEqual(deadline)
+		local now = 11
+		while now < deadline do
+			Gather.observe(state, onPad(2, "Bea"), now, options)
+			Gather.drop(state, 2, options)
+			expect(state.countdownEnds <= deadline).toBeTrue()
+			expect(state.countdownCap).toEqual(deadline)
+			expect(state.phase).toEqual("gather")
+			now += 0.5
+		end
+		Gather.observe(state, onPad(2, "Bea"), deadline - 0.2, options)
+		expect(state.countdownEnds).toEqual(deadline)
+		expect(#state.members).toEqual(2)
+		local locked = Gather.tick(state, deadline, options)
+		expect(locked[1].kind).toEqual("lock")
+		local started = Gather.tick(state, deadline + PartyGather.party.startSweep, options)
+		expect(started[1].kind).toEqual("start")
+		expect(started[1].n).toEqual(2)
+		expect(LaunchGate.SHOW.parties).toEqual(false)
 	end)
 
 	it("bumps a late join to 5 seconds once, and again if they rejoin", function()

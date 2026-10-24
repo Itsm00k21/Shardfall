@@ -4,10 +4,10 @@
 	[ECHO hook] Studio host for the T4 Gate Ring.
 
 	start() returns before it builds unless LaunchGate.parties is on.
-	Parts are a gray pad and four discs in front of Rootvault. No
-	ProximityPrompt is created. Prompts already inside the prompt-free
-	radius are disabled while this host is running, and left alone when
-	the flag is off (this module is not required then).
+	Parts are a gray pad and four discs beside Rootvault. No
+	ProximityPrompt is created. A prompt with no HavenAction inside the
+	prompt-free radius is disabled while this host is running. Haven
+	portal prompts stay enabled. The flag-off path builds nothing.
 
 	Party state stays in memory. No profile write and no teleport.
 	The wave arena has its own flag. A finished countdown locks the roster
@@ -110,7 +110,7 @@ local function silencePrompts(gather: any, config: any)
 	for _, descendant in ipairs(Workspace:GetDescendants()) do
 		if descendant:IsA("ProximityPrompt") then
 			local x, z = promptXZ(descendant)
-			if x ~= nil and z ~= nil and gather.inPromptZone(x, z, config) then
+			if gather.suppressPrompt(descendant:GetAttribute("HavenAction"), x, z, config) then
 				descendant.Enabled = false
 			end
 		end
