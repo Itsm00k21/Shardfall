@@ -220,13 +220,13 @@ Polishing something that isn't fun is the most common way games die.
 **Milestones**
 - 3.1 Shard Gate pad near spawn → teleports into arena.
 - 3.2 Gray-box arena
-  - Round, at least 120 studs, sized for the biggest wave.
-  - 3 enemy gates. Test with the max enemy count first.
+  - Round, 90 studs across, with 3 edge gates, sized for the biggest wave.
+  - Test with the max enemy count first.
 - 3.3 Enemy type 1 (basic chaser) + wave spawner.
 - 3.4 Enemy types 2 and 3 (e.g. ranged, tank).
 - 3.5 Wave flow: 6 / 8 / 10 / 12 enemies, wave counter on screen.
 - 3.6 Boss + 4 adds on wave 5.
-- 3.7 Leave anytime, keep loot from cleared waves.
+- 3.7 No Leave and no early exit. Players keep all earned loot, even on a wipe. Ground loot auto-collects at wave end and on wipe. Difficulties are Normal and Hard (Lv 5) only.
 - 3.8 Stuck-enemy check
   - Pathing test with max wave. No enemies stuck after 30s.
 

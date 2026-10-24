@@ -31,6 +31,7 @@ local ChestConfig = require(ReplicatedStorage.Shared.ChestConfig)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local DungeonConfig = require(ReplicatedStorage.Shared.DungeonConfig)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local ElementGlow = require(ReplicatedStorage.Shared.ElementGlow)
 local Economy = require(ReplicatedStorage.Shared.Economy)
 local cueModule = ReplicatedStorage.Shared
 local CodexCues = require(cueModule.CodexCues)
@@ -38,6 +39,9 @@ local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
+local HardMode = require(ReplicatedStorage.Shared.HardMode)
+local EnemyPerf = require(ReplicatedStorage.Shared.Config.EnemyPerf)
+local EnemyPerfHost = require(script.Parent.EnemyPerfHost)
 local Haven = require(ReplicatedStorage.Shared.Haven)
 local Materials = require(ReplicatedStorage.Shared.Materials)
 local ModelFactory = require(ReplicatedStorage.Shared.ModelFactory)
@@ -51,6 +55,7 @@ local Raids = require(ReplicatedStorage.Shared.Raids)
 local DungeonAdvance = require(script.Parent.DungeonAdvance)
 local EchoBossClear = require(script.Parent.EchoBossClear)
 local EchoRetry = require(script.Parent.EchoRetry)
+local WaveFlowService = require(script.Parent.WaveFlowService)
 local RunTick = require(script.Parent.RunTick)
 local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
@@ -100,6 +105,9 @@ type Enemy = {
 	hover: number,
 	color: Color3,
 	part: BasePart,
+	-- Set only while LaunchGate.enemyPerf is on.
+	perfClock: EnemyPerf.Clock?,
+	perfStuck: boolean?,
 }
 
 type Run = {
@@ -141,6 +149,9 @@ type Run = {
 	-- tuneRaid moved this member off a wing. No kill mark was written.
 	-- They do not hold the shared reset for the room they left.
 	echoJumped: boolean?,
+	-- M10 pool. Nil while enemyPerf is off, so a live run never allocates it.
+	perf: EnemyPerf.Pool?,
+	perfOrders: { { kind: string, offset: Vector3, wave: number? } }?,
 }
 
 type Restart = {
@@ -644,6 +655,37 @@ local function pushRun(player: Player, text: string?)
 	})
 end
 
+-- Element color from Config, parented only when forEnemy returns a spec.
+-- The warm Rim stays the default. Two Highlights on one adornee fight,
+-- so the Rim is disabled while the element glow is the one that draws.
+local function applyElementGlow(part: BasePart, host: Instance, glow: ElementGlow.Visual)
+	local color = Color3.fromRGB(glow.color[1], glow.color[2], glow.color[3])
+	local mark = Instance.new("Highlight")
+	mark.Name = glow.name
+	mark.Adornee = host
+	mark.FillColor = color
+	mark.OutlineColor = color
+	mark.FillTransparency = glow.fillTransparency
+	mark.OutlineTransparency = glow.outlineTransparency
+	if glow.depthMode == "Occluded" then
+		mark.DepthMode = Enum.HighlightDepthMode.Occluded
+	else
+		mark.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	end
+	mark.Parent = host
+	local rim = host:FindFirstChild("Rim")
+	if rim ~= nil and rim:IsA("Highlight") then
+		rim.Enabled = false
+	end
+	local light = Instance.new("PointLight")
+	light.Name = glow.lightName
+	light.Color = color
+	light.Brightness = glow.lightBrightness
+	light.Range = glow.lightRange
+	light.Shadows = false
+	light.Parent = part
+end
+
 local function paintEnemy(enemy: Enemy)
 	enemy.part:SetAttribute("ShardfallHp", enemy.hp)
 	enemy.part:SetAttribute("ShardfallMax", enemy.maxHp)
@@ -785,15 +827,35 @@ end
 
 local function clearEnemies(run: Run)
 	run.puddles = nil
+	local perfOn = LaunchGate.on("enemyPerf")
+	local pool = run.perf
 	for _, enemy in pairs(run.enemies) do
 		local model = enemy.part.Parent
-		if model ~= nil and model:IsA("Model") then
-			model:Destroy()
-		else
-			enemy.part:Destroy()
+		local parked = false
+		if perfOn and pool ~= nil and model ~= nil and model:IsA("Model") then
+			local keep = EnemyPerf.stash(pool, enemy.kind)
+			if keep then
+				parked = EnemyPerfHost.park(enemy.kind, model)
+				if not parked then
+					EnemyPerf.unstash(pool, enemy.kind)
+				end
+			end
+		end
+		if not parked then
+			if model ~= nil and model:IsA("Model") then
+				model:Destroy()
+			else
+				enemy.part:Destroy()
+			end
 		end
 	end
 	run.enemies = {}
+	if pool ~= nil then
+		EnemyPerf.wipe(pool)
+	end
+	if run.perfOrders ~= nil then
+		table.clear(run.perfOrders)
+	end
 	if run.sunbeam ~= nil then
 		run.sunbeam:Destroy()
 		run.sunbeam = nil
@@ -874,7 +936,36 @@ local function clearSpawn(rig: Instance, run: Run, localX: number, localZ: numbe
 	warn(string.format("[Rootvault] spawn still blocked at %.0f, %.0f", x, z))
 end
 
-local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?): Enemy?
+-- Same living-enemy rule as aliveCount. Spawn runs before that helper.
+local function countLiving(run: Run): number
+	local count = 0
+	for _, enemy in pairs(run.enemies) do
+		if enemy.hp > 0 then
+			count += 1
+		end
+	end
+	return count
+end
+
+local function ensurePerf(run: Run): EnemyPerf.Pool
+	local pool = run.perf
+	if pool == nil then
+		pool = EnemyPerf.newPool()
+		pool.alive = countLiving(run)
+		run.perf = pool
+		run.perfOrders = {}
+	end
+	return pool
+end
+
+local function spawnEnemy(
+	run: Run,
+	kind: string,
+	offset: Vector3,
+	wave: number?,
+	spawnIndex: number?,
+	heldAction: ("fresh" | "reuse")?
+): Enemy?
 	local definition = Dungeons.enemy(kind)
 	if definition == nil then
 		return nil
@@ -891,6 +982,28 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			Dungeons.FLOOR_SIZE / 2
 		)
 		offset = Vector3.new(cx, offset.Y, cz)
+	end
+	local claimed: ("fresh" | "reuse")? = nil
+	if LaunchGate.on("enemyPerf") then
+		if heldAction == "fresh" or heldAction == "reuse" then
+			claimed = heldAction
+		else
+			local action = EnemyPerf.claim(ensurePerf(run), kind)
+			if action == "queued" then
+				local orders = run.perfOrders
+				if orders == nil then
+					orders = {}
+					run.perfOrders = orders
+				end
+				table.insert(orders, {
+					kind = kind,
+					offset = offset,
+					wave = wave,
+				})
+				return nil
+			end
+			claimed = if action == "reuse" then "reuse" else "fresh"
+		end
 	end
 	nextEnemyId += 1
 	local id = "e" .. tostring(nextEnemyId)
@@ -934,22 +1047,38 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			display = room.name
 		end
 	end
-	local rigOk, rigOrErr = pcall(function()
-		return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, display)
-	end)
 	local part: BasePart
-	if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
-		part = rigOrErr :: BasePart
-	else
-		local reason = if rigOk then "no recipe" else tostring(rigOrErr)
-		warn(string.format("[Rootvault] %s rig failed (%s); anchored marker only", kind, reason))
-		-- Small, anchored, and non-colliding. The old fallback was a full-size
-		-- Grass block, which is what a failed rig looked like in play.
-		part = makePart(display, Vector3.new(1.2, 1.2, 1.2), rootCFrame, color, run.folder, false)
+	local reusedPart = if claimed == "reuse" then EnemyPerfHost.take(kind) else nil
+	if reusedPart ~= nil then
+		part = reusedPart
+		local reusedModel = part.Parent
+		if reusedModel ~= nil then
+			reusedModel.Parent = run.folder
+		end
+		part.CFrame = rootCFrame
+		part.Anchored = true
+		part.CanCollide = false
 		part.CanTouch = false
 		part.CanQuery = true
-		part.Massless = true
-		part:SetAttribute("ShardfallRigFailed", true)
+		part.Transparency = 1
+		part.Name = display
+	else
+		local rigOk, rigOrErr = pcall(function()
+			return ModelFactory.buildEnemy(run.folder, kind, rootCFrame, size, display)
+		end)
+		if rigOk and typeof(rigOrErr) == "Instance" and (rigOrErr :: Instance):IsA("BasePart") then
+			part = rigOrErr :: BasePart
+		else
+			local reason = if rigOk then "no recipe" else tostring(rigOrErr)
+			warn(string.format("[Rootvault] %s rig failed (%s); anchored marker only", kind, reason))
+			-- Small, anchored, and non-colliding. The old fallback was a full-size
+			-- Grass block, which is what a failed rig looked like in play.
+			part = makePart(display, Vector3.new(1.2, 1.2, 1.2), rootCFrame, color, run.folder, false)
+			part.CanTouch = false
+			part.CanQuery = true
+			part.Massless = true
+			part:SetAttribute("ShardfallRigFailed", true)
+		end
 	end
 	local host = part.Parent
 	local rigModel = if host ~= nil and host:IsA("Model") then host else nil
@@ -975,6 +1104,9 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 			warn(string.format("[Rootvault] %s rig has %d parts", kind, pieces))
 		end
 	end
+	if LaunchGate.on("enemyPerf") and rigModel ~= nil then
+		EnemyPerfHost.prepare(rigModel)
+	end
 	part:SetAttribute(
 		"ShardfallName",
 		if elite then "Elite " .. definition.name else definition.name
@@ -993,6 +1125,12 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	highlight.OutlineTransparency = Dungeons.RIM.outlineTransparency
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	highlight.Parent = rimHost
+	local ordinal = if type(spawnIndex) == "number" then spawnIndex else 1
+	local glow = ElementGlow.forEnemy(ordinal, LaunchGate.on("elementGlow"))
+	if glow ~= nil then
+		applyElementGlow(part, rimHost, glow)
+		part:SetAttribute("ShardfallElement", glow.elementId)
+	end
 	enemyBar(part, definition.name, color, ModelFactory.barLift(kind))
 	local enemy: Enemy = {
 		id = id,
@@ -1031,12 +1169,15 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	}
 	paintEnemy(enemy)
 	run.enemies[id] = enemy
+	if LaunchGate.on("enemyPerf") then
+		enemy.perfClock = EnemyPerf.begin(part.Position.X, part.Position.Z, os.clock())
+	end
 	if enemy.boss and run.echoFight ~= nil then
 		local room = run.dungeon.rooms[run.roomIndex]
 		local bossId = if room ~= nil then room.id else enemy.kind
 		RaidEchoFight.notePull(run.echoFight, bossId)
 	end
-	if enemy.boss then
+	if enemy.boss and run.sunbeam == nil then
 		local beam = makePart(
 			"Sunbeam",
 			Vector3.new(definition.safeRadius * 2, 0.4, definition.safeRadius * 2),
@@ -1067,6 +1208,55 @@ local function spawnEnemy(run: Run, kind: string, offset: Vector3, wave: number?
 	return enemy
 end
 
+-- Park the rig and, if a spawn was waiting on the cap, bring that one in.
+-- The caller already decided this enemy is leaving the field. No loot.
+local function perfRetire(run: Run, enemy: Enemy)
+	-- A pool created on this call has not counted a corpse (hp already 0).
+	local created = run.perf == nil
+	local pool = ensurePerf(run)
+	if created and enemy.hp <= 0 then
+		pool.alive += 1
+	end
+	local outcome = EnemyPerf.retire(pool, enemy.kind)
+	local model = enemy.part.Parent
+	local parked = false
+	if outcome.keep and model ~= nil and model:IsA("Model") then
+		parked = EnemyPerfHost.park(enemy.kind, model)
+		if not parked then
+			EnemyPerf.unstash(pool, enemy.kind)
+		end
+	end
+	if not parked then
+		if model ~= nil and model:IsA("Model") then
+			model:Destroy()
+		else
+			enemy.part:Destroy()
+		end
+	end
+	run.enemies[enemy.id] = nil
+	if outcome.nextKind == nil or outcome.nextAction == nil then
+		return
+	end
+	local orders = run.perfOrders
+	local order = if orders ~= nil then table.remove(orders, 1) else nil
+	if order == nil then
+		return
+	end
+	spawnEnemy(run, order.kind, order.offset, order.wave, nil, outcome.nextAction)
+end
+
+-- Biggest-wave stall. Despawn, then respawn on a clear pad. Not a kill.
+local function unstickEnemy(run: Run, enemy: Enemy)
+	local kind = enemy.kind
+	local wave = if run.dungeon.endless == true then run.wave else nil
+	local stuckX = enemy.part.Position.X
+	local stuckZ = enemy.part.Position.Z
+	perfRetire(run, enemy)
+	local originX, _, originZ = Dungeons.roomOrigin(run.placeIndex)
+	local padX, padZ = EnemyPerf.respawnPad(stuckX - originX, stuckZ - originZ, Dungeons.ENEMY_SPAWNS)
+	spawnEnemy(run, kind, Vector3.new(padX, 0, padZ), wave)
+end
+
 local function spawnRoom(player: Player, run: Run)
 	CombatService.clearShots(player)
 	clearEnemies(run)
@@ -1085,7 +1275,7 @@ local function spawnRoom(player: Player, run: Run)
 	end
 	for index, kind in ipairs(room.enemies) do
 		local offset = SPAWNS[((index - 1) % #SPAWNS) + 1]
-		spawnEnemy(run, kind, offset)
+		spawnEnemy(run, kind, offset, nil, index)
 	end
 	local text = string.format("%s  ·  %s", run.dungeon.name, room.name)
 	if bossRoom then
@@ -1106,7 +1296,7 @@ local function spawnWave(player: Player, run: Run)
 	local kinds = Dungeons.waveKinds(run.wave)
 	for index, kind in ipairs(kinds) do
 		local offset = SPAWNS[((index - 1) % #SPAWNS) + 1]
-		spawnEnemy(run, kind, offset, run.wave)
+		spawnEnemy(run, kind, offset, run.wave, index)
 	end
 	local text = string.format("%s  ·  Wave %d", run.dungeon.name, run.wave)
 	if Dungeons.isBossWave(run.wave) then
@@ -1479,6 +1669,11 @@ local function grant(
 	local bonus = CombatMath.bonusGold(rolled.gold, goldFind)
 	local levels = 0
 	local xpShown = rolled.xp
+	-- Heartwood pays its own raid row. Rootvault and Waves use Config.
+	local tokenGrant = rolled.shardTokens
+	if run.dungeon.id ~= Dungeons.HEARTWOOD_ID then
+		tokenGrant = HardMode.tokens(run.difficulty, rolled.shardTokens)
+	end
 	local ok, err = DataService.mutate(player, function(data)
 		local elapsed = 0
 		if farmSince[player] ~= nil then
@@ -1491,7 +1686,7 @@ local function grant(
 		end
 		data.gold += paid
 		Economy.log(data, "dungeon_clear", "gold", paid, data.gold)
-		data.shardTokens += rolled.shardTokens
+		data.shardTokens += tokenGrant
 		local xpGain = rolled.xp
 		if run.dungeon.endless ~= true and run.dungeon.id == Dungeons.ROOTVAULT_ID then
 			local today = Loops.dayNumber(os.time())
@@ -1586,8 +1781,8 @@ local function grant(
 	if dismissIn == nil then
 		local bits =
 			{ string.format("+%d gold", rolled.gold + bonus), string.format("+%d XP", xpShown) }
-		if rolled.shardTokens > 0 then
-			table.insert(bits, string.format("+%d tokens", rolled.shardTokens))
+		if tokenGrant > 0 then
+			table.insert(bits, string.format("+%d tokens", tokenGrant))
 		end
 		fx(player, {
 			kind = "hint",
@@ -1599,7 +1794,7 @@ local function grant(
 			dungeonName = run.dungeon.name,
 			gold = rolled.gold,
 			bonusGold = bonus,
-			shardTokens = rolled.shardTokens,
+			shardTokens = tokenGrant,
 			xp = xpShown,
 			levels = levels,
 			materials = lines,
@@ -1702,13 +1897,7 @@ end
 
 -- Living enemies in this room. A party wipe counts players, not this.
 local function aliveCount(run: Run): number
-	local count = 0
-	for _, enemy in pairs(run.enemies) do
-		if enemy.hp > 0 then
-			count += 1
-		end
-	end
-	return count
+	return countLiving(run)
 end
 
 local function clearNamed(folder: Instance, name: string)
@@ -1812,6 +2001,9 @@ function DungeonService.damageEnemy(
 	paintEnemy(enemy)
 	if enemy.hp > 0 then
 		enemy.part:SetAttribute("ShardfallFlinchUntil", now + CombatFeel.FLINCH_SECONDS)
+		if LaunchGate.on("enemyPerf") then
+			enemy.perfClock = EnemyPerf.begin(enemy.part.Position.X, enemy.part.Position.Z, now)
+		end
 	end
 	pcall(ModelFactory.flash, enemy.part)
 	if enemy.hp > 0 then
@@ -1857,6 +2049,9 @@ function DungeonService.damageEnemy(
 		end
 	end
 	if enemy.hp <= 0 then
+		-- The rig stays as Remains until the wave clears. Drop the element
+		-- Highlight now so dead enemies do not pile up toward the 31 cap.
+		ElementGlow.detach(ModelFactory.adorn(enemy.part), enemy.part)
 		if enemy.boss and run.echoFight ~= nil then
 			local fight = run.echoFight
 			-- This copy is down. Stacks stay until every member still
@@ -1941,13 +2136,17 @@ function DungeonService.damageEnemy(
 		then
 			LoopService.progress(player, "glade", 1)
 		end
-		pcall(ModelFactory.dissolve, enemy.part)
-		enemy.part.Name = "Remains"
-		enemy.part:SetAttribute("ShardfallName", "")
-		enemy.part.Transparency = 1
-		local bar = enemy.part:FindFirstChild("ShardfallBar")
-		if bar ~= nil then
-			bar:Destroy()
+		if LaunchGate.on("enemyPerf") then
+			perfRetire(run, enemy)
+		else
+			pcall(ModelFactory.dissolve, enemy.part)
+			enemy.part.Name = "Remains"
+			enemy.part:SetAttribute("ShardfallName", "")
+			enemy.part.Transparency = 1
+			local bar = enemy.part:FindFirstChild("ShardfallBar")
+			if bar ~= nil then
+				bar:Destroy()
+			end
 		end
 		if aliveCount(run) == 0 then
 			-- The boss died while an add was still up, so the seat stayed
@@ -2231,6 +2430,27 @@ local function tickEnemy(
 	end
 	moveEnemy(enemy, hrp.Position, dt, run.placeIndex, run.dungeon.floorSize)
 	pcall(ModelFactory.step, enemy.part, now, true)
+	if
+		LaunchGate.on("enemyPerf")
+		and run.dungeon.endless == true
+		and EnemyPerf.isBiggest(Dungeons.waveCount(run.wave), Dungeons.WAVE_MAX_COUNT)
+	then
+		local position = enemy.part.Position
+		local distance =
+			CombatMath.planarDistance(position.X, position.Z, hrp.Position.X, hrp.Position.Z)
+		local hold = math.max(2, enemy.range * 0.65)
+		local clock = enemy.perfClock
+		if clock == nil then
+			clock = EnemyPerf.begin(position.X, position.Z, now)
+		end
+		local nextClock, stalled =
+			EnemyPerf.observe(clock, position.X, position.Z, now, distance > hold)
+		enemy.perfClock = nextClock
+		enemy.perfStuck = stalled
+		if stalled then
+			return
+		end
+	end
 
 	if enemy.boss and enemy.phase == 1 then
 		if now < enemy.weakUntil then
@@ -2483,6 +2703,23 @@ local function tickOne(player: Player, run: Run, step: number, now: number)
 		end
 		tickEnemy(player, run, enemy, hrp, step, now)
 	end
+	if LaunchGate.on("enemyPerf") and runs[player] ~= nil and not run.resolving and not run.cleared then
+		local stuckIds = {}
+		for id, enemy in pairs(run.enemies) do
+			if enemy.perfStuck == true and enemy.hp > 0 then
+				table.insert(stuckIds, id)
+			end
+		end
+		for _, id in ipairs(stuckIds) do
+			local enemy = run.enemies[id]
+			if enemy ~= nil and enemy.hp > 0 then
+				unstickEnemy(run, enemy)
+			end
+			if runs[player] == nil or run.resolving then
+				break
+			end
+		end
+	end
 	if runs[player] ~= nil and not run.resolving and not run.cleared then
 		tickPuddles(player, run, hrp, now)
 	end
@@ -2632,7 +2869,16 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 	if dungeon.id == Dungeons.HEARTWOOD_ID and raidMode == nil then
 		return reject("Pick Story or Normal.")
 	end
-	local diff = Rootvault.difficulty(difficulty)
+	-- Rootvault and Waves. A missing tier joins on Normal. Hard under
+	-- Lv 5 is refused here again so a spoofed remote cannot skip the pad.
+	local tierId: string? = nil
+	if raidMode == nil then
+		local accepted, tierWhy = HardMode.accept(profile.level, difficulty)
+		if accepted == nil then
+			return reject(tierWhy or HardMode.REFUSED)
+		end
+		tierId = accepted
+	end
 	if raidMode ~= nil then
 		local allowed, why = PracticeLoot.levelGate(profile.level)
 		if not allowed then
@@ -2641,8 +2887,6 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		if raidMode.id == "normal" and profile.raidStory ~= true then
 			return reject("Clear Story once before Normal.")
 		end
-	elseif (profile.level or 1) < diff.level then
-		return reject(string.format("Level %d opens %s.", diff.level, diff.id))
 	end
 	if activeFolder == nil then
 		return reject("The dungeon world is still loading.")
@@ -2673,7 +2917,7 @@ function DungeonService.enter(player: Player, dungeonId: any, difficulty: any, p
 		yielding = false,
 		walking = false,
 		loot = {},
-		difficulty = if raidMode ~= nil then raidMode.id else diff.id,
+		difficulty = if raidMode ~= nil then raidMode.id else (tierId :: string),
 		offer = nil,
 		eliteNext = false,
 		shrine = "",
@@ -2945,7 +3189,38 @@ function DungeonService.chooseDoor(player: Player, doorId: any)
 	return DungeonService.advance(player)
 end
 
+function DungeonService.setDifficulty(player: Player, tier: any)
+	local profile = DataService.get(player)
+	if profile == nil then
+		return reject("Profile is still loading.")
+	end
+	-- This player's memory only. A refusal does not write a save or anyone else.
+	local accepted, why = HardMode.select(profile.level, tier, player.UserId)
+	if accepted == nil then
+		return reject(why or HardMode.REFUSED)
+	end
+	return { ok = true, tier = accepted }
+end
+
+local function enterFromPad(player: Player, dungeonId: any)
+	local profile = DataService.get(player)
+	local level = if profile ~= nil then profile.level else 1
+	local tier, why = HardMode.touch(level, player.UserId)
+	if tier == nil then
+		pushRun(player, why or HardMode.PAD_REFUSED)
+		return
+	end
+	local result = DungeonService.enter(player, dungeonId, tier)
+	if result.ok ~= true then
+		pushRun(player, result.error)
+	end
+end
+
 function DungeonService.action(player: Player, action: string, dungeonId: any, extra: any)
+	if action == "difficulty" then
+		local requested = if type(extra) == "string" then extra else dungeonId
+		return DungeonService.setDifficulty(player, requested)
+	end
 	if action == "enter" then
 		return DungeonService.enter(player, dungeonId, extra)
 	end
@@ -3002,10 +3277,7 @@ local function bindTouchRoot(world: Instance)
 				if runs[player] ~= nil then
 					return
 				end
-				local result = DungeonService.enter(player, descendant:GetAttribute("EnterDungeon"))
-				if result.ok ~= true then
-					pushRun(player, result.error)
-				end
+				enterFromPad(player, descendant:GetAttribute("EnterDungeon"))
 			end)
 		end
 	end
@@ -3052,6 +3324,12 @@ local function retryPull(fight: RaidEchoFight.Fight)
 	for member, memberRun in pairs(runs) do
 		if memberRun.echoFight == fight and memberRun.resolving ~= true then
 			table.insert(party, member)
+		end
+	end
+	for _, member in ipairs(party) do
+		local waveRun = WaveFlowService.runFor(member)
+		if waveRun ~= nil then
+			WaveFlowService.wipe(waveRun)
 		end
 	end
 	-- Every guard goes up before any Destroy or stream yield. A hit on
@@ -3214,6 +3492,7 @@ function DungeonService.backfill(player: Player, host: Player)
 end
 
 function DungeonService.start()
+	-- No server-wide pad tier. Each player joins on Normal in noteJoin.
 	print("[Rootvault] build " .. Build.STAMP .. " spawner=ModelFactory boss=Grandmother Gnarl")
 	local litOk, lightResult = pcall(function()
 		return VerdantLook.apply(game:GetService("Lighting"))
@@ -3253,10 +3532,7 @@ function DungeonService.start()
 		if runs[player] ~= nil then
 			return
 		end
-		local result = DungeonService.enter(player, Dungeons.ROOTVAULT_ID)
-		if result.ok ~= true then
-			pushRun(player, result.error)
-		end
+		enterFromPad(player, Dungeons.ROOTVAULT_ID)
 	end)
 
 	local function watchIdle(player: Player)
@@ -3293,6 +3569,9 @@ function DungeonService.start()
 	end
 
 	local function hook(player: Player)
+		-- This player joins on Normal. Other players' tiers stay as they are.
+		-- Nothing is read from or written to the profile.
+		HardMode.noteJoin(player.UserId)
 		watchIdle(player)
 		player.CharacterAdded:Connect(function()
 			placeCharacter(player)
@@ -3326,6 +3605,7 @@ function DungeonService.start()
 		restartAt[player] = nil
 		idleNoted[player] = nil
 		tickFault[player] = nil
+		HardMode.release(player.UserId)
 	end)
 
 	RunService.Heartbeat:Connect(onHeartbeat)

@@ -21,8 +21,8 @@ Progression.BOOST_CAP = 1
 Progression.UNLOCKS = {
 	{ level = 1, id = "class", text = "Class, rolls, pet, chest" },
 	{ level = 5, id = "talent", text = "Level 5 talent and daily quests" },
+	{ level = 5, id = "hard", text = "Hard mode" },
 	{ level = 8, id = "craft", text = "Crafting tab and chest merging" },
-	{ level = 10, id = "hard", text = "Hard Rootvault" },
 	{ level = 15, id = "nightmare", text = "Nightmare Rootvault and the weekly boss" },
 	{ level = 20, id = "heartwood", text = "The Heartwood" },
 }
@@ -42,6 +42,10 @@ function Progression.unlocked(level: number): { string }
 	local ids = {}
 	for _, row in ipairs(Progression.UNLOCKS) do
 		if level >= row.level then
+			-- The row stays. extraDifficulties (off) is what hides it.
+			if row.id == "nightmare" and not LaunchGate.on("extraDifficulties") then
+				continue
+			end
 			table.insert(ids, row.id)
 		end
 	end

@@ -1397,12 +1397,29 @@ PetAura.start(playerGui, function()
 	return latestProfile
 end)
 
+-- [Ghost] oneInventory: the rail toggles the full Inventory itself.
+-- closePanels runs only when opening, then we return. openHub("bag")
+-- would close this inventory and follow's onBag would open it again.
+-- The B key stays on MenuHub follow.
+local function pressRailBag()
+	if LaunchGate.on("oneInventory") then
+		if inventory.isOpen() then
+			inventory.close()
+			return
+		end
+		closePanels("inventory")
+		inventory.open()
+		return
+	end
+	openHub("bag")
+end
+
 hudShell = HudShell.start(playerGui, {
 	onHero = function()
 		openHub("hero")
 	end,
 	onBag = function()
-		openHub("bag")
+		pressRailBag()
 	end,
 	onRoll = function()
 		openHub("roll")
@@ -1428,7 +1445,10 @@ presentStarterGoals(latestProfile)
 actionBar = ActionBar.start(playerGui, {
 	invoke = invoke,
 	menuOpen = function()
-		return menuHub ~= nil and menuHub.isOpen()
+		if menuHub ~= nil and menuHub.isOpen() then
+			return true
+		end
+		return inventory ~= nil and inventory.isShown()
 	end,
 	onDodge = function()
 		CombatStage.dodge()
@@ -1515,6 +1535,8 @@ end)
 if LaunchGate.on("wildCapture") then
 	CaptureHud.start(invoke)
 end
+-- [ECHO hook] Wave arena UI. start() draws nothing while waveArena is off.
+require(script.WaveArena).start()
 PetHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end)

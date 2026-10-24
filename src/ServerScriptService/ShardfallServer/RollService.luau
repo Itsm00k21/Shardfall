@@ -31,6 +31,7 @@ local RollConfig = require(ReplicatedStorage.Shared.RollConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local SessionGuide = require(ReplicatedStorage.Shared.SessionGuide)
 local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 local Settings = require(ReplicatedStorage.Shared.Settings)
 local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
@@ -203,16 +204,43 @@ local function attachGear(payload: { [string]: any }, drawn: any)
 	payload.merged = true
 end
 
+-- Lowest pool rarity that is still at or above the guide floor.
+-- present() is high to low, so the last match is the cheapest raise.
+local function atLeast(pool: any, floorName: string): string?
+	local need = Rarities.INDEX[floorName]
+	if type(need) ~= "number" then
+		return nil
+	end
+	local best = nil
+	for _, name in ipairs(RarityConfig.present(pool)) do
+		if Rarities.rank(name) >= need then
+			best = name
+		end
+	end
+	return best
+end
+
 -- One draw on an already-paid crack: pick a rarity with pity, mint the
 -- item, save it and move the counters. The caller has spent the tokens
--- and checked the Bag. Returns the capture, or nil and a reason.
-local function drawInto(data: any, pool: any, rng: any): (any?, string?)
+-- and checked the Bag. guideFloor is the server Rare floor for roll3.
+-- Returns the capture, or nil and a reason.
+local function drawInto(data: any, pool: any, rng: any, guideFloor: string?): (any?, string?)
 	local luck = RarityConfig.luckFromProfile(data)
 	-- Legendary pity only. A saved sinceEpic is left untouched.
 	local counters = {
 		sinceLegendary = data.sinceLegendary,
 	}
 	local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
+	if type(guideFloor) == "string" then
+		local wanted = SessionGuide.floorRarity(rarity, guideFloor)
+		if wanted ~= rarity then
+			local raised = atLeast(pool, wanted)
+			if type(raised) == "string" then
+				rarity = raised
+				floor = raised
+			end
+		end
+	end
 	local entry = RarityConfig.chooseEntry(pool, rarity, rng)
 	if type(entry) ~= "table" or type(entry.templateId) ~= "string" then
 		return nil, "That shard has nothing to roll."
@@ -310,6 +338,7 @@ local function crack(
 	end
 
 	local captured: any = nil
+	local guideFree = false
 	local ok, err = DataService.mutate(player, function(data)
 		if not Pools.isUnlocked(pool, data.ascension) then
 			return string.format("Reach Ascension %d to roll %s.", pool.ascension, pool.name)
@@ -321,10 +350,18 @@ local function crack(
 				return "Inventory is full."
 			end
 		end
+		-- R2/R3. Free only when the saved step is roll1, roll2, or roll3.
+		-- The step moves in this mutate with the item. No client flag.
+		local guideClaim = nil
+		if currency == Currencies.SHARD then
+			guideClaim = SessionGuide.claimFree(data)
+		end
+		local guideFloor = if guideClaim ~= nil then guideClaim.floor else nil
 		-- A dungeon voucher cracks that area once and does not spend a token.
 		-- It is an earned clear, so it never pays for a Prism roll.
+		-- A guide roll does not spend the voucher either.
 		local usedVoucher = false
-		if currency == Currencies.SHARD then
+		if guideClaim == nil and currency == Currencies.SHARD then
 			local area = (pool :: any).area
 			if type(area) == "string" and type(data.vouchers) == "table" then
 				local stack = data.vouchers[area]
@@ -334,15 +371,23 @@ local function crack(
 				end
 			end
 		end
-		if not usedVoucher then
+		if guideClaim == nil and not usedVoucher then
 			local spent, spendError = Currencies.take(data, currency)
 			if not spent then
 				return spendError or "You cannot pay for that crack."
 			end
 		end
-		local drawn, drawError = drawInto(data, pool, serverRng())
+		local drawn, drawError = drawInto(data, pool, serverRng(), guideFloor)
 		if drawn == nil then
 			return drawError
+		end
+		if type(guideFloor) == "string" and Rarities.INDEX[guideFloor] ~= nil then
+			if Rarities.rank(drawn.rarity) < Rarities.rank(guideFloor) then
+				return "Could not crack that shard."
+			end
+		end
+		if guideClaim ~= nil then
+			guideFree = true
 		end
 		captured = drawn
 		return nil
@@ -382,6 +427,9 @@ local function crack(
 		currency = currency,
 		starterGoalTracker = captured.tracker,
 	}
+	if guideFree then
+		result.guideFree = true
+	end
 	attachGear(result, captured)
 	return result
 end
@@ -428,6 +476,11 @@ local function crackBatch(player: Player, poolId: any, total: number)
 		if blocked ~= nil then
 			return blocked
 		end
+		-- Guide rolls 1-3 are the free single crack. x10 does not spend.
+		local note = SessionGuide.batchNotice(data)
+		if note ~= nil then
+			return note
+		end
 		data.shardTokens -= price
 		local rng = serverRng()
 		for _ = 1, total do
@@ -440,7 +493,15 @@ local function crackBatch(player: Player, poolId: any, total: number)
 		return nil
 	end)
 	if not ok or #captures ~= total then
-		return reject(err or "Could not crack that shard.")
+		local message = if type(err) == "string" then err else "Could not crack that shard."
+		if message == SessionGuide.FREE_ROLL_NOTICE then
+			return {
+				ok = false,
+				error = message,
+				notice = message,
+			}
+		end
+		return reject(message)
 	end
 	local items = {}
 	local best = 1
@@ -487,6 +548,20 @@ local function crackBatch(player: Player, poolId: any, total: number)
 	}
 end
 
+-- Same clock crack() uses. rollMany used to skip it: x10 never looked,
+-- and any other count passes ignoreCooldown into every crack. Two invokes
+-- in one moment then spent twice and granted twice.
+local function rollCooling(player: Player, quick: boolean): boolean
+	local profile = DataService.get(player)
+	local previous = lastRoll[player.UserId]
+	if profile == nil or previous == nil then
+		return false
+	end
+	local settings = Settings.normalize(profile.uiSettings)
+	local waitFor = RollLoop.gap(settings, previous.rarity, previous.quick, quick)
+	return os.clock() - previous.at < waitFor
+end
+
 -- One request, up to ten cracks. Exactly RollConfig.MULTI_COUNT is the
 -- discounted x10 batch above. Any other count cracks one at a time, each
 -- spending the way a single Roll does: a voucher covers one, then a Shard
@@ -500,7 +575,19 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 	if total < 1 or total > RollConfig.MAX_BATCH then
 		return reject("Roll 1 to 10 shards.")
 	end
+	local quick = total == RollConfig.MULTI_COUNT
+	if rollCooling(player, quick) then
+		return reject("Roll cooling down.")
+	end
 	if total == RollConfig.MULTI_COUNT then
+		local note = SessionGuide.batchNotice(DataService.get(player))
+		if type(note) == "string" then
+			return {
+				ok = false,
+				error = note,
+				notice = note,
+			}
+		end
 		return crackBatch(player, poolId, total)
 	end
 	local items = {}

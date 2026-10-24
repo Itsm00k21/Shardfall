@@ -34,6 +34,7 @@ local GoldShop = require("../src/ReplicatedStorage/Shared/GoldShop")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Loops = require("../src/ReplicatedStorage/Shared/Loops")
 local Onboarding = require("../src/ReplicatedStorage/Shared/Onboarding")
+local SessionGuide = require("../src/ReplicatedStorage/Shared/SessionGuide")
 local Pets = require("../src/ReplicatedStorage/Shared/Pets")
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Quality = require("../src/ReplicatedStorage/Shared/Quality")
@@ -714,9 +715,14 @@ function handlers.UpgradeGear(data, uid)
 end
 
 function handlers.Onboard(data, action)
+	if action == "replay" then
+		return { ok = true }
+	end
 	if action == "skip" then
 		local saved, err = mutate(data, function(profile)
 			if profile.onboardDone ~= true then
+				local tokens = SessionGuide.unusedRollTokens(profile)
+				SessionGuide.grantTokens(profile, tokens)
 				Onboarding.starter(profile)
 			end
 			FirstSessionKit.grant(profile)
@@ -727,10 +733,17 @@ function handlers.Onboard(data, action)
 	if data.onboardDone == true then
 		return { ok = true }
 	end
-	if data.onboardStep ~= "open" and data.onboardStep ~= "haven" then
+	local stepId = data.onboardStep
+	if not LaunchGate.on("firstSessionGuide") and SessionGuide.known(stepId) then
+		stepId = "open"
+	end
+	if stepId ~= "open" and stepId ~= "haven" then
 		return fail("Try it in the world first.")
 	end
 	local saved, err = mutate(data, function(profile)
+		if not LaunchGate.on("firstSessionGuide") and SessionGuide.known(profile.onboardStep) then
+			profile.onboardStep = "open"
+		end
 		if profile.onboardStep == "haven" then
 			Onboarding.starter(profile)
 		else

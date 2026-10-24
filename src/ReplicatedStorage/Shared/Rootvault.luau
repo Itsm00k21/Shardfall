@@ -8,12 +8,27 @@
 	and applies the numbers. Layout shuffling stays post-beta.
 ]]
 
+local Economy = require("./Config/Economy")
+
 local Rootvault = {}
 
+-- Combat numbers come from Config/Economy so Hard cannot drift from the
+-- Core Loop. Chest rarity stays here. Medium and Insane are not rows.
+local function combat(id: string, chest: string)
+	local row = Economy.DIFFICULTIES[id]
+	return {
+		id = id,
+		hp = row.hpMultiplier,
+		damage = row.damageMultiplier,
+		level = row.levelGate,
+		chest = chest,
+	}
+end
+
 Rootvault.DIFFICULTIES = {
-	normal = { id = "normal", hp = 1, damage = 1, level = 1, chest = "Common" },
-	hard = { id = "hard", hp = 1.5, damage = 1.5, level = 10, chest = "Uncommon" },
-	nightmare = { id = "nightmare", hp = 2, damage = 2, level = 15, chest = "Rare" },
+	normal = combat("normal", "Common"),
+	hard = combat("hard", "Uncommon"),
+	nightmare = combat("nightmare", "Rare"),
 }
 
 Rootvault.ROLES = {
@@ -50,8 +65,18 @@ function Rootvault.difficulty(id: any)
 end
 
 function Rootvault.scale(id: any, health: number, damage: number): (number, number)
-	local row = Rootvault.difficulty(id)
-	return math.floor(health * row.hp + 0.5), math.floor(damage * row.damage + 0.5)
+	local hpMul = 1
+	local dmgMul = 1
+	if type(id) == "string" and Economy.DIFFICULTIES[id] ~= nil then
+		local row = Economy.DIFFICULTIES[id]
+		hpMul = row.hpMultiplier
+		dmgMul = row.damageMultiplier
+	else
+		local row = Rootvault.difficulty(id)
+		hpMul = row.hp
+		dmgMul = row.damage
+	end
+	return math.floor(health * hpMul + 0.5), math.floor(damage * dmgMul + 0.5)
 end
 
 -- Phase fog and a telegraphed strike never land in the same heartbeat.

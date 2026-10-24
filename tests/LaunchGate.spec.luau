@@ -36,6 +36,8 @@ describe("LaunchGate", function()
 			"extraCurrencies",
 			"chests",
 			"paid",
+			"extraDifficulties",
+			"hardMode",
 		}
 		for _, id in ipairs(flags) do
 			expect(LaunchGate.on(id)).toEqual(false)
@@ -66,6 +68,11 @@ describe("LaunchGate", function()
 		end
 		expect(LaunchGate.promptOpen("waves")).toEqual(true)
 		expect(LaunchGate.promptOpen("rootvault")).toEqual(true)
+	end)
+
+	it("keeps the V1 enemy roster off", function()
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.on("enemyTypes")).toEqual(false)
 	end)
 
 	it("hides raids, the market board, and the pass from the hub cycle", function()
