@@ -1,5 +1,3 @@
-<cursor_untrusted_data_1337 source="CallDynamicTool">
-
 # First 30 Seconds: New Player Flow, Spec v1
 
 Owner: Prism (design). Builders: Ghost (UI), Echo (server). Base: `cursor/live-build-9721` @ `9269e61`. Docs only, no code.
@@ -23,6 +21,7 @@ In the first 30 seconds a new player cracks 3 free shards (the 3rd is a guarante
   3. **ROLL bar**, bottom-center. This is the #397 56 px ROLL-only collapse bar in a tutorial mode (FREE badge, pulse ring). The **mini reveal stage** docks next to it.
   4. **Gate dock**, in the same bottom-center slot as the ROLL bar, shown only on the Gate pad. Its chevron collapses it to a 44 px "Shard Gate ›" pill.
 - The rail, Bag, currency pill and GearBar stay hidden until roll 3 resolves. Then they fade in (0.26 s) with a `newDot` on Bag.
+- Also hidden in Focus mode until the hand-off (phone layout review F8): the live portrait + HP block, and the ActionBar's 2×4 skill grid with the attack/dodge/jump/heavy cluster. At every phone size they sit under the Oracle card (top-left) and the ROLL bar (bottom-center). They fade back in with the rail at the hand-off beat (~10 s).
 - **Center keep-out:** no UI inside x 30–70% / y 28–73% of the viewport at any beat, on any size. World-space markers (BillboardGui, Beam) are allowed.
 - Leaving: **Skip intro** on the card ends Focus mode and pays the same kit (live behavior, kept). Returning players never see any of this.
 
@@ -54,7 +53,13 @@ Cancel / back:
 - Opening any menu hides the card and chip (live `OnboardHud.setCovered`).
 
 ## 4. Layout
-Positions are viewport px with `ScreenInsets = CoreUISafeInsets`. "top" = below the Roblox top bar (menu + chat sit at x 12–90). Scale + offset anchors as noted. The keep-out box is checked at every size.
+Scale + offset anchors as noted. The keep-out box is checked at every size.
+
+**Frames (phone layout review F7).** The keep-out boxes and the landscape tables use **full-screen px**: (0,0) is the screen's top-left, including the Roblox top bar (52 px on phones, 58 on desktop). There are two ScreenGuis:
+- **FocusTop** (`ScreenInsets = DeviceSafeInsets`) holds the pieces that share the top-bar band on landscape phones: the Oracle card, the pill and the mini reveal stage. Their left edge is `GuiService.TopbarInset.Min.X + 8`, never a hard-coded x, so they don't sit on the Roblox menu/chat buttons or a landscape notch. Roblox's PlayerList is off in Focus mode, so the top-right of that band is free.
+- **FocusHud** (`ScreenInsets = CoreUISafeInsets`) holds everything else. Subtract the top inset from a table's y to get its offset.
+
+On portrait, "top" is the CoreUISafe top edge: about 99 px on a notched 390×844 (a 47 px notch plus the 52 px top bar), or 52 with no notch.
 
 **Center keep-out (px)**
 | Size | x | y |
@@ -69,7 +74,7 @@ Positions are viewport px with `ScreenInsets = CoreUISafeInsets`. "top" = below 
 |---|---|---|---|
 | Oracle card | (0,0) / (16, top+4) | (1,-32) × 112 → 358×112 | chevron 44×44 top-right; Skip intro 84×40 visual, 44 hit |
 | Pill (collapsed card) | (0,0) / (16, top+4) | auto 176–240 × 44 | live `IntroPill` |
-| Goal chip | (0,0) / (16, card bottom+8) | 216×44 | collapsed tab 44×44 |
+| Goal chip | (0,0) / (16, card bottom+8) | 216×44 | collapsed tab 44×44. If card bottom + 8 + 44 would pass the keep-out top (236), as it does on a notched phone (top ≈ 99), the chip starts as the tab and opens to 216×44 when the card folds to the pill at roll 1 (F9) |
 | ROLL bar | (0.5,1) / (0.5,0, 1,-8-safeBottom) | 250×56 | ring +6 px; label 13 px above |
 | Mini reveal stage | (0.5,1) / above the bar, gap 8 | (1,-32) × 120 | top edge 618 ≥ 616 ✓ |
 | Gate dock | same slot as the ROLL bar | (1,-32) × 64 | START ≥ 92×48 |
@@ -79,11 +84,11 @@ Positions are viewport px with `ScreenInsets = CoreUISafeInsets`. "top" = below 
 **Landscape phone 667×375** (mockup 03)
 | Piece | Position | Size | Notes |
 |---|---|---|---|
-| Oracle card | (100, 6), right of the Roblox chat button | 360×88 | single-line text + chevron + Skip intro 84×44; bottom 94 < 105 ✓ |
-| Pill | (100, 8) | auto × 44 | |
-| Goal chip | (safeLeft, 60) | 204×44 | bottom 104 < 105 ✓ |
-| ROLL bar | (0.5,1) / bottom 14 | 240×56 | x 213–453, clear of the thumbstick (≤ 164) and Jump (≥ 517) |
-| Mini reveal stage | (1,0) / (-16-safeRight, 8) | 280×84 | top-right. Bottom 92 < 105 ✓ |
+| Oracle card | (TopbarInset.Min.X + 8, 6) in FocusTop, ≈ (100, 6) right of the Roblox chat button | 360×88 | single-line text + chevron + Skip intro 84×44; bottom 94 < 105 ✓ |
+| Pill | (TopbarInset.Min.X + 8, 8) in FocusTop | auto × 44 | |
+| Goal chip | (safeLeft + 12, 60) | **184**×44 (was 204, F10); a 44×44 tab while the card is expanded | The expanded card (x 100–460, y 6–94) overlapped a 204 px chip at y 60, so the chip stays a tab (x 12–56) until the card folds to the pill at roll 1. Bottom 104 < 105, and right edge ≤ 196 < 200 |
+| ROLL bar | (0.5,1) / bottom 14 | 240×56 | x 213–453, clear of the thumbstick (≤ 164). The live combat cluster (attack x 379–443, dodge 327–371) would overlap it, so it's hidden in Focus mode (F8) |
+| Mini reveal stage | (1,0) / (-16-safeRight, 8) in FocusTop | 280×84 | top-right. Bottom 92 < 105 ✓ (F12: it must stay in FocusTop; built in CoreUISafe it would drop to y 60–144 and cross the keep-out) |
 | Gate dock | bottom-center, bottom 14 | 318×60 | label 12 px above it at y ≥ 280 |
 | Hint chip | above the attack button | 150×44 | |
 
@@ -91,7 +96,7 @@ Positions are viewport px with `ScreenInsets = CoreUISafeInsets`. "top" = below 
 | Piece | Position | Size |
 |---|---|---|
 | Oracle card | (100, 6) | 400×96 (bottom 102 < 112 ✓) |
-| Pill / Goal chip | (100, 8) / (safeLeft, 60) | auto×44 / 204×44 |
+| Pill / Goal chip | (TopbarInset.Min.X + 8, 8) / (safeLeft + 12, 60) | auto×44 / 204×44 (right edge ≤ 236 < 240). Tab 44×44 while the card is expanded, because the card (y 6–102) would cover the chip (F10) |
 | ROLL bar | bottom-center, bottom 14 | 260×56 |
 | Mini reveal stage | top-right (-16-safeRight, 8) | 300×92 |
 | Gate dock | bottom-center | 340×60 |
@@ -106,6 +111,12 @@ Positions are viewport px with `ScreenInsets = CoreUISafeInsets`. "top" = below 
 | Mini reveal stage | right of the ROLL bar, gap 16, bottom-aligned | 420×120 |
 | Gate dock | bottom-center | 380×64 |
 Keys: **R** = roll, **C** = collapse/expand card, **E** or click = START on the pad.
+
+**In the arena (beats ~19–30 s; F11).** The live portrait + HP block comes back top-left (CoreUISafe (16,16), 56 tall). Everything else docks around it, using Ghost's #416 Q5 dock rule.
+- **Portrait 390×844:** only one 44 px row fits between the HP block (bottom ≈ 171) and the mid-left rail (top ≈ 242): y 179–223. The Oracle pill sits there and carries the goal (`"◆ Clear wave 1 0/3"`, ≤ 160 wide), so the separate goal chip is hidden in the arena. On a first run the #416 buff strip sits right of the pill (x 184). See the phone layout review, Q1.
+- **Landscape phones:** the pill stays in the FocusTop band (TopbarInset.Min.X + 8, 8). Only the goal chip docks 8 px under the HP block, as its 44×44 tab, at 8 px right of the live rail (x 61 at 667, x 66 at 800). The #416 strip goes in the next row.
+- **Desktop:** the card/pill and goal chip keep their §4 places. The live HP block is at the top-left, so they start 8 px under it (y ≈ 138).
+- **Hint chip:** above the live attack button (CombatCluster). In portrait that spot is the 2×4 skill bar, so see review R10.
 
 ## 5. States
 | Element | Idle | Press | Disabled | New | Locked |
@@ -206,6 +217,8 @@ Decided by Ghost under Kevin's pre-approval (Oct 23, 2026, board row https://app
 - 2026-10-23 (Ghost, Kevin pre-approved): Q3 = **replace**. The `onboardStep` list replaces the old `Onboarding.STEPS` cold open for V1; Skip and the same starter kit stay; Kevin can change it later. Q4 and Q5 stay open with Echo.
 - 2026-10-23 (Echo): Q4 = **yes** (solo, 3 s Config countdown, preloaded arena, 3 s or less). Q5 = **yes** (free server-side tutorial pools, server auto-equip-if-better on existing onboarding state; new save fields go to Ghost first). (Ghost): first roll full length = yes. All §11 questions are now closed.
 
+- 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F7: the coordinate frames are now explicit (full-screen px; FocusTop vs FocusHud; x from TopbarInset). F8: Focus mode also hides the live portrait/HP and the skill bar + combat cluster until the hand-off. F9: on notched portrait phones the goal chip starts as its tab. F10: on landscape the goal chip is a tab while the card is expanded (they overlapped), and the 667×375 chip is 184 wide. F11: arena docking around the live HP block (portrait has one row, so the pill carries the goal; landscape keeps the pill in the top band). F12: the mini stage stays in FocusTop. Layout fixes only; the flow and beats are unchanged.
+
 ## Later (not V1)
 Voice lines for Wren, a set-bonus tip (Core Loop: only once the player owns 2 items of the same element), party-join during onboarding, and a Pets/Skills tutorial roll.
 
@@ -214,7 +227,7 @@ Stock Roblox UI only. No blur or glassmorphism (BlurEffect blurs the 3D world, n
 
 | Element | Instances |
 |---|---|
-| Focus root | `ScreenGui` FocusHud (ResetOnSpawn false, ZIndexBehavior Sibling, `ScreenInsets = CoreUISafeInsets`) → `Frame` root + `UIScale` (desktop clamp) |
+| Focus root | `ScreenGui` FocusHud (ResetOnSpawn false, ZIndexBehavior Sibling, `ScreenInsets = CoreUISafeInsets`) → `Frame` root + `UIScale` (desktop clamp). Plus `ScreenGui` FocusTop (`ScreenInsets = DeviceSafeInsets`) for the top-band pieces on landscape phones, x from `GuiService.TopbarInset` (listen to its changed signal) (F7) |
 | Fade-in | full-screen `Frame` 0,0,0, BackgroundTransparency 0 → 1 over 0.4 s (TweenService Quad Out) |
 | Camera | `Camera.CFrame` tween 0.6 s to the authored `SpawnShot` part, then `CameraType` back to Custom |
 | Oracle card | `Frame` + `UICorner` 10 + `UIStroke` gold 1 (Transparency 0.5) + left accent `Frame` 4 px button color + portrait `ImageLabel` wren_64 in a circle `Frame` (UICorner 0.5 scale) + `TextLabel`s + `TextButton` chevron 44×44 + `TextButton` Skip intro |
@@ -243,6 +256,3 @@ Stock Roblox UI only. No blur or glassmorphism (BlurEffect blurs the 3D world, n
 | arrow_strip | 256×64 | Beam texture (tileable) |
 | arrow_64 | 64×64 | edge arrow |
 | glow_soft_256, shard_icon, shard_frag_a/b/c, lock_icon, spinner_64 | as in #397 | reused |
-
-
-</cursor_untrusted_data_1337>
