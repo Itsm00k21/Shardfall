@@ -24,6 +24,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Config = require("../src/ReplicatedStorage/Shared/Config/Index")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Materials = require("../src/ReplicatedStorage/Shared/Materials")
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Stats = require("../src/ReplicatedStorage/Shared/Stats")
@@ -409,14 +410,31 @@ describe("Config validation: drop tables", function()
 		for _, wave in ipairs(Config.Economy.WAVES) do
 			expect(isPositiveInt(wave.tokens)).toBeTrue()
 		end
+		expect(LaunchGate.on("extraDifficulties")).toEqual(false)
 		local previous = 0
 		for _, id in ipairs(Config.Economy.DIFFICULTY_ORDER) do
 			local row = Config.Economy.DIFFICULTIES[id]
 			checkNumbers("Economy.DIFFICULTIES." .. id, row)
-			expect(row.tokenMultiplier).toBeGreaterThan(previous)
-			previous = row.tokenMultiplier
+			expect(row.tokenMultiplier).toBeGreaterThan(0)
+			expect(row.fragmentMultiplier).toBeGreaterThan(0)
+			expect(row.hpMultiplier).toBeGreaterThan(0)
+			expect(row.damageMultiplier).toBeGreaterThan(0)
 			expect(isPositiveInt(row.levelGate)).toBeTrue()
+			local parked = id == "medium" or id == "nightmare" or id == "insane"
+			if not parked or LaunchGate.on("extraDifficulties") then
+				expect(row.tokenMultiplier).toBeGreaterThan(previous)
+				previous = row.tokenMultiplier
+			end
 		end
+		local hard = Config.Economy.DIFFICULTIES.hard
+		expect(hard.levelGate).toEqual(5)
+		expect(hard.hpMultiplier).toEqual(2)
+		expect(hard.damageMultiplier).toEqual(1.5)
+		expect(hard.tokenMultiplier).toEqual(2)
+		expect(hard.fragmentMultiplier).toEqual(2)
+		expect(Config.Economy.DIFFICULTIES.medium.id).toEqual("medium")
+		expect(Config.Economy.DIFFICULTIES.nightmare.id).toEqual("nightmare")
+		expect(Config.Economy.DIFFICULTIES.insane.id).toEqual("insane")
 	end)
 end)
 

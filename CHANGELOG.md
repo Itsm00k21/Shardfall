@@ -12,6 +12,10 @@ its tag to merged and add the merge commit.
 
 ## [Unreleased]
 
+### Changed
+- Hard mode matches the locked Core Loop. Hard unlocks at Lv 5 with 2× enemy HP, 1.5× enemy damage, 2× Roll Tokens, and a 2× fragment multiplier in `Config/Economy` (Rootvault combat reads that row). Medium, Nightmare, and Insane stay in the table behind `LaunchGate.extraDifficulties` (off). The gate pad refuses a player under Lv 5 while Hard is selected. A session joins on Normal and the pick is server memory only. No new save field. schemaVersion stays 26. (open)
+- Hard pad tier is per player, not one server-wide key (Havoc P2-430-1). One player's pick cannot lock out, drag along, or flip anyone else. `LaunchGate.hardMode` stays off, so the pad offers Normal only and refuses Hard. The Hard row stays. schemaVersion stays 26. (open)
+
 ### Added
 - Phase 3 stuck-enemy check (flag `enemyTypes`, off): a server watchdog
   in the wave flow tracks progress toward the target. No meaningful
