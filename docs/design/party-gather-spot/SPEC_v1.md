@@ -1,7 +1,9 @@
-# Party Gather Spot ("Gate Ring"), Spec v1.1
+# Party Gather Spot ("Gate Ring", canvas T4), Spec v1.2
 
-Owner: Prism (design, docs only, no code). Builders: Ghost (world slots, Gate dock UI), Echo (party server state). Base: `cursor/live-build-9721`. Status: v1.1, Ghost answered Q1, Q3, Q4, Q5 (Oct 24, 2026, Kevin pre-approved); Q2 is a Kevin taste call, Prism recommendation recorded as PROVISIONAL. Gray-box only (pre-Phase S). Nothing beyond the answered questions is approved until Ghost/Kevin say so.
+Owner: Prism (design, docs only, no code). Builders: Ghost (world slots, Gate dock UI), Echo (party server state). Base: `cursor/live-build-9721`. Status: **v1.2** (Oct 24, 2026, DP34P: live prompt audit + T7 v1.1 / M16 v1.1 tie-in; see the v1.2 note). v1.1: Ghost answered Q1, Q3, Q4, Q5 (Oct 24, 2026, Kevin pre-approved); Q2 is a Kevin taste call, Prism recommendation recorded as PROVISIONAL. Gray-box only (pre-Phase S). Nothing beyond the answered questions is approved until Ghost/Kevin say so.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca38838192b465db2fbca4fda1, item 2, from canvas item **T4**: "Party gather spot spec (room for 4 by the Gate pad, name slots, Friends-only toggle, no prompt overlap)". Roadmap Phase 6 (party).
+
+**v1.2 note (Oct 24, 2026, 8:00 AM PT):** Ghost's DP34P row (https://app.notion.com/p/403c31ca388381fea022e68f6cc3fd35, Kevin pre-approved) asked for "T4 gather spot (4 slots, Friends-only toggle, no prompt overlap with Shard Gate pad)". That is this spec (PR #441), so per the no-duplicate rule it's a version commit here, not a new `prism/t4-gather-spot` branch. v1.2 adds: (a) **§4.1 prompt audit** against the live `HavenBuilder.luau` (two live prompts would sit on / overlap the pad once T7 Q2 moves the `EnterPad` to (0, 98); both are dropped there, which is what Q4 already decided); (b) the **T7 v1.1** tie-in (pad = H12 via `Haven.KIT.gatePad`, sign/arch "Shard Gate", Muster H18 + its H14 path leg follow `musterSpot`); (c) the **M16 v1.1** tie-in (flags `parties` / `partyHpScale` / `afkCheck` default off, ×N badge A in the dock label). Mockup `07-prompt-audit-v1.2.svg` added; 01 relabeled (Muster hidden). No other rule changed.
 
 Sources (link, don't copy):
 - Locked: V1 Core Loop §3 Party & Run Setup: "Party: 1–4 players, solo allowed", "Lobby: one Shard Gate pad", "15s countdown starts when the first player steps on; Start now button", "Leader picks Normal or Hard (only tiers all members have unlocked)", "Friends-only toggle; no queue", "3–4 arena copies on the same server … server cap ~12–16 players". Personal loot.
@@ -58,6 +60,22 @@ Up to 4 players gather at the Shard Gate in one step, can see who is in (names o
 
 Slot spacing is 10 studs side to side and 8 front to back, so 4 R15 avatars (about 2.5 studs wide) never touch, and the far tags sit higher on screen than the near tags at the default phone zoom (no tag overlap, mockup 02).
 
+### 4.1 Prompt audit (v1.2, live `cursor/live-build-9721` @ `581c995`, read only)
+Mockup `07-prompt-audit-v1.2.svg`. Prompts come from `promptOn()` (`ShardfallServer/HavenBuilder.luau:296-320`, default `MaxActivationDistance` 18, `RequiresLineOfSight` false). On the Rootvault arch today (`:1766-1771`):
+
+| Live prompt | Where | Reach | Distance to pad center (0, 98) | v1.2 rule |
+|---|---|---|---|---|
+| "Enter" (`HavenAction` rootvault) | on the `EnterPad` fill (attribute `EnterDungeon`) | `Haven.GATE_REACH` 8 | 0 once T7 Q2 moves the pad to (0, 98) | **Not built on the moved pad.** Entry = the pad touch zone + dock START / E (Q4). Echo's `Haven.KIT.gatePad` move skips this `promptOn` call; the server path stays the same. |
+| "Waves · Solo" (`HavenAction` waves) | arch `PillarL` at ≈ (−7, 108) | `Haven.PIER_REACH` 4 | 12.2 (reach covers z ≥ 104, i.e. the pad's back edge) | **Not built while the Gate pad exists.** Solo = 1 player on the pad + START (the #412 solo flow). |
+| "Sealed" (other arches) | next arch on the `GATE_RADIUS` 78 crescent | 8 | ≈ 17+ | hidden with `sealedGates` (T7 Q4 / #413) |
+| "Roll" (Crackstone, T7 H13) | (−12, 52) | 10 | 47.5 | keep |
+| Muster sockets (T7 H18) | (24, 90) | no prompt | 25.3 | hidden with `musterSpot` (Q1); T7's H14 "Gate pad ↔ Muster" path leg follows the same flag |
+| Return pad (T7 H11) | (14, 30) | no prompt | 69.4 | keep |
+
+Result: **0 ProximityPrompts within r 12 of the pad, and no prompt whose reach touches the pad.** Havoc check: stand on each of the 4 slots and on the pad rim (r 8) at all 4 test sizes; no prompt indicator may appear. Prism edits no builder or config; this table is the build contract for Echo / Ghost.
+
+**Flags (M16 v1.1 Q7, decided):** `parties` off = today's solo pad (1 slot lit, no Friends toggle, no party label); on = 4 slots + Friends-only + party label. `partyHpScale` adds the cyan ×N badge (M16 Q6 A) to the label: "Shard Gate · Party 3/4 · Enemy HP ×1.6 · starts in 9". `afkCheck` has no hub UI. All default `false`; Prism flips nothing.
+
 **Screen (full-screen px, #420 frame; nothing enters the center keep-out).**
 
 | Piece | 390×844 | 667×375 | 800×400 | Desktop 1280×720 |
@@ -100,12 +118,12 @@ Loading: if the party state is late, the dock shows the solo layout with a `spin
 - **Solo players:** unchanged from #412; the slot ring is just one lit disc.
 
 ## 8. Mockups
-SVG in repo (fake data, original art, gray-box world): `mockups/01-topdown-gate-pad.svg` (slots, studs, prompt-free zone, Muster flagged) · `mockups/02-leader-phone-390x844.svg` (leader, 3/4, Friends-only off) · `mockups/03-member-landscape-667x375.svg` (member, read-only dock, Friends only on) · `mockups/04-friends-only-refused-800x400.svg` (non-friend refused, toast lane) · `mockups/05-full-desktop-1280x720.svg` (4/4, Hard, countdown 3, keys) · `mockups/06-directions.svg` (A/B/C). Live HUD dashed, keep-out cyan dashed. PNG renders are on the box only.
+SVG in repo (fake data, original art, gray-box world): `mockups/01-topdown-gate-pad.svg` (slots, studs, prompt-free zone, Muster flagged) · `mockups/02-leader-phone-390x844.svg` (leader, 3/4, Friends-only off) · `mockups/03-member-landscape-667x375.svg` (member, read-only dock, Friends only on) · `mockups/04-friends-only-refused-800x400.svg` (non-friend refused, toast lane) · `mockups/05-full-desktop-1280x720.svg` (4/4, Hard, countdown 3, keys) · `mockups/06-directions.svg` (A/B/C) · `mockups/07-prompt-audit-v1.2.svg` (v1.2: live prompts near the pad, drop list, M16 badge label). Live HUD dashed, keep-out cyan dashed. PNG renders are on the box only.
 
 ## 9. Build split
 Phase 6. Gray-box now is optional (the slots are 4 discs on the existing pad).
 - **Echo (server):** in-memory party state (slots, leader, Friends-only, tier, countdown), join/leave from the pad touch zone with 0.5 s grace, friend check, Hard level check, start → one arena copy for the slot list. Tests: 5th player refused, Friends-only refuses a non-friend, leader handoff, countdown bump, nothing written to the save.
-- **Ghost (world + client):** 4 slot discs + name tags on the pad, Friends-only toggle + party label/pips in the Gate dock, member read-only dock, toasts, F key; flag the #413 Muster spot off (Q1 decided, `musterSpot` off, nothing deleted); no arch prompt at all (Q4 decided).
+- **Ghost (world + client):** 4 slot discs + name tags on the pad, Friends-only toggle + party label/pips in the Gate dock, member read-only dock, toasts, F key; flag the #413 Muster spot off (Q1 decided, `musterSpot` off, nothing deleted; T7 H18 sockets + the H14 Gate↔Muster path leg follow it); no arch prompt at all (Q4 decided): with the pad at (0, 98) skip the "Enter" prompt on the moved `EnterPad` and the "Waves · Solo" `PillarL` prompt (§4.1); slots 2–4, Friends toggle and party label only with `parties` on, ×N badge with `partyHpScale` on (M16).
 - **Prism:** Phase S look for the slots (shard-shaped sockets, gate-cyan glow) after the fun test.
 - **Havoc:** join/leave spam, Friends-only race, leader leaves during "Starting…", 4 players + 1 spectator on the pad edge.
 
@@ -113,7 +131,7 @@ Phase 6. Gray-box now is optional (the slots are 4 discs on the existing pad).
 1. Two testers on phones form a party in ≤ 5 s without instructions (step on the pad).
 2. Every player on the pad can read every name tag at 390×844.
 3. Friends-only blocks a non-friend and the leader sees the state in one glance.
-4. No ProximityPrompt shows anywhere on or near the pad; the Crackstone prompt never shows from the pad.
+4. No ProximityPrompt shows anywhere on or near the pad (stand on all 4 slots + the rim, §4.1); the Crackstone prompt never shows from the pad; with `parties` off the solo pad flow is unchanged.
 5. Nothing enters the center keep-out; all tap targets ≥ 44 px; solo flow from #412 unchanged.
 6. 4 players start together in one arena copy every time (20 tries).
 
@@ -124,12 +142,13 @@ Phase 6. Gray-box now is optional (the slots are 4 discs on the existing pad).
 4. ~~@Ghost: Does the Gate keep any ProximityPrompt?~~ **No ProximityPrompt (Ghost).** START is the dock button and the E key; the r 12 prompt-free zone stands.
 5. ~~@Ghost: Leader handoff?~~ **By join order (Ghost).**
 
-Ghost's questions are all answered. Only Kevin's taste call (Q2) remains; the spec runs on the PROVISIONAL pick until he answers.
+Ghost's questions are all answered (v1.2 adds none: the two live prompts in §4.1 are dropped under Q4). Only Kevin's taste call (Q2) remains; the spec runs on the PROVISIONAL pick until he answers.
 
 ## Decision log
 - 2026-10-24 (Prism): v1 published. Recommends direction A (Gate Ring). Five open questions (Ghost 1, 3, 4, 5; Kevin 2). Not approved.
 - 2026-10-24 (Ghost, Kevin pre-approved; Kevin can change later; board row https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953): Q1 = `musterSpot` flag off, nothing deleted. Q3 = keep 15 s from the first player, bump to 5 s on a late join. Q4 = no ProximityPrompt. Q5 = leader handoff by join order. → v1.1.
 - 2026-10-24 (Prism): Kevin taste call Q2 (Friends-only default OFF, leader's friends only) recorded as PROVISIONAL, waiting for Kevin.
+- 2026-10-24 (Ghost DP34P, Kevin pre-approved; Prism): **v1.2**: DP34P's T4 ask folded here (no duplicate branch/PR). Live prompt audit (§4.1): "Enter" on the moved `EnterPad` and "Waves · Solo" on `PillarL` are not built at the pad (follows Q4); T7 v1.1 + M16 v1.1 tie-ins (flags, ×N badge, Muster H18/H14 follow `musterSpot`). Mockup 07 added. Not approved.
 
 ## Later (not V1)
 "Run it back" (party stays together after the results screen), invites from the friends list (direction C's good part), party emotes on the slots, cosmetic slot skins (never power). All go to the Ideas Backlog as NOT APPROVED.
