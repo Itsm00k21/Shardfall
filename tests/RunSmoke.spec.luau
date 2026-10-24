@@ -8,9 +8,10 @@
 	LaunchGate stays as it is shipped. The Phase 2 equip remote is opened
 	with a test stub (equipOn), not by writing LaunchGate.SHOW.
 
-	Steps that need unmerged PRs are pending. Their probes fail if that
-	code lands on this branch, so the skip cannot outlive the module.
-	Nothing here spends Robux.
+	The wave-5 chest from Dungeons.waveReward stays 2. The boss-clear
+	grant from the merged reward module adds 5 on top of that, once.
+	A rejoin and a wipe do not pay it again. LaunchGate.SHOW is not
+	written. Nothing here spends Robux.
 ]]
 
 local fs = require("@lune/fs")
@@ -18,9 +19,9 @@ local fs = require("@lune/fs")
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
-local pending = framework.pending
 local expect = framework.expect
 
+local BossClearReward = require("../src/ReplicatedStorage/Shared/BossClearReward")
 local Classes = require("../src/ReplicatedStorage/Shared/Classes")
 local Config = require("../src/ReplicatedStorage/Shared/Config/Index")
 local Currencies = require("../src/ReplicatedStorage/Shared/Currencies")
@@ -38,6 +39,8 @@ local ResultsGrid = require("../src/ReplicatedStorage/Shared/ResultsGrid")
 local RollMath = require("../src/ReplicatedStorage/Shared/RollMath")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local StarterGoalPay = require("../src/ReplicatedStorage/Shared/StarterGoalPay")
+local WaveFlow = require("../src/ReplicatedStorage/Shared/WaveFlow")
+local WaveFlowService = require("../src/ServerScriptService/ShardfallServer/WaveFlowService")
 local Remotes = require("../src/server/EquipService/Remotes")
 local Validate = require("../src/server/EquipService/Validate")
 
@@ -45,9 +48,6 @@ local HAVEN = "src/ServerScriptService/ShardfallServer/HavenBuilder.luau"
 local DUNGEON = "src/ServerScriptService/ShardfallServer/DungeonService.luau"
 local HUD = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/CombatHud.luau"
 local GATE = "src/ReplicatedStorage/Shared/LaunchGate.luau"
-local BOSS_CLEAR = "src/ReplicatedStorage/Shared/BossClearReward.luau"
-local WAVE_FLOW = "src/ReplicatedStorage/Shared/WaveFlow.luau"
-local WAVE_SERVICE = "src/ServerScriptService/ShardfallServer/WaveFlowService.luau"
 
 local function fixedRng()
 	return {
@@ -144,13 +144,14 @@ describe("M13 run smoke", function()
 		expect(LaunchGate.on("equip")).toEqual(false)
 		expect(LaunchGate.on("waveArena")).toEqual(false)
 		expect(LaunchGate.on("gearSalvage")).toEqual(false)
-		expect(LaunchGate.SHOW.enemyTypes).toBeNil()
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.on("enemyTypes")).toEqual(false)
 
 		local profile = Schema.template()
 		expect(profile.schemaVersion).toEqual(26)
 		expect(profile.shardTokens).toEqual(Schema.STARTER_TOKENS)
 		expect(profile.prismTokens).toEqual(0)
-		expect((profile :: any).bossClearRuns).toBeNil()
+		expect(profile.bossClearRuns).toEqual({})
 
 		-- Roll. One Shard Token. Prism stays at 0.
 		local item = crack(profile, "roll-1")
@@ -254,7 +255,9 @@ describe("M13 run smoke", function()
 		expect(sheet).toEqual(Config.Economy.NORMAL_CLEAR_TOKENS)
 		expect(Config.Economy.WAVES[5].boss).toEqual(true)
 		expect(Config.Economy.WAVES[5].tokens).toEqual(5)
-		expect(Config.Economy.bossClearPay).toBeNil()
+		expect(Config.Economy.BOSS_CLEAR_TOKENS).toEqual(5)
+		expect(Config.Economy.bossClearPay()).toEqual(5)
+		expect(bossReward.shardTokens).toEqual(2)
 
 		local service = fs.readFile(DUNGEON)
 		expect(string.find(service, "grant(player, run, Dungeons.waveReward(run.wave), nil)", 1, true) ~= nil).toBeTrue()
@@ -330,14 +333,14 @@ describe("M13 run smoke", function()
 		expect(string.find(defeat, "shardTokens", 1, true)).toBeNil()
 		expect(profile.shardTokens).toEqual(beforeWipe)
 
-		-- Rejoin. The save keeps the wallet and the equipped drop.
-		-- There is no boss-clear run list to refuse a second pay.
+		-- Rejoin before any boss grant. The save keeps the wallet and the
+		-- equipped drop. The run list is empty, so nothing was paid.
 		local rejoined = Schema.migrate(Schema.deepCopy(profile))
 		assert(rejoined ~= nil)
 		expect(rejoined.schemaVersion).toEqual(26)
 		expect(rejoined.shardTokens).toEqual(beforeWipe)
 		expect(rejoined.prismTokens).toEqual(0)
-		expect((rejoined :: any).bossClearRuns).toBeNil()
+		expect(rejoined.bossClearRuns).toEqual({})
 		expect(Schema.findItem(rejoined, item.uid) ~= nil).toBeTrue()
 		expect(stillEquipped(rejoined, item)).toEqual(true)
 
@@ -348,101 +351,120 @@ describe("M13 run smoke", function()
 		expect(stillEquipped(rejoined, item)).toEqual(true)
 		expect(LaunchGate.on("equip")).toEqual(false)
 		expect(LaunchGate.on("waveArena")).toEqual(false)
-		expect(fs.isFile(BOSS_CLEAR)).toEqual(false)
-		expect(fs.isFile(WAVE_FLOW)).toEqual(false)
+		expect(LaunchGate.on("enemyTypes")).toEqual(false)
 	end)
 
-	pending(
-		"steps a 5-wave combat run",
-		"Pending: WaveFlow and WaveFlowService are not on cursor/live-build-9721. "
-			.. "They live on unmerged #421 (echo/dungeon-no-stuck), #422 (echo/dungeon-enemy-pool), "
-			.. "and #427 (echo/dungeon-boss-kite, kited boss damage). "
-			.. "#433 (echo/m10-enemy-perf) puts the alive cap and 30s unstick on DungeonService instead, "
-			.. "and that module calls game:GetService at load, so Lune cannot enter a run or step it. "
-			.. "This smoke already checks the live wave rows (kinds, Gnarl on wave 5, waveReward).",
-		function()
-			expect(fs.isFile(WAVE_FLOW)).toEqual(false)
-			expect(fs.isFile(WAVE_SERVICE)).toEqual(false)
-			expect(fs.isFile("src/ServerScriptService/ShardfallServer/EnemyTypeService.luau")).toEqual(false)
-			expect(fs.isFile("src/ServerScriptService/ShardfallServer/EnemyPool.luau")).toEqual(false)
-			expect(fs.isFile("src/ServerScriptService/ShardfallServer/EnemyPerfHost.luau")).toEqual(false)
-			local dungeon = fs.readFile(DUNGEON)
-			expect(string.find(dungeon, 'game:GetService("HttpService")', 1, true) ~= nil).toBeTrue()
-		end
-	)
+	it("pays 5 boss-clear tokens once on top of the wave-5 reward of 2", function()
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.on("enemyTypes")).toEqual(false)
+		expect(WaveFlowService.open()).toEqual(false)
+		expect(WaveFlowService.start({
+			player = "hero",
+			profile = Schema.template(),
+			persist = function()
+				return true
+			end,
+		})).toBeNil()
 
-	pending(
-		"pays 5 boss-clear tokens exactly once",
-		"Pending: BossClearReward is only on unmerged #431 (echo/boss-clear-reward). "
-			.. "Config.Economy.WAVES lists 5 for the boss row and 11 for a Normal clear, and nothing in src reads that table. "
-			.. "Live Dungeons.waveReward(5) is 2 shard tokens. DungeonService.grant adds it on every wave-5 clear and stores no run id, "
-			.. "so a second clear would pay again. Schema stays 26 and has no bossClearRuns.",
-		function()
-			expect(fs.isFile(BOSS_CLEAR)).toEqual(false)
-			expect(Config.Economy.bossClearPay).toBeNil()
-			expect(Config.Economy.BOSS_CLEAR_TOKENS).toBeNil()
-			expect((Schema.template() :: any).bossClearRuns).toBeNil()
-			expect(Schema.VERSION).toEqual(26)
-			expect(Dungeons.waveReward(5).shardTokens).toEqual(2)
-			expect(Config.Economy.WAVES[5].tokens).toEqual(5)
-			expect(LaunchGate.on("waveArena")).toEqual(false)
-		end
-	)
+		local wavePay = Dungeons.waveReward(5).shardTokens
+		expect(wavePay).toEqual(2)
+		expect(Config.Economy.BOSS_CLEAR_TOKENS).toEqual(5)
+		expect(Config.Economy.bossClearPay()).toEqual(5)
 
-	pending(
-		"publishes a Results bossClear payload",
-		"Pending: the RunResults bossClear card (granted, tokens) is BossClearReward.card on unmerged #431. "
-			.. "CombatHud's victory card reads gold, shard tokens, XP, and ResultsGrid materials, and it has no bossClear field. "
-			.. "An endless wave clear passes nil for the card timer, so the live publish is the Wave N hint, not that card.",
-		function()
-			expect(fs.isFile(BOSS_CLEAR)).toEqual(false)
-			local hud = fs.readFile(HUD)
-			expect(string.find(hud, "bossClear", 1, true)).toBeNil()
-			expect(string.find(hud, 'payload.kind == "victory"', 1, true) ~= nil).toBeTrue()
+		local run = WaveFlow.start()
+		assert(run ~= nil)
+		local guard = 0
+		while run.clear ~= true and guard < 80 do
+			local boxes = WaveFlow.boxes(run)
+			expect(#boxes > 0).toBeTrue()
+			expect(WaveFlow.hurt(run, boxes[1].id, 100000) > 0).toBeTrue()
+			guard += 1
 		end
-	)
+		expect(run.clear).toEqual(true)
+		expect(run.wave).toEqual(5)
+		expect(run.rewarded).toEqual(false)
 
-	pending(
-		"rolls again from the one-time boss grant",
-		"Pending: a second roll funded by the 5-token boss grant needs BossClearReward.commit on unmerged #431. "
-			.. "The live walk already rolls again, and that crack spends a starter Shard Token (10, then 9, then 8). "
-			.. "It does not spend a boss-clear credit, and it does not prove the grant was paid only once.",
-		function()
-			expect(fs.isFile(BOSS_CLEAR)).toEqual(false)
-			expect(Config.Economy.WAVES[5].tokens).toEqual(5)
-			expect(Dungeons.waveReward(5).shardTokens).toEqual(2)
-		end
-	)
+		local profile = Schema.template()
+		local before = profile.shardTokens
+		profile.shardTokens += wavePay
+		expect(profile.shardTokens).toEqual(before + 2)
 
-	pending(
-		"keeps a wipe from paying or clawing a boss clear",
-		"Pending: BossClearReward.wipe is only on unmerged #431. A wipe must not grant and must not take a saved grant back. "
-			.. "On live, finish(false) publishes Dungeons.defeatLine and does not call grant or write shardTokens. "
-			.. "There is no saved boss grant to claw.",
-		function()
-			expect(fs.isFile(BOSS_CLEAR)).toEqual(false)
-			local waves = Dungeons.get(Dungeons.WAVES_ID)
-			expect(Dungeons.defeatLine(waves)).toEqual(
-				"The waves stop when you fall. Rewards from cleared waves are still yours."
-			)
-		end
-	)
+		local disk = {}
+		local persistCalls = 0
+		local paid = BossClearReward.commit(profile, run.id, function(data)
+			persistCalls += 1
+			disk[1] = Schema.deepCopy(data)
+			return true
+		end)
+		expect(persistCalls).toEqual(1)
+		expect(paid.granted).toEqual(true)
+		expect(paid.already).toEqual(false)
+		expect(paid.saved).toEqual(true)
+		expect(paid.tokens).toEqual(5)
+		expect(profile.shardTokens).toEqual(before + 2 + 5)
+		expect(BossClearReward.seen(profile, run.id)).toEqual(true)
+		expect(BossClearReward.card(paid)).toEqual({ granted = true, tokens = 5 })
 
-	pending(
-		"refuses a second boss-clear pay on rejoin",
-		"Pending: profile.bossClearRuns and BossClearReward.seen are only on unmerged #431. "
-			.. "A disconnect after the save must reload the run id and pay 0 the second time. "
-			.. "Live Schema.migrate keeps shardTokens and does not create a run list, so a rejoin cannot tell that this clear was already paid.",
-		function()
-			expect(fs.isFile(BOSS_CLEAR)).toEqual(false)
-			local fresh = Schema.template()
-			expect((fresh :: any).bossClearRuns).toBeNil()
-			fresh.shardTokens = 17
-			local rejoined = Schema.migrate(Schema.deepCopy(fresh))
-			assert(rejoined ~= nil)
-			expect(rejoined.shardTokens).toEqual(17)
-			expect((rejoined :: any).bossClearRuns).toBeNil()
-			expect(Schema.VERSION).toEqual(26)
-		end
-	)
+		local secondCalls = 0
+		local second = BossClearReward.commit(profile, run.id, function()
+			secondCalls += 1
+			return true
+		end)
+		expect(secondCalls).toEqual(0)
+		expect(second.granted).toEqual(false)
+		expect(second.already).toEqual(true)
+		expect(second.tokens).toEqual(0)
+		expect(profile.shardTokens).toEqual(before + 2 + 5)
+		expect(BossClearReward.card(second)).toEqual({ granted = false, tokens = 0 })
+
+		local wiped = BossClearReward.wipe(profile, run.id)
+		expect(wiped.granted).toEqual(false)
+		expect(wiped.tokens).toEqual(0)
+		expect(profile.shardTokens).toEqual(before + 2 + 5)
+		expect(BossClearReward.seen(profile, run.id)).toEqual(true)
+
+		local rejoined = Schema.migrate(disk[1])
+		assert(rejoined ~= nil)
+		expect(rejoined.schemaVersion).toEqual(26)
+		expect(rejoined.shardTokens).toEqual(before + 2 + 5)
+		expect(BossClearReward.seen(rejoined, run.id)).toEqual(true)
+		local rejoinCalls = 0
+		local replay = BossClearReward.commit(rejoined, run.id, function()
+			rejoinCalls += 1
+			return true
+		end)
+		expect(rejoinCalls).toEqual(0)
+		expect(replay.granted).toEqual(false)
+		expect(replay.already).toEqual(true)
+		expect(replay.tokens).toEqual(0)
+		expect(rejoined.shardTokens).toEqual(before + 2 + 5)
+		local rejoinWipe = BossClearReward.wipe(rejoined, run.id)
+		expect(rejoinWipe.granted).toEqual(false)
+		expect(rejoinWipe.tokens).toEqual(0)
+		expect(rejoined.shardTokens).toEqual(before + 2 + 5)
+		expect(BossClearReward.seen(rejoined, run.id)).toEqual(true)
+
+		local early = Schema.template()
+		local earlyBefore = early.shardTokens
+		early.shardTokens += Dungeons.waveReward(5).shardTokens
+		local earlyWipe = BossClearReward.wipe(early, "run-9")
+		expect(earlyWipe.granted).toEqual(false)
+		expect(earlyWipe.tokens).toEqual(0)
+		expect(early.shardTokens).toEqual(earlyBefore + 2)
+		expect(BossClearReward.seen(early, "run-9")).toEqual(false)
+
+		local spent, spendError = Currencies.take(rejoined, Currencies.SHARD)
+		expect(spent).toEqual(true)
+		expect(spendError).toBeNil()
+		expect(rejoined.shardTokens).toEqual(before + 2 + 5 - 1)
+		expect(rejoined.prismTokens).toEqual(0)
+		local afterRoll = BossClearReward.commit(rejoined, run.id, function()
+			return true
+		end)
+		expect(afterRoll.granted).toEqual(false)
+		expect(afterRoll.already).toEqual(true)
+		expect(rejoined.shardTokens).toEqual(before + 2 + 5 - 1)
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.on("enemyTypes")).toEqual(false)
+	end)
 end)
