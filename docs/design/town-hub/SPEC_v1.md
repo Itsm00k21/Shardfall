@@ -49,7 +49,7 @@ Origin = Lumen Heart (0, 0), +z = south. All on floor y 120. Map: `mockups/01-to
 **Sight lines:** from spawn the Gate is dead ahead (0°) and the Crackstone is ~29° left, so both fit the ~70° landscape cone. In the ~40° portrait cone the Gate arch and its billboard are centered; the Crackstone sits just outside, so its 9-st crystal + Wren's BillboardGui name peek in from the left edge (mockup 02). No part over 2 st tall inside the spawn → Roll → Gate triangle.
 
 **Phone camera checks** (default zoom ~12.5 st, mockups 02–03):
-- 390×844 portrait: Gate arch + "Shard Gate · 4 s" billboard visible; Crackstone + Wren label at left edge; no screen UI inside the center keep-out (x 30–70%, y 28–73%).
+- 390×844 portrait: Gate arch + "Shard Gate · 4 s" billboard visible; Crackstone + Wren label at left edge; no screen UI inside the center keep-out (x 30–70%, y 28–73%; on portrait the top is 35%, review D1, provisional).
 - 667×375 / 800×400 landscape: Crackstone and Gate both visible on spawn.
 - Desktop 1280×720: same as landscape with more sky.
 - BillboardGui labels: `MaxDistance` 80 (Gate 96, live `NAMEPLATE_DISTANCE`), `AlwaysOnTop` false, text ≥ 18 px at 390 wide.
@@ -57,7 +57,7 @@ Origin = Lumen Heart (0, 0), +z = south. All on floor y 120. Map: `mockups/01-to
 ## 5. States
 - **Gate pad:** idle (slow violet swirl) · player on pad (gold rim, dock opens: Normal / Hard Lv 5) · countdown (swirl speeds up, 3 s) · party gathering (Phase 6, later).
 - **Crackstone:** idle glow · free rolls left (gold pulse + "FREE" billboard, new players) · rolling (crystal flashes in the revealed rarity color, 0.3 s).
-- **Pull beam (Phase S):** on an Epic or Legendary roll, a vertical `Beam` in the rarity color (Epic 186,96,240 · Legendary 255,196,64) rises 60 st from the Crackstone for 2.5 s, plus a one-line server toast "<name> pulled a Legendary!". **Per-server only, not saved, no list, no ranking** (decision 8). Max 1 beam at a time; extra pulls queue at 1 s spacing (cap 3 queued, rest dropped).
+- **Pull beam (Phase S):** on an Epic or Legendary roll, a vertical `Beam` in the rarity color (Epic 186,96,240 · Legendary 255,196,64) rises 60 st from the Crackstone for 2.5 s, plus a one-line server toast "<name> pulled a Legendary!" (through the one toast lane as a loot/rarity toast, which goes before queued info toasts; max 1 on screen, phone layout review D3). **Per-server only, not saved, no list, no ranking** (decision 8). Max 1 beam at a time; extra pulls queue at 1 s spacing (cap 3 queued, rest dropped).
 - **Lumen Heart:** constant. Shards bob; one shard "falls" into a random crater every 20–30 s (tween + burst), decor only.
 - **Hollow lip:** static gray band + fog particles; no damage, no gameplay.
 
@@ -141,3 +141,4 @@ Done: `DUNGEON_GATE_PLAZA.md` now says Hard Lv 5 and no Nightmare (decision 10).
 - 2026-10-23 (Ghost, Kevin pre-approved): hub = Crater Square, small V1 hub cut down from the live Haven; parked districts + 5 sealed gates hidden behind LaunchGate flags (delete nothing); Spawn, Roll and Gate within ~10 s walk. Gate prompt = Normal + Hard (Lv 5), no Nightmare. Pull beams per-server only, not saved, Phase S. → v1.1.
 - 2026-10-23 (Ghost, Kevin pre-approved): taste call 1 = fixed evening sky (ClockTime 18.5); taste call 3 = gray-box the Muster spot now. All §11 questions are now closed.
 - 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): phone check pass, no screen UI in this spec. The Gate dock it opens is #412's (see the review's bottom-slot note R2). The `DUNGEON_GATE_PLAZA.md` follow-up was done in PR #418.
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838103a80ad21380d7f451; folded by Prism from the phone layout review rev 1.1, docs/design/phone-layout-review/REVIEW_v1.md §8/§10): D1: the portrait keep-out top is 35% (§4 phone check). D2: on the Gate pad the live combat cluster hides while the #412 Gate dock is up (no change to this world-only spec). D3: the pull toast goes through the one toast lane as loot/rarity (§5).
