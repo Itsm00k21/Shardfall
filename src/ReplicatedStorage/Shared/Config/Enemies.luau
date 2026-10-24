@@ -3,7 +3,8 @@
 --[[
 	V1 enemy types (roadmap 3.3 and 3.4). Chaser, ranged, and tank.
 
-	Every tunable lives here. EnemyRoster, WaveFlow, and the server
+	Every tunable lives here, including the arena a ranged enemy kites
+	inside and the shot ray. EnemyRoster, WaveFlow, and the server
 	services read this file. Dungeons.ENEMIES copies the combat fields
 	so Config.Enemies (the index alias) carries the same three ids.
 	Tuning means editing this module, not the stepper.
@@ -56,6 +57,20 @@ Enemies.STEP_MAX = 0.5
 -- Gray-box preview spacing. The service does not parent parts itself.
 Enemies.PREVIEW_GAP = 8
 Enemies.PREVIEW_LIFT = 6
+
+-- Square floor. A ranged kite stops on this edge instead of leaving.
+-- 90 studs across sits in the locked 80–100 span, centered on the origin.
+Enemies.ARENA = table.freeze({
+	minX = -45,
+	maxX = 45,
+	minZ = -45,
+	maxZ = 45,
+})
+
+-- Horizontal shot ray. High enough to clear the floor, under the walls.
+-- LOS_PAD pulls the ray off the shooter and the target so neither is cover.
+Enemies.SHOT_Y = 3
+Enemies.LOS_PAD = 1.5
 
 Enemies.ORDER = table.freeze({ "chaser", "ranged", "tank" })
 
@@ -146,6 +161,54 @@ local function checkNumber(where: string, value: any, minimum: number): (boolean
 	end
 	if value < minimum then
 		return false, where .. " is below " .. tostring(minimum)
+	end
+	return true, ""
+end
+
+local function checkBound(where: string, value: any): (boolean, string)
+	if not finite(value) then
+		return false, where .. " must be a finite number"
+	end
+	return true, ""
+end
+
+-- The floor is a centered square, 80 to 100 studs across. The shot ray
+-- stays above the floor and off both bodies.
+local function checkArena(source: any): (boolean, string)
+	local box = source.ARENA
+	if type(box) ~= "table" then
+		return false, "ARENA is missing"
+	end
+	for _, field in ipairs({ "minX", "maxX", "minZ", "maxZ" }) do
+		local ok, err = checkBound("ARENA." .. field, box[field])
+		if not ok then
+			return false, err
+		end
+	end
+	if box.minX >= box.maxX or box.minZ >= box.maxZ then
+		return false, "ARENA min must be below max"
+	end
+	local spanX = box.maxX - box.minX
+	local spanZ = box.maxZ - box.minZ
+	if spanX < 80 or spanX > 100 or spanZ < 80 or spanZ > 100 then
+		return false, "ARENA must span 80 to 100 studs"
+	end
+	if box.minX ~= -box.maxX or box.minZ ~= -box.maxZ or spanX ~= spanZ then
+		return false, "ARENA must be a centered square"
+	end
+	local yOk, yErr = checkNumber("SHOT_Y", source.SHOT_Y, 0.5)
+	if not yOk then
+		return false, yErr
+	end
+	if source.SHOT_Y > 12 then
+		return false, "SHOT_Y is above 12"
+	end
+	local padOk, padErr = checkNumber("LOS_PAD", source.LOS_PAD, 0.05)
+	if not padOk then
+		return false, padErr
+	end
+	if source.LOS_PAD > 4 then
+		return false, "LOS_PAD is above 4"
 	end
 	return true, ""
 end
@@ -370,6 +433,13 @@ function Enemies.validate(roster: any?): (boolean, string)
 	end
 	if chaser.retreat ~= 0 or tank.retreat ~= 0 then
 		return false, "chaser and tank do not retreat"
+	end
+	local arenaOk, arenaErr = checkArena(source)
+	if not arenaOk then
+		return false, arenaErr
+	end
+	if source.LOS_PAD * 2 >= ranged.retreat then
+		return false, "LOS_PAD must sit inside the ranged retreat"
 	end
 	if tank.damageTaken >= 1 or chaser.damageTaken ~= 1 or ranged.damageTaken ~= 1 then
 		return false, "only the tank reduces damage taken"
