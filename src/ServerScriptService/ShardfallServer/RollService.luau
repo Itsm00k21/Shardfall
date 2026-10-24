@@ -365,13 +365,16 @@ local function noteBigBatch(player: Player, captures: { any })
 	local best = nil
 	local count = 0
 	local epicCount = 0
+	local legendaries = {}
 	for _, drawn in ipairs(captures) do
 		local rarity = drawn.rarity
 		if type(rarity) ~= "string" or BigRollBeam.qualifies(rarity) ~= true then
 			continue
 		end
 		count += 1
-		if Rarities.rank(rarity) < Rarities.rank("Legendary") then
+		if rarity == "Legendary" and type(drawn.item) == "table" and type(drawn.item.name) == "string" then
+			table.insert(legendaries, drawn)
+		elseif Rarities.rank(rarity) < Rarities.rank("Legendary") then
 			epicCount += 1
 		end
 		if best == nil or Rarities.rank(rarity) > Rarities.rank(best.rarity) then
@@ -379,6 +382,15 @@ local function noteBigBatch(player: Player, captures: { any })
 		end
 	end
 	if best == nil or type(best.item) ~= "table" then
+		return
+	end
+	-- Two or more Legendaries in one x10 each get their own line. One
+	-- count fold ("pulled N LEGENDARY") would drop the other announces.
+	-- A Legendary plus Epics, and an Epic-only batch, stay one best line.
+	if epicCount == 0 and #legendaries > 1 and #legendaries == count then
+		for _, drawn in ipairs(legendaries) do
+			considerBigRoll(player, drawn.item.name, drawn.rarity, 1, 0, true)
+		end
 		return
 	end
 	considerBigRoll(player, best.item.name, best.rarity, count, epicCount, true)
