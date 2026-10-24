@@ -419,7 +419,7 @@ local function bossView(run: any, config: any): any
 end
 
 local function stateOf(arena: any, run: any, config: any): any
-	local hud = if run ~= nil then arena.hud(run, options(config)) else nil
+	local hud = arena.hud(run, options(config))
 	return {
 		ok = true,
 		hud = hud,
