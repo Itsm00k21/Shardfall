@@ -13,8 +13,14 @@
 	Pets have no core. There is no pet feeder.
 
 	Costs are the Essence to buy the next level: 5, 15, 40, 100, 250.
-	Cap is 5. Perks are cumulative and modest. Level 1 keeps perk 1,
-	level 2 keeps perks 1 and 2, and so on.
+	FULL_COST is that whole climb, 410. Cap is 5. Perks are cumulative
+	and modest. Level 1 keeps perk 1, level 2 keeps perks 1 and 2, and
+	so on.
+
+	BULK_SKIP is why a rarity sweep or an auto-salvage leaves a weapon
+	alone once its core is level 1 or higher. An explicit salvage of
+	that weapon is a separate confirm. HELP is one line, shown once
+	per session from the caller's memory table. It is not a save field.
 ]]
 
 local ShardCore = {}
@@ -29,6 +35,15 @@ ShardCore.WALLET_CAP = 1000000000
 
 -- Index 1 is the cost of level 0 -> 1.
 ShardCore.COST = table.freeze({ 5, 15, 40, 100, 250 })
+
+-- Essence to take one weapon core from level 0 to CAP. Sum of COST.
+ShardCore.FULL_COST = 410
+
+-- Rarity sweeps and auto-salvage report this and leave the weapon.
+ShardCore.BULK_SKIP = "That weapon has a Shard Core."
+
+-- First open of the session. The caller stores who has seen it.
+ShardCore.HELP = "Essence feeds a weapon's Shard Core."
 
 ShardCore.PERKS = table.freeze({
 	table.freeze({
@@ -113,6 +128,38 @@ function ShardCore.sanitize(value: any): { [string]: number }
 		end
 	end
 	return clean
+end
+
+-- Nil when a bulk or auto salvage may still take the weapon.
+-- Level 1 and up is protected. The caller decides whether the flag is on.
+function ShardCore.bulkSkipReason(level: any): string?
+	local stored = whole(level)
+	if stored == nil or stored < 1 then
+		return nil
+	end
+	return ShardCore.BULK_SKIP
+end
+
+-- The line the first time this id asks, then nil. session is memory
+-- for the play, not a profile. enabled false does not mark the id.
+function ShardCore.takeHelp(session: any, userId: any, enabled: any): string?
+	if enabled ~= true or type(session) ~= "table" then
+		return nil
+	end
+	if
+		type(userId) ~= "number"
+		or userId ~= userId
+		or userId >= math.huge
+		or userId <= -math.huge
+	then
+		return nil
+	end
+	local key = tostring(userId)
+	if session[key] == true then
+		return nil
+	end
+	session[key] = true
+	return ShardCore.HELP
 end
 
 function ShardCore.levelOf(profile: any, itemId: any): number

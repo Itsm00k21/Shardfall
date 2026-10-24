@@ -9,6 +9,7 @@
 ]]
 
 local Feed = require("./Feed")
+local GearSalvage = require("../../ReplicatedStorage/Shared/GearSalvage")
 local Rate = require("./Rate")
 local Validate = require("./Validate")
 
@@ -60,7 +61,12 @@ function Remotes.handle(request: any, deps: any, buckets: any): any
 		if type(profile) ~= "table" then
 			return fail(Validate.PROFILE)
 		end
-		return Feed.view(profile, nil, config)
+		local view = Feed.view(profile, nil, config)
+		local help = GearSalvage.takeHelp(request.userId)
+		if help ~= nil then
+			view.help = help
+		end
+		return view
 	end
 	local args = request.args
 	if type(args) ~= "table" then

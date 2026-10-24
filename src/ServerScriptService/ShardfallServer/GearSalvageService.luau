@@ -8,6 +8,15 @@
 	the Essence amount. Roll's "Salvage now" is nudge (preview, no
 	delete) then salvageNow (the confirm token).
 
+	counts is a token-free read of the picker rows. It shares this
+	remote, so the GearSalvage rate limit applies, and GearSalvage
+	keeps a second bucket for counts alone. It deletes nothing.
+	A rarity sweep and auto-salvage skip a weapon whose core is
+	level 1 or higher even while LaunchGate.shardCore is off.
+	An explicit uid list can still delete it. The warning and the
+	once-per-session help line are added only while that flag is on.
+	That line is not saved.
+
 	nudge and salvageNow are the API Ghost can call from the Roll tab.
 	They are not a second remote.
 ]]

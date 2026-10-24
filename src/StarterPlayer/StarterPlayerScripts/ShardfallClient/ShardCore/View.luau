@@ -5,7 +5,8 @@
 
 	Mount builds the gui from View.lines(state). state is the table
 	ShardCore.preview returns (and the server sends on GetShardCore
-	and FeedShardCore).
+	and FeedShardCore). help is the once-per-session line when the
+	server included it. An empty help means it was already shown.
 ]]
 
 local View = {}
@@ -28,6 +29,7 @@ export type Lines = {
 	feedText: string,
 	canFeed: boolean,
 	selected: string,
+	help: string,
 	weapons: { WeaponLine },
 	perks: { PerkLine },
 }
@@ -39,6 +41,7 @@ function View.lines(state: any): Lines
 	local status = "No weapon to feed."
 	local canFeed = false
 	local essence = 0
+	local help = ""
 	if type(state) == "table" then
 		if
 			type(state.essence) == "number"
@@ -54,6 +57,9 @@ function View.lines(state: any): Lines
 			status = state.status
 		end
 		canFeed = state.canFeed == true
+		if type(state.help) == "string" then
+			help = state.help
+		end
 		if type(state.weapons) == "table" then
 			for _, row in ipairs(state.weapons) do
 				if type(row) == "table" and type(row.uid) == "string" then
@@ -94,6 +100,7 @@ function View.lines(state: any): Lines
 		feedText = status,
 		canFeed = canFeed,
 		selected = selected,
+		help = help,
 		weapons = weapons,
 		perks = perks,
 	}

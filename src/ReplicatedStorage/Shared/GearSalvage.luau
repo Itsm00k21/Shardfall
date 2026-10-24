@@ -37,11 +37,24 @@
 	salvaged. Favorited gear (item.favorite) is never salvaged.
 	An explicit list fails with "That item is a favorite." and
 	deletes nothing. A rarity sweep skips that piece and reports
-	the skip. Nothing here is for sale.
+	the skip. A weapon whose core is level 1 or higher is skipped
+	by a rarity sweep and by auto-salvage, with ShardCore.BULK_SKIP.
+	That skip does not read LaunchGate.shardCore. An explicit uid
+	list can still delete the weapon. While the flag is on, that
+	list previews a warning and confirm deletes it. While the flag
+	is off, the warning is absent. The first counts or state reply
+	in a session can include ShardCore.HELP, and only while the
+	flag is on. That line lives in module memory, not the save.
+	Nothing here is for sale.
 
 	Salvage selected and salvage-all both preview first. The preview
 	stores a token and deletes nothing. confirm (and salvageNow)
-	spends that token.
+	spends that token. A stale or mismatched token returns
+	expired = true and deletes nothing. A grant that would pass
+	Essence.CAP returns reason "essence_cap" and deletes nothing.
+
+	counts is a token-free read of the picker rows. It is rate-limited
+	and deletes nothing. The token is minted only when a row is tapped.
 ]]
 
 local Essence = require("./Config/Essence")
@@ -49,17 +62,20 @@ local InventoryView = require("./InventoryView")
 local LaunchGate = require("./LaunchGate")
 local Rarities = require("./Rarities")
 local Schema = require("./Schema")
+local ShardCore = require("./Config/ShardCore")
 
 local GearSalvage = {}
 
 GearSalvage.FIELD = "gearEssence"
 GearSalvage.CAP = Essence.CAP
-GearSalvage.TOKEN_SECONDS = 20
+GearSalvage.TOKEN_SECONDS = Essence.TOKEN_SECONDS
 
 local READ = {
 	state = true,
 	preview = true,
 	nudge = true,
+	-- Picker rows. No token, nothing deleted.
+	counts = true,
 	-- Explicit salvage previews a token. confirm is the delete.
 	salvage = true,
 }
@@ -73,6 +89,7 @@ local ACTIONS = {
 	salvageNow = true,
 	nudge = true,
 	auto = true,
+	counts = true,
 }
 
 type Pending = {
@@ -83,11 +100,21 @@ type Pending = {
 	expires: number,
 }
 
+type CountBucket = {
+	tokens: number,
+	updated: number,
+}
+
 local pending: { [string]: Pending } = {}
 local books: { [string]: { [string]: boolean } } = {}
 local bookOrder: { [string]: { string } } = {}
+local countBuckets: { [string]: CountBucket } = {}
+-- Who has already been shown ShardCore.HELP. Not written to the profile.
+local helpSeen: { [string]: boolean } = {}
 local serial = 0
 local BOOK_MAX = 128
+
+local CORE_ONE = ShardCore.BULK_SKIP
 
 local function ownerKey(ownerId: any): string?
 	if type(ownerId) ~= "number" or ownerId ~= ownerId then
@@ -133,6 +160,7 @@ end
 local FAVORITE = "That item is a favorite."
 
 -- Nil when this piece may be salvaged. Equipped, locked, and favorited stay.
+-- A Shard Core does not block an explicit uid list. The confirm warns.
 local function blockReason(profile: any, item: any): string?
 	if type(item) == "table" and (item.kind == "Weapon" or item.kind == "Armor") then
 		if item.locked == true then
@@ -150,6 +178,21 @@ local function blockReason(profile: any, item: any): string?
 		return "Unequip it before salvaging."
 	end
 	return nil
+end
+
+-- Rarity sweeps and auto-salvage only. The core flag does not lift this.
+local function coreSweepReason(profile: any, item: any, uid: any): string?
+	if type(item) ~= "table" or item.kind ~= "Weapon" then
+		return nil
+	end
+	local id = uid
+	if type(id) ~= "string" then
+		id = item.uid
+	end
+	if type(id) ~= "string" then
+		return nil
+	end
+	return ShardCore.bulkSkipReason(ShardCore.levelOf(profile, id))
 end
 
 local function readBalance(value: any): number
@@ -372,6 +415,9 @@ function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, strin
 			if rank ~= nil and cap ~= nil and rank <= cap and pay ~= nil then
 				local blocked = blockReason(profile, item)
 				if blocked == nil then
+					blocked = coreSweepReason(profile, item, uid)
+				end
+				if blocked == nil then
 					table.insert(uids, uid)
 				else
 					table.insert(skipped, { uid = uid, reason = blocked })
@@ -384,15 +430,15 @@ function GearSalvage.plan(profile: any, rarity: any): ({ [string]: any }?, strin
 		return left.uid < right.uid
 	end)
 	if #uids == 0 then
-		local onlyFavorites = #skipped > 0
+		local only = if #skipped > 0 then skipped[1].reason else nil
 		for _, row in ipairs(skipped) do
-			if row.reason ~= FAVORITE then
-				onlyFavorites = false
+			if row.reason ~= only then
+				only = nil
 				break
 			end
 		end
-		if onlyFavorites then
-			return nil, FAVORITE, skipped
+		if only == FAVORITE or only == ShardCore.BULK_SKIP then
+			return nil, only, skipped
 		end
 		return nil, "Nothing of that rarity can be salvaged.", skipped
 	end
@@ -434,7 +480,7 @@ local function salvageUids(profile: any, uids: { string }): ({ [string]: any }?,
 	end
 	GearSalvage.applySave(profile)
 	if total > GearSalvage.CAP - profile.gearEssence then
-		return nil, "Essence is full."
+		return nil, Essence.CAP_REASON
 	end
 	for _, uid in ipairs(uids) do
 		profile.inventory[uid] = nil
@@ -460,6 +506,22 @@ end
 
 local function fail(message: string)
 	return { ok = false, error = message }
+end
+
+local function expiredFail()
+	return {
+		ok = false,
+		error = "That confirm expired. Look again.",
+		expired = true,
+	}
+end
+
+local function capFail()
+	return {
+		ok = false,
+		error = "Essence is full.",
+		reason = Essence.CAP_REASON,
+	}
 end
 
 local function forSale(payload: { [string]: any }): boolean
@@ -535,6 +597,9 @@ function GearSalvage.receive(profile: any, item: any)
 		return keep()
 	end
 	local blocked = blockReason(profile, item)
+	if blocked == nil then
+		blocked = coreSweepReason(profile, item, item.uid)
+	end
 	if blocked ~= nil then
 		local held = keep()
 		held.reason = blocked
@@ -567,7 +632,213 @@ function GearSalvage._reset()
 	for key in pairs(bookOrder) do
 		bookOrder[key] = nil
 	end
+	for key in pairs(countBuckets) do
+		countBuckets[key] = nil
+	end
+	for key in pairs(helpSeen) do
+		helpSeen[key] = nil
+	end
 	serial = 0
+end
+
+-- Drop the once-per-session line so the next join can see it again.
+function GearSalvage.forgetHelp(ownerId: any)
+	local key = ownerKey(ownerId)
+	if key ~= nil then
+		helpSeen[key] = nil
+	end
+end
+
+-- HELP the first time this id asks while shardCore is on. Not a save.
+function GearSalvage.takeHelp(ownerId: any): string?
+	return ShardCore.takeHelp(helpSeen, ownerId, LaunchGate.on("shardCore"))
+end
+
+local function attachHelp(ownerId: any, result: { [string]: any })
+	local line = GearSalvage.takeHelp(ownerId)
+	if line ~= nil then
+		result.help = line
+	end
+	return result
+end
+
+-- Weapons in this list whose core is at least 1. They stay in the list.
+-- The warning rides on the preview and the confirm. The flag hides it.
+local function coreNotes(profile: any, uids: { string }): ({ any }, string?)
+	local notes = {}
+	if not LaunchGate.on("shardCore") then
+		return notes, nil
+	end
+	if type(profile) ~= "table" or type(profile.inventory) ~= "table" then
+		return notes, nil
+	end
+	for _, uid in ipairs(uids) do
+		local item = profile.inventory[uid]
+		local level = ShardCore.levelOf(profile, uid)
+		if type(item) == "table" and item.kind == "Weapon" and level >= 1 then
+			table.insert(notes, { uid = uid, level = level })
+		end
+	end
+	table.sort(notes, function(left, right)
+		return left.uid < right.uid
+	end)
+	if #notes == 0 then
+		return notes, nil
+	end
+	if #notes == 1 then
+		return notes, CORE_ONE
+	end
+	return notes, string.format("%d weapons have a Shard Core.", #notes)
+end
+
+local function withCoreWarning(profile: any, uids: { string }, result: { [string]: any })
+	local notes, warning = coreNotes(profile, uids)
+	if warning ~= nil then
+		result.warning = warning
+		result.cored = notes
+	end
+	return result
+end
+
+local function countsRule(): (number?, number?)
+	local rule = Essence.COUNTS
+	if type(rule) ~= "table" then
+		return nil, nil
+	end
+	local capacity = rule.capacity
+	local perSecond = rule.perSecond
+	if
+		type(capacity) ~= "number"
+		or capacity < 1
+		or capacity ~= math.floor(capacity)
+		or capacity >= math.huge
+	then
+		return nil, nil
+	end
+	if
+		type(perSecond) ~= "number"
+		or perSecond ~= perSecond
+		or perSecond <= 0
+		or perSecond >= math.huge
+	then
+		return nil, nil
+	end
+	return capacity, perSecond
+end
+
+local function takeCounts(owner: string, now: number): boolean
+	local capacity, perSecond = countsRule()
+	if capacity == nil or perSecond == nil then
+		return false
+	end
+	local bucket = countBuckets[owner]
+	if bucket == nil then
+		bucket = { tokens = capacity, updated = now }
+		countBuckets[owner] = bucket
+	end
+	local elapsed = now - bucket.updated
+	if elapsed < 0 then
+		elapsed = 0
+	end
+	bucket.tokens = math.min(capacity, bucket.tokens + elapsed * perSecond)
+	bucket.updated = now
+	if bucket.tokens < 1 then
+		return false
+	end
+	bucket.tokens -= 1
+	return true
+end
+
+local function pickerRarities(): { string }
+	local list = {}
+	local source = Essence.PICKER
+	if type(source) ~= "table" then
+		return list
+	end
+	local seen: { [string]: boolean } = {}
+	for _, name in ipairs(source) do
+		if type(name) == "string" and Essence.amount(name) ~= nil and seen[name] ~= true then
+			seen[name] = true
+			table.insert(list, name)
+		end
+	end
+	return list
+end
+
+local function rarityLimit(): number
+	local count = 0
+	for _ in pairs(Essence.AMOUNT) do
+		count += 1
+	end
+	return count
+end
+
+local function readRarities(value: any): ({ string }?, string?)
+	if value == nil then
+		local list = pickerRarities()
+		if #list == 0 then
+			return nil, "Could not salvage that."
+		end
+		return list, nil
+	end
+	if type(value) ~= "table" then
+		return nil, "Unknown rarity."
+	end
+	local maxCount = rarityLimit()
+	if #value < 1 or #value > maxCount then
+		return nil, "Unknown rarity."
+	end
+	local seen: { [string]: boolean } = {}
+	local list = {}
+	for _, name in ipairs(value) do
+		if type(name) ~= "string" or Essence.amount(name) == nil or seen[name] == true then
+			return nil, "Unknown rarity."
+		end
+		seen[name] = true
+		table.insert(list, name)
+	end
+	local extra = 0
+	for _ in pairs(value) do
+		extra += 1
+	end
+	if extra ~= #list then
+		return nil, "Unknown rarity."
+	end
+	return list, nil
+end
+
+-- One call, every requested row. No token. Nothing is deleted.
+local function counts(profile: any, ownerId: any, rawRarities: any, now: any)
+	local owner = ownerKey(ownerId)
+	local when = clock(now)
+	if owner == nil or when == nil then
+		return fail("Could not salvage that.")
+	end
+	local list, why = readRarities(rawRarities)
+	if list == nil then
+		return fail(why or "Unknown rarity.")
+	end
+	if not takeCounts(owner, when) then
+		return fail("Slow down a moment.")
+	end
+	local rows = {}
+	for _, rarity in ipairs(list) do
+		local plan = GearSalvage.plan(profile, rarity)
+		local row = { count = 0, gain = 0 }
+		if plan ~= nil then
+			row.count = plan.count
+			row.gain = plan.gain
+		end
+		rows[rarity] = row
+	end
+	local result: { [string]: any } = {
+		counts = rows,
+		order = table.clone(list),
+	}
+	for _, rarity in ipairs(list) do
+		result[rarity] = rows[rarity]
+	end
+	return attachHelp(ownerId, pack(profile, result))
 end
 
 local function storePlan(owner: string, plan: { [string]: any }, now: number): string
@@ -601,7 +872,7 @@ local function preview(profile: any, ownerId: any, rarity: any, now: any)
 		return withSkipped(fail(reason or "Nothing of that rarity can be salvaged."), skipped)
 	end
 	local token = storePlan(owner, plan, when)
-	return pack(profile, {
+	return withCoreWarning(profile, plan.uids, pack(profile, {
 		token = token,
 		count = plan.count,
 		gain = plan.gain,
@@ -609,7 +880,7 @@ local function preview(profile: any, ownerId: any, rarity: any, now: any)
 		uids = copyUids(plan.uids),
 		skipped = plan.skipped,
 		message = string.format("%d pieces would become %d Essence.", plan.count, plan.gain),
-	})
+	}))
 end
 
 -- Explicit uids. All-or-nothing. Stores a token and deletes nothing.
@@ -644,13 +915,13 @@ local function previewSelected(profile: any, ownerId: any, rawUids: any, now: an
 		total += pay
 	end
 	local token = storePlan(owner, { mode = "selected", rarity = "", uids = uids }, when)
-	return pack(profile, {
+	return withCoreWarning(profile, uids, pack(profile, {
 		token = token,
 		count = #uids,
 		gain = total,
 		uids = copyUids(uids),
 		message = string.format("%d pieces would become %d Essence.", #uids, total),
-	})
+	}))
 end
 
 local function recheckSelected(profile: any, uids: { string }): (boolean, string?)
@@ -677,13 +948,15 @@ local function confirm(profile: any, ownerId: any, token: any, now: any)
 	local owner = ownerKey(ownerId)
 	local when = clock(now)
 	if owner == nil or when == nil or not validToken(token) then
-		return fail("That confirm expired. Look again.")
+		return expiredFail()
 	end
 	local row = pending[owner]
 	if row == nil or row.token ~= token or when > row.expires then
-		return fail("That confirm expired. Look again.")
+		return expiredFail()
 	end
 	local summary, why
+	local warnedUids = row.uids
+	local notes, warning = coreNotes(profile, warnedUids)
 	if row.mode == "selected" then
 		local ready, blocked = recheckSelected(profile, row.uids)
 		if not ready then
@@ -697,13 +970,22 @@ local function confirm(profile: any, ownerId: any, token: any, now: any)
 			pending[owner] = nil
 			return fail("The bag changed. Look again.")
 		end
+		warnedUids = plan.uids
+		notes, warning = coreNotes(profile, warnedUids)
 		summary, why = salvageUids(profile, plan.uids)
 	end
 	if summary == nil then
+		if why == Essence.CAP_REASON then
+			return capFail()
+		end
 		return fail(why or "Could not salvage that.")
 	end
 	pending[owner] = nil
 	summary.message = string.format("Salvaged %d for %d Essence.", summary.count, summary.gained)
+	if warning ~= nil then
+		summary.warning = warning
+		summary.cored = notes
+	end
 	return pack(profile, summary)
 end
 
@@ -725,7 +1007,7 @@ function GearSalvage.applyAction(profile: any, ownerId: any, action: any, payloa
 		return fail("Nothing here is for sale.")
 	end
 	if action == "state" then
-		return pack(profile, {})
+		return attachHelp(ownerId, pack(profile, {}))
 	end
 	if action == "lock" then
 		local ok, why = GearSalvage.setLock(profile, body.uid, body.locked)
@@ -745,6 +1027,9 @@ function GearSalvage.applyAction(profile: any, ownerId: any, action: any, payloa
 			message = string.format("Auto-salvage on: %s and below.", profile.autoSalvageRarity)
 		end
 		return pack(profile, { message = message })
+	end
+	if action == "counts" then
+		return counts(profile, ownerId, body.rarities, now)
 	end
 	if action == "salvage" then
 		return previewSelected(profile, ownerId, body.uids, now)
