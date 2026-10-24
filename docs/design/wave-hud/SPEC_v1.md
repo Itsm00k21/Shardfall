@@ -1,6 +1,6 @@
-# Wave HUD ("Stack chip + boss bar"), Spec v1.1
+# Wave HUD ("Stack chip + boss bar"), Spec v1.2
 
-Owner: Prism (design, docs only, no code). Builders: Ghost (client HUD), Echo (server payloads). Base: `cursor/live-build-9721`. Status: **v1.1, direction A chosen by Ghost** (Kevin pre-approved, Agent Board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f, Oct 24, 2026). Ghost questions 1–4 are decided; Kevin taste call 5 stays **PROVISIONAL**. Gray-box only (pre-Phase S). Not an official Vision & Design Rules decision until Kevin approves it.
+Owner: Prism (design, docs only, no code). Builders: Ghost (client HUD), Echo (server payloads). Base: `cursor/live-build-9721`. Status: **v1.2** (element colors folded in + Hard red final, Ghost row https://app.notion.com/p/403c31ca388381919fdfd588508d2143, Oct 24, 2026, Kevin pre-approved). v1.1: **direction A chosen by Ghost** (Kevin pre-approved, Agent Board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f, Oct 24, 2026). Ghost questions 1–4 are decided; Kevin taste call 5 stays **PROVISIONAL**. Gray-box only (pre-Phase S). Not an official Vision & Design Rules decision until Kevin approves it.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953, from canvas item **M6**: "Wave HUD spec (wave counter, next-wave timer, boss bar, HARD chip)". Roadmap **3.5** ("wave counter on screen"), **3.6** (boss + 4 adds on wave 5), **5.1** (8 s draft break), **5.4** (Hard).
 
 Sources (link, don't copy):
@@ -8,6 +8,7 @@ Sources (link, don't copy):
 - Live HUD (read only, `cursor/live-build-9721`): `Shared/HudLayout.luau` (portrait 56, HP 220 or clipped on portrait, 108 px currency column, rail, toast host), `ShardfallClient/Ui.luau` lines ~595–640 (today's run label "Waves · Wave N · N left" plus a 96×44 Leave button, which the Oct 23 no-early-exit rule removes), `ShardfallClient/CombatHud.luau` (HP bar, victory card). `Shared/Rarities.luau` `Rarities.COLOR` (Common 168,168,176 · Uncommon 64,186,98 · Rare 72,142,255 · Epic 186,96,240 · Legendary 255,196,64).
 - Server data: PR #417 (`echo/dungeon-wave-flow`) adds `Remotes.WaveCounter` that sends `{ wave, left }` (flag `enemyTypes`, off) and `Config/Enemies.luau` `WAVE_COUNTS = {6, 8, 10, 12}`. PR #419 (`echo/dungeon-wave5-boss`) adds the wave-5 boss + 4 adds. Nothing on the client reads the remote yet.
 - Specs this must match: **#420 phone layout review rev 1.1** (full-screen px frame; center keep-out, portrait top 35% = y 296 (D1, provisional); D2 hub cluster hides under docks, the arena keeps the combat cluster; D3 one toast lane, max 1, loot/rarity outrank info; §4 "Top-left stack: live portrait + HP → a future #417 wave counter → #412 Oracle pill/goal → #416 buff strip"). **#412** first 30 seconds (wave toasts "Wave 1/5", "First kill!", "Wave 1 cleared!" go through the lane). **#414** Shard Crater (arena, loot chip through the lane). **#416** buffs pick-3 v1.1 (8 s break, buff strip, held pill). **Hard mode selector v1.1** (`prism/hard-mode-selector`, "one HARD chip on the wave counter").
+- Element colors (**v1.2**): **PR #435** element color separation study (`docs/design/element-color-study/SPEC_v1.md`), variant **E3 + V3**, picked by Ghost under Kevin's handoff (row https://app.notion.com/p/403c31ca388381919fdfd588508d2143, Q4). Colors live in `Config/Elements` on PR #432 (Echo).
 - Chrome: PR #392 `docs/ui/reference/STYLE.md` (panel 28,24,40 · row 40,34,58 · gold 255,196,64 · danger 230,80,96 · corners 8/10/12 · strokes 1/2 · Builder Sans).
 
 ## 0. Directions (pick one) and recommendation
@@ -76,8 +77,18 @@ Checks:
 |---|---|---|---|---|---|---|---|
 | Wave chip | panel 28,24,40 + 1 px row stroke; "WAVE n/5" text 240,236,248; cyan 120,210,255 enemies bar; "N left" muted (gold at ≤ 3) | `UIScale` 0.96, 0.08 s | 2 px gold stroke, "NEXT WAVE" + seconds in gold, gold bar drains 8 s | 2 px danger stroke, "BOSS IN" + seconds in danger | 2 px danger stroke, "WAVE 5/5", "N adds" | 44×44, "n/5" 13 px | 2 px danger stroke, HARD chip inside (all states) |
 | Boss bar | — | not tappable | — | — | panel + 2 px gold stroke (Normal) / danger (Hard); HP bar 8 px, fill 230,120,70 (Normal) / danger (Hard); white tick at 50% | — | HARD chip before the name |
-| HARD chip | danger 230,80,96 fill, ink 32,22,10 "HARD" 9–11 px bold, pill corners | — | — | — | — | a 4 px danger line at the top of the badge | — |
+| HARD chip | Hard red **230,80,96** fill (final, Ghost Q5), ink 32,22,10 "HARD" 9–11 px bold, pill corners | — | — | — | — | a 4 px danger line at the top of the badge | — |
 Loading: until the first payload arrives, the chip shows "WAVE –/5" with an empty bar (no spinner). Error / stale (no payload for 5 s): keep the last values, no warning text. Empty: in the hub the HUD is hidden.
+
+**Element colors (v1.2).** The #416 buff pips and the enemy-bar pip read `Config/Elements` (Ghost Q7 on #435); the HUD never hard-codes them. Source: PR #435, variant **E3 + V3** (fixes the deutan Void-vs-Rare/Epic clash).
+
+| Element | Fill (pip / glow) | Outline (45% to white) | Pip shape | Notes |
+|---|---|---|---|---|
+| Ember | **#E84814** · 232,72,20 | #F29A7E · 242,154,126 | flame | was #FF7024 on #432; now ≥ 9 ΔE00 from boss telegraph 255,120,40, gold, warn, UPGRADE in all 4 visions |
+| Frost | #5CD6FF · 92,214,255 (unchanged) | #A5E8FF · 165,232,255 | crystal | — |
+| Void | **#C04888** · 192,72,136 | #DC9ABE · 220,154,190 | ring | was #C45CFF (= Epic); now ≥ 18 from Epic 186,96,240, ≥ 23 from Rare |
+
+Pip build: 10 px (buff pip) / 12 px (enemy bar, 14 px desktop), white pip art tinted with the fill + 1 px ink 32,22,10 stroke so the shape carries the read in grayscale (Ember vs Void gray ΔE 0, the pip shape is the colorblind cue; don't drop it). The pip sits 4 px left of the enemy HP bar so it never merges with the HP / Hard red **230,80,96** (Ember E3 vs that red is 5 for tritan; the gap + shape cover it). Element colors never appear on loot, rarity strokes or the HARD chip; rarity keeps `Rarities.COLOR`.
 
 Rarity colors (`Rarities.COLOR`) aren't used by the HUD itself; loot toasts in the lane keep their rarity strokes (D3 priority 1).
 
@@ -87,10 +98,11 @@ Rarity colors (`Rarities.COLOR`) aren't used by the HUD itself; loot toasts in t
 - Boss phase line: **50%** (proposal, matches the live Gnarl "phase 2" note; Config). Boss HP shown with party scaling already applied (HP × (1 + 0.3 × (players − 1))).
 - Sizes: chip 134–180 × 44, collapsed 44×44, boss bar 190–400 × 40–44, HARD chip 38×16 (phone) / 46×20 (desktop), bars 6 px (chip) and 8 px (boss), corners 10 (chip, bar) and h/2 (chips, bars).
 - Timings: chip in 0.2 s, bar tween 0.15 s per kill, state color change 0.2 s, break pulse 0.2 s, boss bar in/out 0.25 s (Quad Out), phase tick flash 2 × 0.15 s.
-- Colors: enemies bar cyan 120,210,255; break gold 255,196,64; boss/Hard danger 230,80,96 (Hard accent is **PROVISIONAL**, Kevin taste call in the Hard spec Q4); Normal boss HP 230,120,70.
+- Colors: enemies bar cyan 120,210,255; break gold 255,196,64; boss/Hard danger **230,80,96** (Hard accent **final**, Ghost Q5 on row https://app.notion.com/p/403c31ca388381919fdfd588508d2143); Normal boss HP 230,120,70; element pips Ember **#E84814** (232,72,20), Frost #5CD6FF (92,214,255), Void **#C04888** (192,72,136), from `Config/Elements` (PR #435 V3).
 - Copy: "WAVE n/5" · "N left" · "NEXT WAVE" · "BOSS IN" · "N adds" · "CLEARED" · "WIPED · wave N" · "HARD" · "phase 2" · boss name from Config (gray box: "GNARL"). Toasts (lane): "Wave n/5" · "First kill!" · "Wave n cleared!" · "Boss incoming!" · "Weak spot open!".
 
 ## 7. Edge cases
+- **Element colors before #432 lands:** if `Config/Elements` has no `color` (today's live build), pips show white with their shape only; no fallback hex in the UI.
 - **Server authority:** the client only displays the payload. A missed event is fixed by the next one (each payload is a full snapshot, not a delta).
 - **Rejoin mid-run:** the server sends a snapshot on join; the chip shows the current state at once (no replay of toasts).
 - **Party:** everyone sees the same wave and boss HP; "N left" counts the whole wave, not personal kills. The anti-AFK rule (Roadmap 6.3) has no HUD in V1.
@@ -127,6 +139,7 @@ Roadmap 3.5 / 3.6. Building waits for Ghost's go and the #417 / #419 flags.
 6. **@Ghost (new in v1.1):** On portrait the pip row is 14 px tall, so it's display-only. Recommended: the full buff list opens from a long-press (0.4 s) on the wave chip and also shows on the results screen; a normal tap keeps folding the chip. OK, or would you rather have a separate 44 px buff button?
 
 ## Decision log
+- 2026-10-24 (Prism, Ghost GO row https://app.notion.com/p/403c31ca388381919fdfd588508d2143, Kevin pre-approved): **v1.2** folds element colors from the PR #435 study, variant E3 + V3: Ember #E84814, Void #C04888 (Frost unchanged), read from `Config/Elements` for the buff pips and enemy-bar pip; Hard red 230,80,96 is final (Ghost Q5). Q5 (Normal boss HP color) still Kevin's. No layout change; mockups unchanged (pips in 01–03 are gray-box). Not approved as a design rule.
 - 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f): direction **A**. Q1 = buff strip re-docks under the wave counter, clear of the action bar (portrait pip row x 16–84, y 226–240; mockups 01–03 re-rendered). Q2 = first-run row session-only, no save field. Q3 = yes, full-snapshot `WaveCounter` payload (rejoin-safe). Q4 = yes, top-band boss bar. Q5 (Kevin taste) stays PROVISIONAL. New Q6 for Ghost (portrait buff list). → v1.1.
 - 2026-10-24 (Prism): v1 published. Recommends direction A (stack chip + boss bar). Five open questions (Ghost 1–4; Kevin 5). Not approved. The HARD chip uses the Hard accent that is still a PROVISIONAL Kevin taste call (Hard spec Q4).
 
@@ -141,6 +154,7 @@ Stock Roblox UI only. No blur or glassmorphism, no soft shadows, no web fonts (B
 | Wave chip | `TextButton` WaveChip (AutoButtonColor false, panel 28,24,40) + `UICorner` 10 + `UIStroke` 1–2 (row / gold / danger by state) + `UIListLayout` horizontal for [HardChip, title] + `TextLabel` title (13 px BuilderSansBold) + `TextLabel` count/seconds (right aligned) + bar `Frame` 6 px (`UICorner` h/2, dim 54,46,78) with fill `Frame` (Size X tween) + `UIScale` (press 0.96, break pulse 1.06) |
 | Collapsed | same button, Size tween to 44×44, title swaps to "n/5"; Tab via `ContextActionService` |
 | Boss bar | `Frame` BossBar + `UICorner` 10 + `UIStroke` 2 + `TextLabel` name + `TextLabel` sub ("WAVE 5/5" or "N adds") + HP back `Frame` 8 px + fill `Frame` with `UIGradient` (fill color → 85% brightness, Rotation 0) + tick `Frame` 2×12 at X scale 0.5; damage = Size tween 0.15 s; a trailing "ghost" fill `Frame` (white, 0.6 transparency) lags 0.3 s behind for hit feel |
+| Element pips (v1.2) | `ImageLabel` (white pip art: flame / crystal / ring) with `ImageColor3` = `Config/Elements[id].color` + `UIStroke` 1 ink 32,22,10; enemy-bar pip 12×12 (14 desktop) 4 px left of the HP bar; no `UIGradient`, no glow image |
 | HARD chip | `Frame` + `UICorner` h/2 + `TextLabel` "HARD" (danger fill, ink text), optional hard_chip_skull_32 `ImageLabel` |
 | Motion | TweenService only, Quad Out; no RenderStepped loops; the break timer updates its label once per second from `breakEndsAt` and tweens the bar once over the remaining time |
 | World VFX (Phase S) | wave start: a short `ParticleEmitter` burst at each enemy gate (gray box: none); boss phase 2: a ring `ParticleEmitter` on the boss (`LightEmission` 0.5) |
