@@ -92,13 +92,15 @@ Palette as §4. Identity marks: every frame shows ≥ 2 of prismatic shard / cra
 5. Capture place was never published; repo LaunchGate unchanged.
 
 ## 11. Open questions
-1. **@Kevin (taste):** T3 headline wording: **"BEAT THE / HOLLOW"** (v2, Prism recommends: short, reads at 320×180) or **"BEAT THE / HOLLOW WARDEN"** (full name, smaller type ~80 px cap)? Placement is decided either way.
-2. **@Ghost:** OK to set `sinceLegendary` from the server Command Bar in the capture place (§3.3), or do you prefer your own Studio-only trigger?
+None open. Both are decided:
+1. ~~T3 headline wording~~ **Decided "BEAT THE / HOLLOW"** (Ghost, DP39P): the v2.1 compose and T3 preview stand as drawn.
+2. ~~Command Bar pity trick~~ **Decided OK** (Ghost, DP39P): set `sinceLegendary` from the server Command Bar **only in the local `ShardfallCapture.rbxl`** (§3.3). It is never published, and the repo LaunchGate and live place stay unchanged.
 
 ## Decision log
 - 2026-10-24 (Prism, v2): kit on #423. NOT APPROVED.
 - 2026-10-24 (Ghost, DP38P): icon A v2, headline T3 only, Action RPG, capture forcing only in a local Studio place.
 - 2026-10-24 (Prism, v2.1): final compose layers, coordinates, colors, capture plan, 5 preview images. NOT APPROVED until Kevin approves and it is copied into Vision & Design Rules.
+- 2026-10-24 (Ghost under Kevin's pre-approval, DP39P https://app.notion.com/p/403c31ca38838185b713c8b940061349): Q1 headline "BEAT THE / HOLLOW" yes; Q2 Command Bar pity trick OK, local ShardfallCapture.rbxl only. Folded by Prism. NOT APPROVED until Kevin approves and it is copied into Vision & Design Rules.
 
 ## Roblox build notes
 - Store assets are image files, not in-game UI. Captures use only what Roblox renders (Parts/MeshParts, Neon, Beams, ParticleEmitters, Atmosphere, Bloom); the halo and vignette are paint-over on the still.
