@@ -172,6 +172,9 @@ function GearSalvage.applySave(profile: any)
 	local rarity = profile.autoSalvageRarity
 	if not knownRarity(rarity) then
 		rarity = ""
+	elseif Rarities.INDEX[rarity] > Rarities.INDEX.Uncommon then
+		-- An old save may say Rare or higher. Lower the cap only.
+		rarity = "Uncommon"
 	end
 	profile.autoSalvageRarity = rarity
 	profile.autoSalvage = profile.autoSalvage == true and rarity ~= ""
@@ -320,6 +323,10 @@ end
 function GearSalvage.setAuto(profile: any, enabled: any, rarity: any): (boolean, string?)
 	if type(profile) ~= "table" or type(enabled) ~= "boolean" then
 		return false, "Auto-salvage needs a choice."
+	end
+	-- The client can ask for Rare. The server does not store it.
+	if knownRarity(rarity) and Rarities.INDEX[rarity] > Rarities.INDEX.Uncommon then
+		return false, "Auto-salvage stops at Uncommon."
 	end
 	if enabled then
 		if not knownRarity(rarity) then
@@ -518,6 +525,8 @@ function GearSalvage.receive(profile: any, item: any)
 	if type(profile) ~= "table" or type(item) ~= "table" then
 		return keep()
 	end
+	-- A stored cap above Uncommon is lowered before the drop is judged.
+	GearSalvage.applySave(profile)
 	local settings = GearSalvage.view(profile)
 	if settings.autoSalvage ~= true then
 		return keep()

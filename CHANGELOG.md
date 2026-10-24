@@ -67,6 +67,9 @@ its tag to merged and add the merge commit.
   a clear "is off" line. [#377] (open)
 
 ### Fixed
+- Auto-salvage stops at Uncommon for gear and for chests. A higher cap from
+  the client is refused. A save that already has one is lowered to Uncommon
+  on load. Gear, gold, and Essence stay. `schemaVersion` stays 26. [#388] (open)
 - Stage B: an auto-salvaged x10 row carries `autoSalvaged` and `essenceGained`,
   the same fields a single crack returns. The granted Essence is the server
   number. [#388] (open)

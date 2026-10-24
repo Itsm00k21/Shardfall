@@ -219,6 +219,14 @@ function ChestConfig.playFullReveal(tier: string, rarity: string, many: boolean)
 	return true
 end
 
+-- True when the client asked for a chest auto-salvage cap above Uncommon.
+function ChestConfig.salvageAboveCap(value: any): boolean
+	if type(value) ~= "string" or Rarities.INDEX[value] == nil then
+		return false
+	end
+	return Rarities.rank(value) > Rarities.rank("Uncommon")
+end
+
 function ChestConfig.ensure(data: any)
 	if type(data.chests) ~= "table" then
 		data.chests = {}
@@ -242,6 +250,8 @@ function ChestConfig.ensure(data: any)
 		or Rarities.INDEX[data.chestSalvageBelow] == nil
 	then
 		data.chestSalvageBelow = ""
+	elseif ChestConfig.salvageAboveCap(data.chestSalvageBelow) then
+		data.chestSalvageBelow = "Uncommon"
 	end
 	if type(data.materials) ~= "table" then
 		data.materials = Materials.empty()

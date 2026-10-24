@@ -126,9 +126,13 @@ describe("Essence save fields", function()
 		expect(bad.gearEssence).toEqual(1000000000)
 		bad.autoSalvage = true
 		bad.autoSalvageRarity = "Rare"
+		local keptGold = bad.gold
+		local keptItem = Schema.deepCopy(bad.inventory.a)
 		GearSalvage.applySave(bad)
 		expect(bad.autoSalvage).toEqual(true)
-		expect(bad.autoSalvageRarity).toEqual("Rare")
+		expect(bad.autoSalvageRarity).toEqual("Uncommon")
+		expect(bad.gold).toEqual(keptGold)
+		expect(bad.inventory.a).toEqual(keptItem)
 		bad.autoSalvage = true
 		bad.autoSalvageRarity = "nope"
 		GearSalvage.applySave(bad)
@@ -158,10 +162,17 @@ describe("Essence save fields", function()
 		tuned.gearEssence = 12.9
 		tuned.autoSalvage = true
 		tuned.autoSalvageRarity = "Epic"
+		tuned.chestSalvageBelow = "Mythic"
+		tuned.gold = 40
+		local worn = tuned.inventory
 		Schema.reconcile(tuned)
 		expect(tuned.gearEssence).toEqual(12)
 		expect(tuned.autoSalvage).toEqual(true)
-		expect(tuned.autoSalvageRarity).toEqual("Epic")
+		expect(tuned.autoSalvageRarity).toEqual("Uncommon")
+		expect(tuned.chestSalvageBelow).toEqual("Uncommon")
+		expect(tuned.gold).toEqual(40)
+		expect(tuned.inventory).toEqual(worn)
+		expect(tuned.schemaVersion).toEqual(26)
 		tuned.autoSalvage = true
 		tuned.autoSalvageRarity = "nope"
 		tuned.gearEssence = math.huge
@@ -513,7 +524,7 @@ describe("Gear salvage", function()
 
 			local turned = GearSalvage.applyAction(data, 42, "auto", {
 				enabled = true,
-				rarity = "Rare",
+				rarity = "Uncommon",
 			}, 10)
 			expect(turned.ok).toEqual(true)
 			expect(data.autoSalvage).toEqual(true)
@@ -1074,6 +1085,90 @@ local function salvageProfile(sinceEpic: number)
 	data.autoSalvageRarity = "Common"
 	return data
 end
+
+describe("Auto-salvage cap", function()
+	it("refuses a client cap above Uncommon and lowers a saved one", function()
+		expect(Schema.VERSION).toEqual(26)
+		local saved = Schema.template()
+		saved.schemaVersion = 26
+		saved.gold = 40
+		saved.gearEssence = 7
+		saved.autoSalvage = true
+		saved.autoSalvageRarity = "Mythic"
+		saved.chestSalvageBelow = "Legendary"
+		put(saved, sword("kept", "Rare", { upgrade = 2, favorite = true }))
+		Schema.reconcile(saved)
+		expect(saved.schemaVersion).toEqual(26)
+		expect(saved.autoSalvage).toEqual(true)
+		expect(saved.autoSalvageRarity).toEqual("Uncommon")
+		expect(saved.chestSalvageBelow).toEqual("Uncommon")
+		expect(saved.gold).toEqual(40)
+		expect(saved.gearEssence).toEqual(7)
+		expect(saved.inventory.kept.uid).toEqual("kept")
+		expect(saved.inventory.kept.rarity).toEqual("Rare")
+		expect(saved.inventory.kept.upgrade).toEqual(2)
+		expect(saved.inventory.kept.favorite).toEqual(true)
+
+		local live = fresh()
+		live.gold = 3
+		live.autoSalvage = true
+		live.autoSalvageRarity = "Epic"
+		put(live, sword("worn", "Rare"))
+		GearSalvage.applySave(live)
+		expect(live.autoSalvage).toEqual(true)
+		expect(live.autoSalvageRarity).toEqual("Uncommon")
+		expect(live.gold).toEqual(3)
+		expect(live.inventory.worn.rarity).toEqual("Rare")
+
+		withFlag(true, function()
+			local data = fresh()
+			data.gold = 8
+			data.gearEssence = 4
+			data.autoSalvage = true
+			data.autoSalvageRarity = "Common"
+			put(data, sword("bag", "Epic", { upgrade = 1 }))
+			local shot = Schema.deepCopy(data)
+			for _, rarity in ipairs({ "Rare", "Epic", "Legendary", "Mythic", "Secret" }) do
+				local refused = GearSalvage.applyAction(data, 42, "auto", {
+					enabled = true,
+					rarity = rarity,
+				}, 10)
+				expect(refused.ok).toEqual(false)
+				expect(refused.error).toEqual("Auto-salvage stops at Uncommon.")
+				expect(data).toEqual(shot)
+				local off = GearSalvage.applyAction(data, 42, "auto", {
+					enabled = false,
+					rarity = rarity,
+				}, 10)
+				expect(off.ok).toEqual(false)
+				expect(off.error).toEqual("Auto-salvage stops at Uncommon.")
+				expect(data).toEqual(shot)
+			end
+			local on = GearSalvage.applyAction(data, 42, "auto", {
+				enabled = true,
+				rarity = "Uncommon",
+			}, 10)
+			expect(on.ok).toEqual(true)
+			expect(data.autoSalvage).toEqual(true)
+			expect(data.autoSalvageRarity).toEqual("Uncommon")
+			expect(data.gold).toEqual(8)
+			expect(data.gearEssence).toEqual(4)
+			expect(data.inventory.bag.upgrade).toEqual(1)
+
+			data.autoSalvageRarity = "Secret"
+			local common = GearSalvage.receive(data, sword("drop", "Common"))
+			expect(common.kept).toEqual(false)
+			expect(common.gained).toEqual(1)
+			expect(data.autoSalvageRarity).toEqual("Uncommon")
+			local rare = GearSalvage.receive(data, sword("rare", "Rare"))
+			expect(rare.kept).toEqual(true)
+			expect(data.inventory.rare).toBeNil()
+			expect(data.inventory.bag.upgrade).toEqual(1)
+			expect(data.gearEssence).toEqual(5)
+		end)
+		expect(LaunchGate.on("gearSalvage")).toEqual(false)
+	end)
+end)
 
 describe("Auto-salvaged x10 batch", function()
 	it("copies autoSalvaged and essenceGained onto batch rows", function()
