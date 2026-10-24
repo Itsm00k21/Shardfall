@@ -11,6 +11,7 @@
 ]]
 
 local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
+local RunResults = require("../../ReplicatedStorage/Shared/RunResults")
 local Boss = require("./Boss")
 local Enemies = require("./Enemies")
 local Feel = require("./Feel")
@@ -111,7 +112,7 @@ end
 
 local function cardOf(run: any, reason: string): any
 	local died = reason == "wipe"
-	return {
+	local card = {
 		kind = "results",
 		wavesCleared = run.wavesCleared,
 		bestWave = run.bestWave,
@@ -127,6 +128,10 @@ local function cardOf(run: any, reason: string): any
 			essence = Loot.essenceDue(run),
 		},
 	}
+	-- Flag off: apply leaves this card as it is. Flag on: waves, grant
+	-- loot, and the session best wave. Client claims are not an argument.
+	RunResults.apply(card, run, nil)
+	return card
 end
 
 local function showResults(run: any, reason: string, events: { any })
@@ -303,6 +308,7 @@ local function kill(run: any, enemy: any, config: any, events: { any })
 	enemy.alive = false
 	enemy.hp = 0
 	enemy.windLeft = 0
+	run.kills = (if type(run.kills) == "number" then run.kills else 0) + 1
 	if enemy.small == true then
 		emit(events, Feel.deathPuff(enemy, config))
 	end
@@ -630,6 +636,9 @@ function Round.enter(options: any?): any
 		clearNoted = {},
 		wavesCleared = 0,
 		bestWave = 0,
+		kills = 0,
+		tier = "normal",
+		party = 1,
 		over = false,
 		cleared = false,
 		died = false,
@@ -662,6 +671,24 @@ function Round.enter(options: any?): any
 	}
 	if typeof(options) == "table" and finite(options.bagSlots) and options.bagSlots >= 0 then
 		run.bagSlots = math.min(run.bagSlots, math.floor(options.bagSlots))
+	end
+	if typeof(options) == "table" then
+		if options.ownerId ~= nil then
+			run.ownerId = options.ownerId
+		end
+		if type(options.tier) == "string" and options.tier ~= "" then
+			run.tier = string.lower(options.tier)
+		end
+		if finite(options.party) and options.party >= 1 then
+			run.party = math.floor(options.party)
+		end
+		if type(options.account) == "table" then
+			run.account = {
+				level = options.account.level,
+				xp = options.account.xp,
+				shardTokens = options.account.shardTokens,
+			}
+		end
 	end
 	if not spawnInto(run, waveIndex, cfg) then
 		return nil

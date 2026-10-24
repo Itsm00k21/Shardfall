@@ -227,6 +227,20 @@ WaveArenaConfig.hubPad = table.freeze({
 	actionText = "Enter",
 })
 
+-- M12 results and Run Again. The server reads these numbers.
+-- Nothing here is a save field. Best wave stays in session memory.
+WaveArenaConfig.results = table.freeze({
+	autoReturn = 30,
+	soloCountdown = 3,
+	runAgainGap = 1,
+	frameMs = 50,
+	hardLevel = 5,
+	lootNames = table.freeze({
+		shard_chip = "Shard Chip",
+		boss_core = "Boss Core",
+	}),
+})
+
 -- 6, 8, 10, 12, then a boss wave with 4 adds. The server reads this list and nothing else.
 WaveArenaConfig.waves = table.freeze({
 	table.freeze({ count = 6, kind = "chaser" }),
