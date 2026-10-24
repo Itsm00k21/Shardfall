@@ -435,7 +435,13 @@ function RunResults.payload(run: any, profile: any, _request: any, now: any): an
 	local tier = tierOf(run)
 	local row = Economy.DIFFICULTIES[tier]
 	local multiplier = 1
-	if type(row) == "table" and finite(row.tokenMultiplier) then
+	-- Hard pay follows the same truth as the fight. A hard tag while
+	-- Hard is not real stays at 1×.
+	if tier == "hard" then
+		if HardMode.isHardReal() and type(row) == "table" and finite(row.tokenMultiplier) then
+			multiplier = row.tokenMultiplier
+		end
+	elseif type(row) == "table" and finite(row.tokenMultiplier) then
 		multiplier = row.tokenMultiplier
 	end
 	local ready, gained, level, frac = personal(wallet(run, profile))

@@ -6,9 +6,9 @@
 
 	A fight snapshot also carries the wave HUD: living enemies and adds,
 	the boss name or a "Wave n/n" label, the difficulty tier, whether Hard
-	really scales, and the seconds left on the run clock. Hard does not
-	scale wave combat yet, so isHardReal stays false and the client keeps
-	the HARD chip hidden. Nothing here is saved.
+	really scales, and the seconds left on the run clock. isHardReal is
+	HardMode.isHardReal(). The hardMode flag ships off, so the HARD chip
+	stays hidden. Nothing here is saved.
 ]]
 
 local function sharedRoot()
@@ -44,12 +44,9 @@ end
 local SharedRequire = sharedRoot()
 
 local WaveArenaConfig = SharedRequire.module("Config/WaveArenaConfig")
+local HardMode = SharedRequire.module("HardMode")
 
 local Hud = {}
-
--- Wave combat still uses the base hp and damage. Economy's Hard
--- multipliers are not applied, so a Hard tier is not a real scale.
-local HARD_IS_REAL = false
 
 function Hud.bossBar(run: any): any
 	if typeof(run) ~= "table" or typeof(run.enemies) ~= "table" then
@@ -147,7 +144,7 @@ local function outside(run: any): any
 		bossName = nil,
 		label = nil,
 		difficulty = difficulty,
-		isHardReal = HARD_IS_REAL,
+		isHardReal = HardMode.isHardReal(),
 		secondsLeft = nil,
 	}
 end
@@ -178,7 +175,7 @@ function Hud.snapshot(run: any, open: boolean, config: any?): any
 		bossName = bossName,
 		label = label,
 		difficulty = difficultyOf(run),
-		isHardReal = HARD_IS_REAL,
+		isHardReal = HardMode.isHardReal(),
 		secondsLeft = timeLeft(run, config),
 	}
 end

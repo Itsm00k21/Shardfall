@@ -10,12 +10,14 @@
 	for that player only. One pick does not change anyone else. This
 	module does not read or write a profile.
 
-	Hard is offered only while LaunchGate.hardMode is on. That switch
-	ships off, so the pad stays on Normal.
+	Hard is offered only while HardMode.isHardReal() is true. That is
+	LaunchGate.hardMode (ships off) and the arena Hard multipliers
+	actually applying. The pad stays on Normal until both are true.
 ]]
 
 local Economy = require("./Config/Economy")
 local LaunchGate = require("./LaunchGate")
+local WaveArenaConfig = require("./Config/WaveArenaConfig")
 
 local HardMode = {}
 
@@ -80,11 +82,35 @@ function HardMode.parked(id: string): boolean
 	return PARKED[id] == true
 end
 
+-- The arena row is the Core Loop (2× HP, 1.5× damage, 2× pay) and it
+-- matches the economy Hard row. A 1× row does not count as Hard.
+function HardMode.applies(row: any): boolean
+	local econ = Economy.DIFFICULTIES.hard
+	if type(row) ~= "table" or type(econ) ~= "table" then
+		return false
+	end
+	if row.hpMultiplier ~= 2 or row.damageMultiplier ~= 1.5 then
+		return false
+	end
+	if row.tokenMultiplier ~= 2 or row.fragmentMultiplier ~= 2 then
+		return false
+	end
+	return row.hpMultiplier == econ.hpMultiplier
+		and row.damageMultiplier == econ.damageMultiplier
+		and row.tokenMultiplier == econ.tokenMultiplier
+		and row.fragmentMultiplier == econ.fragmentMultiplier
+end
+
+-- One check. Flag on is not enough: the arena multipliers have to apply.
+function HardMode.isHardReal(): boolean
+	return LaunchGate.on("hardMode") == true and HardMode.applies(WaveArenaConfig.hard)
+end
+
 function HardMode.offered(id: string): boolean
 	if Economy.DIFFICULTIES[id] == nil then
 		return false
 	end
-	if id == "hard" and LaunchGate.on("hardMode") ~= true then
+	if id == "hard" and HardMode.isHardReal() ~= true then
 		return false
 	end
 	if PARKED[id] == true and LaunchGate.on("extraDifficulties") ~= true then
@@ -187,7 +213,7 @@ function HardMode.touch(level: any, id: any): (string?, string?)
 	local tier = HardMode.sessionTier(id)
 	local accepted, why = HardMode.accept(level, tier)
 	if accepted == nil and tier == "hard" then
-		if LaunchGate.on("hardMode") ~= true then
+		if HardMode.isHardReal() ~= true then
 			return nil, HardMode.CLOSED
 		end
 		return nil, HardMode.REFUSED

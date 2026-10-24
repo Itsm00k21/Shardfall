@@ -43,6 +43,7 @@ end
 local SharedRequire = sharedRoot()
 
 local WaveArenaConfig = SharedRequire.module("Config/WaveArenaConfig")
+local HardMode = SharedRequire.module("HardMode")
 local RunResults = SharedRequire.module("RunResults")
 local Boss = require("./Boss")
 local Enemies = require("./Enemies")
@@ -228,11 +229,70 @@ local function placeDrop(run: any, drop: any, config: any, events: { any }, auto
 	return true
 end
 
+local function hardRow(config: any): any
+	if typeof(config) == "table" and typeof(config.hard) == "table" then
+		return config.hard
+	end
+	return WaveArenaConfig.hard
+end
+
+-- Hard scales only while the shared check is true and this run is Hard.
+local function hardLive(run: any): boolean
+	return typeof(run) == "table" and run.tier == "hard" and HardMode.isHardReal()
+end
+
+local function scaleCount(amount: number, multiplier: any, live: boolean): number
+	if not live then
+		return amount
+	end
+	return HardMode.scalePay(amount, multiplier)
+end
+
+-- Den-clear heal. Hard restores clearHeal of max HP when a non-boss wave
+-- empties, and only while that run is live Hard. Every other tier is left
+-- on the HP it already had. A positive max heals at least 1. The result
+-- never climbs past max HP.
+local function clearHealAmount(maxHp: any, fraction: any): number
+	if not finite(maxHp) or maxHp <= 0 then
+		return 0
+	end
+	if not finite(fraction) or fraction <= 0 then
+		return 0
+	end
+	local amount = math.floor(maxHp * fraction)
+	if amount < 1 then
+		return 1
+	end
+	return amount
+end
+
+local function healClear(run: any, config: any)
+	if hasBoss(run) or not hardLive(run) then
+		return
+	end
+	local player = run.player
+	if typeof(player) ~= "table" then
+		return
+	end
+	local hp = player.hp
+	local maxHp = player.maxHp
+	if not finite(hp) or hp <= 0 or not finite(maxHp) or maxHp <= 0 then
+		return
+	end
+	local amount = clearHealAmount(maxHp, hardRow(config).clearHeal)
+	if amount <= 0 then
+		return
+	end
+	player.hp = math.min(maxHp, hp + amount)
+end
+
 local function payPurse(run: any, config: any, events: { any }): boolean
 	if run.paid[run.wave] == true then
 		return false
 	end
 	local tokens = Loot.purse(run.wave, config)
+	local row = hardRow(config)
+	tokens = scaleCount(tokens, row.tokenMultiplier, hardLive(run))
 	run.earned.tokens += tokens
 	run.paid[run.wave] = true
 	Loot.remember(run, "purse:" .. tostring(run.wave), {
@@ -311,12 +371,14 @@ end
 
 local function dropFor(run: any, enemy: any, config: any, events: { any })
 	local payload = Loot.payload(enemy.kind, config)
+	local row = hardRow(config)
+	local live = hardLive(run)
 	run.nextDrop += 1
 	local drop = {
 		uid = run.nextDrop,
 		dropId = payload.dropId,
-		tokens = payload.tokens,
-		fragments = payload.fragments,
+		tokens = scaleCount(payload.tokens, row.tokenMultiplier, live),
+		fragments = scaleCount(payload.fragments, row.fragmentMultiplier, live),
 		rarity = payload.rarity,
 		x = enemy.x,
 		z = enemy.z,
@@ -347,15 +409,22 @@ local function kill(run: any, enemy: any, config: any, events: { any })
 	dropFor(run, enemy, config, events)
 end
 
-local function makeEnemy(load: any, placed: any, config: any, uid: number): any
+local function makeEnemy(load: any, placed: any, config: any, uid: number, run: any): any
 	local profile = WaveArenaConfig.profile(config, load.kind)
+	local hp = profile.hp
+	local damage = profile.damage
+	if hardLive(run) then
+		local row = hardRow(config)
+		hp *= row.hpMultiplier
+		damage *= row.damageMultiplier
+	end
 	return {
 		uid = uid,
 		id = profile.id,
 		kind = load.kind,
 		typeIndex = load.typeIndex,
-		hp = profile.hp,
-		maxHp = profile.hp,
+		hp = hp,
+		maxHp = hp,
 		x = placed.x,
 		z = placed.z,
 		radius = placed.radius,
@@ -363,7 +432,7 @@ local function makeEnemy(load: any, placed: any, config: any, uid: number): any
 		attackRange = profile.attackRange or profile.arrive,
 		attackRadius = profile.attackRadius,
 		prefer = profile.prefer,
-		damage = profile.damage,
+		damage = damage,
 		interval = profile.attackInterval,
 		windupTotal = profile.windup or 0.5,
 		cooldown = profile.opening or 0,
@@ -389,7 +458,7 @@ local function spawnInto(run: any, waveIndex: number, config: any): boolean
 	local enemies = {}
 	for index, unit in ipairs(placed) do
 		run.nextUid += 1
-		table.insert(enemies, makeEnemy(loadout[index], unit, config, run.nextUid))
+		table.insert(enemies, makeEnemy(loadout[index], unit, config, run.nextUid, run))
 	end
 	run.enemies = enemies
 	run.wave = waveIndex
@@ -406,6 +475,7 @@ local function finishWave(run: any, config: any, events: { any })
 		emit(events, { kind = "bossDown", hold = run.hold })
 		return
 	end
+	healClear(run, config)
 	sweep(run, config, events, true)
 	local nextWave = run.wave + 1
 	if Waves.def(nextWave, config) == nil or not spawnInto(run, nextWave, config) then
@@ -709,7 +779,13 @@ function Round.enter(options: any?): any
 			run.ownerId = options.ownerId
 		end
 		if type(options.tier) == "string" and options.tier ~= "" then
-			run.tier = string.lower(options.tier)
+			local requested = string.lower(options.tier)
+			-- A hard tag does not stick unless Hard is real, so the
+			-- purse cannot pay 2× for a Normal fight.
+			if requested == "hard" and not HardMode.isHardReal() then
+				requested = "normal"
+			end
+			run.tier = requested
 		end
 		if finite(options.party) and options.party >= 1 then
 			run.party = math.floor(options.party)
@@ -838,6 +914,7 @@ function Round.skip(run: any, options: any?): (any, { any })
 		end
 	end
 	noteClear(run, events)
+	healClear(run, cfg)
 	sweep(run, cfg, events, true)
 	local nextWave = run.wave + 1
 	if Waves.def(nextWave, cfg) == nil or not spawnInto(run, nextWave, cfg) then

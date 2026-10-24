@@ -259,6 +259,56 @@ WaveArenaConfig.path = table.freeze({
 	stuckSeconds = 30,
 })
 
+-- Core Loop Hard for this arena. Normal stats stay the base. The fight
+-- and the purse read this row. It matches Economy.DIFFICULTIES.hard:
+-- 2× HP, 1.5× damage, 2× tokens, 2× fragments.
+-- clearHeal is the den-clear heal (CLEAR_HEAL) for this row: 10% of max HP
+-- when a non-boss wave empties. Other tiers keep the heal they already
+-- had. The server reads it only while HardMode.isHardReal() is true.
+-- Nothing here is paid.
+WaveArenaConfig.hard = table.freeze({
+	hpMultiplier = 2,
+	damageMultiplier = 1.5,
+	tokenMultiplier = 2,
+	fragmentMultiplier = 2,
+	clearHeal = 0.1,
+})
+
+local HARD_BANNED = { robux = true, productId = true, cost = true, skip = true, price = true }
+
+-- The arena Hard row. Pass a table to test a broken copy; nil checks this module.
+function WaveArenaConfig.validate(source: any?): (boolean, string)
+	local data = if source == nil then WaveArenaConfig else source
+	if type(data) ~= "table" then
+		return false, "arena config is missing"
+	end
+	local hard = data.hard
+	if type(hard) ~= "table" then
+		return false, "hard multipliers are missing"
+	end
+	for key in pairs(hard) do
+		if HARD_BANNED[key] == true then
+			return false, "hard must not carry a price"
+		end
+	end
+	if hard.hpMultiplier ~= 2 then
+		return false, "hard HP is 2×"
+	end
+	if hard.damageMultiplier ~= 1.5 then
+		return false, "hard damage is 1.5×"
+	end
+	if hard.tokenMultiplier ~= 2 then
+		return false, "hard tokens are 2×"
+	end
+	if hard.fragmentMultiplier ~= 2 then
+		return false, "hard fragments are 2×"
+	end
+	if hard.clearHeal ~= 0.1 then
+		return false, "hard clear heal is 10%"
+	end
+	return true, ""
+end
+
 function WaveArenaConfig.profile(config: any, kind: string): any
 	if kind == "boss" then
 		return config.boss
