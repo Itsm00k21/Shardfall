@@ -108,6 +108,7 @@ local function ended(ownerId: number, receiptId: string, reason: string): any
 		party = 1,
 		phase = "results",
 		settled = true,
+		payoutSettled = true,
 		reason = reason,
 		receiptId = receiptId,
 		wavesCleared = 2,
@@ -333,7 +334,9 @@ describe("M12 results", function()
 				end
 			end
 			expect(started).toEqual(1)
-			expect(runId).toEqual("m12-7-1")
+			local guid = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+			local firstId = runId :: string
+			expect(type(firstId) == "string" and string.match(firstId, guid) ~= nil).toBeTrue()
 			local tooSoon = RunResults.again(7, ended(7, "spam-next", "clear"), data, CLAIM, 10.2, false)
 			expect(tooSoon.ok).toEqual(false)
 			expect(tooSoon.error).toEqual("rate")
@@ -344,7 +347,8 @@ describe("M12 results", function()
 			expect(same.runId).toEqual(runId)
 			local later = RunResults.again(7, ended(7, "spam-later", "timeout"), data, CLAIM, 100, false)
 			expect(later.started).toEqual(true)
-			expect(later.runId).toEqual("m12-7-2")
+			expect(type(later.runId) == "string" and string.match(later.runId, guid) ~= nil).toBeTrue()
+			expect(later.runId == runId).toBeFalse()
 			expect(later.countdown).toEqual(WaveArenaConfig.results.soloCountdown)
 			expect(data).toEqual(before)
 		end)
