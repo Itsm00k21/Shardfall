@@ -6,9 +6,9 @@
 
 	LaunchGate.SHOW.enemyTypes ships false. While it is off, start, hurt,
 	and publish do nothing: no gray box, no damage, no counter push, no
-	boss event. init.server does not call this module, so a normal boot
-	never starts a run. The counter remote is server to client only.
-	There is no profile write.
+	boss event. init.server requires this module so PlayerRemoving and
+	BindToClose connect, and it does not start a run. The counter remote
+	is server to client only. There is no profile write.
 
 	bossEnter and bossDown go to an analytics hook when one exists.
 	That hook is ReplicatedStorage.Shared.Analytics.event, or the
@@ -18,8 +18,9 @@
 	Studio can require the module. Lune loads the same file through the
 	relative path when `game` is not a DataModel. Gray blocks live in
 	EnemyPool. That module reuses them. This file does not create them.
-	stop destroys that run's parts. clear, wipe, PlayerRemoving, and
-	BindToClose all call stop. init.server does not require this module.
+	stop destroys that run's parts, marks the run stopped, and releases
+	its EnemyPerf slots. clear, wipe, PlayerRemoving, and BindToClose
+	all call stop. A later hurt or present sees the mark and returns.
 ]]
 
 local LaunchGate
@@ -198,6 +199,9 @@ function WaveFlowService.stop(run: WaveFlow.Run?)
 	if run == nil then
 		return
 	end
+	-- Runtime only. Not saved. A stale hurt must not build a new pool.
+	run.stopped = true
+	WaveFlow.release(run)
 	local owned = tracks[run]
 	if owned == nil then
 		return
@@ -208,6 +212,19 @@ end
 
 function WaveFlowService.wipe(run: WaveFlow.Run?)
 	WaveFlowService.stop(run)
+end
+
+-- The wave run owned by this player, if one is still tracked.
+function WaveFlowService.runFor(player: any): WaveFlow.Run?
+	if player == nil then
+		return nil
+	end
+	for run, owned in pairs(tracks) do
+		if owned.player == player then
+			return run
+		end
+	end
+	return nil
 end
 
 function WaveFlowService.entries(): number
@@ -247,6 +264,9 @@ end
 -- once. Dead ids go back to the pool before the next bind, so a later
 -- wave reuses a block instead of making another.
 local function present(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
+	if tracks[run] == nil and run.stopped == true then
+		return
+	end
 	local owned = track(run)
 	local living: { [number]: boolean } = {}
 	local boxes = WaveFlow.boxes(run)
@@ -293,6 +313,9 @@ end
 
 function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink: Sink?): number
 	if not WaveFlowService.open() or run == nil then
+		return 0
+	end
+	if tracks[run] == nil and run.stopped == true then
 		return 0
 	end
 	local before = WaveFlow.counter(run)

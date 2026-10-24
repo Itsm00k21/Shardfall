@@ -85,6 +85,8 @@ local CombatService = require(script.CombatService)
 local ClassService = require(script.ClassService)
 local DataService = require(script.DataService)
 local DungeonService = require(script.DungeonService)
+-- Connects PlayerRemoving and BindToClose. Does not start a run.
+require(script.WaveFlowService)
 local GroveService = require(script.GroveService)
 local LaunchGate = require(game:GetService("ReplicatedStorage").Shared.LaunchGate)
 local MarketService = require(script.MarketService)

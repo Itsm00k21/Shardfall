@@ -4,8 +4,9 @@
 	Server math for roadmap 3.5 and the wave-5 boss (3.6). Wave sizes,
 	the boss, and the four adds come from Config/Enemies.luau. This
 	module does not create parts, fire a remote, read a profile, or
-	spend Robux. A wave spawns every enemy at once. This module does
-	not cap how many can be alive and does not queue the rest.
+	spend Robux. A wave spawns every enemy at once. Each spawn claims
+	one slot from EnemyPerf, and a death or a stop releases it. This
+	module does not keep a second cap or a stuck watchdog.
 
 	WaveFlowService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on. A client that requires this file can
@@ -13,6 +14,7 @@
 ]]
 
 local Enemies = require("./Config/Enemies")
+local EnemyPerf = require("./Config/EnemyPerf")
 local EnemyRoster = require("./EnemyRoster")
 
 local WaveFlow = {}
@@ -46,6 +48,10 @@ export type Run = {
 	clear: boolean,
 	nextId: number,
 	members: { Member },
+	-- Runtime only. stop sets this. It is not a save field.
+	stopped: boolean?,
+	perf: EnemyPerf.Pool?,
+	held: { string }?,
 }
 
 local function living(run: Run): number
@@ -122,6 +128,35 @@ function WaveFlow.plan(wave: number): { string }?
 	return kinds
 end
 
+-- Drop every slot this run still holds. Alive returns to zero.
+function WaveFlow.release(run: Run)
+	local held = run.held
+	local pool = run.perf
+	if held == nil or pool == nil then
+		return
+	end
+	while #held > 0 do
+		local kind = table.remove(held)
+		if type(kind) == "string" then
+			EnemyPerf.release(pool, kind)
+		end
+	end
+end
+
+local function releaseOne(run: Run, kind: string)
+	local held = run.held
+	local pool = run.perf
+	if held == nil or pool == nil then
+		return
+	end
+	local at = table.find(held, kind)
+	if at == nil then
+		return
+	end
+	table.remove(held, at)
+	EnemyPerf.release(pool, kind)
+end
+
 local function spawnWave(run: Run, wave: number): boolean
 	local kinds = WaveFlow.plan(wave)
 	if kinds == nil then
@@ -141,10 +176,32 @@ local function spawnWave(run: Run, wave: number): boolean
 		})
 		nextId += 1
 	end
+	-- The previous wave is gone. Free those slots before claiming this one,
+	-- so two waves never stack against the single cap of 22.
+	WaveFlow.release(run)
+	local pool = run.perf
+	local held = run.held
+	local kept = {}
+	for index, kind in ipairs(kinds) do
+		local keep = pool == nil or held == nil
+		if pool ~= nil and held ~= nil then
+			local action = EnemyPerf.claim(pool, kind)
+			if action == "queued" then
+				table.remove(pool.queued)
+			else
+				table.insert(held, kind)
+				keep = true
+			end
+		end
+		local member = members[index]
+		if keep and member ~= nil then
+			table.insert(kept, member)
+		end
+	end
 	run.nextId = nextId
 	run.wave = wave
 	run.clear = false
-	run.members = members
+	run.members = kept
 	return true
 end
 
@@ -154,6 +211,9 @@ function WaveFlow.start(): Run?
 		clear = false,
 		nextId = 1,
 		members = {},
+		stopped = false,
+		perf = EnemyPerf.newPool(),
+		held = {},
 	}
 	if not spawnWave(run, 1) then
 		return nil
@@ -214,6 +274,7 @@ function WaveFlow.hurt(run: Run, id: number, raw: number): number
 	if taken <= 0 or member.actor.hp > 0 then
 		return taken
 	end
+	releaseOne(run, member.actor.kind)
 	if living(run) > 0 then
 		return taken
 	end

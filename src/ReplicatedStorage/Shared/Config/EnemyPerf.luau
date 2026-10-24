@@ -6,10 +6,11 @@
 
 	LaunchGate.enemyPerf (default off) is what turns the server path on.
 
-	Open PRs #421 and #422 already cover a WaveFlow watchdog (STUCK_SECONDS
-	30) and a gray-box pool (MAX_ALIVE 8, mobile cap 4) behind enemyTypes.
-	Those branches are not on this one. The cap here is 22, and the server
-	despawns and respawns the live rig. It does not copy that stack.
+	The gray-box wave roster is on this branch. It does not keep a second
+	alive cap or a second stuck watchdog. The only cap is ALIVE_CAP (22).
+	The only watchdog is this module's 30 second clock, used by the live
+	crawl. WaveFlow claims a slot per spawn and releases it on death or
+	when that run stops.
 ]]
 
 local EnemyPerf = {}
@@ -171,6 +172,20 @@ function EnemyPerf.newPool(): Pool
 		alive = 0,
 		queued = {},
 	}
+end
+
+-- Undo one claim. The kind returns to the idle list while that list is
+-- under the cap. This does not promote the queue. A stopped wave run
+-- releases every slot it still holds.
+function EnemyPerf.release(pool: Pool, kind: string): boolean
+	if pool.alive <= 0 or type(kind) ~= "string" then
+		return false
+	end
+	pool.alive -= 1
+	if #pool.idle < EnemyPerf.ALIVE_CAP then
+		table.insert(pool.idle, kind)
+	end
+	return true
 end
 
 function EnemyPerf.claim(pool: Pool, kind: string): "fresh" | "reuse" | "queued"

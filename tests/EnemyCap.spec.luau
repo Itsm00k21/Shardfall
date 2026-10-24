@@ -1,10 +1,11 @@
 --!strict
 
 --[[
-	Gray-box pool. This branch does not cap how many enemies are alive
-	and does not queue the rest. EnemyPool still reuses one block and
-	clears health, target, and projectile. The flag stays off, so boot
-	does not spawn, the HUD is untouched, and the save schema stays 26.
+	Gray-box pool. The wave roster does not store its own alive cap or a
+	queue. The only cap is EnemyPerf at 22. EnemyPool still reuses one
+	block and clears health, target, and projectile. The flag stays off.
+	Boot requires WaveFlowService and does not spawn. The HUD is
+	untouched, and the save schema stays 26.
 ]]
 
 local fs = require("@lune/fs")
@@ -114,7 +115,7 @@ describe("Config enemy pool", function()
 		local flow = fs.readFile("src/ReplicatedStorage/Shared/WaveFlow.luau")
 		local config = fs.readFile("src/ReplicatedStorage/Shared/Config/Enemies.luau")
 		absent(boot, "EnemyPool")
-		absent(boot, "WaveFlowService")
+		expect(string.find(boot, "require(script.WaveFlowService)", 1, true) ~= nil).toBeTrue()
 		absent(service, "Instance.new")
 		expect(string.find(service, "function WaveFlowService.stop", 1, true) ~= nil).toBeTrue()
 		expect(string.find(service, "function WaveFlowService.wipe", 1, true) ~= nil).toBeTrue()

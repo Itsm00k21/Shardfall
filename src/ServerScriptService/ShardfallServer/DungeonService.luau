@@ -52,6 +52,7 @@ local RaidEchoFight = require(ReplicatedStorage.Shared.RaidEchoFight)
 local Raids = require(ReplicatedStorage.Shared.Raids)
 local EchoBossClear = require(script.Parent.EchoBossClear)
 local EchoRetry = require(script.Parent.EchoRetry)
+local WaveFlowService = require(script.Parent.WaveFlowService)
 local RunTick = require(script.Parent.RunTick)
 local LoopService = require(script.Parent.LoopService)
 local Rarities = require(ReplicatedStorage.Shared.Rarities)
@@ -3228,6 +3229,12 @@ local function retryPull(fight: RaidEchoFight.Fight)
 	for member, memberRun in pairs(runs) do
 		if memberRun.echoFight == fight and memberRun.resolving ~= true then
 			table.insert(party, member)
+		end
+	end
+	for _, member in ipairs(party) do
+		local waveRun = WaveFlowService.runFor(member)
+		if waveRun ~= nil then
+			WaveFlowService.wipe(waveRun)
 		end
 	end
 	-- Every guard goes up before any Destroy or stream yield. A hit on
