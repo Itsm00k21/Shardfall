@@ -24,6 +24,10 @@ WaveArenaConfig.minDiameter = 90
 -- Disconnect, wipe, and this timeout are the only exits.
 WaveArenaConfig.timeout = 480
 
+-- How many run ids a profile remembers. One id per run, not one key per
+-- drop. Older ids fall off. Purchase receipts live in a different table.
+WaveArenaConfig.settleKeep = 50
+
 WaveArenaConfig.arena = table.freeze({
 	-- 90 studs across. Three edge gates sit on the rim.
 	diameter = 90,
