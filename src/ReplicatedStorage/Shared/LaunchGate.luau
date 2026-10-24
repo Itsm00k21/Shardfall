@@ -41,6 +41,7 @@ LaunchGate.SHOW = {
 	rollMenuExtras = false, -- [Ghost] old roll-page Junk/Below row, second Streak/Rolls lines, plain "Odds" rows
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
+	saveTools = false, -- Phase 0.5 dev save buttons. Off until DebugService handles them.
 	equip = false, -- Phase 2 equip remotes (EquipSlot / UnequipSlot / GetEquip)
 	gearLevels = false, -- auto-feed an exact duplicate into stars (off until Kevin decides)
 	upgradeScale = false, -- gold forge upgrades multiply stats at read time

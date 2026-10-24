@@ -94,6 +94,8 @@ DevTools.SECTIONS = table.freeze({
 		title = "Testing",
 		entries = table.freeze({
 			entry("region", "Toggle region lock", "DevGrant", "restrict"),
+			entry("autosave", "Force autosave", "Debug", "autosave"),
+			entry("saveVersion", "Print save version", "Debug", "saveversion"),
 		}),
 	}),
 	-- [ECHO hook] Hidden while equip / gearLevels / shardCore are off.
@@ -117,6 +119,8 @@ local GATED: { [string]: string } = {
 	["DevGrant:prisms"] = "paid",
 	["Debug:tokens"] = "events",
 	["Debug:raid"] = "raids",
+	["Debug:autosave"] = "saveTools",
+	["Debug:saveversion"] = "saveTools",
 	["Debug:equip"] = "equip",
 	["Debug:geardupe"] = "gearLevels",
 	["Debug:fillbag"] = "gearLevels",
@@ -130,6 +134,7 @@ local GATE_NAME: { [string]: string } = {
 	paid = "Paid rolls (Prisms)",
 	events = "The events system (Event Tokens)",
 	raids = "The raid system",
+	saveTools = "Save tools",
 	equip = "Equip",
 	gearLevels = "Gear levels",
 	shardCore = "Shard Core",

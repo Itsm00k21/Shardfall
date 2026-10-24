@@ -39,6 +39,16 @@ its tag to merged and add the merge commit.
   Fails on missing or duplicate ids, bad rarity odds or pity, bad drop
   chances or pool weights, negative or NaN stats, missing strings, and
   broken cross-references. [#374] (merged, d37b2f1)
+- Phase 0.5: save system spec and hardening. Saves with no schemaVersion
+  load as v1 and migrate forward; unknown JSON fields stay; NaN and
+  Roblox values are stripped on the migrated copy; DataStore retries
+  back off; a failed load is never written. Session lock, 60s autosave,
+  and the shutdown flush stay. Schema stays 26. (open)
+- Phase 0.5: release the session lock on leave and on Studio Stop, and
+  wait for that write in BindToClose. Studio takes a same-user lock older
+  than 60s. A live server still will not steal a fresh lock; it retries
+  that load for about 30s, then kicks. No write without the lock. Schema
+  stays 26. (open)
 
 ### Changed
 - Phase 1.1-1.3, 1.7: rolls core. The live roll now uses the 5-tier Rev 2

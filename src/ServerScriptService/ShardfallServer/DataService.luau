@@ -41,6 +41,21 @@
 	then answered "Profile is still loading." forever. A timed-out or thrown
 	store read in Studio becomes an in-memory session profile and a warn.
 	That profile is not written back to the DataStore.
+
+	A failed load (corrupt, newer, busy, or a live DataStore error) never
+	calls UpdateAsync with a replacement profile. The player is kicked.
+	The Studio memory fallback is read-only: save and autosave no-op.
+	Load and write retry with backoff. A lost lock is not retried.
+
+	Studio Stop has to finish the lock release. PlayerRemoving starts it.
+	BindToClose waits for that write, including a release already in flight,
+	and also releases a profile whose player is already gone. It does not
+	return while that release is still open, until the shutdown budget ends.
+
+	In Studio, a lock on this user's profile that is at least 60 seconds
+	old is taken over instead of kicking. A live server does not do that.
+	It retries a busy lock a few times across about 30 seconds, then kicks.
+	A save writes only when this server already holds the lock.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -50,6 +65,8 @@ local RunService = game:GetService("RunService")
 
 local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
 local ProfileLoad = require(ReplicatedStorage.Shared.ProfileLoad)
+local SaveGuard = require(ReplicatedStorage.Shared.SaveGuard)
+local SaveRetry = require(ReplicatedStorage.Shared.SaveRetry)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 local SessionLock = require(ReplicatedStorage.Shared.SessionLock)
 local StoreAdapter = require(script.Parent.StoreAdapter)
@@ -106,6 +123,17 @@ local started = false
 -- Set before shutdown spawns releases. Autosave must not start a write
 -- after this, and release must not wait on a teleport.
 local shuttingDown = false
+
+-- One in-flight release per player. BindToClose waits on this when
+-- PlayerRemoving already started the write. Studio Stop often removes the
+-- player before BindToClose runs, and returning early kills that UpdateAsync
+-- while the lock is still held.
+type ReleaseJob = {
+	done: boolean,
+}
+
+local releaseJobs: { [Player]: ReleaseJob } = {}
+local releasesOpen = 0
 
 local function currentAdapter(): StoreAdapter.Adapter
 	local current = adapter
@@ -212,35 +240,58 @@ local function write(record: Record, releaseLock: boolean): (boolean, string)
 	if record.ephemeral == true then
 		return false, "unloaded"
 	end
-	local outcome = "unwritten"
+	-- A load that never succeeded must not replace the stored profile.
+	if SaveGuard.refusesWrite(record.failed == true) then
+		return false, "unloaded"
+	end
 	local store = currentAdapter()
-	local callOk, callErr = pcall(function()
-		store:updateAsync(record.key, function(document)
-			local saved, reason = SessionLock.trySave(
-				if type(document) == "table" then document else nil,
-				os.time(),
-				serverId,
-				placeId,
-				SessionLock.TIMEOUT_SECONDS,
-				Schema.deepCopy(record.data),
-				releaseLock
-			)
-			outcome = reason
-			return saved
+	local lastReason = "unwritten"
+	for attempt = 1, SaveRetry.WRITE_ATTEMPTS do
+		local outcome = "unwritten"
+		local callOk, callErr = pcall(function()
+			store:updateAsync(record.key, function(document)
+				-- Nil unless this server holds the lock. UpdateAsync then leaves
+				-- the key unchanged, including when the caller asked to release.
+				local saved, reason = SessionLock.trySave(
+					if type(document) == "table" then document else nil,
+					os.time(),
+					serverId,
+					placeId,
+					SessionLock.TIMEOUT_SECONDS,
+					Schema.deepCopy(record.data),
+					releaseLock
+				)
+				outcome = reason
+				return saved
+			end)
 		end)
-	end)
-	if not callOk then
-		return false, "error:" .. tostring(callErr)
+		if callOk and outcome == "saved" then
+			return true, "saved"
+		end
+		if not callOk then
+			lastReason = "error:" .. tostring(callErr)
+		else
+			lastReason = outcome
+		end
+		local why = if callOk then outcome else "error"
+		if not SaveRetry.shouldRetry(attempt, SaveRetry.WRITE_ATTEMPTS, why) then
+			return false, lastReason
+		end
+		for _ = 1, SaveRetry.pauses(attempt) do
+			task.wait(LOAD_RETRY_SECONDS)
+		end
 	end
-	if outcome ~= "saved" then
-		return false, outcome
-	end
-	return true, "saved"
+	return false, lastReason
 end
 
 function DataService.save(player: Player): (boolean, string?)
 	local record = records[player]
-	if record == nil or not record.loaded or record.released then
+	if
+		record == nil
+		or not record.loaded
+		or record.released
+		or SaveGuard.refusesWrite(record.failed)
+	then
 		return false, "Profile is not loaded."
 	end
 	if record.closing then
@@ -260,7 +311,13 @@ end
 
 function DataService.replace(player: Player, data: any): boolean
 	local record = records[player]
-	if record == nil or not record.loaded or record.released or record.closing then
+	if
+		record == nil
+		or not record.loaded
+		or record.released
+		or record.closing
+		or SaveGuard.refusesWrite(record.failed)
+	then
 		return false
 	end
 	record.data = Schema.deepCopy(data)
@@ -343,7 +400,7 @@ local function sessionFallback(record: Record, player: Player, why: any): (boole
 end
 
 local function load(player: Player): (boolean, string?)
-	if records[player] ~= nil then
+	if SaveGuard.alreadyOpen(records[player] ~= nil) then
 		return false, "Profile is already loading."
 	end
 
@@ -392,7 +449,9 @@ local function load(player: Player): (boolean, string?)
 				serverId,
 				placeId,
 				SessionLock.TIMEOUT_SECONDS,
-				watch
+				watch,
+				player.UserId,
+				studio
 			)
 		end)
 
@@ -466,10 +525,11 @@ local function load(player: Player): (boolean, string?)
 			end
 			print(
 				string.format(
-					"[Shardfall] Loaded %s (%d) via %s",
+					"[Shardfall] Loaded %s (%d) via %s (schema v%d)",
 					player.Name,
 					player.UserId,
-					if persistent then "DataStore" else "memory (not saved)"
+					if persistent then "DataStore" else "memory (not saved)",
+					record.data.schemaVersion
 				)
 			)
 			return true, nil
@@ -477,9 +537,20 @@ local function load(player: Player): (boolean, string?)
 			reason = outcome.reason
 		end
 
-		local retryable = reason == "busy" or reason == "error"
-		if retryable and attempt < LOAD_ATTEMPTS then
-			task.wait(LOAD_RETRY_SECONDS)
+		-- A live server keeps the 20 minute rule. Retry a busy lock a few
+		-- times across about 30 seconds, then kick. Studio does not use
+		-- this window: a same-user lock old enough to take never returns
+		-- "busy". Errors, and a fresh Studio lock, keep the short backoff.
+		local liveBusy = reason == "busy" and not studio
+		if liveBusy then
+			if SessionLock.liveBusyShouldRetry(attempt) then
+				task.wait(SessionLock.liveBusyPause(attempt))
+				continue
+			end
+		elseif (reason == "busy" or reason == "error") and attempt < LOAD_ATTEMPTS then
+			for _ = 1, SaveRetry.pauses(attempt) do
+				task.wait(LOAD_RETRY_SECONDS)
+			end
 			continue
 		end
 
@@ -629,38 +700,67 @@ local function beginHopWatch(player: Player, record: Record, teleport: () -> ())
 end
 
 function DataService.release(player: Player)
+	-- PlayerRemoving and BindToClose both call this. The second one has to
+	-- wait until the lock write finishes. Returning early is what let Studio
+	-- Stop kill the UpdateAsync and leave the lock held.
+	local existing = releaseJobs[player]
+	if existing ~= nil then
+		while existing.done ~= true do
+			task.wait(0.05)
+		end
+		return
+	end
 	disconnectHop(player)
 	local record = records[player]
 	if record == nil then
 		return
 	end
-	-- A teleport handoff is already the final write. Wait it out, then drop
-	-- the record without saving again. A second write would either replay
-	-- stale memory or, if it claimed, take the lock back from the raid server.
-	while record.closing do
-		-- Shutdown's budget belongs to the final release, not a teleport wait.
-		if shuttingDown then
-			break
+	local job: ReleaseJob = { done = false }
+	releaseJobs[player] = job
+	releasesOpen += 1
+	local function finish()
+		if job.done then
+			return
 		end
-		task.wait(0.05)
+		job.done = true
+		if releaseJobs[player] == job then
+			releaseJobs[player] = nil
+		end
+		releasesOpen -= 1
 	end
-	if record.released then
+	local worked, failure = pcall(function()
+		-- A teleport handoff is already the final write. Wait it out, then drop
+		-- the record without saving again. A second write would either replay
+		-- stale memory or, if it claimed, take the lock back from the raid server.
+		while record.closing do
+			-- Shutdown's budget belongs to the final release, not a teleport wait.
+			if shuttingDown then
+				break
+			end
+			task.wait(0.05)
+		end
+		if record.released then
+			playerStarted[player] = false
+			records[player] = nil
+			return
+		end
+		local wasLoaded = record.loaded
+		local ephemeral = record.ephemeral == true
+		record.released = true
 		playerStarted[player] = false
-		records[player] = nil
-		return
-	end
-	local wasLoaded = record.loaded
-	local ephemeral = record.ephemeral == true
-	record.released = true
-	playerStarted[player] = false
-	record.loaded = false
-	if ProfileLoad.maySave(wasLoaded, ephemeral) then
-		local ok, reason = write(record, true)
-		if not ok then
-			warn("[Shardfall] Final save failed for", player.Name, reason)
+		record.loaded = false
+		if ProfileLoad.maySave(wasLoaded, ephemeral) then
+			local ok, reason = write(record, true)
+			if not ok then
+				warn("[Shardfall] Final save failed for", player.Name, reason)
+			end
 		end
+		records[player] = nil
+	end)
+	finish()
+	if not worked then
+		error(tostring(failure), 0)
 	end
-	records[player] = nil
 end
 
 -- "teleported" means the lock is clear and PlayerRemoving must not write.
@@ -927,7 +1027,7 @@ local function onPlayer(player: Player)
 	-- PlayerAdded can race the "players already here" loop in Studio.
 	-- The flag is set before the spawn, because the record itself is created
 	-- later, inside the spawned load.
-	if playerStarted[player] then
+	if SaveGuard.alreadyOpen(playerStarted[player] == true) then
 		return
 	end
 	playerStarted[player] = true
@@ -965,6 +1065,7 @@ local function autosave()
 			local record = entry.record
 			if
 				ProfileLoad.maySave(record.loaded, record.ephemeral)
+				and not SaveGuard.refusesWrite(record.failed == true)
 				and not record.released
 				and not record.closing
 				and player.Parent == Players
@@ -1014,7 +1115,12 @@ function DataService.start()
 	game:BindToClose(function()
 		shuttingDown = true
 		local pending = 0
-		for _, player in ipairs(Players:GetPlayers()) do
+		local queued: { [Player]: boolean } = {}
+		local function queue(player: Player)
+			if queued[player] then
+				return
+			end
+			queued[player] = true
 			pending += 1
 			task.spawn(function()
 				local ok, err = pcall(DataService.release, player)
@@ -1024,11 +1130,23 @@ function DataService.start()
 				pending -= 1
 			end)
 		end
+		-- Studio Stop can drop the player before this callback. Release
+		-- whoever is still loaded, and whoever PlayerRemoving already started.
+		for _, player in ipairs(Players:GetPlayers()) do
+			queue(player)
+		end
+		for player in pairs(records) do
+			queue(player)
+		end
+		for player in pairs(releaseJobs) do
+			queue(player)
+		end
 		-- Wait out in-flight writes until the engine's shutdown budget.
 		-- Returning at 25 seconds used to drop a slow UpdateAsync and leave
-		-- that player's lock held.
+		-- that player's lock held. releasesOpen covers a write that started
+		-- after the lists above were copied.
 		local shutdownAt = os.clock()
-		while ProfileLoad.shutdownStillWaiting(pending, os.clock() - shutdownAt) do
+		while ProfileLoad.shutdownStillWaiting(pending + releasesOpen, os.clock() - shutdownAt) do
 			task.wait(0.1)
 		end
 	end)
