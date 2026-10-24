@@ -49,7 +49,7 @@ Safe areas: obey `GuiService:GetGuiInset()` and keep 12 px from the notch and ho
 | State | Look |
 |---|---|
 | Empty | not used (the roll page always has a crystal) |
-| Loading | ROLL shows a spinner glyph and is disabled. The crystal pulses slowly. After 5 s: "Still rolling…" |
+| Loading | ROLL shows a rotating `spinner_64` ImageLabel (TweenService Rotation 0→360, 0.8 s loop) and is disabled. The crystal pulses slowly. After 5 s: "Still rolling…" |
 | Normal | Idle as in mockup `01-idle-phone.jpg` |
 | Full (bag full) | ROLL is enabled. The server returns its full-bag reply, and the "Salvage now" nudge (`GearHooks.SALVAGE_NOW`, live) appears above ROLL |
 | Error | toast with the server text, ROLL is re-enabled, nothing is charged |
@@ -86,7 +86,7 @@ Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and
   - Roll again: 255,205,90, text 24,18,32. Close: 58,52,80, text 240,236,250. Both h 44, corner 8, BuilderSansBold 16.
 - **Best tile** (approved): the highest rarity in the batch (on a tie, the first one).
   - Border becomes gold 255,205,90 at thickness 3.
-  - An outer glow of 6 px in gold at 0.4 transparency.
+  - A gold glow sprite behind the tile (`ImageLabel` `glow_soft_256`, ImageColor3 255,205,90, ImageTransparency 0.4, size tile+16). No blur or drop shadow: Roblox can't render them.
   - A "BEST" badge at top-right in 255,205,90.
   - It pulses once (scale 1.0 → 1.06 → 1.0 over 0.4 s) when the summary opens.
 
@@ -106,7 +106,7 @@ Skip is never gated: `skipReady` is true from 0. Auto skips Common, Uncommon and
 - Bag full: the server's reply plus the "Salvage now" nudge. No crack plays.
 - Auto-salvaged drops show the Salvaged badge in the summary and on the x1 result ("Auto-salvaged +N Essence", `GearHooks`).
 - First time: the first roll is always played at full length (no Auto). A 1-line hint "Tap to skip" shows during the first charge.
-- Reduced motion (Settings): no screen punch or shake. Timings stay the same.
+- Reduced motion (a Settings row): no UIScale punch or shake. Timings stay the same.
 
 ## 8. Mockups
 | File | State |
@@ -140,3 +140,48 @@ Legendary and landscape frames will be drawn in v1.3.
 
 ## Later (not V1)
 Mythic/Secret reveal (Phase 5 appendix in v1.1), Legendary cross-server announcement, and reduced-motion variants.
+
+## Roblox build notes
+Everything here must render with stock Roblox UI.
+- **Not available:** no blur or glassmorphism (BlurEffect blurs the 3D world, not GUI), no soft drop shadows, no CSS-style glows, no custom web fonts.
+- **No particles in the UI:** a `ParticleEmitter` does not render in a ScreenGui or inside a ViewportFrame. All UI "particles" are tweened ImageLabels.
+- **Mockups are a guide:** the mockups are AI-drawn. Where one looks softer or more painterly than Roblox can render, these notes win.
+
+| Element | Instances |
+|---|---|
+| Roll page root | `ScreenGui` (IgnoreGuiInset false, ResetOnSpawn false, ZIndexBehavior Sibling) → `Frame` RollPage + `UIScale` (phone 1.0, desktop by `UIScale` = min(w/1180, h/680)) |
+| Panels, pills, tabs | `Frame` / `TextButton` + `UICorner` (8/10/12) + `UIStroke` (ApplyStrokeMode Border, 1–2 px) + `UIPadding` |
+| Rows | `UIListLayout` (tabs: Horizontal, Padding 6; toggles: Vertical, Padding 8) |
+| Text | `TextLabel` / `TextButton`, `FontFace = Font.fromEnum(Enum.Font.BuilderSans / BuilderSansBold / BuilderSansExtraBold)`, TextSize ≥ 14, `TextScaled` off with `UITextSizeConstraint` where needed |
+| Currency pill | `Frame` + `ImageLabel` shard_icon + `TextLabel` + `TextButton` "+" |
+| Crystal | **Option A (preferred):** `ViewportFrame` with one low-poly `MeshPart` (flat faceted, Material SmoothPlastic, the tier color via `Color`), a `Camera` and a `WorldModel`; spin and shake via TweenService on the part CFrame. Cracks = `Decal`s on the mesh, or ImageLabel overlays. **Option B (cheap):** an `ImageLabel` crystal_base sprite + crack overlay sprites |
+| Crystal glow | `ImageLabel` glow_soft_256 behind the ViewportFrame, ImageColor3 = tier color, ImageTransparency 0.35→0.1 tween while charging |
+| Pedestal | part of the crystal mesh scene (VPF), or `ImageLabel` pedestal_hex |
+| Burst fragments | 6–10 `ImageLabel` shard_frag sprites, TweenService Position/Rotation/ImageTransparency outward over the burst time, then Destroy |
+| Legendary flash / dim | full-screen `Frame`, BackgroundColor3 255,240,200 (flash) or 0,0,0 (dim), BackgroundTransparency tween 1→0.2→1 |
+| Screen punch | `UIScale` on RollPage, 1→1.04→1 over 0.1 s (no camera effects needed) |
+| Pity arc | `ImageLabel` ring_arc_128 + `UIGradient` (Transparency NumberSequence driven by pity %) to fake the fill |
+| Tier pips | `Frame` + `UICorner` (0.5 scale = circle) + `UIStroke` 2; lit = BackgroundTransparency 0, dim = 0.6 |
+| Result banner | `Frame` + `UICorner` 10 + `UIStroke` (tier color) + 2 TextLabels |
+| ROLL button | `TextButton` + `UICorner` 8 + `UIStroke` gold 2 + `UIGradient` (light top → base) + `ImageLabel` shard_icon |
+| Toggles, Skip | `TextButton` + `UICorner` 8; Skip `Size` ≥ (0,96,0,44) on phone |
+| x10 summary | `Frame` panel + `UIGridLayout` (CellSize derived from width/5, CellPadding 8, FillDirectionMaxCells 5) + per-tile `UIAspectRatioConstraint` 1.0 |
+| Tile | `Frame` + `UICorner` 8 + `UIStroke` 2 + `ImageLabel` icon + `TextLabel` name + badge `Frame`/`TextLabel` (corner 4) |
+| Best tile | `UIStroke` gold 3 + `ImageLabel` glow_soft_256 behind (ZIndex −1) + `UIScale` pulse 1→1.06→1 |
+| Toast | `Frame` 220×26 + `UICorner` 13 + `TextLabel` |
+| Animation | `TweenService` only (TweenInfo Quad/Back Out); no per-frame Heartbeat except the crystal bob |
+| Touch | all buttons `TextButton`/`ImageButton` ≥ 44 px tall; `GuiService` inset for safe areas |
+
+### Image assets to upload (PNG, transparent)
+| Asset | Size | Use |
+|---|---|---|
+| glow_soft_256 | 256×256 | white radial glow; tinted by ImageColor3 (crystal, best tile, reveal) |
+| shard_icon | 64×64 | currency and ROLL cost |
+| crystal_base (option B) | 512×512 | flat faceted crystal, white so it can be tinted |
+| crack_1..4 | 512×512 each | crack overlays, white lines |
+| shard_frag_a/b/c | 64×64 each | burst fragments, white (tinted) |
+| pedestal_hex (option B) | 512×256 | flat hex base |
+| ring_arc_128 | 128×128 | pity arc |
+| spinner_64 | 64×64 | loading |
+| lock_icon | 32×32 | locked tab |
+| crystal mesh (option A) | ≤ 500 tris | MeshPart for the ViewportFrame |
