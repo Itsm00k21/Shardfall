@@ -67,6 +67,11 @@ local function fullRoster(): any
 		},
 		SHOT_Y = Enemies.SHOT_Y,
 		LOS_PAD = Enemies.LOS_PAD,
+		SHOT_RADIUS = Enemies.SHOT_RADIUS,
+		LEASH_RANGE = Enemies.LEASH_RANGE,
+		LEASH_SECONDS = Enemies.LEASH_SECONDS,
+		LEASH_WINDUP = Enemies.LEASH_WINDUP,
+		LEASH_RADIUS = Enemies.LEASH_RADIUS,
 		WAVE_COUNTS = Enemies.WAVE_COUNTS,
 		WAVE_ORDER = Enemies.WAVE_ORDER,
 		WAVE_MIXES = Enemies.WAVE_MIXES,
@@ -277,7 +282,7 @@ describe("EnemyTypeService", function()
 		end)
 	end)
 
-	it("ranged backs out of retreat without shooting, and shoots from the band", function()
+	it("ranged backs out of retreat while it shoots, and shoots from the band", function()
 		withFlag(true, function()
 			local close = EnemyTypeService.spawn("ranged", 0, 0)
 			expect(close ~= nil).toBeTrue()
@@ -285,7 +290,7 @@ describe("EnemyTypeService", function()
 				return
 			end
 			local kite = EnemyTypeService.step(close, 10, 0, 1)
-			expect(kite).toEqual(0)
+			expect(kite).toEqual(Enemies.TYPES.ranged.damage)
 			expect(close.x).toBeLessThan(0)
 
 			local far = EnemyTypeService.spawn("ranged", 0, 0)
@@ -308,7 +313,7 @@ describe("EnemyTypeService", function()
 				return
 			end
 			local dealt = EnemyTypeService.step(edge, box.maxX - 13, 0, 1)
-			expect(dealt).toEqual(0)
+			expect(dealt).toEqual(Enemies.TYPES.ranged.damage)
 			expect(edge.x).toEqual(box.maxX)
 			expect(edge.z).toEqual(0)
 
@@ -327,7 +332,7 @@ describe("EnemyTypeService", function()
 				return
 			end
 			local overlap = EnemyTypeService.step(stuck, box.minX, 0, 1)
-			expect(overlap).toEqual(0)
+			expect(overlap).toEqual(Enemies.TYPES.ranged.damage)
 			expect(stuck.x).toEqual(box.minX)
 			expect(stuck.z).toEqual(0)
 		end)
@@ -395,6 +400,164 @@ describe("EnemyTypeService", function()
 				return
 			end
 			expect(EnemyTypeService.step(chaser, 8, 0, 1, wall)).toEqual(Enemies.TYPES.chaser.damage)
+		end)
+	end)
+
+	it("ranged fires when the player is inside 12 studs", function()
+		withFlag(true, function()
+			local row = Enemies.TYPES.ranged
+			expect(row.retreat).toEqual(12)
+			local close = EnemyTypeService.spawn("ranged", 0, 0)
+			expect(close ~= nil).toBeTrue()
+			if close == nil then
+				return
+			end
+			local inside = 6
+			expect(inside < row.retreat).toBeTrue()
+			local first = EnemyTypeService.step(close, inside, 0, 0.05)
+			expect(first).toEqual(0)
+			expect(close.x).toBeLessThan(0)
+			expect(close.shot ~= nil).toBeTrue()
+			local dealt = 0
+			local guard = 0
+			while close.shot ~= nil and guard < 40 do
+				dealt += EnemyTypeService.step(close, inside, 0, 0.05)
+				guard += 1
+			end
+			expect(dealt).toEqual(row.damage)
+
+			local box = Enemies.ARENA
+			local pinned = EnemyTypeService.spawn("ranged", box.minX, 0)
+			expect(pinned ~= nil).toBeTrue()
+			if pinned == nil then
+				return
+			end
+			local hugged = EnemyTypeService.step(pinned, box.minX + 8, 0, 0.05)
+			expect(hugged).toEqual(0)
+			expect(pinned.x).toEqual(box.minX)
+			expect(pinned.shot ~= nil).toBeTrue()
+		end)
+	end)
+
+	it("ranged damage resolves on the projectile path at the current target", function()
+		withFlag(true, function()
+			local row = Enemies.TYPES.ranged
+			expect(Enemies.SHOT_RADIUS < 14).toBeTrue()
+			local missed = EnemyTypeService.spawn("ranged", 0, 0)
+			expect(missed ~= nil).toBeTrue()
+			if missed == nil then
+				return
+			end
+			expect(EnemyTypeService.step(missed, 22, 0, 0.05)).toEqual(0)
+			local stale = missed.shot
+			expect(stale ~= nil).toBeTrue()
+			if stale == nil then
+				return
+			end
+			local landDt = stale.remaining / stale.speed + 1e-4
+			expect(EnemyTypeService.step(missed, 22, 14, landDt)).toEqual(0)
+			expect(missed.shot).toBeNil()
+
+			local home = EnemyTypeService.spawn("ranged", 0, 0)
+			expect(home ~= nil).toBeTrue()
+			if home == nil then
+				return
+			end
+			expect(EnemyTypeService.step(home, 22, 0, 0.05)).toEqual(0)
+			local flying = home.shot
+			expect(flying ~= nil).toBeTrue()
+			if flying == nil then
+				return
+			end
+			local liveX = 8
+			expect(liveX < 22).toBeTrue()
+			expect(liveX > flying.x).toBeTrue()
+			local reachDt = (liveX - flying.x) / flying.speed + 1e-4
+			expect(reachDt < flying.remaining / flying.speed).toBeTrue()
+			expect(EnemyTypeService.step(home, liveX, 0, reachDt)).toEqual(row.damage)
+			expect(home.shot).toBeNil()
+		end)
+	end)
+
+	it("a kited wave-5 boss slams after the leash and does not heal", function()
+		withFlag(true, function()
+			expect(Enemies.BOSS_WAVE).toEqual(5)
+			expect(Enemies.LEASH_RANGE > Enemies.BOSS.range).toBeTrue()
+			expect(Enemies.LEASH_SECONDS >= 0.5).toBeTrue()
+			expect(Enemies.LEASH_WINDUP >= 0.5).toBeTrue()
+			expect(Enemies.LEASH_RADIUS >= 2).toBeTrue()
+			expect(Enemies.validate()).toEqual(true)
+
+			local tooClose = fullRoster()
+			tooClose.LEASH_RANGE = Enemies.BOSS.range
+			local _, rangeErr = Enemies.validate(tooClose)
+			expect(string.find(rangeErr, "LEASH_RANGE", 1, true) ~= nil).toBeTrue()
+
+			local instant = fullRoster()
+			instant.LEASH_SECONDS = 0
+			local _, secondsErr = Enemies.validate(instant)
+			expect(string.find(secondsErr, "LEASH_SECONDS", 1, true) ~= nil).toBeTrue()
+
+			local function kite(actor: any, seconds: number): number
+				local dealt = 0
+				local left = seconds
+				while left > 1e-6 do
+					local dt = math.min(Enemies.STEP_MAX, left)
+					local ahead = Enemies.LEASH_RANGE + Enemies.BOSS.moveSpeed * dt + 2
+					dealt += EnemyTypeService.step(actor, actor.x + ahead, 0, dt)
+					left -= dt
+				end
+				return dealt
+			end
+
+			local function finish(actor: any, targetX: number, targetZ: number): number
+				local dealt = 0
+				local guard = 0
+				while actor.mark ~= nil and guard < 20 do
+					dealt += EnemyTypeService.step(actor, targetX, targetZ, Enemies.STEP_MAX)
+					guard += 1
+				end
+				expect(actor.mark).toBeNil()
+				return dealt
+			end
+
+			local dodger = EnemyTypeService.spawn("boss", 0, 0)
+			expect(dodger ~= nil).toBeTrue()
+			if dodger == nil then
+				return
+			end
+			local chipped = EnemyTypeService.hurt(dodger, 40)
+			expect(chipped).toEqual(40)
+			local hurtHp = dodger.hp
+			expect(hurtHp).toEqual(Enemies.BOSS.maxHealth - 40)
+			expect(kite(dodger, Enemies.LEASH_SECONDS - Enemies.STEP_MAX)).toEqual(0)
+			expect(dodger.mark).toBeNil()
+			expect(kite(dodger, Enemies.STEP_MAX)).toEqual(0)
+			local mark = dodger.mark
+			expect(mark ~= nil).toBeTrue()
+			if mark == nil then
+				return
+			end
+			expect(mark.left).toEqual(Enemies.LEASH_WINDUP)
+			local safeX = mark.x + Enemies.LEASH_RADIUS + 5
+			expect(finish(dodger, safeX, mark.z)).toEqual(0)
+			expect(dodger.hp).toEqual(hurtHp)
+
+			local struck = EnemyTypeService.spawn("boss", 0, 0)
+			expect(struck ~= nil).toBeTrue()
+			if struck == nil then
+				return
+			end
+			expect(EnemyTypeService.hurt(struck, 40)).toEqual(40)
+			local before = struck.hp
+			expect(kite(struck, Enemies.LEASH_SECONDS)).toEqual(0)
+			local slam = struck.mark
+			expect(slam ~= nil).toBeTrue()
+			if slam == nil then
+				return
+			end
+			expect(finish(struck, slam.x, slam.z)).toEqual(Enemies.BOSS.damage)
+			expect(struck.hp).toEqual(before)
 		end)
 	end)
 

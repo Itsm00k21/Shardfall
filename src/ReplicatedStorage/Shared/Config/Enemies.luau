@@ -70,8 +70,19 @@ Enemies.ARENA = table.freeze({
 
 -- Horizontal shot ray. High enough to clear the floor, under the walls.
 -- LOS_PAD pulls the ray off the shooter and the target so neither is cover.
+-- SHOT_RADIUS is how close the projectile path must pass to the target's
+-- current position. The aim point from the firing tick is not a hit.
 Enemies.SHOT_Y = 3
 Enemies.LOS_PAD = 1.5
+Enemies.SHOT_RADIUS = 2
+
+-- Wave-5 boss leash. Staying farther than LEASH_RANGE for LEASH_SECONDS
+-- starts a slam. LEASH_WINDUP is the telegraph. LEASH_RADIUS is the mark
+-- the player can step out of. The boss does not heal when this fires.
+Enemies.LEASH_RANGE = 24
+Enemies.LEASH_SECONDS = 3
+Enemies.LEASH_WINDUP = 1.2
+Enemies.LEASH_RADIUS = 4
 
 Enemies.ORDER = table.freeze({ "chaser", "ranged", "tank" })
 
@@ -253,6 +264,13 @@ local function checkArena(source: any): (boolean, string)
 	end
 	if source.LOS_PAD > 4 then
 		return false, "LOS_PAD is above 4"
+	end
+	local hitOk, hitErr = checkNumber("SHOT_RADIUS", source.SHOT_RADIUS, 0.5)
+	if not hitOk then
+		return false, hitErr
+	end
+	if source.SHOT_RADIUS > 4 then
+		return false, "SHOT_RADIUS is above 4"
 	end
 	return true, ""
 end
@@ -496,6 +514,47 @@ local function checkStuck(source: any): (boolean, string)
 	return true, ""
 end
 
+-- Leash numbers live next to the boss. A slam that is instant, or a
+-- range inside melee, does not count. The boss still does not heal.
+local function checkLeash(source: any): (boolean, string)
+	local rangeOk, rangeErr = checkNumber("LEASH_RANGE", source.LEASH_RANGE, 0.05)
+	if not rangeOk then
+		return false, rangeErr
+	end
+	local secondsOk, secondsErr = checkNumber("LEASH_SECONDS", source.LEASH_SECONDS, 0.5)
+	if not secondsOk then
+		return false, secondsErr
+	end
+	if source.LEASH_SECONDS > 8 then
+		return false, "LEASH_SECONDS is above 8"
+	end
+	local windOk, windErr = checkNumber("LEASH_WINDUP", source.LEASH_WINDUP, 0.5)
+	if not windOk then
+		return false, windErr
+	end
+	if source.LEASH_WINDUP > 4 then
+		return false, "LEASH_WINDUP is above 4"
+	end
+	local radiusOk, radiusErr = checkNumber("LEASH_RADIUS", source.LEASH_RADIUS, 2)
+	if not radiusOk then
+		return false, radiusErr
+	end
+	if source.LEASH_RADIUS > 12 then
+		return false, "LEASH_RADIUS is above 12"
+	end
+	local boss = source.BOSS
+	if type(boss) ~= "table" or not finite(boss.range) or source.LEASH_RANGE <= boss.range then
+		return false, "LEASH_RANGE must sit outside the boss melee range"
+	end
+	local box = source.ARENA
+	if type(box) == "table" and finite(box.maxX) and finite(box.minX) then
+		if source.LEASH_RANGE >= box.maxX - box.minX then
+			return false, "LEASH_RANGE must fit inside the arena"
+		end
+	end
+	return true, ""
+end
+
 -- The three types, or the wave-5 boss. Nil for any other id.
 function Enemies.row(kind: string): Row?
 	if type(kind) ~= "string" then
@@ -618,6 +677,10 @@ function Enemies.validate(roster: any?): (boolean, string)
 	local stuckOk, stuckErr = checkStuck(source)
 	if not stuckOk then
 		return false, stuckErr
+	end
+	local leashOk, leashErr = checkLeash(source)
+	if not leashOk then
+		return false, leashErr
 	end
 	return true, ""
 end

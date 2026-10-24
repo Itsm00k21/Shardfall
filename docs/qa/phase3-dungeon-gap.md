@@ -72,3 +72,11 @@ Server watchdog on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stac
 - Math: `WaveFlow.step` tracks each living enemy. Closing on the target by `STUCK_PROGRESS`, or dealing or taking damage, clears the clock. At the limit it nudges off the blocked line and aims again. If that step is still blocked, it respawns on a clear point inside `Enemies.ARENA`.
 - Service: `WaveFlowService.step` calls that math only while the flag is on. It does not publish `WaveCounter`, parent a part, or write a profile. `init.server` does not require it. No HUD file changes. `schemaVersion` stays 26.
 - The live crawl is unchanged. `DungeonService.moveEnemy` still only clamps to the floor.
+
+## What the enemy p2 pass adds
+
+Stacked on #419. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). `waveArena` stays false. No new flag, remote, profile field, or Robux. `schemaVersion` stays 26.
+
+- A ranged enemy inside `retreat` (12 studs) still backs up, and it fires. Point-blank contact deals the config damage. The arena clamp is unchanged.
+- A ranged shot no longer pays damage at the aim point from the firing tick. The server moves the projectile and hits only if that path reaches the target's current position within `SHOT_RADIUS`. The line-of-sight ray uses that current position. Stepping off the path misses.
+- `LEASH_RANGE`, `LEASH_SECONDS`, `LEASH_WINDUP`, and `LEASH_RADIUS` live in `Config/Enemies.luau`. `Enemies.validate` rejects a leash inside the boss melee range, a non-positive duration, or a windup too short to dodge. If the player stays beyond the leash for `LEASH_SECONDS`, the boss marks that spot and slams after `LEASH_WINDUP`. Leaving the radius deals 0. The boss HP is not restored.
