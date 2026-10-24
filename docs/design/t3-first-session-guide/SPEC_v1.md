@@ -1,6 +1,6 @@
 # T3 First-Session Guide ("Crack your first shard → the Gate"), Spec v1
 
-Owner: Prism (design, docs only: no code, no Config, no save edits). Builders: Ghost (OnboardHud, HUD, world markers), Echo (Onboarding / OnboardingService server steps). Base: `cursor/live-build-9721`. Status: **v1.1, all 7 questions decided** by Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (Oct 24, 2026 12:50Z, Kevin's design calls pre-approved to Ghost). Build still waits for M13. Not an official Vision & Design Rules decision until Kevin copies it there.
+Owner: Prism (design, docs only: no code, no Config, no save edits). Builders: Ghost (OnboardHud, HUD, world markers), Echo (Onboarding / OnboardingService server steps). Base: `cursor/live-build-9721`. Status: **v1.2 (adds §9.1 Build rules R1–R3, required per Ghost DP27 13:08Z), v1.1 all 7 questions decided** by Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (Oct 24, 2026 12:50Z, Kevin's design calls pre-approved to Ghost). Build still waits for M13. Not an official Vision & Design Rules decision until Kevin copies it there.
 Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883813bb309d78b13d87259 (Oct 24, 2026 12:32Z, Kevin pre-approved). ACK: https://app.notion.com/p/403c31ca38838177ab48faab126dd578.
 **Pass target:** a brand-new player reaches the Shard Gate pad in **under 2 minutes with no help**.
 
@@ -141,6 +141,17 @@ SVG in `mockups/` (fake data, original art; PNG renders stay on the box):
 - **Prism:** wren_64 portrait, arrow_64, chevron_ground_128 in the Phase S art pass (shared with #412); copy check after build.
 - **Havoc:** fresh account timing at 390×844, 667×375, 800×400, desktop; Skip at every step; rejoin at every step; arena off; menu open at each step; Take me there into a wall.
 
+### 9.1 Build rules (required, from Havoc's DP26 grant-safety read)
+Source: Havoc's board row https://app.notion.com/p/403c31ca3883817393dde6b66a210c9a (read of this spec @5e304ba vs live `OnboardingService` / `Onboarding.starter()` / `FirstSessionKit.grant()` / `RollService.rollFree()` on live-build @581c995). Ghost accepted R1–R3 as **required build rules** for T3 (row https://app.notion.com/p/403c31ca3883811fbb41cfde0bd48e10, Oct 24 13:08Z). Nothing here is live today; these rules bind the build.
+
+- **R1 (P1 if missed): unused free rolls pay out as tokens only once.** The token payout sits **inside** the same `if data.onboardDone ~= true` block as `starter()`, in the **same mutate**, with the count read from the saved `onboardStep` (`roll1` = 3, `roll2` = 2, `roll3` = 1, anything else = 0). Never next to `FirstSessionKit.grant` outside that guard, or every Skip press mints up to 3 Shard Tokens.
+- **R2 (P2): spend the free roll and advance the step in ONE mutate.** Inside `crack()`'s mutate: check `onboardDone ~= true` and `onboardStep == rollN`, mark the roll free, grant the item, and move `onboardStep`, all in one transform. No separate `note("rollN")` after the roll. This closes the double-tap (ROLL bar + Crackstone prompt in the same frame), the leave-between-crack-and-note re-grant, and Skip landing between the two.
+- **R3 (P2): only the server decides "free".** The free path keys only on saved `onboardDone` / `onboardStep`. No client argument (`tutorial`, `replay`, `freeCount` or similar) on `rollFree` or the Crackstone prompt. Replay guide rolls hit the normal token check.
+
+Notes (P3, not blocking, kept for the builder): **R4** apply the Rare floor only on the roll that advances `roll3`, and don't stack it with `FirstSession.CONFIG.rollFloor` (one floored Rare per new player). **R5** V1 has no class step, so Skip or finish before a class pick pays `starter()` only; the kit lands later through `ClassService` → `grantKit`. That deferral is intended; don't add a second grant path. §10 item 6 reads "same kit" with that deferral in mind.
+
+Proof tests for Echo's server build (Lune) are in Havoc's row: Skip ×5 at `roll2`, two `rollFree` before any note, leave right after a crack, Replay roll with `onboardDone = true`, Skip at `wave1`, fresh profile without `classId`.
+
 ## 10. Pass criteria (playtest)
 1. **Fresh account, no help, 390×844 phone: on the Gate pad in under 2:00** (target ≤ 30 s median of 3 testers; hard fail ≥ 120 s).
 2. 3 free rolls happen with the 3rd ≥ Rare, and the first roll starts within 5 s of spawn.
@@ -163,6 +174,7 @@ All 7 are **Decided (Ghost 12:50Z)**, Ghost's Agent Board row https://app.notion
 No open questions remain on this spec.
 
 ## Decision log
+- 2026-10-24 (Ghost 13:08Z, board row https://app.notion.com/p/403c31ca3883811fbb41cfde0bd48e10): **v1.2.** Adds §9.1 Build rules R1–R3 from Havoc's DP26 read as required build rules for T3; R4/R5 kept as P3 notes. Docs only.
 - 2026-10-24 (Ghost 12:50Z, board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29, Kevin's calls pre-approved to Ghost): **v1.1.** Q1 yes (#449 supersedes #412's T3 file; note added on #412, nothing deleted). Q2 keep `open`. Q3 ROLL bar at spawn. Q4 Take me there at +30 s. Q5 server checks the pad, client arrow cosmetic. Q6 "Wren:" pill. Q7 Replay guide ships in V1, grants nothing. Build waits for M13.
 - 2026-10-24 (Prism): v1 on `prism/t3-first-session-guide`, built on #412 (beats 0–30 s) and #413 (walk times). Ends at the Gate pad (pass point). Open: Ghost 1–5, Kevin 6–7. Not approved.
 
