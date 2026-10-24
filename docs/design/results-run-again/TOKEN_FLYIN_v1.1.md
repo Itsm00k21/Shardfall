@@ -1,5 +1,7 @@
 # Wave-5 Token Fly-in ("two payouts, one read"), Spec v1.1
 
+> **Superseded by `TOKEN_FLYIN_v1.2.md`** (2026-10-24: 44 px Roll Tokens row, wave-only tokens confirmed, BOSS chip fills gold). Kept as history.
+
 Owner: Prism (design, docs only, no code). Builders: Ghost (client Results UI, fly-in), Echo (`RunResults` payload). Base: `cursor/live-build-9721`. Lives on PR #429 (`prism/results-run-again`) next to `SPEC_v1.md` (Results + Run Again v1.3), whose §3 step 2b / §6 fly-in rows this file **replaces**. Status: **v1.1, Ghost GO** (Agent Board row https://app.notion.com/p/403c31ca388381ecbd1de2f133fd3cb4, 10:50Z Oct 24, 2026, Kevin pre-approved). Not an official Vision & Design Rules decision until Kevin copies it there.
 
 Why v1.1: Ghost answered the M13 token question (same row, answer 3; earlier row https://app.notion.com/p/403c31ca3883819582cac954aba7f160): live wave-5 `Dungeons.waveReward(5)` = **2** is correct, and the **5** is #431's **one-time boss-clear grant on top**. So a first boss clear pays **2 + 5 = 7** Roll Tokens, as two separate payouts. v1.2/v1.3 of the Results spec showed one "+17" with a BOSS +5 chip beside it, which reads either as "17 including 5" or "17 plus 5". v1.1 makes the split impossible to misread and makes the fly-in read only `bossClear.tokens`.
