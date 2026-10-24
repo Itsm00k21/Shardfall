@@ -2206,6 +2206,32 @@ describe("HavenBuilder", function()
 		end
 	end)
 
+	it("keeps every island rock from catching a fall", function()
+		local builder, _heartbeats, _workspace = loadBuilder()
+		local hub = instance("Model")
+		hub.Name = "Hub"
+		builder.build(hub)
+		local islands = { "BossPlaza", "Forge", "Market", "GuildHall", "PetGarden", "Observatory" }
+		local rocks = 0
+		for _, name in ipairs(islands) do
+			local model = findNamed(hub, name)
+			expect(model ~= nil).toBeTrue()
+			local rock = model:FindFirstChild("Rock")
+			local ground = model:FindFirstChild("Ground")
+			expect(rock ~= nil and rock:IsA("BasePart")).toBeTrue()
+			expect(ground ~= nil and ground:IsA("BasePart")).toBeTrue()
+			expect(rock.CanCollide).toEqual(false)
+			expect(ground.CanCollide).toEqual(true)
+			rocks += 1
+		end
+		expect(rocks).toEqual(#islands)
+		for _, descendant in ipairs(hub:GetDescendants()) do
+			if descendant.Name == "Rock" then
+				expect(descendant.CanCollide).toEqual(false)
+			end
+		end
+	end)
+
 	it("builds no Training Grove dummy while grove is parked", function()
 		expect(LaunchGate.on("grove")).toEqual(false)
 		local builder, _heartbeats, _workspace = loadBuilder()

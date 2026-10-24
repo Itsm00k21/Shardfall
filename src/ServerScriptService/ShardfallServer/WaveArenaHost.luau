@@ -787,6 +787,15 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 	return { ok = false, error = "Unknown arena action." }
 end
 
+-- True only for a seated arena run while LaunchGate.waveArena is on.
+-- The hub fall rescue uses this to stay out of that run.
+function WaveArenaHost.inRun(player: Player): boolean
+	if not open() then
+		return false
+	end
+	return inArena[player] == true and runs[player] ~= nil
+end
+
 -- Lune only. Studio ignores these. A spec seats one run and replaces the
 -- profile read and the save so a yielding save can be counted.
 function WaveArenaHost._open(on: boolean)
