@@ -21,6 +21,9 @@ local UiTheme = require("./UiTheme")
 local ActionSlots = {}
 
 ActionSlots.COUNT = 8
+-- The band above the slot row that holds the Lock / T tab strip.
+ActionSlots.TAB_BAND = 36
+ActionSlots.TAB_H = 24
 ActionSlots.TONIC_COOLDOWN = 8
 ActionSlots.PADLOCK = "\u{1F512}"
 ActionSlots.UNLOCK = { 1, 2, 4, 6, 10 }
@@ -303,7 +306,11 @@ function ActionSlots.reconcile(source: any, profile: any): { [string]: Bar }
 end
 
 function ActionSlots.barFor(bars: any, classId: string): Bar
-	if type(bars) == "table" and type(bars[classId]) == "table" and type(bars[classId].slots) == "table" then
+	if
+		type(bars) == "table"
+		and type(bars[classId]) == "table"
+		and type(bars[classId].slots) == "table"
+	then
 		return bars[classId]
 	end
 	return ActionSlots.defaults(classId)
@@ -326,7 +333,12 @@ function ActionSlots.swap(bar: Bar, fromIndex: number, toIndex: number): (Bar?, 
 	if bar.locked == true then
 		return nil, "Bar is locked."
 	end
-	if fromIndex < 1 or fromIndex > ActionSlots.COUNT or toIndex < 1 or toIndex > ActionSlots.COUNT then
+	if
+		fromIndex < 1
+		or fromIndex > ActionSlots.COUNT
+		or toIndex < 1
+		or toIndex > ActionSlots.COUNT
+	then
 		return nil, "That slot is empty."
 	end
 	local nextBar = cloneBar(bar)
@@ -614,7 +626,10 @@ function ActionSlots.fromRow(row: any): Slot?
 		return nil
 	end
 	local id = row.id
-	if row.kind == "Consumable" or (type(id) == "string" and string.sub(id, 1, 11) == "consumable:") then
+	if
+		row.kind == "Consumable"
+		or (type(id) == "string" and string.sub(id, 1, 11) == "consumable:")
+	then
 		return { kind = "consumable", id = Materials.TONIC_ID }
 	end
 	if type(row.uid) == "string" and row.uid ~= "" then
@@ -623,7 +638,13 @@ function ActionSlots.fromRow(row: any): Slot?
 	return nil
 end
 
-local function fitSlot(available: number, columns: number, gap: number, prefer: number, minimum: number): number
+local function fitSlot(
+	available: number,
+	columns: number,
+	gap: number,
+	prefer: number,
+	minimum: number
+): number
 	local slot = prefer
 	while slot > minimum and columns * slot + (columns - 1) * gap > available do
 		slot -= 2
@@ -691,6 +712,8 @@ end
 export type Chrome = {
 	lock: Rect,
 	roll: Rect,
+	strip: Rect,
+	tip: Rect,
 }
 
 export type Face = {
@@ -710,11 +733,48 @@ function ActionSlots.chrome(place: any, _extra: any?): Chrome
 			gap = place.gap
 		end
 	end
+	-- [Ghost] Oct 24 (Kevin's Studio shot): Lock and T read as loose
+	-- buttons floating over slots 1-2. They are now one tab strip whose
+	-- bottom edge sits flush on the slot row (the slots start at
+	-- ActionSlots.TAB_BAND), with a hover tip just above the strip.
+	local tabH = ActionSlots.TAB_H
+	local y = ActionSlots.TAB_BAND - tabH
+	local stripW = slot * 2 + gap
 	return {
-		lock = { x = 0, y = 4, w = slot, h = 28 },
-		roll = { x = slot + gap, y = 4, w = slot, h = 28 },
+		lock = { x = 0, y = y, w = slot, h = tabH },
+		roll = { x = slot + gap, y = y, w = slot, h = tabH },
+		strip = { x = 0, y = y, w = stripW, h = tabH },
+		tip = { x = 0, y = 0, w = math.max(stripW, 168), h = y - 2 },
 	}
 end
+
+-- How an action slot reads. "filled" is a skill, item, or tonic. The
+-- first empty slot after the bar's last filled one is "next" (where a
+-- new skill lands); every other empty slot is "empty". Keybinds work the
+-- same for all three; only the paint changes.
+function ActionSlots.look(bar: any, index: number): string
+	local slots = if type(bar) == "table" and type(bar.slots) == "table" then bar.slots else {}
+	local function filled(i: number): boolean
+		local slot = slots[i]
+		return type(slot) == "table" and slot.kind ~= nil and slot.kind ~= "empty"
+	end
+	if filled(index) then
+		return "filled"
+	end
+	local last = 0
+	for i = 1, ActionSlots.COUNT do
+		if filled(i) then
+			last = i
+		end
+	end
+	if index == last + 1 then
+		return "next"
+	end
+	return "empty"
+end
+
+-- Transparency added to an empty slot's frame and key badge, by look.
+ActionSlots.FADE = table.freeze({ filled = 0, next = 0.35, empty = 0.65 })
 
 function ActionSlots.face(_extra: any?): Face
 	return {
@@ -738,7 +798,11 @@ function ActionSlots.overlaps(a: Rect, b: Rect): boolean
 	return a.x < b.x + b.w and a.x + a.w > b.x and a.y < b.y + b.h and a.y + a.h > b.y
 end
 
-function ActionSlots.prompts(place: Place, viewportX: number, viewportY: number): { dodge: Rect, interact: Rect }
+function ActionSlots.prompts(
+	place: Place,
+	viewportX: number,
+	viewportY: number
+): { dodge: Rect, interact: Rect }
 	local size = if place.mobile then 52 else 44
 	local edge = 16
 	local dodgeX = place.x - size - 8

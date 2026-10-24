@@ -243,5 +243,6 @@ require("./BigRollAnnounce.spec")
 require("./BigRollBeam.spec")
 require("./PartyGather.spec")
 require("./UiClassesOffOnboard.spec")
+require("./HudOverlap.spec")
 
 process.exit(framework.run())

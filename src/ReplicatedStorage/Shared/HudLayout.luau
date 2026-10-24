@@ -103,6 +103,67 @@ function HudLayout.pills(viewportX: number, margin: number): Rect
 	return strip
 end
 
+-- [Ghost] Oct 24 (Kevin's Studio shot): the one source of truth for the
+-- top-right stack. The Gold / Mastery / Shards pills come first, then the
+-- owner Dev button (DebugHud via DevTools.layout). The Dev slot is
+-- reserved on every view, even in a live server where the button never
+-- shows, so nothing placed under the column moves between Studio and
+-- live. `bottom` is the first free y under the whole column.
+HudLayout.DEV_W = 56
+HudLayout.DEV_H = 32
+HudLayout.COLUMN_GAP = 8
+
+export type TopRight = {
+	pills: Rect,
+	dev: Rect,
+	column: Rect,
+	bottom: number,
+}
+
+function HudLayout.devButton(viewportX: number, margin: number): Rect
+	local pills = HudLayout.pills(viewportX, margin)
+	local vx = axisWidth(viewportX)
+	return rect(
+		math.max(margin, vx - margin - HudLayout.DEV_W),
+		pills.y + pills.h + HudLayout.COLUMN_GAP,
+		HudLayout.DEV_W,
+		HudLayout.DEV_H
+	)
+end
+
+function HudLayout.topRight(viewportX: number, margin: number): TopRight
+	local pills = HudLayout.pills(viewportX, margin)
+	local dev = HudLayout.devButton(viewportX, margin)
+	local left = math.min(pills.x, dev.x)
+	local right = math.max(pills.x + pills.w, dev.x + dev.w)
+	local top = math.min(pills.y, dev.y)
+	local bottom = dev.y + dev.h
+	return {
+		pills = pills,
+		dev = dev,
+		column = rect(left, top, right - left, bottom - top),
+		bottom = bottom,
+	}
+end
+
+-- Where the player's character stands with the default camera: a narrow
+-- box at the screen centre. HUD cards stay off it.
+function HudLayout.characterZone(viewportX: number, viewportY: number): Rect
+	local vx = math.max(200, math.floor(axisWidth(viewportX)))
+	local vy = math.max(200, math.floor(tonumber(viewportY) or 720))
+	local w = math.clamp(math.floor(vx * 0.12), 80, 160)
+	local h = math.floor(vy * 0.25)
+	return rect(math.floor((vx - w) / 2), math.floor(vy * 0.4), w, h)
+end
+
+-- The rail's hover tips (HudShell: 8px right of a button, 84 wide).
+HudLayout.RAIL_TIP_W = 84
+
+function HudLayout.railTips(viewportX: number, viewportY: number, margin: number): Rect
+	local fit = HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, 64, 44, viewportX)
+	return rect(fit.x + fit.w + 8, fit.y, HudLayout.RAIL_TIP_W, fit.h)
+end
+
 function HudLayout.counters(gold: number, mastery: number, shards: number): { string }
 	local function whole(value: number): number
 		if
@@ -664,25 +725,45 @@ export type Onboard = {
 	pill: Rect,
 	tracker: Rect,
 	goalsTab: Rect,
+	foldGoals: boolean,
 }
 
+-- Goals panel rows (OnboardHud draws the same numbers): a 20px header,
+-- 19px per goal at 15px text, and 16px of padding.
+HudLayout.GOAL_HEAD = 20
+HudLayout.GOAL_LINE = 19
+HudLayout.GOAL_PAD = 16
+
+function HudLayout.goalsHeight(rows: number?): number
+	local count = math.clamp(math.floor(tonumber(rows) or 4), 1, 8)
+	return HudLayout.GOAL_HEAD + count * HudLayout.GOAL_LINE + HudLayout.GOAL_PAD
+end
+
 -- Intro card and the goal list (Kevin, Oct 23: smaller, off the screen
--- centre and off the character). The card sits top-left under the
--- counters, right of the mid-left rail when the two would meet. The goal
--- list sits on the right edge under the pills. A viewport too narrow for
--- both side by side stacks the goals under the card on the right.
--- collapse is the card's chevron (inside the card). pill is where the
--- collapsed card goes; goalsTab is where the collapsed goals go.
--- Button rects are inside the card.
+-- centre and off the character). collapse is the card's chevron (inside
+-- the card). pill is where the collapsed card goes; goalsTab is where the
+-- collapsed goals go. Button rects are inside the card. rows is how many
+-- goals the panel lists (4 while classes is off).
 --
--- [Ghost] Oct 24 (Kevin's clip): on a mouse screen the card sat right
--- against the Hero/Bag rail and under the toast stack. When the view is
--- not a phone and not touch, the card now drops to the lower left: right
--- of the rail, on the action bar's top band, and left of the screen
--- centre, so it never touches the rail, the toasts, the equip prompt, or
--- the character. Phones and touch screens keep the top band (the
--- thumbstick owns the lower left), still right of the rail.
-function HudLayout.onboard(viewportX: number, viewportY: number, touch: boolean?): Onboard
+-- [Ghost] Oct 24, second pass (Kevin's Studio shot): the goals panel
+-- sat under the pills on the Dev button. Now:
+--   * Goals: right-aligned under the whole top-right column
+--     (HudLayout.topRight: pills, then the reserved Dev slot). When the
+--     full panel cannot fit there clear of the bar, the card, and the
+--     character, foldGoals is true and the goals start as the small
+--     "Goals" tab in the same spot.
+--   * Card on a mouse screen that is not a phone: lower left, right of
+--     the rail AND its hover tips, on the action bar's top band, and left
+--     of the character.
+--   * Card on a phone or touch screen: the top band right of the rail
+--     (the thumbstick owns the lower left). A touch tablet narrows it to
+--     the left of the toast stack, or drops it under the equip prompt.
+function HudLayout.onboard(
+	viewportX: number,
+	viewportY: number,
+	touch: boolean?,
+	rows: number?
+): Onboard
 	local margin = 16
 	local gap = 8
 	local vx = math.max(200, math.floor(axisWidth(viewportX)))
@@ -691,56 +772,111 @@ function HudLayout.onboard(viewportX: number, viewportY: number, touch: boolean?
 	if type(rawY) == "number" and rawY == rawY and rawY >= 200 and rawY < math.huge then
 		vy = math.floor(rawY)
 	end
+	local phone = HudLayout.breakpoint(vx, vy) == "phone"
 	local health = HudLayout.health(margin, vx)
-	local pills = HudLayout.pills(vx, margin)
+	local column = HudLayout.topRight(vx, margin)
+	local pills = column.pills
 	local bar = HudLayout.actionCluster(vx, vy)
+	local host = HudLayout.toastHost(vx, margin)
+	local prompt = HudLayout.equipPrompt(vx, margin)
+	local zone = HudLayout.characterZone(vx, vy)
 	local top = math.max(health.y + health.h, pills.y + pills.h) + gap
 	local bottom = bar.y - gap
 	local cardH = 120
 	local trackW = math.min(240, math.max(168, math.floor(vx * 0.24)))
-	local trackH = 72
+	local trackH = HudLayout.goalsHeight(rows)
 	local tabW = 112
 	local tabH = 36
-	-- Always right of the mid-left rail's column (Oct 24): the rail's
-	-- hover tips open to its right, and a card above the rail still read
-	-- as sitting on it.
 	local railFit = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, 64, 44, vx)
-	local cardX = railFit.x + railFit.w + gap
+	local rail = rect(railFit.x, railFit.y, railFit.w, railFit.h)
+	local tips = HudLayout.railTips(vx, vy, margin)
+	local mouse = touch ~= true
+
+	-- Goals: under the top-right column, right-aligned.
+	local trackY = column.bottom + gap
+	local tracker = rect(vx - margin - trackW, trackY, trackW, trackH)
+	local goalsTab = rect(vx - margin - tabW, trackY, tabW, tabH)
+
+	-- Card, top band: right of the rail, left of the column and goals.
+	local cardX = rail.x + rail.w + gap
 	local cardY = top
-	local sideRoom = vx - margin - trackW - gap - cardX
-	local cardW = math.min(340, sideRoom)
-	local tracker: Rect
-	if cardW >= 220 then
-		tracker = rect(vx - margin - trackW, top, trackW, trackH)
-	else
-		-- Narrow: the card takes the row and the goals go under it.
+	local rightLimit = math.min(column.column.x, tracker.x) - gap
+	local cardW = math.min(340, rightLimit - cardX)
+	if cardW < 220 then
+		-- Narrow: the card takes the row under the whole column.
+		cardY = math.max(top, column.bottom + gap)
 		cardW = math.max(160, math.min(340, vx - margin - cardX))
-		trackW = math.min(trackW, vx - margin * 2)
-		tracker = rect(vx - margin - trackW, cardY + cardH + gap, trackW, trackH)
+		tracker = rect(tracker.x, cardY + cardH + gap, tracker.w, tracker.h)
+		goalsTab = rect(goalsTab.x, tracker.y, goalsTab.w, goalsTab.h)
 	end
 	local room = bottom - cardY
 	if room < cardH then
 		cardH = math.max(112, room)
 	end
-	if tracker.y + tracker.h > bottom then
-		tracker = rect(tracker.x, math.max(top, bottom - tracker.h), tracker.w, tracker.h)
-	end
-	local lowLane = touch ~= true and HudLayout.breakpoint(vx, vy) ~= "phone"
-	if lowLane then
-		local lowX = railFit.x + railFit.w + gap
-		local lowW = math.min(340, math.floor(vx / 2) - lowX)
-		local lowH = 120
-		local lowY = bar.y - gap - lowH
-		if lowW >= 220 and lowY >= top then
-			cardX = lowX
-			cardY = lowY
-			cardW = lowW
-			cardH = lowH
-			-- The goals keep the top-right lane under the pills.
-			tracker = rect(vx - margin - trackW, top, trackW, trackH)
+	local card = rect(cardX, cardY, cardW, cardH)
+	-- Never on the character: stop short of the centre box.
+	if HudLayout.overlaps(card, zone) then
+		local shortW = zone.x - gap - cardX
+		if shortW >= 200 then
+			card = rect(cardX, cardY, math.min(card.w, shortW), cardH)
 		end
 	end
-	local card = rect(cardX, cardY, cardW, cardH)
+
+	-- A touch tablet: under the equip prompt, else left of the toasts.
+	if not phone and (HudLayout.overlaps(card, host) or HudLayout.overlaps(card, prompt)) then
+		local lowY = prompt.y + prompt.h + gap
+		local dropped = rect(cardX, lowY, card.w, cardH)
+		local leftW = math.min(340, math.min(host.x, prompt.x) - gap - cardX)
+		if
+			lowY + cardH <= bottom
+			and not HudLayout.overlaps(dropped, zone)
+			and not HudLayout.overlaps(dropped, tracker)
+		then
+			card = dropped
+		elseif leftW >= 200 then
+			card = rect(cardX, cardY, leftW, cardH)
+		end
+	end
+
+	-- A mouse screen that is not a phone: the lower-left lane.
+	if mouse and not phone then
+		local lowX = tips.x + tips.w + gap
+		local lowW = math.min(340, zone.x - gap - lowX)
+		local lowH = 120
+		local lowY = bar.y - gap - lowH
+		local low = rect(lowX, lowY, lowW, lowH)
+		local lowClear = not HudLayout.overlaps(low, host) and not HudLayout.overlaps(low, prompt)
+		if lowW >= 220 and lowY >= top and lowClear then
+			card = low
+		elseif lowW >= 220 and lowY >= top then
+			-- A short window (Kevin's 1024x500 Studio view): the equip
+			-- prompt reaches the low lane. Use the right side under the
+			-- goals, clear of the toasts, the prompt, and the character.
+			local goalsBottom = if tracker.y + tracker.h <= bottom
+				then tracker.y + tracker.h
+				else goalsTab.y + goalsTab.h
+			local sideX = math.max(host.x + host.w, prompt.x + prompt.w, zone.x + zone.w) + gap
+			local sideW = math.min(340, vx - margin - sideX)
+			local side = rect(sideX, goalsBottom + gap, sideW, lowH)
+			if sideW >= 220 and side.y + side.h <= bottom then
+				card = side
+			else
+				card = low
+			end
+		end
+	end
+
+	-- The goals stay clear of everything placed so far, or start folded.
+	local fold = tracker.y + tracker.h > bottom
+		or tracker.y + tracker.h > vy - margin
+		or HudLayout.overlaps(tracker, card)
+		or HudLayout.overlaps(tracker, zone)
+		or HudLayout.overlaps(tracker, bar)
+		or HudLayout.overlaps(tracker, column.column)
+	if HudLayout.overlaps(goalsTab, card) then
+		goalsTab = rect(goalsTab.x, card.y + card.h + gap, goalsTab.w, goalsTab.h)
+	end
+
 	local buttonH = UiTheme.TOUCH
 	local buttonW = math.floor((card.w - 24 - gap) / 2)
 	if buttonW > 132 then
@@ -760,9 +896,10 @@ function HudLayout.onboard(viewportX: number, viewportY: number, touch: boolean?
 		continueButton = rect(buttonX, buttonY, buttonW, buttonH),
 		skip = rect(buttonX + buttonW + gap, buttonY, buttonW, buttonH),
 		collapse = rect(card.w - 8 - chevron, 6, chevron, chevron),
-		pill = rect(cardX, cardY, math.min(280, cardW), tabH),
+		pill = rect(card.x, card.y, math.min(280, card.w), tabH),
 		tracker = tracker,
-		goalsTab = rect(vx - margin - tabW, tracker.y, tabW, tabH),
+		goalsTab = goalsTab,
+		foldGoals = fold,
 	}
 end
 
