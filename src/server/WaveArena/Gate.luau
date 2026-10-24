@@ -16,7 +16,7 @@ if game ~= nil then
 else
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
 end
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 
 local Gate = {}
 

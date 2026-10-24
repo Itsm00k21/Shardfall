@@ -5,7 +5,7 @@
 	so the pad is not created, prompted, or shown while the arena is off.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Gate = require("./Gate")
 
 local HubPad = {}

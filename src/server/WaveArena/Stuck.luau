@@ -6,7 +6,7 @@
 	than minShift, the caller removes them so the wave can finish.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Spawns = require("./Spawns")
 
 local Stuck = {}

@@ -14,7 +14,7 @@ local it = framework.it
 local expect = framework.expect
 
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
-local WaveArenaConfig = require("../src/shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../src/ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local WaveArena = require("../src/server/WaveArena")
 local Gate = require("../src/server/WaveArena/Gate")
 local Graybox = require("../src/server/WaveArena/Graybox")
@@ -27,7 +27,7 @@ local function lengthOf(x: number, z: number): number
 end
 
 local FILES = {
-	"src/shared/Config/WaveArenaConfig.luau",
+	"src/ReplicatedStorage/Shared/Config/WaveArenaConfig.luau",
 	"src/server/WaveArena/init.luau",
 	"src/server/WaveArena/Gate.luau",
 	"src/server/WaveArena/Waves.luau",
@@ -80,7 +80,7 @@ describe("Wave arena guards", function()
 		expect(LaunchGate.on("waveArena")).toEqual(false)
 		local launchSrc = fs.readFile("src/ReplicatedStorage/Shared/LaunchGate.luau")
 		expect(string.find(launchSrc, "waveArena = false", 1, true) ~= nil).toBeTrue()
-		local cfgSrc = fs.readFile("src/shared/Config/WaveArenaConfig.luau")
+		local cfgSrc = fs.readFile("src/ReplicatedStorage/Shared/Config/WaveArenaConfig.luau")
 		expect(string.find(cfgSrc, "enabled = false", 1, true) ~= nil).toBeTrue()
 		expect(Gate.waveArenaOn({ SHOW = { waveArena = false } })).toEqual(false)
 		expect(Gate.waveArenaOn({ SHOW = { waveArena = true } })).toEqual(true)
@@ -138,7 +138,7 @@ describe("Wave arena guards", function()
 
 		local tiny = withEnabled(true)
 		tiny.arena = table.clone(WaveArenaConfig.arena)
-		tiny.arena.diameter = 100
+		tiny.arena.diameter = 80
 		expect(WaveArena.build({ launchGate = { waveArena = true }, config = tiny })).toBeNil()
 	end)
 
@@ -303,10 +303,11 @@ describe("Spawn clearance", function()
 end)
 
 describe("Wave arena graybox", function()
-	it("is a round floor at least 120 studs across with 3 gates", function()
-		expect(WaveArenaConfig.arena.diameter >= 120).toBeTrue()
+	it("is a round floor 90 studs across with 3 edge gates", function()
+		expect(WaveArenaConfig.arena.diameter).toEqual(90)
+		expect(WaveArenaConfig.minDiameter).toEqual(90)
 		expect(WaveArenaConfig.arena.diameter >= Spawns.minimumDiameter()).toBeTrue()
-		expect(Spawns.minimumDiameter() >= 120).toBeTrue()
+		expect(Spawns.minimumDiameter()).toEqual(90)
 		expect(WaveArenaConfig.gates.count).toEqual(3)
 
 		local parts = Graybox.plan()
@@ -316,8 +317,8 @@ describe("Wave arena graybox", function()
 		local posts = named(parts, "WaveArenaPost")
 		expect(#floors).toEqual(1)
 		expect(floors[1].shape).toEqual("Cylinder")
-		expect(floors[1].size[2] >= 120).toBeTrue()
-		expect(floors[1].size[3] >= 120).toBeTrue()
+		expect(floors[1].size[2]).toEqual(90)
+		expect(floors[1].size[3]).toEqual(90)
 		expect(floors[1].size[2]).toEqual(WaveArenaConfig.arena.diameter)
 		expect(#gates).toEqual(3)
 		expect(#posts).toEqual(6)

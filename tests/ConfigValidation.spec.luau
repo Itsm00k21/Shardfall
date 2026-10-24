@@ -646,3 +646,34 @@ describe("Config validation: cross-references", function()
 		end
 	end)
 end)
+
+describe("Config validation: wave arena", function()
+	it("ships a 90-stud arena with three gates and the economy purses", function()
+		local arena = Config.WaveArena
+		expect(arena.enabled).toEqual(false)
+		expect(arena.arena.diameter).toEqual(90)
+		expect(arena.minDiameter).toEqual(90)
+		expect(arena.arena.diameter >= arena.minDiameter).toBeTrue()
+		expect(arena.gates.count).toEqual(3)
+		expect(isFinite(arena.timeout) and arena.timeout > 0).toBeTrue()
+		expect(isPositiveInt(arena.loot.bagSlots)).toBeTrue()
+		local sum = 0
+		expect(#arena.loot.waveTokens).toEqual(#Config.Economy.WAVES)
+		for index, amount in ipairs(arena.loot.waveTokens) do
+			expect(isFinite(amount) and amount >= 0 and amount == math.floor(amount)).toBeTrue()
+			expect(amount).toEqual(Config.Economy.WAVES[index].tokens)
+			sum += amount
+		end
+		expect(sum).toEqual(Config.Economy.NORMAL_CLEAR_TOKENS)
+		for _, kind in ipairs({ "chaser", "ranged", "tank", "add", "boss" }) do
+			local profile = arena.profile(arena, kind)
+			checkId("WaveArena." .. kind, profile.id)
+			checkNumbers("WaveArena." .. kind, profile)
+			local drop = arena.loot.drops[kind]
+			checkId("WaveArena.loot." .. kind, drop.id)
+			checkNumbers("WaveArena.loot." .. kind, drop)
+		end
+		checkNumbers("WaveArena.arena", arena.arena)
+		checkNumbers("WaveArena.gates", arena.gates)
+	end)
+end)

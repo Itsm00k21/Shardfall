@@ -4,12 +4,13 @@
 	Server round. Positions, damage, drops, and the results card are decided
 	here. A tick may move and attack. It cannot set its own damage or hp.
 
-	Leave keeps what was already picked up and what cleared waves swept in.
-	Chips still on the ground for the current wave are dropped. The boss
-	wave waits deathHold seconds after the killing blow before the card.
+	There is no Leave. A run ends on a clear, a wipe, a timeout, or a
+	disconnect. Ground chips are collected once at the end of a wave and
+	on a wipe. The boss wave waits deathHold seconds after the killing
+	blow before the card.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Boss = require("./Boss")
 local Enemies = require("./Enemies")
 local Feel = require("./Feel")
@@ -108,37 +109,156 @@ local function hasBoss(run: any): boolean
 	return false
 end
 
-local function cardOf(run: any, leftEarly: boolean, died: boolean): any
+local function cardOf(run: any, reason: string): any
+	local died = reason == "wipe"
 	return {
 		kind = "results",
 		wavesCleared = run.wavesCleared,
 		bestWave = run.bestWave,
 		wave = run.wave,
-		leftEarly = leftEarly,
+		reason = reason,
 		died = died,
 		cleared = run.wavesCleared >= run.total and died ~= true,
 		loot = {
 			tokens = run.earned.tokens,
 			fragments = run.earned.fragments,
 			drops = table.clone(run.earned.drops),
+			mailbox = table.clone(run.earned.mailbox),
 		},
 	}
 end
 
-local function showResults(run: any, leftEarly: boolean, died: boolean, events: { any })
-	run.phase = if leftEarly then "left" else "results"
-	run.over = true
-	run.died = died
-	run.card = cardOf(run, leftEarly, died)
-	run.cleared = run.card.cleared
-	local reason = "cleared"
-	if died then
-		reason = "died"
-	elseif leftEarly then
-		reason = "left"
+local function showResults(run: any, reason: string, events: { any })
+	if run.settled == true then
+		return
 	end
+	run.settled = true
+	run.phase = "results"
+	run.over = true
+	run.died = reason == "wipe"
+	run.reason = reason
+	run.card = cardOf(run, reason)
+	run.cleared = run.card.cleared
 	emit(events, { kind = "metric", name = "run_end", reason = reason, wave = run.wave })
 	emit(events, run.card)
+end
+
+local function bagCap(config: any): number
+	return Loot.bagCap(config)
+end
+
+local function placeDrop(run: any, drop: any, config: any, events: { any }, auto: boolean): boolean
+	local where = Loot.take(run.earned, drop, bagCap(config))
+	if where == nil then
+		return false
+	end
+	Loot.remember(run, "drop:" .. tostring(drop.uid), {
+		kind = "drop",
+		dropId = drop.dropId,
+		tokens = drop.tokens or 0,
+		fragments = drop.fragments or 0,
+		wave = drop.wave,
+		where = where,
+	})
+	emit(events, {
+		kind = "pickup",
+		id = drop.uid,
+		dropId = drop.dropId,
+		tokens = drop.tokens,
+		fragments = drop.fragments,
+		auto = auto,
+		where = where,
+	})
+	if where == "mailbox" then
+		emit(events, {
+			kind = "overflow",
+			id = drop.uid,
+			dropId = drop.dropId,
+			where = "mailbox",
+		})
+	end
+	return true
+end
+
+local function payPurse(run: any, config: any, events: { any }): boolean
+	if run.paid[run.wave] == true then
+		return false
+	end
+	local tokens = Loot.purse(run.wave, config)
+	run.earned.tokens += tokens
+	run.paid[run.wave] = true
+	Loot.remember(run, "purse:" .. tostring(run.wave), {
+		kind = "purse",
+		tokens = tokens,
+		wave = run.wave,
+	})
+	emit(events, { kind = "wavePurse", wave = run.wave, tokens = tokens })
+	return true
+end
+
+-- Ground chips once. withPurse also pays the cleared wave, once.
+local function sweep(run: any, config: any, events: { any }, withPurse: boolean)
+	local paidNow = false
+	if withPurse then
+		paidNow = payPurse(run, config, events)
+	end
+	local count = 0
+	for _, drop in ipairs(run.ground) do
+		if placeDrop(run, drop, config, events, true) then
+			count += 1
+		end
+	end
+	run.ground = {}
+	if count > 0 or paidNow then
+		emit(events, { kind = "autoCollect", count = count, wave = run.wave })
+	end
+end
+
+local function noteClear(run: any, events: { any })
+	run.wavesCleared = run.wave
+	if run.wave > run.bestWave then
+		run.bestWave = run.wave
+	end
+	if run.clearNoted[run.wave] ~= true then
+		run.clearNoted[run.wave] = true
+		emit(events, { kind = "metric", name = "waveClear", wave = run.wave })
+	end
+end
+
+local function noteBoss(run: any, events: { any })
+	if hasBoss(run) and run.bossNoted ~= true then
+		run.bossNoted = true
+		emit(events, { kind = "metric", name = "bossEnter", wave = run.wave })
+	end
+end
+
+local function noteGate(run: any, events: { any })
+	if run.gateSpent == true then
+		return
+	end
+	run.gateSpent = true
+	emit(events, { kind = "metric", name = "gateSpent", wave = run.wave })
+end
+
+local function purseDue(run: any): boolean
+	return run.wavesCleared >= run.wave
+end
+
+local function timedOut(run: any, config: any): boolean
+	local limit = config.timeout
+	if not finite(limit) or limit <= 0 then
+		limit = 480
+	end
+	return run.seconds >= limit
+end
+
+local function endRun(run: any, reason: string, config: any, events: { any })
+	noteGate(run, events)
+	if run.settled == true then
+		return
+	end
+	sweep(run, config, events, purseDue(run))
+	showResults(run, reason, events)
 end
 
 local function dropFor(run: any, enemy: any, config: any, events: { any })
@@ -175,29 +295,6 @@ local function kill(run: any, enemy: any, config: any, events: { any })
 		emit(events, Feel.deathPuff(enemy, config))
 	end
 	dropFor(run, enemy, config, events)
-end
-
-local function autoCollect(run: any, config: any, events: { any })
-	if run.paid[run.wave] ~= true then
-		local tokens = Loot.purse(run.wave, config)
-		run.earned.tokens += tokens
-		run.paid[run.wave] = true
-		emit(events, { kind = "wavePurse", wave = run.wave, tokens = tokens })
-	end
-	local count = #run.ground
-	for _, drop in ipairs(run.ground) do
-		Loot.take(run.earned, drop)
-		emit(events, {
-			kind = "pickup",
-			id = drop.uid,
-			dropId = drop.dropId,
-			tokens = drop.tokens,
-			fragments = drop.fragments,
-			auto = true,
-		})
-	end
-	run.ground = {}
-	emit(events, { kind = "autoCollect", count = count, wave = run.wave })
 end
 
 local function makeEnemy(load: any, placed: any, config: any, uid: number): any
@@ -251,27 +348,21 @@ local function spawnInto(run: any, waveIndex: number, config: any): boolean
 	return true
 end
 
-local function markCleared(run: any)
-	run.wavesCleared = run.wave
-	if run.wave > run.bestWave then
-		run.bestWave = run.wave
-	end
-end
-
 local function finishWave(run: any, config: any, events: { any })
-	markCleared(run)
+	noteClear(run, events)
 	if hasBoss(run) then
 		run.phase = "deathHold"
 		run.hold = config.boss.deathHold or 1.5
 		emit(events, { kind = "bossDown", hold = run.hold })
 		return
 	end
-	autoCollect(run, config, events)
+	sweep(run, config, events, true)
 	local nextWave = run.wave + 1
 	if Waves.def(nextWave, config) == nil or not spawnInto(run, nextWave, config) then
-		showResults(run, false, false, events)
+		showResults(run, "clear", events)
 		return
 	end
+	noteBoss(run, events)
 	emit(events, { kind = "wave", wave = run.wave })
 	emit(events, { kind = "metric", name = "wave_reached", wave = run.wave })
 end
@@ -281,15 +372,7 @@ local function collectNear(run: any, config: any, events: { any })
 	local kept = {}
 	for _, drop in ipairs(run.ground) do
 		if Loot.near(run.player.x, run.player.z, drop, radius) then
-			Loot.take(run.earned, drop)
-			emit(events, {
-				kind = "pickup",
-				id = drop.uid,
-				dropId = drop.dropId,
-				tokens = drop.tokens,
-				fragments = drop.fragments,
-				auto = false,
-			})
+			placeDrop(run, drop, config, events, false)
 		else
 			table.insert(kept, drop)
 		end
@@ -528,18 +611,28 @@ function Round.enter(options: any?): any
 		hold = 0,
 		enemies = {},
 		ground = {},
-		earned = { tokens = 0, fragments = 0, drops = {} },
+		earned = { tokens = 0, fragments = 0, drops = {}, mailbox = {}, bagCount = 0 },
 		paid = {},
+		grantKeys = {},
+		grantList = {},
+		clearNoted = {},
 		wavesCleared = 0,
 		bestWave = 0,
 		over = false,
 		cleared = false,
 		died = false,
+		settled = false,
+		gateSpent = false,
+		bossNoted = false,
+		reason = nil,
 		card = nil,
 		seconds = 0,
 		nextUid = 0,
 		nextDrop = 0,
 		announced = false,
+		receiptId = if typeof(options) == "table" and type(options.receiptId) == "string"
+			then options.receiptId
+			else "run",
 		origin = cfg.arena.origin,
 		player = {
 			x = stand.x,
@@ -578,22 +671,28 @@ function Round.step(run: any, dt: any, input: any, options: any?): (any, { any }
 	local cfg = cfgOf(config)
 	local events = {}
 	local stepDt = capDt(dt)
-	if stepDt == nil or run.phase == "results" or run.phase == "left" then
+	if stepDt == nil or run.phase == "results" or run.settled == true then
 		return run, events
 	end
 	run.seconds += stepDt
 	if run.announced ~= true then
 		run.announced = true
+		noteGate(run, events)
 		emit(events, { kind = "metric", name = "run_started", wave = run.wave })
 		emit(events, { kind = "metric", name = "wave_reached", wave = run.wave })
+		noteBoss(run, events)
 	end
 	movePlayer(run, stepDt, input, cfg)
 	if run.phase == "deathHold" then
 		collectNear(run, cfg, events)
 		run.hold -= stepDt
 		if run.hold <= 0 then
-			autoCollect(run, cfg, events)
-			showResults(run, false, false, events)
+			sweep(run, cfg, events, true)
+			showResults(run, "clear", events)
+			return run, events
+		end
+		if timedOut(run, cfg) then
+			endRun(run, "timeout", cfg, events)
 		end
 		return run, events
 	end
@@ -610,8 +709,11 @@ function Round.step(run: any, dt: any, input: any, options: any?): (any, { any }
 	collectNear(run, cfg, events)
 	if run.player.hp <= 0 then
 		run.player.hp = 0
-		run.ground = {}
-		showResults(run, false, true, events)
+		endRun(run, "wipe", cfg, events)
+		return run, events
+	end
+	if timedOut(run, cfg) then
+		endRun(run, "timeout", cfg, events)
 		return run, events
 	end
 	if livingCount(run) == 0 then
@@ -620,22 +722,20 @@ function Round.step(run: any, dt: any, input: any, options: any?): (any, { any }
 	return run, events
 end
 
-function Round.leave(run: any, options: any?): (any, { any })
+local function knownReason(reason: any): string
+	if reason == "wipe" or reason == "timeout" or reason == "disconnect" or reason == "clear" then
+		return reason
+	end
+	return "disconnect"
+end
+
+function Round.settle(run: any, reason: any, options: any?): (any, { any })
 	local launchGate, config = optionsOf(options)
 	if typeof(run) ~= "table" or not Gate.open(launchGate, config) then
 		return nil, {}
 	end
-	local cfg = cfgOf(config)
 	local events = {}
-	if run.phase == "results" or run.phase == "left" then
-		return run, events
-	end
-	if run.phase == "deathHold" then
-		autoCollect(run, cfg, events)
-	else
-		run.ground = {}
-	end
-	showResults(run, true, false, events)
+	endRun(run, knownReason(reason), cfgOf(config), events)
 	return run, events
 end
 
@@ -654,13 +754,14 @@ function Round.skip(run: any, options: any?): (any, { any })
 			kill(run, enemy, cfg, events)
 		end
 	end
-	markCleared(run)
-	autoCollect(run, cfg, events)
+	noteClear(run, events)
+	sweep(run, cfg, events, true)
 	local nextWave = run.wave + 1
 	if Waves.def(nextWave, cfg) == nil or not spawnInto(run, nextWave, cfg) then
-		showResults(run, false, false, events)
+		showResults(run, "clear", events)
 		return run, events
 	end
+	noteBoss(run, events)
 	emit(events, { kind = "wave", wave = run.wave })
 	return run, events
 end
@@ -670,15 +771,16 @@ function Round.spawnBoss(run: any, options: any?): (any, { any })
 	if typeof(run) ~= "table" or not Gate.open(launchGate, config) then
 		return nil, {}
 	end
-	if run.phase == "results" or run.phase == "left" then
+	if run.phase == "results" or run.settled == true then
 		return run, {}
 	end
 	local cfg = cfgOf(config)
 	local events = {}
-	run.ground = {}
+	sweep(run, cfg, events, false)
 	local index = Waves.bossIndex(cfg)
 	spawnInto(run, index, cfg)
 	run.over = false
+	noteBoss(run, events)
 	emit(events, { kind = "wave", wave = run.wave })
 	emit(events, { kind = "metric", name = "wave_reached", wave = run.wave })
 	return run, events

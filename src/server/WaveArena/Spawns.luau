@@ -11,7 +11,7 @@
 	The floor slab is not a solid. Spawns stand on it.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Graybox = require("./Graybox")
 local Waves = require("./Waves")
 

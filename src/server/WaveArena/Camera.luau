@@ -5,7 +5,7 @@
 	is pushed out along the line from the boss so it cannot sit in the mesh.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 
 local Camera = {}
 

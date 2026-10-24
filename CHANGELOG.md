@@ -13,14 +13,16 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
-- Phase 3: solo wave arena. Shard Gate pad, a round arena of at least 120
-  studs with 3 enemy gates, enemy types 1-3, waves 6/8/10/12 then a boss and
-  4 adds, leave-with-loot, a stuck-enemy teleport or despawn, ground loot
-  with a 12-stud pickup that sweeps at the end of the wave, a boss HP bar,
-  a camera room so the view does not sit inside the boss, a slam after the
-  red warning, a 1.5s boss death pause, and a hit flash plus death puff on
-  small enemies. `LaunchGate.waveArena` and `WaveArenaConfig.enabled` both
-  stay off, so nothing builds or shows until they are turned on. (open)
+- Phase 3: solo wave arena. Shard Gate pad, a round arena 90 studs across
+  with 3 edge gates, enemy types 1-3, waves 6/8/10/12 then a boss and 4 adds.
+  No Leave. A run ends on clear, wipe, timeout, or disconnect, and the player
+  keeps every earned drop once. Ground chips auto-collect at wave end and on
+  wipe. A full Bag sends the overflow to `profile.arenaMail` (additive,
+  schemaVersion stays 26) instead of deleting it. Stuck enemies teleport or
+  despawn. Pickup radius stays 12 studs. Boss HP bar, camera room, slam after
+  the red warning, 1.5s boss death pause, hit flash and death puff. Metrics
+  add gateSpent, waveClear, and bossEnter. `LaunchGate.waveArena` and
+  `WaveArenaConfig.enabled` both stay off. (open)
 - Playtest fixes (Ghost, clips 6 and 7): x10 results no longer badge pets as "Salvaged" (`GearHooks.markBatch` only checked `profile.inventory`; it now never marks pets and only infers for weapons/armor at or under an active auto-salvage cap; the server never salvaged them). Pets page: worn pet shows one EQUIPPED state (second tap unequips), pet cards get the star row and padlock, `equipUid` finds pets for the optimistic flip. Bag detail shows "You have N gold" under an affordable UPGRADE (clip 6 had Gold 250 vs cost 150, so bright was correct). Hero Power adds worn gear's Item Power to the combat score (same scale as card Power, per shardfall_progression.md). Intro: Skip intro always closes the card and applies the answer, Continue at a world step shows a hint instead of a dead click, card and goals hide while the hub or Inventory is open, goals get a backing panel beside the card on wide screens. Header padlock tidied (faint well, thin arch, keyhole). Client only. (open)
 - Gear detail fixes (Ghost, playtest clip 5): the pet detail panel uses the gear header (icon, rarity-coloured name, "Rarity · Pet", padlock), opens scrolled to the top with stats below, and shows one EQUIPPED state or EQUIP; the Lock button is gone (the header padlock locks). Correction to clip 4: UnequipItem is a live remote, so EQUIPPED on gear and pets now unequips on a second tap within 3 s ("Tap again to unequip"). Padlocks are drawn shapes: a muted grey open lock when unlocked, a gold closed lock when locked, on cards and headers. Every gear card shows a star row, including ☆☆☆☆☆ at 0 stars. Hero panel Crit damage reads as a percent (3.42 -> 342%); Attack speed stays a plain number. Accessories keep the old panel. Client only. (open)
 - Gear detail fixes (Ghost, playtest clip 4): UPGRADE dims and says "Need N more gold" when gold is short; Shard Core feeds only the selected weapon (one "Feed N Essence" button, inline confirm, toast "X core Lv N: +perk", new pip and perk row lit), the all-cores picker is gone; Crit Damage shows as a percent (4.51 -> 451%); worn gear shows one EQUIPPED state (no green "Equipped" header, no Unequip button, which called a parked remote). Client only. (open)

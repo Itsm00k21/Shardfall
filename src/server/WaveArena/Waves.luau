@@ -5,7 +5,7 @@
 	There is no client count and no Rootvault wave table.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 
 local Waves = {}
 

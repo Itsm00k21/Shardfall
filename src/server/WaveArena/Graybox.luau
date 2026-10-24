@@ -9,7 +9,7 @@
 	until Graybox.plan adds the origin.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 
 local Graybox = {}
 

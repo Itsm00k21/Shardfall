@@ -21,14 +21,15 @@ local Economy = require("../src/ReplicatedStorage/Shared/Config/Economy")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Spawns = require("../src/server/WaveArena/Spawns")
 local WaveArena = require("../src/server/WaveArena")
-local WaveArenaConfig = require("../src/shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../src/ReplicatedStorage/Shared/Config/WaveArenaConfig")
 
 local FILES = {
-	"src/shared/Config/WaveArenaConfig.luau",
+	"src/ReplicatedStorage/Shared/Config/WaveArenaConfig.luau",
 	"src/server/WaveArena/init.luau",
 	"src/server/WaveArena/Round.luau",
 	"src/server/WaveArena/Enemies.luau",
 	"src/server/WaveArena/Loot.luau",
+	"src/server/WaveArena/Session.luau",
 	"src/server/WaveArena/Stuck.luau",
 	"src/server/WaveArena/Boss.luau",
 	"src/server/WaveArena/Feel.luau",
@@ -164,7 +165,7 @@ describe("Wave arena enemy types", function()
 		expect(WaveArenaConfig.ranged.hp ~= WaveArenaConfig.chaser.hp).toBeTrue()
 		expect(WaveArenaConfig.ranged.attackRange > WaveArenaConfig.chaser.attackRange).toBeTrue()
 		expect(WaveArenaConfig.tank.moveSpeed < WaveArenaConfig.chaser.moveSpeed).toBeTrue()
-		expect(WaveArenaConfig.arena.diameter >= 120).toBeTrue()
+		expect(WaveArenaConfig.arena.diameter).toEqual(90)
 		expect(WaveArenaConfig.gates.count).toEqual(3)
 
 		local function saw(index: number, kind: string): boolean
@@ -225,7 +226,7 @@ describe("Wave arena enemy types", function()
 	end)
 end)
 
-describe("Wave arena loot and leaving", function()
+describe("Wave arena loot", function()
 	it("leaves chips on the ground until you are inside 12 studs", function()
 		local config = fightConfig()
 		config.chaser = table.clone(config.chaser)
@@ -266,7 +267,7 @@ describe("Wave arena loot and leaving", function()
 		expect(current.earned.fragments).toEqual(1)
 	end)
 
-	it("sweeps the rest at the end of the wave and keeps it if you leave", function()
+	it("sweeps the rest at the end of the wave and keeps it on disconnect", function()
 		local config = fightConfig()
 		local options = opened(config)
 		local run = WaveArena.enter(options) :: any
@@ -278,27 +279,33 @@ describe("Wave arena loot and leaving", function()
 		expect(run.earned.tokens).toEqual(1)
 		expect(run.wavesCleared).toEqual(1)
 
-		local _, left = WaveArena.leave(run, options)
+		local _, left = WaveArena.settle(run, "disconnect", options)
 		local card = findKind(left, "results")
 		expect(card ~= nil).toBeTrue()
-		expect(card.leftEarly).toEqual(true)
+		expect(card.reason).toEqual("disconnect")
 		expect(card.cleared).toEqual(false)
 		expect(card.loot.tokens).toEqual(1)
 		expect(card.loot.fragments).toEqual(2)
 		expect(card.wavesCleared).toEqual(1)
+		expect(run.phase).toEqual("results")
 	end)
 
-	it("drops uncollected chips from the wave you abandon", function()
+	it("keeps uncollected chips once on a wipe", function()
 		local config = fightConfig()
 		local options = opened(config)
 		local run = WaveArena.enter(options) :: any
 		WaveArena.step(run, 0.5, { attack = true }, options)
 		expect(#run.ground).toEqual(1)
-		local _, left = WaveArena.leave(run, options)
-		expect(run.earned.fragments).toEqual(0)
+		local _, left = WaveArena.settle(run, "wipe", options)
+		expect(run.earned.fragments).toEqual(1)
 		expect(run.earned.tokens).toEqual(0)
 		expect(#run.ground).toEqual(0)
-		expect(findKind(left, "results").loot.fragments).toEqual(0)
+		expect(findKind(left, "results").loot.fragments).toEqual(1)
+		expect(findKind(left, "results").reason).toEqual("wipe")
+		local _, again = WaveArena.settle(run, "disconnect", options)
+		expect(#again).toEqual(0)
+		expect(run.earned.fragments).toEqual(1)
+		expect(run.earned.tokens).toEqual(0)
 	end)
 end)
 
@@ -395,7 +402,7 @@ describe("Wave arena boss", function()
 		local _, done = WaveArena.step(run, 0.5, {}, options)
 		local card = findKind(done, "results")
 		expect(card ~= nil).toBeTrue()
-		expect(card.leftEarly).toEqual(false)
+		expect(card.reason).toEqual("clear")
 		expect(card.cleared).toEqual(true)
 		expect(card.loot.tokens).toEqual(6)
 		expect(card.loot.fragments).toEqual(6)
@@ -404,7 +411,7 @@ describe("Wave arena boss", function()
 	end)
 
 	it(
-		"shows a boss bar that tracks hp, and keeps the clear if you leave during the pause",
+		"shows a boss bar that tracks hp, and keeps the clear if you disconnect during the pause",
 		function()
 			local config = fightConfig()
 			config.boss = table.clone(config.boss)
@@ -424,13 +431,17 @@ describe("Wave arena boss", function()
 			WaveArena.step(run, 0.5, { attack = true }, options)
 			expect(run.phase).toEqual("deathHold")
 			expect(WaveArena.hud(run, options).boss.shown).toEqual(false)
-			local _, left = WaveArena.leave(run, options)
+			local _, left = WaveArena.settle(run, "disconnect", options)
 			local card = findKind(left, "results")
-			expect(card.leftEarly).toEqual(true)
+			expect(card.reason).toEqual("disconnect")
 			expect(card.cleared).toEqual(true)
 			expect(card.loot.tokens).toEqual(5)
 			expect(card.loot.fragments).toEqual(4)
-			expect(run.phase).toEqual("left")
+			expect(run.phase).toEqual("results")
+			local _, again = WaveArena.settle(run, "wipe", options)
+			expect(#again).toEqual(0)
+			expect(run.earned.tokens).toEqual(5)
+			expect(run.earned.fragments).toEqual(4)
 		end
 	)
 end)
@@ -464,18 +475,19 @@ describe("Wave arena stuck and camera", function()
 		local options = opened(config)
 		local run = WaveArena.enter(options) :: any
 		local enemy = run.enemies[1]
-		enemy.x = 40
+		-- Inside the 90-stud floor. 40 is past the wall and gets clamped.
+		enemy.x = 30
 		enemy.z = 0
-		enemy.anchorX = 40
+		enemy.anchorX = 30
 		enemy.anchorZ = 0
 		enemy.stillFor = 0
 		enemy.speed = 0
 		local _, waiting = WaveArena.step(run, 0.5, {}, options)
 		expect(findKind(waiting, "teleport")).toBeNil()
-		expect(enemy.x).toEqual(40)
+		expect(enemy.x).toEqual(30)
 		local _, moved = WaveArena.step(run, 0.5, {}, options)
 		expect(findKind(moved, "teleport") ~= nil).toBeTrue()
-		expect(enemy.x).toBeCloseTo(24, 1e-4)
+		expect(enemy.x).toBeCloseTo(14, 1e-4)
 		expect(enemy.alive).toEqual(true)
 
 		enemy.x = 0

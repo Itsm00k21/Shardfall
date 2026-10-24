@@ -19,6 +19,9 @@
 	one copy-first step for those three fields. Do not publish a v27
 	document before that list exists: a higher version looks newer, and a
 	v26 server refuses the load. #387 writes the same gearEssence field.
+
+	Arena chips use the same pattern. arenaMail defaults to {} and
+	schemaVersion stays 26. A missing or junk list becomes {}.
 ]]
 
 local ActionSlots = require("./ActionSlots")
@@ -340,6 +343,8 @@ export type ProfileData = {
 	gearEssence: number,
 	-- [ECHO hook] Core level per weapon uid. Missing uid is 0. Items are not written.
 	shardCores: { [string]: number },
+	-- [ECHO hook] Arena chips. where is "bag" or "mailbox". schemaVersion stays 26.
+	arenaMail: { any },
 }
 
 function Schema.template(): ProfileData
@@ -369,6 +374,8 @@ function Schema.template(): ProfileData
 		gearEssence = 0,
 		-- [ECHO hook] Shard Core levels. Empty until the player feeds a weapon.
 		shardCores = {},
+		-- [ECHO hook] Arena overflow. Empty until a run settles. Not a version bump.
+		arenaMail = {},
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
 		vouchers = { armory = 0, pets = 0 },
@@ -514,6 +521,50 @@ local function optionalUid(value: any): string?
 		return nil
 	end
 	return value
+end
+
+-- Arena overflow rows. Cap the list and each amount so a bad save cannot
+-- grow without bound. schemaVersion stays 26.
+local MAIL_ROWS = 200
+local MAIL_AMOUNT = 1000000
+
+local function mailAmount(value: any): number
+	local amount = wholeNumber(value, 0, 0)
+	if amount > MAIL_AMOUNT then
+		return MAIL_AMOUNT
+	end
+	return amount
+end
+
+local function readArenaMail(value: any): { any }
+	if type(value) ~= "table" then
+		return {}
+	end
+	local rows = {}
+	for _, row in ipairs(value) do
+		if #rows >= MAIL_ROWS then
+			break
+		end
+		if type(row) == "table" and type(row.id) == "string" and row.id ~= "" then
+			local id = row.id
+			if #id > 64 then
+				id = string.sub(id, 1, 64)
+			end
+			local where = "bag"
+			if row.where == "mailbox" then
+				where = "mailbox"
+			end
+			table.insert(rows, {
+				id = id,
+				fragments = mailAmount(row.fragments),
+				tokens = mailAmount(row.tokens),
+				count = mailAmount(row.count),
+				where = where,
+				wave = mailAmount(row.wave),
+			})
+		end
+	end
+	return rows
 end
 
 function Schema.reconcile(data: any): ProfileData
@@ -796,6 +847,7 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	-- [ECHO hook] Keep stored core levels. Drop junk. Do not write the items.
 	data.shardCores = ShardCoreConfig.sanitize(data.shardCores)
+	data.arenaMail = readArenaMail(data.arenaMail)
 	if data.materials == nil or type(data.materials) == "table" then
 		data.materials = Materials.sanitize(data.materials)
 	end
@@ -1447,6 +1499,7 @@ function Schema.snapshot(data: ProfileData)
 		equipLoadout = EquipSlots.publicCopy(data.equipLoadout),
 		gearEssence = data.gearEssence,
 		shardCores = ShardCoreConfig.sanitize(data.shardCores),
+		arenaMail = Schema.deepCopy(data.arenaMail),
 		inventoryBonus = data.inventoryBonus,
 		petSlotBonus = data.petSlotBonus,
 		inventoryCap = Schema.inventoryCap(data),

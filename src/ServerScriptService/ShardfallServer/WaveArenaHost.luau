@@ -5,7 +5,9 @@
 
 	present() and handle() return before they build or step unless
 	LaunchGate.waveArena and WaveArenaConfig.enabled are both on.
-	Loot stays on the run. This file does not write a profile.
+	Loot is committed once, through DataService.mutate, when the run
+	settles. There is no Leave. Disconnect is hooked before the profile
+	save so a rejoin keeps that loot and does not spawn in the arena.
 
 	The arena modules use require-by-string. init.luau resolves from the
 	parent folder (./WaveArena/Child), which matches Lune and the Luau
@@ -16,22 +18,37 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local DataService = require(script.Parent.DataService)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local Schema = require(ReplicatedStorage.Shared.Schema)
 
 local WaveArenaHost = {}
 
 local runs: { [Player]: any } = {}
 local views: { [Player]: Folder } = {}
+local inArena: { [Player]: boolean } = {}
 local presented = false
 
+local function sourceRoot(): Instance
+	return ServerScriptService:WaitForChild("WaveArenaSrc"):WaitForChild("server")
+end
+
 local function modules(): (any, any)
-	local root = ServerScriptService:WaitForChild("WaveArenaSrc")
-	local server = root:WaitForChild("server")
-	local shared = root:WaitForChild("shared")
+	local server = sourceRoot()
 	local arena = require(server:WaitForChild("WaveArena") :: ModuleScript)
-	local config = require(shared:WaitForChild("Config"):WaitForChild("WaveArenaConfig") :: ModuleScript)
+	local config = require(ReplicatedStorage.Shared.Config.WaveArenaConfig)
 	return arena, config
+end
+
+local function sessionModule(): any
+	local arena = sourceRoot():WaitForChild("WaveArena")
+	return require(arena:WaitForChild("Session") :: ModuleScript)
+end
+
+local function lootModule(): any
+	local arena = sourceRoot():WaitForChild("WaveArena")
+	return require(arena:WaitForChild("Loot") :: ModuleScript)
 end
 
 local function open(): boolean
@@ -344,11 +361,92 @@ function WaveArenaHost.present()
 		return nil
 	end
 	presented = true
-	Players.PlayerRemoving:Connect(function(player)
-		runs[player] = nil
-		clearView(player)
-	end)
+	local function watch(player: Player)
+		player.CharacterAdded:Connect(function()
+			task.defer(function()
+				WaveArenaHost.receive(player)
+			end)
+		end)
+		task.defer(function()
+			WaveArenaHost.receive(player)
+		end)
+	end
+	Players.PlayerAdded:Connect(watch)
+	for _, player in Players:GetPlayers() do
+		watch(player)
+	end
 	return built
+end
+
+local function grant(player: Player, run: any)
+	if typeof(run) ~= "table" or typeof(run.grantList) ~= "table" then
+		return
+	end
+	if type(run.receiptId) ~= "string" then
+		run.receiptId = tostring(player.UserId)
+	end
+	local ok, err = DataService.mutate(player, function(data)
+		lootModule().commit(data, run, Schema.inventoryCap(data))
+		return nil
+	end)
+	if not ok then
+		warn("[Shardfall] WaveArena grant:", err)
+	end
+end
+
+function WaveArenaHost.disconnect(player: Player)
+	local run = runs[player]
+	runs[player] = nil
+	inArena[player] = nil
+	clearView(player)
+	if run == nil or not open() then
+		return
+	end
+	local arena, config = modules()
+	if config.enabled ~= true then
+		return
+	end
+	arena.settle(run, "disconnect", options(config))
+	grant(player, run)
+end
+
+local function insideArena(position: Vector3, config: any): boolean
+	local origin = config.arena.origin
+	local dx = position.X - origin.x
+	local dz = position.Z - origin.z
+	local limit = config.arena.diameter / 2 + 8
+	return dx * dx + dz * dz <= limit * limit
+end
+
+-- A rejoin has no server in-arena flag. A body still standing in the
+-- arena disk is sent home. The client cannot set that flag.
+function WaveArenaHost.receive(player: Player)
+	if inArena[player] == true or not open() then
+		return
+	end
+	local _, config = modules()
+	if config.enabled ~= true then
+		return
+	end
+	local character = player.Character
+	if character == nil then
+		return
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root ~= nil and root:IsA("BasePart") and insideArena(root.Position, config) then
+		hubReturn(player)
+	end
+end
+
+local function finishIfOver(player: Player, run: any)
+	if typeof(run) ~= "table" or (run.settled ~= true and run.phase ~= "results") then
+		return
+	end
+	grant(player, run)
+	runs[player] = nil
+	inArena[player] = nil
+	clearView(player)
+	hubReturn(player)
 end
 
 function WaveArenaHost.handle(player: Player, action: string, payload: any): any
@@ -362,16 +460,28 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 	if config.enabled ~= true then
 		return { ok = false, error = "The wave arena is off." }
 	end
+	local session = sessionModule()
+	-- payload cannot open the arena or claim the player is already inside.
+	if not session.remoteOk(true, inArena[player] == true, action) then
+		return { ok = false, error = "Unknown arena action." }
+	end
 	local opts = options(config)
 	if action == "state" then
 		return stateOf(arena, runs[player], config)
 	end
 	if action == "enter" then
+		opts.receiptId = tostring(player.UserId) .. ":" .. tostring(os.clock())
 		local run = arena.enter(opts)
 		if run == nil then
 			return { ok = false, error = "Could not enter the arena." }
 		end
 		runs[player] = run
+		inArena[player] = true
+		if session.teleport(open(), inArena[player] == true) ~= "arena" then
+			runs[player] = nil
+			inArena[player] = nil
+			return { ok = false, error = "The wave arena is off." }
+		end
 		local origin = config.arena.origin
 		local stand = config.player.start
 		pivot(player, origin.x + stand.x, origin.y + 3, origin.z + stand.z)
@@ -379,7 +489,8 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 	end
 	local run = runs[player]
 	if action == "step" then
-		if run == nil then
+		if run == nil or session.teleport(open(), true) ~= "arena" then
+			inArena[player] = nil
 			return stateOf(arena, nil, config)
 		end
 		syncPlayer(run, player)
@@ -391,30 +502,28 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 			end
 			attack = payload.attack == true
 		end
+		-- Client coordinates are ignored. The server copies the character.
 		local updated, events = arena.step(run, dt, { moveX = 0, moveZ = 0, attack = attack }, opts)
 		if updated ~= nil then
 			runs[player] = updated
 			run = updated
 		end
-		if typeof(events) == "table" then
+		if typeof(events) == "table" and run ~= nil then
 			paint(run, player, config, events)
 		end
-		return stateOf(arena, runs[player], config)
-	end
-	if action == "leave" then
-		if run ~= nil then
-			arena.leave(run, opts)
-		end
-		runs[player] = nil
-		clearView(player)
-		hubReturn(player)
-		return { ok = true, hud = nil, boss = nil }
+		local state = stateOf(arena, runs[player], config)
+		finishIfOver(player, runs[player])
+		return state
 	end
 	if action == "skip" or action == "boss" then
+		if run == nil or session.teleport(open(), inArena[player] == true) ~= "arena" then
+			return { ok = false, error = "You are not in the arena." }
+		end
 		local result = arena.dev(action, run, opts)
 		if typeof(result) == "table" and result.run ~= nil then
 			runs[player] = result.run
 			paint(result.run, player, config, {})
+			finishIfOver(player, result.run)
 		end
 		if typeof(result) ~= "table" then
 			return { ok = false, error = "Could not do that." }

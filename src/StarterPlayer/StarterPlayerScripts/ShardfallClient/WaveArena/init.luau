@@ -41,11 +41,7 @@ function WaveArena.start()
 			local state = if stepOk and typeof(stepped) == "table" then stepped else nil
 			if typeof(playerGui) == "Instance" then
 				BossBar.apply(playerGui, if state ~= nil then state.hud else nil)
-				ResultsCard.apply(playerGui, if state ~= nil then state.hud else nil, function()
-					pcall(function()
-						remote:InvokeServer("leave")
-					end)
-				end)
+				ResultsCard.apply(playerGui, if state ~= nil then state.hud else nil)
 				if state ~= nil then
 					CameraRoom.apply(state.boss, state.camera)
 				end

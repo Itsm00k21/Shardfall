@@ -12,7 +12,7 @@
 ]]
 
 -- init.luau is the folder module, so Lune resolves these from src/server.
-local WaveArenaConfig = require("../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Camera = require("./WaveArena/Camera")
 local Gate = require("./WaveArena/Gate")
 local Graybox = require("./WaveArena/Graybox")
@@ -150,8 +150,8 @@ function WaveArena.step(run: any, dt: any, input: any, options: any?): (any, { a
 	return Round.step(run, dt, input, options)
 end
 
-function WaveArena.leave(run: any, options: any?): (any, { any })
-	return Round.leave(run, options)
+function WaveArena.settle(run: any, reason: any, options: any?): (any, { any })
+	return Round.settle(run, reason, options)
 end
 
 function WaveArena.skip(run: any, options: any?): (any, { any })

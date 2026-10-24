@@ -5,7 +5,8 @@
 
 	WaveArenaConfig.enabled is the second guard. Nothing builds, drops, or
 	draws unless this is true AND LaunchGate.waveArena is true. Both ship
-	off. Loot from a run stays on the run. It is not written to a profile.
+	off. A run keeps every earned drop once. The host writes that through
+	the existing profile only after the server settles the run.
 
 	Ids here are new. They are not Rootvault enemy ids. Enemy types 1, 2,
 	and 3 are chaser, ranged, and tank. The boss is the wave-5 finale.
@@ -15,12 +16,17 @@ local WaveArenaConfig = {}
 
 WaveArenaConfig.enabled = false
 
--- Roadmap floor. The shipped diameter is also checked against the biggest wave.
-WaveArenaConfig.minDiameter = 120
+-- Kevin-approved floor (Ghost, Oct 24). The shipped diameter is also
+-- checked against the biggest wave.
+WaveArenaConfig.minDiameter = 90
+
+-- A run that is still going ends on its own after this many seconds.
+-- Disconnect, wipe, and this timeout are the only exits.
+WaveArenaConfig.timeout = 480
 
 WaveArenaConfig.arena = table.freeze({
-	-- 140 leaves room past the 120-stud floor and past the 12-enemy spawn line.
-	diameter = 140,
+	-- 90 studs across. Three edge gates sit on the rim.
+	diameter = 90,
 	wallHeight = 14,
 	wallThickness = 4,
 	floorThickness = 2,
@@ -35,7 +41,7 @@ WaveArenaConfig.arena = table.freeze({
 	standColor = table.freeze({ 120, 132, 120 }),
 })
 
--- Three enemy gates, equally spaced. The first faces +Z.
+-- Three edge gates, equally spaced on the rim. The first faces +Z.
 WaveArenaConfig.gates = table.freeze({
 	count = 3,
 	width = 18,
@@ -166,10 +172,12 @@ WaveArenaConfig.player = table.freeze({
 	start = table.freeze({ x = 0, z = -18 }),
 })
 
--- Chips sit on the ground. Wave tokens match the economy sheet and are
--- swept in when the wave ends, not written to a profile here.
+-- Chips sit on the ground. Wave tokens match the economy sheet.
+-- bagSlots is how many chips fit before the rest go to the mailbox.
+-- A full Bag never deletes a drop.
 WaveArenaConfig.loot = table.freeze({
 	pickupRadius = 12,
+	bagSlots = 100,
 	drops = table.freeze({
 		chaser = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0 }),
 		ranged = table.freeze({ id = "shard_chip", fragments = 1, tokens = 0 }),

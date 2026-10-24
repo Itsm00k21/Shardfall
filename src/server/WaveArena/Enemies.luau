@@ -5,7 +5,7 @@
 	2, or 3 for each slot. The boss wave stays one boss and its adds.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Waves = require("./Waves")
 
 local Enemies = {}

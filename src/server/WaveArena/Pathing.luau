@@ -12,7 +12,7 @@
 	simulate copies its input. It does not move instances.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 local Graybox = require("./Graybox")
 local Spawns = require("./Spawns")
 

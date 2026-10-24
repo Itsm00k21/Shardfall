@@ -5,7 +5,7 @@
 	The boss uses the death hold instead of a puff.
 ]]
 
-local WaveArenaConfig = require("../../shared/Config/WaveArenaConfig")
+local WaveArenaConfig = require("../../ReplicatedStorage/Shared/Config/WaveArenaConfig")
 
 local Feel = {}
 
