@@ -4,8 +4,10 @@
 	Gray-box pool for the gated wave flow.
 
 	One anchored block stands in for each alive enemy. A death parks
-	that block. The next spawn reuses it and clears health, target, and
-	projectile. Nothing on this path calls Destroy.
+	that block. The next spawn reuses it and clears health, target,
+	projectile, every attribute, and every child. Release does not
+	destroy the block. Destroy runs only when the pool itself is
+	destroyed at the end of a run.
 
 	WaveFlowService is the only caller, and only while enemyTypes is on.
 	This module does not read a profile, fire a remote, or touch the HUD.
@@ -43,6 +45,7 @@ export type Pool = {
 	releaseExcept: ({ [number]: boolean }) -> (),
 	body: (number) -> Body?,
 	stats: () -> Stats,
+	destroy: () -> (),
 }
 
 local docked: any = nil
@@ -77,27 +80,129 @@ local function defaultMake(kind: string): any
 		part.Material = Enum.Material.SmoothPlastic
 		return part
 	end
-	return {
+	local part = {
 		Name = kind,
 		health = 0,
 		target = nil,
 		projectile = nil,
+		attributes = {},
+		children = {},
+		destroyed = false,
 	}
+	function part:GetAttributes(): { [string]: any }
+		local copy = {}
+		for key, value in pairs(self.attributes) do
+			if value ~= nil then
+				copy[key] = value
+			end
+		end
+		return copy
+	end
+	function part:SetAttribute(name: string, value: any)
+		self.attributes[name] = value
+	end
+	function part:GetChildren(): { any }
+		return self.children
+	end
+	function part:Destroy()
+		if self.destroyed == true then
+			return
+		end
+		self.destroyed = true
+		self.Parent = nil
+		local kids = self.children
+		self.children = {}
+		self.attributes = {}
+		for _, child in ipairs(kids) do
+			if type(child) == "table" and type(child.Destroy) == "function" then
+				child:Destroy()
+			end
+		end
+	end
+	return part
+end
+
+local function readAttributes(part: any): { [string]: any }
+	if type(part) == "table" and type(part.GetAttributes) == "function" then
+		return part:GetAttributes()
+	end
+	if type(part) == "table" and type(part.attributes) == "table" then
+		return part.attributes
+	end
+	if typeof(part) == "Instance" then
+		return part:GetAttributes()
+	end
+	return {}
+end
+
+local function writeAttribute(part: any, name: string, value: any)
+	if type(part) == "table" and type(part.SetAttribute) == "function" then
+		part:SetAttribute(name, value)
+		return
+	end
+	if type(part) == "table" and type(part.attributes) == "table" then
+		part.attributes[name] = value
+		return
+	end
+	if typeof(part) == "Instance" then
+		part:SetAttribute(name, value)
+	end
+end
+
+local function readChildren(part: any): { any }
+	if type(part) == "table" and type(part.GetChildren) == "function" then
+		return part:GetChildren()
+	end
+	if type(part) == "table" and type(part.children) == "table" then
+		return part.children
+	end
+	if typeof(part) == "Instance" then
+		return part:GetChildren()
+	end
+	return {}
+end
+
+-- Attributes go to nil. Children are destroyed. The part itself stays.
+local function clearAttributesAndChildren(part: any)
+	if part == nil then
+		return
+	end
+	local names = {}
+	for name in pairs(readAttributes(part)) do
+		table.insert(names, name)
+	end
+	for _, name in ipairs(names) do
+		writeAttribute(part, name, nil)
+	end
+	local kids = readChildren(part)
+	local copy = {}
+	for _, child in ipairs(kids) do
+		table.insert(copy, child)
+	end
+	for _, child in ipairs(copy) do
+		local tableDestroy = type(child) == "table" and type(child.Destroy) == "function"
+		if tableDestroy or typeof(child) == "Instance" then
+			child:Destroy()
+		end
+	end
+	if type(part) == "table" and type(part.children) == "table" then
+		table.clear(part.children)
+	end
 end
 
 local function writePart(part: any, kind: string, health: number)
+	clearAttributesAndChildren(part)
 	if type(part) == "table" then
 		part.Name = kind
 		part.health = health
 		part.target = nil
 		part.projectile = nil
 	end
-	if game == nil or game.GetService == nil or typeof(part) ~= "Instance" then
-		return
+	if typeof(part) == "Instance" then
+		part.Name = kind
 	end
-	part.Name = kind
-	part:SetAttribute("Health", health)
-	part:SetAttribute("Target", nil)
+	writeAttribute(part, "Health", health)
+	writeAttribute(part, "Target", nil)
 end
 
 local function reset(body: Body, kind: string)
@@ -112,18 +217,32 @@ local function reset(body: Body, kind: string)
 end
 
 local function park(part: any)
+	clearAttributesAndChildren(part)
 	if type(part) == "table" then
 		part.health = 0
 		part.target = nil
 		part.projectile = nil
 		part.Parent = nil
 	end
-	if game == nil or game.GetService == nil or typeof(part) ~= "Instance" then
+	writeAttribute(part, "Health", 0)
+	writeAttribute(part, "Target", nil)
+	if typeof(part) == "Instance" then
+		part.Parent = nil
+	end
+end
+
+local function destroyPart(part: any)
+	if part == nil then
 		return
 	end
-	part:SetAttribute("Health", 0)
-	part:SetAttribute("Target", nil)
-	part.Parent = nil
+	clearAttributesAndChildren(part)
+	if type(part) == "table" and type(part.Destroy) == "function" then
+		part:Destroy()
+		return
+	end
+	if typeof(part) == "Instance" then
+		part:Destroy()
+	end
 end
 
 local function place(body: Body, spot: any)
@@ -151,6 +270,7 @@ function EnemyPool.create(make: ((string) -> any)?): Pool
 	local factory = if make ~= nil then make else defaultMake
 	local freeList: { Body } = {}
 	local byId: { [number]: Body } = {}
+	local made: { Body } = {}
 	local created = 0
 	local out = 0
 
@@ -166,6 +286,7 @@ function EnemyPool.create(make: ((string) -> any)?): Pool
 				live = false,
 			}
 			created += 1
+			table.insert(made, body)
 		end
 		reset(body, kind)
 		out += 1
@@ -224,6 +345,30 @@ function EnemyPool.create(make: ((string) -> any)?): Pool
 		}
 	end
 
+	local function destroy()
+		local doomed = table.clone(made)
+		table.clear(made)
+		table.clear(freeList)
+		local ids = {}
+		for id in pairs(byId) do
+			table.insert(ids, id)
+		end
+		for _, id in ipairs(ids) do
+			byId[id] = nil
+		end
+		out = 0
+		created = 0
+		for _, body in ipairs(doomed) do
+			body.live = false
+			body.target = nil
+			body.projectile = nil
+			body.health = 0
+			local part = body.part
+			body.part = nil
+			destroyPart(part)
+		end
+	end
+
 	return {
 		acquire = acquire,
 		release = release,
@@ -231,6 +376,7 @@ function EnemyPool.create(make: ((string) -> any)?): Pool
 		releaseExcept = releaseExcept,
 		body = bodyOf,
 		stats = stats,
+		destroy = destroy,
 	}
 end
 

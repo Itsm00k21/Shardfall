@@ -68,6 +68,6 @@ Server boss on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked 
 
 Server pool on the same flag, `LaunchGate.SHOW.enemyTypes` (**false**). Stacked on #419. Does not edit #382, #409, or #389.
 
-- Gray blocks are reused by `EnemyPool`. A death parks the block. The next spawn takes it back and clears health, target, and projectile. The pool does not call `Destroy`. `init.server` does not require the service or the pool.
+- Gray blocks are reused by `EnemyPool`. A death parks the block. The next spawn takes it back and clears health, target, projectile, every attribute, and every child. Release does not destroy the block. `WaveFlowService.stop` destroys that run's parts and drops its track entry. clear, wipe, `PlayerRemoving`, and `BindToClose` all call stop. `init.server` does not require the service or the pool.
 - This branch does not cap alive enemies. There is no `MAX_ALIVE`, no `PLATFORM_CAP`, and no spawn queue. A wave of 12 spawns 12. `left` on `WaveCounter` is the number still alive. The same remote fields, `{ wave, left }`. No new remote. No client file reads it. The alive cap for the live crawl is #433 (`enemyPerf`), which is not in this branch.
 - No profile write. `schemaVersion` stays 26. Live `waveKinds` is unchanged. A normal boot does not start a run, so the pool creates nothing.

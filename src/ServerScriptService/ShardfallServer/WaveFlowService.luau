@@ -18,6 +18,8 @@
 	Studio can require the module. Lune loads the same file through the
 	relative path when `game` is not a DataModel. Gray blocks live in
 	EnemyPool. That module reuses them. This file does not create them.
+	stop destroys that run's parts. clear, wipe, PlayerRemoving, and
+	BindToClose all call stop. init.server does not require this module.
 ]]
 
 local LaunchGate
@@ -171,6 +173,7 @@ end
 type Track = {
 	pool: EnemyPool.Pool,
 	shown: { [number]: boolean },
+	player: any,
 }
 
 local tracks: { [WaveFlow.Run]: Track } = {}
@@ -183,9 +186,61 @@ local function track(run: WaveFlow.Run): Track
 	local created: Track = {
 		pool = EnemyPool.create(),
 		shown = {},
+		player = nil,
 	}
 	tracks[run] = created
 	return created
+end
+
+-- End of a run. Parts are destroyed and this entry is dropped, so the
+-- pool cannot outlive clear, wipe, PlayerRemoving, or BindToClose.
+function WaveFlowService.stop(run: WaveFlow.Run?)
+	if run == nil then
+		return
+	end
+	local owned = tracks[run]
+	if owned == nil then
+		return
+	end
+	tracks[run] = nil
+	owned.pool.destroy()
+end
+
+function WaveFlowService.wipe(run: WaveFlow.Run?)
+	WaveFlowService.stop(run)
+end
+
+function WaveFlowService.entries(): number
+	local count = 0
+	for _ in pairs(tracks) do
+		count += 1
+	end
+	return count
+end
+
+function WaveFlowService.onPlayerRemoving(player: any)
+	if player == nil then
+		return
+	end
+	local ending = {}
+	for run, owned in pairs(tracks) do
+		if owned.player == player then
+			table.insert(ending, run)
+		end
+	end
+	for _, run in ipairs(ending) do
+		WaveFlowService.stop(run)
+	end
+end
+
+function WaveFlowService.onClose()
+	local ending = {}
+	for run in pairs(tracks) do
+		table.insert(ending, run)
+	end
+	for _, run in ipairs(ending) do
+		WaveFlowService.stop(run)
+	end
 end
 
 -- Bind a pooled block to each living enemy. Fresh ids are described
@@ -225,6 +280,8 @@ function WaveFlowService.start(sink: Sink?): WaveFlow.Run?
 	if run == nil then
 		return nil
 	end
+	local owned = track(run)
+	owned.player = if sink ~= nil then sink.player else nil
 	local build = if sink ~= nil then sink.build else nil
 	present(run, build)
 	if sink ~= nil then
@@ -242,12 +299,17 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
 	local build = if sink ~= nil then sink.build else nil
-	present(run, build)
+	if run.clear ~= true then
+		present(run, build)
+	end
 	local after = WaveFlow.counter(run)
 	if sink ~= nil and (after.wave ~= before.wave or after.left ~= before.left) then
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
 	noteBoss(sink, run, before.wave, wasBoss)
+	if run.clear == true then
+		WaveFlowService.stop(run)
+	end
 	return taken
 end
 
@@ -271,6 +333,15 @@ function WaveFlowService.pool(run: WaveFlow.Run?): EnemyPool.Stats?
 		return nil
 	end
 	return owned.pool.stats()
+end
+
+if game ~= nil and game.GetService ~= nil then
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		WaveFlowService.onPlayerRemoving(player)
+	end)
+	game:BindToClose(function()
+		WaveFlowService.onClose()
+	end)
 end
 
 return WaveFlowService

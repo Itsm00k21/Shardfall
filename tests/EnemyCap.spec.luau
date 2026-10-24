@@ -116,7 +116,12 @@ describe("Config enemy pool", function()
 		absent(boot, "EnemyPool")
 		absent(boot, "WaveFlowService")
 		absent(service, "Instance.new")
-		absent(pool, ":Destroy()")
+		expect(string.find(service, "function WaveFlowService.stop", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "function WaveFlowService.wipe", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "PlayerRemoving", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "BindToClose", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "WaveFlowService.onPlayerRemoving", 1, true) ~= nil).toBeTrue()
+		expect(string.find(service, "WaveFlowService.onClose", 1, true) ~= nil).toBeTrue()
 		for _, source in ipairs({ service, pool, flow, config }) do
 			for _, needle in ipairs(CAP_WORDS) do
 				absent(source, needle)
@@ -140,7 +145,13 @@ describe("Config enemy pool", function()
 			expect(ignored.cap).toBeNil()
 			expect(ignored.queue).toBeNil()
 		end
+		expect(WaveFlowService.entries()).toEqual(0)
 		expect(WaveFlowService.start({ player = "hero" })).toBeNil()
+		WaveFlowService.stop(nil)
+		WaveFlowService.wipe(nil)
+		WaveFlowService.onPlayerRemoving(nil)
+		WaveFlowService.onClose()
+		expect(WaveFlowService.entries()).toEqual(0)
 		expect(WaveFlowService.pool(nil)).toBeNil()
 		expect(WaveFlowService.body(nil, 1)).toBeNil()
 	end)
@@ -197,6 +208,82 @@ describe("EnemyPool", function()
 		expect(again.part.projectile).toBeNil()
 		expect(again.part.Name).toEqual("ranged")
 		expect(destroyed).toEqual(0)
+	end)
+
+	it("clears every attribute and child on reset and keeps the part", function()
+		local child = {
+			destroyed = false,
+		}
+		function child:Destroy()
+			self.destroyed = true
+		end
+		local part = {
+			Name = "stale",
+			health = 4,
+			target = "hero",
+			projectile = { remaining = 2 },
+			attributes = {
+				Health = 1,
+				Target = "hero",
+				Stain = "mud",
+			},
+			children = { child },
+			destroyed = false,
+		}
+		function part:GetAttributes(): { [string]: any }
+			local copy = {}
+			for key, value in pairs(self.attributes) do
+				if value ~= nil then
+					copy[key] = value
+				end
+			end
+			return copy
+		end
+		function part:SetAttribute(name: string, value: any)
+			self.attributes[name] = value
+		end
+		function part:GetChildren(): { any }
+			return self.children
+		end
+		function part:Destroy()
+			self.destroyed = true
+		end
+		local pool = EnemyPool.create(function(_kind: string)
+			return part
+		end)
+		local body = pool.acquire("ranged")
+		expect(part.destroyed).toEqual(false)
+		expect(child.destroyed).toEqual(true)
+		expect(#part.children).toEqual(0)
+		expect(part.attributes.Stain).toBeNil()
+		expect(part.attributes.Target).toBeNil()
+		expect(part.attributes.Health).toEqual(Enemies.TYPES.ranged.maxHealth)
+		expect(body.health).toEqual(Enemies.TYPES.ranged.maxHealth)
+		expect(body.target).toBeNil()
+		expect(body.projectile).toBeNil()
+		expect(body.part).toEqual(part)
+		pool.release(body)
+		expect(part.destroyed).toEqual(false)
+		expect(part.health).toEqual(0)
+		local extra = { destroyed = false }
+		function extra:Destroy()
+			self.destroyed = true
+		end
+		part.attributes.Stain = "mud"
+		part.attributes.Mark = 7
+		table.insert(part.children, extra)
+		local again = pool.acquire("tank")
+		expect(again.part).toEqual(part)
+		expect(part.destroyed).toEqual(false)
+		expect(extra.destroyed).toEqual(true)
+		expect(#part.children).toEqual(0)
+		expect(part.attributes.Stain).toBeNil()
+		expect(part.attributes.Mark).toBeNil()
+		expect(part.attributes.Health).toEqual(Enemies.TYPES.tank.maxHealth)
+		expect(again.health).toEqual(Enemies.TYPES.tank.maxHealth)
+		expect(again.target).toBeNil()
+		expect(again.projectile).toBeNil()
+		expect(pool.stats().created).toEqual(1)
 	end)
 end)
 
@@ -278,6 +365,12 @@ describe("WaveFlowService enemy pool", function()
 				end
 			end
 			expect(reused).toBeTrue()
+			WaveFlowService.wipe(run)
+			expect(part.destroyed).toEqual(true)
+			expect(#part.children).toEqual(0)
+			expect(WaveFlowService.pool(run)).toBeNil()
+			expect(WaveFlowService.body(run, box.id)).toBeNil()
+			expect(WaveFlowService.entries()).toEqual(0)
 		end)
 	end)
 
@@ -337,14 +430,159 @@ describe("WaveFlowService enemy pool", function()
 			expect(wave5).toEqual({ "boss", "chaser", "chaser", "ranged", "tank" })
 			expect(run.clear).toEqual(true)
 			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 0 })
-			local stats = WaveFlowService.pool(run)
-			expect(stats ~= nil).toBeTrue()
-			if stats ~= nil then
-				expect(stats.created).toEqual(12)
-				expect(stats.inUse).toEqual(0)
-				expect(stats.free).toEqual(12)
-			end
+			expect(WaveFlowService.pool(run)).toBeNil()
+			expect(WaveFlowService.body(run, 1)).toBeNil()
+			expect(WaveFlowService.entries()).toEqual(0)
 			expect(Schema.VERSION).toEqual(26)
 		end)
+	end)
+end)
+
+local function remember(run: WaveFlow.Run, seen: { [any]: boolean })
+	for _, box in ipairs(WaveFlow.boxes(run)) do
+		local body = WaveFlowService.body(run, box.id)
+		if body ~= nil and body.part ~= nil then
+			seen[body.part] = true
+		end
+	end
+end
+
+local function seenParts(seen: { [any]: boolean }): { any }
+	local parts = {}
+	for part in pairs(seen) do
+		table.insert(parts, part)
+	end
+	return parts
+end
+
+local function expectBurned(parts: { any })
+	expect(#parts > 0).toBeTrue()
+	for _, part in ipairs(parts) do
+		expect(part.destroyed).toEqual(true)
+		expect(#part.children).toEqual(0)
+		local left = 0
+		for _ in pairs(part:GetAttributes()) do
+			left += 1
+		end
+		expect(left).toEqual(0)
+	end
+end
+
+local function expectRunGone(run: WaveFlow.Run)
+	expect(WaveFlowService.pool(run)).toBeNil()
+	expect(WaveFlowService.body(run, 1)).toBeNil()
+end
+
+describe("WaveFlowService pool release", function()
+	it("destroys the pool when the run clears", function()
+		withFlag(true, function()
+			expect(WaveFlowService.entries()).toEqual(0)
+			local sink: WaveFlowService.Sink = { player = "clear-hero" }
+			local run = WaveFlowService.start(sink)
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			local seen: { [any]: boolean } = {}
+			local guard = 0
+			while run.clear ~= true do
+				guard += 1
+				expect(guard <= 41).toBeTrue()
+				remember(run, seen)
+				local boxes = WaveFlow.boxes(run)
+				expect(#boxes > 0).toBeTrue()
+				expect(WaveFlowService.hurt(run, boxes[1].id, 100000, sink) > 0).toBeTrue()
+			end
+			local parts = seenParts(seen)
+			expect(#parts).toEqual(12)
+			expectBurned(parts)
+			expectRunGone(run)
+			expect(WaveFlowService.entries()).toEqual(0)
+			expect(WaveFlowService.counter(run)).toEqual({ wave = 5, left = 0 })
+			expect(Schema.VERSION).toEqual(26)
+		end)
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+	end)
+
+	it("destroys the pool when the run is wiped", function()
+		withFlag(true, function()
+			expect(WaveFlowService.entries()).toEqual(0)
+			local run = WaveFlowService.start({ player = "wipe-hero" })
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			local seen: { [any]: boolean } = {}
+			remember(run, seen)
+			local parts = seenParts(seen)
+			expect(#parts).toEqual(6)
+			expect(WaveFlowService.pool(run) ~= nil).toBeTrue()
+			WaveFlowService.wipe(run)
+			expectBurned(parts)
+			expectRunGone(run)
+			expect(WaveFlowService.entries()).toEqual(0)
+			WaveFlowService.wipe(run)
+			expect(WaveFlowService.entries()).toEqual(0)
+		end)
+	end)
+
+	it("destroys only the leaving player's pool", function()
+		withFlag(true, function()
+			expect(WaveFlowService.entries()).toEqual(0)
+			local leaving = WaveFlowService.start({ player = "leaving" })
+			local staying = WaveFlowService.start({ player = "staying" })
+			expect(leaving ~= nil and staying ~= nil).toBeTrue()
+			if leaving == nil or staying == nil then
+				return
+			end
+			local leftSeen: { [any]: boolean } = {}
+			local staySeen: { [any]: boolean } = {}
+			remember(leaving, leftSeen)
+			remember(staying, staySeen)
+			local leftParts = seenParts(leftSeen)
+			local stayParts = seenParts(staySeen)
+			expect(#leftParts).toEqual(6)
+			expect(#stayParts).toEqual(6)
+			expect(WaveFlowService.entries()).toEqual(2)
+			WaveFlowService.onPlayerRemoving("leaving")
+			expectBurned(leftParts)
+			expectRunGone(leaving)
+			expect(WaveFlowService.pool(staying) ~= nil).toBeTrue()
+			expect(WaveFlowService.entries()).toEqual(1)
+			for _, part in ipairs(stayParts) do
+				expect(part.destroyed).toEqual(false)
+			end
+			WaveFlowService.onPlayerRemoving("staying")
+			expectBurned(stayParts)
+			expectRunGone(staying)
+			expect(WaveFlowService.entries()).toEqual(0)
+		end)
+	end)
+
+	it("destroys every pool on close", function()
+		withFlag(true, function()
+			expect(WaveFlowService.entries()).toEqual(0)
+			local first = WaveFlowService.start({ player = "close-a" })
+			local second = WaveFlowService.start({ player = "close-b" })
+			expect(first ~= nil and second ~= nil).toBeTrue()
+			if first == nil or second == nil then
+				return
+			end
+			local seen: { [any]: boolean } = {}
+			remember(first, seen)
+			remember(second, seen)
+			local parts = seenParts(seen)
+			expect(#parts).toEqual(12)
+			expect(WaveFlowService.entries()).toEqual(2)
+			WaveFlowService.onClose()
+			expectBurned(parts)
+			expectRunGone(first)
+			expectRunGone(second)
+			expect(WaveFlowService.entries()).toEqual(0)
+			WaveFlowService.onClose()
+			expect(WaveFlowService.entries()).toEqual(0)
+			expect(Schema.VERSION).toEqual(26)
+		end)
+		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
 	end)
 end)
