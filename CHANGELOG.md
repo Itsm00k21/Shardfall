@@ -13,6 +13,66 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Wave-5 boss clear pays `BOSS_CLEAR_TOKENS` (5 Roll Tokens) once per run
+  id. The server saves that grant before it tells the client. A failed
+  save pays nothing. Disconnect, rejoin, and a wipe cannot pay the same
+  run twice, and a wipe does not take a saved grant back. The amount is
+  validated in `Config/Economy`. Run ids live on `bossClearRuns` (bounded
+  to 16, default `{}` on load). `schemaVersion` stays 26. No Robux.
+  Flag `enemyTypes` stays off. Stacked on #427. (open)
+- Boss-clear run ids are `HttpService:GenerateGUID` values. A per-boot
+  `run-N` collided across servers, so a saved id refused the next clear.
+  Saves that already store `run-N` still load. An in-flight save cannot
+  pay the same run twice, tell the client early, or roll back a grant
+  that landed while it was writing. `bossClearRuns` stays capped at 16.
+  `schemaVersion` stays 26. No new save field. (open)
+- Server `RunResults` includes `bossClear { granted, tokens }` copied
+  from the saved grant. A failed or unsaved save publishes granted
+  false. The boss row stays 5 Roll Tokens on every tier. Hard does not
+  add a bonus. `schemaVersion` stays 26. (open)
+- A failed boss-clear save subtracts only that grant (5 tokens, floored
+  at 0) and removes only that run id. Tokens spent or earned while the
+  save was failing stay. `schemaVersion` stays 26. (open)
+- The leash slam cancels its mark when the dash path is blocked, so the
+  boss does not cross that line. Shard Volley windup is `VOLLEY_WINDUP`
+  0.9s in `Config/Enemies`. Flag `enemyTypes` stays off. (open)
+- Wave-5 boss kite pressure (flag `enemyTypes`, off). After
+  `PRESSURE_SECONDS` (4) with no damage dealt, the timer stays armed
+  and a damaging tick shaves `PRESSURE_DECAY` instead of clearing it.
+  Outside melee the boss fires Shard Volley: `VOLLEY_WINDUP` 0.8s, then
+  3 shots that lead the target, then `VOLLEY_COOLDOWN` 5s. The leash
+  slam dashes at `LEASH_DASH`. The boss is clamped to `ARENA` and does
+  not regen. Numbers live in `Shared/Config/Enemies.luau`. No save
+  fields. `schemaVersion` stays 26. Stacked on #425. (open)
+- Ranged enemies fire inside the 12-stud retreat and still back up. A shot
+  damages the target only when the projectile path reaches where they are
+  now; a sidestep off that path misses. The wave-5 boss, after
+  `LEASH_RANGE` / `LEASH_SECONDS` in `Shared/Config/Enemies.luau`, throws a
+  telegraphed slam (`LEASH_WINDUP`, `LEASH_RADIUS`) the player can step out
+  of. The boss does not heal. Flag `enemyTypes` stays off. No save fields.
+  `schemaVersion` stays 26. Stacked on #419. (open)
+- Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
+  4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
+  count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns
+  the gray blocks only while the flag is on, and sends `bossEnter` /
+  `bossDown` when `Shared.Analytics.event` exists (that module is not
+  in the tree). No HUD edit, no save write, `schemaVersion` stays 26.
+  Stacked on the wave flow. (open)
+- Phase 3 wave flow (flag `enemyTypes`, off): waves of 6, 8, 10, and 12.
+  Each wave mixes chaser, ranged, and tank. Counts and mixes live in
+  `Shared/Config/Enemies.luau`. `WaveFlowService` pushes `{ wave, left }`
+  on `WaveCounter` only while the flag is on. Boot does not call it.
+  No HUD edit, no save write, `schemaVersion` stays 26. Stacked on the
+  enemy-type roster. (open)
+- Phase 3 enemy types (flag `enemyTypes`, off): chaser, ranged, and tank.
+  Numbers live in `Shared/Config/Enemies.luau` and on `Config.Enemies`.
+  `EnemyTypeService` steps them and describes gray boxes only while the
+  flag is on. Boot does not call it. Waves and rooms do not spawn them.
+  No save write and no HUD change. (open)
+- Ranged kiting stays inside the `Config/Enemies` arena (90 studs, the
+  locked 80–100 span). A ranged shot travels at `projectileSpeed` and a
+  server line-of-sight raycast runs before damage. Flag stays off. No
+  save write and no HUD change. (open)
 - Playtest fixes (Ghost, clips 6 and 7): x10 results no longer badge pets as "Salvaged" (`GearHooks.markBatch` only checked `profile.inventory`; it now never marks pets and only infers for weapons/armor at or under an active auto-salvage cap; the server never salvaged them). Pets page: worn pet shows one EQUIPPED state (second tap unequips), pet cards get the star row and padlock, `equipUid` finds pets for the optimistic flip. Bag detail shows "You have N gold" under an affordable UPGRADE (clip 6 had Gold 250 vs cost 150, so bright was correct). Hero Power adds worn gear's Item Power to the combat score (same scale as card Power, per shardfall_progression.md). Intro: Skip intro always closes the card and applies the answer, Continue at a world step shows a hint instead of a dead click, card and goals hide while the hub or Inventory is open, goals get a backing panel beside the card on wide screens. Header padlock tidied (faint well, thin arch, keyhole). Client only. (open)
 - Gear detail fixes (Ghost, playtest clip 5): the pet detail panel uses the gear header (icon, rarity-coloured name, "Rarity · Pet", padlock), opens scrolled to the top with stats below, and shows one EQUIPPED state or EQUIP; the Lock button is gone (the header padlock locks). Correction to clip 4: UnequipItem is a live remote, so EQUIPPED on gear and pets now unequips on a second tap within 3 s ("Tap again to unequip"). Padlocks are drawn shapes: a muted grey open lock when unlocked, a gold closed lock when locked, on cards and headers. Every gear card shows a star row, including ☆☆☆☆☆ at 0 stars. Hero panel Crit damage reads as a percent (3.42 -> 342%); Attack speed stays a plain number. Accessories keep the old panel. Client only. (open)
 - Gear detail fixes (Ghost, playtest clip 4): UPGRADE dims and says "Need N more gold" when gold is short; Shard Core feeds only the selected weapon (one "Feed N Essence" button, inline confirm, toast "X core Lv N: +perk", new pip and perk row lit), the all-cores picker is gone; Crit Damage shows as a percent (4.51 -> 451%); worn gear shows one EQUIPPED state (no green "Equipped" header, no Unequip button, which called a parked remote). Client only. (open)

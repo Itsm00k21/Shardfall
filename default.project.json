@@ -132,6 +132,12 @@
         "CombatFx": {
           "$className": "RemoteEvent"
         },
+        "WaveCounter": {
+          "$className": "RemoteEvent"
+        },
+        "RunResults": {
+          "$className": "RemoteEvent"
+        },
         "Dungeon": {
           "$className": "RemoteFunction"
         },
