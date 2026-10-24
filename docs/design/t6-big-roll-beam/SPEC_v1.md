@@ -1,6 +1,6 @@
 # T6 Big-Roll Beam + Server Line, Spec v1
 
-Owner: Prism (design, docs only: no code, no Config, no save edits). Builders: Ghost (client VFX, toast, chat line), Echo (server event, rate caps). Base: `cursor/live-build-9721`. Status: **proposal, not approved.**
+Owner: Prism (design, docs only: no code, no Config, no save edits). Builders: Ghost (client VFX, toast, chat line), Echo (server event, rate caps). Base: `cursor/live-build-9721`. Status: **v1.1, all 6 questions decided** by Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (Oct 24, 2026 12:50Z, Kevin's design calls pre-approved to Ghost). Build still waits for M13. Not an official Vision & Design Rules decision until Kevin copies it there.
 Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883813bb309d78b13d87259 (Oct 24, 2026 12:32Z, Kevin pre-approved). ACK: https://app.notion.com/p/403c31ca38838177ab48faab126dd578.
 
 **Builds on (link, don't copy):**
@@ -14,7 +14,7 @@ Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883813bb
 When anyone on the server lands an **Epic or Legendary**, everyone in Crater Square sees a tall beam in that tier's color rising from the roller, visible from both spawn and the Gate pad, plus one short server line in chat. It sells "big rolls happen here" to new players and makes the roller feel seen, without spamming, without costing phone frame rate, and without saving anything.
 
 ## 2. Where it lives
-- **Server (Echo, request):** one new rule: `RarityConfig.reveal().announce` becomes **Epic or better** for the beam/line (⚑ change 1; today Legendary+). `RollService` sends a **new** `Remotes.BigRoll` RemoteEvent (or extends `RollAnnounce`'s payload) with `{ userId, displayName, itemName, rarity, count, at }` after the reveal timer; the server owns the spam caps (§6). Per-server only; the Mythic cross-server path is untouched and stays off in V1.
+- **Server (Echo, request):** one new rule: a separate **`BIGROLL_MIN_TIER = "Epic"`** for the beam/line (⚑ change 1; `RarityConfig.reveal().announce` stays Legendary+, Q2 decided). `RollService` **extends the existing `Remotes.RollAnnounce` payload** (no new remote, Q3 decided) with `{ userId, displayName, itemName, rarity, count, at }` after the reveal timer; the server owns the spam caps (§6). Per-server only; the Mythic cross-server path is untouched and stays off in V1.
 - **Client (Ghost, request):** a `BigRollFx` controller that spawns the beam, the base burst and the BillboardGui tag; one toast in the D3 lane (loot/rarity priority); one `TextChatService` system line. Prism does not edit `RollReveal` or any Ghost-owned file.
 - **World:** Crater Square only (#413). In the arena place, no beams (other players aren't there); the chat line still shows.
 - **Settings (existing, no new field):** `hud.otherVfx = false` hides **other players'** beams and toasts (your own still shows); `graphics.vfx` scales particles; `camera.flash = "off"` removes the flash-in.
@@ -22,7 +22,7 @@ When anyone on the server lands an **Epic or Legendary**, everyone in Crater Squ
 
 ## 3. Flow
 1. Player A taps ROLL → server draws Epic/Legendary → A's client plays the #397 reveal (Epic 1.30 s / Legendary 2.20 s).
-2. At **reveal land + 0.2 s** (server timer: reveal seconds from `RarityConfig.reveal`; skipped reveals fire at the skip time but never earlier than 0.6 s after the roll), the server checks the caps (§6) and fires `BigRoll` to every client.
+2. At **reveal land + 0.2 s** (server timer: reveal seconds from `RarityConfig.reveal`; skipped reveals fire at the skip time but never earlier than 0.6 s after the roll), the server checks the caps (§6) and fires the extended `RollAnnounce` to every client.
 3. Every client in the hub: beam rises at A's position (⚑ change 2: at the **roller**, not fixed at the Crackstone; if A is not standing in Crater Square or is > 96 st from spawn, at the Crackstone (-12, 52)). Base burst + BillboardGui tag "**A · LEGENDARY**".
 4. Other players: one toast in the D3 lane: "★ A pulled a Legendary!" (Epic: "✦ A pulled an Epic!"). The roller gets no toast (they just saw the reveal).
 5. Everyone (roller included): one chat system line (§6 copy) in the tier color.
@@ -96,7 +96,7 @@ SVG in `mockups/` (fake names, original art):
 - `03-timing-and-caps.svg` — event timeline (reveal → beam → fade), queue + chat caps, copy table, budget.
 
 ## 9. Build split
-- **Echo (server):** `BigRoll` event after reveal land; Epic+ threshold for this path only; caps §6; x10 merge; no save writes; analytics: events per hour, dropped by cap.
+- **Echo (server):** extended `RollAnnounce` after reveal land; `BIGROLL_MIN_TIER = Epic` for this path only; caps §6; x10 merge; no save writes; analytics: events per hour, dropped by cap.
 - **Ghost (client):** `BigRollFx` (beam, halo, burst, ring, tag), D3 toast, TextChatService system line (`TextChannel:DisplaySystemMessage` with RichText), `hud.otherVfx`/`graphics.vfx` hooks.
 - **Prism:** beam_strip and ring textures in the Phase S art pass; color check in Studio.
 - **Havoc:** 20 bots rolling x10 for 2 min on a phone: fps, cap behavior, chat flood, late joiner, leave mid-beam.
@@ -110,14 +110,18 @@ SVG in `mockups/` (fake names, original art):
 6. Nothing is saved, listed or ranked (save diff check; no new DataStore keys).
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** ⚑ Beam at the **roller** (falls back to the Crackstone) instead of always at the Crackstone (#413)? Shows *who* rolled. **Recommended: roller.**
-2. **@Ghost / @Echo:** Epic+ for the beam/line while the old `announce` flag stays Legendary+ for anything else that reads it? Or just change `announce` to Epic+? **Recommended: a separate `BIGROLL_MIN_TIER`, so the reveal code doesn't change.**
-3. **@Echo via @Ghost:** New `Remotes.BigRoll` event, or extend `RollAnnounce`'s payload? **Recommended: extend `RollAnnounce`** (one remote, the client already listens).
-4. **@Kevin (taste):** ⚑ Legendary column **80 st + ground ring**, Epic 60 st plain — or both 60 st as in #413? **Recommended: Legendary taller.**
-5. **@Kevin (taste):** Chat line wording "pulled" (matches #413) vs "cracked" (matches "Crack your first shard")? **Recommended: "pulled"** (reads as gacha slang kids know; "cracked" for the tutorial voice only).
-6. **@Kevin (taste):** Show the item name in chat ("…a LEGENDARY Frostbite Edge!") or tier only? **Recommended: show it**; it makes other players want that item.
+All 6 are **Decided (Ghost 12:50Z)**, Ghost's Agent Board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29 (Oct 24, 2026 12:50Z, Kevin's design calls pre-approved to Ghost). Build still waits for M13. Where §2 or §6 still offers two options, these answers win: **`BIGROLL_MIN_TIER = "Epic"`** (separate key; `RarityConfig.reveal().announce` stays Legendary+) and **extend `Remotes.RollAnnounce`** (no new `BigRoll` remote).
+1. ~~Beam at the roller?~~ **Decided (Ghost 12:50Z): yes, beam at the roller**, falling back to the Crackstone when the roller isn't in Crater Square or has no character.
+2. ~~Epic threshold?~~ **Decided (Ghost 12:50Z): a separate `BIGROLL_MIN_TIER = Epic`.** `announce` stays Legendary+, so the reveal code doesn't change.
+3. ~~New remote?~~ **Decided (Ghost 12:50Z): extend `RollAnnounce`, no new remote.** Payload gains `{ userId, itemName, rarity, count, at }`; the client already listens.
+4. ~~Legendary taller?~~ **Decided (Ghost 12:50Z, Kevin's call pre-approved to Ghost): yes.** Legendary 80 st + ground ring, Epic 60 st plain.
+5. ~~"pulled" or "cracked"?~~ **Decided (Ghost 12:50Z): "pulled".** "Cracked" stays the tutorial voice only.
+6. ~~Item name in chat?~~ **Decided (Ghost 12:50Z): yes**, e.g. "…pulled a LEGENDARY Frostbite Edge!".
+
+No open questions remain on this spec.
 
 ## Decision log
+- 2026-10-24 (Ghost 12:50Z, board row https://app.notion.com/p/403c31ca388381e89200df4fe6fe8d29, Kevin's calls pre-approved to Ghost): **v1.1.** Q1 beam at the roller, Crackstone fallback. Q2 separate `BIGROLL_MIN_TIER = Epic`, announce stays Legendary+. Q3 extend `RollAnnounce`, no new remote. Q4 Legendary taller (80 st + ring). Q5 "pulled". Q6 item name in chat. Build waits for M13.
 - 2026-10-24 (Prism): v1 on `prism/t6-big-roll-beam`, details #413's pull-beam note. Changes flagged ⚑ (Epic threshold, beam at roller, Legendary taller). Open: Ghost/Echo 1–3, Kevin 4–6. Not approved.
 
 ## Later (not V1)
