@@ -1,7 +1,13 @@
-# M13 Fun-Test Observer Sheet (Kevin's 15-minute go / no-go), v1
+# M13 Fun-Test Observer Sheet (Kevin's 15-minute go / no-go), v1.1
 
-Owner: Prism (design, docs only, no code, no config). Used by: **Kevin** (or whoever sits next to the testers). Base: `cursor/live-build-9721`. Status: **v1, ready to print or use on a phone.** Not an official Vision & Design Rules decision.
+Owner: Prism (design, docs only, no code, no config). Used by: **Kevin** (or whoever sits next to the testers). Base: `cursor/live-build-9721`. Status: **v1.1, ready to print or use on a phone; part of the M13 fun-test kit v1.1 (`FUN_TEST_KIT_v1.1.md`).** Not an official Vision & Design Rules decision.
 Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883818abc23e33d062c9c26 (11:40Z Oct 24, 2026, GO 2, Kevin pre-approved): "M13 fun-test observer sheet for Kevin (what to watch in the first 2 min, stuck points, the 'friends do 2+ runs' tally), docs only."
+
+v1.1 asked for in: Ghost's DP29 row https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96 (Oct 24, 2026, Kevin pre-approved): "M13 fun-test kit for Kevin: setup steps, observer checklist, 5-question survey, go/no-go against the canvas pass line." **Start from `FUN_TEST_KIT_v1.1.md`** (setup §A, survey §C, scoring §D); this sheet is its observer checklist.
+
+**Changelog**
+- v1.1 (2026-10-24): refreshed for the specs landed since v1: A2 / A5 name both the live and the Crater Square landmarks (Crackstone + Oracle Wren, Shard Gate pad, #413 / T7) so the sheet works on either build; new stuck code S13 (Wren's guide, #449); signal "big-roll beam noticed" (#450); §10 Go box gets the scoring column + "provisional" tick from the kit; the after-session question is now the kit's 5-question survey (Q1 unchanged).
+- v1 (2026-10-24): first 2 min, stuck codes, 2+ runs tally, signals, quotes, Go box.
 
 Sources (link, don't copy): Roadmap **CHECKPOINT: Kevin's 15-minute fun test** (Kevin plays 15 min on a fresh save; 3–6 friends play; nobody explains anything; **Go if** Kevin wants to keep playing after 15 min, most friends do at least 2 runs without being asked, nobody gets stuck in the first 2 minutes) · Roadmap Analytics onboarding funnel (joined → first roll → first equip → entered gate → cleared wave 1 → finished first run → second roll → second run) · #412 first 30 seconds (fast win) · related, **not duplicated here:** PR #436 M13 visual QA checklist (screen-by-screen visual pass, run it *before* the fun test) and PR #434 M13 run smoke (Echo's logic test of the same loop).
 
@@ -32,7 +38,7 @@ One sheet lets Kevin run the fun test without explaining anything, write down wh
 5. Note 1–2 quotes per person (what they say out loud is gold).
 
 **After (5 min)**
-1. Ask each friend one question only: "Would you play again tomorrow?" (Y / N / maybe). Don't argue.
+1. Run the kit's **5-question survey** (`FUN_TEST_KIT_v1.1.md` §C; Q1 is still "Would you play again tomorrow?"). Don't argue, don't explain.
 2. Kevin answers his own: "Do I want to keep playing right now?"
 3. Fill the **Go / No-go** box (§10). Photo the sheet. Post it.
 
@@ -43,10 +49,10 @@ Target times are guides from the first-30-seconds rule and the onboarding funnel
 | # | Checkpoint (funnel step) | Target | F1 | F2 | F3 | F4 | F5 | F6 |
 |---|---|---|---|---|---|---|---|---|
 | A1 | Moves / looks around (any input) | ≤ 0:05 | | | | | | |
-| A2 | Finds the Roll stone (Verdant armory) and rolls (first roll) | ≤ 0:30 | | | | | | |
+| A2 | Finds Roll and rolls (first roll): live Roll stone / armory, or the **Crackstone + Oracle Wren** on a Crater Square build (#413, T7) | ≤ 0:30 | | | | | | |
 | A3 | Reads the reveal (says or reacts to the tier/item) | ≤ 0:40 | | | | | | |
 | A4 | Equips the item (first equip) | ≤ 1:00 | | | | | | |
-| A5 | Reaches the gate / Waves pier and starts (entered gate) | ≤ 1:30 | | | | | | |
+| A5 | Reaches the gate and starts (entered gate): live Rootvault arch / Waves pier, or the **Shard Gate pad** + dock on a Crater Square build | ≤ 1:30 | | | | | | |
 | A6 | Clears wave 1 | ≤ 2:00 | | | | | | |
 | A7 | Reaction at 2:00: 🙂 into it · 😐 neutral · 🙁 bored/confused | — | | | | | | |
 
@@ -69,6 +75,7 @@ Kevin's own row goes in the same table as **K** if he wants it (he plays too).
 | S10 | Results | doesn't find Run again / Roll again, closes and wanders |
 | S11 | UI in the way | panel over the middle, button too small, text unreadable (write the device) |
 | S12 | Other | write one line |
+| S13 | Guide (v1.1) | ignores or fights Oracle Wren's guide / "Take me there" (#449), or the guide covers what they need |
 
 ### C. The 2+ runs tally (Roadmap: "most friends do at least 2 runs without being asked")
 | Tester | Device | Run 1 (✓ cleared / ✗ died / ← left) | Run 2 started unprompted? (m:ss) | Runs total | Asked to play again? (if yes, Run 2 doesn't count) | "Play again tomorrow?" |
@@ -90,6 +97,7 @@ Kevin's own row goes in the same table as **K** if he wants it (he plays too).
 | ☐ talks about what to roll next | ☐ AFK / walks off |
 | ☐ starts a run with a friend on their own | ☐ asks how long this takes |
 | ☐ compares items or rarities | ☐ quits before 15 min |
+| ☐ (v1.1) notices someone's big-roll beam / chat line (#450) | ☐ (v1.1) skips every reveal |
 
 ### E. Quotes (1–2 per person)
 F1: ______ F2: ______ F3: ______ F4: ______ F5: ______ F6: ______ K: ______
@@ -130,7 +138,9 @@ SVG in `mockups/` (fake data, original layout): `01-print-sheet-letter-816x1056.
 | Kevin wants to keep playing after 15 min | ☐ yes ☐ no |
 | Most friends (> half) do 2+ runs without being asked | __ / __ ☐ yes ☐ no |
 | Nobody gets stuck in the first 2 minutes (no S-code or R before 2:00) | ☐ yes ☐ no |
-| **GO** only if all three are yes | ☐ **GO** ☐ **NO-GO** |
+| **GO** only if all three are yes | ☐ **GO** ☐ **NO-GO** ☐ provisional (< 3 friends, or a BUG stopped someone > 2 min) |
+
+v1.1 scoring (kit §D): rule 1 = Kevin's answer written at 15:00 before the survey · rule 2 = sheet C, returning testers count · rule 3 = sheet A/B, fresh testers only, any S-code or R before 2:00 fails. The survey never flips the verdict.
 
 **No-go means** (Roadmap): fix the loop here (pacing, rewards, feel); nothing new gets added until it passes. Write the top 3 stuck codes by count: 1 ____ 2 ____ 3 ____
 
@@ -141,6 +151,7 @@ SVG in `mockups/` (fake data, original layout): `01-print-sheet-letter-816x1056.
 
 ## Decision log
 - 2026-10-24 (Ghost GO 11:40Z, Kevin pre-approved; Prism): v1 published on `prism/m13-observer-sheet`. Links #436 (visual QA) and #434 (run smoke) instead of repeating them. Not approved as a Vision & Design Rules decision.
+- 2026-10-24 (Ghost DP29 https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96, Kevin pre-approved; Prism): **v1.1** refreshed as the kit's observer checklist (A2/A5 names, S13, beam signal, Go-box scoring); kit entry point `FUN_TEST_KIT_v1.1.md`. Not approved.
 
 ## Roblox build notes
 None needed: this is a paper/phone sheet, not game UI. For the test itself use the shipped build: don't flip LaunchGate flags, don't add debug UI, don't show the Studio device frame. If a later version wants an in-game "playtest marker" key for timestamps, it goes to the Ideas Backlog as NOT APPROVED.
