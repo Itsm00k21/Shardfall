@@ -78,6 +78,10 @@ Drops.ENEMIES = {
 	mite_cloud = { realm = "verdant", role = "normal" },
 	-- Elite, not boss: the Waves Mireoak pays the realm rare, not a boss part.
 	mireoak = { realm = "verdant", role = "elite" },
+	-- V1 roster. Not placed in a room or a wave, so a live run does not pay these.
+	chaser = { realm = "verdant", role = "normal" },
+	ranged = { realm = "verdant", role = "normal" },
+	tank = { realm = "verdant", role = "normal" },
 } :: { [string]: EnemyDrop }
 
 -- Extra forage on top of the realm bundle. Living Vine is a Vine Crawler

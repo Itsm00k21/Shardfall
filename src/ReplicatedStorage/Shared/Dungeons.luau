@@ -854,6 +854,50 @@ function Dungeons.progressNote(ascension: any): string?
 	return nil
 end
 
+-- V1 types (Config/Enemies). Copied onto the catalog so Config.Enemies
+-- lists them. Rooms and waveKinds do not spawn them. The flag is
+-- LaunchGate.enemyTypes, and it stays off.
+do
+	local V1Enemies = require("./Config/Enemies")
+
+	local function v1Enemy(id: string): EnemyDef
+		local row = V1Enemies.TYPES[id]
+		assert(row ~= nil, "V1 enemy missing: " .. id)
+		local style: "melee" | "projectile" = "melee"
+		if row.style == "projectile" then
+			style = "projectile"
+		end
+		local shared = V1Enemies.SHARED
+		return {
+			id = row.id,
+			name = row.name,
+			maxHealth = row.maxHealth,
+			damage = row.damage,
+			defense = row.defense,
+			attackSpeed = row.attackSpeed,
+			moveSpeed = row.moveSpeed,
+			range = row.range,
+			style = style,
+			minDot = row.minDot,
+			projectileSpeed = row.projectileSpeed,
+			hover = shared.hover,
+			boss = shared.boss,
+			phase2At = shared.phase2At,
+			weakSeconds = shared.weakSeconds,
+			armoredMultiplier = shared.armoredMultiplier,
+			fogInterval = shared.fogInterval,
+			fogDamage = shared.fogDamage,
+			safeRadius = shared.safeRadius,
+			color = { row.color[1], row.color[2], row.color[3] },
+			size = { row.size[1], row.size[2], row.size[3] },
+		}
+	end
+
+	for _, id in ipairs(V1Enemies.ORDER) do
+		Dungeons.ENEMIES[id] = v1Enemy(id)
+	end
+end
+
 for _, enemy in pairs(Dungeons.ENEMIES) do
 	table.freeze(enemy.color)
 	table.freeze(enemy.size)

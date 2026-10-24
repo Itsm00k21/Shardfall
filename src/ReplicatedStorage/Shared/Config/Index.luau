@@ -39,6 +39,8 @@ Config.Rarities = require("./Rarities")
 Config.Elements = require("./Elements")
 Config.SetBonuses = require("../RelicSets")
 Config.Dungeons = Dungeons
+-- Includes the V1 chaser, ranged, and tank rows from Config/Enemies.luau.
+-- LaunchGate.enemyTypes stays off, so live waves do not spawn them.
 Config.Enemies = Dungeons.ENEMIES
 Config.Rewards = require("../Drops")
 Config.Economy = require("./Economy")
