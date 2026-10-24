@@ -12,6 +12,13 @@
 
 	Profiles are plain tables: no Color3, no Instance, no functions. That is
 	what DataStores can save and what a RemoteEvent can send.
+
+	Stage B adds gearEssence, autoSalvage, and autoSalvageRarity without a
+	version bump. schemaVersion stays 26 so a v26 server still loads the
+	save. #381's migration list is not on this base. When it lands, register
+	one copy-first step for those three fields. Do not publish a v27
+	document before that list exists: a higher version looks newer, and a
+	v26 server refuses the load. #387 writes the same gearEssence field.
 ]]
 
 local ActionSlots = require("./ActionSlots")
@@ -242,6 +249,7 @@ export type ProfileData = {
 	pets: { [string]: Item },
 	pity: { [string]: PityState },
 	equipped: Equipped,
+	gearEssence: number,
 	materials: { [string]: number },
 	consumables: { [string]: number },
 	vouchers: { [string]: number },
@@ -274,6 +282,8 @@ export type ProfileData = {
 	lastWeeklyBossWeek: number,
 	chestDuplicates: string,
 	chestSalvageBelow: string,
+	autoSalvage: boolean,
+	autoSalvageRarity: string,
 	pendingChest: any,
 	musicVolume: number,
 	sfxVolume: number,
@@ -398,6 +408,9 @@ function Schema.template(): ProfileData
 		lastWeeklyBossWeek = -1,
 		chestDuplicates = "dust",
 		chestSalvageBelow = "",
+		-- Off until the player turns it on. Does not salvage the bag.
+		autoSalvage = false,
+		autoSalvageRarity = "",
 		pendingChest = nil,
 		musicVolume = Audio.DEFAULT_MUSIC,
 		sfxVolume = Audio.DEFAULT_SFX,
@@ -466,6 +479,16 @@ end
 function Schema.xpToNext(level: number): number
 	return Progression.xpToNext(level)
 end
+
+local AUTO_RARITY = {
+	Common = true,
+	Uncommon = true,
+	Rare = true,
+	Epic = true,
+	Legendary = true,
+	Mythic = true,
+	Secret = true,
+}
 
 local function wholeNumber(value: any, fallback: number, minimum: number): number
 	local numberValue = tonumber(value)
@@ -708,6 +731,14 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	if type(data.chestSalvageBelow) ~= "string" then
 		data.chestSalvageBelow = ""
+	end
+	if type(data.autoSalvageRarity) ~= "string" or AUTO_RARITY[data.autoSalvageRarity] ~= true then
+		data.autoSalvageRarity = ""
+	end
+	if data.autoSalvage ~= true or data.autoSalvageRarity == "" then
+		data.autoSalvage = false
+	else
+		data.autoSalvage = true
 	end
 	local earned = {}
 	for _, row in ipairs(CraftingLevel.MILESTONES) do
@@ -1450,6 +1481,8 @@ function Schema.snapshot(data: ProfileData)
 		lastWeeklyBossWeek = data.lastWeeklyBossWeek,
 		chestDuplicates = data.chestDuplicates,
 		chestSalvageBelow = data.chestSalvageBelow,
+		autoSalvage = data.autoSalvage,
+		autoSalvageRarity = data.autoSalvageRarity,
 		pendingChest = Schema.deepCopy(data.pendingChest),
 		musicVolume = data.musicVolume,
 		sfxVolume = data.sfxVolume,

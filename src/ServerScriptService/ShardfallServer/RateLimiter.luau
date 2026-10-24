@@ -83,6 +83,7 @@ local RULES: { [string]: Rule } = {
 	Craft = { capacity = 4, perSecond = 1 },
 	Salvage = { capacity = 4, perSecond = 1 },
 	BulkSalvage = { capacity = 2, perSecond = 0.5 },
+	GearSalvage = { capacity = 4, perSecond = 1 },
 	BuyForgeBoost = { capacity = 2, perSecond = 0.5 },
 	BuyInventoryExpansion = { capacity = 2, perSecond = 0.5 },
 	BuyGoldShop = { capacity = 3, perSecond = 1 },

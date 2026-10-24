@@ -116,6 +116,23 @@ function DebugService.run(player: Player, action: any)
 		end
 		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
 	end
+	-- [ECHO hook] Stage B (#388). salvagefill only; essence is the Stage C grant above.
+	if action == "salvagefill" then
+		local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
+		local note = ""
+		local ok, err = DataService.mutate(player, function(data)
+			local applied, text = GearSalvage.debugFill(data, os.time())
+			if not applied then
+				return text
+			end
+			note = text
+			return nil
+		end)
+		if not ok then
+			return reject(err or "Could not do that.")
+		end
+		return { ok = true, message = note, note = note, profile = DataService.snapshot(player) }
+	end
 	local note = ""
 	local ok, err = DataService.mutate(player, function(data)
 		local applied, text = DebugTools.apply(data, action)

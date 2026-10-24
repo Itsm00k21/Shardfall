@@ -424,8 +424,11 @@ describe("PhoneLayout", function()
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/InventoryHud.luau")
 		expect(string.find(hub, "HudLayout.bagCard", 1, true)).toBeGreaterThan(0)
 		expect(string.find(hub, "HudLayout.chipWidth", 1, true)).toBeGreaterThan(0)
-		expect(string.find(bag, "HudLayout.bagChrome", 1, true)).toBeGreaterThan(0)
-		expect(string.find(bag, "HudLayout.inventoryCard", 1, true)).toBeGreaterThan(0)
+		-- [Ghost] Phase 3: the one inventory reads its modal, chrome and
+		-- card geometry from InventoryLayout (pure, specced in InventoryV3).
+		expect(string.find(bag, "InventoryLayout.chrome", 1, true)).toBeGreaterThan(0)
+		expect(string.find(bag, "InventoryLayout.card", 1, true)).toBeGreaterThan(0)
+		expect(string.find(bag, "InventoryLayout.modal", 1, true)).toBeGreaterThan(0)
 	end)
 
 	it("keeps the intro card and goal line off the counters and the bar", function()

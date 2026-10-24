@@ -195,10 +195,8 @@ describe("HubInput", function()
 		GuiFake.activate(GuiFake.findNamed(screen, "Stop"))
 		expect(string.find(labelText(screen, "Stop"), "Uncommon", 1, true) ~= nil).toBeTrue()
 		expect(#rolled(calls)).toEqual(before)
-		GuiFake.activate(GuiFake.findNamed(screen, "JunkMode"))
-		expect(labelText(screen, "JunkMode")).toEqual("Junk  keep")
-		GuiFake.activate(GuiFake.findNamed(screen, "JunkBelow"))
-		expect(labelText(screen, "JunkBelow")).toEqual("Below  Epic")
+		-- [Ghost] The old Junk / Below row is hidden on the roll page (clip 4).
+		expect(GuiFake.findNamed(screen, "Junk").Visible).toBeFalse()
 		expect(hasText(screen, "Luck  0")).toBeTrue()
 		GuiFake.activate(GuiFake.findNamed(screen, "PetShards"))
 		expect(hasText(screen, "Luck  0")).toBeFalse()
@@ -1282,7 +1280,8 @@ describe("HubInput", function()
 		button.InputEnded:Fire(pointer)
 		GuiFake.emit(button, "Activated")
 		expect(#rolled(calls)).toEqual(1)
-		expect(GuiFake.findNamed(screen, "Name").Text).toEqual("")
+		-- While it cracks the card shows the shard, never the result early.
+		expect(GuiFake.findNamed(screen, "Name").Text).toEqual("Shard")
 		expect(labelText(screen, "ShardTokens")).toEqual(HubStyle.shardCount(36))
 		expect(button:GetAttribute("CrackLocked")).toEqual(true)
 		expect(screen.Enabled).toEqual(true)
@@ -1363,16 +1362,11 @@ describe("HubInput", function()
 					expect(count.Position.X.Offset + count.Size.X.Offset <= host.Size.X.Offset).toBeTrue()
 				end
 			end
-			expect(meters).toEqual(2)
-			local odds = progress:FindFirstChild("Odds")
-			expect(odds ~= nil).toBeTrue()
-			local oddsText = ""
-			for _, child in ipairs(odds:GetChildren()) do
-				if child:IsA("TextLabel") then
-					oddsText = child.Text
-				end
-			end
-			expect(oddsText).toEqual("Odds")
+			-- Legendary pity is the only meter (Epic pity removed).
+			expect(meters).toEqual(1)
+			expect(progress:FindFirstChild("EpicPity")).toBeNil()
+			-- [Ghost] No plain "Odds" strip under the pity bar; ODDS has its panel.
+			expect(progress:FindFirstChild("Odds")).toBeNil()
 		end
 		check(1280, 800)
 		check(390, 844)

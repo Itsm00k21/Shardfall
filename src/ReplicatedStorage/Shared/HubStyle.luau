@@ -468,4 +468,31 @@ function HubStyle.petStage(width: any, height: any, _extra: any?)
 	}
 end
 
+-- [Ghost] Clip 9: which pet card the detail opens on. A pick the player
+-- made this session wins (by uid, then by index); otherwise the equipped
+-- pet; otherwise the first card.
+function HubStyle.petDefault(cards: any, equippedUid: any, pickIndex: any, pickUid: any): number
+	if type(cards) ~= "table" or #cards == 0 then
+		return 1
+	end
+	if type(pickUid) == "string" then
+		for index, card in ipairs(cards) do
+			if type(card) == "table" and card.uid == pickUid then
+				return index
+			end
+		end
+	end
+	if type(pickIndex) == "number" and cards[pickIndex] ~= nil then
+		return pickIndex
+	end
+	if type(equippedUid) == "string" then
+		for index, card in ipairs(cards) do
+			if type(card) == "table" and card.uid == equippedUid then
+				return index
+			end
+		end
+	end
+	return 1
+end
+
 return HubStyle

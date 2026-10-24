@@ -10,11 +10,13 @@
 
 local ResultsGrid = {}
 
-ResultsGrid.TILE = 52
-ResultsGrid.MIN_TILE = 40
+-- Tiles are 64 px with a two-line name strip under them (Oct 23 retest:
+-- one 26 px line cut "Verdant Bark" to "Verdant B…").
+ResultsGrid.TILE = 64
+ResultsGrid.MIN_TILE = 48
 ResultsGrid.GAP = 6
 ResultsGrid.MAX_ROWS = 2
-ResultsGrid.LABEL_H = 26
+ResultsGrid.LABEL_H = 36
 
 export type Tile = { name: string, count: number, color: { number }? }
 

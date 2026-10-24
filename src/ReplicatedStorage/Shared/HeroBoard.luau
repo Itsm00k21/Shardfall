@@ -1,11 +1,15 @@
 --!strict
 
 --[[
-	Hero-tab numbers. Power is a score from the equipped loadout.
+	Hero-tab numbers. Power is a score from the equipped loadout: the
+	base combat score plus the Item Power of each worn weapon, armor piece
+	and accessory (docs/design/shardfall_progression.md, "Gear power
+	curve"), so it reads on the same scale as the Power on a gear card.
 	Each bar is that stat divided by a fixed cap, clamped to 0..1.
 ]]
 
 local CombatMath = require("./CombatMath")
+local InventoryView = require("./InventoryView")
 
 local HeroBoard = {}
 
@@ -28,13 +32,56 @@ local function fill(value: number, cap: number): number
 	return math.clamp(value / cap, 0, 1)
 end
 
+-- Item Power of every worn gear piece (weapon, armor, accessories). Pets
+-- are not gear and add through the combat score only.
+function HeroBoard.gearPower(profile: any): number
+	if
+		type(profile) ~= "table"
+		or type(profile.inventory) ~= "table"
+		or type(profile.equipped) ~= "table"
+	then
+		return 0
+	end
+	local inventory, equipped = profile.inventory, profile.equipped
+	local seen: { [string]: boolean } = {}
+	local total = 0
+	local function add(uid: any)
+		if type(uid) ~= "string" or seen[uid] then
+			return
+		end
+		local item = inventory[uid]
+		if
+			type(item) == "table"
+			and (item.kind == "Weapon" or item.kind == "Armor" or item.kind == "Accessory")
+		then
+			seen[uid] = true
+			total += InventoryView.powerOf(item)
+		end
+	end
+	add(equipped.weapon)
+	for _, group in ipairs({ equipped.armor, equipped.accessories }) do
+		if type(group) == "table" then
+			for _, uid in pairs(group) do
+				add(uid)
+			end
+		end
+	end
+	return total
+end
+
+-- [Ghost] Clip 6: the Hero tile said 91 while one worn Rare bow said 3045.
+-- Hero Power now adds the worn gear's Item Power to the combat score.
 function HeroBoard.power(profile: any): number
 	local offense, vitality = CombatMath.loadout(profile)
 	local score = offense.damage * 2 + vitality.maxHealth * 0.15 + vitality.defense * 3
 	if score ~= score or score < 0 then
-		return 0
+		score = 0
 	end
-	return math.floor(score + 0.5)
+	local gear = HeroBoard.gearPower(profile)
+	if gear ~= gear or gear < 0 then
+		gear = 0
+	end
+	return math.floor(score + gear + 0.5)
 end
 
 function HeroBoard.bars(profile: any): { Bar }
@@ -97,7 +144,8 @@ function HeroBoard.tiles(profile: any): { Tile }
 		{
 			id = "critDamage",
 			label = "Crit damage",
-			value = string.format("%.2f", offense.critDamage),
+			-- [Ghost] Clip 5: a percent like Crit (3.42 -> 342%).
+			value = string.format("%d%%", math.floor(offense.critDamage * 100 + 0.5)),
 			art = "SkillHeavy",
 		},
 		{

@@ -31,6 +31,7 @@ local RollConfig = require(ReplicatedStorage.Shared.RollConfig)
 local RollLoop = require(ReplicatedStorage.Shared.RollLoop)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
 local Schema = require(ReplicatedStorage.Shared.Schema)
+local GearSalvage = require(ReplicatedStorage.Shared.GearSalvage)
 local Settings = require(ReplicatedStorage.Shared.Settings)
 local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local DataService = require(script.Parent.DataService)
@@ -170,9 +171,12 @@ local function gearSpare(data: any): boolean
 	return Accept.spareRoom(data, true)
 end
 
-local function gearPlace(data: any, item: any): (any?, string?)
+local function gearPlace(data: any, item: any, place: ((any) -> ())?): (any?, string?)
+	local insert = place or function(row: any)
+		Schema.insertItem(data, row)
+	end
 	if not LaunchGate.on("gearLevels") then
-		Schema.insertItem(data, item)
+		insert(item)
 		return nil, nil
 	end
 	local Accept = require(script.Parent.GearLevels.Accept)
@@ -183,7 +187,7 @@ local function gearPlace(data: any, item: any): (any?, string?)
 		if Schema.countItems(data) >= Schema.inventoryCap(data) then
 			return nil, "Inventory is full."
 		end
-		Schema.insertItem(data, landing.item)
+		insert(landing.item)
 	end
 	return landing, nil
 end
@@ -204,8 +208,8 @@ end
 -- and checked the Bag. Returns the capture, or nil and a reason.
 local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 	local luck = RarityConfig.luckFromProfile(data)
+	-- Legendary pity only. A saved sinceEpic is left untouched.
 	local counters = {
-		sinceEpic = data.sinceEpic,
 		sinceLegendary = data.sinceLegendary,
 	}
 	local rarity, pityTriggered, floor = RarityConfig.pick(pool, luck, counters, rng)
@@ -219,7 +223,15 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		now = os.time(),
 		poolId = pool.id,
 	}, rng)
-	local landing, placeError = gearPlace(data, item)
+	-- [ECHO hook] Stage A merges an exact duplicate first. Auto-salvage (#388)
+	-- only sees a new drop that Stage A did not merge.
+	local arrival = { kept = true, gained = 0 }
+	local landing, placeError = gearPlace(data, item, function(row: any)
+		arrival = GearSalvage.receive(data, row)
+		if arrival.kept ~= false then
+			Schema.insertItem(data, row)
+		end
+	end)
 	if placeError ~= nil then
 		return nil, placeError
 	end
@@ -227,12 +239,11 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		item = landing.item
 	end
 	RarityConfig.advance(counters, item.rarity, floor)
-	data.sinceEpic = counters.sinceEpic
 	data.sinceLegendary = counters.sinceLegendary
 	data.shardRolls = math.min(1000000000, (data.shardRolls or 0) + 1)
 	StarterGoalPay.grant(data, "rolls", nil)
-	-- The per-pool pity bucket is an old save field. The live counters
-	-- are sinceEpic and sinceLegendary. Do not increment the bucket.
+	-- The per-pool pity bucket is an old save field. The live counter is
+	-- sinceLegendary. Do not increment the bucket.
 	local captured = {
 		item = item,
 		pityTriggered = pityTriggered,
@@ -240,15 +251,24 @@ local function drawInto(data: any, pool: any, rng: any): (any?, string?)
 		fillerSeed = fillerSeed,
 		luck = luck,
 		rollIndex = data.shardRolls,
-		sinceEpic = data.sinceEpic,
 		sinceLegendary = data.sinceLegendary,
 		tracker = StarterGoalPay.tracker(data),
 	}
 	attachGear(captured, landing)
+	if arrival.kept == false then
+		captured.autoSalvaged = true
+		captured.essenceGained = arrival.gained
+	end
 	return captured
 end
 
-local function crack(player: Player, poolId: any, currency: string, skip: boolean, ignoreCooldown: boolean?)
+local function crack(
+	player: Player,
+	poolId: any,
+	currency: string,
+	skip: boolean,
+	ignoreCooldown: boolean?
+)
 	local pool = poolFromClient(poolId)
 	if pool == nil then
 		return reject("Unknown shard.")
@@ -354,12 +374,10 @@ local function crack(player: Player, poolId: any, currency: string, skip: boolea
 		quick = quick,
 		pityTriggered = captured.pityTriggered,
 		pity = {
-			sinceEpic = captured.sinceEpic,
 			sinceLegendary = captured.sinceLegendary,
-			epicAt = RarityConfig.EPIC_PITY,
 			legendaryAt = RarityConfig.LEGENDARY_PITY,
 			shardRolls = captured.rollIndex,
-			left = RollConfig.pityLeft(captured.sinceEpic),
+			left = RollConfig.pityLeft(captured.sinceLegendary),
 		},
 		currency = currency,
 		starterGoalTracker = captured.tracker,
@@ -374,12 +392,10 @@ end
 
 local function pityView(drawn: any)
 	return {
-		sinceEpic = drawn.sinceEpic,
 		sinceLegendary = drawn.sinceLegendary,
-		epicAt = RarityConfig.EPIC_PITY,
 		legendaryAt = RarityConfig.LEGENDARY_PITY,
 		shardRolls = drawn.rollIndex,
-		left = RollConfig.pityLeft(drawn.sinceEpic),
+		left = RollConfig.pityLeft(drawn.sinceLegendary),
 	}
 end
 

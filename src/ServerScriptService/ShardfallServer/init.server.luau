@@ -15,10 +15,16 @@
 	subscribe cannot sit in front of the profile load.
 
 	The first statement is a print, before any require, so a broken module
-	still leaves `[Shardfall] build b6c099e+ server` in Output.
+	still leaves `[Shardfall] build <git sha> server` in Output. Build has no
+	requires; the sha comes from the generated BuildStamp (scripts/stamp.sh).
 ]]
 
-print("[Shardfall] build b6c099e+ server")
+print((function(): string
+	local ok, line = pcall(function()
+		return require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Build")).line("server")
+	end)
+	return if ok then line else "[Shardfall] build unknown server"
+end)())
 
 local function silenceForeignScripts()
 	local ForeignScripts = require(game:GetService("ReplicatedStorage").Shared.ForeignScripts)

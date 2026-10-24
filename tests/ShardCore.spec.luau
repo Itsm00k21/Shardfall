@@ -769,8 +769,6 @@ describe("Shard Core wiring", function()
 		local debugService =
 			fs.readFile("src/ServerScriptService/ShardfallServer/DebugService.luau")
 		local project = fs.readFile("default.project.json")
-		local hub =
-			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		local bar =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/ActionBar.luau")
 		local contrib = string.find(totals, "local function contribution", 1, true)
@@ -792,7 +790,12 @@ describe("Shard Core wiring", function()
 		expect(string.find(project, '"FeedShardCore"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(project, '"GetShardCore"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(project, '"ShardCoreChanged"', 1, true) ~= nil).toBeTrue()
-		expect(string.find(hub, "ShardCore", 1, true)).toBeNil()
+		-- Ghost shows the core (ghost/gear-ui-hooks) through GearDetail's
+		-- CoreCard, only behind the flag. MenuHub mentions FeedShardCore.
+		local detail = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/GearDetail.luau")
+		local mountAt = string.find(detail, "CoreCard.build(", 1, true)
+		local gateAt = string.find(detail, 'LaunchGate.on("shardCore")', 1, true)
+		expect(mountAt ~= nil and gateAt ~= nil and (gateAt :: number) < (mountAt :: number)).toBeTrue()
 		expect(string.find(bar, "ShardCore", 1, true)).toBeNil()
 		local DevTools = require("../src/ReplicatedStorage/Shared/DevTools")
 		expect(DevTools.blocked("Debug", "essence")).toEqual(
