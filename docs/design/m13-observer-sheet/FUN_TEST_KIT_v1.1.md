@@ -3,7 +3,7 @@
 Owner: Prism (design, docs only, no code, no config, no flag flips, no save edits). Used by: **Kevin** + one helper. Base: `cursor/live-build-9721`. Status: **v1.1, ready to run.** Not an official Vision & Design Rules decision.
 Asked for in: Ghost's Agent Board row DP29 https://app.notion.com/p/403c31ca3883816cbc9cc827b26d3c96 (Oct 24, 2026, Kevin pre-approved), Next (2): "M13 fun-test kit for Kevin: setup steps, observer checklist, 5-question survey, go/no-go against the canvas pass line." ACK: https://app.notion.com/p/403c31ca388381bda15dc237843e114b. Extends v1 of this PR (#445, `OBSERVER_SHEET_v1.md`), no duplicate PR.
 
-**The pass line (what Go means).** Ghost's M13 canvas card wasn't readable from this session (cursor.com canvas, 403), so this kit uses the source the canvas cites, the **locked Roadmap "CHECKPOINT: Kevin's 15-minute fun test"** (read only, not edited), word for word: **Go if** (1) *Kevin wants to keep playing after 15 min*, (2) *Most friends do at least 2 runs without being asked*, (3) *Nobody gets stuck in the first 2 minutes.* **No-go means** *we fix the loop here (pacing, rewards, feel); nothing new gets added until it passes.* Then *review the Parking Lot, pick at most 2 items.* V1 Core Loop success test: "if it's fun for 15 minutes, the loop works." Q1 asks Ghost to confirm the canvas line says the same.
+**The pass line (what Go means).** Ghost's M13 canvas card wasn't readable from this session (cursor.com canvas, 403), so this kit uses the source the canvas cites, the **locked Roadmap "CHECKPOINT: Kevin's 15-minute fun test"** (read only, not edited), word for word: **Go if** (1) *Kevin wants to keep playing after 15 min*, (2) *Most friends do at least 2 runs without being asked*, (3) *Nobody gets stuck in the first 2 minutes.* **No-go means** *we fix the loop here (pacing, rewards, feel); nothing new gets added until it passes.* Then *review the Parking Lot, pick at most 2 items.* V1 Core Loop success test: "if it's fun for 15 minutes, the loop works." **v1.2 (Ghost DP31P, confirmed): the §D Go box = the canvas pass line**, exactly: Kevin wants to keep going · friends do 2+ runs · nobody stuck in the first 2 min. No extra line, no time target.
 
 **One-page map:** §A setup (before) → §B observer checklist (during; the v1 sheet, refreshed) → §C 5-question survey (after, ≤ 2 min each) → §D go / no-go box (5 min) → §E what happens next. Print: `mockups/01-print-sheet-letter-816x1056.svg` (observer) + `mockups/03-survey-card-print-816x1056.svg` (6 survey cards). Phone: `mockups/02-phone-tally-390x844.svg` + `mockups/04-survey-phone-390x844.svg`.
 
@@ -112,13 +112,14 @@ SVG in `mockups/` (original layout, fake data; PNG renders stay on the box): `01
 4. Phone versions: every tap target ≥ 44 px; readable at 390×844 without zoom.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** The M13 canvas card was not readable here (403). Confirm its pass line = the Roadmap checkpoint's 3 "Go if" lines used in §D (or paste any extra line, e.g. a time target)? **Recommended: yes, Roadmap lines only.**
+1. ~~**@Ghost:**~~ **CONFIRMED v1.2 (Ghost DP31P https://app.notion.com/p/403c31ca388381feb52fdb6685c444a5): Go box = canvas pass line (Kevin wants to keep going, friends do 2+ runs, nobody stuck in the first 2 min).** The M13 canvas card was not readable here (403). Confirm its pass line = the Roadmap checkpoint's 3 "Go if" lines used in §D (or paste any extra line, e.g. a time target)? **Recommended: yes, Roadmap lines only.**
 2. **@Ghost:** Fresh saves via new / never-played accounts (or a test-place reset you own), never by wiping a live save? **Recommended: new accounts.**
 3. **@Kevin (taste):** Survey read aloud by the helper with answers ticked on paper (rec, more honest, no typing) or testers tap it themselves on the phone card? **Recommended: read aloud.**
 (v1 questions on `OBSERVER_SHEET_v1.md` §11 still stand: Kevin Q1 helper live, Q2 print + phone, Ghost Q3 funnel cross-check.)
 
 ## Decision log
 - 2026-10-24 (Ghost DP29, Kevin pre-approved for Prism to write it; Prism): **kit v1.1** on `prism/m13-observer-sheet` (#445): setup table, refreshed observer checklist, 5-question survey, go / no-go scored only on the Roadmap's 3 lines, fix-list owner map, 2 survey mockups. Not approved.
+- 2026-10-24 (Ghost DP31P; Prism): **v1.2 note**: Q1 confirmed, the §D Go box is the canvas pass line word for word (keep going · 2+ runs · nobody stuck in first 2 min). No layout change. Still open: Ghost Q2, Kevin Q3.
 
 ## Roblox build notes
 None: paper / phone kit, not game UI. Test the shipped build: no flag flips, no debug UI, no added playtest markers. An in-game survey or timestamp key would go to the Ideas Backlog as NOT APPROVED (and any later in-game version would follow Frames/ImageLabels + `UICorner` / `UIStroke`, ≥ 44 px, collapse, off the center).
