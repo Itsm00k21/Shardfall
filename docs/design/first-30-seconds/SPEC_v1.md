@@ -175,7 +175,7 @@ SVG in `mockups/`. Fake data. The dashed box is the center keep-out. Rendered an
 - Server-side auto-equip-if-better.
 - Step transitions and rejoin resume.
 - First-ever Gate run: solo with a 3 s countdown (a Config value) and the arena preloaded.
-- The `onboardStep` list replaces the old cold-open ids (pending Q3).
+- The `onboardStep` list **replaces** the old `Onboarding.STEPS` cold-open ids (pedestals → swing → dodge → door → Haven) for V1 (Q3 answered by Ghost, Oct 23, 2026). Skip intro and the same starter kit stay. Nothing is deleted from the repo; the old ids are just no longer the V1 path.
 - Analytics (#383): time to the first roll, the 3rd roll, the pad, the first kill, and Skip use.
 
 ## 10. Pass criteria (playtest)
@@ -185,11 +185,12 @@ SVG in `mockups/`. Fake data. The dashed box is the center keep-out. Rendered an
 4. At 390×844, 667×375, 800×400 and desktop, no UI enters the center keep-out at any beat, and every tap target is at least 44 px tall.
 5. The card folds to the pill, the goal chip folds to a tab, and the Gate dock folds to a pill. Skip intro pays the same kit plus the unused rolls.
 6. Rejoining mid-flow resumes at the same beat. A returning player never sees Focus mode.
+7. A fresh account never sees the old cold open (class pedestals, swing, dodge, door) before or after this flow (Q3 = replace).
 
 ## 11. Open questions (answer by number)
 1. ~~@Kevin: First fight A (wave 1 via Shard Gate) or B (practice shardling)?~~ **RESOLVED by Kevin (Oct 23, 2026): A.** The first fight is wave 1 of the Normal dungeon through the Shard Gate. Needs the #382 arena gated on; until then the "Coming soon" edge case in §7 applies.
 2. ~~@Kevin: OK to treat Core Loop §7 times as starting estimates tuned by this spec?~~ **RESOLVED by Kevin (Oct 23, 2026): yes.** Core Loop §7 times are starting estimates; this spec's ~0:12 rolls / ~0:20 wave 1 are the playtest tune. The locked Core Loop page is not edited here; changing it, or copying this into Vision & Design Rules, still needs Kevin.
-3. @Ghost: The live `Onboarding.STEPS` is the older cold open (class pedestals → swing → dodge → door → Haven). For V1, should it be **replaced** by this flow's steps (keeping Skip and the same kit), or should this flow **run after** it? (replace/after)
+3. ~~@Ghost: Replace the old `Onboarding.STEPS` cold open, or run this flow after it?~~ **ANSWERED by Ghost (Oct 23, 2026, Kevin pre-approved Ghost's calls): replace.** For V1 this flow's `onboardStep` list replaces the old cold open (pedestals → swing → dodge → door → Haven). Keep Skip and the same starter kit. Running both would blow the 30 s budget. Kevin can still change this later. Board row: https://app.notion.com/p/403c31ca388381ddaeb5edc911c66a55
 4. @Echo: For the first-ever Gate run, use solo, a 3 s countdown instead of 15 s (Config), and preload the arena so the teleport takes 3 s or less? (yes/no)
 5. @Echo: Tutorial pools of roll 1 Weapon, roll 2 Armor, roll 3 Weapon with the Rare floor, all free, with server auto-equip-if-better? (yes/no)
 
@@ -200,6 +201,7 @@ Already pending with Kevin (not re-asked; Decision request row https://app.notio
 
 ## Decision log
 - 2026-10-23 (Kevin): Q1 = **A**, first fight is wave 1 through the Shard Gate (depends on #382 arena being gated on). Q2 = **yes**, Core Loop §7 timings are starting estimates; this spec's timings are the tune. Locked Core Loop page unchanged.
+- 2026-10-23 (Ghost, Kevin pre-approved): Q3 = **replace**. The `onboardStep` list replaces the old `Onboarding.STEPS` cold open for V1; Skip and the same starter kit stay; Kevin can change it later. Q4 and Q5 stay open with Echo.
 
 ## Later (not V1)
 Voice lines for Wren, a set-bonus tip (Core Loop: only once the player owns 2 items of the same element), party-join during onboarding, and a Pets/Skills tutorial roll.
