@@ -145,6 +145,38 @@ local function sample(): Schema.ProfileData
 end
 
 describe("InventoryView", function()
+	it("names open filters and hides the ones a tab does not use", function()
+		local weapons = InventoryView.activeFilters("weapons")
+		expect(weapons.realm).toBeTrue()
+		expect(weapons.slot).toBeTrue()
+		expect(weapons.sockets).toBeTrue()
+		expect(weapons.worn).toBeTrue()
+		expect(weapons.rarity).toBeTrue()
+		local materials = InventoryView.activeFilters("materials")
+		expect(materials.realm).toBeTrue()
+		expect(materials.slot).toBeFalse()
+		expect(materials.sockets).toBeFalse()
+		expect(materials.worn).toBeFalse()
+		local chests = InventoryView.activeFilters("chests")
+		expect(chests.realm).toBeFalse()
+		expect(chests.slot).toBeFalse()
+		expect(chests.rarity).toBeFalse()
+		expect(chests.sort).toBeTrue()
+		local items = InventoryView.activeFilters("items")
+		expect(items.realm).toBeFalse()
+		expect(items.sockets).toBeFalse()
+		expect(items.rarity).toBeTrue()
+		expect(InventoryView.realmLabel(nil)).toEqual("All realms")
+		expect(InventoryView.realmLabel("Any")).toEqual("All realms")
+		expect(InventoryView.realmLabel("N/A")).toEqual("All realms")
+		expect(InventoryView.realmLabel("Verdant Wilds")).toEqual("Realm: Verdant Wilds")
+		expect(InventoryView.slotLabel(nil)).toEqual("All types")
+		expect(InventoryView.slotLabel("dagger")).toEqual("Type: dagger")
+		expect(InventoryView.socketLabel(nil, nil)).toEqual("All sockets")
+		expect(InventoryView.socketLabel(1, nil)).toEqual("Sockets: 1")
+		expect(InventoryView.socketLabel(nil, 3)).toEqual("Sockets: 3+")
+	end)
+
 	it("filters weapons by rarity, realm, slot, sockets, equipped, locked, and search", function()
 		local profile = sample()
 		local weapons = InventoryView.query(profile, query(nil))
@@ -358,5 +390,30 @@ describe("InventoryView", function()
 
 		local _, none = Crafting.salvageRarity(profile, "Common", 1)
 		expect(none).toEqual("Nothing of that rarity can be salvaged.")
+	end)
+
+	it("lists every chest tier on its own tab", function()
+		local chestQuery = InventoryView.defaultQuery()
+		chestQuery.tab = "chests"
+		local empty = InventoryView.query({}, chestQuery)
+		expect(#empty).toEqual(6)
+		local profile = Schema.template()
+		profile.chests.Rare = 3
+		local rows = InventoryView.query(profile, chestQuery)
+		expect(#rows).toEqual(6)
+		local rare = nil
+		for _, row in ipairs(rows) do
+			expect(row.kind).toEqual("Chest")
+			if row.rarity == "Rare" then
+				rare = row
+			end
+		end
+		assert(rare ~= nil)
+		expect(rare.count).toEqual(3)
+		expect(rare.id).toEqual("chest:Rare")
+		chestQuery.search = "myth"
+		local found = InventoryView.query(profile, chestQuery)
+		expect(#found).toEqual(1)
+		expect(found[1].rarity).toEqual("Mythic")
 	end)
 end)

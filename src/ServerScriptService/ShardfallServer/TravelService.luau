@@ -1,8 +1,8 @@
 --!strict
 
 --[[
-	Server travel. Touching a waystone writes the unlock. The Travel remote
-	checks the save, then streams the destination and moves the character.
+	Server travel. Every destination is open. The Travel remote checks the
+	cooldown, then streams the destination and moves the character.
 	BuyTravelPass is a stub and does not set travelPass.
 ]]
 
@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataService = require(script.Parent.DataService)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
 local DungeonService = require(script.Parent.DungeonService)
 local PolicyCache = require(script.Parent.PolicyCache)
 local Travel = require(ReplicatedStorage.Shared.Travel)
@@ -67,10 +68,10 @@ local function teleport(player: Player, cframe: CFrame)
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		hrp.Anchored = true
 	end
+	character:PivotTo(cframe)
 	pcall(function()
 		player:RequestStreamAroundAsync(cframe.Position, 5)
 	end)
-	character:PivotTo(cframe)
 	if hrp ~= nil and hrp:IsA("BasePart") then
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
@@ -122,6 +123,9 @@ function TravelService.go(player: Player, id: string): (boolean, string?)
 end
 
 function TravelService.buyPass(player: Player)
+	if not LaunchGate.on("extraRealms") then
+		return { ok = false, error = "That is closed." }
+	end
 	local allowed, reason, code = PolicyCache.allowPaid(player)
 	if not allowed then
 		return {
@@ -147,7 +151,7 @@ function TravelService.bind()
 	for _, descendant in ipairs(haven:GetDescendants()) do
 		if
 			descendant:IsA("BasePart")
-			and type(descendant:GetAttribute("WaystoneId")) == "string"
+			and Travel.shouldBind(descendant.Name, descendant:GetAttribute("WaystoneId"))
 		then
 			local id = descendant:GetAttribute("WaystoneId") :: string
 			bound += 1

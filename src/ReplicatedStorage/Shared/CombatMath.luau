@@ -4,9 +4,11 @@
 	Hit math for weapons and armor. No Instances, so tests can run it.
 
 	The equipped weapon supplies Damage, Attack Speed, Crit Chance, and Crit
-	Damage. Those numbers were already rolled and scaled when the item
-	dropped, so this module does not scale them again. Armor supplies HP and
-	Defense. Weapon type (`sword`, `bow`, `staff`, `dagger`, `hammer`) picks
+	Damage. Stars are already in the saved stat.value. Gold upgrades
+	(item.upgrade) multiply damage and armor HP at read time when
+	LaunchGate.upgradeScale is on, through UpgradeScale. They are not
+	written back. Armor also supplies Defense, unscaled. Weapon type
+	(`sword`, `bow`, `staff`, `dagger`, `hammer`) picks
 	melee or a projectile. That tag is also the class-system hook; class
 	weights are applied at roll time, not here.
 
@@ -23,6 +25,9 @@
 	armor. Pet Lifesteal heals those hits only. Chain Lightning is still
 	only stored.
 ]]
+
+local MeleeConfig = require("./MeleeConfig")
+local UpgradeScale = require("./UpgradeScale")
 
 local CombatMath = {}
 
@@ -92,8 +97,8 @@ CombatMath.UNARMED = {
 	attackSpeed = 1,
 	critChance = 0.02,
 	critDamage = 1.5,
-	range = 6,
-	minDot = 0.2,
+	range = MeleeConfig.reach("unarmed"),
+	minDot = MeleeConfig.minDot("unarmed"),
 	projectileSpeed = 0,
 	lifesteal = 0,
 	unarmed = true,
@@ -102,10 +107,16 @@ CombatMath.UNARMED = {
 -- Studs. Melee is a swing in front of the player. Bows and staffs spawn a
 -- server-side part that flies `range` studs at `projectileSpeed` studs/sec.
 CombatMath.STYLES = {
-	sword = { style = "melee", range = 8, minDot = 0.25, projectileSpeed = 0 },
-	greatsword = { style = "melee", range = 10, minDot = 0.35, projectileSpeed = 0 },
-	dagger = { style = "melee", range = 6, minDot = 0.05, projectileSpeed = 0 },
-	hammer = { style = "melee", range = 11, minDot = 0.45, projectileSpeed = 0 },
+	-- Melee reach and cone live in MeleeConfig (reach is to the target edge).
+	sword = { style = "melee", range = MeleeConfig.reach("sword"), minDot = MeleeConfig.minDot("sword"), projectileSpeed = 0 },
+	greatsword = {
+		style = "melee",
+		range = MeleeConfig.reach("greatsword"),
+		minDot = MeleeConfig.minDot("greatsword"),
+		projectileSpeed = 0,
+	},
+	dagger = { style = "melee", range = MeleeConfig.reach("dagger"), minDot = MeleeConfig.minDot("dagger"), projectileSpeed = 0 },
+	hammer = { style = "melee", range = MeleeConfig.reach("hammer"), minDot = MeleeConfig.minDot("hammer"), projectileSpeed = 0 },
 	bow = { style = "projectile", range = 80, minDot = -1, projectileSpeed = 95 },
 	staff = { style = "projectile", range = 62, minDot = -1, projectileSpeed = 64 },
 } :: { [string]: Style }
@@ -231,7 +242,10 @@ function CombatMath.offense(weapon: Gear?, extra: { Gear }?): Offense
 		critDamage = 1
 	end
 
-	local damage = CombatMath.readStat(weapon.stats, "damage", CombatMath.UNARMED.damage)
+	local rolledDamage = CombatMath.readStat(weapon.stats, "damage", nil)
+	local damage = if type(rolledDamage) == "number"
+		then UpgradeScale.apply(rolledDamage, weapon.upgrade)
+		else CombatMath.UNARMED.damage
 	if damage < 1 then
 		damage = 1
 	end
@@ -256,13 +270,100 @@ function CombatMath.vitality(armor: { Gear }): Vitality
 	local health = CombatMath.BASE_HEALTH
 	local defense = 0
 	for _, piece in ipairs(armor) do
-		health += math.max(0, CombatMath.readStat(piece.stats, "health", 0))
+		local rolledHealth = CombatMath.readStat(piece.stats, "health", nil)
+		local gained = if type(rolledHealth) == "number"
+			then UpgradeScale.apply(rolledHealth, piece.upgrade)
+			else 0
+		health += math.max(0, gained)
 		defense += math.max(0, CombatMath.readStat(piece.stats, "defense", 0))
 	end
 	return {
 		maxHealth = math.floor(health + 0.5),
 		defense = math.floor(defense + 0.5),
 	}
+end
+
+-- Bar text and fill both use this. 103 showed up when a refresh added a
+-- +3 health bonus onto a full bar (100 + 3) and a second label still had
+-- max 100. Death publishes 0; the number on screen has to be 0 as well.
+function CombatMath.clampVitals(hp: number, maxHp: number): (number, number)
+	local max = maxHp
+	if type(max) ~= "number" or max ~= max or max < 1 then
+		max = 1
+	end
+	max = math.floor(max + 0.5)
+	local current = hp
+	if type(current) ~= "number" or current ~= current then
+		current = 0
+	end
+	current = math.floor(current + 0.5)
+	if current < 0 then
+		current = 0
+	elseif current > max then
+		current = max
+	end
+	return current, max
+end
+
+-- HP after the max changes. Undamaged players stay full, so a leftover
+-- 103 cannot sit under a max of 130. A real hit keeps the missing points.
+-- Death stays at 0.
+function CombatMath.syncVitals(
+	hp: number,
+	previousMax: number,
+	nextMax: number,
+	hurt: boolean
+): (number, number)
+	local _, newMax = CombatMath.clampVitals(1, nextMax)
+	if hurt ~= true then
+		return newMax, newMax
+	end
+	local current, oldMax = CombatMath.clampVitals(hp, previousMax)
+	if current <= 0 then
+		return 0, newMax
+	end
+	if current >= oldMax then
+		return newMax, newMax
+	end
+	local missing = oldMax - current
+	local shifted = newMax - missing
+	if shifted < 0 then
+		shifted = 0
+	end
+	return CombatMath.clampVitals(shifted, newMax)
+end
+
+-- One incoming hit after defense and the class taken multiplier.
+-- Already at 0 deals nothing and is not a new kill, so a second orb in the
+-- same heartbeat cannot call the death hook again.
+function CombatMath.applyPlayerDamage(
+	hp: number,
+	maxHp: number,
+	rawDamage: number,
+	defense: number,
+	taken: number
+): (number, number, boolean)
+	local current, max = CombatMath.clampVitals(hp, maxHp)
+	if current <= 0 then
+		return 0, 0, false
+	end
+	local multiplier = taken
+	if type(multiplier) ~= "number" or multiplier ~= multiplier or multiplier < 0 then
+		multiplier = 1
+	end
+	local raw = rawDamage
+	if type(raw) ~= "number" or raw ~= raw or raw < 0 then
+		raw = 0
+	end
+	local hit = CombatMath.resolveHit(raw * multiplier, 0, 1, defense, 1, 0)
+	local nextHp = current - hit.amount
+	if nextHp <= 0 then
+		return 0, hit.amount, true
+	end
+	if nextHp > max then
+		nextHp = max
+	end
+	return nextHp, hit.amount, false
 end
 
 -- `roll` is the same 0..1 number Random:NextNumber returns. Below crit chance
@@ -328,6 +429,23 @@ function CombatMath.bossTaken(
 	return reduced
 end
 
+-- Popup word for a boss hit: "Weak!" in the weak window, "Guarded" while
+-- armour cuts the damage, nil when the hit is plain full damage.
+CombatMath.GUARDED_TAG = "Guarded"
+CombatMath.WEAK_TAG = "Weak!"
+function CombatMath.bossTag(phase: number, weak: boolean, armoredMultiplier: number): string?
+	if phase >= 2 then
+		return nil
+	end
+	if weak then
+		return CombatMath.WEAK_TAG
+	end
+	if type(armoredMultiplier) == "number" and armoredMultiplier < 1 then
+		return CombatMath.GUARDED_TAG
+	end
+	return nil
+end
+
 function CombatMath.bonusGold(baseGold: number, goldFind: number): number
 	if type(baseGold) ~= "number" or baseGold <= 0 then
 		return 0
@@ -383,6 +501,7 @@ function CombatMath.nearestInRange(
 	for _, point in ipairs(points) do
 		if type(point) == "table" and type(point.x) == "number" and type(point.z) == "number" then
 			local distance = CombatMath.planarDistance(originX, originZ, point.x, point.z)
+				- (if type(point.radius) == "number" then MeleeConfig.targetRadius(point.radius * 2, 0) else 0)
 			if distance <= range and distance < bestDistance then
 				best = point
 				bestDistance = distance
@@ -408,13 +527,20 @@ function CombatMath.hitsMelee(
 	targetX: number,
 	targetZ: number,
 	range: number,
-	minDot: number
+	minDot: number,
+	targetRadius: number?
 ): boolean
 	local dx = targetX - originX
 	local dz = targetZ - originZ
 	local distance = math.sqrt(dx * dx + dz * dz)
-	if distance > range or distance < 1e-4 then
+	local radius = if type(targetRadius) == "number" then MeleeConfig.targetRadius(targetRadius * 2, 0) else 0
+	local gap = distance - radius
+	if gap > range then
 		return false
+	end
+	-- Hugging the target always connects (MeleeConfig.CLOSE_STUDS).
+	if gap <= MeleeConfig.CLOSE_STUDS or distance < 1e-4 then
+		return true
 	end
 	local lookLength = math.sqrt(lookX * lookX + lookZ * lookZ)
 	if lookLength < 1e-4 then

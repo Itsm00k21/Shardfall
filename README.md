@@ -75,7 +75,7 @@ rojo serve
 
 Leave that terminal running. In Studio, create a Baseplate (or open any place), open the Rojo plugin, and connect to `localhost:34872`.
 
-Rojo only writes the instances this project describes. It will not delete your baseplate, lighting, or scripts you add later in those services (`$ignoreUnknownInstances` is on).
+Rojo only writes the instances this project describes. It leaves Workspace, lighting, ReplicatedStorage, and `StarterPlayerScripts` extras alone, including Roblox's `PlayerModule` and `RbxCharacterSounds`. It **does** remove unknown scripts under `ServerScriptService` on sync, so an old world script left there cannot keep spawning the grey-box hub.
 
 You should see:
 
@@ -86,9 +86,11 @@ You should see:
 
 ### 5. Press Play
 
-A panel named **SHARDFALL** sits on the right.
+A panel named **SHARDFALL** sits on the right. **Hide** closes it. The **SHARDFALL** button that replaces it, and the bottom-corner **Menu** button, open it again.
 
-- You start at level 1 with **25 shard tokens**, 0 gold, 0 Shard Luck.
+Open **View > Output**. The first server line must be `[Shardfall] build 917d688+ server`, and the client line `[Shardfall] build 917d688+ client`. Then paste the `[HavenArt]` and `[Rootvault]` lines. If those build lines are missing, this place is not running the synced scripts: in Explorer, delete every Script under `ServerScriptService`, `Workspace`, `StarterGui`, `StarterPack`, `ReplicatedFirst`, and `ServerStorage` that is **not** inside `ShardfallServer`. Leave `StarterPlayer` alone. `PlayerModule` and `RbxCharacterSounds` are Roblox's camera and control scripts. If a previous playtest left them Disabled, select each one and clear Disabled. Reconnect Rojo, press Play again, and read Output before judging the art.
+
+- You start at level 1 with **10 shard tokens**, 0 gold, 0 Shard Luck.
 - **Armory** and **Pets** are separate roll areas. You start in Verdant Wilds (Ascension 0). Sunken Reach, Emberforge, Frostveil, and Void Rift show as locked until your ascension reaches them.
 - **Crack a Shard** spends one token in the selected area. The popup shows the rarity color (Secret is a moving rainbow), the rolled stats, and a quality such as `92% roll`.
 - Pity counts **up**: `Pity 18 / 50 toward Legendary`. The bar fills with that same number. At 50, the next roll is Legendary or better, then the counter resets. Armory and pets keep separate counters.
@@ -240,7 +242,7 @@ Profile fields in version 6:
 | `level`, `xp` | XP to next level is `100 * level`. A Rootvault clear grants XP and can level you up. |
 | `ascension` | Unlocks roll pools and, later, dungeons. 0 is Verdant Wilds. 4 is Void Rift. |
 | `gold` | Soft currency. A Rootvault clear pays gold. Gold Find on the equipped weapon, armor, or pet adds a fraction. |
-| `shardTokens` | Earned wallet. Spent by Shard Token cracks. New profiles start at 25. Not bought with Robux. |
+| `shardTokens` | Earned wallet. Spent by Shard Token cracks. New profiles start at 10. Not bought with Robux. |
 | `prismTokens` | Robux wallet. Spent by Prism Token cracks. New and migrated profiles start at 0. |
 | `shardLuck` | Earned luck stat passed into every roll. |
 | `luckBoost` | Purchased luck added on top of `shardLuck`. 0 until a Luck Boost is applied. The stub does not set this; the Studio dev button does, so you can see the odds move. |
@@ -312,6 +314,8 @@ src/ReplicatedStorage/Shared/
     HavenLife.luau            Extra hub dressing, day cycle, ambience slots
     Travel.luau               Waystone unlocks and the travel cooldown
     Quality.luau              Low, Med, and High graphics budgets
+    Build.luau                Startup stamp printed in Output
+    ForeignScripts.luau       Which startup scripts the scan may disable
     InventoryStacks.luau      Loadout line and star feeders
     InventoryView.luau        Inventory filters, sorts, and compare
     ModelFactory.luau         Part rigs for monsters and the forest kit

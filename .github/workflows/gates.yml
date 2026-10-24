@@ -1,0 +1,31 @@
+# Lint and unit tests. A non-zero exit from any step fails the job.
+# Tool versions come from rokit.toml. This workflow does not run StyLua
+# and does not read repository secrets.
+
+name: gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - cursor/live-build-9721
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: selene and lune
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rokit toolchain
+        uses: CompeyDev/setup-rokit@v0.1.2
+
+      - name: Selene
+        run: selene src
+
+      - name: Lune tests
+        run: lune run tests/run

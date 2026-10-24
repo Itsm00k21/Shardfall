@@ -12,8 +12,12 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Crafting = require(ReplicatedStorage.Shared.Crafting)
+local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local Economy = require(ReplicatedStorage.Shared.Economy)
 local RollMath = require(ReplicatedStorage.Shared.RollMath)
+local StarterGoalPay = require(ReplicatedStorage.Shared.StarterGoalPay)
 local DataService = require(script.Parent.DataService)
+local LoopService = require(script.Parent.LoopService)
 
 local CraftService = {}
 
@@ -44,6 +48,9 @@ function CraftService.craft(player: Player, recipeId: any, targetUid: string?)
 			return reason or "Could not craft that."
 		end
 		captured = summary
+		if summary.rerolled ~= true then
+			StarterGoalPay.grant(data, "forge", { craft = true })
+		end
 		return nil
 	end)
 	if not ok or captured == nil then
@@ -64,6 +71,9 @@ function CraftService.craft(player: Player, recipeId: any, targetUid: string?)
 end
 
 function CraftService.salvage(player: Player, targetUid: any)
+	if not LaunchGate.on("forgeSalvage") then
+		return reject("That is closed.")
+	end
 	if
 		type(targetUid) ~= "string"
 		or string.match(targetUid, "^[%w%-]+$") == nil
@@ -94,6 +104,9 @@ function CraftService.salvage(player: Player, targetUid: any)
 end
 
 function CraftService.salvageRarity(player: Player, rarity: any)
+	if not LaunchGate.on("forgeSalvage") then
+		return reject("That is closed.")
+	end
 	if type(rarity) ~= "string" or string.match(rarity, "^[%w]+$") == nil or #rarity > 32 then
 		return reject("Unknown rarity.")
 	end
@@ -118,6 +131,27 @@ function CraftService.salvageRarity(player: Player, rarity: any)
 			craftingLevel = captured.craftingLevel,
 		},
 	}
+end
+
+function CraftService.upgrade(player: Player, uid: any)
+	if type(uid) ~= "string" or uid == "" then
+		return reject("Pick a piece of gear.")
+	end
+	local note = ""
+	local ok, err = DataService.mutate(player, function(data)
+		local item = data.inventory[uid]
+		local upgraded, reason = Economy.upgrade(item, data)
+		if not upgraded then
+			return reason
+		end
+		note = reason
+		return nil
+	end)
+	if not ok then
+		return reject(err or "Could not upgrade that.")
+	end
+	LoopService.progress(player, "forge", 1)
+	return { ok = true, note = note, profile = DataService.snapshot(player) }
 end
 
 return CraftService

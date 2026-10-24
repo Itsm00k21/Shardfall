@@ -1,5 +1,8 @@
 std = "roblox"
 
+# Studio-only harness. `selene src` already skips it. This keeps a repo-wide scan off it too.
+exclude = ["ops/studio-smoke/**"]
+
 [rules]
 # DataStore and player handlers yield on purpose.
 incorrect_standard_library_use = "allow"

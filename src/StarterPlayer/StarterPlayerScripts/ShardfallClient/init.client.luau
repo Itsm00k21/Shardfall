@@ -13,23 +13,252 @@
 
 	The pool id is the realm selected in the current roll area. Armory and
 	Pets are separate. A realm above the player's ascension is not offered.
+
+	The first statement is a print, before any require, so a broken module
+	still leaves `[Shardfall] build <git sha> client` in Output. Build has no
+	requires; the sha comes from the generated BuildStamp (scripts/stamp.sh).
 ]]
+
+print((function(): string
+	local ok, line = pcall(function()
+		return require(
+			game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Build")
+		).line("client")
+	end)
+	return if ok then line else "[Shardfall] build unknown client"
+end)())
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
+local ClientChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClientChrome"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
+local LegacyChrome = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LegacyChrome"))
+local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
+local ForeignScripts =
+	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ForeignScripts"))
+local ActionBar = require(script.ActionBar)
+local CaptureHud = require(script.CaptureHud)
+local ClassHud = require(script.ClassHud)
 local CombatHud = require(script.CombatHud)
+local CombatStage = require(script.CombatStage)
+local DebugHud = require(script.DebugHud)
+local DoorHud = require(script.DoorHud)
 local HavenClient = require(script.HavenClient)
+local HudShell = require(script.HudShell)
+local EventBanner = require(script.EventBanner)
+local MenuHub = require(script.MenuHub)
 local InventoryHud = require(script.InventoryHud)
-local ThumbBar = require(script.ThumbBar)
+local LoadingHud = require(script.LoadingHud)
+local StarterGoalHud = require(script.StarterGoalHud)
+local MusicController = require(script.MusicController)
+local OnboardHud = require(script.OnboardHud)
+local LoopHud = require(script.LoopHud)
+local MarketHud = require(script.MarketHud)
+local PetAura = require(script.PetAura)
+local PetHud = require(script.PetHud)
+local RaidHud = require(script.RaidHud)
+local RollReel = require(script.RollReel)
 local TravelHud = require(script.TravelHud)
 local Ui = require(script.Ui)
 local VerdantLod = require(script.VerdantLod)
 
 local player = Players.LocalPlayer
+
+local function hideRobloxChrome()
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+	end)
+end
+hideRobloxChrome()
+task.spawn(function()
+	for _ = 1, 10 do
+		hideRobloxChrome()
+		task.wait(0.5)
+	end
+end)
+
+-- Haven's walk surface is y=120. The default camera follows the Humanoid,
+-- which is what PlayerModule does. Set it here as well so a late control
+-- script cannot leave the camera in the void under the island.
+local function followCharacter(character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 8)
+	if humanoid == nil or not humanoid:IsA("Humanoid") then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	if camera == nil then
+		return
+	end
+	camera.CameraType = Enum.CameraType.Custom
+	camera.CameraSubject = humanoid
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root ~= nil and root:IsA("BasePart") then
+		local at = root.Position
+		camera.CFrame = CFrame.new(at + Vector3.new(0, 6, 14), at + Vector3.new(0, 2, 0))
+	end
+end
+
+if player.Character ~= nil then
+	task.spawn(followCharacter, player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	followCharacter(character)
+	CombatStage.bind(character)
+end)
+if player.Character ~= nil then
+	CombatStage.bind(player.Character)
+end
+CombatStage.watchCamera()
+
 local playerGui = player:WaitForChild("PlayerGui")
+
+-- A mouse or touch click must not leave a HUD button selected: a held
+-- GuiService.SelectedObject turns WASD into UI navigation. Gamepad keeps it.
+do
+	local GuiService = game:GetService("GuiService")
+	local UiSelection =
+		require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSelection"))
+	local function dropSelection()
+		local lastInput = UserInputService:GetLastInputType().Name
+		if UiSelection.shouldClear(lastInput, GuiService.SelectedObject ~= nil) then
+			GuiService.SelectedObject = nil
+		end
+	end
+	GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+		task.defer(dropSelection)
+	end)
+	UserInputService.LastInputTypeChanged:Connect(dropSelection)
+end
+
+local function scriptNames(instance: Instance): { string }
+	local names = { instance.Name }
+	local cursor: Instance? = instance.Parent
+	while cursor ~= nil do
+		table.insert(names, cursor.Name)
+		cursor = cursor.Parent
+	end
+	return names
+end
+
+local function dropStaleScripts(root: Instance)
+	local doomed = {}
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("BaseScript") and descendant ~= script then
+			local avatar = descendant:FindFirstAncestorOfClass("Model")
+			local inAvatar = avatar ~= nil and Players:GetPlayerFromCharacter(avatar) ~= nil
+			-- PlayerGui and PlayerScripts only. Never Workspace, and never
+			-- a script on the character that is keeping the avatar upright.
+			if
+				not inAvatar and ForeignScripts.shouldFlag("StarterPlayer", scriptNames(descendant))
+			then
+				table.insert(doomed, descendant)
+			end
+		end
+	end
+	for _, descendant in ipairs(doomed) do
+		warn(
+			string.format(
+				"[Shardfall] removed stale UI script %s so it cannot draw a second panel.",
+				descendant:GetFullName()
+			)
+		)
+		descendant:Destroy()
+	end
+end
+
+local function clearStaleGuis(gui: PlayerGui)
+	local doomed = {}
+	for _, child in ipairs(gui:GetChildren()) do
+		if
+			child:IsA("ScreenGui")
+			and (
+				ClientChrome.shouldClear(child.Name)
+				or LegacyChrome.shouldDestroy(child.Name)
+				or LegacyChrome.isPlaceCopy(
+					child.Name,
+					StarterGui:FindFirstChild(child.Name) ~= nil
+				)
+			)
+		then
+			if LegacyChrome.shouldDestroy(child.Name) then
+				warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
+			end
+			table.insert(doomed, child)
+		end
+	end
+	for _, child in ipairs(doomed) do
+		child:Destroy()
+	end
+	local hosts: { [ScreenGui]: boolean } = {}
+	for _, descendant in ipairs(gui:GetDescendants()) do
+		if descendant:IsA("TextLabel") and ClientChrome.legacyReadout(descendant.Text) then
+			local host = descendant:FindFirstAncestorOfClass("ScreenGui")
+			if host ~= nil and LegacyChrome.textScanned(host.Name) then
+				hosts[host] = true
+			end
+		end
+	end
+	for host in pairs(hosts) do
+		warn("[Shardfall] removed legacy panel " .. host:GetFullName())
+		host:Destroy()
+	end
+end
+
+if script.Parent ~= nil then
+	dropStaleScripts(script.Parent)
+end
+dropStaleScripts(playerGui)
+clearStaleGuis(playerGui)
+local function legacyText(host: Instance): boolean
+	for _, descendant in ipairs(host:GetDescendants()) do
+		if
+			(descendant:IsA("TextLabel") or descendant:IsA("TextButton"))
+			and ClientChrome.legacyReadout(descendant.Text)
+		then
+			return true
+		end
+	end
+	return false
+end
+
+-- A respawn re-clones StarterGui copies (ResetOnSpawn), so the join sweep
+-- alone misses them. That is how the old results panel and its Continue
+-- teleport came back after a dungeon.
+playerGui.ChildAdded:Connect(function(child)
+	if not child:IsA("ScreenGui") then
+		return
+	end
+	if
+		LegacyChrome.shouldDestroy(child.Name)
+		or LegacyChrome.isPlaceCopy(child.Name, StarterGui:FindFirstChild(child.Name) ~= nil)
+	then
+		warn("[Shardfall] removed legacy ScreenGui " .. child.Name)
+		child:Destroy()
+		return
+	end
+	-- Our own guis (ShardfallHub, ...) are never text-scanned: the Roll
+	-- page's "Pity 0/50" matched and the whole hub was destroyed.
+	if not LegacyChrome.textScanned(child.Name) then
+		return
+	end
+	task.defer(function()
+		if child.Parent ~= nil and legacyText(child) then
+			warn("[Shardfall] removed legacy panel " .. child:GetFullName())
+			child:Destroy()
+		end
+	end)
+end)
+-- After the sweep. An earlier mount is destroyed: an unowned name is legacy,
+-- and an owned name is cleared as a leftover copy.
+-- Parked (Kevin, Oct 22): the tips overlay is off, so players drop straight
+-- into the hub. Nothing waits on it; the HUD and movement never gated on it.
+if LaunchGate.on("loadingTips") then
+	LoadingHud.start(playerGui)
+end
 local shared = ReplicatedStorage:WaitForChild("Shared")
 local Areas = require(shared:WaitForChild("Areas"))
 local Currencies = require(shared:WaitForChild("Currencies"))
@@ -47,13 +276,19 @@ if remotes == nil then
 end
 
 local shownOddsKey: string? = nil
+local paintedStarterGoals: string? = nil
 local ui
+local rollReel
+local musicController = MusicController.start()
 local inventory
 local travel
-local thumb
+local actionBar
+local hudShell
+local eventBanner: { setProfile: (any) -> () }? = nil
+local menuHub
+local latestProfile: any = nil
 local graphicsTier = "med"
 local graphicsSent = false
-local farmOn = false
 
 local function deviceIsTouch(): boolean
 	local preferred = ""
@@ -64,9 +299,19 @@ local function deviceIsTouch(): boolean
 	return Quality.touchDevice(UserInputService.TouchEnabled, named)
 end
 
+-- A missing remote must not yield this script forever. 15 seconds matches
+-- the server lookup. Callers already treat ok == false as a failed action.
+local REMOTE_WAIT_SECONDS = 15
+
 local function invoke(name: string, ...: any)
-	local remote = (remotes :: Instance):WaitForChild(name)
-	assert(remote:IsA("RemoteFunction"), name .. " is not a RemoteFunction")
+	local remote = (remotes :: Instance):WaitForChild(name, REMOTE_WAIT_SECONDS)
+	if remote == nil or not remote:IsA("RemoteFunction") then
+		warn("[Shardfall] " .. name .. " remote is not available")
+		return {
+			ok = false,
+			error = name .. " remote is not available",
+		}
+	end
 	return remote:InvokeServer(...)
 end
 
@@ -91,41 +336,147 @@ local function remoteError(ok: boolean, result: any, fallback: string): string?
 	return nil
 end
 
+-- One GetOdds in flight, plus one trailing request. Pity and the roll
+-- count paint from the profile, so a crack batch does not refetch.
+local oddsPull = { busy = false, again = false, limited = 0 }
+
 local function refreshOdds()
-	local ok, result = pcall(function()
-		return invoke("GetOdds", selectedPoolId)
-	end)
-	local message = remoteError(ok, result, "Could not load odds.")
-	if message ~= nil then
-		ui.setStatus(message, "error")
-		ui.setNotice(message)
+	if oddsPull.busy then
+		oddsPull.again = true
 		return
 	end
-	ui.setOdds((result :: any).odds)
+	oddsPull.busy = true
+	oddsPull.limited = 0
+	task.spawn(function()
+		repeat
+			oddsPull.again = false
+			local poolId = selectedPoolId
+			local ok, result = pcall(function()
+				return invoke("GetOdds", poolId)
+			end)
+			local message: string? = nil
+			if not ok then
+				message = tostring(result)
+			elseif type(result) ~= "table" then
+				message = "Could not load odds. (remote returned " .. typeof(result) .. ")"
+			elseif result.ok ~= true then
+				message = tostring(result.error or "Could not load odds.")
+			else
+				ui.setOdds(result.odds)
+				oddsPull.limited = 0
+			end
+			if message == "Slow down a moment." then
+				if oddsPull.limited < 2 then
+					oddsPull.limited += 1
+					oddsPull.again = true
+					task.wait(1.1)
+				end
+			elseif message ~= nil then
+				oddsPull.limited = 0
+				warn("[Shardfall] " .. message)
+				ui.setStatus(message, "error")
+				ui.setNotice(message)
+			end
+		until oddsPull.again ~= true
+		oddsPull.busy = false
+	end)
 end
 
 local function oddsKey(profile: any): string
-	local since = 0
-	if type(profile.pity) == "table" then
-		local bucket = profile.pity[selectedPoolId]
-		if type(bucket) == "table" then
-			since = bucket.rollsSinceLegendary or 0
-		end
-	end
 	return string.format(
 		"%s:%s:%s:%s",
 		selectedPoolId,
 		tostring(profile.shardLuck or 0),
 		tostring(profile.luckBoost or 0),
-		tostring(since)
+		tostring(profile.vip == true)
 	)
+end
+
+local function flagBit(value: any): string
+	if value == true then
+		return "1"
+	end
+	return "0"
+end
+
+-- The snapshot field is the server show result. A bare goals array has
+-- no ok flag, so present would paint nothing. Skip a repeat whose
+-- progress and granted flags did not change.
+local function starterGoalKey(tracker: any): string
+	if type(tracker) ~= "table" or tracker.ok ~= true or type(tracker.goals) ~= "table" then
+		return "hidden"
+	end
+	local parts: { string } = {}
+	local goals = tracker.goals
+	for index = 1, 3 do
+		local row = goals[index]
+		if type(row) == "table" then
+			table.insert(
+				parts,
+				string.format(
+					"%s:%s/%s",
+					tostring(row.text),
+					tostring(row.progress),
+					tostring(row.goal)
+				)
+			)
+		else
+			table.insert(parts, "-")
+		end
+	end
+	local grantedFlags: any = {}
+	local state = tracker.state
+	if type(state) == "table" and type(state.granted) == "table" then
+		grantedFlags = state.granted
+	end
+	local granted = flagBit(grantedFlags.forge)
+		.. flagBit(grantedFlags.rootvault)
+		.. flagBit(grantedFlags.rolls)
+		.. flagBit(grantedFlags.level)
+		.. flagBit(grantedFlags.guild)
+	return table.concat(parts, "|") .. "#" .. granted
+end
+
+local function presentStarterGoals(profile: any)
+	if hudShell == nil then
+		return
+	end
+	local tracker = if type(profile) == "table" then profile.starterGoalTracker else nil
+	local key = starterGoalKey(tracker)
+	if key == paintedStarterGoals then
+		return
+	end
+	paintedStarterGoals = key
+	StarterGoalHud.present(tracker)
 end
 
 local function applyProfile(profile: any, saving: any)
 	if type(profile) ~= "table" then
 		return
 	end
+	latestProfile = profile
+	ui.clearStatus()
 	ui.setProfile(profile, saving == true)
+	CombatHud.setWallet(profile.gold or 0, profile.shardTokens or 0, profile.gems or 0)
+	if hudShell ~= nil then
+		hudShell.setProfile(profile)
+		hudShell.noteDevice(deviceIsTouch())
+	end
+	if eventBanner ~= nil then
+		eventBanner.setProfile(profile)
+	end
+	if actionBar ~= nil then
+		actionBar.setProfile(profile)
+	end
+	if menuHub ~= nil then
+		menuHub.setProfile(profile)
+		menuHub.promptClass(false)
+	end
+	ClassHud.setProfile(profile)
+	OnboardHud.setProfile(profile)
+	PetHud.setProfile(profile)
+	LoopHud.setProfile(profile)
+	RaidHud.setProfile(profile)
 	if inventory ~= nil then
 		inventory.setProfile(profile)
 	end
@@ -135,8 +486,48 @@ local function applyProfile(profile: any, saving: any)
 	local tier = Quality.resolve(profile.graphicsQuality, deviceIsTouch())
 	graphicsTier = tier
 	VerdantLod.setTier(tier)
-	if thumb ~= nil then
-		thumb.setGraphics(Quality.label(tier))
+	ui.setGraphics(Quality.label(tier))
+	if rollReel ~= nil then
+		rollReel.setProfile(profile)
+		rollReel.setTier(tier)
+	end
+	local master = 1
+	local uiVolume = profile.sfxVolume or 0
+	local settings = profile.uiSettings
+	if type(settings) == "table" and type(settings.audio) == "table" then
+		if type(settings.audio.master) == "number" then
+			master = settings.audio.master
+		end
+		if type(settings.audio.ui) == "number" then
+			uiVolume = settings.audio.ui
+		end
+	end
+	musicController.setVolumes(
+		(profile.musicVolume or 0) * master,
+		(profile.sfxVolume or 0) * master
+	)
+	musicController.setUiVolume(uiVolume * master)
+	CombatHud.setFeel(tier, profile.shake ~= false)
+	CombatStage.setProfile(profile)
+	local vfx = 1
+	if type(settings) == "table" and type(settings.graphics) == "table" then
+		if type(settings.graphics.vfx) == "number" then
+			vfx = settings.graphics.vfx
+		end
+	end
+	CombatStage.setBudget(tier, vfx)
+	local camera = workspace.CurrentCamera
+	if camera ~= nil and type(settings) == "table" and type(settings.camera) == "table" then
+		if type(settings.camera.fov) == "number" then
+			camera.FieldOfView = settings.camera.fov
+		end
+	end
+	if
+		type(settings) == "table"
+		and type(settings.graphics) == "table"
+		and settings.graphics.shadows == false
+	then
+		game:GetService("Lighting").GlobalShadows = false
 	end
 	if Quality.normalize(profile.graphicsQuality) == nil and not graphicsSent then
 		graphicsSent = true
@@ -154,6 +545,7 @@ local function applyProfile(profile: any, saving: any)
 		shownOddsKey = key
 		refreshOdds()
 	end
+	presentStarterGoals(profile)
 end
 
 local function applyResult(result: any)
@@ -163,53 +555,62 @@ local function applyResult(result: any)
 	if type(result.profile) == "table" then
 		applyProfile(result.profile, result.saving)
 	end
+	if type(result.starterGoalTracker) == "table" then
+		if type(latestProfile) ~= "table" then
+			latestProfile = {}
+		end
+		latestProfile.starterGoalTracker = result.starterGoalTracker
+		local shown = latestProfile
+		presentStarterGoals(shown)
+	end
 	if type(result.policy) == "table" then
 		ui.setPolicy(result.policy)
 	end
 end
 
-ui = Ui.mount(playerGui, {
-	showDev = RunService:IsStudio(),
-	onCrack = function()
-		ui.setBusy(true)
-		ui.setStatus("Cracking a shard...", "info")
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("RollShard", selectedPoolId)
-			end)
-			ui.setBusy(false)
-			local message = remoteError(ok, result, "Roll failed.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			ui.showRoll(result)
-			local item = (result :: any).item
-			local name = if type(item) == "table" then item.name else "a drop"
-			ui.setStatus("Received " .. tostring(name) .. ".", "ok")
+local cycleGraphics: () -> ()
+
+local function requestDungeon(action: string, dungeonId: string?)
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return invoke("Dungeon", action, dungeonId)
 		end)
+		local message = remoteError(ok, result, "Dungeon request failed.")
+		if message ~= nil then
+			ui.setStatus(message, "error")
+			return
+		end
+		applyResult(result)
+		if type(result) == "table" and type(result.run) == "table" then
+			ui.setRun(result.run)
+			musicController.syncRun(result.run)
+			DoorHud.setRun(result.run)
+		end
+		if action == "enter" and dungeonId == "rootvault_waves" then
+			ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
+		elseif action == "enter" then
+			ui.setStatus("Entered the Rootvault. Cleared rooms advance on their own.", "ok")
+		elseif action == "advance" then
+			ui.setStatus("Next room.", "ok")
+		elseif action == "leave" then
+			ui.setStatus("Back at the hub.", "ok")
+		elseif action == "skip" then
+			ui.setStatus("Skipped to the boss.", "ok")
+		end
+	end)
+end
+
+ui = Ui.mount(playerGui, {
+	showDev = false,
+	onCrack = function()
+		if menuHub ~= nil then
+			menuHub.open("roll")
+		end
 	end,
 	onPaid = function()
-		ui.setStatus("Cracking with a Prism Token...", "info")
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("RollPaid", selectedPoolId)
-			end)
-			local message = remoteError(ok, result, "Prism crack blocked.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-			else
-				applyResult(result)
-				ui.showRoll(result)
-				local item = (result :: any).item
-				local name = if type(item) == "table" then item.name else "a drop"
-				ui.setStatus("Received " .. tostring(name) .. " for a Prism Token.", "ok")
-			end
-			if ok and type(result) == "table" and message ~= nil then
-				applyResult(result)
-			end
-		end)
+		if menuHub ~= nil then
+			menuHub.open("roll")
+		end
 	end,
 	onBuyPrism = function()
 		ui.setStatus(Currencies.packPitch(), "info")
@@ -258,6 +659,20 @@ ui = Ui.mount(playerGui, {
 	onArea = function(poolId: string)
 		selectedPoolId = poolId
 		refreshOdds()
+	end,
+	onUpgrade = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("UpgradeGear", uid)
+			end)
+			local message = remoteError(ok, result, "Could not upgrade that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Upgraded.", "ok")
+		end)
 	end,
 	onCraft = function(recipeId: string, targetUid: string?)
 		task.spawn(function()
@@ -316,33 +731,7 @@ ui = Ui.mount(playerGui, {
 			end
 		end)
 	end,
-	onDungeon = function(action: string, dungeonId: string?)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("Dungeon", action, dungeonId)
-			end)
-			local message = remoteError(ok, result, "Dungeon request failed.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			if type(result) == "table" and type(result.run) == "table" then
-				ui.setRun(result.run)
-			end
-			if action == "enter" and dungeonId == "rootvault_waves" then
-				ui.setStatus("Entered Rootvault Waves. It continues until you fall.", "ok")
-			elseif action == "enter" then
-				ui.setStatus("Entered the Rootvault. Cleared rooms advance on their own.", "ok")
-			elseif action == "advance" then
-				ui.setStatus("Next room.", "ok")
-			elseif action == "leave" then
-				ui.setStatus("Back at the hub.", "ok")
-			elseif action == "skip" then
-				ui.setStatus("Skipped to the boss.", "ok")
-			end
-		end)
-	end,
+	onDungeon = requestDungeon,
 	onTonic = function()
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -362,7 +751,35 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 	onAttack = function()
-		CombatHud.swing()
+		if CombatStage.swing() then
+			CombatHud.swing()
+		end
+	end,
+	onAudio = function(music: number, sfx: number, commit: boolean)
+		musicController.setVolumes(music, sfx)
+		if not commit then
+			return
+		end
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetAudio", music, sfx)
+			end)
+			local message = remoteError(ok, result, "Could not save audio.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+		end)
+	end,
+	onChests = function()
+		if not LaunchGate.on("chests") or inventory == nil then
+			return
+		end
+		inventory.openTab("chests")
+	end,
+	onGraphics = function()
+		cycleGraphics()
 	end,
 	onAutoFarm = function(enabled: boolean)
 		task.spawn(function()
@@ -382,11 +799,7 @@ ui = Ui.mount(playerGui, {
 					"ok"
 				)
 			end
-			farmOn = applied
 			ui.setAutoFarm(applied)
-			if thumb ~= nil then
-				thumb.setFarm(applied)
-			end
 		end)
 	end,
 	onAutoAttack = function(enabled: boolean)
@@ -406,6 +819,130 @@ ui = Ui.mount(playerGui, {
 		end)
 	end,
 })
+
+rollReel = RollReel.mount(playerGui, {
+	invoke = invoke,
+	remoteError = remoteError,
+	getPoolId = function()
+		return selectedPoolId
+	end,
+	applyResult = applyResult,
+	setStatus = function(text: string, kind: string)
+		ui.setStatus(text, kind)
+	end,
+	setBusy = function(isBusy: boolean)
+		ui.setBusy(isBusy)
+		-- The Heartbeat recheck brings the goals back once the result
+		-- card closes; this hides them on the same frame the roll starts.
+		OnboardHud.setCovered("roll", isBusy)
+	end,
+	onEquip = function(uid: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("EquipItem", uid)
+			end)
+			local message = remoteError(ok, result, "Could not equip that.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Equipped.", "ok")
+		end)
+	end,
+	tier = function()
+		return graphicsTier
+	end,
+})
+
+local function hideMarket()
+	local gui = playerGui:FindFirstChild("ShardfallMarket")
+	if gui == nil then
+		return
+	end
+	local market = gui:FindFirstChild("Market")
+	if market ~= nil and market:IsA("GuiObject") then
+		market.Visible = false
+	end
+	local toggle = gui:FindFirstChild("OpenMarket")
+	if toggle ~= nil and toggle:IsA("GuiObject") then
+		toggle.Visible = false
+		toggle.Position = UDim2.new(0, 16, 1, -16)
+	end
+end
+
+local function guiChild(guiName: string, childName: string): GuiObject?
+	local gui = playerGui:FindFirstChild(guiName)
+	if gui == nil then
+		return nil
+	end
+	local child = gui:FindFirstChild(childName)
+	if child ~= nil and child:IsA("GuiObject") then
+		return child
+	end
+	return nil
+end
+
+-- Hatch, the raid chip, and the market button never sit on the join screen.
+local function hideStrayButtons()
+	local hatch = guiChild("ShardfallPets", "Hatch")
+	if hatch ~= nil then
+		hatch.Visible = false
+	end
+	local raid = guiChild("ShardfallRaids", "RaidToggle")
+	if raid ~= nil then
+		raid.Visible = false
+	end
+	local market = guiChild("ShardfallMarket", "OpenMarket")
+	if market ~= nil then
+		market.Visible = false
+	end
+end
+
+-- Join shows HP, currency, the action bar, and the Studio debug toggle.
+-- open is ignored: nothing here may reveal the roll sheet or the daily board.
+local function setHubChrome(open: boolean, _keepRaid: boolean?)
+	if open == true then
+		return
+	end
+	if rollReel ~= nil then
+		rollReel.setOpen(false)
+	end
+	LoopHud.setOpen(false)
+	hideStrayButtons()
+end
+
+local function closePanels(except: string?)
+	if except ~= "menu" and menuHub ~= nil then
+		menuHub.close()
+	end
+	if except ~= "craft" then
+		ui.close()
+	end
+	if except ~= "inventory" and inventory ~= nil then
+		inventory.close()
+	end
+	if except ~= "travel" and travel ~= nil then
+		travel.close()
+	end
+	if except ~= "skills" then
+		ClassHud.close()
+	end
+	if except ~= "raid" then
+		RaidHud.close()
+	end
+	if except ~= "market" then
+		hideMarket()
+	end
+	if except ~= "roll" and rollReel ~= nil then
+		rollReel.setOpen(false)
+	end
+	if except ~= "daily" and except ~= "pass" then
+		LoopHud.setOpen(false)
+	end
+	hideStrayButtons()
+	DoorHud.suppress(except ~= nil)
+end
 
 inventory = InventoryHud.start(playerGui, {
 	onEquip = function(uid: string)
@@ -467,6 +1004,52 @@ inventory = InventoryHud.start(playerGui, {
 			local count = if type(bulk) == "table" then bulk.count else 0
 			ui.setStatus(string.format("Salvaged %s %s pieces.", tostring(count), rarity), "ok")
 		end)
+	end,
+	-- Full-bag salvage (#388). GearBar waits on the answer, so this one
+	-- yields instead of spawning. The profile in the answer is applied
+	-- first, so the labels read the server's values.
+	onGear = function(action: string, payload: any): any
+		local ok, result = pcall(function()
+			return invoke("GearSalvage", action, payload)
+		end)
+		if not ok then
+			warn("[Shardfall] " .. tostring(result))
+			return { ok = false, error = "Could not reach the server. Try again." }
+		end
+		applyResult(result)
+		return result
+	end,
+	-- [Ghost] Full-inventory gear panel. Same remotes as the Bag.
+	onUpgrade = function(uid: string)
+		local ok, result = pcall(function()
+			return invoke("UpgradeGear", uid)
+		end)
+		local message = remoteError(ok, result, "Could not upgrade that.")
+		if message ~= nil then
+			ui.setStatus(message, "error")
+			return result
+		end
+		applyResult(result)
+		local note = if type(result) == "table" and type(result.note) == "string"
+			then result.note
+			else nil
+		ui.setStatus(if note ~= nil then "Upgraded " .. note else "Upgraded.", "ok")
+		return result
+	end,
+	-- Shard Core reads and feeds. The feed answer has no profile; the
+	-- panel mirrors essence and level until the next profile push.
+	onCore = function(action: string, uid: string): any
+		if action ~= "FeedShardCore" and action ~= "GetShardCore" then
+			return { ok = false, error = "Unknown Shard Core action." }
+		end
+		local ok, result = pcall(function()
+			return invoke(action, uid)
+		end)
+		if not ok then
+			warn("[Shardfall] " .. tostring(result))
+			return { ok = false, error = "Could not reach the server. Try again." }
+		end
+		return result
 	end,
 	onLock = function(uid: string, locked: boolean)
 		task.spawn(function()
@@ -540,6 +1123,137 @@ inventory = InventoryHud.start(playerGui, {
 			ui.setStatus(if type(note) == "string" then note else "Fed.", "ok")
 		end)
 	end,
+	onOpenChest = function(tier: string, count: number)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("OpenChest", tier, count)
+			end)
+			local message = remoteError(ok, result, "Could not open that chest.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local chest = if type(result) == "table" then result.chest else nil
+			if rollReel ~= nil and type(chest) == "table" then
+				rollReel.playChest(chest)
+			end
+			if count > 1 then
+				ui.setStatus(string.format("Opened %d %s chests.", count, tier), "ok")
+			else
+				ui.setStatus("Opened a " .. tier .. " chest.", "ok")
+			end
+		end)
+	end,
+	onMergeChest = function(tier: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("MergeChest", tier)
+			end)
+			local message = remoteError(ok, result, "Could not merge those chests.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local merged = if type(result) == "table" then result.merge else nil
+			local nextTier = if type(merged) == "table" then tostring(merged.to) else "the next"
+			ui.setStatus("Merged into a " .. nextTier .. " chest.", "ok")
+		end)
+	end,
+	onBuyChest = function(tier: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyChest", tier)
+			end)
+			local message = remoteError(ok, result, "Could not buy that chest.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Bought a " .. tier .. " chest with Shard Keys.", "ok")
+		end)
+	end,
+	onClaimLogin = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("ClaimLogin")
+			end)
+			local message = remoteError(ok, result, "Could not claim the daily chest.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Daily login claimed.", "ok")
+		end)
+	end,
+	onBuyDust = function(templateId: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyDustShard", templateId)
+			end)
+			local message = remoteError(ok, result, "Could not buy that shard.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			local name = if type(result) == "table" then tostring(result.name) else "shard"
+			ui.setStatus("Bought " .. name .. " with Shard Dust.", "ok")
+		end)
+	end,
+	onBuyBundle = function()
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("BuyChestBundle")
+			end)
+			if ok and type(result) == "table" and result.ok == true then
+				applyResult(result)
+				return
+			end
+			if ok and type(result) == "table" and result.code == "stub" then
+				ui.setStatus("That bundle is not for sale yet. Odds stay on the chest tab.", "info")
+				return
+			end
+			local message = remoteError(ok, result, "Could not request that bundle.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+			end
+		end)
+	end,
+	onChestOptions = function(mode: string, salvage: string)
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return invoke("SetChestOptions", mode, salvage)
+			end)
+			local message = remoteError(ok, result, "Could not save chest options.")
+			if message ~= nil then
+				ui.setStatus(message, "error")
+				return
+			end
+			applyResult(result)
+			ui.setStatus("Chest options saved.", "ok")
+		end)
+	end,
+	onResumeChest = function(pending: any)
+		if rollReel == nil or type(pending) ~= "table" then
+			return
+		end
+		local reel = rollReel
+		task.spawn(function()
+			reel.playChest({
+				tier = "Mythic",
+				pending = pending,
+				results = {},
+				bestIndex = 1,
+				seconds = 4,
+				reelSeconds = 0,
+				luck = 1,
+			})
+		end)
+	end,
 	onTonic = function()
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -557,39 +1271,53 @@ inventory = InventoryHud.start(playerGui, {
 	onStatus = function(text: string, kind: string)
 		ui.setStatus(text, kind)
 	end,
-})
-
-travel = TravelHud.start(playerGui, {
-	onTravel = function(destinationId: string)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("Travel", destinationId)
-			end)
-			local message = remoteError(ok, result, "Could not travel.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			ui.setStatus("Traveled.", "ok")
-		end)
-	end,
-	onBuyPass = function()
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("BuyTravelPass")
-			end)
-			local message = remoteError(ok, result, "Could not buy a travel pass.")
-			if message ~= nil then
-				ui.setStatus(message, "info")
-				return
-			end
-			applyResult(result)
-		end)
+	onVisible = function(open: boolean)
+		if open then
+			closePanels("inventory")
+		end
+		ui.setCovered(open)
+		OnboardHud.setCovered("inventory", open)
 	end,
 })
 
-local function cycleGraphics()
+travel = if not LaunchGate.on("travel")
+	then nil
+	else TravelHud.start(playerGui, {
+		onVisible = function(open: boolean)
+			if open then
+				closePanels("travel")
+			end
+		end,
+		onTravel = function(destinationId: string)
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return invoke("Travel", destinationId)
+				end)
+				local message = remoteError(ok, result, "Could not travel.")
+				if message ~= nil then
+					ui.setStatus(message, "error")
+					return
+				end
+				applyResult(result)
+				ui.setStatus("Traveled.", "ok")
+			end)
+		end,
+		onBuyPass = function()
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return invoke("BuyTravelPass")
+				end)
+				local message = remoteError(ok, result, "Could not buy a travel pass.")
+				if message ~= nil then
+					ui.setStatus(message, "info")
+					return
+				end
+				applyResult(result)
+			end)
+		end,
+	})
+
+function cycleGraphics()
 	local order = Quality.ids()
 	local nextId = order[1]
 	for index, id in ipairs(order) do
@@ -612,70 +1340,188 @@ local function cycleGraphics()
 	end)
 end
 
-thumb = ThumbBar.start(playerGui, {
-	onMenu = function()
-		ui.toggleMenu()
+local function openHub(tab: string)
+	if menuHub == nil or ClassHud.holdsChoice() then
+		return
+	end
+	if not menuHub.isOpen() then
+		closePanels("menu")
+	end
+	menuHub.toggle(tab)
+end
+
+menuHub = MenuHub.start(playerGui, {
+	invoke = invoke,
+	getPoolId = function()
+		return selectedPoolId
 	end,
-	onInventory = function()
-		inventory.toggle()
+	onBag = function()
+		-- [Ghost] One inventory: the Bag key toggles it.
+		if LaunchGate.on("oneInventory") and inventory.isOpen() then
+			inventory.close()
+			return
+		end
+		closePanels("inventory")
+		inventory.open()
+		if menuHub ~= nil then
+			menuHub.close()
+		end
 	end,
-	onTravel = function()
-		travel.toggle()
+	onMarket = function()
+		closePanels("market")
+		MarketHud.open()
+		if menuHub ~= nil then
+			menuHub.close()
+		end
 	end,
-	onAttack = function()
-		CombatHud.swing()
+	onDim = function(open: boolean)
+		if hudShell ~= nil and not open then
+			hudShell.setRail("")
+		end
+		-- [Ghost] Clip 7: the intro card and goals step aside for the hub.
+		OnboardHud.setCovered("hub", open)
 	end,
-	onTonic = function()
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("UseTonic")
-			end)
-			local message = remoteError(ok, result, "Could not drink that.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
-			end
-			applyResult(result)
-			local healed = if type(result) == "table" then result.healed else nil
-			ui.setStatus(
-				string.format("Healing Tonic restored %s HP.", tostring(healed or "some")),
-				"ok"
-			)
-		end)
+	onTab = function(id: string)
+		if hudShell ~= nil then
+			hudShell.setRail(id)
+		end
 	end,
-	onAutoFarm = function()
-		task.spawn(function()
-			local enabled = not farmOn
-			local ok, result = pcall(function()
-				return invoke("SetAutoFarm", enabled)
-			end)
-			local message = remoteError(ok, result, "Could not set auto farm.")
-			local applied = enabled
-			if message ~= nil then
-				applied = not enabled
-				ui.setStatus(message, "error")
-			else
-				ui.setStatus(
-					if enabled
-						then "Auto Farm is on. Wins and losses start the same run again."
-						else "Auto Farm is off.",
-					"ok"
-				)
-			end
-			farmOn = applied
-			ui.setAutoFarm(applied)
-			thumb.setFarm(applied)
-		end)
+	onBadges = function(badges)
+		if hudShell ~= nil then
+			hudShell.setBadges(badges)
+		end
 	end,
-	onGraphics = cycleGraphics,
+	onClassSheet = function()
+		local opening = not ClassHud.isVisible()
+		if opening then
+			closePanels("skills")
+			ClassHud.setVisible(true)
+		else
+			ClassHud.dismiss()
+		end
+	end,
+	onToast = function(message: string)
+		if hudShell ~= nil then
+			hudShell.toast(message)
+		end
+	end,
 })
-thumb.setGraphics(Quality.label(graphicsTier))
+PetAura.start(playerGui, function()
+	return latestProfile
+end)
+
+-- [Ghost] oneInventory: the rail toggles the full Inventory itself.
+-- closePanels runs only when opening, then we return. openHub("bag")
+-- would close this inventory and follow's onBag would open it again.
+-- The B key stays on MenuHub follow.
+local function pressRailBag()
+	if LaunchGate.on("oneInventory") then
+		if inventory.isOpen() then
+			inventory.close()
+			return
+		end
+		closePanels("inventory")
+		inventory.open()
+		return
+	end
+	openHub("bag")
+end
+
+hudShell = HudShell.start(playerGui, {
+	onHero = function()
+		openHub("hero")
+	end,
+	onBag = function()
+		pressRailBag()
+	end,
+	onRoll = function()
+		openHub("roll")
+	end,
+	onPets = function()
+		openHub("pets")
+	end,
+	onShop = function()
+		openHub("shop")
+	end,
+	onSettings = function()
+		openHub("settings")
+	end,
+})
+if LaunchGate.on("events") then
+	eventBanner = EventBanner.start(playerGui)
+end
+-- After the shell, so the rows can sit on ShardfallHud. The frame stays
+-- hidden until present. A new ScreenGui here would be removed on ChildAdded.
+StarterGoalHud.start(playerGui)
+presentStarterGoals(latestProfile)
+
+actionBar = ActionBar.start(playerGui, {
+	invoke = invoke,
+	menuOpen = function()
+		if menuHub ~= nil and menuHub.isOpen() then
+			return true
+		end
+		return inventory ~= nil and inventory.isShown()
+	end,
+	onDodge = function()
+		CombatStage.dodge()
+		CombatHud.dodge()
+	end,
+	onLight = function()
+		if CombatStage.swing() then
+			CombatHud.swing(false)
+		end
+	end,
+	onHeavy = function()
+		if CombatStage.swing(true) then
+			CombatHud.swing(true)
+		end
+	end,
+	onDodgeChip = function()
+		PetAura.note("Dodge")
+	end,
+	onSkill = function()
+		CombatStage.skill()
+	end,
+	onToast = function(message: string)
+		if hudShell ~= nil then
+			hudShell.toast(message)
+		end
+		ui.setStatus(message, "error")
+	end,
+	onResult = function(result: any)
+		applyResult(result)
+	end,
+	onRoll = function()
+		openHub("roll")
+	end,
+	mobile = deviceIsTouch,
+})
+if latestProfile ~= nil then
+	actionBar.setProfile(latestProfile)
+end
 
 HavenClient.start({
 	onPanel = function(kind: string, areaId: string?)
-		ui.openPanel(kind, areaId)
+		if ClassHud.holdsChoice() then
+			return
+		end
 		if kind == "craft" then
-			ui.setStatus("Forge. Craft, upgrade, and reroll.", "info")
+			closePanels("craft")
+			ui.openPanel("craft")
+			if hudShell ~= nil then
+				hudShell.toast("Forge. Upgrade gear.")
+			end
+			return
+		end
+		local tab = UiRouter.havenTab(kind, areaId)
+		if tab == nil or menuHub == nil then
+			return
+		end
+		closePanels("menu")
+		menuHub.open(tab)
+		if kind == "market" then
+			ui.setStatus("Gold shop. A Healing Tonic and a bag slot.", "info")
 		elseif areaId == "pets" then
 			ui.setStatus("Pet Garden. Companions.", "info")
 		else
@@ -685,30 +1531,159 @@ HavenClient.start({
 	onSoon = function(message: string)
 		ui.setStatus(message, "info")
 	end,
+	onTravel = function()
+		if travel == nil or ClassHud.holdsChoice() then
+			return
+		end
+		closePanels("travel")
+		travel.open()
+	end,
 })
 
 VerdantLod.start()
 
+MarketHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
+if LaunchGate.on("wildCapture") then
+	CaptureHud.start(invoke)
+end
+-- [ECHO hook] Wave arena UI. start() draws nothing while waveArena is off.
+require(script.WaveArena).start()
+PetHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
+LoopHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
+RaidHud.setListener(function(opening: boolean)
+	if opening then
+		closePanels("raid")
+	end
+end)
+RaidHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end)
+setHubChrome(false)
+-- Owner-only Dev Tools panel (Oct 22). Every press toasts its result.
+DebugHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end, {
+	toast = function(message: string)
+		if hudShell ~= nil then
+			hudShell.toast(message)
+		end
+	end,
+	apply = function(result: any)
+		applyResult(result)
+	end,
+	changed = function(open: boolean)
+		OnboardHud.setCovered("dev", open)
+	end,
+})
+local function retireChrome(name: string)
+	local gui = playerGui:FindFirstChild(name)
+	if gui ~= nil and gui:IsA("ScreenGui") then
+		gui.Enabled = false
+	end
+end
+retireChrome("ShardfallMenu")
+OnboardHud.start(function(action: string, ...: any)
+	return invoke(action, ...)
+end, applyResult)
+-- [Ghost] Oct 24: the starter-goal mini list hides while the intro card
+-- or its goals show, so the two goal lists never stack.
+OnboardHud.onShownChange(function(shown: boolean)
+	StarterGoalHud.setSuppressed("onboard", shown)
+end)
+-- [Ghost] Clip 9: the intro and goals came back over the open Bag. Covered
+-- is now read live from each menu's real visible state, so any open menu
+-- keeps them hidden however it was opened.
+OnboardHud.coverWhen("inventory", function(): boolean
+	return inventory ~= nil and inventory.isShown()
+end)
+OnboardHud.coverWhen("hub", function(): boolean
+	return menuHub ~= nil and menuHub.isOpen()
+end)
+OnboardHud.coverWhen("craft", function(): boolean
+	return ui.isOpen()
+end)
+OnboardHud.coverWhen("travel", function(): boolean
+	return travel ~= nil and travel.isOpen()
+end)
+OnboardHud.coverWhen("skills", function(): boolean
+	return ClassHud.isVisible()
+end)
+OnboardHud.coverWhen("raid", function(): boolean
+	return RaidHud.isOpen()
+end)
+OnboardHud.coverWhen("loop", function(): boolean
+	return LoopHud.isOpen()
+end)
+-- [Ghost] Oct 24 (#482): the Dev Tools panel opens under the goals
+-- column; the goals hide while it is open and come back on close.
+OnboardHud.coverWhen("dev", DebugHud.isOpen)
+-- [Ghost] Oct 24 (Havoc P3-482-C): the roll reel (DisplayOrder 40) wins
+-- over the goals during a roll, including the onboarding roll step.
+OnboardHud.coverWhen("roll", function(): boolean
+	return rollReel ~= nil and rollReel.isShowing()
+end)
+OnboardHud.coverWhen("results", function(): boolean
+	local gui = playerGui:FindFirstChild("WaveArenaResults")
+	local card = if gui ~= nil then gui:FindFirstChild("Card") else nil
+	return card ~= nil and OnboardHud.shown(card)
+end)
+OnboardHud.coverWhen("market", function(): boolean
+	local gui = playerGui:FindFirstChild("ShardfallMarket")
+	local market = if gui ~= nil then gui:FindFirstChild("Market") else nil
+	return market ~= nil and OnboardHud.shown(market)
+end)
+if LaunchGate.on("doors") then
+	DoorHud.start(function(action: string, ...: any)
+		return invoke(action, ...)
+	end)
+end
+ClassHud.start(remotes :: Instance, function(action: string, ...: any)
+	return invoke(action, ...)
+end)
 CombatHud.start(remotes :: Instance, {
+	onDodgeCharges = function(charges: number)
+		CombatStage.noteDodgeCharges(charges)
+		if actionBar ~= nil then
+			actionBar.setDodge(charges)
+		end
+	end,
 	onRun = function(run)
+		CombatStage.setInRun(type(run) == "table" and run.active == true)
 		ui.setRun(run)
+		musicController.syncRun(run)
+		DoorHud.setRun(run)
 	end,
 	onHint = function(text)
 		ui.setStatus(text, "info")
+		-- Loot lines ("Loot: Spore Cap x2", CombatFeel.LOOT_PREFIX) toast.
+		if hudShell ~= nil and string.sub(text, 1, 6) == "Loot: " then
+			hudShell.toast(text)
+		end
 	end,
 })
+setHubChrome(false)
 
-local profileEvent = (remotes :: Instance):WaitForChild("ProfileUpdated")
-if profileEvent:IsA("RemoteEvent") then
+-- A missing ProfileUpdated or PolicyUpdated skips that connect. GetProfile still runs.
+local profileEvent = (remotes :: Instance):WaitForChild("ProfileUpdated", REMOTE_WAIT_SECONDS)
+if profileEvent ~= nil and profileEvent:IsA("RemoteEvent") then
 	profileEvent.OnClientEvent:Connect(function(profile, saving)
 		applyProfile(profile, saving)
 	end)
 end
 
-local policyEvent = (remotes :: Instance):WaitForChild("PolicyUpdated")
-if policyEvent:IsA("RemoteEvent") then
+local policyEvent = (remotes :: Instance):WaitForChild("PolicyUpdated", REMOTE_WAIT_SECONDS)
+if policyEvent ~= nil and policyEvent:IsA("RemoteEvent") then
 	policyEvent.OnClientEvent:Connect(function(policy)
 		ui.setPolicy(policy)
+		if rollReel ~= nil then
+			rollReel.setPolicy(policy)
+		end
 	end)
 end
 
@@ -718,8 +1693,8 @@ task.spawn(function()
 	end)
 	local message = remoteError(ok, result, "Could not load your profile.")
 	if message ~= nil then
-		ui.setStatus(message, "error")
-		refreshOdds()
+		ui.setStatus(message, "error", true)
+		ui.setNotice(message)
 		return
 	end
 	applyProfile((result :: any).profile, (result :: any).saving)

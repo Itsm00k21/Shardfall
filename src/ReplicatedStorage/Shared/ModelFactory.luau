@@ -59,6 +59,9 @@ ModelFactory.MONSTERS = {
 	"thorn_sprite",
 	"grandmother_gnarl",
 }
+-- Far Glade field rigs. Kept out of MONSTERS, which mirrors the Rootvault rooms.
+ModelFactory.FIELD_MONSTERS =
+	{ "mud_tusk", "hedge_lurker", "seed_flinger", "sap_mouth", "mite_cloud", "mireoak" }
 
 ModelFactory.TREES = { "tree_giant", "tree_pine", "tree_mushroom", "tree_willow" }
 
@@ -69,6 +72,12 @@ local SCALE: { [string]: number } = {
 	root_brute = 1.45,
 	thorn_sprite = 1.15,
 	grandmother_gnarl = 5,
+	mud_tusk = 1.2,
+	hedge_lurker = 1,
+	seed_flinger = 1.05,
+	sap_mouth = 1.1,
+	mite_cloud = 1,
+	mireoak = 4,
 }
 
 local MOSS = { 86, 150, 78 }
@@ -82,6 +91,12 @@ local GLOW = { 170, 255, 176 }
 local CAP = { 168, 92, 86 }
 local STONE = { 122, 116, 108 }
 local WATER = { 64, 168, 156 }
+local MUD = { 138, 102, 68 }
+local MUD_DARK = { 98, 72, 50 }
+local OLIVE = { 120, 128, 60 }
+local TUSK = { 196, 176, 132 }
+local SAP = { 255, 186, 82 }
+local MITE = { 176, 196, 72 }
 
 local function piece(
 	name: string,
@@ -395,7 +410,9 @@ local RECIPES: { [string]: { Piece } } = {
 		ball("Canopy", 2.6, 0, 5.3, 0, MOSS_DARK, "Grass", "large", nil, "body"),
 		ball("Eye", 0.38, 0.38, 3.5, -0.72, AMBER, "Neon", "small", true, nil),
 		ball("Eye", 0.38, -0.38, 3.5, -0.72, AMBER, "Neon", "small", true, nil),
-		block("WeakSpot", 0.7, 0.7, 0.25, 0, 2.6, -0.85, GOLD, "Neon", "large", nil),
+		-- Lowered from y 2.6 and enlarged so it sits at a player's chest
+		-- (Kevin's playtest: too high to read as reachable).
+		block("WeakSpot", 1.0, 1.0, 0.25, 0, 1.5, -0.85, GOLD, "Neon", "large", nil),
 		block("Arm", 0.45, 2.2, 0.45, 1.35, 3.4, 0, BARK, "Wood", "large", "arm"),
 		block("Arm", 0.45, 2.2, 0.45, -1.35, 3.4, 0, BARK, "Wood", "large", "arm"),
 		ball("Fist", 0.7, 1.7, 2.1, -0.2, BARK_DARK, "Wood", "large", nil, "fist"),
@@ -546,6 +563,90 @@ local RECIPES: { [string]: { Piece } } = {
 			0.42
 		),
 	},
+	-- Far Glade. Muted per the doc: only the Lurker's eyes and the Flinger's
+	-- sap glint, no body glow.
+	mud_tusk = {
+		block("Body", 2.6, 1.6, 3.4, 0, 1.45, 0.2, MUD, "Mud", "large", "body"),
+		block("Hump", 2, 0.6, 1.6, 0, 2.45, -0.3, MUD_DARK, "Mud", "large", "body"),
+		block("Head", 1.6, 1.2, 1.3, 0, 1.35, -2.05, MUD_DARK, "Mud", "large", "body"),
+		wedge("Tusk", 0.35, 1.2, 0.35, 0.6, 1.0, -2.95, -60, 0, 0, TUSK, "Wood", "small", nil),
+		wedge("Tusk", 0.35, 1.2, 0.35, -0.6, 1.0, -2.95, -60, 0, 0, TUSK, "Wood", "small", nil),
+		ball("Eye", 0.22, 0.45, 1.6, -2.72, BARK_DARK, "Wood", "small", false, nil),
+		ball("Eye", 0.22, -0.45, 1.6, -2.72, BARK_DARK, "Wood", "small", false, nil),
+		block("Leg", 0.5, 0.8, 0.5, 0.9, 0.4, -1, MUD_DARK, "Mud", "small", "leg"),
+		block("Leg", 0.5, 0.8, 0.5, -0.9, 0.4, -1, MUD_DARK, "Mud", "small", "leg"),
+		block("Leg", 0.5, 0.8, 0.5, 0.9, 0.4, 1.4, MUD_DARK, "Mud", "small", "leg"),
+		block("Leg", 0.5, 0.8, 0.5, -0.9, 0.4, 1.4, MUD_DARK, "Mud", "small", "leg"),
+	},
+	hedge_lurker = {
+		block("Body", 1.3, 0.9, 2.6, 0, 1.05, 0.2, MOSS_DARK, "Grass", "large", "body"),
+		ball("Head", 1.1, 0, 1.35, -1.5, MOSS_DARK, "Grass", "large", nil, "body"),
+		wedge("Ear", 0.3, 0.55, 0.3, 0.32, 1.95, -1.5, 0, 0, 12, BARK, "Wood", "small", nil),
+		wedge("Ear", 0.3, 0.55, 0.3, -0.32, 1.95, -1.5, 0, 0, -12, BARK, "Wood", "small", nil),
+		ball("Eye", 0.2, 0.25, 1.45, -2.02, GLOW, "Neon", "small", false, nil),
+		ball("Eye", 0.2, -0.25, 1.45, -2.02, GLOW, "Neon", "small", false, nil),
+		block("Tail", 0.25, 0.25, 1.6, 0, 1.45, 2.1, BARK_DARK, "Wood", "small", nil),
+		block("Twig", 0.15, 0.6, 0.15, 0.3, 1.7, 0.4, BARK, "Wood", "small", nil),
+		block("Twig", 0.15, 0.6, 0.15, -0.3, 1.7, 0.9, BARK, "Wood", "small", nil),
+		block("Leg", 0.3, 0.6, 0.3, 0.5, 0.3, -0.8, BARK_DARK, "Wood", "small", "leg"),
+		block("Leg", 0.3, 0.6, 0.3, -0.5, 0.3, -0.8, BARK_DARK, "Wood", "small", "leg"),
+		block("Leg", 0.3, 0.6, 0.3, 0.5, 0.3, 1.1, BARK_DARK, "Wood", "small", "leg"),
+		block("Leg", 0.3, 0.6, 0.3, -0.5, 0.3, 1.1, BARK_DARK, "Wood", "small", "leg"),
+	},
+	seed_flinger = {
+		ball("Body", 2.2, 0, 1.4, 0, OLIVE, "Grass", "large", nil, "body"),
+		ball("Sack", 1.3, 0, 2.15, 0.95, BARK, "Fabric", "large", nil, "body"),
+		ball("Pod", 0.45, 0.4, 2.7, 0.9, BARK_DARK, "Wood", "small", nil, nil),
+		ball("Pod", 0.45, -0.35, 2.65, 1.2, BARK_DARK, "Wood", "small", nil, nil),
+		wedge("Leaf", 0.9, 0.2, 1.2, 0.9, 2.35, -0.2, 0, 0, 30, MOSS, "Grass", "small", nil),
+		wedge("Leaf", 0.9, 0.2, 1.2, -0.9, 2.35, -0.2, 0, 0, -30, MOSS, "Grass", "small", nil),
+		ball("Eye", 0.24, 0.35, 1.65, -1.0, AMBER, "Wood", "small", false, nil),
+		ball("Eye", 0.24, -0.35, 1.65, -1.0, AMBER, "Wood", "small", false, nil),
+		block("Root", 0.4, 0.5, 0.4, 0.6, 0.25, 0, BARK_DARK, "Wood", "small", "leg"),
+		block("Root", 0.4, 0.5, 0.4, -0.6, 0.25, 0, BARK_DARK, "Wood", "small", "leg"),
+	},
+	sap_mouth = {
+		block("Stump", 1.8, 1.8, 1.8, 0, 0.9, 0, BARK, "Wood", "large", "body"),
+		block("Rim", 2, 0.35, 2, 0, 1.9, 0, BARK_DARK, "Wood", "large", "body"),
+		block("Knot", 0.9, 0.9, 0.3, 0, 1.1, -0.95, BARK_DARK, "Wood", "small", nil),
+		ball("Lamp", 0.6, 0, 1.1, -1.05, SAP, "Neon", "small", true, nil),
+		ball("Eye", 0.2, 0.35, 1.6, -0.92, BARK_DARK, "Wood", "small", false, nil),
+		ball("Eye", 0.2, -0.35, 1.6, -0.92, BARK_DARK, "Wood", "small", false, nil),
+		wedge("Sprout", 0.5, 0.2, 0.8, 0.4, 2.2, 0.2, 0, 0, 25, MOSS, "Grass", "small", nil),
+		block("Root", 0.4, 0.4, 0.9, 0.8, 0.2, -0.6, BARK_DARK, "Wood", "small", "leg"),
+		block("Root", 0.4, 0.4, 0.9, -0.8, 0.2, 0.6, BARK_DARK, "Wood", "small", "leg"),
+	},
+	-- No single body: a loose ball of leaf mites on the float limb.
+	mite_cloud = {
+		ball("Mite", 0.45, 0, 1.3, 0, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.4, 0.7, 1.6, 0.3, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.4, -0.65, 1.5, -0.35, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.35, 0.35, 2.0, -0.5, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.35, -0.4, 1.0, 0.55, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.3, 0.8, 1.1, -0.6, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.3, -0.85, 1.9, 0.4, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.35, 0.1, 0.85, -0.75, MITE, "Grass", "small", nil, "float"),
+		ball("Mite", 0.3, -0.2, 2.2, 0.3, MITE, "Grass", "small", nil, "float"),
+		ball("Eye", 0.18, 0.12, 1.35, -0.24, AMBER, "Neon", "small", false, "float"),
+	},
+	-- Wide walking oak, mud-brown bark, short root legs, one amber knot.
+	mireoak = {
+		block("Trunk", 2.6, 2.6, 2.2, 0, 2.1, 0, MUD, "Wood", "large", "body"),
+		block("Brow", 2.9, 0.5, 2.4, 0, 3.55, 0, MUD_DARK, "Wood", "large", "body"),
+		ball("Crown", 2.4, 0.7, 4.4, 0.2, MOSS_DARK, "Grass", "large", nil, "body"),
+		ball("Crown", 2.1, -0.9, 4.2, -0.1, MOSS, "Grass", "large", nil, "body"),
+		ball("Eye", 0.32, 0.5, 3.1, -1.12, AMBER, "Neon", "small", true, nil),
+		ball("Eye", 0.32, -0.5, 3.1, -1.12, AMBER, "Neon", "small", true, nil),
+		block("WeakSpot", 0.8, 0.8, 0.3, 0, 2.1, -1.15, AMBER, "Neon", "large", nil),
+		block("Arm", 0.55, 1.8, 0.55, 1.65, 2.4, 0, MUD_DARK, "Wood", "large", "arm"),
+		block("Arm", 0.55, 1.8, 0.55, -1.65, 2.4, 0, MUD_DARK, "Wood", "large", "arm"),
+		ball("Fist", 0.8, 1.65, 1.4, -0.2, MUD, "Wood", "large", nil, "fist"),
+		ball("Fist", 0.8, -1.65, 1.4, -0.2, MUD, "Wood", "large", nil, "fist"),
+		block("Root", 0.7, 0.8, 0.9, 0.85, 0.4, -0.5, MUD_DARK, "Wood", "small", "leg"),
+		block("Root", 0.7, 0.8, 0.9, -0.85, 0.4, -0.5, MUD_DARK, "Wood", "small", "leg"),
+		block("Root", 0.7, 0.8, 0.9, 0.85, 0.4, 0.7, MUD_DARK, "Wood", "small", "leg"),
+		block("Root", 0.7, 0.8, 0.9, -0.85, 0.4, 0.7, MUD_DARK, "Wood", "small", "leg"),
+	},
 	root_ring = {
 		block("Root", 1.4, 0.45, 0.55, 0, 0.28, 0, BARK_DARK, "Wood", "large", nil),
 		wedge("Spike", 0.45, 0.9, 0.45, 0.35, 0.7, 0, 12, 0, 18, BARK, "Wood", "small", nil),
@@ -572,6 +673,9 @@ end
 function ModelFactory.barLift(kind: string): number
 	if kind == "grandmother_gnarl" then
 		return 26
+	end
+	if kind == "mireoak" then
+		return 22
 	end
 	if kind == "root_brute" then
 		return 8
@@ -839,6 +943,7 @@ function ModelFactory.buildEnemy(
 	local root = Instance.new("Part")
 	root.Name = if displayName ~= "" then displayName else kind
 	root.Size = rootSize
+	root.Shape = Enum.PartType.Block
 	root.CFrame = rootCFrame
 	root.Anchored = true
 	root.CanCollide = false
@@ -846,9 +951,15 @@ function ModelFactory.buildEnemy(
 	root.CanQuery = true
 	root.CastShadow = false
 	root.Massless = true
+	-- Hit volume. Transparency 1, and it is not the Highlight adornee.
+	-- Visuals live on Body so a rim light cannot draw this block.
 	root.Transparency = 1
+	root:SetAttribute("ShardfallHitbox", true)
 	root.Parent = model
 	model.PrimaryPart = root
+	local body = Instance.new("Model")
+	body.Name = "Body"
+	body.Parent = model
 	local foot = -rootSize.Y / 2
 	for _, source in ipairs(laid) do
 		local ox = source.offset[1]
@@ -856,7 +967,7 @@ function ModelFactory.buildEnemy(
 		local oz = source.offset[3]
 		local localCf = CFrame.new(ox, oy, oz)
 			* CFrame.Angles(source.rotation[1], source.rotation[2], source.rotation[3])
-		local visual = spawnPiece(root, source, root.CFrame * localCf, true)
+		local visual = spawnPiece(body, source, root.CFrame * localCf, true)
 		visual:SetAttribute("Ox", ox)
 		visual:SetAttribute("Oy", oy)
 		visual:SetAttribute("Oz", oz)
@@ -869,19 +980,54 @@ function ModelFactory.buildEnemy(
 		visual.CanTouch = false
 	end
 	root:SetAttribute("ShardfallPieces", #laid)
-	local roleLight = if kind == "grandmother_gnarl"
+	local roleLight = if kind == "grandmother_gnarl" or kind == "mireoak"
 		then 22
 		elseif kind == "root_brute" or kind == "thorn_sprite" then 12
 		elseif kind == "spore_bat" then 8
 		else 0
 	if roleLight > 0 then
-		attachLight(root, if kind == "grandmother_gnarl" then AMBER else CYAN, roleLight)
+		attachLight(
+			root,
+			if kind == "grandmother_gnarl" or kind == "mireoak" then AMBER else CYAN,
+			roleLight
+		)
 	end
 	root.Anchored = true
 	root.CanCollide = false
 	root.CanTouch = false
 	root.Transparency = 1
 	return root
+end
+
+-- Highlight and hit-flash adorn this, never the transparent hit volume.
+function ModelFactory.adorn(root: BasePart): Instance
+	local model = root.Parent
+	if model ~= nil then
+		local body = model:FindFirstChild("Body")
+		if body ~= nil then
+			return body
+		end
+	end
+	return root
+end
+
+local function visualParts(root: BasePart): { BasePart }
+	local scope: Instance = ModelFactory.adorn(root)
+	local parts = {}
+	if scope == root then
+		for _, child in ipairs(root:GetChildren()) do
+			if child:IsA("BasePart") then
+				table.insert(parts, child)
+			end
+		end
+		return parts
+	end
+	for _, descendant in ipairs(scope:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(parts, descendant)
+		end
+	end
+	return parts
 end
 
 function ModelFactory.step(root: BasePart, time: number, moving: boolean)
@@ -896,7 +1042,7 @@ function ModelFactory.step(root: BasePart, time: number, moving: boolean)
 		root.CanCollide = false
 		root.CanTouch = false
 	end
-	for _, child in ipairs(root:GetChildren()) do
+	for _, child in ipairs(visualParts(root)) do
 		if child:IsA("BasePart") then
 			if child.Anchored ~= true or child.CanCollide == true or child.CanTouch == true then
 				if child:GetAttribute("ShardfallLoose") ~= true then
@@ -917,6 +1063,10 @@ function ModelFactory.step(root: BasePart, time: number, moving: boolean)
 				local limb = child:GetAttribute("Limb")
 				local limbName = if type(limb) == "string" then limb else "body"
 				local pitch, bob = ModelFactory.motion(kindName, limbName, time, moving)
+				local flinchUntil = root:GetAttribute("ShardfallFlinchUntil")
+				if type(flinchUntil) == "number" and time < flinchUntil then
+					pitch += 18
+				end
 				local localCf = CFrame.new(ox, oy, oz)
 					* CFrame.Angles(
 						if type(rx) == "number" then rx else 0,
@@ -939,8 +1089,7 @@ function ModelFactory.flash(root: BasePart)
 	highlight.OutlineColor = Color3.fromRGB(255, 220, 140)
 	highlight.FillTransparency = 0.35
 	highlight.OutlineTransparency = 0.1
-	local host = root.Parent
-	local adorn: Instance = if host ~= nil and host:IsA("Model") then host else root
+	local adorn = ModelFactory.adorn(root)
 	highlight.Adornee = adorn
 	highlight.Parent = adorn
 	task.delay(0.12, function()
@@ -951,7 +1100,7 @@ function ModelFactory.flash(root: BasePart)
 end
 
 function ModelFactory.tintNamed(root: BasePart, name: string, color: Color3?)
-	for _, descendant in ipairs(root:GetDescendants()) do
+	for _, descendant in ipairs(visualParts(root)) do
 		if descendant:IsA("BasePart") and descendant.Name == name then
 			if color == nil then
 				local red = descendant:GetAttribute("BaseR")
@@ -968,15 +1117,40 @@ function ModelFactory.tintNamed(root: BasePart, name: string, color: Color3?)
 end
 
 function ModelFactory.dissolve(root: BasePart)
-	for _, descendant in ipairs(root:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			descendant.Transparency = 1
+	local fading = {}
+	for _, descendant in ipairs(visualParts(root)) do
+		if descendant ~= root then
 			descendant.CanCollide = false
-		elseif descendant:IsA("ParticleEmitter") or descendant:IsA("PointLight") then
-			(descendant :: any).Enabled = false
-		elseif descendant:IsA("Motor6D") then
-			descendant.Transform = CFrame.new()
+			table.insert(fading, descendant)
+			for _, child in ipairs(descendant:GetChildren()) do
+				if child:IsA("ParticleEmitter") or child:IsA("PointLight") then
+					child.Enabled = false
+				elseif child:IsA("Motor6D") then
+					child.Transform = CFrame.new()
+				end
+			end
 		end
+	end
+	local puff = Instance.new("ParticleEmitter")
+	puff.Name = "Death"
+	puff.Rate = 12
+	puff.Lifetime = NumberRange.new(0.2, 0.45)
+	puff.Speed = NumberRange.new(2, 6)
+	puff.Parent = root
+	local steps = 5
+	for step = 1, steps do
+		local alpha = step / steps
+		task.delay(0.45 * alpha, function()
+			for _, part in ipairs(fading) do
+				if part.Parent ~= nil then
+					part.Transparency = alpha
+				end
+			end
+			if step == steps and puff.Parent ~= nil then
+				puff.Enabled = false
+				puff:Destroy()
+			end
+		end)
 	end
 	local host = root.Parent
 	local folder = if host ~= nil then host.Parent else nil

@@ -61,10 +61,18 @@ function SessionLock.status(lock: any, now: number, jobId: string, timeout: numb
 	if lock.jobId == jobId then
 		return "owned"
 	end
-	if type(lock.lockedAt) ~= "number" then
+	local lockedAt = lock.lockedAt
+	-- NaN and infinity never age out. A foreign lock with either value
+	-- would stay busy forever, so another server may claim it.
+	if
+		type(lockedAt) ~= "number"
+		or lockedAt ~= lockedAt
+		or lockedAt >= math.huge
+		or lockedAt <= -math.huge
+	then
 		return "expired"
 	end
-	if now - lock.lockedAt >= timeout then
+	if now - lockedAt >= timeout then
 		return "expired"
 	end
 	return "busy"
@@ -123,6 +131,21 @@ function SessionLock.trySave(
 		Data = data,
 		Lock = lock,
 	}, "saved"
+end
+
+-- Clear a lock this server owns. Data stays the stored document, so a
+-- failed load cannot replace a claimed profile with a blank one.
+function SessionLock.tryRelease(document: Document?, jobId: string): (Document?, string)
+	if document == nil then
+		return nil, "missing"
+	end
+	if SessionLock.status(document.Lock, 0, jobId, SessionLock.TIMEOUT_SECONDS) ~= "owned" then
+		return nil, "busy"
+	end
+	return {
+		Data = document.Data,
+		Lock = SessionLock.cleared(),
+	}, "released"
 end
 
 return SessionLock

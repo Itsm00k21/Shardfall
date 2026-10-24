@@ -5,14 +5,148 @@ local describe = framework.describe
 local it = framework.it
 local expect = framework.expect
 
+local FirstSession = require("../src/ReplicatedStorage/Shared/FirstSession")
+local Onboarding = require("../src/ReplicatedStorage/Shared/Onboarding")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 
 describe("Schema", function()
+	it("treats a missing key as a new profile", function()
+		local profile, err = Schema.migrate(nil)
+		expect(err).toBeNil()
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
+		expect(profile.onboardDone).toEqual(false)
+		expect(profile.onboardStep).toEqual("open")
+		expect(profile.firstSession.returning).toEqual(false)
+		expect(profile.shardTokens).toEqual(10)
+		local again = Schema.migrate(profile)
+		assert(again ~= nil)
+		expect(again.shardTokens).toEqual(10)
+		expect(again.onboardDone).toEqual(false)
+		expect(again.onboardStep).toEqual("open")
+		expect(again.firstSession.returning).toEqual(false)
+		local kept = Schema.migrate({ shardTokens = 37 })
+		assert(kept ~= nil)
+		expect(kept.shardTokens).toEqual(37)
+		local emptyWallet = Schema.migrate({ shardTokens = 0 })
+		assert(emptyWallet ~= nil)
+		expect(emptyWallet.shardTokens).toEqual(0)
+		local payout = Schema.deepCopy(profile)
+		Onboarding.starter(payout)
+		expect(payout.gold).toEqual(250)
+		expect(payout.onboardDone).toEqual(true)
+		local skipped = FirstSession.skip(profile.firstSession, { classId = "warden" })
+		expect(skipped.ok).toEqual(true)
+		expect(#skipped.rewards > 0).toBeTrue()
+
+		local legacy, legacyErr = Schema.migrate({ schemaVersion = 13, gold = 4 })
+		expect(legacyErr).toBeNil()
+		assert(legacy ~= nil)
+		expect(legacy.onboardDone).toEqual(true)
+		expect(legacy.onboardStep).toEqual("haven")
+		expect(legacy.gold).toEqual(4)
+		expect(legacy.firstSession.returning).toEqual(true)
+		local oldSkip = FirstSession.skip(legacy.firstSession, { classId = "warden" })
+		expect(oldSkip.ok).toEqual(true)
+		expect(#oldSkip.rewards).toEqual(0)
+	end)
+
+	it("turns an infinite wallet into zero and keeps a real gold value", function()
+		local broken, err = Schema.migrate({
+			schemaVersion = Schema.VERSION,
+			gold = math.huge,
+			gems = math.huge,
+			raidMarks = math.huge,
+		})
+		expect(err).toBeNil()
+		assert(broken ~= nil)
+		expect(broken.gold).toEqual(0)
+		expect(broken.gems).toEqual(0)
+		expect(broken.raidMarks).toEqual(0)
+
+		local nanGold, nanErr = Schema.migrate({
+			schemaVersion = Schema.VERSION,
+			gold = 0 / 0,
+		})
+		expect(nanErr).toBeNil()
+		assert(nanGold ~= nil)
+		expect(nanGold.gold).toEqual(0)
+
+		local kept, keptErr = Schema.migrate({
+			schemaVersion = Schema.VERSION,
+			gold = 40,
+		})
+		expect(keptErr).toBeNil()
+		assert(kept ~= nil)
+		expect(kept.gold).toEqual(40)
+	end)
+
+	it("keeps a versionless profile's wallets and lastSeen", function()
+		local seen = 1_600_000_000
+		local saved = {
+			gold = 40,
+			shardTokens = 100,
+			gems = 9,
+			raidMarks = 12,
+			lastSeen = seen,
+			companions = {
+				{ species = "shardjaw", name = "Shardjaw" },
+			},
+			codex = { unlocked = { attack = true } },
+			inventory = {
+				abc = { uid = "abc", name = "Wooden Sword", kind = "Weapon" },
+			},
+		}
+		local profile, err = Schema.migrate(saved)
+		expect(err).toBeNil()
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(Schema.VERSION)
+		expect(profile.gold).toEqual(40)
+		expect(profile.shardTokens).toEqual(100)
+		expect(profile.gems).toEqual(9)
+		expect(profile.raidMarks).toEqual(12)
+		expect(profile.lastSeen).toEqual(seen)
+		expect(profile.companions[1].species).toEqual("shardjaw")
+		expect(profile.codex.unlocked.attack).toEqual(true)
+		expect(profile.inventory.abc.name).toEqual("Wooden Sword")
+	end)
+
+	it("refuses a bag that is not a table and does not empty it", function()
+		local saved = {
+			schemaVersion = 26,
+			gold = 10,
+			inventory = "nope",
+			pets = "nope",
+			materials = "nope",
+			equipped = { weapon = "abc" },
+		}
+		local profile, err = Schema.migrate(saved)
+		expect(profile).toBeNil()
+		expect(err).toEqual("corrupt")
+		expect(saved.inventory).toEqual("nope")
+		expect(saved.gold).toEqual(10)
+		expect(saved.equipped.weapon).toEqual("abc")
+
+		local reconciled = Schema.reconcile({
+			schemaVersion = 26,
+			gold = 10,
+			inventory = "nope",
+			pets = "nope",
+			materials = "nope",
+			equipped = { weapon = "abc" },
+		})
+		expect(reconciled.inventory).toEqual("nope")
+		expect(reconciled.pets).toEqual("nope")
+		expect(reconciled.materials).toEqual("nope")
+		expect(reconciled.gold).toEqual(10)
+		expect(reconciled.equipped.weapon).toEqual("abc")
+	end)
+
 	it("starts a new profile at version 1 with starter tokens", function()
 		local profile = Schema.template()
 		expect(profile.schemaVersion).toEqual(Schema.VERSION)
 		expect(profile.level).toEqual(1)
-		expect(profile.shardTokens).toEqual(25)
+		expect(profile.shardTokens).toEqual(10)
 		expect(profile.shardLuck).toEqual(0)
 		expect(profile.gold).toEqual(0)
 		expect(profile.ascension).toEqual(0)
@@ -34,7 +168,7 @@ describe("Schema", function()
 		expect(profile.schemaVersion).toEqual(Schema.VERSION)
 		expect(profile.gold).toEqual(40)
 		expect(profile.shardLuck).toEqual(0)
-		expect(profile.shardTokens).toEqual(25)
+		expect(profile.shardTokens).toEqual(10)
 		expect(profile.inventory.abc.name).toEqual("Wooden Sword")
 		expect((saved :: any).futureFlag).toEqual(true)
 		expect((profile :: any).futureFlag).toEqual(true)
@@ -72,7 +206,7 @@ describe("Schema", function()
 		assert(profile ~= nil)
 		expect(profile.gold).toEqual(0)
 		expect(profile.level).toEqual(1)
-		expect(profile.shardTokens).toEqual(25)
+		expect(profile.shardTokens).toEqual(10)
 		expect(profile.shardLuck).toEqual(0)
 	end)
 
@@ -94,7 +228,7 @@ describe("Schema", function()
 		expect(profile.inventory.abc.name).toEqual("Wooden Sword")
 		expect(profile.gold).toEqual(0)
 		expect(snapshot.xpToNext).toEqual(100)
-		expect(Schema.xpToNext(3)).toEqual(300)
+		expect(Schema.xpToNext(3)).toEqual(math.floor(100 * (3 ^ 1.6) + 0.5))
 	end)
 
 	it("tracks pity per pool and files pets separately from weapons", function()
@@ -359,5 +493,478 @@ describe("Schema", function()
 		})
 		assert(dropped ~= nil)
 		expect(dropped.graphicsQuality).toEqual("")
+		expect(dropped.schemaVersion).toEqual(Schema.VERSION)
+		expect(dropped.shardRolls).toEqual(0)
+		expect(dropped.sinceEpic).toEqual(0)
+		expect(dropped.sinceLegendary).toEqual(0)
+		expect(dropped.quickRoll).toEqual(false)
+		expect(dropped.vip).toEqual(false)
+		expect(dropped.shake).toEqual(true)
+		local pityCopy = Schema.snapshot(dropped)
+		expect(pityCopy.shardRolls).toEqual(0)
+		expect(pityCopy.shake).toEqual(true)
+
+		local keptRolls = Schema.migrate({
+			schemaVersion = 10,
+			shardRolls = 40,
+			sinceEpic = 12,
+			sinceLegendary = 400,
+			quickRoll = true,
+			vip = true,
+			shake = false,
+			gold = 2,
+		})
+		assert(keptRolls ~= nil)
+		expect(keptRolls.shardRolls).toEqual(40)
+		expect(keptRolls.sinceEpic).toEqual(12)
+		expect(keptRolls.sinceLegendary).toEqual(400)
+		expect(keptRolls.quickRoll).toEqual(true)
+		expect(keptRolls.vip).toEqual(true)
+		expect(keptRolls.shake).toEqual(false)
+		expect(keptRolls.gold).toEqual(2)
+		expect(keptRolls.chests.Common).toEqual(0)
+		expect(keptRolls.shardKeys).toEqual(10)
+		expect(keptRolls.starterGoals.granted.rolls).toEqual(true)
+		expect(keptRolls.starterGoals.granted.forge).toEqual(false)
+		expect(keptRolls.starterGoals.granted.level).toEqual(false)
+		expect(keptRolls.lastLoginDay).toEqual(-1)
+		expect(keptRolls.chestDuplicates).toEqual("dust")
+		local chestCopy = Schema.snapshot(keptRolls)
+		expect(chestCopy.chests.Mythic).toEqual(0)
+		expect(chestCopy.shardDust).toEqual(0)
+		expect(keptRolls.musicVolume).toEqual(1)
+		expect(keptRolls.sfxVolume).toEqual(1)
+		expect(chestCopy.musicVolume).toEqual(1)
+		expect(chestCopy.sfxVolume).toEqual(1)
+
+		local quiet = Schema.migrate({
+			schemaVersion = 12,
+			musicVolume = 0,
+			sfxVolume = 2,
+			gold = 3,
+		})
+		assert(quiet ~= nil)
+		expect(quiet.musicVolume).toEqual(0)
+		expect(quiet.sfxVolume).toEqual(1)
+		expect(quiet.gold).toEqual(3)
+	end)
+
+	it("fills per-class action bars when a version 23 save is migrated", function()
+		local profile = Schema.migrate({
+			schemaVersion = 23,
+			classId = "tidecaller",
+			gold = 5,
+		})
+		assert(profile ~= nil)
+		expect(profile.schemaVersion).toEqual(26)
+		expect(profile.gold).toEqual(5)
+		local bar = profile.actionBars.tidecaller
+		expect(bar.locked).toEqual(false)
+		expect(#bar.slots).toEqual(8)
+		expect(bar.slots[1]).toEqual({ kind = "skill", id = "tidal_bolt" })
+		expect(bar.slots[2]).toEqual({ kind = "skill", id = "healing_pool" })
+		expect(bar.slots[3]).toEqual({ kind = "skill", id = "bubble_ward" })
+		expect(bar.slots[4]).toEqual({ kind = "skill", id = "undertow" })
+		expect(bar.slots[5]).toEqual({ kind = "skill", id = "monsoon" })
+		expect(bar.slots[6]).toEqual({ kind = "consumable", id = "healing_tonic" })
+		expect(bar.slots[7]).toEqual({ kind = "empty", id = "" })
+		expect(bar.slots[8]).toEqual({ kind = "empty", id = "" })
+		local fresh = Schema.template()
+		expect(fresh.schemaVersion).toEqual(Schema.VERSION)
+		expect(fresh.actionBars.tidecaller.slots[1].id).toEqual("tidal_bolt")
+		expect(fresh.actionBars.warden.slots[1].id).toEqual("thorn_bash")
+		expect(fresh.actionBars.warden.slots[6].id).toEqual("healing_tonic")
+
+		local slots = {}
+		for index = 1, 8 do
+			slots[index] = { kind = "empty", id = "" }
+		end
+		slots[1] = { kind = "skill", id = "healing_pool" }
+		slots[2] = { kind = "skill", id = "thorn_bash" }
+		slots[8] = { kind = "skill", id = "tidal_bolt" }
+		local kept = Schema.migrate({
+			schemaVersion = 24,
+			classId = "tidecaller",
+			gold = 1,
+			actionBars = {
+				tidecaller = { locked = true, slots = slots },
+			},
+		})
+		assert(kept ~= nil)
+		expect(kept.schemaVersion).toEqual(26)
+		expect(kept.gold).toEqual(1)
+		expect(kept.actionBars.tidecaller.locked).toEqual(true)
+		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+		expect(kept.actionBars.tidecaller.slots[2].kind).toEqual("empty")
+		expect(kept.actionBars.tidecaller.slots[8].id).toEqual("tidal_bolt")
+		expect(kept.actionBars.warden.slots[1].id).toEqual("thorn_bash")
+		local copy = Schema.snapshot(kept)
+		expect(copy.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+		copy.actionBars.tidecaller.slots[1].id = "changed"
+		expect(kept.actionBars.tidecaller.slots[1].id).toEqual("healing_pool")
+	end)
+end)
+
+describe("Codex seen flags", function()
+	local IDS = {
+		"attack",
+		"dodge",
+		"perfect",
+		"skills",
+		"telegraphs",
+		"shards",
+		"doors",
+		"pets",
+		"crafting",
+		"rarity",
+	}
+
+	local function expectLocked(codex: any)
+		expect(type(codex)).toEqual("table")
+		expect(type(codex.unlocked)).toEqual("table")
+		for _, id in ipairs(IDS) do
+			expect(codex.unlocked[id]).toEqual(false)
+		end
+	end
+
+	it("starts a new profile and a version 24 save locked", function()
+		expect(Schema.VERSION).toEqual(26)
+		local fresh = Schema.template()
+		expect(fresh.schemaVersion).toEqual(26)
+		expectLocked(fresh.codex)
+
+		local old = Schema.migrate({
+			schemaVersion = 24,
+			gold = 7,
+			codex = { unlocked = { attack = true } },
+		})
+		assert(old ~= nil)
+		expect(old.schemaVersion).toEqual(26)
+		expect(old.gold).toEqual(7)
+		expectLocked(old.codex)
+	end)
+
+	it("keeps saved flags and fills a missing record", function()
+		local unlocked = {}
+		for _, id in ipairs(IDS) do
+			unlocked[id] = false
+		end
+		unlocked.attack = true
+		unlocked.rarity = true
+		local kept = Schema.migrate({
+			schemaVersion = 25,
+			gold = 4,
+			codex = { unlocked = unlocked, paid = true },
+		})
+		assert(kept ~= nil)
+		expect(kept.schemaVersion).toEqual(26)
+		expect(kept.gold).toEqual(4)
+		expect(kept.codex.unlocked.attack).toEqual(true)
+		expect(kept.codex.unlocked.rarity).toEqual(true)
+		expect(kept.codex.unlocked.dodge).toEqual(false)
+		expect(kept.codex.unlocked.crafting).toEqual(false)
+		expect(kept.codex.paid).toBeNil()
+
+		local partial = Schema.migrate({
+			schemaVersion = 25,
+			codex = { unlocked = { attack = true, dodge = 1, pets = "true" } },
+		})
+		assert(partial ~= nil)
+		expect(partial.codex.unlocked.attack).toEqual(true)
+		expect(partial.codex.unlocked.dodge).toEqual(false)
+		expect(partial.codex.unlocked.pets).toEqual(false)
+		expect(partial.codex.unlocked.skills).toEqual(false)
+
+		local missing = Schema.migrate({ schemaVersion = 25, gold = 2 })
+		assert(missing ~= nil)
+		expect(missing.gold).toEqual(2)
+		expectLocked(missing.codex)
+
+		local copy = Schema.snapshot(kept)
+		expect(copy.codex.unlocked.attack).toEqual(true)
+		copy.codex.unlocked.attack = false
+		expect(kept.codex.unlocked.attack).toEqual(true)
+	end)
+
+	it("keeps the saved flags when an unlock fails", function()
+		local saved = {
+			unlocked = {
+				attack = true,
+				dodge = false,
+				perfect = false,
+				skills = false,
+				telegraphs = false,
+				shards = false,
+				doors = false,
+				pets = false,
+				crafting = false,
+				rarity = false,
+			},
+		}
+		table.freeze(saved.unlocked)
+		table.freeze(saved)
+		local failed = {
+			ok = false,
+			state = {
+				unlocked = {
+					attack = false,
+					dodge = true,
+				},
+			},
+			paid = true,
+			productId = 0,
+			robux = 0,
+			cost = 0,
+			skip = false,
+		}
+		table.freeze(failed.state.unlocked)
+		table.freeze(failed.state)
+		table.freeze(failed)
+		local kept = Schema.applyCodex(saved, failed)
+		expect(kept.unlocked.attack).toEqual(true)
+		expect(kept.unlocked.dodge).toEqual(false)
+		expect(kept.keys).toBeNil()
+		expect(kept.gold).toBeNil()
+		expect(saved.unlocked.attack).toEqual(true)
+		expect(failed.ok).toEqual(false)
+		expect(failed.state.unlocked.dodge).toEqual(true)
+		expect(kept == saved).toBeFalse()
+
+		local missing = Schema.applyCodex(saved, nil)
+		expect(missing.unlocked.attack).toEqual(true)
+
+		local skipped = Schema.applyCodex(saved, {
+			ok = true,
+			skip = true,
+			state = { unlocked = { attack = false, dodge = true } },
+		})
+		expect(skipped.unlocked.attack).toEqual(true)
+		expect(skipped.unlocked.dodge).toEqual(false)
+
+		local named = Schema.applyCodex(saved, {
+			ok = true,
+			userId = 1,
+			state = { unlocked = { dodge = true } },
+		})
+		expect(named.unlocked.attack).toEqual(true)
+		expect(named.unlocked.dodge).toEqual(false)
+
+		local opened = {
+			ok = true,
+			paid = true,
+			state = {
+				unlocked = {
+					attack = true,
+					dodge = true,
+					perfect = false,
+					skills = false,
+					telegraphs = false,
+					shards = false,
+					doors = false,
+					pets = false,
+					crafting = false,
+					rarity = true,
+				},
+			},
+		}
+		table.freeze(opened.state.unlocked)
+		table.freeze(opened.state)
+		table.freeze(opened)
+		local stored = Schema.applyCodex(saved, opened)
+		expect(stored.unlocked.attack).toEqual(true)
+		expect(stored.unlocked.dodge).toEqual(true)
+		expect(stored.unlocked.rarity).toEqual(true)
+		expect(stored.unlocked.skills).toEqual(false)
+		expect(saved.unlocked.dodge).toEqual(false)
+		expect(opened.state.unlocked.dodge).toEqual(true)
+	end)
+end)
+
+describe("Training Grove record", function()
+	local function expectEmpty(grove: any)
+		expect(grove.hits).toEqual(0)
+		expect(grove.damage).toEqual(0)
+		expect(grove.healing).toEqual(0)
+		expect(grove.up).toEqual(true)
+		expect(grove.dummy).toEqual(false)
+		expect(grove.dodge).toEqual(false)
+		expect(grove.room).toEqual(false)
+		expect(grove.cosmetic).toEqual(false)
+		expect(grove.colors.red).toEqual(false)
+		expect(grove.colors.yellow).toEqual(false)
+		expect(grove.colors.purple).toEqual(false)
+		expect(grove.colors.blue).toEqual(false)
+		expect(grove.keys).toBeNil()
+		expect(grove.gold).toBeNil()
+	end
+
+	it("starts a new profile and a version 25 save empty", function()
+		expect(Schema.VERSION).toEqual(26)
+		local fresh = Schema.template()
+		expect(fresh.schemaVersion).toEqual(26)
+		expectEmpty(fresh.trainingGrove)
+		expect(fresh.codex.unlocked.attack).toEqual(false)
+
+		local old = Schema.migrate({
+			schemaVersion = 25,
+			gold = 6,
+			codex = {
+				unlocked = {
+					attack = true,
+					dodge = false,
+					perfect = false,
+					skills = false,
+					telegraphs = false,
+					shards = false,
+					doors = false,
+					pets = false,
+					crafting = false,
+					rarity = false,
+				},
+			},
+			trainingGrove = { hits = 9, cosmetic = true, keys = 10, gold = 15 },
+		})
+		assert(old ~= nil)
+		expect(old.schemaVersion).toEqual(26)
+		expect(old.gold).toEqual(6)
+		expect(old.codex.unlocked.attack).toEqual(true)
+		expect(old.codex.unlocked.dodge).toEqual(false)
+		expectEmpty(old.trainingGrove)
+		expect(old.codex.hits).toBeNil()
+	end)
+
+	it("keeps a saved grove and does not fold it into codex", function()
+		local kept = Schema.migrate({
+			schemaVersion = 26,
+			gold = 3,
+			codex = { unlocked = { attack = true } },
+			trainingGrove = {
+				hits = 4,
+				damage = 12,
+				healing = 1.9,
+				up = false,
+				dummy = true,
+				dodge = true,
+				colors = { red = true, yellow = false, purple = 1, blue = "true" },
+				room = true,
+				cosmetic = true,
+				keys = 10,
+				gold = 15,
+			},
+		})
+		assert(kept ~= nil)
+		expect(kept.schemaVersion).toEqual(26)
+		expect(kept.gold).toEqual(3)
+		expect(kept.codex.unlocked.attack).toEqual(true)
+		expect(kept.trainingGrove.hits).toEqual(4)
+		expect(kept.trainingGrove.damage).toEqual(12)
+		expect(kept.trainingGrove.healing).toEqual(1)
+		expect(kept.trainingGrove.up).toEqual(false)
+		expect(kept.trainingGrove.dummy).toEqual(true)
+		expect(kept.trainingGrove.dodge).toEqual(true)
+		expect(kept.trainingGrove.colors.red).toEqual(true)
+		expect(kept.trainingGrove.colors.yellow).toEqual(false)
+		expect(kept.trainingGrove.colors.purple).toEqual(false)
+		expect(kept.trainingGrove.colors.blue).toEqual(false)
+		expect(kept.trainingGrove.room).toEqual(true)
+		expect(kept.trainingGrove.cosmetic).toEqual(true)
+		expect(kept.trainingGrove.keys).toBeNil()
+		expect(kept.trainingGrove.gold).toBeNil()
+
+		local missing = Schema.migrate({ schemaVersion = 26, gold = 1 })
+		assert(missing ~= nil)
+		expectEmpty(missing.trainingGrove)
+
+		local copy = Schema.snapshot(kept)
+		expect(copy.trainingGrove.hits).toEqual(4)
+		copy.trainingGrove.hits = 0
+		expect(kept.trainingGrove.hits).toEqual(4)
+	end)
+
+	it("keeps the saved record when a grove call fails", function()
+		local saved = {
+			hits = 2,
+			damage = 8,
+			healing = 0,
+			up = true,
+			dummy = true,
+			dodge = false,
+			colors = { red = true, yellow = false, purple = false, blue = false },
+			room = false,
+			cosmetic = false,
+		}
+		table.freeze(saved.colors)
+		table.freeze(saved)
+		local failed = {
+			ok = false,
+			keys = 10,
+			gold = 15,
+			paid = true,
+			productId = 0,
+			robux = 0,
+			cost = 0,
+			skip = false,
+			state = { hits = 0, cosmetic = true, keys = 10, gold = 15 },
+		}
+		table.freeze(failed.state)
+		table.freeze(failed)
+		local kept = Schema.applyGrove(saved, failed)
+		expect(kept.hits).toEqual(2)
+		expect(kept.cosmetic).toEqual(false)
+		expect(kept.colors.red).toEqual(true)
+		expect(kept.keys).toBeNil()
+		expect(kept.gold).toBeNil()
+		expect(saved.hits).toEqual(2)
+		expect(failed.state.hits).toEqual(0)
+		expect(kept == saved).toBeFalse()
+
+		local skipped = Schema.applyGrove(saved, {
+			ok = true,
+			skip = true,
+			state = { hits = 9, cosmetic = true },
+		})
+		expect(skipped.hits).toEqual(2)
+		expect(skipped.cosmetic).toEqual(false)
+
+		local named = Schema.applyGrove(saved, {
+			ok = true,
+			guildId = "grove",
+			state = { hits = 9 },
+		})
+		expect(named.hits).toEqual(2)
+
+		local opened = {
+			ok = true,
+			paid = true,
+			keys = 10,
+			gold = 15,
+			state = {
+				hits = 3,
+				damage = 20,
+				healing = 0,
+				up = true,
+				dummy = true,
+				dodge = true,
+				colors = { red = true, yellow = true, purple = true, blue = true },
+				room = true,
+				cosmetic = true,
+				keys = 10,
+				gold = 15,
+			},
+		}
+		table.freeze(opened.state.colors)
+		table.freeze(opened.state)
+		table.freeze(opened)
+		local stored = Schema.applyGrove(saved, opened)
+		expect(stored.hits).toEqual(3)
+		expect(stored.damage).toEqual(20)
+		expect(stored.dodge).toEqual(true)
+		expect(stored.colors.blue).toEqual(true)
+		expect(stored.room).toEqual(true)
+		expect(stored.cosmetic).toEqual(true)
+		expect(stored.keys).toBeNil()
+		expect(stored.gold).toBeNil()
+		expect(saved.hits).toEqual(2)
+		expect(opened.state.hits).toEqual(3)
 	end)
 end)

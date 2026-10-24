@@ -1,0 +1,90 @@
+--!strict
+
+local fs = require("@lune/fs")
+
+local framework = require("./framework")
+local describe = framework.describe
+local it = framework.it
+local expect = framework.expect
+
+local UiTheme = require("../src/ReplicatedStorage/Shared/UiTheme")
+
+describe("UiTheme", function()
+	it("keeps padding, type, and taps on one scale", function()
+		expect(UiTheme.PAD >= 8).toBeTrue()
+		expect(UiTheme.safeMargin() >= 8).toBeTrue()
+		expect(UiTheme.MIN_TEXT >= 14).toBeTrue()
+		expect(UiTheme.CORNER > 0).toBeTrue()
+		expect(UiTheme.TAP >= 64).toBeTrue()
+		expect(UiTheme.TOUCH >= 44).toBeTrue()
+		expect(UiTheme.MOTION.open).toEqual(0.26)
+		expect(UiTheme.MOTION.panel).toEqual(0.15)
+		expect(UiTheme.MOTION.stagger).toEqual(0.1)
+		expect(UiTheme.MOTION.pop).toEqual(0.12)
+		expect(UiTheme.BACKDROP).toEqual(0.5)
+		expect(#UiTheme.RARITY_ORDER).toEqual(5)
+		expect(UiTheme.STROKE >= 1).toBeTrue()
+		expect(UiTheme.STROKE_BOLD >= 1 and UiTheme.STROKE_BOLD <= 2).toBeTrue()
+		expect(UiTheme.PAD).toEqual(8)
+		expect(UiTheme.GAP).toEqual(12)
+		expect(UiTheme.EDGE).toEqual(16)
+		expect(UiTheme.HEADER_FONT).toEqual("BuilderSansBold")
+		expect(UiTheme.BODY_FONT).toEqual("BuilderSans")
+		expect(UiTheme.RGB.header ~= nil).toBeTrue()
+		expect(UiTheme.RGB.body ~= nil).toBeTrue()
+		expect(UiTheme.RGB.loss ~= nil).toBeTrue()
+		expect(UiTheme.compareTone(2)).toEqual("gain")
+		expect(UiTheme.compareTone(-1)).toEqual("loss")
+		expect(UiTheme.compareTone(0)).toEqual("same")
+		expect(UiTheme.labelWidth("Vault") >= 64).toBeTrue()
+		expect(UiTheme.labelWidth("Materials") > UiTheme.labelWidth("Gold")).toBeTrue()
+		for _, background in ipairs({ "body", "panel", "header" }) do
+			expect(UiTheme.contrast(UiTheme.RGB.text, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+			expect(UiTheme.contrast(UiTheme.RGB.muted, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+			expect(UiTheme.contrast(UiTheme.RGB.gold, UiTheme.RGB[background]) >= 4.5).toBeTrue()
+		end
+		expect(UiTheme.MIN_TEXT >= 14).toBeTrue()
+	end)
+
+	it("paints Mythic red and Secret white from the Rarities ladder", function()
+		local red, green, blue = UiTheme.rarityColor("Mythic")
+		expect(red).toEqual(230)
+		expect(green).toEqual(64)
+		expect(blue).toEqual(78)
+		local whiteR, whiteG, whiteB = UiTheme.rarityColor("Secret")
+		expect(whiteR).toEqual(255)
+		expect(whiteG).toEqual(255)
+		expect(whiteB).toEqual(255)
+		local goldR, goldG, goldB = UiTheme.rarityColor("Legendary")
+		expect(goldR).toEqual(255)
+		expect(goldG).toEqual(196)
+		expect(goldB).toEqual(72)
+		local commonR, commonG, commonB = UiTheme.rarityColor("Common")
+		expect(commonR).toEqual(198)
+		expect(commonG).toEqual(196)
+		expect(commonB).toEqual(206)
+		local unknownR, unknownG, unknownB = UiTheme.rarityColor("NotARarity")
+		expect(unknownR).toEqual(commonR)
+		expect(unknownG).toEqual(commonG)
+		expect(unknownB).toEqual(commonB)
+
+		local bag = fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/InventoryHud.luau")
+		expect(string.find(bag, 'rarity == "Mythic" or rarity == "Secret"', 1, true)).toBeNil()
+		expect(string.find(bag, 'selected.rarity == "Mythic" or selected.rarity == "Secret"', 1, true)).toBeNil()
+		local rainbows = 0
+		for _ in string.gmatch(bag, "Rarities%.isRainbow%(") do
+			rainbows += 1
+		end
+		expect(rainbows >= 2).toBeTrue()
+	end)
+
+	it("lifts a dark red so it can sit on the odds panel", function()
+		local red, green, blue = UiTheme.lift(230, 64, 78)
+		local luma = 0.2126 * (red / 255) + 0.7152 * (green / 255) + 0.0722 * (blue / 255)
+		expect(luma >= 0.62).toBeTrue()
+		local keepR, keepG, keepB = UiTheme.lift(255, 196, 64)
+		expect(keepR).toEqual(255)
+		expect(keepG).toEqual(196)
+		expect(keepB).toEqual(64)
+	end)
+end)

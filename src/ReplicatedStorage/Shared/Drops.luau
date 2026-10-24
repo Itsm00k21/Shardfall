@@ -71,6 +71,20 @@ Drops.ENEMIES = {
 	moss_crawler = { realm = "verdant", role = "normal" },
 	thorn_sprite = { realm = "verdant", role = "elite" },
 	grandmother_gnarl = { realm = "verdant", role = "boss" },
+	mud_tusk = { realm = "verdant", role = "normal" },
+	hedge_lurker = { realm = "verdant", role = "normal" },
+	seed_flinger = { realm = "verdant", role = "normal" },
+	sap_mouth = { realm = "verdant", role = "normal" },
+	mite_cloud = { realm = "verdant", role = "normal" },
+	-- Elite, not boss: the Waves Mireoak pays the realm rare, not a boss part.
+	mireoak = { realm = "verdant", role = "elite" },
+	-- V1 roster. Live rooms and waveKinds do not spawn them, so a live run
+	-- does not pay these. The gated flow can name them while enemyTypes
+	-- is on, and that flow does not grant drops.
+	chaser = { realm = "verdant", role = "normal" },
+	ranged = { realm = "verdant", role = "normal" },
+	tank = { realm = "verdant", role = "normal" },
+	boss = { realm = "verdant", role = "boss" },
 } :: { [string]: EnemyDrop }
 
 -- Extra forage on top of the realm bundle. Living Vine is a Vine Crawler
@@ -91,6 +105,21 @@ local BONUS: { [string]: { Entry } } = {
 	},
 	thorn_sprite = {
 		row("vine", 1, 1, 1),
+	},
+	mud_tusk = {
+		row("wood", 1, 1, 2),
+	},
+	hedge_lurker = {
+		row("vine", 1, 1, 1),
+	},
+	seed_flinger = {
+		row("spore", 0.6, 1, 1),
+	},
+	sap_mouth = {
+		row("bark", 0.5, 1, 1),
+	},
+	mite_cloud = {
+		row("spore", 0.4, 1, 1),
 	},
 }
 

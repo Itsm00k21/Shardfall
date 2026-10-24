@@ -5,8 +5,11 @@
 
 	Armory pools drop weapons and armor. Pet pools drop pets. The player's
 	ascension has to be at least the pool's ascension or the server will not
-	roll it. Odds are PLACEHOLDER. Weights sum to 10_000 so at 0 Shard Luck
-	the chance is weight / 100 percent. RollMath.odds reads these weights.
+	roll it. The player sheet is RarityConfig.disclose. Weights only split
+	items inside a chosen rarity. They are not the rarity odds.
+	pityLegendaryAt matches RarityConfig.LEGENDARY_PITY (150). The crack
+	reads RarityConfig.pick, not this field. Mythic and Secret rows stay
+	in the rosters but do not roll while LaunchGate.extraTiers is off.
 
 	Higher realms (Sunken Reach, Emberforge, Frostveil, Void Rift) are a
 	short placeholder roster: one drop per rarity. Verdant Wilds is the
@@ -15,6 +18,7 @@
 ]]
 
 local ItemBases = require("./ItemBases")
+local RarityConfig = require("./RarityConfig")
 
 local Pools = {}
 
@@ -80,7 +84,7 @@ local function build(definition): Pool
 		area = definition.area,
 		ascension = definition.ascension,
 		theme = definition.theme,
-		pityLegendaryAt = 50,
+		pityLegendaryAt = RarityConfig.LEGENDARY_PITY,
 		placeholder = true,
 		public = true,
 		entries = entries,
@@ -131,18 +135,21 @@ local definitions = {
 		ascension = 0,
 		theme = "Nature, beasts, wood, and vines",
 		drops = {
-			line("moss_hare", 3500),
-			line("acorn_newt", 2500),
-			line("briar_pup", 1500),
-			line("pollen_moth", 1000),
-			line("fern_stag", 600),
-			line("brook_otter", 400),
-			line("vine_lynx", 250),
-			line("myco_fox", 150),
+			line("shardjaw", 3200),
+			line("thorn_lantern", 1800),
+			line("glass_kestrel", 800),
+			line("moss_hare", 1400),
+			line("acorn_newt", 1000),
+			line("briar_pup", 600),
+			line("pollen_moth", 400),
+			line("fern_stag", 300),
+			line("brook_otter", 200),
+			line("vine_lynx", 120),
+			line("myco_fox", 80),
 			line("antler_hart", 50),
 			line("dawnbloom_wolf", 30),
-			line("thorn_hydra", 10),
-			line("grove_phoenix", 8),
+			line("thorn_hydra", 12),
+			line("grove_phoenix", 6),
 			line("sleeping_dryad", 2),
 		},
 	},

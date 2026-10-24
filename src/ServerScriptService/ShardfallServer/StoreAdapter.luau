@@ -17,6 +17,7 @@
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local CallBudget = require(ReplicatedStorage.Shared.CallBudget)
 local MemoryStore = require(ReplicatedStorage.Shared.MemoryStore)
 
 local StoreAdapter = {}
@@ -58,11 +59,14 @@ local function dataStoreAdapter(): Adapter
 end
 
 function StoreAdapter.connect(): (Adapter, string?)
-	local ok, err = pcall(function()
+	-- The probe has to finish. Studio with API access off can leave
+	-- UpdateAsync yielded, and DataService.start used to wait there forever.
+	local ok, err = CallBudget.run(CallBudget.DATASTORE_SECONDS, function()
 		local probe = DataStoreService:GetDataStore(PROBE_STORE)
 		probe:UpdateAsync("__shardfall_probe", function(current)
 			return current
 		end)
+		return true
 	end)
 	if ok then
 		return dataStoreAdapter(), nil

@@ -220,6 +220,46 @@ function CraftingLevel.copyTable(): { Milestone }
 	return rows
 end
 
+-- Levels while crafting XP is at the bar, including a saved full bar.
+function CraftingLevel.settle(profile: any): number
+	if type(profile) ~= "table" then
+		return 0
+	end
+	local level = profile.craftingLevel
+	if type(level) ~= "number" or level ~= level or level < 1 then
+		level = 1
+	end
+	level = math.floor(level)
+	if level > CraftingLevel.MAX then
+		level = CraftingLevel.MAX
+	end
+	local xp = profile.craftingXp
+	if type(xp) ~= "number" or xp ~= xp or xp < 0 then
+		xp = 0
+	end
+	xp = math.floor(xp)
+	if level >= CraftingLevel.MAX then
+		profile.craftingLevel = CraftingLevel.MAX
+		profile.craftingXp = 0
+		profile.craftingMilestones = earnedLevels(CraftingLevel.MAX)
+		return 0
+	end
+	local gained = 0
+	while level < CraftingLevel.MAX and xp >= CraftingLevel.xpToNext(level) and gained < 100 do
+		xp -= CraftingLevel.xpToNext(level)
+		level += 1
+		gained += 1
+	end
+	if level >= CraftingLevel.MAX then
+		level = CraftingLevel.MAX
+		xp = 0
+	end
+	profile.craftingLevel = level
+	profile.craftingXp = xp
+	profile.craftingMilestones = earnedLevels(level)
+	return gained
+end
+
 -- Adds crafting XP. Returns the XP that landed and how many levels were gained.
 function CraftingLevel.grant(profile: any, baseAmount: number, now: number): (number, number)
 	if type(profile) ~= "table" then
@@ -249,21 +289,9 @@ function CraftingLevel.grant(profile: any, baseAmount: number, now: number): (nu
 		amount = 0
 	end
 	amount = math.floor(amount * CraftingLevel.multiplier(profile.forgeBoostUntil, now))
-	xp += amount
-	local gained = 0
-	while level < CraftingLevel.MAX and xp >= CraftingLevel.xpToNext(level) and gained < 100 do
-		xp -= CraftingLevel.xpToNext(level)
-		level += 1
-		gained += 1
-	end
-	if level >= CraftingLevel.MAX then
-		level = CraftingLevel.MAX
-		xp = 0
-	end
 	profile.craftingLevel = level
-	profile.craftingXp = xp
-	profile.craftingMilestones = earnedLevels(level)
-	return amount, gained
+	profile.craftingXp = xp + amount
+	return amount, CraftingLevel.settle(profile)
 end
 
 for _, row in ipairs(CraftingLevel.MILESTONES) do

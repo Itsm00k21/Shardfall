@@ -3,9 +3,9 @@
 --[[
 	Haven quick travel.
 
-	Waystones unlock on first touch and stay in the save. Spawn is open
-	from the start. A travel pass skips the cooldown; nothing in the game
-	sells that pass yet.
+	Every stand is open from the first session. A travel pass skips the
+	cooldown; nothing in the game sells that pass yet. The crystal on a
+	waystone is decoration, so only the pillar named Waystone is bound.
 ]]
 
 local Haven = require("./Haven")
@@ -53,8 +53,7 @@ local market = Haven.district("market")
 local garden = Haven.district("garden")
 assert(forge ~= nil and market ~= nil and garden ~= nil, "Haven districts missing")
 
--- Stand on the walk, looking at the station. The crystal sits beside that
--- spot so the first touch is the unlock, not the teleport.
+-- Stand on the walk, looking at the station. The crystal sits beside that spot.
 Travel.DESTINATIONS = {
 	spot(
 		"spawn",
@@ -97,7 +96,6 @@ Travel.DESTINATIONS = {
 		market.x + 16,
 		market.z + 12
 	),
-	spot("portals", "Dungeon Portals", 0, 244, 0, 252, 18, 244),
 } :: { Destination }
 
 local BY_ID: { [string]: Destination } = {}
@@ -126,29 +124,18 @@ function Travel.arrival(id: string): (number?, number?, number?, number?, number
 	return dest.x, y, dest.z, dest.lookX, dest.lookZ
 end
 
-function Travel.isUnlocked(data: any, id: string): boolean
-	if BY_ID[id] == nil then
-		return false
-	end
-	if id == "spawn" then
-		return true
-	end
-	return type(data) == "table" and type(data.waystones) == "table" and data.waystones[id] == true
+function Travel.isUnlocked(_data: any, id: string): boolean
+	return BY_ID[id] ~= nil
 end
 
--- True when this touch newly unlocked the stone.
-function Travel.touch(data: any, id: string): boolean
-	if type(data) ~= "table" or BY_ID[id] == nil then
-		return false
-	end
-	if Travel.isUnlocked(data, id) then
-		return false
-	end
-	if type(data.waystones) ~= "table" then
-		data.waystones = {}
-	end
-	data.waystones[id] = true
-	return true
+-- Pillar only. The crystal carries no id, and binding both logged 12 for 6 stones.
+function Travel.shouldBind(name: string, waystoneId: any): boolean
+	return name == "Waystone" and type(waystoneId) == "string" and BY_ID[waystoneId] ~= nil
+end
+
+-- Kept so an old touch path cannot write a lock. Every stand is already open.
+function Travel.touch(_data: any, _id: string): boolean
+	return false
 end
 
 function Travel.passSkipsCooldown(data: any): boolean
@@ -183,9 +170,6 @@ function Travel.attempt(data: any, id: string, now: number): string?
 	end
 	if BY_ID[id] == nil then
 		return "Unknown destination."
-	end
-	if not Travel.isUnlocked(data, id) then
-		return "That waystone is still locked."
 	end
 	local left = Travel.remaining(data, now)
 	if left > 0 then

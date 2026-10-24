@@ -7,6 +7,8 @@ local expect = framework.expect
 
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
+local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local RollMath = require("../src/ReplicatedStorage/Shared/RollMath")
 local Traits = require("../src/ReplicatedStorage/Shared/Traits")
 
@@ -61,7 +63,8 @@ describe("RollMath odds", function()
 		expect(odds.placeholder).toBeTrue()
 		expect(string.find(odds.notice, "PLACEHOLDER", 1, true) ~= nil).toBeTrue()
 		expect(string.find(odds.notice, "pity", 1, true) ~= nil).toBeTrue()
-		expect(odds.pityLegendaryAt).toEqual(50)
+		expect(odds.pityLegendaryAt).toEqual(RarityConfig.LEGENDARY_PITY)
+		expect(odds.pityLegendaryAt).toEqual(150)
 	end)
 
 	it("publishes chances that sum to 1 and match the weights at 0 luck", function()
@@ -304,23 +307,54 @@ describe("RollMath rolls", function()
 		expect(pity.totalRolls).toEqual(1)
 	end)
 
-	it("guarantees Legendary or better on the pity roll and then resets", function()
+	it("does not guarantee Legendary at 50, and does at the live 150", function()
+		local pool = starter()
+		expect(pool.pityLegendaryAt).toEqual(150)
+		expect(pool.pityLegendaryAt).toEqual(RarityConfig.LEGENDARY_PITY)
 		local pity = { rollsSinceLegendary = 0, totalRolls = 0 }
 		local rng = zeroRng()
 		for n = 1, 49 do
-			local result = RollMath.roll(starter(), pity, context("n" .. n, 0), rng)
+			local result = RollMath.roll(pool, pity, context("n" .. n, 0), rng)
 			expect(result.pityTriggered).toBeFalse()
 			expect(Rarities.isLegendaryOrBetter(result.item.rarity)).toBeFalse()
 		end
 		expect(pity.rollsSinceLegendary).toEqual(49)
+		local early = RollMath.odds(pool, 0, { rollsSinceLegendary = 49 })
+		expect(early.pityActive).toBeFalse()
+		for _, entry in ipairs(early.entries) do
+			if entry.rarity == "Common" then
+				expect(entry.chance > 0).toBeTrue()
+			end
+		end
 
-		local forced = RollMath.roll(starter(), pity, context("pity", 0), rng)
+		pity.rollsSinceLegendary = RarityConfig.LEGENDARY_PITY - 1
+		local due = RollMath.odds(pool, 0, { rollsSinceLegendary = pity.rollsSinceLegendary })
+		expect(due.pityActive).toBeTrue()
+		expect(due.pityLegendaryAt).toEqual(150)
+		local forced = RollMath.roll(pool, pity, context("pity", 0), rng)
 		expect(forced.pityTriggered).toBeTrue()
 		expect(Rarities.isLegendaryOrBetter(forced.item.rarity)).toBeTrue()
 		-- zeroRng selects the first Legendary-or-better row.
 		expect(forced.item.templateId).toEqual("antlerbrand")
 		expect(pity.rollsSinceLegendary).toEqual(0)
-		expect(pity.totalRolls).toEqual(50)
+	end)
+
+	it("treats a non-finite pity counter as zero and still forces the guarantee", function()
+		local pool = starter()
+		local pity = { rollsSinceLegendary = 0 / 0, totalRolls = 0 / 0 }
+		local missed = RollMath.roll(pool, pity, context("nan", 0), zeroRng())
+		expect(missed.pityTriggered).toBeFalse()
+		expect(pity.rollsSinceLegendary).toEqual(1)
+		expect(pity.totalRolls).toEqual(1)
+		pity.rollsSinceLegendary = math.huge
+		pity.totalRolls = -math.huge
+		RollMath.roll(pool, pity, context("inf", 0), zeroRng())
+		expect(pity.rollsSinceLegendary).toEqual(1)
+		expect(pity.totalRolls).toEqual(1)
+		pity.rollsSinceLegendary = pool.pityLegendaryAt - 1
+		local forced = RollMath.roll(pool, pity, context("due", 0), zeroRng())
+		expect(forced.pityTriggered).toBeTrue()
+		expect(Rarities.isLegendaryOrBetter(forced.item.rarity)).toBeTrue()
 	end)
 
 	it("does not let one pool's pity advance another pool", function()
@@ -375,6 +409,8 @@ describe("RollMath rolls", function()
 			return RollMath.roll(pool, pity, context("item", 0), zeroRng())
 		end
 
+		expect(#rollKind("Pet", "Secret").item.traits).toEqual(0) -- traits parked
+		LaunchGate.SHOW.traits = true
 		expect(#rollKind("Material", "Secret").item.traits).toEqual(0)
 		expect(#rollKind("Pet", "Common").item.traits).toEqual(0)
 		local pet = rollKind("Pet", "Secret")
@@ -398,6 +434,7 @@ describe("RollMath rolls", function()
 			seen[trait.id] = true
 			expect(Traits.isKnown(trait.id)).toBeTrue()
 		end
+		LaunchGate.SHOW.traits = false
 	end)
 
 	it("follows a fixed weight split for a two-entry pool", function()
@@ -430,6 +467,7 @@ describe("RollMath rolls", function()
 	end)
 
 	it("mints a fern stag at the bottom of its pet ranges", function()
+		LaunchGate.SHOW.traits = true
 		local item = RollMath.mint("fern_stag", { uid = "stag", now = 0 }, zeroRng())
 		expect(item.quality).toEqual(0)
 		expect(item.kind).toEqual("Pet")
@@ -439,6 +477,7 @@ describe("RollMath rolls", function()
 		expect(item.traits[1].display).toEqual("5.0%")
 		expect(item.stats[1].id).toEqual("pet_damage")
 		expect(item.stats[1].value).toBeCloseTo(5 * 1.35, 1e-9)
+		LaunchGate.SHOW.traits = false
 	end)
 end)
 

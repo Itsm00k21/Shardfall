@@ -7,24 +7,35 @@
 local MobileShell = {}
 
 function MobileShell.mount(screen: ScreenGui)
+	-- Device safe insets are the GUI's own box. Scale stays at 1.
+	-- Growing from the screen center pushed the travel sidebar and the
+	-- odds panel onto each other.
 	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.IgnoreGuiInset = false
 	local scale = Instance.new("UIScale")
 	scale.Name = "Fit"
+	scale.Scale = 1
 	scale.Parent = screen
-	local function fit()
-		local camera = workspace.CurrentCamera
-		local height = if camera ~= nil then camera.ViewportSize.Y else 780
-		if height < 1 then
-			height = 780
-		end
-		scale.Scale = math.clamp(height / 780, 1, 1.25)
+end
+
+function MobileShell.view(screen: ScreenGui): (number, number)
+	local size = screen.AbsoluteSize
+	if size.X >= 200 and size.Y >= 200 then
+		return size.X, size.Y
 	end
-	fit()
 	local camera = workspace.CurrentCamera
-	if camera ~= nil then
-		camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+	local vx = if camera ~= nil then camera.ViewportSize.X else 1280
+	local vy = if camera ~= nil then camera.ViewportSize.Y else 720
+	local GuiService = game:GetService("GuiService")
+	local inset = GuiService:GetGuiInset()
+	vy -= inset.Y
+	if vx < 1 then
+		vx = 1280
 	end
+	if vy < 1 then
+		vy = 720
+	end
+	return vx, vy
 end
 
 function MobileShell.aspect(parent: Instance, ratio: number)

@@ -243,6 +243,36 @@ function Materials.displayName(id: string): string
 	return definition.name
 end
 
+-- A loot line names the material. It never repeats the enemy that dropped
+-- it, including a boss shout ("Grandmother Gnarl!" or a mismatched
+-- "Grandmother Great!"). The boss herself stays "Grandmother Gnarl".
+function Materials.lootHint(lines: { string }, enemyName: string?): string
+	local kept = {}
+	for _, line in ipairs(lines) do
+		if type(line) ~= "string" then
+			continue
+		end
+		local trimmed = string.match(line, "^%s*(.-)%s*$")
+		if trimmed == nil or trimmed == "" then
+			continue
+		end
+		local shout = string.sub(trimmed, -1) == "!"
+		if enemyName ~= nil and enemyName ~= "" and string.find(trimmed, enemyName, 1, true) ~= nil then
+			continue
+		end
+		if shout and (string.find(trimmed, "Grandmother", 1, true) ~= nil or string.find(trimmed, "Grandfather", 1, true) ~= nil) then
+			continue
+		end
+		table.insert(kept, trimmed)
+	end
+	if #kept == 0 then
+		return ""
+	end
+	-- "Loot: Spore Cap x2". The old "+ " lead read as a stray "1" in the
+	-- small toast font (Kevin's Oct 19 playtest). CombatFeel.LOOT_PREFIX.
+	return "Loot: " .. table.concat(kept, ", ")
+end
+
 function Materials.realmForAscension(ascension: any): string
 	local level = ascension
 	if type(level) ~= "number" or level ~= level then

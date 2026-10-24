@@ -105,12 +105,28 @@ local GOLD = { 255, 186, 96 }
 local PINK = { 255, 150, 190 }
 local CLOTH = { 86, 124, 210 }
 
-local function outer(x: number, z: number, radius: number, push: number): (number, number)
+-- A point just outside an island. inward keeps the curtain on the side that
+-- faces the plaza, and side steps it off the bridge so the sheet is not
+-- hidden in the deck.
+local function fallPoint(
+	x: number,
+	z: number,
+	radius: number,
+	push: number,
+	inward: boolean,
+	side: number
+): (number, number)
 	local reach = math.sqrt(x * x + z * z)
-	if reach < 1 then
-		return x, z - radius - push
+	local dirx = 0
+	local dirz = -1
+	if reach >= 1 then
+		dirx = x / reach
+		dirz = z / reach
 	end
-	return x + x / reach * (radius + push), z + z / reach * (radius + push)
+	local sign = if inward then -1 else 1
+	local px = x + dirx * sign * (radius + push)
+	local pz = z + dirz * sign * (radius + push)
+	return px - dirz * side, pz + dirx * side
 end
 
 function HavenLife.pieces(): { Piece }
@@ -149,53 +165,66 @@ function HavenLife.pieces(): { Piece }
 		)
 	end
 
+	-- Plaza falls flank the heart in the spawn view. A sheet on the north
+	-- rim sits behind the crystal. District falls face the walk in.
 	local falls = {
-		{ 0, 0, Haven.PLAZA_RADIUS },
+		{ math.sin(math.rad(-28)) * 8, -math.cos(math.rad(-28)) * 8, Haven.PLAZA_RADIUS, false },
+		{ math.sin(math.rad(28)) * 8, -math.cos(math.rad(28)) * 8, Haven.PLAZA_RADIUS, false },
 	}
 	for _, district in ipairs(Haven.DISTRICTS) do
-		table.insert(falls, { district.x, district.z, district.radius or 30 })
+		table.insert(falls, { district.x, district.z, district.radius or 30, true })
 	end
 	for _, fall in ipairs(falls) do
-		local fx, fz = outer(fall[1], fall[2], fall[3], 3)
-		local yaw = math.atan2(fx, fz)
+		-- Long axis is local Z. The builder yaws first, then pitches, so the
+		-- sheet hangs as a curtain instead of lying flat on the cliff.
+		local inward = fall[4] == true
+		local side = if inward then 22 else 0
+		local fx, fz = fallPoint(fall[1], fall[2], fall[3], 18, inward, side)
+		local yaw = math.atan2(fx - fall[1], fz - fall[2])
+		local length = 36
+		local tilt = 78
+		local top = 14
+		local centerY = top - math.sin(math.rad(tilt)) * (length / 2)
 		add(
 			piece(
 				"Waterfall",
 				"Part",
-				7,
 				18,
-				0.8,
+				2.6,
+				length,
 				fx,
-				-6,
+				centerY,
 				fz,
-				72,
+				tilt,
 				math.deg(yaw),
 				0,
-				MIST,
+				{ 168, 198, 210 },
 				"Glass",
 				"large",
-				0.35,
+				0.28,
 				nil,
-				"mist"
+				"mist",
+				true
 			)
 		)
+		local lipX, lipZ = fallPoint(fall[1], fall[2], fall[3], 2, inward, side)
 		add(
 			piece(
 				"FallLip",
 				"WedgePart",
-				6,
+				10,
+				0.8,
+				4,
+				lipX,
 				1.2,
-				2.4,
-				fx,
-				1.2,
-				fz,
-				28,
+				lipZ,
+				tilt,
 				math.deg(yaw),
 				0,
 				MIST,
-				"Neon",
+				"Glass",
 				"small",
-				0.2
+				0.35
 			)
 		)
 	end
@@ -214,13 +243,10 @@ function HavenLife.pieces(): { Piece }
 				28,
 				index * 40,
 				12,
-				{ 170, 120, 255 },
-				"Neon",
+				{ 158, 142, 186 },
+				"SmoothPlastic",
 				"large",
-				0.15,
-				nil,
-				nil,
-				true
+				0.08
 			)
 		)
 		list[#list].drift = 70 + index * 18
@@ -277,30 +303,6 @@ function HavenLife.pieces(): { Piece }
 		)
 	end
 
-	local forge = Haven.district("forge")
-	assert(forge ~= nil)
-	add(
-		piece(
-			"Anvil",
-			"Part",
-			2.4,
-			1.3,
-			1.2,
-			forge.x + 14,
-			1.15,
-			forge.z + 10,
-			0,
-			20,
-			0,
-			{ 70, 72, 80 },
-			"Metal",
-			"large",
-			0,
-			nil,
-			"sparks"
-		)
-	)
-
 	local garden = Haven.district("garden")
 	assert(garden ~= nil)
 	local flowers = {
@@ -327,7 +329,7 @@ function HavenLife.pieces(): { Piece }
 				0,
 				0,
 				petal[(index - 1) % #petal + 1],
-				"Neon",
+				"SmoothPlastic",
 				"small",
 				0,
 				"Ball"
@@ -348,7 +350,7 @@ function HavenLife.pieces(): { Piece }
 			0,
 			0,
 			PINK,
-			"Neon",
+			"SmoothPlastic",
 			"small",
 			1,
 			"Ball",
@@ -369,7 +371,7 @@ function HavenLife.pieces(): { Piece }
 			0,
 			0,
 			GOLD,
-			"Neon",
+			"SmoothPlastic",
 			"small",
 			1,
 			"Ball",
@@ -416,13 +418,10 @@ function HavenLife.pieces(): { Piece }
 			18,
 			0,
 			0,
-			{ 210, 220, 255 },
-			"Neon",
+			{ 180, 190, 210 },
+			"Glass",
 			"large",
-			0.25,
-			nil,
-			nil,
-			true
+			0.4
 		)
 	)
 
@@ -452,8 +451,18 @@ function HavenLife.rigs(): { Rig }
 		},
 	}
 	for index, points in ipairs(loops) do
-		local height = 3.05 + index * 0.28
+		local height = 6.2 + index * 0.5
 		local home = points[1]
+		local cloak = {
+			{ 120, 72, 220 },
+			{ 220, 84, 96 },
+			{ 48, 150, 170 },
+		}
+		local flag = {
+			{ 196, 164, 84 },
+			{ 186, 112, 140 },
+			{ 120, 168, 176 },
+		}
 		table.insert(list, {
 			name = "Townsfolk",
 			kind = "folk",
@@ -465,16 +474,16 @@ function HavenLife.rigs(): { Rig }
 				piece(
 					"Body",
 					"Part",
-					1.3,
+					3.6,
 					height,
-					0.8,
+					2.4,
 					0,
 					height / 2,
 					0,
 					0,
 					0,
 					0,
-					{ 90, 108, 150 },
+					cloak[index],
 					"SmoothPlastic",
 					"large",
 					0
@@ -482,11 +491,11 @@ function HavenLife.rigs(): { Rig }
 				piece(
 					"Head",
 					"Part",
-					1.1,
-					1.1,
-					1.1,
+					2,
+					2,
+					2,
 					0,
-					height + 0.7,
+					height + 1.3,
 					0,
 					0,
 					0,
@@ -498,37 +507,54 @@ function HavenLife.rigs(): { Rig }
 					"Ball"
 				),
 				piece(
-					"Arm",
+					"TownsfolkFlag",
 					"Part",
-					0.35,
+					8,
+					20,
 					1.4,
-					0.35,
-					0.9,
-					height * 0.55,
+					0,
+					height + 12,
 					0,
 					0,
 					0,
-					18,
-					{ 90, 108, 150 },
-					"SmoothPlastic",
-					"small",
+					0,
+					flag[index],
+					"Fabric",
+					"large",
 					0
 				),
 				piece(
 					"Arm",
 					"Part",
-					0.35,
-					1.4,
-					0.35,
-					-0.9,
+					0.7,
+					2.6,
+					0.7,
+					2.1,
+					height * 0.55,
+					0,
+					0,
+					0,
+					18,
+					cloak[index],
+					"SmoothPlastic",
+					"large",
+					0
+				),
+				piece(
+					"Arm",
+					"Part",
+					0.7,
+					2.6,
+					0.7,
+					-2.1,
 					height * 0.55,
 					0,
 					0,
 					0,
 					-18,
-					{ 90, 108, 150 },
+					cloak[index],
 					"SmoothPlastic",
-					"small",
+					"large",
 					0
 				),
 			},
@@ -643,9 +669,44 @@ function HavenLife.mood(
 		}
 	end
 	return {
-		brightness = 2.15,
+		brightness = 1.25,
 		ambient = { 96, 112, 84 },
 		outdoor = { 128, 146, 112 },
+	}
+end
+
+-- Midday values match VerdantLook. The sun sits in the camera near 6:12 and
+-- 18:12, and an unclamped bloom size plus sun rays turns that into a yellow screen.
+function HavenLife.exposure(clockTime: number): {
+	bloomIntensity: number,
+	bloomSize: number,
+	bloomThreshold: number,
+	sunIntensity: number,
+	sunSpread: number,
+	brightness: number,
+}
+	local hour = 12
+	if type(clockTime) == "number" and clockTime == clockTime then
+		hour = clockTime % 24
+	end
+	local function band(center: number): number
+		local distance = math.abs(hour - center)
+		if distance > 12 then
+			distance = 24 - distance
+		end
+		if distance >= 1.8 then
+			return 0
+		end
+		return 1 - distance / 1.8
+	end
+	local glare = math.max(band(6.2), band(18.2))
+	return {
+		bloomIntensity = 0.045 - glare * 0.03,
+		bloomSize = 8 - glare * 3,
+		bloomThreshold = 2.05 + glare * 0.15,
+		sunIntensity = 0.05 - glare * 0.04,
+		sunSpread = 0.22 - glare * 0.08,
+		brightness = 1.25 - glare * 0.6,
 	}
 end
 

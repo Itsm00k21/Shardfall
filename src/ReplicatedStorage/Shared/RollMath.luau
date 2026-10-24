@@ -4,13 +4,14 @@
 	Shard rolls, as plain functions.
 
 	The server is the only place a roll is allowed to change a profile, but
-	the math itself lives here so the client can show the same odds the server
-	uses, and so tests can run without Roblox.
+	the math itself lives here so tests can run without Roblox.
 
-	Odds disclosed to players come from RollMath.odds. Pity is NOT baked into
-	those percentages: pity is a guarantee on top. The notice string says so.
-	Roblox requires paid random items to disclose their odds. Free rolls use
-	the same table so the numbers never diverge.
+	The player sheet is RarityConfig.disclose. The live crack is
+	RarityConfig.pick (Legendary pity at 150 only). RollMath.odds is the
+	weight table, not that sheet. Pity on this table follows
+	pool.pityLegendaryAt. Live pools set that to RarityConfig.LEGENDARY_PITY.
+	There is no Legendary guarantee at 50. Pity is not baked into the
+	weight percentages until that guarantee is the next roll.
 
 	Rng contract (matches Roblox Random):
 	  nextNumber() -> number in [0, 1)
@@ -21,6 +22,7 @@ local ItemBases = require("./ItemBases")
 local Rarities = require("./Rarities")
 local Stats = require("./Stats")
 local Traits = require("./Traits")
+local LaunchGate = require("./LaunchGate")
 
 local RollMath = {}
 
@@ -353,11 +355,15 @@ function RollMath.odds(pool: Pool, luckPoints: number, query: any): OddsTable
 	}
 end
 
+local function finiteCount(value: any): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge and value >= 0
+end
+
 local function normalizePity(pity: PityState)
-	if type(pity.rollsSinceLegendary) ~= "number" or pity.rollsSinceLegendary < 0 then
+	if not finiteCount(pity.rollsSinceLegendary) then
 		pity.rollsSinceLegendary = 0
 	end
-	if type(pity.totalRolls) ~= "number" or pity.totalRolls < 0 then
+	if not finiteCount(pity.totalRolls) then
 		pity.totalRolls = 0
 	end
 end
@@ -394,6 +400,9 @@ local function rollGear(
 		stats, quality = Stats.roll(base.stats, rarity, gearWeight(base), rng)
 	end
 	local traits = {}
+	if not LaunchGate.on("traits") then
+		return stats, quality, traits
+	end
 	if kind == "Weapon" or kind == "Armor" then
 		traits = Traits.roll(rarity, rng)
 	elseif kind == "Pet" then

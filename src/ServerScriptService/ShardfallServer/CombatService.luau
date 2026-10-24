@@ -19,9 +19,14 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local Materials = require(ReplicatedStorage.Shared.Materials)
+local Quality = require(ReplicatedStorage.Shared.Quality)
 local DataService = require(script.Parent.DataService)
+local EchoVitals = require(script.Parent.EchoVitals)
+local LoopService = require(script.Parent.LoopService)
+local OnboardingService = require(script.Parent.OnboardingService)
 
 local CombatService = {}
 
@@ -35,13 +40,16 @@ export type EnemyView = {
 	x: number,
 	y: number,
 	z: number,
+	-- Ground-plane radius; melee reach is measured to this edge.
+	radius: number?,
 }
 
 type Hooks = {
 	enemies: (Player) -> { EnemyView },
-	onEnemyHit: (Player, string, number, boolean) -> (),
+	onEnemyHit: (Player, string, number, boolean, boolean) -> (),
 	onPlayerDown: (Player) -> (),
 	inRun: (Player) -> boolean,
+	paysProgress: ((Player) -> boolean)?,
 }
 
 type State = {
@@ -51,6 +59,12 @@ type State = {
 	nextAttack: number,
 	nextCompanion: number,
 	ready: boolean,
+	combo: number,
+	comboAt: number,
+	charge: CombatFeel.ChargeClock,
+	dodge: CombatFeel.DodgeState,
+	ult: number,
+	hurt: boolean,
 }
 
 type Shot = {
@@ -69,20 +83,33 @@ type Shot = {
 	critChance: number,
 	critDamage: number,
 	lifesteal: number,
+	heavy: boolean,
+	landed: boolean?,
 }
+
+local classMods = function(_player: Player): { taken: number, dealt: number }
+	return { taken = 1, dealt = 1 }
+end
+local onPlayerHit = function(_player: Player) end
 
 local hooks: Hooks = {
 	enemies = function(_player)
 		return {}
 	end,
-	onEnemyHit = function(_player, _id, _amount, _crit) end,
+	onEnemyHit = function(_player, _id, _amount, _crit, _heavy) end,
 	onPlayerDown = function(_player) end,
 	inRun = function(_player)
 		return false
 	end,
 }
 
+-- DungeonService registers these. Nil keeps the unbuffed number.
+-- The client never supplies either value.
+local echoHeal: ((Player, number) -> number)? = nil
+local echoMax: ((Player, number) -> number)? = nil
+
 local vitals: { [Player]: State } = {}
+local telegraphs: { [Player]: { CombatFeel.Telegraph } } = {}
 local autoOn: { [Player]: boolean } = {}
 local steerUntil: { [Player]: number } = {}
 local shots: { Shot } = {}
@@ -134,10 +161,38 @@ local function ensure(player: Player): State
 			nextAttack = 0,
 			nextCompanion = 0,
 			ready = false,
+			combo = 0,
+			comboAt = 0,
+			charge = CombatFeel.blankCharge(),
+			dodge = CombatFeel.blankDodge(os.clock()),
+			ult = 0,
+			hurt = false,
 		}
 		vitals[player] = state
 	end
 	return state
+end
+
+-- The body stays full so a fall cannot zero it. MaxHealth matches the combat
+-- bar (the place default is 500, which is what the overhead used to read
+-- while the HUD still said 100).
+local function syncBody(player: Player, maxHp: number)
+	local character = player.Character
+	if character == nil then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		return
+	end
+	local maxHealth = math.max(1, maxHp)
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	if humanoid.MaxHealth ~= maxHealth then
+		humanoid.MaxHealth = maxHealth
+	end
+	if humanoid.Health ~= humanoid.MaxHealth then
+		humanoid.Health = humanoid.MaxHealth
+	end
 end
 
 local function paint(part: BasePart, hp: number, maxHp: number)
@@ -153,65 +208,110 @@ local function paint(part: BasePart, hp: number, maxHp: number)
 	end
 end
 
-local function publish(player: Player, state: State)
-	local hrp = rootPart(player)
-	if hrp ~= nil then
-		paint(hrp, state.hp, state.maxHp)
-		local nameLabel = hrp:FindFirstChild("Name", true)
-		if nameLabel ~= nil and nameLabel:IsA("TextLabel") then
-			nameLabel.Text =
-				string.format("%d / %d", math.max(0, math.floor(state.hp)), state.maxHp)
-		end
+local function ensureBar(part: BasePart, studs: number, color: Color3): TextLabel
+	local existing = part:FindFirstChild("ShardfallBar")
+	local gui: BillboardGui
+	if existing ~= nil and existing:IsA("BillboardGui") then
+		gui = existing
+	else
+		local created = Instance.new("BillboardGui")
+		created.Name = "ShardfallBar"
+		created.Size = UDim2.fromOffset(92, 22)
+		created.StudsOffset = Vector3.new(0, studs, 0)
+		created.AlwaysOnTop = true
+		created.Parent = part
+		gui = created
 	end
-	fx(player, {
-		kind = "hp",
-		hp = math.max(0, state.hp),
-		maxHp = state.maxHp,
-	})
-end
 
-local function ensureBar(part: BasePart, studs: number, color: Color3)
-	if part:FindFirstChild("ShardfallBar") ~= nil then
-		return
+	if gui:FindFirstChild("Back") == nil then
+		local back = Instance.new("Frame")
+		back.Name = "Back"
+		back.Position = UDim2.fromOffset(0, 14)
+		back.Size = UDim2.new(1, 0, 0, 8)
+		back.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
+		back.BorderSizePixel = 0
+		back.Parent = gui
+
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BackgroundColor3 = color
+		fill.BorderSizePixel = 0
+		fill.Parent = back
 	end
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "ShardfallBar"
-	gui.Size = UDim2.fromOffset(92, 22)
-	gui.StudsOffset = Vector3.new(0, studs, 0)
-	gui.AlwaysOnTop = true
-	gui.Parent = part
+
+	local label = gui:FindFirstChild("Vitals")
+	if label ~= nil and label:IsA("TextLabel") then
+		return label
+	end
+	local legacy = gui:FindFirstChild("Name")
+	if legacy ~= nil and legacy:IsA("TextLabel") then
+		legacy.Name = "Vitals"
+		return legacy
+	end
 
 	local name = Instance.new("TextLabel")
-	name.Name = "Name"
+	name.Name = "Vitals"
 	name.BackgroundTransparency = 1
 	name.Size = UDim2.new(1, 0, 0, 12)
 	name.Font = Enum.Font.BuilderSansBold
 	name.TextSize = 12
 	name.TextColor3 = Color3.fromRGB(240, 236, 248)
 	name.TextStrokeTransparency = 0.4
-	name.Text = part:GetAttribute("ShardfallName") or ""
+	name.Text = ""
 	name.Parent = gui
+	return name
+end
 
-	local back = Instance.new("Frame")
-	back.Name = "Back"
-	back.Position = UDim2.fromOffset(0, 14)
-	back.Size = UDim2.new(1, 0, 0, 8)
-	back.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
-	back.BorderSizePixel = 0
-	back.Parent = gui
-
-	local fill = Instance.new("Frame")
-	fill.Name = "Fill"
-	fill.Size = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3 = color
-	fill.BorderSizePixel = 0
-	fill.Parent = back
+local function publish(player: Player, state: State)
+	local hp, maxHp = CombatMath.clampVitals(state.hp, state.maxHp)
+	state.hp = hp
+	state.maxHp = maxHp
+	local hrp = rootPart(player)
+	if hrp ~= nil then
+		paint(hrp, hp, maxHp)
+		local nameLabel = ensureBar(hrp, 3.2, Color3.fromRGB(110, 210, 140))
+		nameLabel.Text = string.format("HP  %d / %d", hp, maxHp)
+	end
+	syncBody(player, maxHp)
+	fx(player, {
+		kind = "hp",
+		hp = hp,
+		maxHp = maxHp,
+	})
 end
 
 local function attachCharacter(player: Player, character: Model)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		local waited = character:WaitForChild("Humanoid", 5)
+		if waited ~= nil and waited:IsA("Humanoid") then
+			humanoid = waited
+		end
+	end
 	if humanoid ~= nil then
+		-- Combat HP lives on the session, not on the Humanoid. Fall damage
+		-- and a stale Health script used to zero the body while the bar
+		-- still read 50/100. The body stays full so only damagePlayer can
+		-- down the player. MaxHealth follows the combat max so the overhead
+		-- does not stay on the place default of 500.
 		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		humanoid.BreakJointsOnDeath = false
+		pcall(function()
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+		end)
+		local pinning = false
+		local function pin()
+			if pinning or humanoid.Parent == nil then
+				return
+			end
+			pinning = true
+			humanoid.Health = humanoid.MaxHealth
+			pinning = false
+		end
+		humanoid.HealthChanged:Connect(pin)
+		syncBody(player, ensure(player).maxHp)
+		pin()
 	end
 	local hrp = character:WaitForChild("HumanoidRootPart", 5)
 	if hrp ~= nil and hrp:IsA("BasePart") then
@@ -221,8 +321,24 @@ local function attachCharacter(player: Player, character: Model)
 	end
 end
 
+function CombatService.bindClassMods(fn: (Player) -> { taken: number, dealt: number })
+	classMods = fn
+end
+
+function CombatService.bindPlayerHit(fn: (Player) -> ())
+	onPlayerHit = fn
+end
+
 function CombatService.bindHooks(nextHooks: Hooks)
 	hooks = nextHooks
+end
+
+function CombatService.bindEcho(
+	heal: (Player, number) -> number,
+	maxHealth: (Player, number) -> number
+)
+	echoHeal = heal
+	echoMax = maxHealth
 end
 
 function CombatService.refresh(player: Player)
@@ -233,18 +349,25 @@ function CombatService.refresh(player: Player)
 	end
 	local _, vitality = CombatMath.loadout(profile)
 	local previousMax = state.maxHp
+	local baseMax = vitality.maxHealth
+	local scaledMax = baseMax
+	if echoMax ~= nil then
+		scaledMax = echoMax(player, baseMax)
+	end
 	state.defense = vitality.defense
-	state.maxHp = vitality.maxHealth
-	if not state.ready then
-		state.hp = state.maxHp
-		state.ready = true
-	else
-		if state.maxHp > previousMax then
-			state.hp += state.maxHp - previousMax
-		end
-		if state.hp > state.maxHp then
-			state.hp = state.maxHp
-		end
+	-- Unbuffed loadout in, echoed max out. publish sends this to the HP bar.
+	state.maxHp = EchoVitals.maxHp(baseMax, scaledMax)
+	if state.ready and state.hp <= 0 then
+		-- A profile save on the killing blow used to add the new max onto
+		-- 0 (or onto a full bar: 100 + 3 = 103) and the label jumped.
+		state.hp = 0
+		publish(player, state)
+		return
+	end
+	state.hp = CombatMath.syncVitals(state.hp, previousMax, state.maxHp, state.hurt)
+	state.ready = true
+	if state.hp >= state.maxHp then
+		state.hurt = false
 	end
 	publish(player, state)
 end
@@ -252,6 +375,24 @@ end
 function CombatService.revive(player: Player)
 	local state = ensure(player)
 	state.hp = state.maxHp
+	state.ready = true
+	state.hurt = false
+	publish(player, state)
+end
+
+-- A max shrink is not a hit. refresh keeps a 0 and does not call
+-- onPlayerDown. Putting them on the down path after a boss reset would
+-- fail the run, because pullStarted is already false. 1 HP leaves them
+-- standing. A real hit can still down them. Already above 0 is unchanged.
+function CombatService.spare(player: Player)
+	local state = ensure(player)
+	if state.hp > 0 then
+		return
+	end
+	local _, maxHp = CombatMath.clampVitals(1, state.maxHp)
+	state.maxHp = maxHp
+	state.hp = 1
+	state.hurt = true
 	state.ready = true
 	publish(player, state)
 end
@@ -266,11 +407,17 @@ local function heal(player: Player, amount: number, x: number, y: number, z: num
 		return
 	end
 	local state = ensure(player)
+	if state.hp <= 0 then
+		return
+	end
 	local before = state.hp
 	state.hp = math.min(state.maxHp, state.hp + amount)
 	local gained = state.hp - before
 	if gained <= 0 then
 		return
+	end
+	if state.hp >= state.maxHp then
+		state.hurt = false
 	end
 	publish(player, state)
 	fx(player, {
@@ -283,6 +430,36 @@ local function heal(player: Player, amount: number, x: number, y: number, z: num
 end
 
 -- Returns true when this hit dropped the player. The dungeon ends the run.
+function CombatService.noteTelegraph(player: Player, endsAt: number)
+	if type(endsAt) ~= "number" or endsAt ~= endsAt then
+		return
+	end
+	local now = os.clock()
+	local list = CombatFeel.pruneTelegraphs(telegraphs[player] or {}, now)
+	table.insert(list, CombatFeel.openTelegraph(endsAt))
+	telegraphs[player] = list
+end
+
+local function awardedRecently(player: Player, now: number): boolean
+	local list = telegraphs[player]
+	if list == nil then
+		return false
+	end
+	for _, window in ipairs(list) do
+		if window.awarded == true and now <= window.endsAt + CombatFeel.DODGE_LATENCY then
+			return true
+		end
+	end
+	return false
+end
+
+local function grantsProgress(player: Player): boolean
+	if hooks.paysProgress == nil then
+		return true
+	end
+	return hooks.paysProgress(player)
+end
+
 function CombatService.damagePlayer(
 	player: Player,
 	rawDamage: number,
@@ -294,16 +471,34 @@ function CombatService.damagePlayer(
 	if state.hp <= 0 then
 		return true
 	end
-	local hit = CombatMath.resolveHit(rawDamage, 0, 1, state.defense, 1, 0)
-	state.hp -= hit.amount
-	local down = state.hp <= 0
-	if down then
-		state.hp = 0
+	local now = os.clock()
+	if CombatFeel.iframe(state.dodge, now) then
+		-- Ult was already decided when the dodge arrived. A hit during
+		-- i-frames does not score a second perfect off a client time.
+		local perfect = awardedRecently(player, now)
+		fx(player, {
+			kind = "dodge",
+			perfect = perfect,
+			charges = state.dodge.charges,
+			ult = state.ult,
+			x = x,
+			y = y,
+			z = z,
+		})
+		return false
+	end
+	local mods = classMods(player)
+	local before = state.hp
+	local nextHp, amount, down =
+		CombatMath.applyPlayerDamage(state.hp, state.maxHp, rawDamage, state.defense, mods.taken)
+	state.hp = nextHp
+	if nextHp < before then
+		state.hurt = true
 	end
 	publish(player, state)
 	fx(player, {
 		kind = "damage",
-		amount = hit.amount,
+		amount = amount,
 		crit = false,
 		x = x,
 		y = y + 2,
@@ -312,8 +507,21 @@ function CombatService.damagePlayer(
 	if down then
 		-- Defer so a killing blow cannot destroy the shot list mid-loop.
 		task.defer(hooks.onPlayerDown, player)
+	else
+		onPlayerHit(player)
 	end
 	return down
+end
+
+local function feelTier(player: Player): (string, boolean)
+	local profile = DataService.get(player)
+	local tier = "med"
+	local shake = true
+	if profile ~= nil then
+		tier = Quality.normalize(profile.graphicsQuality) or "med"
+		shake = profile.shake ~= false
+	end
+	return tier, shake
 end
 
 local function strikeEnemy(
@@ -322,10 +530,12 @@ local function strikeEnemy(
 	damage: number,
 	critChance: number,
 	critDamage: number,
-	lifesteal: number
+	lifesteal: number,
+	heavy: boolean
 )
+	local mods = classMods(player)
 	local hit = CombatMath.resolveHit(
-		damage,
+		damage * mods.dealt,
 		critChance,
 		critDamage,
 		enemy.defense,
@@ -333,21 +543,36 @@ local function strikeEnemy(
 		lifesteal
 	)
 	local amount = hit.amount
+	local tag: string? = nil
 	if enemy.boss then
 		amount = CombatMath.bossTaken(amount, enemy.phase, enemy.weak, enemy.armoredMultiplier)
+		-- Kevin's playtest: body hits looked like they did nothing. Say so.
+		tag = CombatMath.bossTag(enemy.phase, enemy.weak, enemy.armoredMultiplier)
 		if lifesteal > 0 then
 			hit.healed = math.floor(amount * lifesteal + 0.5)
 		end
 	end
+	local kind = CombatFeel.weight(hit.crit, heavy, false)
+	local juice = CombatFeel.juice(kind)
+	local tier, shakeOn = feelTier(player)
+	local state = ensure(player)
 	fx(player, {
 		kind = "damage",
 		amount = amount,
 		crit = hit.crit,
+		heavy = heavy,
+		weight = kind,
+		hitstop = juice.hitstop,
+		flash = juice.flash,
+		shake = CombatFeel.shakeAllowed(tier, shakeOn, juice),
+		particles = CombatFeel.particlesFor(tier, juice),
+		combo = state.combo,
+		tag = tag,
 		x = enemy.x,
 		y = enemy.y + 2,
 		z = enemy.z,
 	})
-	hooks.onEnemyHit(player, enemy.id, amount, hit.crit)
+	hooks.onEnemyHit(player, enemy.id, amount, hit.crit, heavy)
 	if hit.healed > 0 then
 		local hrp = rootPart(player)
 		local x, y, z = enemy.x, enemy.y, enemy.z
@@ -446,7 +671,8 @@ function CombatService.companionTick(player: Player)
 		offense.damage,
 		offense.critChance,
 		offense.critDamage,
-		offense.lifesteal
+		offense.lifesteal,
+		false
 	)
 end
 
@@ -481,14 +707,28 @@ local function releaseSwing(
 	hrp: BasePart,
 	offense: CombatMath.Offense,
 	aim: Vector3,
-	flat: Vector3
+	flat: Vector3,
+	fromPlayer: boolean
 )
 	local state = ensure(player)
 	local now = os.clock()
 	if now < state.nextAttack then
-		return
+		return false
 	end
+	if now < state.dodge.iframeUntil then
+		-- A dodge cancels the end of a swing. The next hit waits out the roll.
+		return false
+	end
+	-- Auto swings pass false and leave a held charge for the player's click.
+	local heavy = false
+	if fromPlayer then
+		heavy = CombatFeel.takeCharge(state.charge, now, nil)
+	end
+	local step = CombatFeel.advanceCombo(state.combo, state.comboAt, now, heavy)
+	state.combo = step.chain
+	state.comboAt = now
 	state.nextAttack = now + CombatMath.cooldown(offense.attackSpeed)
+	local damage = offense.damage * step.multiplier
 
 	if offense.style == "projectile" then
 		local start = hrp.Position + aim * 3
@@ -505,19 +745,20 @@ local function releaseSwing(
 				remaining = offense.range,
 				player = player,
 				fromPlayer = true,
-				damage = offense.damage,
+				damage = damage,
 				critChance = offense.critChance,
 				critDamage = offense.critDamage,
 				lifesteal = offense.lifesteal,
+				heavy = step.heavy,
 			},
 			if offense.weaponType == "staff"
 				then Color3.fromRGB(120, 220, 140)
 				else Color3.fromRGB(230, 210, 140)
 		)
-		return
+		return true
 	end
 
-	swingFlash(hrp.Position, flat, offense.range, false)
+	swingFlash(hrp.Position, flat, offense.range, step.heavy)
 	local closest: EnemyView? = nil
 	local closestDistance = math.huge
 	for _, enemy in ipairs(hooks.enemies(player)) do
@@ -530,7 +771,8 @@ local function releaseSwing(
 				enemy.x,
 				enemy.z,
 				offense.range,
-				offense.minDot
+				offense.minDot,
+				enemy.radius
 			)
 		then
 			local distance =
@@ -545,17 +787,25 @@ local function releaseSwing(
 		strikeEnemy(
 			player,
 			closest,
-			offense.damage,
+			damage,
 			offense.critChance,
 			offense.critDamage,
-			offense.lifesteal
+			offense.lifesteal,
+			step.heavy
 		)
 	end
+	return true
+end
+
+function CombatService.beginCharge(player: Player)
+	local state = ensure(player)
+	CombatFeel.beginCharge(state.charge, os.clock())
 end
 
 function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any)
+	-- Haven has nothing to swing at. The old tip sat on the gold banner
+	-- from the moment the player spawned.
 	if not hooks.inRun(player) then
-		hint(player, "Enter the Rootvault first. Click swings. Bows and staffs fire a shot.")
 		return
 	end
 	local hrp = rootPart(player)
@@ -565,6 +815,9 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	local offense = CombatMath.loadout(DataService.get(player))
 	local facing = hrp.CFrame.LookVector
 	local aim = direction(lookX, lookY, lookZ, facing)
+	local cx, cy, cz =
+		CombatFeel.clampLook(aim.X, aim.Y, aim.Z, facing.X, facing.Y, facing.Z, CombatFeel.AIM_DOT)
+	aim = Vector3.new(cx, cy, cz)
 	local flat = Vector3.new(aim.X, 0, aim.Z)
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(facing.X, 0, facing.Z)
@@ -572,7 +825,70 @@ function CombatService.attack(player: Player, lookX: any, lookY: any, lookZ: any
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(0, 0, -1)
 	end
-	releaseSwing(player, hrp, offense, aim, flat.Unit)
+	if releaseSwing(player, hrp, offense, aim, flat.Unit, true) then
+		OnboardingService.note(player, "swing")
+	end
+end
+
+function CombatService.dodge(player: Player)
+	if not hooks.inRun(player) then
+		return
+	end
+	local state = ensure(player)
+	local now = os.clock()
+	OnboardingService.note(player, "dodge")
+	if not CombatFeel.tryDodge(state.dodge, now) then
+		fx(player, { kind = "dodge", perfect = false, charges = 0, ult = state.ult })
+		return
+	end
+	-- The remote may still carry an old client clock. It is not an argument.
+	local perfect = CombatFeel.scoreAny(telegraphs[player], now, nil)
+	if perfect then
+		CombatFeel.notePerfect(state.dodge, now)
+		state.ult = math.min(100, state.ult + CombatFeel.PERFECT_ULT)
+	end
+	if grantsProgress(player) then
+		LoopService.progress(player, "dodge", 1)
+	end
+	local hrp = rootPart(player)
+	fx(player, {
+		kind = "dodge",
+		perfect = perfect,
+		charges = state.dodge.charges,
+		ult = state.ult,
+		x = if hrp ~= nil then hrp.Position.X else 0,
+		y = if hrp ~= nil then hrp.Position.Y else 0,
+		z = if hrp ~= nil then hrp.Position.Z else 0,
+	})
+end
+
+function CombatService.ultCharge(player: Player): number
+	return ensure(player).ult
+end
+
+function CombatService.addUlt(player: Player, amount: number)
+	local state = ensure(player)
+	state.ult = math.min(100, state.ult + amount)
+end
+
+function CombatService.spendUlt(player: Player)
+	ensure(player).ult = 0
+end
+
+function CombatService.healAmount(player: Player, amount: number)
+	if echoHeal ~= nil then
+		amount = EchoVitals.heal(amount, echoHeal(player, amount))
+	end
+	local hrp = rootPart(player)
+	local x, y, z = 0, 0, 0
+	if hrp ~= nil then
+		x, y, z = hrp.Position.X, hrp.Position.Y, hrp.Position.Z
+	end
+	heal(player, amount, x, y, z)
+end
+
+function CombatService.strike(player: Player, enemy: EnemyView, damage: number, heavy: boolean)
+	strikeEnemy(player, enemy, damage, 0.05, 1.5, 0, heavy)
 end
 
 -- Nearest enemy inside the equipped weapon's range. Melee still uses that
@@ -606,7 +922,7 @@ function CombatService.autoTick(player: Player)
 	if flat.Magnitude < 0.05 then
 		flat = Vector3.new(0, 0, -1)
 	end
-	releaseSwing(player, hrp, offense, aim, flat.Unit)
+	releaseSwing(player, hrp, offense, aim, flat.Unit, false)
 end
 
 function CombatService.launchEnemyShot(
@@ -639,6 +955,7 @@ function CombatService.launchEnemyShot(
 		critChance = 0,
 		critDamage = 1,
 		lifesteal = 0,
+		heavy = false,
 	}, Color3.fromRGB(186, 120, 255))
 end
 
@@ -733,23 +1050,39 @@ local function stepShots(dt: number)
 					shot.damage,
 					shot.critChance,
 					shot.critDamage,
-					shot.lifesteal
+					shot.lifesteal,
+					shot.heavy
 				)
 				hit = true
 			end
 		else
-			local hrp = rootPart(shot.player)
-			if
-				hrp ~= nil
-				and CombatMath.within(x, y, z, hrp.Position.X, hrp.Position.Y, hrp.Position.Z, 3)
-			then
-				CombatService.damagePlayer(
-					shot.player,
-					shot.damage,
-					hrp.Position.X,
-					hrp.Position.Y,
-					hrp.Position.Z
-				)
+			if shot.landed ~= true then
+				local hrp = rootPart(shot.player)
+				if
+					hrp ~= nil
+					and CombatMath.within(
+						x,
+						y,
+						z,
+						hrp.Position.X,
+						hrp.Position.Y,
+						hrp.Position.Z,
+						3
+					)
+				then
+					-- Mark it before the hit so a hook that steps shots again
+					-- cannot apply this orb a second time.
+					shot.landed = true
+					CombatService.damagePlayer(
+						shot.player,
+						shot.damage,
+						hrp.Position.X,
+						hrp.Position.Y,
+						hrp.Position.Z
+					)
+				end
+			end
+			if shot.landed == true then
 				hit = true
 			end
 		end
@@ -789,6 +1122,7 @@ function CombatService.start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		vitals[player] = nil
+		telegraphs[player] = nil
 		autoOn[player] = nil
 		steerUntil[player] = nil
 		lastHint[player] = nil

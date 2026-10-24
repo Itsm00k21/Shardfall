@@ -9,6 +9,7 @@ local Areas = require("../src/ReplicatedStorage/Shared/Areas")
 local ItemBases = require("../src/ReplicatedStorage/Shared/ItemBases")
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Rarities = require("../src/ReplicatedStorage/Shared/Rarities")
+local RarityConfig = require("../src/ReplicatedStorage/Shared/RarityConfig")
 
 local function weightSum(pool): number
 	local sum = 0
@@ -33,7 +34,8 @@ describe("Catalog", function()
 				expect(pool.ascension).toEqual(index - 1)
 				expect(pool.placeholder).toBeTrue()
 				expect(pool.public).toBeTrue()
-				expect(pool.pityLegendaryAt).toEqual(50)
+				expect(pool.pityLegendaryAt).toEqual(RarityConfig.LEGENDARY_PITY)
+				expect(pool.pityLegendaryAt).toEqual(150)
 				expect(weightSum(pool)).toEqual(10000)
 				expect(Pools.isUnlocked(pool, pool.ascension)).toBeTrue()
 				expect(Pools.isUnlocked(pool, pool.ascension - 1)).toBeFalse()
@@ -71,9 +73,11 @@ describe("Catalog", function()
 			if base.weaponType ~= nil then
 				types[base.weaponType] = true
 			end
-			if base.setId == "grovewarden" then
+			if string.sub(base.id, 1, 12) == "grovewarden_" then
 				grove[base.slot] = true
 				expect(base.rarity).toEqual("Epic")
+				-- Kevin, Oct 22: the set tag is dropped until Phase 2 set bonuses.
+				expect(base.setId).toBeNil()
 			end
 			if base.kind ~= "Pet" then
 				expect(base.stats ~= nil and #base.stats > 0).toBeTrue()

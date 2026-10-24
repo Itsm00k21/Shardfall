@@ -97,4 +97,58 @@ describe("SessionLock", function()
 		expect(document).toBeNil()
 		expect(reason).toEqual("missing")
 	end)
+
+	it("lets another server claim a lock whose timestamp is not finite", function()
+		local nanLock = {
+			jobId = "server-a",
+			placeId = 7,
+			lockedAt = 0 / 0,
+		}
+		expect(SessionLock.status(nanLock, NOW, "server-a", TIMEOUT)).toEqual("owned")
+		expect(SessionLock.status(nanLock, NOW, "server-b", TIMEOUT)).toEqual("expired")
+		local hugeLock = {
+			jobId = "server-a",
+			placeId = 7,
+			lockedAt = math.huge,
+		}
+		expect(SessionLock.status(hugeLock, NOW, "server-a", TIMEOUT)).toEqual("owned")
+		expect(SessionLock.status(hugeLock, NOW, "server-b", TIMEOUT)).toEqual("expired")
+		local held = {
+			Data = { gold = 80 },
+			Lock = nanLock,
+		}
+		local document, reason =
+			SessionLock.tryClaim(held, NOW, "server-b", 8, TIMEOUT, { gold = 80 })
+		expect(reason).toEqual("claimed")
+		assert(document ~= nil)
+		expect(document.Lock.jobId).toEqual("server-b")
+		expect(document.Data.gold).toEqual(80)
+		expect(held.Data.gold).toEqual(80)
+		local fresh = SessionLock.claim(NOW, "server-a", 7)
+		expect(SessionLock.status(fresh, NOW, "server-b", TIMEOUT)).toEqual("busy")
+	end)
+
+	it("releases an owned lock without replacing the stored profile", function()
+		local held = {
+			Data = { gold = 80 },
+			Lock = SessionLock.claim(NOW, "server-a", 7),
+		}
+		local released, reason = SessionLock.tryRelease(held, "server-a")
+		expect(reason).toEqual("released")
+		assert(released ~= nil)
+		expect(released.Data.gold).toEqual(80)
+		expect(released.Lock.jobId).toEqual("")
+		expect(held.Data.gold).toEqual(80)
+		expect(SessionLock.status(released.Lock, NOW, "server-b", TIMEOUT)).toEqual("free")
+
+		local stranger, strangerReason = SessionLock.tryRelease(held, "server-b")
+		expect(stranger).toBeNil()
+		expect(strangerReason).toEqual("busy")
+		expect(held.Lock.jobId).toEqual("server-a")
+		expect(held.Data.gold).toEqual(80)
+
+		local missing, missingReason = SessionLock.tryRelease(nil, "server-a")
+		expect(missing).toBeNil()
+		expect(missingReason).toEqual("missing")
+	end)
 end)

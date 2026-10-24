@@ -14,7 +14,37 @@
         "RollShard": {
           "$className": "RemoteFunction"
         },
+        "RollShards": {
+          "$className": "RemoteFunction"
+        },
+        "RollAnnounce": {
+          "$className": "RemoteEvent"
+        },
         "RollPaid": {
+          "$className": "RemoteFunction"
+        },
+        "OpenChest": {
+          "$className": "RemoteFunction"
+        },
+        "ChooseChest": {
+          "$className": "RemoteFunction"
+        },
+        "MergeChest": {
+          "$className": "RemoteFunction"
+        },
+        "BuyChest": {
+          "$className": "RemoteFunction"
+        },
+        "ClaimLogin": {
+          "$className": "RemoteFunction"
+        },
+        "BuyDustShard": {
+          "$className": "RemoteFunction"
+        },
+        "BuyChestBundle": {
+          "$className": "RemoteFunction"
+        },
+        "SetChestOptions": {
           "$className": "RemoteFunction"
         },
         "BuyPrism": {
@@ -47,13 +77,65 @@
         "DevGrant": {
           "$className": "RemoteFunction"
         },
+        "Debug": {
+          "$className": "RemoteFunction"
+        },
         "ProfileUpdated": {
           "$className": "RemoteEvent"
         },
         "Attack": {
           "$className": "RemoteEvent"
         },
+        "Dodge": {
+          "$className": "RemoteEvent"
+        },
+        "SetClass": {
+          "$className": "RemoteFunction"
+        },
+        "PickTalent": {
+          "$className": "RemoteFunction"
+        },
+        "UseSkill": {
+          "$className": "RemoteFunction"
+        },
+        "UseActionSlot": {
+          "$className": "RemoteFunction"
+        },
+        "SetActionBar": {
+          "$className": "RemoteFunction"
+        },
+        "Onboard": {
+          "$className": "RemoteFunction"
+        },
+        "UpgradeGear": {
+          "$className": "RemoteFunction"
+        },
+        "HatchPet": { "$className": "RemoteFunction" },
+        "PetCare": { "$className": "RemoteFunction" },
+        "FusePet": { "$className": "RemoteFunction" },
+        "PaintPet": { "$className": "RemoteFunction" },
+        "FavoritePet": { "$className": "RemoteFunction" },
+        "Trade": { "$className": "RemoteFunction" },
+        "Market": { "$className": "RemoteFunction" },
+        "Loops": { "$className": "RemoteFunction" },
+        "RerollDaily": { "$className": "RemoteFunction" },
+        "ClaimPass": { "$className": "RemoteFunction" },
+        "PremiumPass": { "$className": "RemoteFunction" },
+        "StartDailyBoss": { "$className": "RemoteFunction" },
+        "RaidQueue": { "$className": "RemoteFunction" },
+        "RaidPost": { "$className": "RemoteFunction" },
+        "RaidJoin": { "$className": "RemoteFunction" },
+        "RaidPractice": { "$className": "RemoteFunction" },
+        "RaidBuy": { "$className": "RemoteFunction" },
+        "RaidLeave": { "$className": "RemoteFunction" },
+        "RaidReady": { "$className": "RemoteFunction" },
         "CombatFx": {
+          "$className": "RemoteEvent"
+        },
+        "WaveCounter": {
+          "$className": "RemoteEvent"
+        },
+        "RunResults": {
           "$className": "RemoteEvent"
         },
         "Dungeon": {
@@ -68,6 +150,9 @@
         "BulkSalvage": {
           "$className": "RemoteFunction"
         },
+        "GearSalvage": {
+          "$className": "RemoteFunction"
+        },
         "SetItemLock": {
           "$className": "RemoteFunction"
         },
@@ -75,6 +160,9 @@
           "$className": "RemoteFunction"
         },
         "BuyInventoryExpansion": {
+          "$className": "RemoteFunction"
+        },
+        "BuyGoldShop": {
           "$className": "RemoteFunction"
         },
         "UseTonic": {
@@ -100,6 +188,42 @@
         },
         "SetGraphicsQuality": {
           "$className": "RemoteFunction"
+        },
+        "SetSettings": {
+          "$className": "RemoteFunction"
+        },
+        "SetAudio": {
+          "$className": "RemoteFunction"
+        },
+        "SetShake": {
+          "$className": "RemoteFunction"
+        },
+        "HavenPrompt": {
+          "$className": "RemoteEvent"
+        },
+        "WaveArena": {
+          "$className": "RemoteFunction"
+        },
+        "EquipSlot": {
+          "$className": "RemoteFunction"
+        },
+        "UnequipSlot": {
+          "$className": "RemoteFunction"
+        },
+        "GetEquip": {
+          "$className": "RemoteFunction"
+        },
+        "EquipChanged": {
+          "$className": "RemoteEvent"
+        },
+        "GetShardCore": {
+          "$className": "RemoteFunction"
+        },
+        "FeedShardCore": {
+          "$className": "RemoteFunction"
+        },
+        "ShardCoreChanged": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -114,9 +238,24 @@
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "$ignoreUnknownInstances": true,
+      "$ignoreUnknownInstances": false,
       "ShardfallServer": {
-        "$path": "src/ServerScriptService/ShardfallServer"
+        "$path": "src/ServerScriptService/ShardfallServer",
+        "EquipService": {
+          "$path": "src/server/EquipService"
+        },
+        "GearLevels": {
+          "$path": "src/server/GearLevels"
+        },
+        "ShardCore": {
+          "$path": "src/server/ShardCore"
+        }
+      },
+      "WaveArenaSrc": {
+        "$className": "Folder",
+        "server": {
+          "$path": "src/server"
+        }
       }
     },
     "StarterPlayer": {
