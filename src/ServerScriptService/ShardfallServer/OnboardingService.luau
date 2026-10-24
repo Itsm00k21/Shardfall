@@ -10,7 +10,8 @@
 	The T3 guide is LaunchGate.firstSessionGuide. Off, note and free rolls
 	stay as they were. advance() treats a saved guide step as the cold-open
 	card, so a rollback is not stuck. Skip pays the saved step's tokens
-	once either way. Replay writes nothing.
+	once either way, except a flag-off open step, which owes 0. Replay
+	writes nothing.
 ]]
 
 -- Lune has no DataModel. Studio requires go through ReplicatedStorage.

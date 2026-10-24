@@ -8,10 +8,11 @@
 	step's token count once, so a rollback cannot zero that debt or pay it
 	twice.
 
-	R1. Unused free rolls become Shard Tokens once, from the saved step
-	(open = 3, roll1 = 3, roll2 = 2, roll3 = 1, anything else = 0), and
-	only while onboardDone is still false. The flag does not change that
-	count.
+	R1. Unused free rolls become Shard Tokens once, from the saved step,
+	and only while onboardDone is still false. roll1 = 3, roll2 = 2,
+	roll3 = 1, and anything else = 0. open owes 3 only while the flag is
+	on. With the flag off, open owes 0, so a fresh Skip does not grant
+	tokens. A saved roll step still pays its count.
 	R2. claimFree spends the free roll and moves onboardStep together.
 	A roll step does not move through note().
 	R3. Free or not is read from onboardDone and onboardStep. There is
@@ -28,8 +29,10 @@ local WaveArenaConfig = require("./Config/WaveArenaConfig")
 
 local SessionGuide = {}
 
--- One source for the three free cracks. open and roll1 owe all of them.
--- roll2 and roll3 owe what is left. check() still locks freeRolls at 3.
+-- One source for the three free cracks. roll1 owes all of them. roll2
+-- and roll3 owe what is left. open stores the same 3 so a flag-on Skip
+-- can pay them. unusedRollTokens returns 0 for open while the flag is
+-- off. check() still locks freeRolls at 3.
 local FREE_ROLLS = 3
 
 local TOKEN_COUNT: { [string]: number } = {
@@ -184,14 +187,19 @@ function SessionGuide.freeStep(id: any): boolean
 end
 
 -- Tokens still owed for unused free rolls. 0 once the guide is finished
--- or the saved step owes none. The flag does not change the count, so a
--- rollback still pays the saved step and a second skip pays 0.
+-- or the saved step owes none. A saved roll step pays its count with the
+-- flag on or off, so a rollback cannot zero that debt or pay it twice.
+-- open pays its row only while the flag is on. Flag off, a fresh open
+-- card owes 0.
 function SessionGuide.unusedRollTokens(data: any): number
 	if type(data) ~= "table" or data.onboardDone == true then
 		return 0
 	end
 	local row = find(data.onboardStep)
 	if row == nil or type(row.tokens) ~= "number" then
+		return 0
+	end
+	if row.id == "open" and not enabled() then
 		return 0
 	end
 	return row.tokens
