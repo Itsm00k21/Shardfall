@@ -1,6 +1,6 @@
-# Wave HUD ("Stack chip + boss bar"), Spec v1
+# Wave HUD ("Stack chip + boss bar"), Spec v1.1
 
-Owner: Prism (design, docs only, no code). Builders: Ghost (client HUD), Echo (server payloads). Base: `cursor/live-build-9721`. Status: proposal, gray-box only (pre-Phase S). Nothing here is approved until Ghost/Kevin say so.
+Owner: Prism (design, docs only, no code). Builders: Ghost (client HUD), Echo (server payloads). Base: `cursor/live-build-9721`. Status: **v1.1, direction A chosen by Ghost** (Kevin pre-approved, Agent Board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f, Oct 24, 2026). Ghost questions 1–4 are decided; Kevin taste call 5 stays **PROVISIONAL**. Gray-box only (pre-Phase S). Not an official Vision & Design Rules decision until Kevin approves it.
 Asked for in: Ghost's Agent Board row (Kevin pre-approved) https://app.notion.com/p/403c31ca388381eeb7def55a6b3d4953, from canvas item **M6**: "Wave HUD spec (wave counter, next-wave timer, boss bar, HARD chip)". Roadmap **3.5** ("wave counter on screen"), **3.6** (boss + 4 adds on wave 5), **5.1** (8 s draft break), **5.4** (Hard).
 
 Sources (link, don't copy):
@@ -21,13 +21,15 @@ Mockup: `mockups/08-directions.svg`.
 
 **Recommendation: A.** It's the slot #420 already set aside, it follows D1–D3 with no new rules, and it keeps the screen center for the fight. The rest of this spec is A.
 
+**Decided (Ghost, Oct 24, 2026, Kevin pre-approved): A.**
+
 ## 1. Goal
 At any moment in a run, a player can tell in under a second which wave they're on (of 5), how many enemies are left, how long the break lasts before the next wave, whether this is Hard, and, on wave 5, how much HP the boss has left. All of this without covering the fight or a combat button.
 
 ## 2. Where it lives
 - **Screen (Ghost):** the arena HUD only (never in the hub). New `WaveHud` pieces in the same ScreenGui as the live HP block (`CoreUISafeInsets`): `WaveChip` (Frame) in the #420 top-left stack, `BossBar` (Frame) shown only on wave 5, and the `HardChip` (inside both when the run is Hard). It replaces today's text run label in `Ui.luau`; the Leave button goes away with it (no early exit, Oct 23 rule). Prism doesn't edit `Ui.luau`, `HudLayout`, `CombatHud` or any Ghost-owned file; Ghost decides where the code goes.
 - **Toasts:** "Wave N cleared!", "First kill!", "Boss incoming!", "Weak spot open!" use the existing D3 toast lane (info priority). The HUD adds no second toast host.
-- **Server (Echo):** extend the #417 `WaveCounter` payload (Q3) to `{ wave, total, left, phase = "fight" | "break" | "boss", breakEndsAt, tier, bossHp, bossMax, bossPhase }`. The client only displays; the server owns every number. Nothing is saved.
+- **Server (Echo):** extend the #417 `WaveCounter` payload to a **full snapshot** (Q3, decided: yes, rejoin-safe) `{ wave, total, left, phase = "fight" | "break" | "boss", breakEndsAt, tier, bossHp, bossMax, bossPhase }`. Every send is the whole state, never a delta, and the server sends one on join. The client only displays; the server owns every number. Nothing is saved.
 - **Not here:** party member list, damage numbers, minimap, timers on the whole run, any Robux or boost prompt.
 
 ## 3. Flow
@@ -43,7 +45,9 @@ At any moment in a run, a player can tell in under a second which wave they're o
 | 8 | Boss dies | Boss bar empties, flashes gold, folds (0.25 s). Chip shows "CLEARED". Then the results screen (separate spec, `prism/results-run-again`). | run end |
 | — | Wipe | The chip shows "WIPED · wave N" for the death hold, then the results screen. No penalty text; all earned loot is kept. | run end |
 
-Collapse: tapping the chip folds it to a 44×44 badge "2/5" (and back). The boss bar can't be folded (it's the fight's main read) but it's only up on wave 5. Desktop: Tab folds/unfolds.
+**First run (Q2, decided):** the #412 first-run row (Oracle pill carrying "Wave 1/5") is **session-only**: it lives in memory for the current server session and needs **no save field**. The chip shows after the pill's wave-1 line ends, so the row never holds both.
+
+Collapse: tapping the chip folds it to a 44×44 badge "2/5" (and back); the pip row under it hides while folded. The boss bar can't be folded (it's the fight's main read) but it's only up on wave 5. Desktop: Tab folds/unfolds.
 
 ## 4. Layout
 Full-screen px, same frame as the #420 review (0,0 = screen top-left including the Roblox top bar). Build in `CoreUISafeInsets` by subtracting the top inset.
@@ -56,15 +60,15 @@ Full-screen px, same frame as the #420 review (0,0 = screen top-left including t
 | **Wave chip** | **x 16–150, y 179–223** (134×44) | **x 61–197, y 132–176** (136×44), right of the rail; right edge 197 < keep-out 200 | **x 66–222, y 132–176** (156×44) | **x 88–268, y 138–182** (180×44), above the rail top 177 is too tight, so it sits right of the rail |
 | Collapsed chip | 44×44 at the chip's top-left | same | same | same |
 | **Boss bar** (wave 5) | **x 16–206, y 179–223** (190×44), replaces the chip in its row; the chip's "adds left" moves into the bar's sub-line | **top band x 160–403, y 8–48** (243×40), between the Roblox buttons (`TopbarInset.Min.X + 8`) and the toast lane (411) | **top band x 200–516, y 8–48** (316×40); toast lane starts at 524 | **x 440–840, y 110–150** (400×40), under the top-center toast lane (y 66–102); keep-out top 202 |
-| #416 buff strip (moves) | x 158, y 187, ≤ 100 wide (was (16, 179)); during the boss it folds to a 44×28 pip "×3" at x 214–258 | x 61, y 184 (was y 132) | x 66, y 184 | x 88, y 190 (was y 138) |
+| #416 buff strip (**v1.1, Q1 decided: under the wave counter, clear of the action bar**) | **pip row x 16–84, y 226–240** (≤ 68×14, up to 4 pips 10 px, spacing 14), 3 px under the chip and 2 px above the rail top (242); left of the toast lane (88). It stays in the same place under the boss bar on wave 5 (no fold to the right any more). Display-only on portrait (see Q6) | x 61, y 184 (8 px under the chip) | x 66, y 184 | x 88, y 190 |
 | #412 goal tab / Oracle pill (first run only) | the one row y 179–223 already carries the pill; on a first run the chip is the pill's second line, see Q2 | goal tab moves to y 184, buff strip to y 236 | same as 667 | goal under the strip |
 | Toast lane (D3, unchanged) | x 88–266, y 231–267 | x 411–651, y 8–44 | x 524–784, y 8–44 | x 480–800, y 66–102 |
 
 Checks:
-- **Portrait:** chip bottom 223 < toast lane top 231 and < rail top 242; chip right 150 and strip right 258 stay left of the currency column (266). Boss bar right 206 + folded strip 214–258 fit in the same row. Nothing reaches y 296.
+- **Portrait:** chip bottom 223 < pip row top 226; pip row bottom 240 < rail top 242; pip row right 84 < toast lane left 88; chip right 150 stays left of the currency column (266). The boss bar (x 16–206) keeps the pip row under it. Nothing reaches y 296, and nothing is near the action bar / skill grid (y ≥ 566) or the thumbstick.
 - **667×375:** chip x 61–197 clears the rail (x 16–53) and the keep-out (x ≥ 200). Boss bar 160–403 in the top band (y < 52) doesn't touch the HP block (y 68) or the toast lane (≥ 411).
 - **800×400 / desktop:** same logic, all edges outside the keep-out.
-- **Combat buttons:** nothing in this spec is near the attack/dodge/jump cluster, the skill bar or the thumbstick zone. The chip is the only tappable piece (44 tall, a full 44×44 target even when collapsed).
+- **Combat buttons (Q1):** the buff strip / pip row sits under the wave counter on every size, so nothing in this spec is near the attack/dodge/jump cluster, the action/skill bar or the thumbstick zone. The chip is the only tappable piece (44 tall, a full 44×44 target even when collapsed); the 14 px portrait pip row is display-only, so it never needs a 44 px target.
 - **Text:** chip line 1 at 13 px bold, line 2 at 11 px (badge size, R7 minimum). Boss name 13 px bold.
 
 ## 5. States
@@ -97,12 +101,12 @@ Rarity colors (`Rarities.COLOR`) aren't used by the HUD itself; loot toasts in t
 - **Performance:** 2 Frames + a few labels; updates only on payloads (no Heartbeat), one tween per change.
 
 ## 8. Mockups
-SVG in repo (fake data, original art, gray-box arena): `mockups/01-fight-phone-390x844.svg` (Hard, wave 2/5) · `mockups/02-break-phone-390x844.svg` (8 s break, toast lane) · `mockups/03-boss-phone-390x844.svg` (Hard boss, phase 2, buffs folded) · `mockups/04-fight-landscape-667x375.svg` (chip right of the rail, toast in the top band) · `mockups/05-boss-landscape-800x400.svg` (boss bar in the top band) · `mockups/06-desktop-1280x720.svg` (BOSS IN 5) · `mockups/07-states.svg` (every state) · `mockups/08-directions.svg` (A/B/C). The live HUD is dashed; the keep-out is the cyan dashed box. PNG renders are on the box only.
+SVG in repo (fake data, original art, gray-box arena). v1.1 re-rendered 01–03 with the pip row under the chip / boss bar. `mockups/01-fight-phone-390x844.svg` (Hard, wave 2/5) · `mockups/02-break-phone-390x844.svg` (8 s break, toast lane) · `mockups/03-boss-phone-390x844.svg` (Hard boss, phase 2, pips under the bar) · `mockups/04-fight-landscape-667x375.svg` (chip right of the rail, toast in the top band) · `mockups/05-boss-landscape-800x400.svg` (boss bar in the top band) · `mockups/06-desktop-1280x720.svg` (BOSS IN 5) · `mockups/07-states.svg` (every state) · `mockups/08-directions.svg` (A/B/C). The live HUD is dashed; the keep-out is the cyan dashed box. PNG renders are on the box only.
 
 ## 9. Build split
 Roadmap 3.5 / 3.6. Building waits for Ghost's go and the #417 / #419 flags.
-- **Echo (server):** full-snapshot `WaveCounter` payload (Q3): `wave, total, left, phase, breakEndsAt, tier, bossHp, bossMax, bossPhase`; send on join, on every kill, on phase change and on boss damage (throttled to 10 Hz). Tests: snapshot after rejoin, `left` never negative, break end uses server time, Hard tier flag present.
-- **Ghost (client):** `WaveChip`, `BossBar`, `HardChip`, collapse, Tab key, buff strip / goal tab re-dock per §4, remove the Leave button and old run label when the flag flips, toasts through the D3 lane.
+- **Echo (server):** full-snapshot `WaveCounter` payload (Q3, decided): `wave, total, left, phase, breakEndsAt, tier, bossHp, bossMax, bossPhase`; send on join, on every kill, on phase change and on boss damage (throttled to 10 Hz). Tests: snapshot after rejoin, `left` never negative, break end uses server time, Hard tier flag present.
+- **Ghost (client):** `WaveChip`, `BossBar`, `HardChip`, collapse, Tab key, buff strip re-dock under the wave counter (Q1) and goal tab per §4, session-only first-run row (Q2, no save field), remove the Leave button and old run label when the flag flips, toasts through the D3 lane.
 - **Prism:** copy check and a Phase S pass (boss name plate art, phase tick VFX).
 - **Havoc:** kill spam (bar never goes below 0), rejoin during break, lag spike during the timer, wipe on the boss.
 
@@ -115,13 +119,15 @@ Roadmap 3.5 / 3.6. Building waits for Ghost's go and the #417 / #419 flags.
 6. No Leave / early-exit button appears anywhere in the run.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** The #416 buff strip moves to sit right of the chip on portrait (x 158, y 187) and under it on landscape/desktop, and folds to a 44 px pip during the boss. OK?
-2. **@Ghost:** First run (#412 Focus mode) on portrait: the Oracle pill and the chip share the one row under the HP block. Recommended: the chip shows only after the Oracle pill's wave-1 line ends (the pill already says "Wave 1/5"), so the row never holds both. OK?
-3. **@Ghost:** Can Echo widen the #417 `WaveCounter` payload into the full snapshot in §2 (wave, total, left, phase, breakEndsAt, tier, boss HP/max/phase)? Recommended: yes, one remote, full snapshots.
-4. **@Ghost:** Boss bar on landscape goes in the top band (y 8–48, next to the toast lane). Any clash with the Roblox top-bar buttons or #412 FocusTop on your devices?
-5. **@Kevin (taste):** Normal boss HP color: warm orange 230,120,70 (recommended, keeps red for Hard) or the same danger red on both tiers?
+1. ~~**@Ghost:** Buff strip placement?~~ **Decided (Ghost, Oct 24, 2026, Kevin pre-approved): re-dock the #416 buff strip under the wave counter, clear of the action bar.** Portrait: a 14 px pip row at x 16–84, y 226–240 (also under the boss bar on wave 5); landscape/desktop: 8 px under the chip (unchanged). See §4.
+2. ~~**@Ghost:** First run row?~~ **Decided: the first-run row is session-only, no save field.** The chip shows after the Oracle pill's wave-1 line ends. See §3.
+3. ~~**@Ghost:** Full-snapshot payload?~~ **Decided: yes, a full-snapshot `WaveCounter` payload (rejoin-safe).** See §2 and §9.
+4. ~~**@Ghost:** Boss bar in the top band?~~ **Decided: yes, top-band boss bar** on landscape/desktop (portrait keeps it in the chip row). See §4.
+5. **@Kevin (taste, PROVISIONAL):** Normal boss HP color: warm orange 230,120,70 (recommended, keeps red for Hard) or the same danger red on both tiers? The spec ships orange until Kevin says otherwise.
+6. **@Ghost (new in v1.1):** On portrait the pip row is 14 px tall, so it's display-only. Recommended: the full buff list opens from a long-press (0.4 s) on the wave chip and also shows on the results screen; a normal tap keeps folding the chip. OK, or would you rather have a separate 44 px buff button?
 
 ## Decision log
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381089ec4e42d24ad049f): direction **A**. Q1 = buff strip re-docks under the wave counter, clear of the action bar (portrait pip row x 16–84, y 226–240; mockups 01–03 re-rendered). Q2 = first-run row session-only, no save field. Q3 = yes, full-snapshot `WaveCounter` payload (rejoin-safe). Q4 = yes, top-band boss bar. Q5 (Kevin taste) stays PROVISIONAL. New Q6 for Ghost (portrait buff list). → v1.1.
 - 2026-10-24 (Prism): v1 published. Recommends direction A (stack chip + boss bar). Five open questions (Ghost 1–4; Kevin 5). Not approved. The HARD chip uses the Hard accent that is still a PROVISIONAL Kevin taste call (Hard spec Q4).
 
 ## Later (not V1)
