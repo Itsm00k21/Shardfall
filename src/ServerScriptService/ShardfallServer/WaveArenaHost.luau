@@ -29,6 +29,7 @@ local ServerScriptService: any
 local DataService: any
 local DevAccess: any
 local LaunchGate: any
+local PartyGatherPrompt: any
 local RunResults: any
 local OnboardingService: any
 local Schema: any
@@ -40,6 +41,7 @@ if studio then
 	DataService = require(script.Parent.DataService)
 	DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 	LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+	PartyGatherPrompt = require(ReplicatedStorage.Shared.PartyGatherPrompt)
 	RunResults = require(ReplicatedStorage.Shared.RunResults)
 	OnboardingService = require(script.Parent.OnboardingService)
 	Schema = require(ReplicatedStorage.Shared.Schema)
@@ -52,6 +54,7 @@ else
 	}
 	DevAccess = require("../../ReplicatedStorage/Shared/DevAccess")
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
+	PartyGatherPrompt = require("../../ReplicatedStorage/Shared/PartyGatherPrompt")
 	RunResults = require("../../ReplicatedStorage/Shared/RunResults")
 	OnboardingService = require("./OnboardingService")
 	Schema = require("../../ReplicatedStorage/Shared/Schema")
@@ -419,7 +422,7 @@ local function bossView(run: any, config: any): any
 end
 
 local function stateOf(arena: any, run: any, config: any): any
-	local hud = if run ~= nil then arena.hud(run, options(config)) else nil
+	local hud = arena.hud(run, options(config))
 	return {
 		ok = true,
 		hud = hud,
@@ -454,6 +457,7 @@ function WaveArenaHost.present()
 				prompt.MaxActivationDistance = 12
 				prompt.RequiresLineOfSight = false
 				prompt.Parent = part
+				PartyGatherPrompt.tag(prompt)
 				prompt.Triggered:Connect(function(player)
 					WaveArenaHost.handle(player, "enter", nil)
 				end)

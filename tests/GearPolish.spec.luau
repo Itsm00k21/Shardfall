@@ -35,7 +35,8 @@ local function withFlags(on: { [string]: boolean }, fn: () -> ())
 	end
 end
 
-local ALL = { upgradeScale = true, gearSalvage = true, shardCore = true, equip = true, gearLevels = true }
+local ALL =
+	{ upgradeScale = true, gearSalvage = true, shardCore = true, equip = true, gearLevels = true }
 
 local function weapon(uid: string, name: string, upgrade: number?)
 	return {
@@ -137,7 +138,10 @@ end
 
 local function anyText(root: any, needle: string): boolean
 	for _, node in ipairs(root:GetDescendants()) do
-		if (node:IsA("TextLabel") or node:IsA("TextButton")) and string.find(node.Text, needle, 1, true) ~= nil then
+		if
+			(node:IsA("TextLabel") or node:IsA("TextButton"))
+			and string.find(node.Text, needle, 1, true) ~= nil
+		then
 			return true
 		end
 	end
@@ -157,8 +161,14 @@ describe("Gear polish: Shard Core picker", function()
 				canFeed = true,
 			})
 		end
-		table.insert(preview.weapons, { uid = "b", name = "Bramble Fang", rarity = "Rare", level = 2, nextCost = 40 })
-		table.insert(preview.weapons, { uid = "h9", name = "Beastbone Hammer", rarity = "Common", level = 1, nextCost = 15 })
+		table.insert(
+			preview.weapons,
+			{ uid = "b", name = "Bramble Fang", rarity = "Rare", level = 2, nextCost = 40 }
+		)
+		table.insert(
+			preview.weapons,
+			{ uid = "h9", name = "Beastbone Hammer", rarity = "Common", level = 1, nextCost = 15 }
+		)
 		local groups = GearHooks.coreGroups(preview, "b")
 		expect(#groups).toEqual(3)
 		expect(groups[1].name).toEqual("Bramble Fang")
@@ -308,7 +318,8 @@ describe("Gear polish: clip 4 detail panel", function()
 			local _, hub, screen = boot({ gold = 100000 })
 			hub.open("bag")
 			GuiFake.activate(cardFor(screen, "Iron Sword"))
-			local equip = GuiFake.findNamed(GuiFake.findNamed(screen, "DetailActions"), "DetailEquip")
+			local equip =
+				GuiFake.findNamed(GuiFake.findNamed(screen, "DetailActions"), "DetailEquip")
 			expect(equip.Text).toEqual("EQUIPPED")
 			local header = GuiFake.findNamed(screen, "CompareHeader")
 			expect(header == nil or header.Visible == false).toBeTrue()
@@ -317,7 +328,11 @@ describe("Gear polish: clip 4 detail panel", function()
 			for _, node in ipairs(GuiFake.findNamed(screen, "Compare"):GetDescendants()) do
 				if (node:IsA("TextLabel") or node:IsA("TextButton")) and node.Visible then
 					local words = string.lower(node.Text)
-					if words == "equipped" or words == "unequip" or words == "this is equipped." then
+					if
+						words == "equipped"
+						or words == "unequip"
+						or words == "this is equipped."
+					then
 						count += 1
 					end
 				end
@@ -382,7 +397,10 @@ describe("Gear polish: small Bag", function()
 			expect(anyText(screen, "Salvage  Common")).toBeFalse()
 			local opens = 0
 			for _, node in ipairs(screen:GetDescendants()) do
-				if node:IsA("TextButton") and string.gsub(node.Text, "^%s+", "") == "Open full bag" then
+				if
+					node:IsA("TextButton")
+					and string.gsub(node.Text, "^%s+", "") == "Open full bag"
+				then
 					opens += 1
 				end
 			end
@@ -520,9 +538,11 @@ describe("Gear polish: clip 6 Pets page", function()
 			local many = pets()
 			for index = 1, 8 do
 				local uid = string.format("slime%d", index)
-				many[uid] = { uid = uid, name = "Bog Slime " .. index, kind = "Pet", rarity = "Common" }
+				many[uid] =
+					{ uid = uid, name = "Bog Slime " .. index, kind = "Pet", rarity = "Common" }
 			end
-			local world, hub, screen = boot({ pets = many, equipped = { weapon = "spare", armor = {}, pet = "fox" } })
+			local world, hub, screen =
+				boot({ pets = many, equipped = { weapon = "spare", armor = {}, pet = "fox" } })
 			hub.open("pets")
 			local list = GuiFake.findNamed(screen, "PetList")
 			expect(list:IsA("ScrollingFrame")).toBeTrue()
@@ -607,12 +627,26 @@ describe("Gear polish: clip 7 intro card", function()
 		expect(continue.Parent.Visible).toEqual(true)
 		GuiFake.activate(continue)
 		expect(#calls).toEqual(0)
-		expect(textHas(onboard, "press Choose on a class")).toBeTrue()
+		-- [Ghost] Oct 24: classes is off on live, so the hint points at
+		-- Skip intro, never at a picker the server refuses.
+		expect(textHas(onboard, "Classes open later")).toBeTrue()
+		expect(textHas(onboard, "press Choose on a class")).toBeFalse()
 		-- The same push keeps the hint up; a new step replaces it.
 		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
-		expect(textHas(onboard, "press Choose on a class")).toBeTrue()
+		expect(textHas(onboard, "Classes open later")).toBeTrue()
 		expect(OnboardHud.continueHint("open")).toBeNil()
 		expect(OnboardHud.continueHint("haven")).toBeNil()
+		local saved = LaunchGate.SHOW.classes
+		LaunchGate.SHOW.classes = true
+		local ok, err = pcall(function()
+			expect(OnboardHud.continueHint("class")).toEqual(
+				"Open Hero and press Choose on a class. Or press Skip intro."
+			)
+		end)
+		LaunchGate.SHOW.classes = saved
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	it("closes on Skip even when the server does not answer ok", function()
@@ -647,9 +681,10 @@ describe("Gear polish: clip 7 intro card", function()
 		local card = GuiFake.findNamed(onboard, "Continue").Parent
 		expect(panel.Visible).toEqual(true)
 		expect(panel.BackgroundTransparency < 0.5).toBeTrue()
-		expect(
-			string.find(GuiFake.findNamed(panel, "GoalText").Text, "Choose a class", 1, true) ~= nil
-		).toBeTrue()
+		-- Classes off: the class goal is dropped from the list.
+		local goalText = GuiFake.findNamed(panel, "GoalText").Text
+		expect(string.find(goalText, "Choose a class", 1, true) == nil).toBeTrue()
+		expect(string.find(goalText, "Keep swinging", 1, true) ~= nil).toBeTrue()
 		OnboardHud.setCovered("hub", true)
 		expect(card.Visible).toEqual(false)
 		expect(panel.Visible).toEqual(false)
@@ -661,14 +696,17 @@ describe("Gear polish: clip 7 intro card", function()
 		expect(panel.Visible).toEqual(true)
 	end)
 
-	it("puts the goals beside the card on a wide screen, clear of the character", function()
+	it("keeps the goals top right, clear of the lower-left card on a wide screen", function()
 		local HudLayout = require("../src/ReplicatedStorage/Shared/HudLayout")
 		local world = GuiFake.world()
 		local OnboardHud = world.load("OnboardHud")
 		local wide = HudLayout.onboard(1482, 669)
 		local x, y, w, h = OnboardHud.goalRect(wide, 1482, 5)
+		-- [Ghost] Oct 24: the card sits lower left on a mouse screen, so the
+		-- goals keep the top-right lane and never stack on it.
+		expect(HudLayout.overlaps({ x = x, y = y, w = w, h = h }, wide.card)).toBeFalse()
 		expect(x >= wide.card.x + wide.card.w).toBeTrue()
-		expect(y).toEqual(wide.card.y)
+		expect(y + h <= wide.card.y).toBeTrue()
 		expect(x + w <= 1482 - 16).toBeTrue()
 		expect(h >= 5 * 17).toBeTrue()
 		local phone = HudLayout.onboard(667, 375)

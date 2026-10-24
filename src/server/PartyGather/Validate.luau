@@ -47,7 +47,7 @@ function Validate.problems(config: any): { string }
 	if typeof(gate) ~= "table" or gate.id ~= "rootvault" then
 		table.insert(problems, "gate")
 	end
-	if pad.x ~= 0 or pad.y ~= 120 or pad.z ~= 98 or pad.radius ~= 8 then
+	if pad.x ~= -10 or pad.y ~= 120 or pad.z ~= 108 or pad.radius ~= 8 then
 		table.insert(problems, "pad")
 	end
 	if not finite(pad.thickness) or pad.thickness <= 0 or pad.thickness > 2 then
@@ -70,7 +70,12 @@ function Validate.problems(config: any): { string }
 	if party.min ~= 1 or party.cap ~= 4 or party.countdown ~= 15 then
 		table.insert(problems, "caps")
 	end
-	if party.lateJoinUnder ~= 5 or party.lateJoinBump ~= 5 or party.leaveGrace ~= 0.5 then
+	if
+		party.lateJoinUnder ~= 5
+		or party.lateJoinBump ~= 5
+		or party.leaveGrace ~= 0.5
+		or party.deadlineExtra ~= 10
+	then
 		table.insert(problems, "clock")
 	end
 	if party.startSweep ~= 0.4 or party.friendsOnlyDefault ~= false or party.hardLevel ~= 5 then

@@ -11,8 +11,40 @@
 	When a round is allowed, the roster still comes only from config.
 ]]
 
+local function sharedRoot()
+	if game ~= nil and game.GetService ~= nil then
+		local folder = script.Parent
+		if folder ~= nil and folder.Name == "server" then
+			return require(folder:WaitForChild("SharedRequire"))
+		end
+		if folder ~= nil and folder.Parent ~= nil then
+			return require(folder.Parent:WaitForChild("SharedRequire"))
+		end
+		error("SharedRequire is not beside this module")
+	end
+	local source = debug.info(1, "s")
+	local marker = "src/server/"
+	local at = string.find(source, marker, 1, true)
+	if at == nil then
+		error("SharedRequire could not see src/server in " .. source)
+	end
+	local rest = string.sub(source, at + #marker)
+	local _, slashes = string.gsub(rest, "/", "")
+	if slashes == 0 then
+		return require("./SharedRequire")
+	end
+	local prefix = ""
+	local parent = string.char(46, 46)
+	for _ = 1, slashes do
+		prefix ..= parent .. "/"
+	end
+	return require(prefix .. "SharedRequire")
+end
+
+local SharedRequire = sharedRoot()
+
 -- init.luau is the folder module, so Lune resolves these from src/server.
-local WaveArenaConfig = require("../ReplicatedStorage/Shared/Config/WaveArenaConfig")
+local WaveArenaConfig = SharedRequire.module("Config/WaveArenaConfig")
 local Camera = require("./WaveArena/Camera")
 local Gate = require("./WaveArena/Gate")
 local Graybox = require("./WaveArena/Graybox")
@@ -164,7 +196,7 @@ end
 
 function WaveArena.hud(run: any, options: any?): any
 	local launchGate, config = resolve(options)
-	return Hud.snapshot(run, Gate.open(launchGate, config))
+	return Hud.snapshot(run, Gate.open(launchGate, config), config)
 end
 
 function WaveArena.camera(eye: any, center: any, size: { number }, config: any?): any

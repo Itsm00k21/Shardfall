@@ -29,7 +29,17 @@ local DebugHud = {}
 export type Hooks = {
 	toast: ((string) -> ())?,
 	apply: ((any) -> ())?,
+	-- Called with true when the panel opens and false when it closes.
+	changed: ((boolean) -> ())?,
 }
+
+-- The open panel, for OnboardHud.coverWhen("dev", DebugHud.isOpen).
+local openPanel: Frame? = nil
+
+function DebugHud.isOpen(): boolean
+	local panel = openPanel
+	return panel ~= nil and panel.Visible
+end
 
 local function rgb(name: string): Color3
 	local row = UiTheme.RGB[name]
@@ -66,7 +76,7 @@ function DebugHud.start(invoke: (string, ...any) -> any, hooks: Hooks?)
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "ShardfallDebug"
 	screen.ResetOnSpawn = false
-	screen.DisplayOrder = 20
+	screen.DisplayOrder = DevTools.DISPLAY_ORDER
 	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.IgnoreGuiInset = false
 	screen.Parent = player:WaitForChild("PlayerGui")
@@ -241,7 +251,12 @@ function DebugHud.start(invoke: (string, ...any) -> any, hooks: Hooks?)
 		gridLayout.Parent = grid
 
 		local function paintHead()
-			head.Text = string.format("%s  %s (%d)", if grid.Visible then "-" else "+", section.title, #shown)
+			head.Text = string.format(
+				"%s  %s (%d)",
+				if grid.Visible then "-" else "+",
+				section.title,
+				#shown
+			)
 		end
 		head.Activated:Connect(function()
 			grid.Visible = not grid.Visible
@@ -281,7 +296,9 @@ function DebugHud.start(invoke: (string, ...any) -> any, hooks: Hooks?)
 		footer.TextColor3 = rgb("muted")
 		footer.TextWrapped = true
 		footer.TextXAlignment = Enum.TextXAlignment.Left
-		footer.Text = "Hidden while their system is off (LaunchGate): " .. table.concat(hidden, ", ") .. "."
+		footer.Text = "Hidden while their system is off (LaunchGate): "
+			.. table.concat(hidden, ", ")
+			.. "."
 		footer.Parent = body
 	end
 
@@ -294,11 +311,21 @@ function DebugHud.start(invoke: (string, ...any) -> any, hooks: Hooks?)
 		panel.Size = UDim2.fromOffset(frame.w, frame.h)
 	end
 
+	openPanel = panel
+	-- [Ghost] Oct 24: tell the client so the onboarding goals hide while
+	-- the panel is open and come back when it closes.
+	local function setOpen(on: boolean)
+		panel.Visible = on
+		local changed = if hooks ~= nil then hooks.changed else nil
+		if changed ~= nil then
+			pcall(changed, on)
+		end
+	end
 	toggle.Activated:Connect(function()
-		panel.Visible = not panel.Visible
+		setOpen(not panel.Visible)
 	end)
 	close.Activated:Connect(function()
-		panel.Visible = false
+		setOpen(false)
 	end)
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)

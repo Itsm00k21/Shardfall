@@ -10,7 +10,39 @@
 	configured level. Nothing here writes a profile.
 ]]
 
-local PartyGatherConfig = require("../../ReplicatedStorage/Shared/Config/PartyGather")
+local function sharedRoot()
+	if game ~= nil and game.GetService ~= nil then
+		local folder = script.Parent
+		if folder ~= nil and folder.Name == "server" then
+			return require(folder:WaitForChild("SharedRequire"))
+		end
+		if folder ~= nil and folder.Parent ~= nil then
+			return require(folder.Parent:WaitForChild("SharedRequire"))
+		end
+		error("SharedRequire is not beside this module")
+	end
+	local source = debug.info(1, "s")
+	local marker = "src/server/"
+	local at = string.find(source, marker, 1, true)
+	if at == nil then
+		error("SharedRequire could not see src/server in " .. source)
+	end
+	local rest = string.sub(source, at + #marker)
+	local _, slashes = string.gsub(rest, "/", "")
+	if slashes == 0 then
+		return require("./SharedRequire")
+	end
+	local prefix = ""
+	local parent = string.char(46, 46)
+	for _ = 1, slashes do
+		prefix ..= parent .. "/"
+	end
+	return require(prefix .. "SharedRequire")
+end
+
+local SharedRequire = sharedRoot()
+
+local PartyGatherConfig = SharedRequire.module("Config/PartyGather")
 
 local Party = {}
 
@@ -29,6 +61,7 @@ export type State = {
 	tier: string,
 	phase: string,
 	countdownEnds: number?,
+	countdownCap: number?,
 	startingEnds: number?,
 	bumped: { [number]: boolean },
 }
@@ -67,6 +100,7 @@ local function reset(state: State, config: any)
 	state.tier = "Normal"
 	state.phase = "idle"
 	state.countdownEnds = nil
+	state.countdownCap = nil
 	state.startingEnds = nil
 	state.bumped = {}
 end
@@ -78,6 +112,7 @@ function Party.new(config: any?): State
 		tier = "Normal",
 		phase = "idle",
 		countdownEnds = nil,
+		countdownCap = nil,
 		startingEnds = nil,
 		bumped = {},
 	}
@@ -280,10 +315,23 @@ function Party.observe(state: State, actor: Actor, now: number, config: any?): {
 	if fresh then
 		state.phase = "gather"
 		state.countdownEnds = now + cfg.party.countdown
+		local extra = cfg.party.deadlineExtra
+		if type(extra) ~= "number" or extra ~= extra or extra < 0 then
+			extra = 0
+		end
+		state.countdownCap = state.countdownEnds + extra
 	elseif state.countdownEnds ~= nil then
 		local left = state.countdownEnds - now
 		if left < cfg.party.lateJoinUnder and state.bumped[actor.userId] ~= true then
-			state.countdownEnds = now + cfg.party.lateJoinBump
+			local nextEnd = now + cfg.party.lateJoinBump
+			local cap = state.countdownCap
+			if type(cap) == "number" and nextEnd > cap then
+				nextEnd = cap
+			end
+			if nextEnd < (state.countdownEnds :: number) then
+				nextEnd = state.countdownEnds :: number
+			end
+			state.countdownEnds = nextEnd
 			state.bumped[actor.userId] = true
 		end
 	end

@@ -128,7 +128,9 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 	className.Font = Enum.Font.BuilderSans
 	className.TextSize = UiTheme.MIN_TEXT
 	className.TextColor3 = rgb("text")
-	className.Text = "Class"
+	-- [Ghost] Oct 24: classes off reads "Hero", not a "Class" prompt the
+	-- server refuses.
+	className.Text = if LaunchGate.on("classes") then "Class" else "Hero"
 	className.Parent = portrait
 
 	local health = Instance.new("Frame")
@@ -610,7 +612,8 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 		gold.Size = UDim2.fromOffset(labelW, labelH)
 		mastery.Size = UDim2.fromOffset(labelW, labelH)
 		shards.Size = UDim2.fromOffset(labelW, labelH)
-		local side = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
+		local side =
+			HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, vx)
 		rail.Position = UDim2.fromOffset(side.x, side.y)
 		rail.Size = UDim2.fromOffset(side.w, side.h)
 		local pad = side.gap
@@ -638,9 +641,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			label.Position = UDim2.fromOffset(0, (index - 1) * (card.h + UiTheme.PAD))
 			label.Size = UDim2.fromOffset(card.w, card.h)
 		end
-		local ask = HudLayout.equipPrompt(vx, margin)
+		local ask = HudLayout.equipPrompt(vx, margin, vy)
 		prompt.Position = UDim2.fromOffset(ask.x, ask.y)
 		prompt.Size = UDim2.fromOffset(ask.w, ask.h)
+		local yes, no = HudLayout.promptButtons(ask.w)
+		promptYes.Position = UDim2.fromOffset(yes.x, yes.y)
+		promptYes.Size = UDim2.fromOffset(yes.w, yes.h)
+		promptNo.Position = UDim2.fromOffset(no.x, no.y)
+		promptNo.Size = UDim2.fromOffset(no.w, no.h)
 	end
 	place()
 	screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
@@ -704,7 +712,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				portrait.BackgroundColor3 = Color3.fromRGB(color[1], color[2], color[3])
 			else
 				initial.Text = "?"
-				className.Text = "Class"
+				className.Text = if LaunchGate.on("classes") then "Class" else "Hero"
 			end
 			local shardCount = if type(profile) == "table" then profile.shardTokens or 0 else 0
 			local goldCount = if type(profile) == "table"
@@ -729,12 +737,14 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 				xpText.Text = "XP  Max"
 				xpFill.Size = UDim2.fromScale(1, 1)
 			end
-			showDot("Hero", classDef == nil)
+			-- Classes off: no "Choose class" dot or tip on the Hero button.
+			local wantsClass = classDef == nil and LaunchGate.on("classes")
+			showDot("Hero", wantsClass)
 			local heroButton = rail:FindFirstChild("Hero")
 			if heroButton ~= nil then
 				local tip = heroButton:FindFirstChild("Tip")
 				if tip ~= nil and tip:IsA("TextLabel") then
-					tip.Text = if classDef == nil then "Choose class" else "Hero"
+					tip.Text = if wantsClass then "Choose class" else "Hero"
 				end
 			end
 			showDot("Bag", false)

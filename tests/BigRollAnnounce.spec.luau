@@ -6,11 +6,6 @@
 	Flag on: tiers at or above Config.BigRoll.MIN_TIER get the beam line
 	and not the older "rolled" broadcast. Flag off: that older line only,
 	the same payload as before. The flag ships false. schemaVersion stays 26.
-
-	P3-466-2. An x10 that lands two Legendaries fires one RollAnnounce
-	for each of them. Flag on, that is two beam lines, not one folded
-	"+N more" and not the older "rolled" line as well. Flag off, two
-	older lines and no beam.
 ]]
 
 local fs = require("@lune/fs")
@@ -70,6 +65,8 @@ local function harness()
 	local now = 1000
 	local guids = 0
 	local active = { profile = Schema.template() }
+	local scriptedNumbers: { number } = {}
+	local scriptedAt = 0
 
 	local function add(parent: any, name: string, value: any)
 		local node = {
@@ -224,6 +221,11 @@ local function harness()
 			new = function()
 				return {
 					NextNumber = function()
+						scriptedAt += 1
+						local value = scriptedNumbers[scriptedAt]
+						if type(value) == "number" then
+							return value
+						end
 						return 0.5
 					end,
 					NextInteger = function(_self, minimum: number, _maximum: number)
@@ -291,6 +293,11 @@ local function harness()
 		return data
 	end
 
+	local function scriptNumbers(values: { number })
+		scriptedNumbers = values
+		scriptedAt = 0
+	end
+
 	return {
 		service = service,
 		player = player,
@@ -299,6 +306,10 @@ local function harness()
 		beat = beat,
 		clear = clear,
 		fresh = fresh,
+		clock = function()
+			return now
+		end,
+		scriptNumbers = scriptNumbers,
 	}
 end
 
@@ -353,7 +364,7 @@ end
 -- The harness RNG cannot land two Legendaries in one x10 (pity fires
 -- once). This swaps the live pick for the length of one example, then
 -- puts it back even when the example fails.
-local function withPlan(plan: { string }, fn: () -> ())
+local function withPlan(plan: { string }, fn: (() -> ()) -> ())
 	local saved = RarityConfig.pick
 	local cursor = 0
 	RarityConfig.pick = function(_pool: any, _luck: number, _pity: any, _rng: any): (string, boolean, string?)
@@ -380,6 +391,7 @@ local function withFlag(on: boolean, fn: () -> ())
 	BigRollBeam.reset()
 	world.clear()
 	world.fresh()
+	world.scriptNumbers({})
 	world.advance(120)
 	local ok, err = pcall(fn)
 	LaunchGate.SHOW.bigRollBeam = previous
@@ -488,6 +500,94 @@ describe("Legendary RollAnnounce", function()
 		end)
 		expect(LaunchGate.SHOW.bigRollBeam).toEqual(false)
 		expect(BigRoll.MIN_TIER).toEqual("Epic")
+	end)
+
+	it("names both Legendaries in an x10 and folds neither into +N more", function()
+		withFlag(true, function()
+			local start = world.clock()
+			for userId = 1, BigRoll.CHAT_MAX do
+				local fact = BigRollBeam.serverRoll({
+					userId = userId,
+					displayName = "P" .. tostring(userId),
+					itemName = "Blade",
+					rarity = "Epic",
+					quick = true,
+				})
+				BigRollBeam.offer(fact, start)
+			end
+			world.advance(BigRollBeam.delay("Epic", true))
+			world.beat()
+			expect(#world.rows).toEqual(BigRoll.CHAT_MAX)
+			for _, row in ipairs(world.rows) do
+				expect(row.rarity).toEqual("Epic")
+				expect(row.overflow).toBeNil()
+			end
+
+			-- Pity forces roll 1. The next scripted 0 is roll 2's Legendary
+			-- check; the 0 after that picks its item. Later draws stay off
+			-- Legendary and Epic.
+			local draws = {}
+			for _ = 1, 6 do
+				table.insert(draws, 0.5)
+			end
+			table.insert(draws, 0)
+			table.insert(draws, 0)
+			world.scriptNumbers(draws)
+			local result = world.service.rollMany(world.player, POOL, 10)
+			expect(result.ok).toEqual(true)
+			expect(result.count).toEqual(10)
+			local names = {}
+			for _, row in ipairs(result.items) do
+				if row.rarity == "Legendary" then
+					table.insert(names, row.item.name)
+				end
+			end
+			expect(#names).toEqual(2)
+			expect(#world.rows).toEqual(BigRoll.CHAT_MAX)
+
+			world.advance(BigRoll.PLAYER_GAP + 1)
+			world.beat()
+			local named = {}
+			for _, row in ipairs(world.rows) do
+				expect(row.overflow).toBeNil()
+				expect(string.find(row.text, "more big rolls", 1, true)).toBeNil()
+				if row.rarity == "Legendary" then
+					table.insert(named, row)
+				end
+			end
+			expect(#named).toEqual(2)
+			local pending = { named[1], named[2] }
+			for _, itemName in ipairs(names) do
+				local found = nil
+				for index, row in ipairs(pending) do
+					local text = row.text
+					if
+						row.kind == "bigRoll"
+						and row.count == 1
+						and row.displayName == "Ada"
+						and string.find(text, itemName, 1, true) ~= nil
+						and string.find(text, "LEGENDARY", 1, true) ~= nil
+					then
+						found = index
+						break
+					end
+				end
+				expect(found ~= nil).toBeTrue()
+				table.remove(pending, found :: number)
+			end
+			expect(#pending).toEqual(0)
+
+			local sent = #world.rows
+			world.advance(BigRoll.CHAT_WINDOW)
+			world.beat()
+			expect(#world.rows).toEqual(sent)
+			for _, row in ipairs(world.rows) do
+				expect(row.overflow).toBeNil()
+				expect(string.find(row.text, "more big rolls", 1, true)).toBeNil()
+			end
+		end)
+		expect(LaunchGate.SHOW.bigRollBeam).toEqual(false)
+		expect(Schema.VERSION).toEqual(26)
 	end)
 
 	it("fires one RollAnnounce per Legendary when an x10 lands two", function()

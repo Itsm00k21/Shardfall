@@ -24,14 +24,27 @@
 	slim "Shardfall: <step>" pill at the top left; tapping the pill opens
 	it again. The goals fold into a "Goals N/5" tab on the right edge.
 	Both remember that for the session. Skip intro still closes for good.
+
+	[Ghost] Oct 24 (Kevin's clips): with LaunchGate classes off the card
+	still said "Choose a class", the goals listed it, and Continue sent the
+	player to a picker the server refuses ("That is closed"). While classes
+	is off the class goal is dropped from the list and the count, and the
+	class step's copy points at Skip intro instead. On a mouse screen the
+	card now sits lower left (HudLayout.onboard), and while the card or
+	its goals show, the starter-goal mini list hides (onShownChange) so
+	the two lists never stack. Body and goal text stay at 14px or more.
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local UserInputService = game:GetService("UserInputService")
+
 local Onboarding = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Onboarding"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
+local LaunchGate = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LaunchGate"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local MobileShell = require(script.Parent.MobileShell)
 
 local OnboardHud = {}
@@ -53,6 +66,11 @@ local goalsHeader: TextLabel? = nil
 -- Session only: the collapsed state outlives profile pushes and menus.
 local cardCollapsed = false
 local goalsCollapsed = false
+-- True once the player folds or opens the goals themselves; until then
+-- HudLayout's foldGoals picks the start state for the view.
+local goalsChosen = false
+local shownListeners: { (boolean) -> () } = {}
+local lastShown: boolean? = nil
 
 -- Steps the Continue button can move on its own. Every other step is
 -- finished in the world, and the server refuses "advance" there.
@@ -65,31 +83,73 @@ local HINTS = {
 	door = "Walk through one of the two doors. Or press Skip intro.",
 }
 
+-- Copy for the class step while LaunchGate classes is off. The picker is
+-- hidden and the server refuses SetClass, so the card never asks for it.
+OnboardHud.CLASSES_OFF_TEXT = "Classes open later. Your gear sets your skills for now."
+OnboardHud.CLASSES_OFF_HINT = "Classes open later. Press Skip intro to start."
+OnboardHud.CLASSES_OFF_PILL = "Shardfall: Skip intro to start"
+
+local function classesOff(): boolean
+	return not LaunchGate.on("classes")
+end
+
 function OnboardHud.continueHint(id: any): string?
 	if type(id) ~= "string" or TEXT_BEATS[id] == true then
 		return nil
 	end
+	if id == "class" and classesOff() then
+		return OnboardHud.CLASSES_OFF_HINT
+	end
 	return HINTS[id] or "Finish this step in the world. Or press Skip intro."
 end
 
--- Goals go beside the card when the row has room (clear of the character
--- under the card), else where HudLayout put them.
-local GOAL_W = 280
-local GOAL_LINE = 17
+-- The goal rows the card lists. While classes is off the class row is
+-- dropped, so the list and the N/M count never ask for a class.
+function OnboardHud.visibleGoals(list: { any }): { any }
+	if not classesOff() then
+		return list
+	end
+	local kept = {}
+	for _, goal in ipairs(list) do
+		if goal.id ~= "class" then
+			table.insert(kept, goal)
+		end
+	end
+	return kept
+end
+
+-- The card's body text for a step.
+function OnboardHud.stepText(step: any): string
+	if type(step) ~= "table" then
+		return ""
+	end
+	if step.id == "class" and classesOff() then
+		return OnboardHud.CLASSES_OFF_TEXT
+	end
+	return if type(step.text) == "string" then step.text else ""
+end
+
+-- Called with true while the card or its goals are on screen, false when
+-- both are gone. init hides the starter-goal mini list on true.
+function OnboardHud.onShownChange(callback: (boolean) -> ())
+	table.insert(shownListeners, callback)
+	if lastShown ~= nil then
+		pcall(callback, lastShown)
+	end
+end
+
+-- [Ghost] Oct 24: the goals go exactly where HudLayout.onboard put them
+-- (under the top-right pills and Dev column). h is the body under the
+-- 20px header; apply adds the header back.
+local GOAL_LINE = HudLayout.GOAL_LINE
 
 function OnboardHud.goalRect(
 	layout: any,
-	vx: number,
+	_vx: number,
 	lines: number
 ): (number, number, number, number)
-	local box = layout.card
 	local tracker = layout.tracker
-	local h = math.max(tracker.h, lines * GOAL_LINE + 16)
-	local besideX = box.x + box.w + 8
-	local stacked = tracker.y >= box.y + box.h
-	if stacked and besideX + GOAL_W <= vx - 16 - 72 then
-		return besideX, box.y, GOAL_W, h
-	end
+	local h = math.max(tracker.h - HudLayout.GOAL_HEAD, lines * GOAL_LINE + HudLayout.GOAL_PAD)
 	return tracker.x, tracker.y, tracker.w, h
 end
 
@@ -169,7 +229,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	text.Position = UDim2.fromOffset(12, 32)
 	text.Size = UDim2.new(1, -24, 0, 44)
 	text.Font = Enum.Font.BuilderSans
-	text.TextSize = 14
+	text.TextSize = math.max(UiTheme.MIN_TEXT, 15)
 	text.TextWrapped = true
 	text.TextXAlignment = Enum.TextXAlignment.Left
 	text.TextYAlignment = Enum.TextYAlignment.Top
@@ -244,7 +304,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	collapse.Size = UDim2.fromOffset(28, 28)
 	local introPill = small("IntroPill", "Shardfall", screen)
 	introPill.Visible = false
-	introPill.TextSize = 14
+	introPill.TextSize = UiTheme.MIN_TEXT
 	introPill.TextXAlignment = Enum.TextXAlignment.Left
 	introPill.TextTruncate = Enum.TextTruncate.AtEnd
 	introPill.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
@@ -307,7 +367,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	header.Position = UDim2.fromOffset(10, 6)
 	header.Size = UDim2.new(1, -48, 0, 20)
 	header.Font = Enum.Font.BuilderSansBold
-	header.TextSize = 14
+	header.TextSize = math.max(UiTheme.MIN_TEXT, 15)
 	header.TextXAlignment = Enum.TextXAlignment.Left
 	header.TextColor3 = Color3.fromRGB(255, 214, 120)
 	header.Text = "Goals"
@@ -319,7 +379,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	fold.Size = UDim2.fromOffset(28, 24)
 	local tab = small("GoalsTab", "‹ Goals", screen)
 	tab.Visible = false
-	tab.TextSize = 14
+	tab.TextSize = UiTheme.MIN_TEXT
 	tab.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
 	tab.BackgroundTransparency = 0.08
 	local tabStroke = Instance.new("UIStroke")
@@ -331,10 +391,12 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	goalsTab = tab
 	fold.MouseButton1Click:Connect(function()
 		goalsCollapsed = true
+		goalsChosen = true
 		OnboardHud._show()
 	end)
 	tab.MouseButton1Click:Connect(function()
 		goalsCollapsed = false
+		goalsChosen = true
 		OnboardHud._show()
 	end)
 
@@ -345,7 +407,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	tracker.Position = UDim2.fromOffset(10, 28)
 	tracker.Size = UDim2.new(1, -20, 1, -34)
 	tracker.Font = Enum.Font.BuilderSans
-	tracker.TextSize = 14
+	tracker.TextSize = math.max(UiTheme.MIN_TEXT, 15)
 	tracker.TextWrapped = true
 	tracker.TextXAlignment = Enum.TextXAlignment.Left
 	tracker.TextYAlignment = Enum.TextYAlignment.Top
@@ -356,7 +418,16 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 
 	local function apply()
 		local vx, vy = MobileShell.view(screen)
-		local layout = HudLayout.onboard(vx, vy)
+		local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local rows = 1
+		for _ in string.gmatch(tracker.Text, "\n") do
+			rows += 1
+		end
+		local layout = HudLayout.onboard(vx, vy, touchOnly, math.max(4, rows))
+		if not goalsChosen then
+			-- A view with no clear room for the full list starts folded.
+			goalsCollapsed = layout.foldGoals
+		end
 		frame.Position = UDim2.fromOffset(layout.card.x, layout.card.y)
 		frame.Size = UDim2.fromOffset(layout.card.w, layout.card.h)
 		advance.Position = UDim2.fromOffset(layout.continueButton.x, layout.continueButton.y)
@@ -376,7 +447,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 			lines += 1
 		end
 		local gx, gy, gw, gh = OnboardHud.goalRect(layout, vx, lines)
-		gh += 20 -- the "Goals N/5" header row
+		gh += HudLayout.GOAL_HEAD -- the "Goals N/4" header row
 		backing.Position = UDim2.fromOffset(gx, gy)
 		backing.Size = UDim2.fromOffset(gw, gh)
 	end
@@ -422,6 +493,13 @@ local function show()
 	if tab ~= nil then
 		tab.Visible = active and hasGoals and goalsCollapsed
 	end
+	local nowShown = frame.Visible or panel.Visible
+	if nowShown ~= lastShown then
+		lastShown = nowShown
+		for _, callback in ipairs(shownListeners) do
+			pcall(callback, nowShown)
+		end
+	end
 end
 OnboardHud._show = show
 
@@ -454,6 +532,7 @@ function OnboardHud.setCollapsed(cardOn: boolean?, goalsOn: boolean?)
 	end
 	if goalsOn ~= nil then
 		goalsCollapsed = goalsOn
+		goalsChosen = true
 	end
 	show()
 end
@@ -477,10 +556,10 @@ function OnboardHud.setProfile(profile: any)
 	stepId = step.id
 	heading.Text = "Shardfall"
 	if moved or OnboardHud.continueHint(step.id) == nil then
-		text.Text = step.text
+		text.Text = OnboardHud.stepText(step)
 	end
 	local lines = {}
-	local list = Onboarding.goals(step.id, profile)
+	local list = OnboardHud.visibleGoals(Onboarding.goals(step.id, profile))
 	for _, goal in ipairs(list) do
 		local mark = if goal.done then "x" else "o"
 		table.insert(lines, mark .. "  " .. goal.text)
@@ -497,7 +576,10 @@ function OnboardHud.setProfile(profile: any)
 	end
 	local introPill = pill
 	if introPill ~= nil then
-		introPill.Text = Onboarding.pillText(step.id, list) .. "  ›"
+		local pillLabel = if step.id == "class" and classesOff()
+			then OnboardHud.CLASSES_OFF_PILL
+			else Onboarding.pillText(step.id, list)
+		introPill.Text = pillLabel .. "  ›"
 	end
 	local relayout = OnboardHud._layout
 	if relayout ~= nil then
