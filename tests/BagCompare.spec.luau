@@ -106,7 +106,8 @@ end
 local function pane(screen: any): { string }
 	local list = GuiFake.findNamed(screen, "Compare")
 	local rows = {}
-	for _, child in ipairs(list:GetChildren()) do
+	-- The gear panel nests the title in Hero and the buttons in Actions.
+	for _, child in ipairs(list:GetDescendants()) do
 		if child:IsA("TextLabel") or child:IsA("TextButton") then
 			table.insert(rows, { child.LayoutOrder, child.Text })
 		end
@@ -166,7 +167,7 @@ describe("Bag detail compare", function()
 		expect(has(rows, "Damage  40  +")).toBeTrue()
 		expect(has(rows, "Attack Speed  1.30  +")).toBeTrue()
 		expect(has(rows, "Crit Chance  20.0%  +")).toBeTrue()
-		expect(has(rows, "Crit Damage  2.00  -")).toBeTrue()
+		expect(has(rows, "Crit Damage  200%  -")).toBeTrue()
 		expect(has(rows, "Damage  28  +")).toBeFalse()
 		expect(has(rows, "UPGRADE  1,280")).toBeTrue()
 	end)
@@ -177,12 +178,12 @@ describe("Bag detail compare", function()
 		local rows = pane(screen)
 		expect(has(rows, "Attack Speed  1.15  =")).toBeTrue()
 		expect(has(rows, "Crit Chance  11.8%  =")).toBeTrue()
-		expect(has(rows, "Crit Damage  2.40  =")).toBeTrue()
+		expect(has(rows, "Crit Damage  240%  =")).toBeTrue()
 		expect(has(rows, "Damage  28  +")).toBeTrue()
 		select(screen, "Nightstriker")
 		local label = nil
-		for _, child in ipairs(GuiFake.findNamed(screen, "Compare"):GetChildren()) do
-			if child:IsA("TextLabel") and child.Text == "Crit Damage  2.00  -" then
+		for _, child in ipairs(GuiFake.findNamed(screen, "Compare"):GetDescendants()) do
+			if child:IsA("TextLabel") and child.Text == "Crit Damage  200%  -" then
 				label = child
 			end
 		end

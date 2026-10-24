@@ -961,6 +961,11 @@ function GuiFake.world()
 		"HudShell",
 		"StarterGoalHud",
 		"OnboardHud",
+		"GearBar",
+		"CoreCard",
+		"GearDetail",
+		"Dropdown",
+		"InventoryHud",
 		"RollSummaryHud",
 	}) do
 		local moduleScript = newInstance("ModuleScript")
@@ -968,6 +973,25 @@ function GuiFake.world()
 		moduleScript.Parent = folder
 		scripts[name] = moduleScript
 	end
+	-- Echo's gear mounts (#388 BagTools, #389 ShardCore) load from their
+	-- own folders, so MenuHub can require them the way Studio does.
+	local bagToolsScript = newInstance("ModuleScript")
+	bagToolsScript.Name = "BagTools"
+	bagToolsScript.Parent = folder
+	scripts["BagTools/init"] = bagToolsScript
+	local coreFolder = newInstance("Folder")
+	coreFolder.Name = "ShardCore"
+	coreFolder.Parent = folder
+	for _, name in ipairs({ "Mount", "View" }) do
+		local moduleScript = newInstance("ModuleScript")
+		moduleScript.Name = name
+		moduleScript.Parent = coreFolder
+		scripts["ShardCore/" .. name] = moduleScript
+	end
+	local configFolder = newInstance("Folder")
+	configFolder.Name = "Config"
+	configFolder.MakeMissing = true
+	configFolder.Parent = shared
 
 	local loadedClient = {}
 	local base = {
@@ -984,6 +1008,9 @@ function GuiFake.world()
 		tostring = tostring,
 		type = type,
 		typeof = function(value)
+			if type(value) == "table" and rawget(value, "_class") ~= nil then
+				return "Instance"
+			end
 			if type(value) == "table" and type(value.__type) == "string" then
 				return value.__type
 			end
@@ -1080,6 +1107,18 @@ function GuiFake.world()
 		end
 		env.script = scripts[name]
 		env.require = function(module)
+			if module == "./View" and name == "ShardCore/Mount" then
+				return loadClient("ShardCore/View")
+			end
+			if type(module) == "table" and module.Name == "BagTools" and module.Parent == folder then
+				return loadClient("BagTools/init")
+			end
+			if type(module) == "table" and module.Parent == coreFolder then
+				return loadClient("ShardCore/" .. module.Name)
+			end
+			if type(module) == "table" and module.Parent == configFolder then
+				return require(SHARED .. "Config/" .. module.Name)
+			end
 			if type(module) ~= "table" then
 				error("require " .. tostring(module), 2)
 			end
@@ -1095,6 +1134,11 @@ function GuiFake.world()
 				or moduleName == "HudShell"
 				or moduleName == "StarterGoalHud"
 				or moduleName == "OnboardHud"
+				or moduleName == "GearBar"
+				or moduleName == "CoreCard"
+				or moduleName == "GearDetail"
+				or moduleName == "Dropdown"
+				or moduleName == "InventoryHud"
 				or moduleName == "RollSummaryHud"
 			then
 				return loadClient(moduleName)
@@ -1156,6 +1200,8 @@ function GuiFake.world()
 		enum = EnumRoot,
 		load = loadClient,
 		vector2 = vector2,
+		runService = runService,
+		new = newInstance,
 	}
 end
 

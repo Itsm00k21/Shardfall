@@ -69,14 +69,32 @@ function Onboarding.starter(data: any)
 	data.onboardStep = "haven"
 end
 
-function Onboarding.goals(stepId: string): { { id: string, text: string, done: boolean } }
+-- The goal lines under the card. profile is optional: when it already has
+-- a class, "Choose a class" reads done whatever step the save is on.
+-- On the cold open ("open") or an unknown step nothing is done yet.
+function Onboarding.goals(
+	stepId: string,
+	profile: any?
+): { { id: string, text: string, done: boolean } }
 	local rows = {}
-	local marking = true
+	local known = false
+	for _, row in ipairs(Onboarding.STEPS) do
+		if row.id == stepId then
+			known = true
+		end
+	end
+	local marking = known and stepId ~= Onboarding.STEPS[1].id
+	local hasClass = type(profile) == "table"
+		and type(profile.classId) == "string"
+		and profile.classId ~= ""
 	for _, row in ipairs(Onboarding.STEPS) do
 		if row.id ~= "open" then
 			local done = marking and row.id ~= stepId
 			if row.id == stepId then
 				marking = false
+			end
+			if row.id == "class" and hasClass then
+				done = true
 			end
 			table.insert(rows, {
 				id = row.id,
@@ -86,6 +104,49 @@ function Onboarding.goals(stepId: string): { { id: string, text: string, done: b
 		end
 	end
 	return rows
+end
+
+-- Short names for the collapsed intro pill ("Shardfall: Choose a class").
+Onboarding.SHORT = table.freeze({
+	open = "Welcome",
+	class = "Choose a class",
+	swing = "Keep swinging",
+	dodge = "Dodge",
+	door = "Pick a door",
+	haven = "Haven",
+})
+
+-- How many goal lines are done, and how many there are.
+function Onboarding.goalCount(goals: { { done: boolean } }): (number, number)
+	local done = 0
+	for _, goal in ipairs(goals) do
+		if goal.done then
+			done += 1
+		end
+	end
+	return done, #goals
+end
+
+-- The pill text: the step's short name, or the first goal still to do
+-- when the step's own goal is already done (a class chosen before the
+-- save left the class step).
+function Onboarding.pillText(stepId: any, goals: { { id: string, done: boolean } }?): string
+	local id = Onboarding.step(stepId).id
+	local short: string = Onboarding.SHORT[id] or "Welcome"
+	if goals ~= nil then
+		for _, goal in ipairs(goals) do
+			if goal.id == id and goal.done then
+				for _, other in ipairs(goals) do
+					if not other.done then
+						short = Onboarding.SHORT[other.id] or short
+						break
+					end
+				end
+				break
+			end
+		end
+	end
+	return "Shardfall: " .. short
 end
 
 return Onboarding

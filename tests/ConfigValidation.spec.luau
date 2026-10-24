@@ -626,6 +626,20 @@ describe("Config validation: cross-references", function()
 		end
 	end)
 
+	it("pays a positive whole Essence amount for every live rarity", function()
+		local seen = {}
+		for _, id in ipairs(Config.Live.Rarities.ORDER) do
+			local amount = Config.Essence.amount(id)
+			expect(type(amount) == "number" and amount >= 1 and amount == math.floor(amount)).toBeTrue()
+			seen[id] = true
+		end
+		expect(Config.Essence.CAP).toEqual(1000000000)
+		for id in pairs(Config.Essence.AMOUNT) do
+			expect(seen[id] == true).toBeTrue()
+		end
+		expect(Config.Essence.amount("nope")).toBeNil()
+	end)
+
 	it("keeps live difficulties inside the V1 difficulty list", function()
 		for id in pairs(Config.Live.Difficulties) do
 			expect(Config.Economy.DIFFICULTIES[id] ~= nil).toBeTrue()

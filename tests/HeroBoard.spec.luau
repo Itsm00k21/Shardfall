@@ -31,6 +31,38 @@ describe("HeroBoard", function()
 		end
 	end)
 
+	it("puts worn gear's Item Power into Hero Power, on the card scale (clip 6)", function()
+		local InventoryView = require("../src/ReplicatedStorage/Shared/InventoryView")
+		local bow = {
+			uid = "bow",
+			kind = "Weapon",
+			rarity = "Rare",
+			quality = 0.45,
+			stats = { { id = "damage", value = 20 } },
+		}
+		local vest = {
+			uid = "vest",
+			kind = "Armor",
+			slot = "chest",
+			rarity = "Rare",
+			quality = 0.47,
+			stats = {},
+		}
+		local pet = { uid = "fox", kind = "Pet", rarity = "Legendary", stats = {} }
+		local profile = {
+			inventory = { bow = bow, vest = vest },
+			pets = { fox = pet },
+			equipped = { weapon = "bow", armor = { chest = "vest" }, pet = "fox" },
+		}
+		local cards = InventoryView.powerOf(bow) + InventoryView.powerOf(vest)
+		expect(HeroBoard.gearPower(profile)).toEqual(cards)
+		local hero = HeroBoard.power(profile)
+		expect(hero >= cards).toBeTrue()
+		expect(hero >= InventoryView.powerOf(bow)).toBeTrue()
+		expect(HeroBoard.gearPower(nil)).toEqual(0)
+		expect(HeroBoard.gearPower({ inventory = {}, equipped = { weapon = "gone" } })).toEqual(0)
+	end)
+
 	it("lays out the redesigned hero sheet with real stat values (A1)", function()
 		local tiles = HeroBoard.tiles(nil)
 		expect(#tiles).toEqual(8)

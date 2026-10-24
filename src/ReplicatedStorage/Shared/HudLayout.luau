@@ -660,12 +660,20 @@ export type Onboard = {
 	card: Rect,
 	continueButton: Rect,
 	skip: Rect,
+	collapse: Rect,
+	pill: Rect,
 	tracker: Rect,
+	goalsTab: Rect,
 }
 
--- Intro card and the goal line. Both sit under the counters. A short
--- landscape phone puts the goal line beside the card so it stays above
--- the action bar. Button rects are inside the card.
+-- Intro card and the goal list (Kevin, Oct 23: smaller, off the screen
+-- centre and off the character). The card sits top-left under the
+-- counters, right of the mid-left rail when the two would meet. The goal
+-- list sits on the right edge under the pills. A viewport too narrow for
+-- both side by side stacks the goals under the card on the right.
+-- collapse is the card's chevron (inside the card). pill is where the
+-- collapsed card goes; goalsTab is where the collapsed goals go.
+-- Button rects are inside the card.
 function HudLayout.onboard(viewportX: number, viewportY: number): Onboard
 	local margin = 16
 	local gap = 8
@@ -680,47 +688,59 @@ function HudLayout.onboard(viewportX: number, viewportY: number): Onboard
 	local bar = HudLayout.actionCluster(vx, vy)
 	local top = math.max(health.y + health.h, pills.y + pills.h) + gap
 	local bottom = bar.y - gap
-	local cardH = 144
+	local cardH = 120
+	local trackW = math.min(240, math.max(168, math.floor(vx * 0.24)))
 	local trackH = 72
-	local cardW = math.min(460, vx - margin * 2)
-	local cardX = math.max(margin, math.floor((vx - cardW) / 2))
+	local tabW = 112
+	local tabH = 36
+	-- Clear of the mid-left rail when the card's band crosses it.
+	local railFit = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, 64, 44, vx)
+	local cardX = margin
+	if railFit.y < top + cardH and railFit.y + railFit.h > top then
+		cardX = railFit.x + railFit.w + gap
+	end
 	local cardY = top
+	local sideRoom = vx - margin - trackW - gap - cardX
+	local cardW = math.min(340, sideRoom)
 	local tracker: Rect
-	if bottom - top >= cardH + gap + trackH then
-		tracker = rect(cardX, cardY + cardH + gap, math.min(280, cardW), trackH)
+	if cardW >= 220 then
+		tracker = rect(vx - margin - trackW, top, trackW, trackH)
 	else
-		local trackW = 168
-		cardW = math.min(460, math.max(200, vx - margin * 2 - gap - trackW))
-		cardX = margin + trackW + gap
-		if cardX + cardW > vx - margin then
-			cardW = math.max(160, vx - margin - cardX)
-		end
-		local room = bottom - cardY
-		if room < cardH then
-			cardH = math.max(120, room)
-		end
-		tracker = rect(margin, cardY, trackW, cardH)
+		-- Narrow: the card takes the row and the goals go under it.
+		cardW = math.max(160, math.min(340, vx - margin - cardX))
+		trackW = math.min(trackW, vx - margin * 2)
+		tracker = rect(vx - margin - trackW, cardY + cardH + gap, trackW, trackH)
+	end
+	local room = bottom - cardY
+	if room < cardH then
+		cardH = math.max(112, room)
+	end
+	if tracker.y + tracker.h > bottom then
+		tracker = rect(tracker.x, math.max(top, bottom - tracker.h), tracker.w, tracker.h)
 	end
 	local card = rect(cardX, cardY, cardW, cardH)
 	local buttonH = UiTheme.TOUCH
 	local buttonW = math.floor((card.w - 24 - gap) / 2)
-	if buttonW > 140 then
-		buttonW = 140
+	if buttonW > 132 then
+		buttonW = 132
 	end
 	if buttonW < 1 then
 		buttonW = 1
 	end
-	local buttonsW = buttonW * 2 + gap
-	local buttonX = math.floor((card.w - buttonsW) / 2)
-	local buttonY = card.h - 12 - buttonH
+	local buttonX = 12
+	local buttonY = card.h - 10 - buttonH
 	if buttonY < 36 then
 		buttonY = 36
 	end
+	local chevron = 28
 	return {
 		card = card,
 		continueButton = rect(buttonX, buttonY, buttonW, buttonH),
 		skip = rect(buttonX + buttonW + gap, buttonY, buttonW, buttonH),
+		collapse = rect(card.w - 8 - chevron, 6, chevron, chevron),
+		pill = rect(cardX, cardY, math.min(280, cardW), tabH),
 		tracker = tracker,
+		goalsTab = rect(vx - margin - tabW, tracker.y, tabW, tabH),
 	}
 end
 

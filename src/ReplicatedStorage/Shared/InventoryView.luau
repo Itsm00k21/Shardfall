@@ -16,6 +16,7 @@ local Rarities = require("./Rarities")
 local Schema = require("./Schema")
 local Stats = require("./Stats")
 local Trading = require("./Trading")
+local UpgradeScale = require("./UpgradeScale")
 
 local InventoryView = {}
 
@@ -197,7 +198,11 @@ function InventoryView.powerOf(item: any): number
 	if type(stars) ~= "number" or stars ~= stars then
 		stars = 0
 	end
-	return rarityRank(tostring(item.rarity)) * 1000 + quality * 100 + stars * 10
+	-- [ECHO hook] Gold upgrades add to Item Power only while upgradeScale is on.
+	return rarityRank(tostring(item.rarity)) * 1000
+		+ quality * 100
+		+ stars * 10
+		+ UpgradeScale.powerBonus(item)
 end
 
 function InventoryView.realmOf(item: any): string

@@ -41,6 +41,12 @@ LaunchGate.SHOW = {
 	rollMenuExtras = false, -- [Ghost] old roll-page Junk/Below row, second Streak/Rolls lines, plain "Odds" rows
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
+	equip = false, -- Phase 2 equip remotes (EquipSlot / UnequipSlot / GetEquip)
+	gearLevels = false, -- auto-feed an exact duplicate into stars (off until Kevin decides)
+	upgradeScale = false, -- gold forge upgrades multiply stats at read time
+	shardCore = false, -- Shard Core feeder (GetShardCore / FeedShardCore). Spends gearEssence.
+	gearSalvage = false, -- salvage gear into Essence (Stage B). Off until Kevin flips it.
+	oneInventory = false, -- [Ghost] Bag rail button and B key open the full Inventory; the small Bag is retired.
 	extraTiers = false, -- Mythic/Secret rolling (Phase 5). Owned items of those tiers still load and show
 	luckMilestone = false, -- every-10th-roll x2 luck boost and its "x2 Luck in N" meter. Parked Oct 22; shardRolls still counts
 }

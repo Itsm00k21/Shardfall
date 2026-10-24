@@ -83,10 +83,28 @@ DevTools.SECTIONS = table.freeze({
 		}),
 	}),
 	table.freeze({
+		id = "salvage",
+		title = "Gear salvage",
+		entries = table.freeze({
+			entry("salvagefill", "Fill the Bag", "Debug", "salvagefill"),
+		}),
+	}),
+	table.freeze({
 		id = "testing",
 		title = "Testing",
 		entries = table.freeze({
 			entry("region", "Toggle region lock", "DevGrant", "restrict"),
+		}),
+	}),
+	-- [ECHO hook] Hidden while equip / gearLevels / shardCore are off.
+	table.freeze({
+		id = "gear",
+		title = "Gear",
+		entries = table.freeze({
+			entry("equip", "Seat owned gear", "Debug", "equip"),
+			entry("geardupe", "Grant a dupe", "Debug", "geardupe"),
+			entry("fillbag", "Fill the Bag", "Debug", "fillbag"),
+			entry("essence", "Grant Essence", "Debug", "essence"),
 		}),
 	}),
 })
@@ -99,6 +117,11 @@ local GATED: { [string]: string } = {
 	["DevGrant:prisms"] = "paid",
 	["Debug:tokens"] = "events",
 	["Debug:raid"] = "raids",
+	["Debug:equip"] = "equip",
+	["Debug:geardupe"] = "gearLevels",
+	["Debug:fillbag"] = "gearLevels",
+	["Debug:essence"] = "shardCore",
+	["Debug:salvagefill"] = "gearSalvage",
 }
 
 local GATE_NAME: { [string]: string } = {
@@ -107,6 +130,10 @@ local GATE_NAME: { [string]: string } = {
 	paid = "Paid rolls (Prisms)",
 	events = "The events system (Event Tokens)",
 	raids = "The raid system",
+	equip = "Equip",
+	gearLevels = "Gear levels",
+	shardCore = "Shard Core",
+	gearSalvage = "Gear salvage",
 }
 
 function DevTools.gateOf(remote: string, arg: any): string?
@@ -117,7 +144,11 @@ function DevTools.gateOf(remote: string, arg: any): string?
 end
 
 function DevTools.offMessage(flag: string): string
-	return string.format("%s is off (LaunchGate.%s), so this does nothing yet.", GATE_NAME[flag] or flag, flag)
+	return string.format(
+		"%s is off (LaunchGate.%s), so this does nothing yet.",
+		GATE_NAME[flag] or flag,
+		flag
+	)
 end
 
 -- nil when the action may run. Otherwise why it is refused.
