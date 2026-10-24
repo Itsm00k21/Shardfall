@@ -402,6 +402,18 @@ function Keybinds.worldMode(open: boolean, page: any, gamepad: boolean, revealin
 	return "walk"
 end
 
+-- A roll session (press, server call, every reveal of an x1, x10 or auto
+-- chain) locks movement. No single hold may outlast this many seconds: the
+-- hub drops it and frees the player, so a hung call never leaves them stuck.
+Keybinds.REVEAL_HOLD_MAX = 12
+
+function Keybinds.holdExpired(since: any, now: number): boolean
+	if type(since) ~= "number" or since ~= since then
+		return true
+	end
+	return now - since > Keybinds.REVEAL_HOLD_MAX
+end
+
 -- Walk mode: combat keys only, so a click or a key on the panel does not
 -- swing or cast. Movement, Space, and Shift (sprint and dodge) stay free.
 function Keybinds.walkSinkNames(): { string }

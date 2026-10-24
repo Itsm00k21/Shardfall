@@ -313,9 +313,10 @@ describe("Config validation: odds", function()
 		end
 	end)
 
-	it("has positive whole live pity", function()
-		expect(isPositiveInt(Config.Live.RollConfig.EPIC_PITY)).toBeTrue()
+	it("has positive whole live pity, Legendary only, from Config.Rarities", function()
+		expect((Config.Live.RollConfig :: any).EPIC_PITY).toBeNil()
 		expect(isPositiveInt(Config.Live.RollConfig.LEGENDARY_PITY)).toBeTrue()
+		expect(Config.Live.RollConfig.LEGENDARY_PITY).toEqual(Config.Rarities.PITY.legendary.hard)
 	end)
 end)
 
@@ -623,6 +624,20 @@ describe("Config validation: cross-references", function()
 				end
 			end
 		end
+	end)
+
+	it("pays a positive whole Essence amount for every live rarity", function()
+		local seen = {}
+		for _, id in ipairs(Config.Live.Rarities.ORDER) do
+			local amount = Config.Essence.amount(id)
+			expect(type(amount) == "number" and amount >= 1 and amount == math.floor(amount)).toBeTrue()
+			seen[id] = true
+		end
+		expect(Config.Essence.CAP).toEqual(1000000000)
+		for id in pairs(Config.Essence.AMOUNT) do
+			expect(seen[id] == true).toBeTrue()
+		end
+		expect(Config.Essence.amount("nope")).toBeNil()
 	end)
 
 	it("keeps live difficulties inside the V1 difficulty list", function()

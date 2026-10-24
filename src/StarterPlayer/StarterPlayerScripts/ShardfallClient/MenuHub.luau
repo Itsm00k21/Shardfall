@@ -48,6 +48,8 @@ local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild(
 local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local HubStyle = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HubStyle"))
+local BagCompare = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagCompare"))
+local GearHooks = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GearHooks"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
@@ -64,11 +66,11 @@ local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local RollSpot = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSpot"))
+local RollSummary = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSummary"))
 local RollScreen = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollScreen"))
 local RollConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollConfig"))
 local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShardBoard"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
-local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
 local IconAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("IconAssets"))
 local UiMotion = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiMotion"))
@@ -77,6 +79,9 @@ local PadFocus = require(script.Parent:WaitForChild("PadFocus"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
+local BagTools = require(script.Parent.BagTools)
+local GearDetail = require(script.Parent:WaitForChild("GearDetail"))
+local RollSummaryView = require(script.Parent:WaitForChild("RollSummaryHud"))
 
 local MenuHub = {}
 
@@ -343,6 +348,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.replayResult = nil
 	hubState.batchLeft = {}
 	hubState.summaryItems = {}
+	-- [Ghost] item -> RollSummary tile, filled as each x10 card lands.
+	hubState.summaryMeta = setmetatable({}, { __mode = "k" })
+	hubState.batchSkip = false
+	hubState.batchRows = setmetatable({}, { __mode = "k" })
 	hubState.batching = false
 	hubState.pendingFace = nil
 	hubState.crackNamed = false
@@ -379,18 +388,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.revealToken = 0
 	hubState.lastCrack = 0
 	hubState.pityTweens = {}
-	hubState.epicFillShown = 0
 	hubState.legendaryFillShown = 0
-	hubState.epicFlashRoll = -1
 	hubState.legendaryFlashRoll = -1
 	hubState.serverSince = nil
-	hubState.serverEpic = nil
 	hubState.lastMissed = false
 	hubState.lastLanded = nil
 	hubState.toastToken = 0
 	hubState.sessionRolls = {}
 	hubState.sessionTemplates = {}
 	hubState.activeReveal = nil
+	-- A roll session (x1, x10 batch or auto chain) holds the movement lock
+	-- from the press until its last reveal ends, so the server wait, the
+	-- cooldown and the gaps between x10 cards stay locked too. nil = free.
+	-- { since = os.clock(), token = revealToken }. See hubFn.holdRoll.
+	hubState.rollHold = nil
 	-- A newer roll bumps this and cancels the previous card tweens so a
 	-- late spin cannot paint the older name over the newer result.
 	hubState.cardGeneration = 0
@@ -868,6 +879,65 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 	end
 
+	-- The lock must not depend on PlayerModule alone: a forked or missing
+	-- ControlModule, keys outside the sink (arrows), or a server MoveTo
+	-- (auto-farm kiting) all move the Humanoid straight past Disable().
+	-- So "lock" also zeroes the local Humanoid's WalkSpeed and jump (the
+	-- client owns its character, so this stops every walk source) and
+	-- puts the exact old values back on release.
+	hubState.frozen = nil
+
+	function hubFn.localHumanoid(): any
+		local localPlayer = Players.LocalPlayer
+		local character = if localPlayer ~= nil then localPlayer.Character else nil
+		if character == nil then
+			return nil
+		end
+		return character:FindFirstChildOfClass("Humanoid")
+	end
+
+	function hubFn.freezeCharacter(on: boolean)
+		local frozen = hubState.frozen
+		if on then
+			local humanoid = hubFn.localHumanoid()
+			if humanoid == nil or (frozen ~= nil and frozen.humanoid == humanoid) then
+				return
+			end
+			if frozen ~= nil then
+				hubFn.freezeCharacter(false)
+			end
+			hubState.frozen = {
+				humanoid = humanoid,
+				walkSpeed = humanoid.WalkSpeed,
+				jumpPower = humanoid.JumpPower,
+				jumpHeight = humanoid.JumpHeight,
+			}
+			humanoid.WalkSpeed = 0
+			humanoid.JumpPower = 0
+			humanoid.JumpHeight = 0
+			pcall(function()
+				humanoid:Move(Vector3.zero)
+			end)
+			return
+		end
+		hubState.frozen = nil
+		if frozen == nil then
+			return
+		end
+		local humanoid = frozen.humanoid
+		-- Only undo our own zero: if something else changed it meanwhile,
+		-- that value wins. A saved zero falls back to Roblox defaults.
+		if humanoid.WalkSpeed == 0 then
+			humanoid.WalkSpeed = if frozen.walkSpeed > 0 then frozen.walkSpeed else 16
+		end
+		if humanoid.JumpPower == 0 then
+			humanoid.JumpPower = if frozen.jumpPower > 0 then frozen.jumpPower else 50
+		end
+		if humanoid.JumpHeight == 0 then
+			humanoid.JumpHeight = if frozen.jumpHeight > 0 then frozen.jumpHeight else 7.2
+		end
+	end
+
 	-- mode is Keybinds.worldMode: "free", "walk" or "lock". A boolean
 	-- still works (true = "lock", false = "free"). Only "lock" disables the
 	-- controls, so closing, or switching to a walk page, always releases them.
@@ -881,6 +951,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local locked = mode == "lock"
 		local changed = mode ~= previous
 		if not changed and not (locked and hubState.controlsHeld ~= true) then
+			if locked then
+				hubFn.freezeCharacter(true)
+			end
 			return
 		end
 		hubState.worldMode = mode
@@ -911,6 +984,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.controlsHeld = false
 			end
 		end
+		hubFn.freezeCharacter(locked)
 	end
 
 	function hubFn.worldModeFor(state: UiRouter.State): string
@@ -919,8 +993,30 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			state.open,
 			UiRouter.top(state),
 			gamepad,
-			hubState.activeReveal ~= nil
+			hubState.activeReveal ~= nil or hubState.rollHold ~= nil
 		)
+	end
+
+	-- Lock movement for a whole roll session. beginRoll calls this before
+	-- the server call; every end path calls releaseRoll. The Heartbeat
+	-- failsafe drops a hold older than Keybinds.REVEAL_HOLD_MAX seconds.
+	function hubFn.holdRoll(token: number)
+		hubState.rollHold = { since = os.clock(), token = token }
+		hubFn.syncRevealLock()
+	end
+
+	-- token (optional): only release the hold that roll took, so a stale
+	-- task cannot free a newer roll. No token releases any hold.
+	function hubFn.releaseRoll(token: number?)
+		local hold = hubState.rollHold
+		if hold == nil then
+			return
+		end
+		if token ~= nil and hold.token ~= token then
+			return
+		end
+		hubState.rollHold = nil
+		hubFn.syncRevealLock()
 	end
 
 	-- A reveal locks the hub while it plays; recompute when it starts and
@@ -1189,7 +1285,32 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	hubState.hero = hubFn.scroll(hubFn.page("hero"))
+	function hubFn.hideTips()
+		local screen = hubState.screen
+		if screen == nil then
+			return
+		end
+		-- Tips live on the screen (so they can overlap the grid edge) and
+		-- outlive their card when the grid repaints. Drop orphans; an
+		-- orphan has no card position and drew stuck at the bottom-left.
+		local owners = hubState.tipOwners
+		for _, child in ipairs(screen:GetChildren()) do
+			if child.Name == "Tip" and child:IsA("Frame") then
+				child.Visible = false
+				local owner = if owners ~= nil then owners[child] else nil
+				if owner ~= nil and owner.Parent == nil then
+					owners[child] = nil
+					child:Destroy()
+				end
+			end
+		end
+	end
 	hubState.bag = hubFn.scroll(hubFn.page("bag"))
+	-- Any scroll of the grid hides hover tips; they track the cursor, not
+	-- the canvas, and would float over the wrong card.
+	hubState.bag:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		hubFn.hideTips()
+	end)
 	hubState.sets = hubFn.scroll(hubFn.page("sets"))
 	hubState.pets = hubFn.scroll(hubFn.page("pets"))
 	hubState.rollPage = hubFn.page("roll")
@@ -1356,10 +1477,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealToken += 1
 		hubState.holdingRoll = false
 		hubState.activeReveal = nil
+		hubState.rollHold = nil
 		hubFn.syncRevealLock()
 		hubState.replayResult = nil
 		hubState.batchLeft = {}
 		hubState.batching = false
+		hubState.batchSkip = false
+		hubFn.paintSkip()
 		hubState.pendingCount = 1
 		hubState.pendingFace = nil
 		hubState.crackNamed = false
@@ -1419,6 +1543,56 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.revealRarity.Text = ""
 	hubState.revealRarity.ZIndex = 9
 	hubState.revealRarity.Parent = hubState.revealCard
+	-- Every face has an icon tile and a detail line: the shard while it
+	-- cracks, the gear kind and two stats once it lands.
+	hubState.revealIconTile = Instance.new("Frame")
+	hubState.revealIconTile.Name = "IconTile"
+	hubState.revealIconTile.Position = UDim2.fromOffset(8, 8)
+	hubState.revealIconTile.Size = UDim2.fromOffset(56, 56)
+	hubState.revealIconTile.BackgroundColor3 = rgb("body")
+	hubState.revealIconTile.BorderSizePixel = 0
+	hubState.revealIconTile.ZIndex = 9
+	hubState.revealIconTile.Parent = hubState.revealCard
+	hubState.revealIconCorner = Instance.new("UICorner")
+	hubState.revealIconCorner.CornerRadius = UDim.new(0, 8)
+	hubState.revealIconCorner.Parent = hubState.revealIconTile
+	hubState.revealIconStroke = Instance.new("UIStroke")
+	hubState.revealIconStroke.Thickness = UiTheme.STROKE
+	hubState.revealIconStroke.Color = rgb("accent")
+	hubState.revealIconStroke.Parent = hubState.revealIconTile
+	hubState.revealIcon = Instance.new("ImageLabel")
+	hubState.revealIcon.Name = "Icon"
+	hubState.revealIcon.BackgroundTransparency = 1
+	hubState.revealIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	hubState.revealIcon.Position = UDim2.fromScale(0.5, 0.5)
+	hubState.revealIcon.Size = UDim2.fromScale(0.8, 0.8)
+	hubState.revealIcon.ScaleType = Enum.ScaleType.Fit
+	hubState.revealIcon.Image = IconAssets.Shards or ""
+	hubState.revealIcon.ZIndex = 10
+	hubState.revealIcon.Parent = hubState.revealIconTile
+	hubState.revealDetail = Instance.new("TextLabel")
+	hubState.revealDetail.Name = "Detail"
+	hubState.revealDetail.BackgroundTransparency = 1
+	hubState.revealDetail.Position = UDim2.fromOffset(72, 64)
+	hubState.revealDetail.Size = UDim2.new(1, -200, 0, 20)
+	hubState.revealDetail.Font = bodyFont()
+	hubState.revealDetail.TextSize = UiTheme.MIN_TEXT
+	hubState.revealDetail.TextXAlignment = Enum.TextXAlignment.Left
+	hubState.revealDetail.TextTruncate = Enum.TextTruncate.AtEnd
+	hubState.revealDetail.TextColor3 = rgb("muted")
+	hubState.revealDetail.Text = ""
+	hubState.revealDetail.ZIndex = 9
+	hubState.revealDetail.Parent = hubState.revealCard
+
+	function hubFn.paintCardFace(face: any, color: Color3)
+		local art = (IconAssets :: any)[face.icon]
+		hubState.revealIcon.Image = if type(art) == "string" then art else (IconAssets.ItemMisc or "")
+		hubState.revealIconStroke.Color = color
+		hubState.revealTitle.Text = face.title
+		hubState.revealRarity.Text = face.rarity
+		hubState.revealDetail.Text = face.detail
+	end
+
 	hubState.revealNew = Instance.new("TextLabel")
 	hubState.revealNew.Name = "New"
 	hubState.revealNew.AnchorPoint = Vector2.new(1, 0)
@@ -1490,16 +1664,147 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.flashCover.ZIndex = 12
 	hubState.flashCover.Parent = hubState.rollPage
 
+	-- [Ghost] Echo's gear stages (#387/#388/#389). Every piece below sits
+	-- behind its LaunchGate flag; with the flags off nothing here shows.
+	hubState.salvageNudge = nil
+	hubState.salvageNowBusy = false
+	hubState.salvageNowButton = Instance.new("TextButton")
+	hubState.salvageNowButton.Name = "SalvageNow"
+	hubState.salvageNowButton.AnchorPoint = Vector2.new(0.5, 1)
+	hubState.salvageNowButton.Position = UDim2.new(0.5, 0, 1, -96)
+	hubState.salvageNowButton.Size = UDim2.new(1, -24, 0, UiTheme.TOUCH)
+	hubState.salvageNowButton.BackgroundColor3 = rgb("gold")
+	hubState.salvageNowButton.Font = headerFont()
+	hubState.salvageNowButton.TextSize = UiTheme.MIN_TEXT
+	hubState.salvageNowButton.TextColor3 = rgb("ink")
+	hubState.salvageNowButton.Text = GearHooks.SALVAGE_NOW
+	hubState.salvageNowButton.AutoButtonColor = false
+	hubState.salvageNowButton.Visible = false
+	hubState.salvageNowButton.ZIndex = 9
+	hubState.salvageNowButton.Parent = hubState.rollPage
+	local salvageNowCorner = Instance.new("UICorner")
+	salvageNowCorner.CornerRadius = UDim.new(0, 8)
+	salvageNowCorner.Parent = hubState.salvageNowButton
+
+	-- Batch rows carry the same gear fields as a single roll.
+	function hubFn.gearFields(target: any, source: any)
+		if type(target) ~= "table" or type(source) ~= "table" then
+			return
+		end
+		for _, key in ipairs({
+			"merged",
+			"oldLevel",
+			"newLevel",
+			"essence",
+			"levelText",
+			"autoSalvaged",
+			"essenceGained",
+		}) do
+			if source[key] ~= nil then
+				target[key] = source[key]
+			end
+		end
+	end
+
+	-- A gear remote answered with a fresh snapshot. Take it and keep the
+	-- Bag in step. Never edits the profile itself.
+	function hubFn.takeGearProfile(result: any)
+		if type(result) ~= "table" or type(result.profile) ~= "table" then
+			return
+		end
+		hubState.profile = result.profile
+	end
+
+	function hubFn.paintSalvageNudge()
+		local button = hubState.salvageNowButton
+		local label = if LaunchGate.on("gearSalvage")
+			then GearHooks.nudgeLabel(hubState.salvageNudge)
+			else nil
+		if label == nil then
+			button.Visible = false
+			return
+		end
+		button.Text = label
+		if hubState.revealCard ~= nil then
+			button.Position = hubState.revealCard.Position
+		end
+		button.Visible = true
+	end
+
+	-- Read-only: nudge only plans. Nothing leaves the Bag until the
+	-- player presses Salvage now.
+	function hubFn.askNudge(): any
+		local ok, answer = pcall(hooks.invoke, BagTools.REMOTE, "nudge", {})
+		if ok and type(answer) == "table" and answer.ok == true and type(answer.token) == "string" then
+			return {
+				token = answer.token,
+				count = answer.count,
+				gain = answer.gain,
+				at = os.clock(),
+			}
+		end
+		return nil
+	end
+
+	function hubFn.noteBagFull(full: boolean)
+		if not full or not LaunchGate.on("gearSalvage") then
+			hubState.salvageNudge = nil
+			hubFn.paintSalvageNudge()
+			return
+		end
+		hubState.salvageNudge = hubFn.askNudge()
+		hubFn.paintSalvageNudge()
+	end
+
+	function hubFn.salvageNow()
+		local nudge = hubState.salvageNudge
+		if nudge == nil or hubState.salvageNowBusy or not LaunchGate.on("gearSalvage") then
+			return
+		end
+		hubState.salvageNowBusy = true
+		-- Tokens last 20 s. A stale one is re-planned; if the plan changed,
+		-- show the new count and wait for another press.
+		if os.clock() - nudge.at > 15 then
+			local fresh = hubFn.askNudge()
+			if fresh == nil or fresh.count ~= nudge.count then
+				hubState.salvageNudge = fresh
+				hubState.salvageNowBusy = false
+				hubFn.paintSalvageNudge()
+				return
+			end
+			nudge = fresh
+		end
+		local ok, answer = pcall(hooks.invoke, BagTools.REMOTE, "salvageNow", { token = nudge.token })
+		hubState.salvageNowBusy = false
+		local message = "Could not salvage that."
+		if ok and type(answer) == "table" then
+			hubFn.takeGearProfile(answer)
+			if answer.ok == true then
+				message = if type(answer.message) == "string" then answer.message else "Salvaged."
+			elseif type(answer.error) == "string" then
+				message = answer.error
+			end
+		end
+		hubState.salvageNudge = nil
+		hubFn.paintSalvageNudge()
+		if hooks.onToast ~= nil then
+			hooks.onToast(message)
+		end
+		hubFn.paintRoll()
+	end
+
 	-- Same card clear a miss uses. Leaving the tab and every other
 	-- beginRoll hide go through here so the previous name cannot stay.
 	function hubFn.blankReveal()
 		local face = RollReveal.face(nil)
 		hubFn.bumpCardGeneration()
 		hubState.activeReveal = nil
+		hubState.rollHold = nil
 		hubFn.syncRevealLock()
 		hubState.revealCard.Visible = face.visible
 		hubState.revealTitle.Text = face.name
 		hubState.revealRarity.Text = face.rarity
+		hubState.revealDetail.Text = ""
 		hubState.revealNew.Visible = false
 		hubState.revealEquip.Visible = false
 		hubState.revealBest.Visible = false
@@ -1640,21 +1945,85 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.reelCenter = hubFn.reelWindow("Center", 0.28, 0.44)
 	hubState.reelRight = hubFn.reelWindow("Right", 0.72, 0.28)
 	hubState.reelCenter.Text = "Roll"
+	-- [Ghost] The milestone is a small toast at the top of the Roll page
+	-- (Kevin, Oct 23), not a banner over the reel.
 	hubState.reelMilestone = Instance.new("TextLabel")
 	hubState.reelMilestone.Name = "Milestone"
-	hubState.reelMilestone.Size = UDim2.fromScale(1, 1)
+	hubState.reelMilestone.AnchorPoint = Vector2.new(0.5, 0)
+	hubState.reelMilestone.Position = UDim2.new(0.5, 0, 0, 4)
+	hubState.reelMilestone.Size = UDim2.fromOffset(220, 26)
 	hubState.reelMilestone.BackgroundColor3 = rgb("gold")
+	hubState.reelMilestone.BackgroundTransparency = 0.05
 	hubState.reelMilestone.Font = headerFont()
-	hubState.reelMilestone.TextSize = 20
+	hubState.reelMilestone.TextSize = 14
 	hubState.reelMilestone.TextColor3 = rgb("ink")
+	hubState.reelMilestone.TextTruncate = Enum.TextTruncate.AtEnd
 	hubState.reelMilestone.Text = ""
 	hubState.reelMilestone.Visible = false
 	hubState.reelMilestone.Active = false
-	hubState.reelMilestone.ZIndex = 9
-	hubState.reelMilestone.Parent = hubState.reelHost
+	hubState.reelMilestone.ZIndex = 12
+	hubState.reelMilestone:SetAttribute("Toast", true)
+	hubState.reelMilestone.Parent = hubState.rollPage
 	hubState.milestoneCorner = Instance.new("UICorner")
-	hubState.milestoneCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	hubState.milestoneCorner.CornerRadius = UDim.new(0, 13)
 	hubState.milestoneCorner.Parent = hubState.reelMilestone
+
+	-- [Ghost] x10: Skip stays on screen for the whole batch; the batch ends
+	-- on the summary grid.
+	hubState.batchSkipButton = Instance.new("TextButton")
+	hubState.batchSkipButton.Name = "SkipBatch"
+	-- Bottom right of the reveal card (the card sits 96 px off the page
+	-- bottom), clear of the Shards wallet pill in the top right.
+	hubState.batchSkipButton.AnchorPoint = Vector2.new(1, 1)
+	hubState.batchSkipButton.Position = UDim2.new(1, -20, 1, -104)
+	hubState.batchSkipButton.Size = UDim2.fromOffset(72, 30)
+	hubState.batchSkipButton.BackgroundColor3 = rgb("body")
+	hubState.batchSkipButton.Font = headerFont()
+	hubState.batchSkipButton.TextSize = 15
+	hubState.batchSkipButton.TextColor3 = rgb("text")
+	hubState.batchSkipButton.Text = RollSummary.SKIP .. " »"
+	hubState.batchSkipButton.AutoButtonColor = true
+	hubState.batchSkipButton.Visible = false
+	hubState.batchSkipButton.ZIndex = 13
+	hubState.batchSkipButton.Parent = hubState.rollPage
+	local skipCorner = Instance.new("UICorner")
+	skipCorner.CornerRadius = UDim.new(0, 8)
+	skipCorner.Parent = hubState.batchSkipButton
+	hubState.rollSummary = RollSummaryView.mount(hubState.screen)
+	hubState.batchSkipButton.Activated:Connect(function()
+		hubFn.skipBatch()
+	end)
+
+	function hubFn.paintSkip()
+		hubState.batchSkipButton.Visible = hubState.batching == true
+	end
+
+	-- Skip the rest of the batch: every card left lands at once, then the
+	-- summary shows. Nothing is skipped on the server; the rolls already happened.
+	function hubFn.skipBatch()
+		if hubState.batching ~= true then
+			return
+		end
+		hubState.batchSkip = true
+		if hubState.activeReveal ~= nil then
+			hubFn.skipReveal()
+		end
+	end
+
+	function hubFn.showSummary()
+		if #hubState.summaryItems == 0 then
+			return
+		end
+		local tiles = RollSummary.tiles(hubState.summaryItems, hubState.summaryMeta)
+		local view = hubState.screen.AbsoluteSize
+		hubState.rollSummary.show(tiles, {
+			view = view,
+			phone = RollScreen.isPhone(view.X),
+			onAgain = function()
+				hubFn.applyControl("TimesTen")
+			end,
+		})
+	end
 	hubState.shardStone = Instance.new("Frame")
 	hubState.shardStone.Name = "Shard"
 	hubState.shardStone.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1832,7 +2201,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		local wide = caption ~= "Roll" and caption ~= "Miss"
+		-- "Shard" is the crack itself: the crystal must stay on screen.
+		-- Hiding it left a wide "Shard" window with an empty body.
+		local wide = caption ~= "Roll" and caption ~= "Miss" and caption ~= "Shard"
 		hubState.shardStone.Visible = not wide
 		hubFn.placeReelWindows(wide)
 		hubFn.paintWindow(hubState.reelLeft, "—", "Common", false)
@@ -1847,6 +2218,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.toastToken += 1
 		local token = hubState.toastToken
 		hubState.reelMilestone.Text = text
+		hubState.reelMilestone.Size =
+			UDim2.fromOffset(math.clamp(utf8.len(text) or #text, 8, 48) * 8 + 28, 26)
 		hubState.reelMilestone.Visible = true
 		hubFn.playUi("toast")
 		task.delay(1.8, function()
@@ -1983,11 +2356,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealCard.Size = UDim2.new(1, -24, 0, layout.card.h)
 		hubState.revealCard.Position = UDim2.new(0.5, 0, 0, layout.card.y + layout.card.h)
 		hubState.revealCard.AnchorPoint = Vector2.new(0.5, 1)
-		hubState.revealTitle.Position = UDim2.fromOffset(12, layout.name.y)
-		hubState.revealTitle.Size = UDim2.new(1, -120, 0, layout.name.h)
+		local tile = math.max(24, math.min(56, layout.card.h - 16))
+		local textX = 8 + tile + 10
+		hubState.revealIconTile.Size = UDim2.fromOffset(tile, tile)
+		hubState.revealIconTile.Position = UDim2.fromOffset(8, math.floor((layout.card.h - tile) / 2))
+		hubState.revealTitle.Position = UDim2.fromOffset(textX, layout.name.y)
+		hubState.revealTitle.Size = UDim2.new(1, -(textX + 108), 0, layout.name.h)
 		hubState.revealRarity.Visible = layout.rarity.visible
-		hubState.revealRarity.Position = UDim2.fromOffset(12, layout.rarity.y)
-		hubState.revealRarity.Size = UDim2.new(1, -120, 0, layout.rarity.h)
+		hubState.revealRarity.Position = UDim2.fromOffset(textX, layout.rarity.y)
+		hubState.revealRarity.Size = UDim2.new(1, -(textX + 108), 0, layout.rarity.h)
+		local detailY = layout.rarity.y + layout.rarity.h
+		hubState.revealDetail.Visible = layout.rarity.visible and detailY + 16 <= layout.card.h
+		hubState.revealDetail.Position = UDim2.fromOffset(textX, detailY)
+		hubState.revealDetail.Size = UDim2.new(1, -(textX + 136), 0, 18)
 		local aboveCard = height - layout.card.y + 6
 		hubState.closeBeat.Position = UDim2.new(1, -12, 1, -aboveCard)
 		hubState.revealFly.Visible = layout.fly
@@ -2024,8 +2405,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.detailStroke.Parent = hubState.detail
 	hubState.detailList = Instance.new("ScrollingFrame")
 	hubState.detailList.Name = "Compare"
-	hubState.detailList.Position = UDim2.fromOffset(0, 52)
-	hubState.detailList.Size = UDim2.new(1, 0, 1, -52)
+	-- Starts under the Back button (4 + TOUCH) with a gap, so the first
+	-- row can never sit under Back.
+	hubState.detailList.Position = UDim2.fromOffset(0, UiTheme.TOUCH + 12)
+	hubState.detailList.Size = UDim2.new(1, 0, 1, -(UiTheme.TOUCH + 12))
 	hubState.detailList.BackgroundTransparency = 1
 	hubState.detailList.BorderSizePixel = 0
 	hubState.detailList.ScrollBarThickness = 6
@@ -2040,6 +2423,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.detailPad = Instance.new("UIPadding")
 	hubState.detailPad.PaddingLeft = UDim.new(0, UiTheme.GAP)
 	hubState.detailPad.PaddingRight = UDim.new(0, UiTheme.GAP)
+	hubState.detailPad.PaddingTop = UDim.new(0, 4)
+	hubState.detailPad.PaddingBottom = UDim.new(0, UiTheme.GAP)
 	hubState.detailPad.Parent = hubState.detailList
 	hubState.detailBack = Instance.new("TextButton")
 	hubState.detailBack.Name = "Back"
@@ -2080,6 +2465,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.show(id: string)
+		hubFn.hideTips()
 		for pageId, frame in pairs(hubState.pages) do
 			frame.Visible = pageId == id
 		end
@@ -2298,35 +2684,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return nil
 	end
 
-	function hubFn.statMap(item: any): { [string]: number }
-		local map: { [string]: number } = {}
-		if type(item) ~= "table" or type(item.stats) ~= "table" then
-			return map
-		end
-		for _, stat in ipairs(item.stats) do
-			if
-				type(stat) == "table"
-				and type(stat.id) == "string"
-				and type(stat.value) == "number"
-			then
-				map[stat.id] = stat.value
-			end
-		end
-		return map
-	end
-
-	function hubFn.formatStat(id: string, value: number): string
-		local definition = Stats.DEFS[id]
-		local name = if definition ~= nil then definition.name else id
-		if definition ~= nil and definition.unit == "percent" then
-			return string.format("%s  %.1f%%", name, value * 100)
-		end
-		if definition ~= nil and definition.decimals > 0 then
-			return string.format("%s  %." .. tostring(definition.decimals) .. "f", name, value)
-		end
-		return string.format("%s  %d", name, math.floor(value + 0.5))
-	end
-
 	function hubFn.itemWorn(uid: string): boolean
 		local profile = hubState.profile
 		if
@@ -2364,6 +2721,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local backup = nil
 		if type(profile) == "table" and type(profile.inventory) == "table" then
 			local item = profile.inventory[uid]
+			-- [Ghost] Clip 6: pets live in profile.pets, so the Pets page
+			-- never flipped to EQUIPPED until a later profile push.
+			if item == nil and type(profile.pets) == "table" then
+				item = profile.pets[uid]
+			end
 			if type(profile.equipped) == "table" then
 				backup = {}
 				for key, value in pairs(profile.equipped) do
@@ -2402,6 +2764,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if type(result.profile) == "table" then
 					hubState.profile = result.profile
 				end
+				-- Repaint so the pane names the new worn item at once.
+				if hubState.shownId == "bag" or hubState.shownId == "sets" then
+					hubFn.paintBag()
+				elseif hubState.shownId == "pets" then
+					hubFn.paintPets()
+				end
 				return
 			end
 			if type(hubState.profile) == "table" and backup ~= nil then
@@ -2410,6 +2778,74 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.showMilestone("Could not equip that.")
 			if hubState.shownId == "bag" then
 				hubFn.paintBag()
+			elseif hubState.shownId == "pets" then
+				hubFn.paintPets()
+			end
+		end)
+	end
+
+	-- [Ghost] Clip 6: the second tap on a worn pet's EQUIPPED button.
+	-- Flips at once, then asks the server; puts the pet back on failure.
+	function hubFn.unequipPet(uid: string)
+		local profile = hubState.profile
+		if
+			type(profile) ~= "table"
+			or type(profile.equipped) ~= "table"
+			or profile.equipped.pet ~= uid
+		then
+			return
+		end
+		profile.equipped.pet = nil
+		if hubState.shownId == "pets" then
+			hubFn.paintPets()
+		end
+		task.spawn(function()
+			local ok, result = pcall(hooks.invoke, "UnequipItem", uid)
+			if ok and type(result) == "table" and result.ok == true then
+				if type(result.profile) == "table" then
+					hubState.profile = result.profile
+				end
+				return
+			end
+			local now = hubState.profile
+			if
+				type(now) == "table"
+				and type(now.equipped) == "table"
+				and now.equipped.pet == nil
+			then
+				now.equipped.pet = uid
+			end
+			hubFn.showMilestone("Could not unequip that.")
+			if hubState.shownId == "pets" then
+				hubFn.paintPets()
+			end
+		end)
+	end
+
+	-- [Ghost] Clip 6: the padlock flips at once; the server push confirms.
+	function hubFn.togglePetLock(uid: string)
+		local profile = hubState.profile
+		local pet = if type(profile) == "table" and type(profile.pets) == "table"
+			then profile.pets[uid]
+			else nil
+		if type(pet) ~= "table" then
+			return
+		end
+		local want = pet.locked ~= true
+		pet.locked = want
+		if hubState.shownId == "pets" then
+			hubFn.paintPets()
+		end
+		task.spawn(function()
+			local ok, result = pcall(hooks.invoke, "SetItemLock", uid, want)
+			if ok and type(result) == "table" and result.ok == true then
+				return
+			end
+			if pet.locked == want then
+				pet.locked = not want
+			end
+			if hubState.shownId == "pets" then
+				hubFn.paintPets()
 			end
 		end)
 	end
@@ -2480,14 +2916,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.bagCompactPainted = hubFn.bagCompact()
 			task.defer(hubFn.paintBag)
 		end
+		-- Leave room for the pinned BagFoot, or the last card row sits
+		-- under it and reads as cut off.
+		local footH = if list.Parent ~= nil and list.Parent:FindFirstChild("BagFoot") ~= nil
+			then UiTheme.TOUCH + UiTheme.PAD * 2
+			else 0
 		if not hubState.detail.Visible then
-			list.Size = UDim2.fromScale(1, 1)
+			list.Size = UDim2.new(1, 0, 1, -footH)
 			return
 		end
 		local box = HubStyle.bagStage(hubFn.rollRowWidth(), 480)
 		local gap = 8
 		if box.detail.x > 0 then
-			list.Size = UDim2.new(0, math.max(80, box.detail.x - gap), 1, 0)
+			list.Size = UDim2.new(0, math.max(80, box.detail.x - gap), 1, -footH)
 		else
 			list.Size = UDim2.new(1, 0, 0, math.max(80, box.detail.y - gap))
 		end
@@ -2510,118 +2951,147 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.paintDetail(item: any)
+		hubFn.hideTips()
 		hubFn.clear(hubState.detailList)
 		if type(item) ~= "table" then
 			hubState.detailOpen = false
 			hubFn.paintWorn()
 			return
 		end
-		hubFn.mountWorn(hubState.detailList)
-		local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
-		local red, green, blue = UiTheme.rarityColor(rarity)
-		hubFn.line(hubState.detailList, tostring(item.name or "Item"), 1, rgb("text"))
-		hubFn.line(hubState.detailList, rarity, 2, Color3.fromRGB(red, green, blue))
-		hubFn.divider(hubState.detailList, 3)
-		local other = InventoryView.counterpart(hubState.profile, item)
-		local same = other ~= nil and other.uid == item.uid
-		if other == nil then
-			hubFn.line(hubState.detailList, "Nothing equipped to compare.", 4, rgb("muted"))
-		elseif same then
-			hubFn.line(hubState.detailList, "Equipped.", 4, rgb("ok"))
-		else
-			hubFn.line(
-				hubState.detailList,
-				"Compared with " .. tostring(other.name or "equipped"),
-				4,
-				rgb("muted")
-			)
+		-- [Ghost] The shared gear panel: the item's icon (not the avatar),
+		-- stats with compare marks, EQUIP and UPGRADE side by side, the
+		-- padlock, and the Shard Core card. The avatar stays on paintWorn.
+		local uid = if type(item.uid) == "string" then item.uid else nil
+		local note = nil
+		if type(hubState.upgradeNote) == "table" and hubState.upgradeNote.uid == item.uid then
+			note = hubState.upgradeNote
 		end
-		local mine = hubFn.statMap(item)
-		local theirs = if other ~= nil and not same then hubFn.statMap(other) else {}
-		local ids = {}
-		local marked: { [string]: boolean } = {}
-		for id in pairs(mine) do
-			marked[id] = true
-			table.insert(ids, id)
-		end
-		for id in pairs(theirs) do
-			if marked[id] ~= true then
-				table.insert(ids, id)
-			end
-		end
-		table.sort(ids)
-		local order = 10
-		for _, id in ipairs(ids) do
-			local value = mine[id] or 0
-			local text = hubFn.formatStat(id, value)
-			local color = rgb("text")
-			if other ~= nil and not same then
-				local delta = value - (theirs[id] or 0)
-				local tone = UiTheme.compareTone(delta)
-				if tone == "gain" then
-					color = rgb("ok")
-					text = text .. "  +"
-				elseif tone == "loss" then
-					color = rgb("loss")
-					text = text .. "  -"
+		GearDetail.build(hubState.detailList, {
+			profile = hubState.profile,
+			item = item,
+			order = 1,
+			powerOf = InventoryView.powerOf,
+			note = note,
+			fonts = { header = headerFont(), body = bodyFont() },
+			colors = {
+				text = rgb("text"),
+				muted = rgb("muted"),
+				ok = rgb("ok"),
+				loss = rgb("loss"),
+				equip = rgb("equip"),
+			},
+			decorate = function(button: TextButton, rest: Color3)
+				hubFn.setRest(button, rest)
+				hubFn.motion(button)
+			end,
+			bind = hubFn.bindActivated,
+			onEquip = function()
+				if uid ~= nil then
+					hubFn.equipUid(uid)
 				end
-			end
-			hubFn.line(hubState.detailList, text, order, color)
-			order += 1
-		end
-		local power = InventoryView.powerOf(item)
-		local powerText = string.format("Power  %d", power)
-		local powerColor = rgb("text")
-		if other ~= nil and not same then
-			local delta = power - InventoryView.powerOf(other)
-			local tone = UiTheme.compareTone(delta)
-			if tone == "gain" then
-				powerColor = rgb("ok")
-				powerText = powerText .. "  +"
-			elseif tone == "loss" then
-				powerColor = rgb("loss")
-				powerText = powerText .. "  -"
-			end
-		end
-		hubFn.line(hubState.detailList, powerText, 80, powerColor)
-		if type(item.uid) == "string" then
-			local uid = item.uid
-			local equip = hubFn.row(
-				hubState.detailList,
-				if same then "EQUIPPED" else HubStyle.EQUIP,
-				90,
-				function()
-					if not same then
-						hubFn.equipUid(uid)
-					end
-				end
-			)
-			if not same then
-				equip.BackgroundColor3 = rgb("equip")
-				equip.TextColor3 = rgb("text")
-				hubFn.setRest(equip, rgb("equip"))
-			end
-			local upgrade = hubFn.row(
-				hubState.detailList,
-				HubStyle.upgradeLabel(item.upgrade),
-				91,
-				function()
+			end,
+			onUpgrade = function()
+				if uid ~= nil then
 					task.spawn(function()
-						pcall(hooks.invoke, "UpgradeGear", uid)
+						hubFn.upgradeUid(uid)
 					end)
 				end
-			)
-			upgrade.BackgroundColor3 = rgb("gold")
-			upgrade.TextColor3 = rgb("ink")
-			hubFn.setRest(upgrade, rgb("gold"))
-		end
+			end,
+			onLock = function(locked: boolean)
+				if uid == nil then
+					return
+				end
+				-- Same call as the card padlock; the profile push repaints.
+				task.spawn(function()
+					pcall(hooks.invoke, "SetItemLock", uid, locked)
+				end)
+			end,
+			core = if uid ~= nil
+				then {
+					open = hubState.coreOpen ~= false,
+					onToggle = function(open: boolean)
+						hubState.coreOpen = open
+					end,
+					invoke = function(action: string, itemId: string): any
+						local ok, answer = pcall(hooks.invoke, action, itemId)
+						if not ok then
+							return { ok = false, error = tostring(answer) }
+						end
+						return answer
+					end,
+					onFed = function(answer: any, fedUid: string)
+						hubFn.mirrorCore(answer, fedUid)
+						if hubState.selectedUid ~= nil and hubState.detailOpen then
+							hubFn.paintDetail(hubFn.findItem(hubState.selectedUid))
+						end
+					end,
+					onStatus = function(text: string, _kind: string)
+						if hooks.onToast ~= nil then
+							hooks.onToast(text)
+						end
+					end,
+				}
+				else nil,
+		})
 		hubFn.placeDetail()
 		hubState.detail.Visible = true
 		hubFn.fitBagList()
 		hubState.detailOpen = true
 	end
 
+	-- FeedShardCore answers with the view, not the profile. Mirror the two
+	-- fields it changed into the local snapshot until the next profile
+	-- push. Nothing here is saved; the server already wrote it.
+	function hubFn.mirrorCore(answer: any, fedUid: string)
+		local profile = hubState.profile
+		if type(profile) ~= "table" or type(answer) ~= "table" then
+			return
+		end
+		if type(answer.essence) == "number" then
+			profile.gearEssence = answer.essence
+		end
+		if type(answer.level) == "number" then
+			if type(profile.shardCores) ~= "table" then
+				profile.shardCores = {}
+			end
+			profile.shardCores[fedUid] = answer.level
+		end
+	end
+
+	-- The server charges and levels in one mutate. Show its answer: apply
+	-- the returned profile, repaint, and toast the result either way.
+	function hubFn.upgradeUid(uid: string)
+		if hubState.upgradeBusy == uid then
+			return
+		end
+		hubState.upgradeBusy = uid
+		local before = hubFn.findItem(uid)
+		local ok, result = pcall(hooks.invoke, "UpgradeGear", uid)
+		hubState.upgradeBusy = nil
+		local accepted = ok and type(result) == "table" and result.ok == true
+		local message = nil
+		if accepted then
+			if type(result.profile) == "table" then
+				hubState.profile = result.profile
+			end
+			message = BagCompare.success(result.note, hubFn.findItem(uid) or before)
+		else
+			local reason = if ok and type(result) == "table" then result.error else nil
+			message = BagCompare.refusal(reason, before)
+		end
+		hubState.upgradeNote = { uid = uid, text = message, ok = accepted }
+		if hooks.onToast ~= nil then
+			hooks.onToast(message)
+		end
+		if hubState.shownId == "bag" or hubState.shownId == "sets" then
+			hubFn.paintBag()
+		elseif hubState.selectedUid == uid and hubState.detailOpen then
+			hubFn.paintDetail(hubFn.findItem(uid))
+		end
+	end
+
 	function hubFn.openItem(uid: string)
+		hubFn.hideTips()
 		hubState.selectedUid = uid
 		hubState.detailHidden = false
 		local item = hubFn.findItem(uid)
@@ -2640,6 +3110,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		tip.Visible = false
 		tip.ZIndex = 30
 		tip.Parent = hubState.screen
+		if hubState.tipOwners == nil then
+			hubState.tipOwners = setmetatable({}, { __mode = "k" }) :: any
+		end
+		hubState.tipOwners[tip] = card
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, UiTheme.CORNER)
 		corner.Parent = tip
@@ -2695,23 +3169,18 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			tip.Position = UDim2.fromOffset(box.x, box.y)
 			tip.Size = UDim2.fromOffset(box.w, box.h)
 		end
-		local function pinned(): boolean
-			return hubState.selectedUid ~= nil and hubState.selectedUid == item.uid
-		end
+		-- Hover only. A tip is never pinned to the selected card: the
+		-- detail pane shows that item, and a pinned tip outlived view
+		-- changes (stuck bottom-left). hideTips clears every tip on any
+		-- click, scroll, tab change, or panel close.
 		card.MouseEnter:Connect(function()
+			hubFn.hideTips()
 			fill()
 			tip.Visible = true
 		end)
 		card.MouseLeave:Connect(function()
-			tip.Visible = pinned()
-			if tip.Visible then
-				fill()
-			end
+			tip.Visible = false
 		end)
-		if pinned() then
-			fill()
-			tip.Visible = true
-		end
 	end
 
 	function hubFn.itemCard(
@@ -2829,9 +3298,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			else Enum.TextYAlignment.Top
 		name.TextWrapped = not compact
 		name.TextTruncate = if compact then Enum.TextTruncate.AtEnd else Enum.TextTruncate.None
-		name.TextColor3 = rgb("text")
+		name.TextColor3 = Color3.fromRGB(liftR, liftG, liftB)
 		name.Text = tostring(item.name or "Item")
 		name.Parent = card
+		-- [Ghost] +level and stars under the name (full) or beside the
+		-- icon (compact), in gold.
+		local levelText = GearHooks.levelLine(item)
+		if levelText ~= "" then
+			local level = Instance.new("TextLabel")
+			level.Name = "Level"
+			level.BackgroundTransparency = 1
+			if compact then
+				level.Position = UDim2.fromOffset(parts.icon.x + parts.icon.w + 4, parts.icon.y)
+				level.Size = UDim2.fromOffset(math.max(0, cellW - parts.icon.w - 20), parts.icon.h)
+				level.TextXAlignment = Enum.TextXAlignment.Right
+			else
+				level.Position = UDim2.fromOffset(full.tip.x, full.tip.y)
+				level.Size = UDim2.fromOffset(full.tip.w, full.tip.h)
+				level.TextXAlignment = Enum.TextXAlignment.Left
+			end
+			level.Font = headerFont()
+			level.TextSize = UiTheme.MIN_TEXT
+			level.TextColor3 = rgb("gold")
+			level.TextTruncate = Enum.TextTruncate.AtEnd
+			level.Text = levelText
+			level.ZIndex = 6
+			level.Parent = card
+		end
 		if not compact and BagBoard.isNew(item, hubState.seen.bagAt) then
 			local badge = Instance.new("TextLabel")
 			badge.Name = "New"
@@ -2907,11 +3400,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lock.AnchorPoint = Vector2.new(0, 0)
 			lock.Position = UDim2.fromOffset(parts.lock.x, parts.lock.y)
 			lock.Size = UDim2.fromOffset(parts.lock.w, parts.lock.h)
-			lock.BackgroundColor3 = navy
-			lock.Font = headerFont()
-			lock.TextSize = UiTheme.MIN_TEXT
-			lock.TextColor3 = rgb("text")
-			lock.Text = if item.locked == true then "Locked" else "Lock"
+			-- Padlock glyph, gold when locked. The name stays "Lock".
+			local lockedCard = item.locked == true
+			-- [Ghost] Clip 5: drawn lock, gold closed / grey open (GearDetail).
+			local lockFill = navy
+			lock.BackgroundColor3 = lockFill
+			lock.Text = ""
+			lock:SetAttribute("Locked", lockedCard)
+			GearDetail.lockIcon(lock, lockedCard, math.max(12, math.min(parts.lock.w, parts.lock.h) - 10))
 			lock.AutoButtonColor = false
 			lock.ZIndex = 7
 			lock.Parent = card
@@ -2923,7 +3419,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lockStroke.Thickness = 1.5
 			lockStroke.Color = Color3.fromRGB(150, 92, 255)
 			lockStroke.Parent = lock
-			hubFn.setRest(lock, navy)
+			hubFn.setRest(lock, lockFill)
 			hubFn.motion(lock)
 			local locked = item.locked == true
 			hubFn.bindActivated(lock, function()
@@ -3279,8 +3775,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				headerFont()
 			).TextXAlignment =
 				Enum.TextXAlignment.Center
+			-- [Ghost] Clip 6: Hero Power now includes worn Item Power (4-5
+			-- digits), so the number shrinks to fit its 120 px column.
+			local powerText = tostring(power)
+			local powerSize = if #powerText <= 3 then 48 elseif #powerText == 4 then 40 else 32
 			local value =
-				label(header, tostring(power), px, 46, powerW, 56, 48, rgb("gold"), headerFont())
+				label(header, powerText, px, 46, powerW, 56, powerSize, rgb("gold"), headerFont())
 			value.Name = "Power"
 			value.TextXAlignment = Enum.TextXAlignment.Center
 		end
@@ -3588,6 +4088,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return following
 	end
 
+	-- [Ghost] Salvage lives in the full bag (InventoryHud + GearBar). The
+	-- small Bag is a preview: the grid, one "Open full bag", and a footer.
+
 	function hubFn.paintBag()
 		hubState.bagCompactPainted = hubFn.bagCompact()
 		for _, child in ipairs(hubState.screen:GetChildren()) do
@@ -3765,9 +4268,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.apply(UiRouter.push(hubState.route, "sets"))
 			end)
 		end
-		hubFn.row(actions, "Open full bag", 3, function()
-			hooks.onBag()
-		end)
+		if not LaunchGate.on("oneInventory") then
+			hubFn.row(actions, "Open full bag", 3, function()
+				hooks.onBag()
+			end)
+		end
+		-- [Ghost] Auto-salvage is a live setting in the save. When it is on,
+		-- say so here too; the switch itself is in the full inventory.
+		if LaunchGate.on("gearSalvage") then
+			local autoText, autoOn = GearHooks.autoPill(hubState.profile)
+			if autoOn then
+				local warn = hubFn.line(actions, autoText .. "  (change it in Open full bag)", 1, rgb("gold"))
+				warn.Name = "AutoWarn"
+			end
+		end
 		if LaunchGate.on("forgeSalvage") then
 			if hubState.salvageArmed then
 				hubFn.line(actions, BagBoard.confirm(hubState.salvageRarity), 4, rgb("loss"))
@@ -3800,13 +4314,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 		end
 		if #shown == 0 then
-			hubFn.emptyState(hubState.bag, "bag", "The bag is empty.", "Open full bag", function()
-				hooks.onBag()
-			end)
-			local empty = hubState.bag:FindFirstChild("Empty")
-			if empty ~= nil and empty:IsA("GuiObject") then
-				empty.LayoutOrder = 9
-			end
+			-- "Open full bag" is already in the actions above. The empty
+			-- line is copy only, so the button is not shown twice.
+			local empty = hubFn.line(hubState.bag, "The bag is empty. Roll a shard to fill it.", 9, rgb("muted"))
+			empty.Name = "Empty"
 		else
 			local listH = hubState.bag.AbsoluteSize.Y
 			local listW = hubState.bag.AbsoluteSize.X
@@ -3886,12 +4397,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			slotCorner.Parent = slotButton
 			hubFn.bindActivated(slotButton, function() end)
 		end
+		-- The footer is pinned under the scrolling list, on the page, so a
+		-- long grid or a repaint after a roll cannot push it out of view.
+		local page = hubState.bag.Parent
+		local footH = UiTheme.TOUCH + UiTheme.PAD * 2
+		hubState.bag.Size = UDim2.new(1, 0, 1, -footH)
+		if page ~= nil then
+			local old = page:FindFirstChild("BagFoot")
+			if old ~= nil then
+				hubFn.clear(old)
+				old:Destroy()
+			end
+		end
 		local foot = Instance.new("Frame")
 		foot.Name = "BagFoot"
 		foot.BackgroundTransparency = 1
-		foot.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
+		foot.AnchorPoint = Vector2.new(0, 1)
+		foot.Position = UDim2.new(0, UiTheme.PAD, 1, -UiTheme.PAD)
+		foot.Size = UDim2.new(1, -UiTheme.PAD * 2, 0, UiTheme.TOUCH)
 		foot.LayoutOrder = 13
-		foot.Parent = hubState.bag
+		foot.Parent = if page ~= nil then page else hubState.bag
 		local footLayout = Instance.new("UIListLayout")
 		footLayout.FillDirection = Enum.FillDirection.Horizontal
 		footLayout.Padding = UDim.new(0, 8)
@@ -4031,6 +4556,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					table.insert(cards, pet)
 				end
 			end
+			-- [Ghost] A stable order, so a repaint keeps the picked pet put.
+			table.sort(cards, function(a, b)
+				if a.name ~= b.name then
+					return a.name < b.name
+				end
+				return tostring(a.uid) < tostring(b.uid)
+			end)
 		end
 		for _, companion in ipairs(following) do
 			table.insert(cards, {
@@ -4045,12 +4577,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		petStage.Size = UDim2.fromOffset(petSpec.w, petSpec.h)
 		petStage.LayoutOrder = 8
 		petStage.Parent = hubState.pets
-		local petList = Instance.new("Frame")
+		-- [Ghost] Clip 9: the list scrolls on its own (it clipped pets past
+		-- the fourth card) and keeps its place across repaints.
+		local petList = Instance.new("ScrollingFrame")
 		petList.Name = "PetList"
 		petList.BackgroundTransparency = 1
+		petList.BorderSizePixel = 0
 		petList.Position = UDim2.fromOffset(petSpec.list.x, petSpec.list.y)
 		petList.Size = UDim2.fromOffset(petSpec.list.w, petSpec.list.h)
+		petList.CanvasSize = UDim2.new(0, 0, 0, 0)
+		petList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		petList.ScrollingDirection = Enum.ScrollingDirection.Y
+		petList.ScrollBarThickness = 6
+		petList.ScrollBarImageColor3 = rgb("gold")
 		petList.Parent = petStage
+		local petListPad = Instance.new("UIPadding")
+		petListPad.PaddingRight = UDim.new(0, 10)
+		petListPad.Parent = petList
+		local keptY = if type(hubState.petListY) == "number" then hubState.petListY else 0
+		petList.CanvasPosition = Vector2.new(0, keptY)
+		task.defer(function()
+			if petList.Parent ~= nil then
+				petList.CanvasPosition = Vector2.new(0, keptY)
+			end
+		end)
+		petList:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+			hubState.petListY = petList.CanvasPosition.Y
+		end)
 		local petLayout = Instance.new("UIListLayout")
 		petLayout.Padding = UDim.new(0, 6)
 		petLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -4080,7 +4633,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			cardRarity.Name = "Rarity"
 			cardRarity.BackgroundTransparency = 1
 			cardRarity.Position = UDim2.fromOffset(56, 30)
-			cardRarity.Size = UDim2.new(1, -62, 0, 18)
+			cardRarity.Size = UDim2.new(1, -100, 0, 18)
 			cardRarity.Font = bodyFont()
 			cardRarity.TextSize = UiTheme.MIN_TEXT
 			cardRarity.TextXAlignment = Enum.TextXAlignment.Left
@@ -4090,24 +4643,62 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local cardName = Instance.new("TextLabel")
 			cardName.BackgroundTransparency = 1
 			cardName.Position = UDim2.fromOffset(56, 6)
-			cardName.Size = UDim2.new(1, -62, 0, 24)
+			cardName.Size = UDim2.new(1, -100, 0, 24)
 			cardName.Font = headerFont()
 			cardName.TextSize = UiTheme.MIN_TEXT
 			cardName.TextXAlignment = Enum.TextXAlignment.Left
 			cardName.TextColor3 = rgb("text")
 			cardName.Text = tostring(pet.name or "Pet")
 			cardName.Parent = card
+			-- [Ghost] Clip 6: the same star row and padlock as Bag cards.
+			if type(pet.uid) == "string" then
+				local petUid = pet.uid
+				card:SetAttribute("Uid", petUid)
+				local stars = Instance.new("TextLabel")
+				stars.Name = "Stars"
+				stars.BackgroundTransparency = 1
+				stars.AnchorPoint = Vector2.new(1, 0)
+				stars.Position = UDim2.new(1, -44, 0, 30)
+				stars.Size = UDim2.fromOffset(110, 18)
+				stars.Font = bodyFont()
+				stars.TextSize = UiTheme.MIN_TEXT
+				stars.TextXAlignment = Enum.TextXAlignment.Right
+				stars.TextColor3 = rgb("gold")
+				stars.Text = GearHooks.levelLine(pet)
+				stars.ZIndex = 3
+				stars.Parent = card
+				local lockedPet = pet.locked == true
+				local petLock = Instance.new("TextButton")
+				petLock.Name = "Lock"
+				petLock.AnchorPoint = Vector2.new(1, 0.5)
+				petLock.Position = UDim2.new(1, -8, 0.5, 0)
+				petLock.Size = UDim2.fromOffset(30, 30)
+				petLock.BackgroundTransparency = 1
+				petLock.Text = ""
+				petLock.AutoButtonColor = false
+				petLock.ZIndex = 7
+				petLock:SetAttribute("Locked", lockedPet)
+				petLock.Parent = card
+				GearDetail.lockIcon(petLock, lockedPet, 20)
+				hubFn.bindActivated(petLock, function()
+					hubFn.togglePetLock(petUid)
+				end)
+			end
 			local pick = index
+			local pickUid = pet.uid
 			hubFn.bindActivated(card, function()
 				hubState.petPick = pick
+				hubState.petPickUid = pickUid
 				hubFn.paintPets()
 				hubFn.show("pets")
 			end)
 		end
-		local picked = cards[1]
-		if type(hubState.petPick) == "number" and cards[hubState.petPick] ~= nil then
-			picked = cards[hubState.petPick]
-		end
+		-- [Ghost] Clip 9: with no pick yet the detail opens on the
+		-- equipped pet, not whichever sorts first.
+		local equippedPet = if type(hubState.profile) == "table" and type(hubState.profile.equipped) == "table"
+			then hubState.profile.equipped.pet
+			else nil
+		local picked = cards[HubStyle.petDefault(cards, equippedPet, hubState.petPick, hubState.petPickUid)]
 		local petDetail = Instance.new("Frame")
 		petDetail.Name = "PetDetail"
 		petDetail.BackgroundColor3 = rgb("header")
@@ -4147,9 +4738,39 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if type(picked) == "table" and type(picked.uid) == "string" then
 			local petUid = picked.uid
-			hubFn.row(petDetail, HubStyle.EQUIP, 20, function()
-				hubFn.equipUid(petUid)
-			end)
+			-- [Ghost] Clip 6: one EQUIPPED state once worn; a second tap
+			-- within GearDetail.ARM_SECONDS unequips (same as the Bag).
+			local worn = hubFn.itemWorn(petUid)
+			local equipRow = hubFn.row(petDetail, HubStyle.EQUIP, 20, nil)
+			equipRow.Name = "PetEquip"
+			equipRow.TextXAlignment = Enum.TextXAlignment.Center
+			equipRow.Font = headerFont()
+			equipRow:SetAttribute("Worn", worn)
+			if worn then
+				local wornFill = Color3.fromRGB(46, 70, 60)
+				equipRow.Text = "EQUIPPED"
+				equipRow.BackgroundColor3 = wornFill
+				hubFn.setRest(equipRow, wornFill)
+				hubFn.bindActivated(
+					equipRow,
+					GearDetail.wornTap(equipRow, function()
+						hubFn.unequipPet(petUid)
+					end)
+				)
+			else
+				equipRow.Text = HubStyle.EQUIP
+				hubFn.bindActivated(equipRow, function()
+					if equipRow:GetAttribute("Equipping") == true then
+						return
+					end
+					equipRow:SetAttribute("Equipping", true)
+					equipRow.Text = "EQUIPPED"
+					hubFn.equipUid(petUid)
+					if hubState.shownId == "pets" then
+						hubFn.paintPets()
+					end
+				end)
+			end
 		end
 		local crack = hubFn.row(hubState.pets, "Crack a Pet Shard", 20, function()
 			hubState.rollKind = "pets"
@@ -4440,7 +5061,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return button
 	end
 
-	function hubFn.paintCta(sinceEpic: number)
+	function hubFn.paintCta(sinceLegendary: number)
 		for _, child in ipairs(hubState.ctaRow:GetChildren()) do
 			child:Destroy()
 		end
@@ -4504,13 +5125,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.ctaButton("Info", RollScreen.ODDS_LABEL, if hubState.infoOpen == true then "button" else "header")
 		end
 
-		-- Meters: tenth-crack luck pips (left / top) and free pity (right /
-		-- bottom). Pity is never sold; it only counts cracks.
+		-- Meters: tenth-crack luck pips (left / top) and the free Legendary
+		-- pity (right / bottom). Pity is never sold; it only counts cracks.
 		local lit, luckText = RollScreen.luckPips(
 			if type(hubState.profile) == "table" then hubState.profile.shardRolls else 0
 		)
 		local luck = Instance.new("Frame")
 		luck.Name = "LuckMeter"
+		-- Parked milestone (LaunchGate.luckMilestone off): built but hidden.
+		luck.Visible = RarityConfig.milestoneOn()
 		luck.BackgroundTransparency = 1
 		luck.Position = UDim2.fromOffset(screen.luck.x, screen.luck.y)
 		luck.Size = UDim2.fromOffset(screen.luck.w, screen.luck.h)
@@ -4556,8 +5179,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pityCorner.Parent = pity
 		local pityFill = Instance.new("Frame")
 		pityFill.Name = "Fill"
-		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceEpic), 1)
-		pityFill.BackgroundColor3 = Color3.fromRGB(150, 92, 255)
+		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceLegendary), 1)
+		pityFill.BackgroundColor3 = hubFn.rarityColor3("Legendary")
 		pityFill.BorderSizePixel = 0
 		pityFill.ZIndex = 6
 		pityFill.Parent = pity
@@ -4573,7 +5196,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pityLabel.TextColor3 = rgb("text")
 		pityLabel.TextStrokeTransparency = 0.5
 		pityLabel.TextTruncate = Enum.TextTruncate.AtEnd
-		pityLabel.Text = RollConfig.pityText(sinceEpic)
+		pityLabel.Text = RollConfig.pityText(sinceLegendary)
 		pityLabel.ZIndex = 7
 		pityLabel.Parent = pity
 		hubFn.placeCta(screen)
@@ -4741,8 +5364,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn)
 
+		-- [Ghost] Kevin, clip 4: the roll page reads streak bar, Gear/Pet tabs,
+		-- crystal + ODDS, pity bar, then the buttons. The old junk row and the
+		-- repeated Streak/Rolls/Odds lines stay behind rollMenuExtras (off).
+		local cleanMenu = not LaunchGate.on("rollMenuExtras")
 		local junkRow = Instance.new("Frame")
 		junkRow.Name = "Junk"
+		junkRow.Visible = not cleanMenu
 		junkRow.BackgroundTransparency = 1
 		junkRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
 		junkRow.LayoutOrder = 5
@@ -4774,26 +5402,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		junkButton("JunkMode", "Junk  " .. hubState.draft.rolls.autoJunk)
 		junkButton("JunkBelow", "Below  " .. hubState.draft.rolls.junkBelow)
 
-		local sinceEpic = if hubState.serverEpic ~= nil
-			then hubState.serverEpic
-			elseif type(hubState.profile) == "table" then hubState.profile.sinceEpic or 0
-			else 0
 		local pityResult = if hubState.serverSince ~= nil
 			then { pity = { sinceLegendary = hubState.serverSince } }
 			else nil
 		local sinceLegendary, pityGoal = UiRouter.legendaryPity(hubState.profile, pityResult)
-		local epicMeter = RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)
 		local pityMeter = RollHype.pity(sinceLegendary, pityGoal)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		hubFn.line(
-			hubState.roll,
-			UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
-			6,
-			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		)
-		hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		if not cleanMenu then
+			hubFn.line(
+				hubState.roll,
+				UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
+				6,
+				rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
+			)
+			hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		end
 		local bestText = "Best pull  —"
 		if type(hubState.bestPull) == "table" then
 			bestText = string.format(
@@ -4845,9 +5470,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			infoPad.PaddingRight = UDim.new(0, UiTheme.GAP)
 			infoPad.Parent = info
 			hubFn.line(info, string.format("Luck  %d", luck + boost), 1, rgb("gold"))
-			hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
+			if RarityConfig.milestoneOn() then
+				hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
+			end
 			local legendaryCount = if type(sinceLegendary) == "number" then sinceLegendary else 0
-			hubFn.line(info, RarityConfig.pityLine(sinceEpic, legendaryCount), 3, rgb("text"))
+			hubFn.line(info, RarityConfig.pityLine(legendaryCount), 3, rgb("text"))
 			local infoPool = if hubState.rollKind == "pets"
 				then Pools.get(hubFn.rollPoolId())
 				else Pools.get("verdant_armory")
@@ -4862,13 +5489,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			table.insert(hubState.pityTweens, tween)
 			tween:Play()
 		end
-		-- One host, absolute rows. A collapsed list cannot pile Epic,
-		-- Legendary, and Odds on top of each other when the kind switches.
+		-- One host, absolute rows. A collapsed list cannot pile Legendary
+		-- and Odds on top of each other when the kind switches. There is
+		-- no Epic pity row (Phase 1.3: Legendary pity only).
 		local progress = ShardBoard.stack(hubState.rollKind, {
-			Epic = {
-				counter = if epicMeter.ok == true then epicMeter.counter else sinceEpic,
-				goal = RarityConfig.EPIC_PITY,
-			},
 			Legendary = {
 				counter = if pityMeter.ok == true then pityMeter.counter else sinceLegendary,
 				goal = pityGoal,
@@ -4904,10 +5528,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold: boolean,
 			animate: string
 		)
-			local rowId = if name == "EpicPity"
-				then "Epic"
-				elseif name == "LegendaryPity" then "Legendary"
-				else name
+			local rowId = if name == "LegendaryPity" then "Legendary" else name
 			local row = progressRow(rowId)
 			if row == nil or row.bar ~= true then
 				return
@@ -5076,10 +5697,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			meter(name, tier, counter, goal, fill, order, fromFill, reset, animate)
 			return fill, nextSeen
 		end
-		-- stylua: ignore
-		local nextEpicFill, nextEpicSeen = paintPity("EpicPity", "Epic", epicMeter, "Epic", 4, hubState.epicFillShown, hubState.epicFlashRoll)
-		hubState.epicFillShown = nextEpicFill
-		hubState.epicFlashRoll = nextEpicSeen
 		local nextLegendaryFill, nextLegendarySeen = paintPity(
 			"LegendaryPity",
 			"Legendary",
@@ -5092,7 +5709,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.legendaryFillShown = nextLegendaryFill
 		hubState.legendaryFlashRoll = nextLegendarySeen
 		local oddsRow = progressRow("Odds")
-		if oddsRow ~= nil then
+		if oddsRow ~= nil and cleanMenu then
+			-- Only the pity bar: drop the reserved "Odds" strip under it.
+			progressHost.Size = UDim2.fromOffset(progress.w, math.max(0, oddsRow.y - 6))
+		end
+		if oddsRow ~= nil and not cleanMenu then
 			local oddsHost = Instance.new("Frame")
 			oddsHost.Name = "Odds"
 			oddsHost.BackgroundColor3 = rgb("header")
@@ -5128,6 +5749,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		oddsLines.Size = UDim2.fromScale(1, 0)
 		oddsLines.AutomaticSize = Enum.AutomaticSize.Y
 		oddsLines.LayoutOrder = 13
+		oddsLines.Visible = not cleanMenu
 		oddsLines.Parent = hubState.roll
 		local oddsLayout = Instance.new("UIListLayout")
 		oddsLayout.Padding = UDim.new(0, 4)
@@ -5140,8 +5762,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.line(oddsLines, text, index, rgb("text"))
 			end
 		end
-		hubFn.paintOddsBars(oddsPane, nextEpicFill, nextLegendaryFill)
-		hubFn.paintCta(sinceEpic)
+		hubFn.paintOddsBars(oddsPane, 0, nextLegendaryFill)
+		hubFn.paintCta(if type(sinceLegendary) == "number" then sinceLegendary else 0)
 
 		local recent = if #hubState.sessionRolls > 0
 			then hubState.sessionRolls
@@ -5165,18 +5787,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubFn.line(hubState.roll, "Last 10", 31, rgb("gold"))
 		hubFn.divider(hubState.roll, 32)
-		if #hubState.summaryItems > 0 then
-			hubFn.line(hubState.roll, "Cracked", 40, rgb("gold"))
-			for index, item in ipairs(hubState.summaryItems) do
-				local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
-				hubFn.line(
-					hubState.roll,
-					string.format("%s  %s", tostring(item.name or "Shard"), rarity),
-					40 + index,
-					hubFn.rarityColor3(rarity)
-				)
-			end
-		end
+		-- [Ghost] The x10 "Cracked" text list is gone: the batch ends on the
+		-- RollSummary grid instead.
 		if #recent == 0 then
 			hubFn.line(hubState.roll, "No rolls yet.", 33, rgb("muted"))
 		else
@@ -5268,6 +5880,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if hubState.rollBusy then
 				return
 			end
+			hubState.rollSummary.hide()
 			hubState.pendingCount = 10
 			hubState.summaryItems = {}
 			hubState.batchLeft = {}
@@ -5389,12 +6002,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		item: any,
 		record: RollReveal.Record,
 		isNew: boolean,
-		upgrade: boolean
+		upgrade: boolean,
+		extra: any?
 	)
 		hubState.revealCard.Visible = true
-		hubState.revealTitle.Text = record.name
-		hubState.revealRarity.Text = record.rarity
+		-- Icon, name, tier color plus the real base chance ("Rare · 6.6%")
+		-- and the first two stats, the same face the Bag card leads with.
+		-- [Ghost] Echo's gear stages: a merged dupe or an auto-salvaged drop.
+		local gearNote = if type(extra) == "table" and type(extra.note) == "string"
+			then extra.note
+			else nil
+		local gone = type(extra) == "table" and extra.gone == true
 		local color = hubFn.rarityColor3(record.rarity)
+		hubFn.paintCardFace(
+			RollReveal.cardFace(item, record, InventoryView.statLines(item)),
+			color
+		)
+		if gearNote ~= nil then
+			hubState.revealRarity.Text = hubState.revealRarity.Text .. " · " .. gearNote
+		end
 		hubState.revealRarity.TextColor3 = color
 		hubState.revealStroke.Color = color
 		hubState.revealNew.Visible = isNew
@@ -5421,11 +6047,16 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubState.draft.rolls.autoJunk,
 			upgrade
 		)
-		hubState.revealEquip.Visible = junk == "equip" and hubState.cardRoom >= 72
+		hubState.revealEquip.Visible = junk == "equip" and hubState.cardRoom >= 72 and not gone
 		if type(item.uid) == "string" then
 			hubState.revealEquip:SetAttribute("Uid", item.uid)
 		end
-		if junk == "salvage" and LaunchGate.on("forgeSalvage") and type(item.uid) == "string" then
+		if
+			junk == "salvage"
+			and not gone
+			and LaunchGate.on("forgeSalvage")
+			and type(item.uid) == "string"
+		then
 			task.spawn(function()
 				pcall(hooks.invoke, "Salvage", item.uid)
 			end)
@@ -5464,8 +6095,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.stageReveal()
 		hubState.revealCard.Visible = true
-		hubState.revealTitle.Text = ""
-		hubState.revealRarity.Text = ""
+		local total = 1
+		local index = 1
+		if hubState.batching then
+			index = #hubState.summaryItems
+			total = index + #hubState.batchLeft
+		end
+		hubFn.paintCardFace(RollReveal.pendingFace(index, total), rgb("accent"))
+		hubState.revealRarity.TextColor3 = rgb("text")
 		hubState.revealNew.Visible = false
 		hubState.revealBest.Visible = false
 		hubState.revealEquip.Visible = false
@@ -5508,6 +6145,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				quick = true,
 				currency = "shard",
 			}
+			hubFn.gearFields(hubState.replayResult, nextCrack)
 			hubState.rollBusy = false
 			hubState.loop = { phase = "revealing", queued = false }
 			hubFn.beginRoll()
@@ -5515,10 +6153,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if hubState.batching then
 			hubState.batching = false
+			hubState.batchSkip = false
+			hubFn.paintSkip()
 			hubState.pendingCount = 1
 			hubState.loop = RollLoop.idle()
+			hubFn.releaseRoll()
 			hubFn.setPulse(true)
 			hubFn.paintRoll()
+			hubFn.showSummary()
 			return
 		end
 		local finished = RollLoop.finish(hubState.loop)
@@ -5528,6 +6170,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		hubState.loop = RollLoop.idle()
+		hubFn.releaseRoll()
 		hubFn.setPulse(true)
 		hubFn.paintCrackButton()
 	end
@@ -5557,6 +6200,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.setPulse(false)
 		hubFn.paintCrackButton()
 		hubState.revealToken += 1
+		hubFn.holdRoll(hubState.revealToken)
 		hubFn.bumpCardGeneration()
 		-- Cancel leaves a flash or drip where it was. Snap them off so the
 		-- previous roll cannot sit on top of this one.
@@ -5581,22 +6225,28 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if generation ~= hubState.revealToken then
 					hubState.rollBusy = false
 					hubState.crackLocked = false
+					hubFn.releaseRoll(generation)
 					return
 				end
 				if RollFocus.chain(hubState.windowFocused) ~= true then
 					hubState.rollBusy = false
 					hubState.crackLocked = false
 					hubState.loop = RollLoop.idle()
+					hubFn.releaseRoll(generation)
 					hubFn.setPulse(true)
 					return
 				end
 				if hubState.pendingCount > 1 then
 					local count = hubState.pendingCount
 					hubState.pendingCount = 1
+					-- [Ghost] What Kevin owned BEFORE the batch: the reply's profile
+					-- already holds every drop, so NEW is judged against this.
+					local ownedBefore = RollLoop.ownedTemplates(hubState.profile, nil)
 					local batchOk, batch = pcall(hooks.invoke, "RollShards", poolId, count)
 					if generation ~= hubState.revealToken then
 						hubState.rollBusy = false
 						hubState.crackLocked = false
+						hubFn.releaseRoll(generation)
 						return
 					end
 					if
@@ -5605,8 +6255,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						and type(batch.items) == "table"
 						and #batch.items > 0
 					then
+						-- [Ghost] Auto-salvaged x10 rows never reach the Bag.
+						-- Say so, or the press looks like it did nothing.
+						if LaunchGate.on("gearSalvage") then
+							local gone, gain = GearHooks.markBatch(batch.items, batch.profile)
+							local note = GearHooks.batchLine(#batch.items, gone, gain)
+							if note ~= nil and hooks.onToast ~= nil then
+								hooks.onToast(note)
+							end
+						end
 						hubState.batching = true
+						hubState.batchSkip = false
+						hubFn.paintSkip()
 						hubState.summaryItems = {}
+						-- The summary reads NEW / ★ up / auto-salvaged off the batch row.
+						hubState.batchRows = setmetatable({}, { __mode = "k" })
+						for _, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" then
+								hubState.batchRows[row.item] = row
+							end
+						end
+						-- One outcome per tile, stars chained per copy through the batch.
+						local planned = RollSummary.batch(batch.items, ownedBefore)
+						for index, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" and planned[index] ~= nil then
+								hubState.summaryMeta[row.item] = planned[index]
+							end
+						end
 						hubState.batchLeft = {}
 						for index = 2, #batch.items do
 							table.insert(hubState.batchLeft, batch.items[index])
@@ -5622,9 +6297,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 							currency = batch.currency,
 							profile = batch.profile,
 						}
+						hubFn.gearFields(result, first)
 						ok = true
 					else
 						hubState.batching = false
+						hubFn.paintSkip()
 						ok = batchOk
 						result = batch
 					end
@@ -5635,6 +6312,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if generation ~= hubState.revealToken then
 				hubState.rollBusy = false
 				hubState.crackLocked = false
+				hubFn.releaseRoll(generation)
 				return
 			end
 			hubState.rollBusy = false
@@ -5661,6 +6339,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			-- A refusal did not land and did not miss. Leave the streak.
 			local kind = RollRefuse.classify(ok, result)
+			hubFn.noteBagFull(kind == "refuse" and GearHooks.bagFull(ok, result))
 			if kind ~= "land" or record == nil then
 				local caption = "Roll"
 				if kind == "refuse" then
@@ -5737,6 +6416,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if type(item.uid) == "string" then item.uid else nil
 			)
 			hubState.activeNew = RollLoop.isNew(item.templateId, owned)
+			local plannedTile = if hubState.batching then hubState.summaryMeta[item] else nil
+			if plannedTile ~= nil then
+				-- [Ghost] The reveal card agrees with the summary tile.
+				hubState.activeNew = plannedTile.isNew
+			end
 			hubState.activeUpgrade = RollLoop.isUpgrade(hubState.profile, item)
 			hubState.activeItem = item
 			hubState.bestPull = RollLoop.best(hubState.bestPull, item)
@@ -5749,9 +6433,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			hubState.slideHistory = true
 			if type(result.pity) == "table" then
-				if type(result.pity.sinceEpic) == "number" then
-					hubState.serverEpic = result.pity.sinceEpic
-				end
 				if type(result.pity.sinceLegendary) == "number" then
 					hubState.serverSince = result.pity.sinceLegendary
 				end
@@ -5791,9 +6472,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				record = shownRecord,
 				isNew = hubState.activeNew,
 				upgrade = hubState.activeUpgrade,
+				extra = {
+					note = GearHooks.revealNote(result),
+					gone = type(result) == "table" and result.autoSalvaged == true,
+				},
 			}
 			if hubState.batching then
 				table.insert(hubState.summaryItems, item)
+				if hubState.summaryMeta[item] == nil then
+					local source = hubState.batchRows[item] or result
+					hubState.summaryMeta[item] = RollSummary.row(item, source, hubState.activeNew)
+				end
 			end
 			hubState.crackNamed = false
 			hubState.crackSounded = false
@@ -5815,7 +6504,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				card.rarity,
 				hubFn.crackMode(card.rarity, quick or hubState.batching)
 			)
-			duration = plan.seconds
+			-- [Ghost] x10 cards take <= RollSummary.STEP each; Skip lands the rest now.
+			if hubState.batching then
+				plan = RollSummary.fast(plan)
+			end
+			duration = if hubState.batching and hubState.batchSkip then 0 else plan.seconds
 			if duration <= 0 then
 				hubFn.paintReel(slots, #slots)
 				hubState.revealCard.BackgroundColor3 = color
@@ -5842,9 +6535,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						)
 					)
 				end
-				if RollLoop.stinger(card.rarity, reduced) then
+				-- Skipped x10 cards land silently; the summary says the rest.
+				local quiet = hubState.batchSkip == true
+				if not quiet and RollLoop.stinger(card.rarity, reduced) then
 					hubFn.playUi("stinger")
-				elseif not reduced and (pace.tier or 0) >= 3 then
+				elseif not quiet and not reduced and (pace.tier or 0) >= 3 then
 					hubFn.playUi("confirm")
 				end
 				hubFn.finishReveal()
@@ -5880,7 +6575,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if not hubState.crackNamed and type(hubState.pendingFace) == "table" then
 			hubState.crackNamed = true
 			local face = hubState.pendingFace
-			hubFn.paintResult(face.item, face.record, face.isNew, face.upgrade)
+			hubFn.paintResult(face.item, face.record, face.isNew, face.upgrade, face.extra)
 		end
 		hubState.holdingRoll = false
 		hubState.loop = RollLoop.idle()
@@ -5951,6 +6646,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end)
 		end
 	end)
+	hubFn.bindActivated(hubState.salvageNowButton, function()
+		task.spawn(hubFn.salvageNow)
+	end)
 	hubFn.bindActivated(hubState.revealEquip, function()
 		local uid = hubState.revealEquip:GetAttribute("Uid")
 		if type(uid) ~= "string" or uid == "" then
@@ -5961,6 +6659,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 	end)
 	RunService.Heartbeat:Connect(function()
+		-- Failsafe: a hold or reveal that outlives REVEAL_HOLD_MAX (a hung
+		-- server call, a lost Heartbeat end) stops the roll and frees the
+		-- player. Nothing can leave the character frozen.
+		if hubState.worldMode == "lock" then
+			-- A respawn mid-lock brings a fresh Humanoid; freeze that too.
+			hubFn.freezeCharacter(true)
+		elseif hubState.frozen ~= nil then
+			hubFn.freezeCharacter(false)
+		end
+		local hold = hubState.rollHold
+		local stuck = hubState.activeReveal
+		if
+			(hold ~= nil and Keybinds.holdExpired(hold.since, os.clock()))
+			or (stuck ~= nil and Keybinds.holdExpired(stuck.started, os.clock()))
+		then
+			hubFn.stopRollChain()
+			hubState.crackLocked = false
+			hubFn.setPulse(true)
+			hubFn.paintCrackButton()
+			return
+		end
 		local active = hubState.activeReveal
 		if active == nil or active.generation ~= hubState.cardGeneration then
 			return
@@ -6020,7 +6739,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					hubState.pendingFace.item,
 					hubState.pendingFace.record,
 					hubState.pendingFace.isNew,
-					hubState.pendingFace.upgrade
+					hubState.pendingFace.upgrade,
+					hubState.pendingFace.extra
 				)
 			end
 			if elapsed >= active.duration then
@@ -6324,7 +7044,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold = profile.gold,
 			shardTokens = profile.shardTokens,
 			shardRolls = profile.shardRolls,
-			sinceEpic = profile.sinceEpic,
 			sinceLegendary = profile.sinceLegendary,
 			ascension = profile.ascension,
 			inventory = profile.inventory,
@@ -6369,7 +7088,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			extra.junk = if type(rolls) == "table" then rolls.autoJunk else nil
 			extra.below = if type(rolls) == "table" then rolls.junkBelow else nil
 			extra.anim = if type(rolls) == "table" then rolls.animation else nil
-			extra.epic = hubState.serverEpic
 			extra.since = hubState.serverSince
 			extra.rolls = if type(hubState.hype) == "table" then hubState.hype.rolls else 0
 			extra.streak = if type(hubState.hype) == "table" then hubState.hype.streak else 0
@@ -6897,6 +7615,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.close()
+		hubFn.hideTips()
 		hubFn.apply(UiRouter.close(hubState.route))
 	end
 
@@ -6913,6 +7632,17 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.follow(nextState: UiRouter.State)
 		if nextState.generation == hubState.route.generation then
+			return
+		end
+		-- [Ghost] One inventory: the Bag route (rail button, B key, hub
+		-- tab) opens the full Inventory instead of the small Bag. The old
+		-- Bag page stays behind LaunchGate oneInventory = false.
+		if
+			LaunchGate.on("oneInventory")
+			and nextState.open
+			and UiRouter.top(nextState) == "bag"
+		then
+			hooks.onBag()
 			return
 		end
 		local prompt = nextState.open
@@ -7103,6 +7833,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			hubFn.hideTips()
+		end
 		if hubState.capturing ~= nil and input.KeyCode == Enum.KeyCode.Escape then
 			hubState.capturing = nil
 			hubState.bindNote = nil
@@ -7419,7 +8155,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		setProfile = function(nextProfile: any)
 			hubState.profile = nextProfile
 			hubState.serverSince = nil
-			hubState.serverEpic = nil
 			if type(nextProfile) == "table" and type(nextProfile.uiSettings) == "table" then
 				hubState.draft = Settings.normalize(nextProfile.uiSettings)
 				hubState.uiScale.Scale = hubState.draft.hud.scale

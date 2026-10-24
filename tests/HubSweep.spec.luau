@@ -22,9 +22,10 @@ local CLIENT = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.clie
 local HUB = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau"
 
 describe("HubSweep", function()
-	it("the live Roll pity text still trips the legacy check (why the guard exists)", function()
-		local live = ShardBoard.pityText(0, RarityConfig.EPIC_PITY)
-		expect(ClientChrome.legacyReadout(live)).toEqual(true)
+	it("the old Epic pity text trips the legacy check (why the guard exists); Legendary 0/150 does not", function()
+		expect(ClientChrome.legacyReadout(ShardBoard.pityText(0, 50))).toEqual(true)
+		local live = ShardBoard.pityText(0, RarityConfig.LEGENDARY_PITY)
+		expect(ClientChrome.legacyReadout(live)).toEqual(false)
 	end)
 
 	it("never text-scans our own guis", function()

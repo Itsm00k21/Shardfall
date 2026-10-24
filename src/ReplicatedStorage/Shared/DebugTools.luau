@@ -17,6 +17,7 @@ local ChestConfig = require("./ChestConfig")
 local Currencies = require("./Currencies")
 local Materials = require("./Materials")
 local Pools = require("./Pools")
+local RollConfig = require("./RollConfig")
 
 local DebugTools = {}
 
@@ -37,6 +38,26 @@ local function count(value: any): number
 		return 0
 	end
 	return math.floor(value)
+end
+
+-- Sets the Legendary pity counter and says what the next roll does.
+local function setPity(data: any, value: number): string
+	local cap = RollConfig.LEGENDARY_PITY
+	local before = count(data.sinceLegendary)
+	local after = math.clamp(value, 0, cap - 1)
+	data.sinceLegendary = after
+	local tail
+	if after + 1 >= cap then
+		tail = "next roll is a guaranteed Legendary"
+	elseif RollConfig.softBonus(after) > 0 then
+		tail = string.format(
+			"soft pity on: next roll +%d%% Legendary chance",
+			math.floor(RollConfig.softBonus(after) * 100 + 0.5)
+		)
+	else
+		tail = RollConfig.pityText(after)
+	end
+	return string.format("Legendary pity %d/%d (was %d): %s.", after, cap, before, tail)
 end
 
 -- Adds up to `amount` under `cap` and says what landed.
@@ -92,6 +113,18 @@ end
 function DebugTools.grant(data, kind: string, now: number): (boolean, string)
 	if kind == "tokens" then
 		return true, addCapped(data, "shardTokens", 5, 9999, "Shards")
+	end
+	if kind == "tokens100" then
+		return true, addCapped(data, "shardTokens", 100, 9999, "Shards")
+	end
+	if kind == "pity149" then
+		return true, setPity(data, RollConfig.LEGENDARY_PITY - 1)
+	end
+	if kind == "pity120" then
+		return true, setPity(data, 120)
+	end
+	if kind == "pity0" then
+		return true, setPity(data, 0)
 	end
 	if kind == "prisms" then
 		return true, addCapped(data, "prismTokens", 5, 9999, "Prism Tokens")
