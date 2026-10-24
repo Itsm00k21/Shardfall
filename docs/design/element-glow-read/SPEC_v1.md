@@ -9,7 +9,7 @@ Sources (link, don't copy):
   - `Shared/ElementGlow.luau`: element from **spawn order** (`ORDER` ember → frost → void); flag off returns nil, nothing builds.
   - `DungeonService.applyElementGlow`: one `Highlight` (fill = outline = element color) on the rim host, the warm `Rim` Highlight is **disabled** while the glow draws (so still 1 Highlight per enemy), plus one `PointLight` on the root part. Attribute `ShardfallElement` on the part.
   - `Shared/Dungeons.luau` `RIM`: fill 255,214,160 @ 0.88, outline 255,236,200 @ 0.2 (today's default read).
-- **Havoc DP14** (board row https://app.notion.com/p/403c31ca3883816ba337eff1ab1648ef, report https://app.notion.com/p/403c31ca388381339e36c73c90f10e34): SHIP flag-off. **P2-432-1:** Roblox draws at most **31 Highlights** at once; dead enemies keep theirs until wave clear, so at ~22 alive about 10 kills push new glows past the limit. Fix: remove glow + rim on death and cap how many enemies glow on mobile. **P3-432-1:** the light stays lit on the corpse spot. **P3-432-2:** #422 wave-arena enemies get no glow. **P3-432-3:** element follows spawn order, not enemy type. Real alive counts today: 3–8 (4 on mobile).
+- **Havoc DP14** (board row https://app.notion.com/p/403c31ca3883816ba337eff1ab1648ef, report https://app.notion.com/p/403c31ca388381339e36c73c90f10e34): SHIP flag-off. **P2-432-1:** Roblox draws at most **31 Highlights** at once; dead enemies keep theirs until wave clear, so at ~22 alive about 10 kills push new glows past the limit. Fix: remove glow + rim on death and cap how many enemies glow on mobile. **P3-432-1:** the light stays lit on the corpse spot. **P3-432-2:** #422 wave-arena enemies get no glow. **P3-432-3:** element follows spawn order, not enemy type. Real alive counts on live today: 3–8 (4 on mobile). **New since Havoc's audit: PR #433** (open, flag `enemyPerf` off) sets `Config.EnemyPerf.ALIVE_CAP` = **22**, so the 22-alive case is no longer only a stress model.
 - Specs this must match: **Boss telegraphs v1.1** (`prism/boss-telegraphs`: threat orange 255,120,40, flat floor shapes with white rims). **Hard accent v1.1** (`prism/hard-accent`: Hard is HUD-only, no sky tint). **M15 element buffs v1.2** (#416). **Wave HUD v1.1** (#428 buff pips). **#414 Shard Crater** (arena floor ≈ 64,56,84 → 30,26,42). **#420** keep-out.
 - Chrome: PR #392 `docs/ui/reference/STYLE.md`. Rarity colors (`Shared/Rarities.luau`: Common 168,168,176 · Uncommon 64,186,98 · Rare 72,142,255 · Epic 186,96,240 · Legendary 255,196,64) are **loot** colors; element glows are **enemy** colors (see §7 for the Void/Epic overlap).
 
@@ -37,7 +37,8 @@ On a 390×844 phone at crawl zoom 18, with 3–8 enemies alive, a new player can
 |---|---|---|
 | 1 | Flag `elementGlow` off (ships this way) | Today's warm Rim on every enemy. No pips, no lights. Zero element pixels. |
 | 2 | Enemy spawns, glow slot free | Highlight pops in over 0.15 s (Fill 1 → 0.5, Outline 1 → 0), ground pool light fades in. Pip shows on the bar. |
-| 3 | Enemy spawns, glow budget full | Warm Rim (as today) + pip + element-stroked bar. No Highlight swap, no light. |
+| 3 | Enemy spawns, glow budget full | Warm Rim (as today) + pip + element-stroked bar. No light. |
+| 3b | Enemy spawns, enemy Highlight ceiling (18) full (only with #433's cap 22) | No Highlight at all: pip + element-stroked bar only. |
 | 4 | An enemy with a glow dies | Glow fades out in 0.15 s (Fill/Outline → 1, light Brightness → 0), then the Highlight and light are **destroyed**. The slot is free. |
 | 5 | Slot freed | The **oldest alive enemy without a glow** gets it (one swap per frame): Rim disabled, glow pops in (step 2). |
 | 6 | Wave clear | Nothing left to clean (everything was removed at death). |
@@ -55,11 +56,11 @@ World visuals are 3D and may cross the center keep-out (that rule is for UI pane
 | Glow budget | **6** (touch) | 6 | 6 | **12** (keyboard/mouse) |
 | Ground pool lights | max **4** (touch) | 4 | 4 | 12 |
 
-Highlight count rule (fixes P2-432-1): **every alive enemy has exactly 1 Highlight** (element glow *or* warm Rim, never both, never zero); **every dead enemy has 0**. So Highlights in use ≈ alive enemies + players + loot/boss, well under Roblox's 31 at today's caps (3–8 alive), and still under it at the 22-enemy stress case. Mockup `08-cap-fallback.svg`.
+Highlight count rule (fixes P2-432-1): **every alive enemy has at most 1 Highlight** (element glow *or* warm Rim, never both); **every dead enemy has 0**. **Enemy Highlight ceiling = 18** (glow + Rim together), leaving 13 of Roblox's 31 for players, loot, the boss and other systems. At today's 3–8 alive this never binds. With #433's alive cap 22, enemies 19–22 get **no Highlight**: they read by the pip + element-stroked bar only, and gain a Rim/glow as soon as one frees. Mockup `08-cap-fallback.svg`.
 Checks: nothing tappable is added (pip is display-only; no 44 px target needed). No UI panel is added, so the keep-out at all 4 sizes is unchanged.
 
 ## 5. States
-| Element | Flag off | Glow (slot) | Over budget | Dying (0–0.15 s) | Dead |
+| Element | Flag off | Glow (slot) | Over glow budget | Dying (0–0.15 s) | Dead |
 |---|---|---|---|---|---|
 | Highlight | warm Rim | element: Fill 0.5, Outline 0 (tinted) | warm Rim (Fill 0.88, Outline 0.2) | Fill/Outline tween → 1 | destroyed |
 | Rim | on | disabled | on | — | destroyed with the glow (P2) |
@@ -72,7 +73,7 @@ Loading: if `ShardfallElement` isn't set yet, show no pip (never a wrong one). E
 - **Fill colors (PROVISIONAL, Kevin):** keep #432: Ember **255,112,36**, Frost **92,214,255**, Void **196,92,255**.
 - **Outline colors (new, rec A):** element color lerped 45% to white: Ember **255,176,134**, Frost **165,232,255**, Void **222,165,255**. The lighter rim reads on the dark crater floor and on the violet sky; the fill carries the hue.
 - `GLOW`: `fillTransparency` 0.28 → **0.5**; `outlineTransparency` **0** (keep); `lightBrightness` 3 → **1.5**; `lightRange` 22 → **10** (a pool under the enemy, not a floor wash); `depthMode` **AlwaysOnTop** (keep: enemies behind pillars still read).
-- Budget knobs (Echo names them, Config only): glow max **6 touch / 12 desktop**; light max **4 touch / 12 desktop**.
+- Budget knobs (Echo names them, Config only): glow max **6 touch / 12 desktop**; light max **4 touch / 12 desktop**; enemy Highlight ceiling (glow + Rim) **18** on every device. Over the ceiling: pip + bar stroke only.
 - Tweens: in 0.15 s (Quad Out), out 0.15 s (Quad In). One slot hand-off per frame.
 - Pip shapes: Ember = flame triangle, Frost = crystal diamond, Void = ring. 12×12, 1 px ink 20,16,28 stroke.
 - Grayscale check (luma): Ember ≈ 145, Frost ≈ 180, Void ≈ 142. Ember and Void are close in gray, so the **shape pip is required** for colorblind reads (Q2).
@@ -94,7 +95,7 @@ SVG in repo (fake data, original art, gray-box crater). `mockups/01-wave4-phone-
 
 ## 9. Build split
 Before `elementGlow` is ever turned on. Building waits for Ghost's go.
-- **Echo (server, #432 follow-up):** Config numbers (§6), tinted outline color, destroy Highlight + light on death with a 0.15 s fade (P2-432-1, P3-432-1), the glow budget + oldest-first hand-off, warm Rim back on for over-budget enemies, the same rules on the #422 arena path (P3-432-2). Tests: alive enemy always has exactly 1 Highlight; dead has 0; glow count never above the budget; flag off builds nothing.
+- **Echo (server, #432 follow-up):** Config numbers (§6), tinted outline color, destroy Highlight + light on death with a 0.15 s fade (P2-432-1, P3-432-1), the glow budget + oldest-first hand-off, warm Rim back on for over-budget enemies, the same rules on the #422 arena path (P3-432-2). Tests: alive enemy has ≤ 1 Highlight; dead has 0; glow count ≤ budget; enemy Highlights ≤ 18 with 22 alive (#433); flag off builds nothing.
 - **Ghost (client, Q2):** element pip + bar stroke on the enemy bar from `ShardfallElement`.
 - **Prism:** Phase S pass (element particles, pip art) after the fun test; check Kevin's color call.
 - **Havoc:** 8 alive on a phone, kill 20 in a row in one wave (Highlights never stack), 22-enemy stress, Low graphics, flag flip mid-wave.
@@ -112,11 +113,11 @@ Before `elementGlow` is ever turned on. Building waits for Ghost's go.
 3. **@Kevin (taste, PROVISIONAL):** Ember 255,112,36 sits next to the telegraph orange 255,120,40. Keep both (shape separates them, recommended for gray-box) or shift Ember redder (e.g. 255,84,40) or the telegraph to violet-white (telegraphs Q6)?
 4. **@Kevin (taste, PROVISIONAL):** Void 196,92,255 is close to Epic 186,96,240. Keep (context separates enemies from loot, recommended) or push Void toward magenta (e.g. 222,80,255)?
 5. **@Ghost:** Boss element glow: none in v1 (recommended; the boss keeps its own look and telegraphs), or one element per boss?
-6. **@Ghost:** Glow budget 6 touch / 12 desktop and light cap 4 / 12, as Config knobs: OK? (Havoc's stress estimate says lights are the real cost.)
+6. **@Ghost:** Glow budget 6 touch / 12 desktop, light cap 4 / 12, and an enemy Highlight ceiling of 18 (needed once #433's alive cap 22 is on), as Config knobs: OK? (Havoc's stress estimate says lights are the real per-frame cost.)
 7. **@Ghost (FYI):** Wave HUD #428 buff pips use 255,140,70 / 120,210,255 / 186,96,240. Recommend they read the same `Config/Elements` colors so a Frost buff and a Frost enemy match. I'll fold that into #428 when you say so.
 
 ## Decision log
-- 2026-10-24 (Prism): v1 published from Ghost's GO (board row https://app.notion.com/p/403c31ca38838155a532f79564499765, Kevin pre-approved). Recommends direction A (outline-led: fill 0.5, light-tint outline, range-10 pool, shape pip). Includes the P2-432-1 fix (1 Highlight per alive enemy, 0 per dead, budget 6/12 with warm-Rim + pip fallback). Seven open questions (Ghost 1, 2, 5, 6, 7; Kevin 3, 4). Not approved.
+- 2026-10-24 (Prism): v1 published from Ghost's GO (board row https://app.notion.com/p/403c31ca38838155a532f79564499765, Kevin pre-approved). Recommends direction A (outline-led: fill 0.5, light-tint outline, range-10 pool, shape pip). Includes the P2-432-1 fix (≤ 1 Highlight per alive enemy, 0 per dead, glow budget 6/12 with warm-Rim + pip fallback, enemy Highlight ceiling 18 for #433's cap 22). Seven open questions (Ghost 1, 2, 5, 6, 7; Kevin 3, 4). Not approved.
 
 ## Later (not V1)
 Element particles on enemies (Ember sparks, Frost motes, Void wisps), element hit flashes, a per-element death pop, element weakness hints on the pip. All go to the Ideas Backlog as NOT APPROVED.
@@ -130,7 +131,7 @@ Stock Roblox only. No blur, no post-processing, no custom shaders. The mockups a
 | Ground pool | `PointLight` on the root part (Range 10, Brightness 1.5, Shadows false, Color element); only while under the light cap |
 | Warm Rim | existing `Rim` `Highlight`; `Enabled = false` while a glow draws, `true` when over budget |
 | Death | tween Fill/Outline → 1 and light Brightness → 0 (0.15 s Quad In), then `Destroy()` the glow, the Rim and the light **before** the corpse fade (`DungeonService` death path, ~:1987) |
-| Budget | server table of enemies with a glow; on spawn: glow if count < max else Rim; on death: free, then give it to the oldest alive enemy without one (≤ 1 per `Heartbeat`) |
+| Budget | server table of enemies with a glow and with a Rim; on spawn: glow if glow count < max, else Rim if enemy Highlights < 18, else none; on death: free, then give it to the oldest alive enemy without one (≤ 1 per `Heartbeat`) |
 | Pip (client) | inside the enemy bar `BillboardGui`: `ImageLabel` 12×12 (or `Frame` + `UICorner`/rotated `Frame` for gray-box shapes) + `UIStroke` 1 ink; bar `UIStroke` 1 px element color; `Visible` from `ShardfallElement` |
 
 ### Image assets to upload (PNG, transparent)
