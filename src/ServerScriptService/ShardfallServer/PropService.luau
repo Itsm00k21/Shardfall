@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HavenProps = require(ReplicatedStorage.Shared.HavenProps)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local PartyGatherPrompt = require(ReplicatedStorage.Shared.PartyGatherPrompt)
 local PropAssets = require(ReplicatedStorage.Shared.PropAssets)
 
 local PropService = {}
@@ -156,6 +157,7 @@ local function standPortal(parent: Instance, ignore: { Instance })
 	prompt.RequiresLineOfSight = false
 	prompt:SetAttribute("HavenAction", "travel")
 	prompt.Parent = host
+	PartyGatherPrompt.tag(prompt)
 end
 
 -- The hub landmark shrine. Decor only: no prompt, no attributes.

@@ -426,6 +426,9 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 	local gateModule = instance("ModuleScript")
 	gateModule.Name = "LaunchGate"
 	gateModule.Parent = shared
+	local partyPromptModule = instance("ModuleScript")
+	partyPromptModule.Name = "PartyGatherPrompt"
+	partyPromptModule.Parent = shared
 
 	local runService = {
 		Heartbeat = {
@@ -542,6 +545,12 @@ local function loadBuilder(): (Mock, { Mock }, Mock)
 			end
 			if module == gateModule then
 				return LaunchGate
+			end
+			if module == partyPromptModule then
+				return {
+					TAG = "PartyGatherPrompt",
+					tag = function() end,
+				}
 			end
 			error("unexpected require", 2)
 		end,
