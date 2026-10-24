@@ -66,6 +66,9 @@ Config.BigRoll = require("./BigRoll")
 -- T4 Gate Ring. Not a tenth area. The server reads it only while
 -- LaunchGate.parties is on (off). Nothing here is a save field.
 Config.PartyGather = require("./PartyGather")
+-- Brute Den playtest tune. Not a tenth area. No flag and no save field.
+-- The server reads it for that Rootvault room's lineup and clear heal.
+Config.BruteDen = require("./BruteDen")
 
 Config.AREAS = table.freeze({
 	"Items",
