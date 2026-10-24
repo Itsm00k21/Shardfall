@@ -61,6 +61,10 @@ function Session.remoteOk(serverOpen: boolean, inArena: boolean, action: string)
 	if action == "step" or action == "skip" or action == "boss" then
 		return inArena == true
 	end
+	-- Run Again is checked again in RunResults. A closed server never gets here.
+	if action == "again" then
+		return true
+	end
 	return false
 end
 

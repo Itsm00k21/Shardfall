@@ -873,8 +873,9 @@ function Remotes.bind()
 		RateLimiter.forget(player.UserId)
 	end)
 
-	-- [ECHO hook] Enter, step, skip, and boss. There is no Leave.
+	-- [ECHO hook] Enter, step, skip, boss, and again. There is no Leave.
 	-- Skip and boss stay owner-only. Loot is committed by the host.
+	-- again cannot grant loot. RunResults ignores reward fields.
 	functionRemote("WaveArena").OnServerInvoke = function(player, action, payload)
 		return guard(player, "WaveArena", function()
 			if type(action) ~= "string" then

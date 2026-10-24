@@ -22,6 +22,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local DataService = require(script.Parent.DataService)
 local DevAccess = require(ReplicatedStorage.Shared.DevAccess)
 local LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+local RunResults = require(ReplicatedStorage.Shared.RunResults)
 local OnboardingService = require(script.Parent.OnboardingService)
 local Schema = require(ReplicatedStorage.Shared.Schema)
 
@@ -451,9 +452,11 @@ function WaveArenaHost.settle(player: Player, reason: string): string
 	local Settle = settleModule()
 	local id = Settle.id(run)
 	if Settle.done(settlements, id) then
-		runs[player] = nil
-		inArena[player] = nil
-		clearView(player)
+		if not RunResults.stay(reason) then
+			runs[player] = nil
+			inArena[player] = nil
+			clearView(player)
+		end
 		return "again"
 	end
 	if type(run.receiptId) ~= "string" then
@@ -470,9 +473,11 @@ function WaveArenaHost.settle(player: Player, reason: string): string
 	end
 	local status = Settle.finish(settlements, data, run, reason, options(config), save)
 	if status == "paid" or status == "again" then
-		runs[player] = nil
-		inArena[player] = nil
-		clearView(player)
+		if not RunResults.stay(reason) then
+			runs[player] = nil
+			inArena[player] = nil
+			clearView(player)
+		end
 	else
 		warn("[Shardfall] WaveArena grant retry:", reason)
 		rememberRun(player)
@@ -482,6 +487,7 @@ end
 
 function WaveArenaHost.disconnect(player: Player)
 	WaveArenaHost.settle(player, "disconnect")
+	RunResults.forget(player.UserId)
 end
 
 function WaveArenaHost.shutdown()
@@ -491,6 +497,7 @@ function WaveArenaHost.shutdown()
 	end
 	for _, player in ipairs(pending) do
 		WaveArenaHost.settle(player, "shutdown")
+		RunResults.forget(player.UserId)
 	end
 end
 
@@ -528,6 +535,10 @@ local function finishIfOver(player: Player, run: any)
 	end
 	local reason = if type(run.reason) == "string" then run.reason else "clear"
 	WaveArenaHost.settle(player, reason)
+	if RunResults.stay(reason) and runs[player] == run then
+		RunResults.refresh(run.card, run, DataService.get(player))
+		return
+	end
 	hubReturn(player)
 end
 
@@ -554,6 +565,12 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 	if action == "enter" then
 		opts.receiptId = tostring(player.UserId) .. ":" .. tostring(os.clock())
 		opts.bagSlots = freeBag(player, config)
+		-- Owner, tier, and the account snapshot come from the server.
+		-- The enter payload cannot set them or claim loot.
+		opts.ownerId = player.UserId
+		opts.tier = "normal"
+		opts.party = 1
+		opts.account = RunResults.account(DataService.get(player))
 		local run = arena.enter(opts)
 		if run == nil then
 			return { ok = false, error = "Could not enter the arena." }
@@ -569,6 +586,47 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 		local stand = config.player.start
 		pivot(player, origin.x + stand.x, origin.y + 3, origin.z + stand.z)
 		return stateOf(arena, run, config)
+	end
+	if action == "again" then
+		local result = RunResults.again(
+			player.UserId,
+			runs[player],
+			DataService.get(player),
+			payload,
+			os.clock(),
+			DataService.teleportHold(player) ~= nil
+		)
+		if result.started ~= true then
+			if result.noop ~= true and runs[player] ~= nil then
+				result.hud = arena.hud(runs[player], options(config))
+			end
+			return result
+		end
+		local previous = runs[player]
+		local againOpts = options(config)
+		againOpts.receiptId = result.runId
+		againOpts.bagSlots = freeBag(player, config)
+		againOpts.ownerId = player.UserId
+		againOpts.tier = result.tier
+		againOpts.party = 1
+		againOpts.account = RunResults.account(DataService.get(player))
+		local fresh = arena.enter(againOpts)
+		if fresh == nil then
+			local priorId = if typeof(previous) == "table" then previous.receiptId else nil
+			RunResults.release(player.UserId, priorId)
+			return { ok = false, error = "Could not enter the arena." }
+		end
+		runs[player] = fresh
+		inArena[player] = true
+		clearView(player)
+		local origin = config.arena.origin
+		local stand = config.player.start
+		pivot(player, origin.x + stand.x, origin.y + 3, origin.z + stand.z)
+		local state = stateOf(arena, fresh, config)
+		state.started = true
+		state.runId = result.runId
+		state.countdown = result.countdown
+		return state
 	end
 	local run = runs[player]
 	if action == "step" then
