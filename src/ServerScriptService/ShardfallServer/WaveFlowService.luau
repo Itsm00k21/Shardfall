@@ -1,14 +1,15 @@
 --!strict
 
 --[[
-	Server owner for the V1 wave flow (roadmap 3.5) and the wave-5 boss
-	(roadmap 3.6).
+	Server owner for the V1 wave flow (roadmap 3.5), the wave-5 boss
+	(roadmap 3.6), and the stuck-enemy watchdog (roadmap 3.8).
 
 	LaunchGate.SHOW.enemyTypes ships false. While it is off, start, hurt,
-	and publish do nothing: no gray box, no damage, no counter push, no
-	boss event. init.server does not call this module, so a normal boot
-	never starts a run. The counter remote is server to client only.
-	There is no profile write.
+	step, and publish do nothing: no gray box, no damage, no counter push,
+	no boss event, no nudge, no respawn. init.server does not call this
+	module, so a normal boot never starts a run. The counter remote is
+	server to client only. There is no profile write. The watchdog does
+	not fire a remote and does not build a HUD line.
 
 	bossEnter and bossDown go to an analytics hook when one exists.
 	That hook is ReplicatedStorage.Shared.Analytics.event, or the
@@ -214,6 +215,22 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	end
 	noteBoss(sink, run, before.wave, wasBoss)
 	return taken
+end
+
+-- One tick of movement and the stall clock. Nil while the flag is off,
+-- so a boot with enemyTypes false does not move, nudge, or respawn anyone.
+-- This does not publish the counter and does not write a profile.
+function WaveFlowService.step(
+	run: WaveFlow.Run?,
+	targetX: number,
+	targetZ: number,
+	dt: number,
+	obstacles: { WaveFlow.Obstacle }?
+): { WaveFlow.Pulse }?
+	if not WaveFlowService.open() or run == nil then
+		return nil
+	end
+	return WaveFlow.step(run, targetX, targetZ, dt, obstacles)
 end
 
 return WaveFlowService

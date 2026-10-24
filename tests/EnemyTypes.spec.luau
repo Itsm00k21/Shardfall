@@ -80,6 +80,10 @@ local function fullRoster(): any
 			ranged = Enemies.BOSS_ADD_MIX.ranged,
 			tank = Enemies.BOSS_ADD_MIX.tank,
 		},
+		STUCK_SECONDS = Enemies.STUCK_SECONDS,
+		STUCK_PROGRESS = Enemies.STUCK_PROGRESS,
+		STUCK_NUDGE = Enemies.STUCK_NUDGE,
+		SPAWN_CLEAR = Enemies.SPAWN_CLEAR,
 	}
 end
 
