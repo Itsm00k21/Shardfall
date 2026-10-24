@@ -487,6 +487,20 @@ local function crackBatch(player: Player, poolId: any, total: number)
 	}
 end
 
+-- Same clock crack() uses. rollMany used to skip it: x10 never looked,
+-- and any other count passes ignoreCooldown into every crack. Two invokes
+-- in one moment then spent twice and granted twice.
+local function rollCooling(player: Player, quick: boolean): boolean
+	local profile = DataService.get(player)
+	local previous = lastRoll[player.UserId]
+	if profile == nil or previous == nil then
+		return false
+	end
+	local settings = Settings.normalize(profile.uiSettings)
+	local waitFor = RollLoop.gap(settings, previous.rarity, previous.quick, quick)
+	return os.clock() - previous.at < waitFor
+end
+
 -- One request, up to ten cracks. Exactly RollConfig.MULTI_COUNT is the
 -- discounted x10 batch above. Any other count cracks one at a time, each
 -- spending the way a single Roll does: a voucher covers one, then a Shard
@@ -499,6 +513,10 @@ function RollService.rollMany(player: Player, poolId: any, count: any)
 	total = math.floor(total)
 	if total < 1 or total > RollConfig.MAX_BATCH then
 		return reject("Roll 1 to 10 shards.")
+	end
+	local quick = total == RollConfig.MULTI_COUNT
+	if rollCooling(player, quick) then
+		return reject("Roll cooling down.")
 	end
 	if total == RollConfig.MULTI_COUNT then
 		return crackBatch(player, poolId, total)
