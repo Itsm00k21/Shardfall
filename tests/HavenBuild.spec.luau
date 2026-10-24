@@ -1370,8 +1370,8 @@ describe("HavenBuilder", function()
 				end
 				expect(LaunchGate.on("raids")).toEqual(false)
 				expect(raidPrompts).toEqual(1)
-				expect(later ~= nil and later.ActionText == "Opens later").toBeTrue()
-				expect(later:GetAttribute("HavenMessage")).toEqual("Opens later")
+				expect(later ~= nil and later.ActionText == "Heartwood opens later.").toBeTrue()
+				expect(later:GetAttribute("HavenMessage")).toEqual("Heartwood opens later.")
 				expect(later.MaxActivationDistance).toEqual(Haven.GATE_REACH)
 				expect(arch:FindFirstChild("PillarL") ~= nil).toBeTrue()
 				expect(arch:FindFirstChild("PillarR") ~= nil).toBeTrue()
@@ -1720,7 +1720,7 @@ describe("HavenBuilder", function()
 				error(portal.id .. " title ink is too dim", 2)
 			end
 			local expectedLine = if portal.id == "heartwood" and not LaunchGate.on("raids")
-				then "Opens later"
+				then "Heartwood opens later."
 				else portal.subline
 			if subline == nil or subline.Text ~= expectedLine then
 				error(portal.id .. " subline is missing", 2)
@@ -1804,7 +1804,7 @@ describe("HavenBuilder", function()
 		expect(waves.MaxActivationDistance).toEqual(Haven.PIER_REACH)
 		expect(LaunchGate.on("raids")).toEqual(false)
 		expect(heartPrompts).toEqual(1)
-		expect(later ~= nil and later.ActionText == "Opens later").toBeTrue()
+		expect(later ~= nil and later.ActionText == "Heartwood opens later.").toBeTrue()
 		expect(heartArch:FindFirstChild("PillarL") ~= nil).toBeTrue()
 		expect(heartArch:FindFirstChild("Seal") ~= nil).toBeTrue()
 
@@ -2187,8 +2187,8 @@ describe("HavenBuilder", function()
 			if prompt == nil then
 				error(portal.id .. " mouth has no prompt", 2)
 			elseif portal.id == "heartwood" and not LaunchGate.on("raids") then
-				if prompt:GetAttribute("HavenAction") ~= "soon" or prompt.ActionText ~= "Opens later" then
-					error("heartwood mouth is not the Opens later prompt", 2)
+				if prompt:GetAttribute("HavenAction") ~= "soon" or prompt.ActionText ~= "Heartwood opens later." then
+					error("heartwood mouth is not the Heartwood opens later. prompt", 2)
 				end
 				live = false
 			else
@@ -2230,8 +2230,8 @@ describe("HavenBuilder", function()
 					error(portal.id .. " sealed prompt lights a ring segment", 2)
 				end
 				if portal.id == "heartwood" and not LaunchGate.on("raids") then
-					if plate ~= "Opens later" then
-						error("heartwood sealed plate does not say Opens later", 2)
+					if plate ~= "Heartwood opens later." then
+						error("heartwood sealed plate does not say Heartwood opens later.", 2)
 					end
 				elseif type(plate) ~= "string" or string.find(plate, "Sealed", 1, true) == nil then
 					error(portal.id .. " sealed name plate dropped Sealed", 2)
@@ -2347,7 +2347,7 @@ describe("HavenBuilder", function()
 		expect(plate.BackgroundTransparency < 0.2).toBeTrue()
 	end)
 
-	it("seals the Heartwood arch and says Opens later while raids are closed", function()
+	it("seals the Heartwood arch and says Heartwood opens later. while raids are closed", function()
 		expect(LaunchGate.on("raids")).toEqual(false)
 		local builder, _heartbeats, _workspace = loadBuilder()
 		local hub = instance("Model")
@@ -2374,13 +2374,13 @@ describe("HavenBuilder", function()
 					later = child
 				end
 			elseif child:IsA("TextLabel") and child.Name == "Subline" then
-				expect(child.Text).toEqual("Opens later")
+				expect(child.Text).toEqual("Heartwood opens later.")
 			end
 		end
 		expect(later ~= nil).toBeTrue()
-		expect(later.ActionText).toEqual("Opens later")
+		expect(later.ActionText).toEqual("Heartwood opens later.")
 		expect(later.ObjectText).toEqual("Heartwood")
-		expect(later:GetAttribute("HavenMessage")).toEqual("Opens later")
+		expect(later:GetAttribute("HavenMessage")).toEqual("Heartwood opens later.")
 		expect(later.Parent).toEqual(glow)
 		expect(later.MaxActivationDistance).toEqual(Haven.GATE_REACH)
 		local root = findNamed(hub, "rootvault")

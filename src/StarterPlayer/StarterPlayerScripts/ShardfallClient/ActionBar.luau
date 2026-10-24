@@ -170,6 +170,72 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 	hexTab(lock, lockStroke)
 	hexTab(rollKey, rollStroke)
+	-- [Ghost] Oct 24: one strip, flush on the slot row, instead of two
+	-- loose buttons. The tabs become see-through segments of the strip.
+	local tabStrip = Instance.new("Frame")
+	tabStrip.Name = "TabStrip"
+	tabStrip.BackgroundColor3 = Color3.fromRGB(24, 20, 58)
+	tabStrip.BackgroundTransparency = 0.05
+	tabStrip.BorderSizePixel = 0
+	tabStrip.ZIndex = 0
+	tabStrip.Parent = root
+	local stripCorner = Instance.new("UICorner")
+	stripCorner.CornerRadius = UDim.new(0, 8)
+	stripCorner.Parent = tabStrip
+	local stripStroke = Instance.new("UIStroke")
+	stripStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stripStroke.Color = Color3.fromRGB(150, 92, 255)
+	stripStroke.Thickness = 2
+	stripStroke.Parent = tabStrip
+	local divider = Instance.new("Frame")
+	divider.Name = "Divider"
+	divider.AnchorPoint = Vector2.new(0.5, 0)
+	divider.Position = UDim2.new(0.5, 0, 0, 4)
+	divider.Size = UDim2.new(0, 1, 1, -8)
+	divider.BackgroundColor3 = Color3.fromRGB(150, 92, 255)
+	divider.BorderSizePixel = 0
+	divider.Parent = tabStrip
+	for _, tabButton in ipairs({ lock, rollKey }) do
+		tabButton.BackgroundTransparency = 1
+		tabButton.ZIndex = 2
+		local edge = tabButton:FindFirstChildOfClass("UIStroke")
+		if edge ~= nil then
+			edge.Enabled = false
+		end
+	end
+	local tabTip = Instance.new("TextLabel")
+	tabTip.Name = "TabTip"
+	tabTip.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
+	tabTip.BackgroundTransparency = 0.08
+	tabTip.BorderSizePixel = 0
+	tabTip.Font = Enum.Font.BuilderSans
+	tabTip.TextSize = UiTheme.MIN_TEXT
+	tabTip.TextColor3 = theme("text")
+	tabTip.TextXAlignment = Enum.TextXAlignment.Left
+	tabTip.Text = ""
+	tabTip.Visible = false
+	tabTip.ZIndex = 9
+	tabTip.Parent = root
+	local tabTipPad = Instance.new("UIPadding")
+	tabTipPad.PaddingLeft = UDim.new(0, 6)
+	tabTipPad.PaddingRight = UDim.new(0, 6)
+	tabTipPad.Parent = tabTip
+	local tabTipCorner = Instance.new("UICorner")
+	tabTipCorner.CornerRadius = UDim.new(0, 6)
+	tabTipCorner.Parent = tabTip
+	local TAB_TIPS = {
+		Lock = "Lock the bar so drags keep your slots",
+		RollKey = "Roll for gear (T)",
+	}
+	for _, tabButton in ipairs({ lock, rollKey }) do
+		tabButton.MouseEnter:Connect(function()
+			tabTip.Text = TAB_TIPS[tabButton.Name] or ""
+			tabTip.Visible = tabTip.Text ~= ""
+		end)
+		tabButton.MouseLeave:Connect(function()
+			tabTip.Visible = false
+		end)
+	end
 	rollKey.Activated:Connect(function()
 		local open = callbacks.onRoll
 		if open ~= nil then
@@ -180,7 +246,7 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	local grid = Instance.new("Frame")
 	grid.Name = "Slots"
 	grid.BackgroundTransparency = 1
-	grid.Position = UDim2.fromOffset(0, 36)
+	grid.Position = UDim2.fromOffset(0, ActionSlots.TAB_BAND)
 	grid.Parent = root
 	local layout = Instance.new("UIGridLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
@@ -192,7 +258,8 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	for index = 1, ActionSlots.COUNT do
 		local button = Instance.new("TextButton")
 		button.Name = "Slot" .. tostring(index)
-		button.BackgroundColor3 = Color3.fromRGB(contrast.fill[1], contrast.fill[2], contrast.fill[3])
+		button.BackgroundColor3 =
+			Color3.fromRGB(contrast.fill[1], contrast.fill[2], contrast.fill[3])
 		button.BackgroundTransparency = 0
 		button.BorderSizePixel = 0
 		button.Text = ""
@@ -715,9 +782,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 				local badge = artId ~= nil and slot.kind == "skill"
 				glyph.Text = if artId ~= nil and not badge then "" else letter
 				glyph.TextSize = if badge then 14 else 22
-				glyph.Position = if badge then UDim2.fromScale(0.5, 0.64) else UDim2.fromScale(0, 0.26)
+				glyph.Position = if badge
+					then UDim2.fromScale(0.5, 0.64)
+					else UDim2.fromScale(0, 0.26)
 				glyph.Size = if badge then UDim2.fromScale(0.36, 0.26) else UDim2.fromScale(1, 0.62)
-				glyph.TextXAlignment = if badge then Enum.TextXAlignment.Right else Enum.TextXAlignment.Center
+				glyph.TextXAlignment = if badge
+					then Enum.TextXAlignment.Right
+					else Enum.TextXAlignment.Center
 				glyph.ZIndex = if badge then 3 else 2
 				glyph.TextColor3 = Color3.fromRGB(liftedR, liftedG, liftedB)
 			end
@@ -729,8 +800,25 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 					hexGlow.ImageTransparency = 0
 				end
 			end
+			-- [Ghost] Oct 24: empty slots fade so eight blank hexes do not
+			-- read as unfinished. The next free slot stays half bright.
+			local look = ActionSlots.look(bar, index)
+			local fade = ActionSlots.FADE[look] or 0
+			button:SetAttribute("Look", look)
+			local bindBadge = button:FindFirstChild("Bind")
+			if bindBadge ~= nil and bindBadge:IsA("TextLabel") then
+				bindBadge.BackgroundTransparency = fade
+				bindBadge.TextTransparency = fade * 0.6
+			end
+			if button:FindFirstChild("HexFrame") == nil then
+				button.BackgroundTransparency = fade
+			end
+			if border ~= nil and border:IsA("UIStroke") then
+				border.Transparency = fade
+			end
 			local hexFrame = button:FindFirstChild("HexFrame")
 			if hexFrame ~= nil and hexFrame:IsA("ImageLabel") then
+				hexFrame.ImageTransparency = fade
 				-- Items and consumables keep a soft rarity tint on the frame.
 				if slot.kind == "item" or slot.kind == "consumable" then
 					local row = ActionSlots.border(slot, profile)
@@ -985,7 +1073,9 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 	jump.Activated:Connect(function()
 		local player = Players.LocalPlayer
 		local character = if player ~= nil then player.Character else nil
-		local humanoid = if character ~= nil then character:FindFirstChildOfClass("Humanoid") else nil
+		local humanoid = if character ~= nil
+			then character:FindFirstChildOfClass("Humanoid")
+			else nil
 		if humanoid ~= nil then
 			humanoid.Jump = true
 		end
@@ -1011,9 +1101,13 @@ function ActionBar.start(playerGui: PlayerGui, callbacks: Callbacks)
 		lock.Size = UDim2.fromOffset(chrome.lock.w, chrome.lock.h)
 		rollKey.Position = UDim2.fromOffset(chrome.roll.x, chrome.roll.y)
 		rollKey.Size = UDim2.fromOffset(chrome.roll.w, chrome.roll.h)
+		tabStrip.Position = UDim2.fromOffset(chrome.strip.x, chrome.strip.y)
+		tabStrip.Size = UDim2.fromOffset(chrome.strip.w, chrome.strip.h)
+		tabTip.Position = UDim2.fromOffset(chrome.tip.x, chrome.tip.y)
+		tabTip.Size = UDim2.fromOffset(chrome.tip.w, chrome.tip.h)
 		root.Position = UDim2.fromOffset(spot.x, spot.y)
 		root.Size = UDim2.fromOffset(spot.w, spot.h)
-		grid.Size = UDim2.fromOffset(spot.w, spot.h - 36)
+		grid.Size = UDim2.fromOffset(spot.w, spot.h - ActionSlots.TAB_BAND)
 		layout.CellSize = UDim2.fromOffset(spot.slot, spot.slot)
 		layout.CellPadding = UDim2.fromOffset(spot.gap, spot.gap)
 		local chips = ActionSlots.prompts(spot, size.X, size.Y)

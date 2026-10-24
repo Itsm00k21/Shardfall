@@ -358,30 +358,36 @@ local function considerBigRoll(
 	BigRollBeam.offer(fact, os.clock())
 end
 
+-- One named line per Legendary or better in the batch. Epics still fold
+-- into a single line (and into "+N more big rolls" once the chat cap is
+-- full). A Legendary is never that unnamed summary.
 local function noteBigBatch(player: Player, captures: { any })
 	if not LaunchGate.on("bigRollBeam") then
 		return
 	end
-	local best = nil
-	local count = 0
+	local epicBest = nil
 	local epicCount = 0
 	for _, drawn in ipairs(captures) do
 		local rarity = drawn.rarity
 		if type(rarity) ~= "string" or BigRollBeam.qualifies(rarity) ~= true then
 			continue
 		end
-		count += 1
-		if Rarities.rank(rarity) < Rarities.rank("Legendary") then
-			epicCount += 1
+		if type(drawn.item) ~= "table" or type(drawn.item.name) ~= "string" then
+			continue
 		end
-		if best == nil or Rarities.rank(rarity) > Rarities.rank(best.rarity) then
-			best = drawn
+		if Rarities.rank(rarity) >= Rarities.rank("Legendary") then
+			considerBigRoll(player, drawn.item.name, rarity, 1, 0, true)
+		else
+			epicCount += 1
+			if epicBest == nil or Rarities.rank(rarity) > Rarities.rank(epicBest.rarity) then
+				epicBest = drawn
+			end
 		end
 	end
-	if best == nil or type(best.item) ~= "table" then
+	if epicBest == nil or type(epicBest.item) ~= "table" then
 		return
 	end
-	considerBigRoll(player, best.item.name, best.rarity, count, epicCount, true)
+	considerBigRoll(player, epicBest.item.name, epicBest.rarity, epicCount, epicCount, true)
 end
 
 local function crack(

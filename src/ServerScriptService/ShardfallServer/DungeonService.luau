@@ -39,6 +39,7 @@ local CombatFeel = require(ReplicatedStorage.Shared.CombatFeel)
 local CombatMath = require(ReplicatedStorage.Shared.CombatMath)
 local MeleeConfig = require(ReplicatedStorage.Shared.MeleeConfig)
 local Dungeons = require(ReplicatedStorage.Shared.Dungeons)
+local BruteDen = require(ReplicatedStorage.Shared.Config.BruteDen)
 local HardMode = require(ReplicatedStorage.Shared.HardMode)
 local EnemyPerf = require(ReplicatedStorage.Shared.Config.EnemyPerf)
 local EnemyPerfHost = require(script.Parent.EnemyPerfHost)
@@ -338,13 +339,19 @@ end
 
 -- The stream yield lives in teleport. Spawn it so the heartbeat can keep
 -- ticking the other players while this character waits for the floor.
+-- recover clears Anchored after the move, including when the move throws
+-- or teleport puts the previous anchored state back.
 local function fallTeleport(player: Player, cframe: CFrame)
 	if fallStream[player] == true then
 		return
 	end
 	fallStream[player] = true
 	task.spawn(function()
-		local ok, err = pcall(teleport, player, cframe)
+		local ok, err = HubRescue.recover(function()
+			return rootPart(player)
+		end, function()
+			teleport(player, cframe)
+		end)
 		fallStream[player] = nil
 		if not ok then
 			warn("[Shardfall] fall rescue failed: " .. tostring(err))
@@ -1903,6 +1910,22 @@ local function finish(player: Player, victory: boolean)
 	end
 end
 
+-- Brute Den only. Same rule as the spring door: unbuffed loadout max,
+-- then one healAmount so an echo bar is not scaled twice. Other rooms
+-- return before any heal. The amount is Config, not a literal here.
+local function healDenClear(player: Player, run: Run)
+	local room = run.dungeon.rooms[run.roomIndex]
+	if room == nil or not BruteDen.applies(run.dungeon.id, room.id) then
+		return
+	end
+	local _, vitality = CombatMath.loadout(DataService.get(player))
+	local amount = BruteDen.clearHeal(vitality.maxHealth)
+	if amount <= 0 then
+		return
+	end
+	CombatService.healAmount(player, amount)
+end
+
 local function beginAdvance(player: Player, run: Run, text: string)
 	run.cleared = true
 	if PracticeLoot.pays(run.practice == true) then
@@ -2215,6 +2238,7 @@ function DungeonService.damageEnemy(
 						return nil
 					end)
 				end
+				healDenClear(player, run)
 				beginAdvance(
 					player,
 					run,
@@ -2810,7 +2834,8 @@ local function rescueArena(player: Player, now: number)
 		return
 	end
 	local hrp = rootPart(player)
-	if hrp == nil or not Haven.fellOffHub(hrp.Position.Y) then
+	local line = HubRescue.fallLine("arena", Haven.FALL_Y, WaveArenaConfig.arena.origin.y)
+	if hrp == nil or not HubRescue.pastLine(hrp.Position.Y, line) then
 		return
 	end
 	if fallStream[player] == true or (fallAt[player] or 0) > now then

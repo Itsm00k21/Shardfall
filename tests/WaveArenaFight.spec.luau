@@ -149,7 +149,9 @@ describe("Wave arena fight gate", function()
 		expect(shown.pad.canCollide).toEqual(false)
 		expect(shown.pad.destination[3]).toEqual(12000)
 		expect(calls).toEqual(#shown.arena + 1)
-		-- Haven spawn is (0, 124, 30). The pad is a short walk south of it.
+		-- Haven spawn is (0, 124, 30). The pad sits inside the plaza at (14, y, 44).
+		expect(shown.pad.position[1]).toEqual(14)
+		expect(shown.pad.position[3]).toEqual(44)
 		local dx = shown.pad.position[1]
 		local dz = shown.pad.position[3] - 30
 		expect(math.sqrt(dx * dx + dz * dz) < 30).toBeTrue()

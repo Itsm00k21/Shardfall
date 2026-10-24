@@ -9,6 +9,7 @@
 ]]
 
 local Classes = require("./Classes")
+local LaunchGate = require("./LaunchGate")
 
 local NotifyBadges = {}
 
@@ -34,6 +35,11 @@ function NotifyBadges.blank(): Seen
 end
 
 local function classMissing(profile: any): boolean
+	-- [Ghost] Oct 24: no "Choose class" badge while LaunchGate classes is
+	-- off. The picker is hidden and the server refuses SetClass.
+	if not LaunchGate.on("classes") then
+		return false
+	end
 	if type(profile) ~= "table" then
 		return false
 	end

@@ -17,13 +17,18 @@
 	an 18px line. HudLayout.place(viewportX, viewportY, rowCount)
 	supplies the rect when that function exists. Until then the
 	rect sits under the health bar and drops below the toast host
-	when they would overlap. On a phone it also stays off the
-	equip prompt. A viewport that cannot hold that rect collapses
+	when they would overlap. It also stays off the equip prompt
+	and the action bar. A viewport that cannot hold that rect collapses
 	the tracker instead of clamping it into the toast or off the
 	screen.
 
 	The server sends the rows. This module does not count, and it
 	does not load the rules module. The frame starts hidden.
+
+	[Ghost] Oct 24 (Kevin's clip): this list stacked on the intro card's
+	top edge. setSuppressed(source, on) hides it while another goal
+	surface is up; init passes "onboard" while the intro card or its
+	goals show, so the two lists never sit on each other.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -69,6 +74,7 @@ local screenRef: ScreenGui? = nil
 local held: any = nil
 local heldSettings: any = nil
 local placing = false
+local suppressed: { [string]: boolean } = {}
 
 local function finite(value: any): number?
 	if type(value) ~= "number" then
@@ -193,8 +199,8 @@ local function toastHost(viewportX: number, margin: number): Rect
 end
 
 -- Same frame HudShell places from HudLayout.equipPrompt.
-local function equipPrompt(viewportX: number, margin: number): Rect
-	local prompt = HudLayout.equipPrompt(viewportX, margin)
+local function equipPrompt(viewportX: number, margin: number, viewportY: number?): Rect
+	local prompt = HudLayout.equipPrompt(viewportX, margin, viewportY)
 	return { x = prompt.x, y = prompt.y, w = prompt.w, h = prompt.h }
 end
 
@@ -229,11 +235,15 @@ local function fitWidth(viewportX: number, margin: number, originX: number): num
 	return WIDTH
 end
 
-local function clearOf(box: Rect, block: Rect, prompt: Rect, rail: Rect): boolean
+local function clearOf(box: Rect, block: Rect, prompt: Rect, rail: Rect, bar: Rect?): boolean
 	if HudLayout.overlaps(box, block) or HudLayout.overlaps(box, prompt) then
 		return false
 	end
 	if HudLayout.overlaps(box, rail) then
+		return false
+	end
+	-- [Ghost] Oct 24: a landscape phone's thumb cluster rises this high.
+	if bar ~= nil and HudLayout.overlaps(box, bar) then
 		return false
 	end
 	return true
@@ -257,12 +267,18 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	end
 	local box: Rect = { x = x, y = y, w = width, h = height }
 	local block = toastHost(viewportX, margin)
-	local prompt = equipPrompt(viewportX, margin)
-	local railFit =
-		HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, viewportX)
+	local prompt = equipPrompt(viewportX, margin, viewportY)
+	local railFit = HudLayout.railFit(
+		viewportY,
+		margin,
+		HudLayout.RAIL_COUNT,
+		UiTheme.TAP,
+		UiTheme.TOUCH,
+		viewportX
+	)
 	local rail: Rect = { x = railFit.x, y = railFit.y, w = railFit.w, h = railFit.h }
 	local railRight = railFit.x + railFit.w + TOAST_GAP
-	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"
+	local bar = HudLayout.actionCluster(viewportX, viewportY)
 
 	if HudLayout.overlaps(box, block) then
 		local nextX = x
@@ -275,9 +291,10 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 		end
 	end
 
-	-- Phones only. Prefer the full width just under the prompt. A short
-	-- phone that cannot hold that uses the gap beside the prompt instead.
-	if phone and HudLayout.overlaps(box, prompt) then
+	-- Prefer the full width just under the prompt. A short screen that
+	-- cannot hold that uses the gap beside the prompt instead. [Ghost]
+	-- Oct 24 (Havoc #482): every view now, not only phones (1024x600).
+	if HudLayout.overlaps(box, prompt) then
 		local moved = false
 		local originX = x
 		if originX < railRight then
@@ -293,7 +310,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 			}
 			if
 				onScreen(below, viewportX, viewportY, margin)
-				and clearOf(below, block, prompt, rail)
+				and clearOf(below, block, prompt, rail, bar)
 			then
 				box = below
 				moved = true
@@ -320,7 +337,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 			for _, slot in ipairs(slots) do
 				if
 					onScreen(slot, viewportX, viewportY, margin)
-					and clearOf(slot, block, prompt, rail)
+					and clearOf(slot, block, prompt, rail, bar)
 				then
 					box = slot
 					break
@@ -341,7 +358,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 		}
 		if
 			onScreen(dropped, viewportX, viewportY, margin)
-			and clearOf(dropped, block, prompt, rail)
+			and clearOf(dropped, block, prompt, rail, bar)
 			and not HudLayout.overlaps(dropped, banner)
 		then
 			box = dropped
@@ -351,7 +368,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	if not onScreen(box, viewportX, viewportY, margin) or HudLayout.overlaps(box, block) then
 		return hideRect()
 	end
-	if phone and HudLayout.overlaps(box, prompt) then
+	if HudLayout.overlaps(box, prompt) or HudLayout.overlaps(box, bar) then
 		return hideRect()
 	end
 	return box
@@ -422,7 +439,7 @@ local function apply(rows: { Row })
 	local vx, vy = viewport()
 	local box = StarterGoalHud.place(vx, vy, count, textSize)
 	local show = StarterGoalHud.shown(#rows, heldSettings)
-	if box.collapsed == true then
+	if box.collapsed == true or StarterGoalHud.isSuppressed() then
 		show = false
 	end
 	frame.Visible = show
@@ -448,6 +465,21 @@ local function apply(rows: { Row })
 			end
 		end
 	end
+end
+
+-- True while any source asked the list to stay hidden.
+function StarterGoalHud.isSuppressed(): boolean
+	for _, on in pairs(suppressed) do
+		if on then
+			return true
+		end
+	end
+	return false
+end
+
+function StarterGoalHud.setSuppressed(source: string, on: boolean)
+	suppressed[source] = if on == true then true else nil
+	apply(StarterGoalHud.rows(held))
 end
 
 function StarterGoalHud.present(result: any)

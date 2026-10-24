@@ -24,6 +24,10 @@ local DevTools = {}
 
 DevTools.PREFIX = "[Dev]"
 DevTools.BUTTON_TEXT = "Dev"
+-- [Ghost] Oct 24 (#482 clip): above the onboarding card and goals (95) so
+-- the open panel is never drawn under them; under the banner (100) and
+-- the loading screen (110). OnboardHud also hides while it is open.
+DevTools.DISPLAY_ORDER = 96
 DevTools.TITLE = "Dev Tools (owner only)"
 
 export type Entry = { id: string, label: string, remote: string, arg: string }
@@ -226,14 +230,9 @@ export type Rect = { x: number, y: number, w: number, h: number }
 function DevTools.layout(viewportX: number, viewportY: number, margin: number): (Rect, Rect)
 	local vx = if type(viewportX) == "number" and viewportX >= 200 then viewportX else 1280
 	local vy = if type(viewportY) == "number" and viewportY >= 200 then viewportY else 800
-	local pills = HudLayout.pills(vx, margin)
-	local buttonW, buttonH = 56, 32
-	local button = {
-		x = vx - margin - buttonW,
-		y = pills.y + pills.h + 8,
-		w = buttonW,
-		h = buttonH,
-	}
+	-- HudLayout.topRight reserves this slot for every view (Oct 24).
+	local button = HudLayout.devButton(vx, margin)
+	local buttonH = button.h
 	local width = math.min(300, vx - margin * 2)
 	local top = button.y + buttonH + 8
 	-- Leave the bottom band for the action bar and skills.
