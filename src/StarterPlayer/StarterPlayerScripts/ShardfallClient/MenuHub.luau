@@ -4353,12 +4353,33 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		petStage.Size = UDim2.fromOffset(petSpec.w, petSpec.h)
 		petStage.LayoutOrder = 8
 		petStage.Parent = hubState.pets
-		local petList = Instance.new("Frame")
+		-- [Ghost] Clip 9: the list scrolls on its own (it clipped pets past
+		-- the fourth card) and keeps its place across repaints.
+		local petList = Instance.new("ScrollingFrame")
 		petList.Name = "PetList"
 		petList.BackgroundTransparency = 1
+		petList.BorderSizePixel = 0
 		petList.Position = UDim2.fromOffset(petSpec.list.x, petSpec.list.y)
 		petList.Size = UDim2.fromOffset(petSpec.list.w, petSpec.list.h)
+		petList.CanvasSize = UDim2.new(0, 0, 0, 0)
+		petList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		petList.ScrollingDirection = Enum.ScrollingDirection.Y
+		petList.ScrollBarThickness = 6
+		petList.ScrollBarImageColor3 = rgb("gold")
 		petList.Parent = petStage
+		local petListPad = Instance.new("UIPadding")
+		petListPad.PaddingRight = UDim.new(0, 10)
+		petListPad.Parent = petList
+		local keptY = if type(hubState.petListY) == "number" then hubState.petListY else 0
+		petList.CanvasPosition = Vector2.new(0, keptY)
+		task.defer(function()
+			if petList.Parent ~= nil then
+				petList.CanvasPosition = Vector2.new(0, keptY)
+			end
+		end)
+		petList:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+			hubState.petListY = petList.CanvasPosition.Y
+		end)
 		local petLayout = Instance.new("UIListLayout")
 		petLayout.Padding = UDim.new(0, 6)
 		petLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -4448,18 +4469,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.show("pets")
 			end)
 		end
-		local picked = cards[1]
-		if type(hubState.petPick) == "number" and cards[hubState.petPick] ~= nil then
-			picked = cards[hubState.petPick]
-		end
-		if type(hubState.petPickUid) == "string" then
-			for _, card in ipairs(cards) do
-				if card.uid == hubState.petPickUid then
-					picked = card
-					break
-				end
-			end
-		end
+		-- [Ghost] Clip 9: with no pick yet the detail opens on the
+		-- equipped pet, not whichever sorts first.
+		local equippedPet = if type(hubState.profile) == "table" and type(hubState.profile.equipped) == "table"
+			then hubState.profile.equipped.pet
+			else nil
+		local picked = cards[HubStyle.petDefault(cards, equippedPet, hubState.petPick, hubState.petPickUid)]
 		local petDetail = Instance.new("Frame")
 		petDetail.Name = "PetDetail"
 		petDetail.BackgroundColor3 = rgb("header")

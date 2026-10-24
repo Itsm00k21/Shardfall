@@ -240,7 +240,7 @@ describe("GearBar: auto-salvage labels", function()
 		end)
 	end)
 
-	it("a saved Rare cap is shown, never sent back, and can be lowered", function()
+	it("a saved Rare cap is clamped quietly when the popover opens, with one plain line", function()
 		withFlag(function()
 			local profile = bag()
 			profile.autoSalvage = true
@@ -248,13 +248,18 @@ describe("GearBar: auto-salvage labels", function()
 			local invoke, calls = server(profile)
 			local _, parent = mount(profile, invoke)
 			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: ≤ Rare  ⚙")
-			-- Mounting sends nothing; the save is not rewritten quietly.
+			-- Mounting sends nothing.
 			expect(#calls).toEqual(0)
 			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
-			expect(GuiFake.findNamed(parent, "AutoUnsafe").Visible).toBeTrue()
-			GuiFake.activate(GuiFake.findNamed(parent, "AutoLower"))
+			-- Clip 9: no "saved cap is Rare" warning and no Lower button.
+			expect(GuiFake.findNamed(parent, "AutoUnsafe")).toBeNil()
+			expect(GuiFake.findNamed(parent, "AutoLower")).toBeNil()
+			local note = GuiFake.findNamed(parent, "AutoCapNote")
+			expect(note.Visible).toBeTrue()
+			expect(note.Text).toEqual(GearHooks.capNote(profile))
 			expect(calls[#calls][2]).toEqual({ enabled = true, rarity = "Uncommon" })
 			expect(profile.autoSalvageRarity).toEqual("Uncommon")
+			expect(GuiFake.findNamed(parent, "AutoSalvage").Text).toEqual("Auto-salvage: ≤ Uncommon  ⚙")
 			-- Off then On again sends Uncommon, never Rare.
 			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
 			GuiFake.activate(GuiFake.findNamed(parent, "AutoToggle"))
@@ -262,6 +267,19 @@ describe("GearBar: auto-salvage labels", function()
 			for _, call in ipairs(calls) do
 				expect(GearHooks.capRank(call[2].rarity) <= 2).toBeTrue()
 			end
+		end)
+	end)
+
+	it("a saved Rare cap that is off is shown clamped and never sent", function()
+		withFlag(function()
+			local profile = bag()
+			profile.autoSalvage = false
+			profile.autoSalvageRarity = "Rare"
+			local invoke, calls = server(profile)
+			local _, parent = mount(profile, invoke)
+			GuiFake.activate(GuiFake.findNamed(parent, "AutoSalvage"))
+			expect(#calls).toEqual(0)
+			expect(GuiFake.findNamed(parent, "AutoCapPick").Text).toEqual("Cap: Uncommon  ▼")
 		end)
 	end)
 

@@ -1124,6 +1124,8 @@ function GuiFake.world()
 		enum = EnumRoot,
 		load = loadClient,
 		vector2 = vector2,
+		runService = runService,
+		new = newInstance,
 	}
 end
 

@@ -18,9 +18,18 @@
 	Auto-salvage is read from the profile snapshot the server last sent.
 	This view keeps no copy of it, polls nothing, and sends explicit
 	{enabled, rarity}. Default is Off. The client never sends a cap above
-	Uncommon (GearHooks.safeCap); a saved Rare+ cap is shown as it is and
-	the popover offers to lower it. A refused press leaves the label on the
-	server's value and shows the reason.
+	Uncommon (GearHooks.safeCap); a saved Rare+ cap shows in the chip as it
+	is, the popover shows it clamped to Uncommon with one plain line, and
+	opening the popover while it is on sends the clamp once so the server
+	matches the dropdown. A refused press leaves
+	the label on the server's value and shows the reason. The chip keeps
+	one width on or off so it never shoves Select.
+
+	bulk     "BulkPicker" (Clip 9): "Salvage…" in the row on Weapons and
+	         Armor opens it. "Salvage all Common", "… Uncommon and below",
+	         "… Rare and below", each with the server preview's count and
+	         Essence, then the usual SalvageConfirm. Locked, favorite and
+	         equipped gear never counts (the server checks again).
 
 	Equipped, locked and favorite gear cannot be picked. The server checks
 	again on confirm. Nothing here costs Robux.
@@ -266,6 +275,8 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	autoMark.Visible = false
 	autoMark.Parent = autoButton
 	local selectButton = button(row, "SelectMode", "Select", 4, COLORS.button)
+	-- [Ghost] Clip 9: manual bulk salvage, one obvious button.
+	local bulkButton = button(row, "BulkSalvage", GearHooks.BULK_BUTTON, 3, COLORS.button)
 
 	local pickOptions = {}
 	for _, cap in ipairs(PICK_CAPS) do
@@ -317,10 +328,9 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		onChange = function(_: any) end,
 	})
 	capDrop.button.ZIndex = 31
-	local unsafe = label(popover, "AutoUnsafe", "", 4, COLORS.warn, 13)
-	unsafe.Visible = false
-	local lowerButton = wideButton(popover, "AutoLower", "Lower cap to Uncommon", 5, COLORS.buttonDim)
-	lowerButton.Visible = false
+	-- One plain line under the cap. No "saved cap is Rare" argument with the
+	-- dropdown and no Lower button: a higher saved cap is clamped silently.
+	local capNote = label(popover, "AutoCapNote", GearHooks.capNote(nil), 4, COLORS.muted, 13)
 	local ask = Instance.new("Frame")
 	ask.Name = "AutoAsk"
 	ask.BackgroundColor3 = Color3.fromRGB(60, 34, 30)
@@ -394,6 +404,30 @@ function GearBar.mount(parent: Instance, opts: Opts)
 	local confirmYes = wideButton(confirm, "ConfirmSalvage", "Confirm", 2, COLORS.danger)
 	local confirmNo = wideButton(confirm, "CancelSalvage", "Cancel", 3, COLORS.buttonDim)
 
+	-- Bulk picker. Rows fill from the server preview; the client estimate
+	-- shows until it answers.
+	local bulk = panel(host, "BulkPicker", 340)
+	local bulkTitle = label(bulk, "BulkTitle", "Salvage gear", 1, COLORS.text, 18)
+	bulkTitle.Font = Enum.Font.BuilderSansBold
+	label(
+		bulk,
+		"BulkHelp",
+		"Weapons and Armor in your Bag. Locked, favorite and equipped gear is never salvaged.",
+		2,
+		COLORS.muted,
+		13
+	)
+	local bulkRows: { [string]: TextButton } = {}
+	local bulkSeen: { [string]: { count: number, gain: number, server: boolean } } = {}
+	for index, cap in ipairs(GearHooks.BULK_CAPS) do
+		local rowButton = wideButton(bulk, "Bulk" .. cap, GearHooks.bulkTitle(cap), 2 + index, COLORS.buttonDim)
+		rowButton.Size = UDim2.new(1, 0, 0, 52)
+		rowButton.TextWrapped = true
+		rowButton:SetAttribute("Cap", cap)
+		bulkRows[cap] = rowButton
+	end
+	local bulkClose = wideButton(bulk, "BulkCancel", "Cancel", 9, COLORS.button)
+
 	local function picked(): { string }
 		local list = {}
 		for uid in pairs(selected) do
@@ -422,15 +456,24 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		toggleButton.TextColor3 = if on then COLORS.ink else COLORS.text
 		toggleButton:SetAttribute("On", on)
 		capDrop.set(GearHooks.safeCap(GearHooks.autoCapName(profile)))
-		local risky = GearHooks.capUnsafe(profile)
-		unsafe.Visible = risky
-		lowerButton.Visible = risky
-		if risky then
-			unsafe.Text = string.format(
-				"Your saved cap is %s%s. Auto-salvage now allows Uncommon at most.",
-				GearHooks.autoCapName(profile),
-				if on then " and it is on" else ""
-			)
+		capNote.Text = GearHooks.capNote(profile)
+	end
+
+	local function paintBulk(profile: any)
+		for cap, rowButton in pairs(bulkRows) do
+			local seen = bulkSeen[cap]
+			local count, gain
+			if seen ~= nil then
+				count, gain = seen.count, seen.gain
+			else
+				count, gain = GearHooks.bulkEstimate(profile, cap)
+			end
+			rowButton.Text = GearHooks.bulkTitle(cap) .. "\n" .. GearHooks.bulkLine(count, gain)
+			rowButton:SetAttribute("Count", count)
+			rowButton:SetAttribute("Gain", gain)
+			rowButton:SetAttribute("Server", seen ~= nil and seen.server)
+			rowButton.BackgroundColor3 = if count > 0 then COLORS.danger else COLORS.buttonDim
+			rowButton.AutoButtonColor = count > 0
 		end
 	end
 
@@ -450,11 +493,37 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		end
 		essence.Visible = not (compact and selecting)
 		autoButton.Visible = not (compact and selecting)
-		setText(autoButton, chipText .. "  ⚙")
-		if on then
-			-- Room for the warning mark on the left.
-			autoButton.Size = UDim2.fromOffset(widthFor(autoButton.Text) + 18, GearBar.CONTROL_H)
+		-- One width on or off (room for the warning mark included), so
+		-- turning it on never shoves Select along the row. A phone drops
+		-- the gear glyph to keep Salvage… on the row.
+		if compact then
+			autoButton.Text = chipText
+			autoButton.Size = UDim2.fromOffset(widthFor(GearHooks.CHIP_WIDEST_COMPACT), GearBar.CONTROL_H)
+		else
+			autoButton.Text = chipText .. "  ⚙"
+			autoButton.Size = UDim2.fromOffset(widthFor(GearHooks.CHIP_WIDEST .. "  ⚙") + 18, GearBar.CONTROL_H)
 		end
+		local where = tab()
+		bulkButton.Visible = not selecting and (where == nil or where == "weapons" or where == "armor")
+		bulkButton.Size = UDim2.fromOffset(if compact then 84 else widthFor(GearHooks.BULK_BUTTON), GearBar.CONTROL_H)
+		if compact and not selecting and bulkButton.Visible then
+			-- A big Essence number would push the row sideways on a phone;
+			-- the picker shows the balance instead.
+			local room = if row.AbsoluteSize.X > 0 then row.AbsoluteSize.X else 370
+			local used = autoButton.Size.X.Offset
+				+ essence.Size.X.Offset
+				+ bulkButton.Size.X.Offset
+				+ selectButton.Size.X.Offset
+				+ 3 * UiTheme.PAD
+			if used > room then
+				essence.Visible = false
+			end
+		end
+		bulkTitle.Text = string.format("Salvage gear  ·  Essence %d", held)
+		if not bulkButton.Visible and bulk.Visible then
+			bulk.Visible = false
+		end
+		paintBulk(profile)
 		autoButton.BackgroundColor3 = if on then COLORS.warn else COLORS.buttonDim
 		autoButton.TextColor3 = if on then COLORS.ink else COLORS.text
 		autoButton:SetAttribute("AutoOn", on)
@@ -536,11 +605,15 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		ask.Visible = true
 	end
 
+	local clampCap: () -> () = function() end
+
 	local function openPopover()
 		Dropdown.closeAll(host)
 		hideAsk()
+		bulk.Visible = false
 		paint()
 		popover.Visible = true
+		clampCap()
 	end
 
 	local function closePopover()
@@ -580,10 +653,102 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		end
 	end
 
-	lowerButton.MouseButton1Click:Connect(function()
+	-- A saved Rare+ cap that is on: opening the popover sends the clamp
+	-- once, quietly, so the server stops salvaging what the dropdown says
+	-- it keeps. Mounting and repaints never send.
+	local clampSent = false
+	clampCap = function()
 		local profile = opts.getProfile()
-		hideAsk()
-		sendAuto({ enabled = GearHooks.autoRarity(profile) ~= nil, rarity = "Uncommon" })
+		if busy or clampSent or not GearHooks.capUnsafe(profile) or GearHooks.autoRarity(profile) == nil then
+			return
+		end
+		clampSent = true
+		call("auto", { enabled = true, rarity = GearHooks.safeCap(GearHooks.autoCapName(profile)) }, function(_) end)
+	end
+
+	-- Bulk picker: one server preview per row, one at a time.
+	local function refreshBulk()
+		if busy then
+			return
+		end
+		busy = true
+		task.spawn(function()
+			for _, cap in ipairs(GearHooks.BULK_CAPS) do
+				if not bulk.Visible then
+					break
+				end
+				local ok, result = pcall(opts.invoke, "preview", { rarity = cap })
+				if ok and type(result) == "table" then
+					if result.ok == true then
+						bulkSeen[cap] = {
+							count = if type(result.count) == "number" then math.floor(result.count) else 0,
+							gain = if type(result.gain) == "number" then math.floor(result.gain) else 0,
+							server = true,
+						}
+					elseif type(result.error) == "string" and string.find(result.error, "Nothing", 1, true) then
+						bulkSeen[cap] = { count = 0, gain = 0, server = true }
+					end
+				end
+			end
+			busy = false
+			paint()
+		end)
+	end
+
+	local function openBulk()
+		Dropdown.closeAll(host)
+		closePopover()
+		hideConfirm()
+		table.clear(bulkSeen)
+		bulk.Visible = true
+		paint()
+		refreshBulk()
+	end
+
+	local function bulkPick(cap: string)
+		local count = GearHooks.bulkEstimate(opts.getProfile(), cap)
+		local seen = bulkSeen[cap]
+		if (seen ~= nil and seen.count <= 0) or (seen == nil and count <= 0) then
+			opts.onStatus(GearHooks.bulkTitle(cap) .. ": nothing to salvage.", "info")
+			return
+		end
+		-- A fresh preview: the server keeps one token per player, so the
+		-- picker's last row preview is not this row's.
+		call("preview", { rarity = cap }, function(result)
+			if type(result) ~= "table" or result.ok ~= true or type(result.token) ~= "string" then
+				opts.onStatus(message(result, "Could not check that salvage."), "error")
+				return
+			end
+			token = result.token
+			local n = if type(result.count) == "number" then math.floor(result.count) else 0
+			local gain = if type(result.gain) == "number" then math.floor(result.gain) else 0
+			bulkSeen[cap] = { count = n, gain = gain, server = true }
+			bulk.Visible = false
+			confirmText.Text = string.format(
+				"%s: salvage %d piece%s for +%d Essence? Locked, favorite and equipped gear stays. This cannot be undone.",
+				GearHooks.bulkTitle(cap),
+				n,
+				if n == 1 then "" else "s",
+				gain
+			)
+			confirm.Visible = true
+		end)
+	end
+
+	bulkButton.MouseButton1Click:Connect(function()
+		if bulk.Visible then
+			bulk.Visible = false
+		else
+			openBulk()
+		end
+	end)
+	for cap, rowButton in pairs(bulkRows) do
+		rowButton.MouseButton1Click:Connect(function()
+			bulkPick(cap)
+		end)
+	end
+	bulkClose.MouseButton1Click:Connect(function()
+		bulk.Visible = false
 	end)
 
 	askYes.MouseButton1Click:Connect(function()
@@ -745,6 +910,8 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		bar = bar,
 		confirm = confirm,
 		popover = popover,
+		bulk = bulk,
+		bulkButton = bulkButton,
 	}
 
 	function handle.selecting(): boolean
@@ -788,6 +955,10 @@ function GearBar.mount(parent: Instance, opts: Opts)
 		paint()
 	end
 
+	function handle.openBulk()
+		openBulk()
+	end
+
 	function handle.setCompact(on: boolean)
 		if compact ~= on then
 			compact = on
@@ -801,6 +972,7 @@ function GearBar.mount(parent: Instance, opts: Opts)
 
 	function handle.closePopups()
 		closePopover()
+		bulk.Visible = false
 		Dropdown.closeAll(host)
 	end
 
