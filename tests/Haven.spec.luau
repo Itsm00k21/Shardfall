@@ -7,6 +7,7 @@ local expect = framework.expect
 
 local Dungeons = require("../src/ReplicatedStorage/Shared/Dungeons")
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 
 describe("Haven", function()
 	it("lays the districts and six gates on the crescent", function()
@@ -157,6 +158,27 @@ describe("Haven", function()
 			sealed = true,
 		}
 		expect(Haven.gatePlate(shut)).toEqual("Lv 15")
+	end)
+
+	it("seals Heartwood with Opens later while raids are off", function()
+		local heart = Haven.portal("heartwood")
+		expect(LaunchGate.on("raids")).toEqual(false)
+		expect(Haven.gateOpen(heart)).toEqual(true)
+		expect(Haven.gateShownOpen(heart)).toEqual(false)
+		expect(Haven.gateShownPlate(heart)).toEqual("Opens later")
+		expect(Haven.gateShownOpen(Haven.portal("rootvault"))).toEqual(true)
+		expect(Haven.gateShownPlate(Haven.portal("rootvault"))).toEqual("Lv 1 · Solo")
+		expect(Haven.gateShownOpen(Haven.portal("tidecrypt"))).toEqual(false)
+		expect(Haven.gateShownPlate(Haven.portal("tidecrypt"))).toEqual(Haven.gatePlate(Haven.portal("tidecrypt")))
+		LaunchGate.SHOW.raids = true
+		local shown = Haven.gateShownOpen(heart)
+		local plate = Haven.gateShownPlate(heart)
+		LaunchGate.SHOW.raids = false
+		expect(shown).toEqual(true)
+		expect(plate).toEqual("Lv 15 · 4–8")
+		expect(LaunchGate.on("raids")).toEqual(false)
+		expect(Haven.gateShownOpen(heart)).toEqual(false)
+		expect(Haven.gateOpen(heart)).toEqual(true)
 	end)
 
 	it("gives every live dungeon exactly one arch", function()

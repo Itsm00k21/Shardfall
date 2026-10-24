@@ -5,13 +5,14 @@
 
 	Simple parts, themed colors, and a low count. The crystal's shards orbit
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
-	the existing panel. The Rootvault arch is an EnterPad. The Heartwood arch
-	is decor while raids are closed. Finder and Practice appear only when
-	LaunchGate.raids is on. It is not an EnterPad. Milestone 2 dresses
-	each arch and its name plate. Milestone 3 puts one shadowless light in
-	each mouth, a quiet emitter under the forge rate cap, and a flat court
-	ring. An open mouth pulses. A sealed mouth stays dim until someone
-	stands close. Open versus sealed follows Haven.gateOpen. Global Lighting
+	the existing panel. The Rootvault arch is an EnterPad. While raids are
+	closed the Heartwood arch is sealed and its prompt says Opens later.
+	Finder and Practice appear only when LaunchGate.raids is on. It is not
+	an EnterPad. Milestone 2 dresses each arch and its name plate. Milestone 3
+	puts one shadowless light in each mouth, a quiet emitter under the forge
+	rate cap, and a flat court ring. An open mouth pulses. A sealed mouth
+	stays dim until someone stands close. Open versus sealed follows
+	Haven.gateShownOpen. Global Lighting
 	is left on the day cycle. No new sound id.
 
 	StreamingEnabled cannot be set from a script. It lives on Workspace in
@@ -1103,7 +1104,7 @@ local function buildCourt(parent: Instance)
 	)
 	for _, portal in ipairs(Haven.PORTALS) do
 		local bearing = math.rad(portal.bearing or 0)
-		local lit = Haven.gateLit(portal)
+		local lit = Haven.gateShownOpen(portal)
 		local color = if lit
 			then rgb(portal.color :: { number })
 			else Color3.fromRGB(90, 90, 96)
@@ -1678,7 +1679,7 @@ local function buildPortals(parent: Instance)
 		arch.Name = portal.id
 		arch.Parent = shelf
 		arch:SetAttribute("GateDress", dress)
-		local open = Haven.gateOpen(portal)
+		local open = Haven.gateShownOpen(portal)
 		local sealed = not open
 		arch:SetAttribute("GateSealed", sealed)
 		if type(portal.dungeonId) == "string" then
@@ -1770,7 +1771,8 @@ local function buildPortals(parent: Instance)
 			promptOn(fill, "Enter", portal.name, "rootvault", nil, nil, reach)
 			promptOn(leftPier, "Waves", "Solo", "waves", nil, nil, Haven.PIER_REACH)
 		elseif portal.id == "heartwood" then
-			-- The arch stays. Finder and Practice are the raid doors.
+			-- Finder and Practice are the raid doors. While raids are off the
+			-- sealed mouth says the gate opens later, so walking up does something.
 			if LaunchGate.on("raids") then
 				promptOn(fill, "Finder", portal.message or portal.name, "heartwood", portal.message, nil, reach)
 				promptOn(
@@ -1782,6 +1784,9 @@ local function buildPortals(parent: Instance)
 					nil,
 					Haven.PIER_REACH
 				)
+			else
+				local later = Haven.gateShownPlate(portal)
+				promptOn(fill, later, portal.name, "soon", later, nil, reach)
 			end
 		else
 			promptOn(fill, "Sealed", portal.message or portal.name, "soon", portal.message, nil, reach)
@@ -1901,7 +1906,7 @@ local function buildPortals(parent: Instance)
 				emitters = glowEmitters,
 			})
 		end
-		gatePlate(arch, at(0, leftH + lintelSize.Y + 2.6, 0), portal.name, Haven.gatePlate(portal))
+		gatePlate(arch, at(0, leftH + lintelSize.Y + 2.6, 0), portal.name, Haven.gateShownPlate(portal))
 	end
 
 	-- Flat ring on the court. Lit segments point at open gates. The top
@@ -1913,7 +1918,7 @@ local function buildPortals(parent: Instance)
 	local guideCenter = Haven.LAYER - 0.04
 	for _, portal in ipairs(Haven.PORTALS) do
 		local bearing = math.rad(portal.bearing or 0)
-		local lit = Haven.gateLit(portal)
+		local lit = Haven.gateShownOpen(portal)
 		local dirX = math.sin(bearing)
 		local dirZ = math.cos(bearing)
 		local color = if lit then rgb(portal.color :: { number }) else Color3.fromRGB(86, 86, 92)
