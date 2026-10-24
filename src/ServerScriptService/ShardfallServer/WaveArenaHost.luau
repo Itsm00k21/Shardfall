@@ -9,6 +9,8 @@
 	and shutdown all use that settlement. A failed save can retry.
 	There is no Leave. The wave clock is the server clock. A client
 	time step is ignored. Rejoin does not spawn in the arena.
+	When m12Results is on, recall() sends a results player home at
+	returnAt and clears that run unless a newer run already started.
 
 	The arena modules use require-by-string. init.luau resolves from the
 	parent folder (./WaveArena/Child), which matches Lune and the Luau
@@ -407,6 +409,9 @@ function WaveArenaHost.present()
 		return nil
 	end
 	presented = true
+	game:GetService("RunService").Heartbeat:Connect(function()
+		WaveArenaHost.recall(os.clock())
+	end)
 	local function watch(player: Player)
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
@@ -452,6 +457,7 @@ function WaveArenaHost.settle(player: Player, reason: string): string
 	local Settle = settleModule()
 	local id = Settle.id(run)
 	if Settle.done(settlements, id) then
+		RunResults.markPaid(run, "again")
 		if not RunResults.stay(reason) then
 			runs[player] = nil
 			inArena[player] = nil
@@ -472,6 +478,7 @@ function WaveArenaHost.settle(player: Player, reason: string): string
 		return saved == true
 	end
 	local status = Settle.finish(settlements, data, run, reason, options(config), save)
+	RunResults.markPaid(run, status)
 	if status == "paid" or status == "again" then
 		if not RunResults.stay(reason) then
 			runs[player] = nil
@@ -526,6 +533,35 @@ function WaveArenaHost.receive(player: Player)
 	local root = character:FindFirstChild("HumanoidRootPart")
 	if root ~= nil and root:IsA("BasePart") and insideArena(root.Position, config) then
 		hubReturn(player)
+	end
+end
+
+-- Results return time. A player who already started another run keeps
+-- that run and the in-arena flag. Heartbeat calls this, so the client
+-- does not have to keep stepping.
+function WaveArenaHost.recall(now: any)
+	if not open() or LaunchGate.on("m12Results") ~= true then
+		return
+	end
+	local pending = {}
+	for player in pairs(runs) do
+		table.insert(pending, player)
+	end
+	for _, player in ipairs(pending) do
+		local run = runs[player]
+		if typeof(run) == "table" then
+			local seat = { run = run, inArena = inArena[player] }
+			if RunResults.releaseSeat(seat, now) == "hub" then
+				local reason = if type(run.reason) == "string" then run.reason else "clear"
+				WaveArenaHost.settle(player, reason)
+				if runs[player] == run then
+					runs[player] = nil
+					inArena[player] = nil
+					clearView(player)
+					hubReturn(player)
+				end
+			end
+		end
 	end
 end
 

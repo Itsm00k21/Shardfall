@@ -14,7 +14,14 @@
 	Run Again starts at most one run for a burst in one frame. The same
 	ended run does not start a second time. A different run inside
 	results.runAgainGap is refused. The player must own that ended run,
-	must not be mid-teleport, and must still be allowed on its tier.
+	must not be mid-teleport, must still be allowed on its tier, and
+	must wait until that run's payout has settled.
+
+	Each start mints HttpService:GenerateGUID. forget() drops the session
+	book on rejoin and does not put that id back, so a saved settle
+	record cannot block the next run's payout. releaseSeat() sends a
+	results seat home at returnAt unless the player already started
+	another run.
 ]]
 
 local BossClearReward = require("./BossClearReward")
@@ -33,6 +40,49 @@ local PLAYABLE = { clear = true, wipe = true, timeout = true }
 
 local bestWaves: { [string]: number } = {}
 local books: { [string]: any } = {}
+
+-- Ids this server has already minted. forget() does not clear the set.
+-- A counter that restarted at 1 after rejoin would mint the same id the
+-- profile already settled, and the next run would pay nothing.
+local issued: { [string]: boolean } = {}
+local standIn = 0
+
+local GUID_RUN = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+
+local function validGuid(id: any): boolean
+	return type(id) == "string" and string.match(id, GUID_RUN) ~= nil
+end
+
+-- Lune only. A live server and Studio take HttpService below.
+local function standInGuid(): string
+	standIn += 1
+	return string.format("00000000-0000-4000-8000-%012x", standIn)
+end
+
+local function freshId(): string
+	if game ~= nil and game.GetService ~= nil then
+		return game:GetService("HttpService"):GenerateGUID(false)
+	end
+	return standInGuid()
+end
+
+local function mintRunId(): string
+	local tries = 0
+	while tries < 8 do
+		tries += 1
+		local id = freshId()
+		if validGuid(id) and issued[id] ~= true then
+			issued[id] = true
+			return id
+		end
+	end
+	local id = standInGuid()
+	while issued[id] == true do
+		id = standInGuid()
+	end
+	issued[id] = true
+	return id
+end
 
 local function enabled(): boolean
 	return LaunchGate.on("m12Results")
@@ -172,7 +222,7 @@ end
 local function bookOf(key: string): any
 	local found = books[key]
 	if found == nil then
-		found = { consumed = {}, serial = 0 }
+		found = { consumed = {} }
 		books[key] = found
 	end
 	return found
@@ -195,6 +245,49 @@ function RunResults.forget(userId: any)
 			bestWaves[saved] = nil
 		end
 	end
+end
+
+function RunResults.markPaid(run: any, status: any): boolean
+	if type(run) ~= "table" then
+		return false
+	end
+	if status ~= "paid" and status ~= "again" then
+		return false
+	end
+	run.payoutSettled = true
+	return true
+end
+
+-- "hub" when this results run has reached returnAt. "keep" when the seat
+-- is already a newer run. "stay" when the clock has not fired, or the
+-- flag is off. Only "hub" clears the seat.
+local function due(run: any, now: any): string
+	if not enabled() or type(run) ~= "table" then
+		return "stay"
+	end
+	if run.phase ~= "results" then
+		return "keep"
+	end
+	local at: any = if type(run.card) == "table" then run.card.returnAt else nil
+	if not finite(at) then
+		at = run.returnAt
+	end
+	if not finite(now) or not finite(at) or now < at then
+		return "stay"
+	end
+	return "hub"
+end
+
+function RunResults.releaseSeat(seat: any, now: any): string
+	if type(seat) ~= "table" then
+		return "stay"
+	end
+	local decision = due(seat.run, now)
+	if decision == "hub" then
+		seat.run = nil
+		seat.inArena = nil
+	end
+	return decision
 end
 
 function RunResults.release(userId: any, resultsId: any)
@@ -486,8 +579,10 @@ function RunResults.again(userId: any, run: any, profile: any, _request: any, no
 	if finite(book.lastStart) and now - book.lastStart < numbers.runAgainGap then
 		return refuse("rate")
 	end
-	book.serial += 1
-	local runId = string.format("m12-%s-%d", key, book.serial)
+	if run.payoutSettled ~= true then
+		return refuse("payout")
+	end
+	local runId = mintRunId()
 	book.consumed[resultsId] = runId
 	book.liveId = runId
 	book.frameNow = now
