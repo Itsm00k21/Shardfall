@@ -1,7 +1,8 @@
 --!strict
 
 --[[
-	V1 enemy types (roadmap 3.3, 3.4) and the wave-5 boss (3.6).
+	V1 enemy types (roadmap 3.3, 3.4), the wave-5 boss (3.6),
+	and the stuck-enemy clock (3.8).
 
 	Every tunable lives here, including the arena a ranged enemy kites
 	inside and the shot ray. EnemyRoster, WaveFlow, and the server
@@ -180,6 +181,17 @@ Enemies.BOSS = table.freeze({
 	color = table.freeze({ 58, 58, 62 }),
 	size = table.freeze({ 7.5, 9, 7 }),
 })
+
+-- Roadmap 3.8. An enemy with no meaningful progress toward its target
+-- and no damage for this long is stuck. validate rejects a wait above 30.
+Enemies.STUCK_SECONDS = 30
+-- Closing this many studs counts as progress. Damage does too.
+Enemies.STUCK_PROGRESS = 0.5
+-- First recovery: step this far off the blocked line and aim again.
+Enemies.STUCK_NUDGE = 8
+-- A respawn point keeps this much air between the body, obstacles, and
+-- the other living enemies. The point stays inside ARENA.
+Enemies.SPAWN_CLEAR = 3
 
 local REQUIRED = { "chaser", "ranged", "tank" }
 
@@ -444,6 +456,46 @@ local function checkBoss(source: any): (boolean, string)
 	return true, ""
 end
 
+-- The stall clock cannot run past 30 seconds. The nudge and the spawn
+-- pad have to be real distances that still fit the arena.
+local function checkStuck(source: any): (boolean, string)
+	local secondsOk, secondsErr = checkNumber("STUCK_SECONDS", source.STUCK_SECONDS, 0.05)
+	if not secondsOk then
+		return false, secondsErr
+	end
+	if source.STUCK_SECONDS > 30 then
+		return false, "STUCK_SECONDS is above 30"
+	end
+	local progressOk, progressErr = checkNumber("STUCK_PROGRESS", source.STUCK_PROGRESS, 0.05)
+	if not progressOk then
+		return false, progressErr
+	end
+	if source.STUCK_PROGRESS > 4 then
+		return false, "STUCK_PROGRESS is above 4"
+	end
+	local nudgeOk, nudgeErr = checkNumber("STUCK_NUDGE", source.STUCK_NUDGE, 0.5)
+	if not nudgeOk then
+		return false, nudgeErr
+	end
+	if source.STUCK_NUDGE > 16 then
+		return false, "STUCK_NUDGE is above 16"
+	end
+	local clearOk, clearErr = checkNumber("SPAWN_CLEAR", source.SPAWN_CLEAR, 0.5)
+	if not clearOk then
+		return false, clearErr
+	end
+	if source.SPAWN_CLEAR > 8 then
+		return false, "SPAWN_CLEAR is above 8"
+	end
+	local box = source.ARENA
+	if type(box) == "table" and finite(box.maxX) and finite(box.minX) then
+		if source.SPAWN_CLEAR * 4 >= box.maxX - box.minX then
+			return false, "SPAWN_CLEAR does not fit the arena"
+		end
+	end
+	return true, ""
+end
+
 -- The three types, or the wave-5 boss. Nil for any other id.
 function Enemies.row(kind: string): Row?
 	if type(kind) ~= "string" then
@@ -562,6 +614,10 @@ function Enemies.validate(roster: any?): (boolean, string)
 	local bossOk, bossErr = checkBoss(source)
 	if not bossOk then
 		return false, bossErr
+	end
+	local stuckOk, stuckErr = checkStuck(source)
+	if not stuckOk then
+		return false, stuckErr
 	end
 	return true, ""
 end

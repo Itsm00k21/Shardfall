@@ -99,6 +99,10 @@ local function fullRoster(patch: { [string]: any }?): any
 			ranged = Enemies.BOSS_ADD_MIX.ranged,
 			tank = Enemies.BOSS_ADD_MIX.tank,
 		},
+		STUCK_SECONDS = Enemies.STUCK_SECONDS,
+		STUCK_PROGRESS = Enemies.STUCK_PROGRESS,
+		STUCK_NUDGE = Enemies.STUCK_NUDGE,
+		SPAWN_CLEAR = Enemies.SPAWN_CLEAR,
 	}
 	if patch ~= nil then
 		for key, value in pairs(patch) do
@@ -321,6 +325,25 @@ describe("Config wave list", function()
 				expect(kind == "chaser" or kind == "ranged" or kind == "tank").toBeFalse()
 			end
 		end
+	end)
+
+	it("caps the stuck clock at 30 seconds", function()
+		expect(Enemies.STUCK_SECONDS).toEqual(30)
+		expect(Enemies.STUCK_SECONDS <= 30).toBeTrue()
+		expect(Enemies.STUCK_PROGRESS > 0).toBeTrue()
+		expect(Enemies.STUCK_NUDGE > 0).toBeTrue()
+		expect(Enemies.SPAWN_CLEAR > 0).toBeTrue()
+		expect(Enemies.validate()).toEqual(true)
+		expect(Enemies.validate(fullRoster({ STUCK_SECONDS = 30 }))).toEqual(true)
+		local _, high = Enemies.validate(fullRoster({ STUCK_SECONDS = 31 }))
+		expect(string.find(high, "STUCK_SECONDS", 1, true) ~= nil).toBeTrue()
+		expect(string.find(high, "30", 1, true) ~= nil).toBeTrue()
+		local _, nan = Enemies.validate(fullRoster({ STUCK_SECONDS = 0 / 0 }))
+		expect(string.find(nan, "STUCK_SECONDS", 1, true) ~= nil).toBeTrue()
+		local _, zero = Enemies.validate(fullRoster({ STUCK_SECONDS = 0 }))
+		expect(string.find(zero, "STUCK_SECONDS", 1, true) ~= nil).toBeTrue()
+		local _, negative = Enemies.validate(fullRoster({ STUCK_SECONDS = -1 }))
+		expect(string.find(negative, "STUCK_SECONDS", 1, true) ~= nil).toBeTrue()
 	end)
 end)
 
@@ -557,5 +580,327 @@ describe("WaveFlowService", function()
 			expect(string.find(body, "bossEnter", 1, true)).toBeNil()
 			expect(string.find(body, "bossDown", 1, true)).toBeNil()
 		end
+	end)
+end)
+
+local function withStuck(seconds: number, body: () -> ())
+	local prior = Enemies.STUCK_SECONDS
+	Enemies.STUCK_SECONDS = seconds
+	local ok, err = pcall(body)
+	Enemies.STUCK_SECONDS = prior
+	if not ok then
+		error(err :: any, 0)
+	end
+end
+
+local function bodyRadius(kind: string): number
+	local row = Enemies.row(kind)
+	if row == nil then
+		return 1
+	end
+	local wide = row.size[1]
+	if row.size[3] > wide then
+		wide = row.size[3]
+	end
+	return wide * 0.5
+end
+
+-- A wall across the arena. Straight steps toward a target on the far side
+-- hit it, and an 8-stud nudge cannot hop over it.
+local function barrier(): { WaveFlow.Obstacle }
+	local disks = {}
+	local x = -30
+	while x <= 80 do
+		table.insert(disks, { x = x, z = -12, radius = 6 })
+		x += 8
+	end
+	return disks
+end
+
+local function insideArena(x: number, z: number): boolean
+	return x >= Enemies.ARENA.minX
+		and x <= Enemies.ARENA.maxX
+		and z >= Enemies.ARENA.minZ
+		and z <= Enemies.ARENA.maxZ
+end
+
+local function clearOf(pulse: WaveFlow.Pulse, disks: { WaveFlow.Obstacle }): boolean
+	local radius = bodyRadius(pulse.kind)
+	for _, disk in ipairs(disks) do
+		local dx = pulse.x - disk.x
+		local dz = pulse.z - disk.z
+		local reach = disk.radius + radius
+		if dx * dx + dz * dz < reach * reach then
+			return false
+		end
+	end
+	return true
+end
+
+local function pulseFor(pulses: { WaveFlow.Pulse }, id: number): WaveFlow.Pulse?
+	for _, pulse in ipairs(pulses) do
+		if pulse.id == id then
+			return pulse
+		end
+	end
+	return nil
+end
+
+-- Steps one wave. Every living enemy must be engaged or reset before the
+-- stall passes 30 seconds, and a reset lands inside the arena, off the wall.
+local function simulate(
+	run: WaveFlow.Run,
+	sent: { Note },
+	targetX: number,
+	targetZ: number,
+	disks: { WaveFlow.Obstacle },
+	seconds: number
+)
+	local dt = 0.25
+	local since: { [number]: number } = {}
+	local saw: { [number]: boolean } = {}
+	local resets: { [number]: number } = {}
+	for _, member in ipairs(run.members) do
+		if member.actor.hp > 0 then
+			since[member.id] = 0
+			saw[member.id] = false
+			resets[member.id] = 0
+		end
+	end
+	local before = #sent
+	local steps = math.floor(seconds / dt + 0.5)
+	for _ = 1, steps do
+		local pulses = WaveFlowService.step(run, targetX, targetZ, dt, disks)
+		expect(pulses ~= nil).toBeTrue()
+		if pulses == nil then
+			return
+		end
+		for _, pulse in ipairs(pulses) do
+			expect(pulse.idle <= 30).toBeTrue()
+			expect(pulse.idle <= Enemies.STUCK_SECONDS + 1e-4).toBeTrue()
+			if pulse.reset then
+				expect(pulse.nudged).toBeTrue()
+				expect(since[pulse.id] + dt >= Enemies.STUCK_SECONDS - 1e-4).toBeTrue()
+				expect(since[pulse.id] + dt <= 30 + 1e-4).toBeTrue()
+				expect(insideArena(pulse.x, pulse.z)).toBeTrue()
+				expect(clearOf(pulse, disks)).toBeTrue()
+				resets[pulse.id] += 1
+			end
+			if pulse.engaged or pulse.reset then
+				since[pulse.id] = 0
+				saw[pulse.id] = true
+			else
+				since[pulse.id] += dt
+			end
+			expect(since[pulse.id] <= 30).toBeTrue()
+		end
+	end
+	expect(#sent).toEqual(before)
+	local resetCount = 0
+	for id, stalled in pairs(since) do
+		expect(stalled <= 30).toBeTrue()
+		expect(saw[id]).toBeTrue()
+		expect(stalled <= Enemies.STUCK_SECONDS).toBeTrue()
+		resetCount += resets[id]
+	end
+	expect(resetCount >= 1).toBeTrue()
+end
+
+describe("Stuck watchdog", function()
+	it("does not step, nudge, or respawn while the flag is off", function()
+		local run = WaveFlow.start()
+		expect(run ~= nil).toBeTrue()
+		if run == nil then
+			return
+		end
+		local actor = run.members[1].actor
+		local x = actor.x
+		local z = actor.z
+		expect(WaveFlowService.step(run, 0, -36, 30, barrier())).toBeNil()
+		expect(actor.x).toEqual(x)
+		expect(actor.z).toEqual(z)
+		expect(Schema.VERSION).toEqual(26)
+		local service = fs.readFile("src/ServerScriptService/ShardfallServer/WaveFlowService.luau")
+		local math = fs.readFile("src/ReplicatedStorage/Shared/WaveFlow.luau")
+		for _, source in ipairs({ service, math }) do
+			expect(string.find(source, "schemaVersion", 1, true)).toBeNil()
+			expect(string.find(source, "DataService", 1, true)).toBeNil()
+			expect(string.find(source, "SetAsync", 1, true)).toBeNil()
+		end
+		expect(string.find(service, "WaveFlowService.step", 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("reads the config clock and respawns only after that wait", function()
+		withFlag(true, function()
+			withStuck(2, function()
+				local _, sink = watch()
+				local run = WaveFlowService.start(sink)
+				expect(run ~= nil).toBeTrue()
+				if run == nil then
+					return
+				end
+				local actor = run.members[1].actor
+				local id = run.members[1].id
+				actor.x = 0
+				actor.z = 0
+				for index = 2, #run.members do
+					run.members[index].actor.hp = 0
+				end
+				local disks = barrier()
+				local dt = 0.25
+				local since = 0
+				local resets = 0
+				local steps = math.floor(8 / dt + 0.5)
+				for _ = 1, steps do
+					local pulses = WaveFlowService.step(run, 0, -36, dt, disks)
+					expect(pulses ~= nil).toBeTrue()
+					if pulses == nil then
+						return
+					end
+					local pulse = pulseFor(pulses, id)
+					expect(pulse ~= nil).toBeTrue()
+					if pulse == nil then
+						return
+					end
+					if pulse.reset then
+						expect(pulse.nudged).toBeTrue()
+						expect(since + dt >= 2 - 1e-4).toBeTrue()
+						expect(since + dt <= 2 + 1e-4).toBeTrue()
+						expect(insideArena(pulse.x, pulse.z)).toBeTrue()
+						expect(clearOf(pulse, disks)).toBeTrue()
+						resets += 1
+						since = 0
+					elseif pulse.engaged then
+						since = 0
+					else
+						since += dt
+					end
+					expect(since <= 2).toBeTrue()
+				end
+				expect(resets >= 1).toBeTrue()
+				expect(Enemies.STUCK_SECONDS).toEqual(2)
+			end)
+		end)
+		expect(Enemies.STUCK_SECONDS).toEqual(30)
+	end)
+
+	it("nudges around one disk instead of respawning", function()
+		withFlag(true, function()
+			withStuck(2, function()
+				local _, sink = watch()
+				local run = WaveFlowService.start(sink)
+				expect(run ~= nil).toBeTrue()
+				if run == nil then
+					return
+				end
+				local id = run.members[1].id
+				run.members[1].actor.x = 0
+				run.members[1].actor.z = 0
+				for index = 2, #run.members do
+					run.members[index].actor.hp = 0
+				end
+				local disks = {
+					{ x = 0, z = -7, radius = 3 },
+				}
+				local dt = 0.25
+				local nudged = false
+				local resets = 0
+				local steps = math.floor(6 / dt + 0.5)
+				for _ = 1, steps do
+					local pulses = WaveFlowService.step(run, 0, -30, dt, disks)
+					expect(pulses ~= nil).toBeTrue()
+					if pulses == nil then
+						return
+					end
+					local pulse = pulseFor(pulses, id)
+					expect(pulse ~= nil).toBeTrue()
+					if pulse == nil then
+						return
+					end
+					if pulse.nudged then
+						nudged = true
+					end
+					if pulse.reset then
+						resets += 1
+					end
+				end
+				expect(nudged).toBeTrue()
+				expect(resets).toEqual(0)
+			end)
+		end)
+	end)
+
+	it("treats damage as progress so a blocked enemy is not respawned", function()
+		withFlag(true, function()
+			local _, sink = watch()
+			local run = WaveFlowService.start(sink)
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			local disks = barrier()
+			local dt = 0.25
+			local elapsed = 0
+			local resets = 0
+			local engaged = false
+			while elapsed < 36 do
+				if elapsed % 2 < dt then
+					for _, member in ipairs(run.members) do
+						if member.actor.hp > 0 then
+							expect(WaveFlowService.hurt(run, member.id, 1, sink) > 0).toBeTrue()
+						end
+					end
+				end
+				local pulses = WaveFlowService.step(run, 0, -36, dt, disks)
+				expect(pulses ~= nil).toBeTrue()
+				if pulses == nil then
+					return
+				end
+				for _, pulse in ipairs(pulses) do
+					if pulse.engaged then
+						engaged = true
+					end
+					if pulse.reset then
+						resets += 1
+					end
+				end
+				elapsed += dt
+			end
+			expect(engaged).toBeTrue()
+			expect(resets).toEqual(0)
+			expect(WaveFlowService.counter(run).left).toEqual(6)
+		end)
+	end)
+
+	it("engages or resets every enemy of the max wave within 30 seconds", function()
+		withFlag(true, function()
+			local sent, sink = watch()
+			local run = WaveFlowService.start(sink)
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			expect(Schema.VERSION).toEqual(26)
+			expect(Enemies.STUCK_SECONDS <= 30).toBeTrue()
+			killLiving(run, sink, 6 + 8 + 10)
+			expect(WaveFlow.counter(run)).toEqual({ wave = 4, left = 12 })
+			expect(#run.members).toEqual(12)
+			local disks = barrier()
+			simulate(run, sent, 0, -36, disks, 40)
+			expect(WaveFlow.counter(run).left).toEqual(12)
+			killLiving(run, sink, 12)
+			expect(WaveFlow.counter(run)).toEqual({ wave = 5, left = 5 })
+			expect(#run.members).toEqual(5)
+			expect(WaveFlow.plan(5)).toEqual({ "boss", "chaser", "chaser", "ranged", "tank" })
+			simulate(run, sent, 0, -36, disks, 40)
+			expect(WaveFlow.counter(run).left).toEqual(5)
+			expect(run.clear).toEqual(false)
+			local kinds = {}
+			for _, member in ipairs(run.members) do
+				table.insert(kinds, member.actor.kind)
+				expect(insideArena(member.actor.x, member.actor.z)).toBeTrue()
+			end
+			expect(kinds).toEqual({ "boss", "chaser", "chaser", "ranged", "tank" })
+		end)
 	end)
 end)

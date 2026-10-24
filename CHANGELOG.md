@@ -13,6 +13,12 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Phase 3 stuck-enemy check (flag `enemyTypes`, off): a server watchdog
+  in the wave flow tracks progress toward the target. No meaningful
+  movement or damage for `Enemies.STUCK_SECONDS` (30, rejected above 30)
+  nudges and re-paths, then respawns on a clear point inside the arena.
+  No HUD edit, no save write, `schemaVersion` stays 26. Stacked on the
+  wave-5 boss. (open)
 - Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
   4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
   count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns
