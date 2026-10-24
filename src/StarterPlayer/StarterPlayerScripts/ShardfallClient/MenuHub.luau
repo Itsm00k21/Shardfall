@@ -4595,11 +4595,26 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		petListPad.PaddingRight = UDim.new(0, 10)
 		petListPad.Parent = petList
 		local keptY = if type(hubState.petListY) == "number" then hubState.petListY else 0
-		petList.CanvasPosition = Vector2.new(0, keptY)
-		task.defer(function()
-			if petList.Parent ~= nil then
-				petList.CanvasPosition = Vector2.new(0, keptY)
+		-- AutomaticCanvasSize applies after the children exist. A
+		-- CanvasPosition written before that pass is clamped to the top.
+		-- Restore when the canvas size updates, and once more on the next
+		-- defer so a clamp in the same step does not win.
+		local function restorePetScroll()
+			if petList.Parent == nil then
+				return
 			end
+			petList.CanvasPosition = Vector2.new(0, keptY)
+		end
+		local canvasConn: RBXScriptConnection? = nil
+		canvasConn = petList:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function()
+			restorePetScroll()
+			task.defer(function()
+				restorePetScroll()
+				if canvasConn ~= nil then
+					canvasConn:Disconnect()
+					canvasConn = nil
+				end
+			end)
 		end)
 		petList:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
 			hubState.petListY = petList.CanvasPosition.Y
