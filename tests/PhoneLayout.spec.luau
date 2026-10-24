@@ -442,13 +442,16 @@ describe("PhoneLayout", function()
 			local bar = HudLayout.actionCluster(vx, vy)
 			local rows: { Named } = {}
 			add(rows, "card", layout.card, 8)
-			add(rows, "tracker", layout.tracker, 8)
+			-- [Ghost] Oct 24: a view with no clear room for the full goals
+			-- list starts folded, so the folded tab is what is on screen.
+			local goals = if layout.foldGoals then layout.goalsTab else layout.tracker
+			add(rows, "tracker", goals, 8)
 			add(rows, "health", health, 0)
 			add(rows, "pills", pills, 0)
 			add(rows, "bar", bar, 0)
 			assertClear(rows)
 			expect(inside(layout.card, vx, vy, margin)).toBeTrue()
-			expect(inside(layout.tracker, vx, vy, margin)).toBeTrue()
+			expect(inside(goals, vx, vy, margin)).toBeTrue()
 			local card = layout.card
 			for _, button in ipairs({ layout.continueButton, layout.skip }) do
 				expect(button.w >= UiTheme.TOUCH).toBeTrue()

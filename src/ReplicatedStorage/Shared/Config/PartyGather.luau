@@ -6,14 +6,16 @@
 	Content only. LaunchGate.parties (default false) is the switch.
 	With the switch off, nothing is built and the solo pad stays as it is.
 
-	The pad sits 10 studs north of the Rootvault mouth (Haven.PORTALS
-	rootvault at (0, 108), floor Haven.FLOOR_Y). Four slots stand on that
-	disc. Party state is memory only. schemaVersion stays 26. Nothing here is paid.
+	The pad sits 10 studs west of the Rootvault mouth (Haven.PORTALS
+	rootvault at (0, 108), floor Haven.FLOOR_Y), off the x=0 lane from
+	spawn to that mouth. Four slots stand on that disc. Party state is
+	memory only. schemaVersion stays 26. Nothing here is paid.
 ]]
 
 local PartyGather = {}
 
--- Mouth this ring stands in front of. The pad is north of it, toward spawn.
+-- Mouth this ring stands beside. The pad is west of it, clear of the
+-- x=0 walk from spawn (0, 30) to the mouth.
 PartyGather.gate = table.freeze({
 	id = "rootvault",
 	x = 0,
@@ -21,9 +23,9 @@ PartyGather.gate = table.freeze({
 })
 
 PartyGather.pad = table.freeze({
-	x = 0,
+	x = -10,
 	y = 120,
-	z = 98,
+	z = 108,
 	-- Whole disc is the touch zone. Diameter 16.
 	radius = 8,
 	thickness = 0.4,
@@ -34,7 +36,7 @@ PartyGather.pad = table.freeze({
 })
 
 -- Offsets from the pad center. Slot 1 is the near-left disc (first joiner).
--- Centers land at (-5, 94), (5, 94), (-5, 102), (5, 102).
+-- Centers land at (-15, 104), (-5, 104), (-15, 112), (-5, 112).
 PartyGather.slots = table.freeze({
 	table.freeze({ id = 1, x = -5, z = -4 }),
 	table.freeze({ id = 2, x = 5, z = -4 }),
@@ -60,6 +62,9 @@ PartyGather.party = table.freeze({
 	min = 1,
 	cap = 4,
 	countdown = 15,
+	-- First join records a hard stop at countdown + deadlineExtra.
+	-- Late bumps may move the clock toward that stop, not past it.
+	deadlineExtra = 10,
 	-- A join with less than lateJoinUnder seconds left bumps the clock
 	-- to lateJoinBump. Once per joiner. The clock does not restart.
 	lateJoinUnder = 5,

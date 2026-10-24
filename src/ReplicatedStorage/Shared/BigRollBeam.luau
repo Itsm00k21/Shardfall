@@ -9,9 +9,11 @@
 
 	One RollAnnounce payload carries the line and, when a slot is free,
 	the beam. Per server: one beam live, three queued, four chat lines
-	in thirty seconds, one event per player per eight seconds. Nothing
-	is saved. Nothing costs Robux. Mythic cross-server announce is not
-	this path.
+	in thirty seconds, one event per player per eight seconds. Epic and
+	below still fold into "+N more big rolls" once that chat cap is full.
+	Legendary and above never fold: each one keeps its own named line.
+	Nothing is saved. Nothing costs Robux. Mythic cross-server announce
+	is not this path.
 ]]
 
 local LaunchGate = require("./LaunchGate")
@@ -371,13 +373,18 @@ local function emit(slot: Slot, now: number, sink: (any) -> (), config: any)
 		state.windowStart = now
 		state.sentInWindow = 0
 	end
-	if state.sentInWindow >= config.CHAT_MAX then
+	local isLegendary = legendary(slot.rarity)
+	-- The chat cap still folds Epic and below into the unnamed summary.
+	-- A Legendary (or anything above it) always keeps a named line, and
+	-- does not take a slot once the cap is already full.
+	if state.sentInWindow >= config.CHAT_MAX and not isLegendary then
 		state.overflow += 1
 		state.droppedBeam += 1
 		return
 	end
-	state.sentInWindow += 1
-	local isLegendary = legendary(slot.rarity)
+	if state.sentInWindow < config.CHAT_MAX then
+		state.sentInWindow += 1
+	end
 	local beam = true
 	local beamAt = nil
 	if not isLegendary and muted(slot.userId, now) then

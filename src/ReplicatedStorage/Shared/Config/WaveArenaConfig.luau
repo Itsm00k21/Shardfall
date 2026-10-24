@@ -218,12 +218,13 @@ WaveArenaConfig.camera = table.freeze({
 })
 
 -- Haven spawn is (0, 124, 30) on the plaza floor at y = 120.
--- The pad is a short walk south-east of that. It used to sit on the
--- Rootvault lane at (0, 120.5, 46), where its reach-12 prompt overlapped
--- the Training Grove post at (-16, 48.2), reach 8. East of the lane the
--- two reaches stay apart. The pad is not built while the arena is gated.
+-- The pad sits inside the plaza disc (radius 52) at (14, 120.5, 44).
+-- (16, 120.5, 46) left a corner of the 8-stud pad outside that disc.
+-- The old lane spot (0, 120.5, 46) overlapped the Training Grove post
+-- at (-16, 48.2), reach 8. This spot stays clear of that post.
+-- The pad is not built while the arena is gated.
 WaveArenaConfig.hubPad = table.freeze({
-	position = table.freeze({ x = 16, y = 120.5, z = 46 }),
+	position = table.freeze({ x = 14, y = 120.5, z = 44 }),
 	size = table.freeze({ 8, 1, 8 }),
 	color = table.freeze({ 186, 140, 72 }),
 	prompt = "Shard Gate",

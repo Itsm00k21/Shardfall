@@ -6,7 +6,7 @@
 	Simple parts, themed colors, and a low count. The crystal's shards orbit
 	on a heartbeat. ProximityPrompts carry HavenAction so the client can open
 	the existing panel. The Rootvault arch is an EnterPad. While raids are
-	closed the Heartwood arch is sealed and its prompt says Opens later.
+	closed the Heartwood arch is sealed and its prompt says Heartwood opens later.
 	Finder and Practice appear only when LaunchGate.raids is on. It is not
 	an EnterPad. Milestone 2 dresses each arch and its name plate. Milestone 3
 	puts one shadowless light in each mouth, a quiet emitter under the forge
@@ -37,6 +37,7 @@ local HavenLife = require(ReplicatedStorage.Shared.HavenLife)
 local ShellLayout = require(ReplicatedStorage.Shared.ShellLayout)
 local Travel = require(ReplicatedStorage.Shared.Travel)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
+local PartyGatherPrompt = require(ReplicatedStorage.Shared.PartyGatherPrompt)
 
 local HavenBuilder = {}
 
@@ -321,6 +322,7 @@ local function promptOn(
 		prompt:SetAttribute("HavenDistrict", district)
 	end
 	prompt.Parent = host
+	PartyGatherPrompt.tag(prompt)
 end
 
 -- Keep overlapping faces this far apart. Coplanar tops flicker in Studio.

@@ -66,6 +66,9 @@ local goalsHeader: TextLabel? = nil
 -- Session only: the collapsed state outlives profile pushes and menus.
 local cardCollapsed = false
 local goalsCollapsed = false
+-- True once the player folds or opens the goals themselves; until then
+-- HudLayout's foldGoals picks the start state for the view.
+local goalsChosen = false
 local shownListeners: { (boolean) -> () } = {}
 local lastShown: boolean? = nil
 
@@ -135,24 +138,18 @@ function OnboardHud.onShownChange(callback: (boolean) -> ())
 	end
 end
 
--- Goals go beside the card when the row has room (clear of the character
--- under the card), else where HudLayout put them. A line fits 15px text.
-local GOAL_W = 280
-local GOAL_LINE = 19
+-- [Ghost] Oct 24: the goals go exactly where HudLayout.onboard put them
+-- (under the top-right pills and Dev column). h is the body under the
+-- 20px header; apply adds the header back.
+local GOAL_LINE = HudLayout.GOAL_LINE
 
 function OnboardHud.goalRect(
 	layout: any,
-	vx: number,
+	_vx: number,
 	lines: number
 ): (number, number, number, number)
-	local box = layout.card
 	local tracker = layout.tracker
-	local h = math.max(tracker.h, lines * GOAL_LINE + 16)
-	local besideX = box.x + box.w + 8
-	local stacked = tracker.y >= box.y + box.h
-	if stacked and besideX + GOAL_W <= vx - 16 - 72 then
-		return besideX, box.y, GOAL_W, h
-	end
+	local h = math.max(tracker.h - HudLayout.GOAL_HEAD, lines * GOAL_LINE + HudLayout.GOAL_PAD)
 	return tracker.x, tracker.y, tracker.w, h
 end
 
@@ -394,10 +391,12 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	goalsTab = tab
 	fold.MouseButton1Click:Connect(function()
 		goalsCollapsed = true
+		goalsChosen = true
 		OnboardHud._show()
 	end)
 	tab.MouseButton1Click:Connect(function()
 		goalsCollapsed = false
+		goalsChosen = true
 		OnboardHud._show()
 	end)
 
@@ -420,7 +419,15 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 	local function apply()
 		local vx, vy = MobileShell.view(screen)
 		local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-		local layout = HudLayout.onboard(vx, vy, touchOnly)
+		local rows = 1
+		for _ in string.gmatch(tracker.Text, "\n") do
+			rows += 1
+		end
+		local layout = HudLayout.onboard(vx, vy, touchOnly, math.max(4, rows))
+		if not goalsChosen then
+			-- A view with no clear room for the full list starts folded.
+			goalsCollapsed = layout.foldGoals
+		end
 		frame.Position = UDim2.fromOffset(layout.card.x, layout.card.y)
 		frame.Size = UDim2.fromOffset(layout.card.w, layout.card.h)
 		advance.Position = UDim2.fromOffset(layout.continueButton.x, layout.continueButton.y)
@@ -440,7 +447,7 @@ function OnboardHud.start(invoke: (string, ...any) -> any, applyResult: ((any) -
 			lines += 1
 		end
 		local gx, gy, gw, gh = OnboardHud.goalRect(layout, vx, lines)
-		gh += 20 -- the "Goals N/5" header row
+		gh += HudLayout.GOAL_HEAD -- the "Goals N/4" header row
 		backing.Position = UDim2.fromOffset(gx, gy)
 		backing.Size = UDim2.fromOffset(gw, gh)
 	end
@@ -525,6 +532,7 @@ function OnboardHud.setCollapsed(cardOn: boolean?, goalsOn: boolean?)
 	end
 	if goalsOn ~= nil then
 		goalsCollapsed = goalsOn
+		goalsChosen = true
 	end
 	show()
 end

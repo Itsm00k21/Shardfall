@@ -15,6 +15,7 @@
 ]]
 
 local LaunchGate = require("./LaunchGate")
+local BruteDen = require("./Config/BruteDen")
 
 local Dungeons = {}
 
@@ -271,7 +272,8 @@ Dungeons.ENEMIES = {
 		id = "thorn_sprite",
 		name = "Thorn Sprite",
 		maxHealth = 40,
-		damage = 11,
+		-- Brute Den tune. The number lives in Config/BruteDen, not here.
+		damage = BruteDen.THORN_DAMAGE,
 		defense = 1,
 		attackSpeed = 0.9,
 		moveSpeed = 13,
@@ -488,9 +490,9 @@ local ROOTVAULT: DungeonDef = {
 			enemies = { "spore_bat", "spore_bat", "moss_crawler" },
 		},
 		{
-			id = "den",
+			id = BruteDen.ROOM_ID,
 			name = "Brute Den",
-			enemies = { "root_brute", "thorn_sprite" },
+			enemies = BruteDen.enemies(),
 		},
 		{
 			id = "heart",
