@@ -121,7 +121,9 @@ function ProfileLoad.open(
 	serverId: string,
 	placeId: number,
 	timeout: number,
-	attempt: Attempt?
+	attempt: Attempt?,
+	userId: number?,
+	studio: boolean?
 ): Outcome
 	local migrated = nil
 	local reason = "error"
@@ -153,7 +155,9 @@ function ProfileLoad.open(
 				serverId,
 				placeId,
 				timeout,
-				Schema.deepCopy(data)
+				Schema.deepCopy(data),
+				userId,
+				studio
 			)
 			reason = claimReason
 			if written == nil then

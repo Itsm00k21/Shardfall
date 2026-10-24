@@ -114,7 +114,10 @@ receives the default.
 
 Pure rules: `SessionLock`. DataService applies them inside `UpdateAsync`.
 
-Lock value: `{ jobId, placeId, lockedAt }`.
+Lock value: `{ jobId, placeId, lockedAt }` plus an optional `userId`.
+Old locks omit `userId`. That field is not `schemaVersion` and does not
+bump the profile. A missing `userId` still means the player who owns the
+`Player_<userId>` key.
 
 | Status | Meaning | This server may |
 |---|---|---|
@@ -122,9 +125,14 @@ Lock value: `{ jobId, placeId, lockedAt }`.
 | owned | `jobId` is this server | save, refresh `lockedAt` |
 | busy | another server, `now - lockedAt < 20 min` | nothing. Transform returns nil |
 | expired | another server, age `>= 20 min`, or the timestamp is NaN / infinity | steal: claim, keep `Data` |
+| studio stale | Studio only, same `userId` (or a legacy lock with no `userId`), age `>= 60s`, still inside 20 min | same steal. `status` reports `"expired"` |
 
 `SessionLock.TIMEOUT_SECONDS` is 20 minutes. Autosave is 60 seconds, so a
-live server refreshes the lock long before it looks stale.
+live server refreshes the lock long before it looks stale. Studio uses
+`SessionLock.STUDIO_STEAL_SECONDS` (60) for a lock held by the same user.
+A live server does not. A different user id keeps the 20 minute rule even
+in Studio. The short steal is a claim. `trySave` still returns nil unless
+this server already owns the lock, so a busy profile is not written.
 
 This server's own lock stays `owned` even when `lockedAt` is old. A slow
 autosave must not kick the player who is playing here. Another server
@@ -158,6 +166,14 @@ is how many times that delay runs:
 Loads try `LOAD_ATTEMPTS` (5) times. The next wait happens only for
 `"busy"` and `"error"`. `"corrupt"` and `"newer"` do not retry.
 
+A live busy lock does not use that backoff. It loads
+`SessionLock.LIVE_BUSY_ATTEMPTS` (4) times and waits
+`SessionLock.liveBusyPause` between them: 10 seconds, three times, about
+30 seconds, then kicks. The 20 minute steal does not change. Studio does
+not use this window. A same-user lock at least 60 seconds old is claimed
+on the first load. A fresh Studio lock (under 60 seconds) still uses the
+table above, then kicks. `"error"` on either server still uses the table.
+
 Writes try `SaveRetry.WRITE_ATTEMPTS` (3) times. Retries are `"error"`
 (the call threw) and `"unwritten"` (the transform never reported).
 `"lost"` and `"missing"` do not retry. Retrying a lost lock could take
@@ -181,13 +197,20 @@ The worst crash loses one interval of play.
 
 ## Shutdown flush
 
-`game:BindToClose` sets `shuttingDown`, then `DataService.release` for
-each player still in the server. Release writes and clears the lock when
-`ProfileLoad.maySave` says the profile was loaded and is not ephemeral.
+`PlayerRemoving` and `game:BindToClose` both call `DataService.release`.
+Release writes and clears the lock when `ProfileLoad.maySave` says the
+profile was loaded and is not ephemeral.
 
-The wait uses `ProfileLoad.shutdownStillWaiting` for 30 seconds. Autosave
-does not start a second write after `shuttingDown`. A teleport that
-already released the lock is not written again.
+Studio Stop can remove the player before `BindToClose` runs. The callback
+also releases any profile still in memory and any release `PlayerRemoving`
+already started. A second `release` waits until that write finishes. It
+does not return early and let Studio kill the `UpdateAsync` while the
+lock is still held.
+
+The wait uses `ProfileLoad.shutdownStillWaiting` for 30 seconds, counting
+both the players queued in the callback and a release that is still open.
+Autosave does not start a second write after `shuttingDown`. A teleport
+that already released the lock is not written again.
 
 ## Failure behavior
 
@@ -195,7 +218,9 @@ already released the lock is not written again.
 |---|---|---|---|
 | Corrupt profile, or bag is not a table | not loaded | key unchanged | kicked. "could not be read. It was not overwritten." |
 | Schema newer than this build | not loaded | key unchanged | kicked. Ask them to rejoin after the server updates |
-| Lock busy for all 5 attempts | not loaded | key unchanged | kicked. Rejoin in a moment |
+| Lock busy, live, after 4 loads across ~30s | not loaded | key unchanged | kicked. Rejoin in a moment |
+| Lock busy, Studio, same user, age >= 60s | loaded | claimed; saved gold kept | stays |
+| Lock busy, Studio, fresh (under 60s) or a different user id | not loaded after the short retries | key unchanged | kicked. Rejoin in a moment |
 | Live DataStore error after retries | not loaded (`failed`) | key unchanged. Owned lock from a timed-out attempt is cleared with `tryRelease`, which does not replace `Data` | kicked |
 | Studio, or the store is not persistent, and the read throws or times out | ephemeral template, or the session profile `open` returned | not written. `save` returns success and does not call `UpdateAsync` | stays. Output says memory, not saved |
 | Autosave sees `"lost"` | `loaded` cleared | not written | kicked. Session moved |
@@ -207,7 +232,8 @@ not ephemeral.
 
 ## Test plan
 
-`lune run tests/run` includes `tests/Phase05Save.spec.luau`.
+`lune run tests/run` includes `tests/Phase05Save.spec.luau` and
+`tests/SaveLockRelease.spec.luau`.
 
 | Case | What it checks |
 |---|---|
@@ -223,6 +249,9 @@ not ephemeral.
 | Backoff | pauses 1, 2, 4, 4; lost and missing are not retried |
 | Failed load | corrupt `open` leaves gold and the bad bag; a thrown `updateAsync` leaves gold; `refusesWrite` skips the write |
 | Wiring | DataService still autosaves at 60s, flushes on `BindToClose`, checks the failed-load guard before `updateAsync`, and waits `LOAD_RETRY_SECONDS` inside `SaveRetry.pauses` |
+| Studio stale lock | same user, age >= 60s, claims and keeps gold; 59s, a different user, and a non-owner save do not write |
+| Fresh live lock | a few seconds old, and 90s old, stay busy; the store is unchanged; the live retry window is 30s across 4 loads |
+| Release on close | `ProfileLoad.release` clears the lock and keeps gold; `PlayerRemoving` and `BindToClose` both release, and shutdown waits for an in-flight write |
 
 Existing `Schema.spec`, `SessionLock.spec`, `SaveLocks.spec`, and
 `ProfileLoad` specs stay the regression net for every older step.
