@@ -139,8 +139,24 @@ begin("CombatHooks", function()
 end)
 
 -- Profiles first. A receipt read, trade audit, or messaging hang must not skip this.
--- Arena disconnect is connected first so a settled run is in the profile
--- before DataService.release writes the save. The require stays behind the flag.
+-- Arena settlement is idempotent per run id. Save, teleport, disconnect, and
+-- shutdown all call it. The require stays behind the flag.
+if LaunchGate.on("waveArena") then
+	DataService.beforeSave(function(player, reason)
+		require(script.WaveArenaHost).settle(player, reason)
+	end)
+end
+game:BindToClose(function()
+	if not LaunchGate.on("waveArena") then
+		return
+	end
+	local ok, err = pcall(function()
+		require(script.WaveArenaHost).shutdown()
+	end)
+	if not ok then
+		warn("[Shardfall] WaveArena shutdown:", err)
+	end
+end)
 game:GetService("Players").PlayerRemoving:Connect(function(player)
 	if not LaunchGate.on("waveArena") then
 		return

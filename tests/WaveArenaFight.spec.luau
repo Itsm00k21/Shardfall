@@ -30,6 +30,7 @@ local FILES = {
 	"src/server/WaveArena/Enemies.luau",
 	"src/server/WaveArena/Loot.luau",
 	"src/server/WaveArena/Session.luau",
+	"src/server/WaveArena/Settle.luau",
 	"src/server/WaveArena/Stuck.luau",
 	"src/server/WaveArena/Boss.luau",
 	"src/server/WaveArena/Feel.luau",

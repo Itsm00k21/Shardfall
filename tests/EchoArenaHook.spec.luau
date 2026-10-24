@@ -49,6 +49,10 @@ describe("Phase 3 arena hooks", function()
 		expect(string.find(host, "moveX = 0", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, "bagSlots", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, "DataService.get", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "session.clock", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "payload.dt", 1, true)).toBeNil()
+		expect(string.find(server, "DataService.beforeSave", 1, true) ~= nil).toBeTrue()
+		expect(string.find(server, "WaveArenaHost).shutdown", 1, true) ~= nil).toBeTrue()
 		local card = fs.readFile(
 			"src/StarterPlayer/StarterPlayerScripts/ShardfallClient/WaveArena/ResultsCard.luau"
 		)

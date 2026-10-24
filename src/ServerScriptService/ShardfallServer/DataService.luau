@@ -628,11 +628,31 @@ local function beginHopWatch(player: Player, record: Record, teleport: () -> ())
 	end
 end
 
+local beforeSaveHooks: { (Player, string) -> () } = {}
+
+-- Runs before a profile is written for a leave, a teleport, or shutdown.
+-- Arena loot settles here so PlayerRemoving order cannot skip it.
+function DataService.beforeSave(hook: (Player, string) -> ())
+	table.insert(beforeSaveHooks, hook)
+end
+
+local function runBeforeSave(player: Player, reason: string)
+	for _, hook in ipairs(beforeSaveHooks) do
+		local ok, err = pcall(hook, player, reason)
+		if not ok then
+			warn("[Shardfall] beforeSave:", err)
+		end
+	end
+end
+
 function DataService.release(player: Player)
 	disconnectHop(player)
 	local record = records[player]
 	if record == nil then
 		return
+	end
+	if record.closing ~= true and record.released ~= true and record.loaded == true then
+		runBeforeSave(player, "disconnect")
 	end
 	-- A teleport handoff is already the final write. Wait it out, then drop
 	-- the record without saving again. A second write would either replay
@@ -688,6 +708,7 @@ function DataService.releaseForTeleport(player: Player, teleport: () -> ()): (st
 	if record.closing then
 		return "closing", ProfileLoad.TELEPORT_ALREADY
 	end
+	runBeforeSave(player, "teleport")
 	local watched = beginHopWatch(player, record, teleport)
 	if record.ephemeral then
 		record.closing = true
@@ -804,6 +825,9 @@ function DataService.releasePartyForTeleport(
 	end
 	if mixed then
 		return "kept", empty
+	end
+	for _, player in ipairs(players) do
+		runBeforeSave(player, "teleport")
 	end
 	for _, player in ipairs(players) do
 		local record = records[player]

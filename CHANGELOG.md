@@ -19,7 +19,10 @@ its tag to merged and add the merge commit.
   keeps every earned drop once. Ground chips auto-collect at wave end and on
   wipe. A full Bag holds overflow for the session only (`overflowCap` in
   config). At run end or disconnect that overflow is salvaged into existing
-  `gearEssence` at the normal salvage rates, once. No `arenaMail` field.
+  `gearEssence` at the normal salvage rates, once. Settlement is one receipt
+  per run id on run end, disconnect, teleport, shutdown, and a failed save
+  (the retry pays once). The server owns the wave clock and ignores a
+  client time step. No `arenaMail` field.
   schemaVersion stays 26. Stuck enemies teleport or
   despawn. Pickup radius stays 12 studs. Boss HP bar, camera room, slam after
   the red warning, 1.5s boss death pause, hit flash and death puff. Metrics

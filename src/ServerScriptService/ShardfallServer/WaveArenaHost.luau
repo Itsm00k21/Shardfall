@@ -5,9 +5,10 @@
 
 	present() and handle() return before they build or step unless
 	LaunchGate.waveArena and WaveArenaConfig.enabled are both on.
-	Loot is committed once, through DataService.mutate, when the run
-	settles. There is no Leave. Disconnect is hooked before the profile
-	save so a rejoin keeps that loot and does not spawn in the arena.
+	Loot is committed once per run id. Run end, disconnect, teleport,
+	and shutdown all use that settlement. A failed save can retry.
+	There is no Leave. The wave clock is the server clock. A client
+	time step is ignored. Rejoin does not spawn in the arena.
 
 	The arena modules use require-by-string. init.luau resolves from the
 	parent folder (./WaveArena/Child), which matches Lune and the Luau
@@ -28,6 +29,7 @@ local WaveArenaHost = {}
 local runs: { [Player]: any } = {}
 local views: { [Player]: Folder } = {}
 local inArena: { [Player]: boolean } = {}
+local settlements = { done = {} :: { [string]: boolean } }
 local presented = false
 
 local function sourceRoot(): Instance
@@ -46,9 +48,9 @@ local function sessionModule(): any
 	return require(arena:WaitForChild("Session") :: ModuleScript)
 end
 
-local function lootModule(): any
+local function settleModule(): any
 	local arena = sourceRoot():WaitForChild("WaveArena")
-	return require(arena:WaitForChild("Loot") :: ModuleScript)
+	return require(arena:WaitForChild("Settle") :: ModuleScript)
 end
 
 local function open(): boolean
@@ -420,36 +422,75 @@ function WaveArenaHost.present()
 	return built
 end
 
-local function grant(player: Player, run: any)
-	if typeof(run) ~= "table" or typeof(run.grantList) ~= "table" then
+local function rememberRun(player: Player)
+	if type(player) ~= "userdata" then
 		return
+	end
+	local run = runs[player]
+	if typeof(run) ~= "table" or type(run.receiptId) ~= "string" then
+		return
+	end
+	-- Keep the run findable by id after the player map is cleared,
+	-- so a later exit can see that this id already settled.
+	runs[player] = run
+end
+
+function WaveArenaHost.settle(player: Player, reason: string): string
+	local run = runs[player]
+	if typeof(run) ~= "table" then
+		return "again"
+	end
+	if not open() then
+		return "off"
+	end
+	local _, config = modules()
+	if config.enabled ~= true then
+		return "off"
+	end
+	local Settle = settleModule()
+	local id = Settle.id(run)
+	if Settle.done(settlements, id) then
+		runs[player] = nil
+		inArena[player] = nil
+		clearView(player)
+		return "again"
 	end
 	if type(run.receiptId) ~= "string" then
 		run.receiptId = tostring(player.UserId)
 	end
-	local ok, err = DataService.mutate(player, function(data)
-		lootModule().commit(data, run)
-		return nil
-	end)
-	if not ok then
-		warn("[Shardfall] WaveArena grant:", err)
+	local data = DataService.get(player)
+	if typeof(data) ~= "table" then
+		rememberRun(player)
+		return "retry"
 	end
+	local function save(): boolean
+		local saved = DataService.save(player)
+		return saved == true
+	end
+	local status = Settle.finish(settlements, data, run, reason, options(config), save)
+	if status == "paid" or status == "again" then
+		runs[player] = nil
+		inArena[player] = nil
+		clearView(player)
+	else
+		warn("[Shardfall] WaveArena grant retry:", reason)
+		rememberRun(player)
+	end
+	return status
 end
 
 function WaveArenaHost.disconnect(player: Player)
-	local run = runs[player]
-	runs[player] = nil
-	inArena[player] = nil
-	clearView(player)
-	if run == nil or not open() then
-		return
+	WaveArenaHost.settle(player, "disconnect")
+end
+
+function WaveArenaHost.shutdown()
+	local pending = {}
+	for player in pairs(runs) do
+		table.insert(pending, player)
 	end
-	local arena, config = modules()
-	if config.enabled ~= true then
-		return
+	for _, player in ipairs(pending) do
+		WaveArenaHost.settle(player, "shutdown")
 	end
-	arena.settle(run, "disconnect", options(config))
-	grant(player, run)
 end
 
 local function insideArena(position: Vector3, config: any): boolean
@@ -484,10 +525,8 @@ local function finishIfOver(player: Player, run: any)
 	if typeof(run) ~= "table" or (run.settled ~= true and run.phase ~= "results") then
 		return
 	end
-	grant(player, run)
-	runs[player] = nil
-	inArena[player] = nil
-	clearView(player)
+	local reason = if type(run.reason) == "string" then run.reason else "clear"
+	WaveArenaHost.settle(player, reason)
 	hubReturn(player)
 end
 
@@ -537,15 +576,14 @@ function WaveArenaHost.handle(player: Player, action: string, payload: any): any
 			return stateOf(arena, nil, config)
 		end
 		syncPlayer(run, player)
-		local dt = 0.1
 		local attack = false
 		if typeof(payload) == "table" then
-			if type(payload.dt) == "number" then
-				dt = payload.dt
-			end
 			attack = payload.attack == true
 		end
-		-- Client coordinates are ignored. The server copies the character.
+		-- Client time and coordinates are ignored. The server clock and
+		-- the character pose are what the sim uses.
+		local dt, clock = session.clock(run.clock, os.clock(), nil)
+		run.clock = clock
 		local updated, events = arena.step(run, dt, { moveX = 0, moveZ = 0, attack = attack }, opts)
 		if updated ~= nil then
 			runs[player] = updated

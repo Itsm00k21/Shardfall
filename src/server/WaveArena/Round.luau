@@ -745,6 +745,8 @@ local function knownReason(reason: any): string
 		or reason == "disconnect"
 		or reason == "clear"
 		or reason == "leave"
+		or reason == "teleport"
+		or reason == "shutdown"
 	then
 		return reason
 	end
