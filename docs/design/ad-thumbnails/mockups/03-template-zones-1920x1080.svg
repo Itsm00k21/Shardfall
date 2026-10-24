@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" font-family="Arial"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22103E"/><stop offset="1" stop-color="#783C8C"/></linearGradient>
+<linearGradient id="prism" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="#96EBFF"/><stop offset=".7" stop-color="#FF96DC"/><stop offset="1" stop-color="#FFC440"/></linearGradient>
+<linearGradient id="goldg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE7A8"/><stop offset="1" stop-color="#FFC440"/></linearGradient>
+<radialGradient id="burst"><stop offset="0" stop-color="#FFC440" stop-opacity=".9"/><stop offset="1" stop-color="#FFC440" stop-opacity="0"/></radialGradient>
+<radialGradient id="vburst"><stop offset="0" stop-color="#C04888" stop-opacity=".8"/><stop offset="1" stop-color="#C04888" stop-opacity="0"/></radialGradient>
+<linearGradient id="gray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A4A50"/><stop offset="1" stop-color="#5C5C62"/></linearGradient></defs><rect width="1920" height="1080" fill="#22103E"/><g fill="none" stroke-width="5" stroke-dasharray="24 16"><rect x="96" y="54" width="1728" height="972" stroke="#FFFFFF" opacity=".5"/><rect x="192" y="108" width="760" height="380" stroke="#96EBFF"/><rect x="1440" y="54" width="384" height="216" stroke="#E65060"/></g><rect y="918" width="1920" height="162" fill="#E65060" opacity=".18"/>
+<text x="210" y="160" font-size="40" fill="#96EBFF">TEXT-SAFE (192,108)–(952,488) · ≤ 3 words · cap ≥ 140 px</text>
+<text x="120" y="100" font-size="34" fill="#FFFFFF" opacity=".8">ACTION-SAFE 90% (96,54)–(1824,1026)</text>
+<text x="1452" y="110" font-size="32" fill="#E65060">TOP-RIGHT CLEAN</text><text x="1452" y="150" font-size="32" fill="#E65060">(1440,54)–(1824,270)</text>
+<text x="120" y="1000" font-size="40" fill="#E65060">BOTTOM 15% (y ≥ 918): no text, no key art (Roblox metadata / player count)</text>
+<rect x="1000" y="300" width="760" height="560" fill="none" stroke="#FFC440" stroke-width="5" stroke-dasharray="10 10"/><text x="1020" y="350" font-size="36" fill="#FFC440">SUBJECT ZONE: ≥ 40% of frame height,</text><text x="1020" y="395" font-size="36" fill="#FFC440">right two-thirds, brightest value here</text></svg>
