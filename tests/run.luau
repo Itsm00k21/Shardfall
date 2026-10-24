@@ -235,5 +235,6 @@ require("./UpgradeScale.spec")
 require("./ShardCore.spec")
 require("./GearSalvage.spec")
 require("./GearPolish.spec")
+require("./BigRollBeam.spec")
 
 process.exit(framework.run())
