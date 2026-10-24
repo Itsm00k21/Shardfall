@@ -16,6 +16,7 @@ local expect = framework.expect
 local Haven = require("../src/ReplicatedStorage/Shared/Haven")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local PartyGather = require("../src/ReplicatedStorage/Shared/Config/PartyGather")
+local PartyGatherPrompt = require("../src/ReplicatedStorage/Shared/PartyGatherPrompt")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local Gather = require("../src/server/PartyGather")
 local PartyGatherHost = require("../src/ServerScriptService/ShardfallServer/PartyGatherHost")
@@ -28,6 +29,7 @@ local FILES = {
 	"src/server/PartyGather/Graybox.luau",
 	"src/server/PartyGather/Validate.luau",
 	"src/ServerScriptService/ShardfallServer/PartyGatherHost.luau",
+	"src/ReplicatedStorage/Shared/PartyGatherPrompt.luau",
 }
 
 local function rootvault(): any
@@ -115,6 +117,78 @@ describe("Party gather config", function()
 		expect(string.find(host, "suppressPrompt", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, "descendant.Enabled = false", 1, true) ~= nil).toBeTrue()
 		expect(LaunchGate.SHOW.parties).toEqual(false)
+	end)
+
+	it("keeps the prompt list on CollectionService instead of scanning Workspace", function()
+		expect(PartyGatherPrompt.TAG).toEqual("PartyGatherPrompt")
+		expect(Schema.VERSION).toEqual(26)
+		expect(LaunchGate.SHOW.parties).toEqual(false)
+		local seen = {
+			near = { name = "near" },
+			haven = { name = "haven" },
+		}
+		local added: ((any) -> ())? = nil
+		local removed: ((any) -> ())? = nil
+		local reads = 0
+		local service = {
+			GetTagged = function(_service, tag)
+				reads += 1
+				expect(tag).toEqual(PartyGatherPrompt.TAG)
+				return { seen.near, seen.haven }
+			end,
+			GetInstanceAddedSignal = function(_service, tag)
+				expect(tag).toEqual(PartyGatherPrompt.TAG)
+				return {
+					Connect = function(_signal, callback)
+						added = callback
+					end,
+				}
+			end,
+			GetInstanceRemovedSignal = function(_service, tag)
+				expect(tag).toEqual(PartyGatherPrompt.TAG)
+				return {
+					Connect = function(_signal, callback)
+						removed = callback
+					end,
+				}
+			end,
+		}
+		local list = PartyGatherHost.trackPrompts(service, PartyGatherPrompt.TAG)
+		expect(reads).toEqual(1)
+		expect(#list).toEqual(2)
+		expect(list[1]).toEqual(seen.near)
+		expect(list[2]).toEqual(seen.haven)
+		expect(added ~= nil and removed ~= nil).toBeTrue()
+		local add = added :: (any) -> ()
+		local drop = removed :: (any) -> ()
+		local late = { late = true }
+		add(late)
+		add(late)
+		add(nil)
+		expect(#list).toEqual(3)
+		expect(list[3]).toEqual(late)
+		expect(reads).toEqual(1)
+		drop(seen.near)
+		drop(seen.near)
+		expect(#list).toEqual(2)
+		expect(list[1]).toEqual(seen.haven)
+		expect(list[2]).toEqual(late)
+		expect(reads).toEqual(1)
+		local host = fs.readFile("src/ServerScriptService/ShardfallServer/PartyGatherHost.luau")
+		expect(string.find(host, "GetDescendants", 1, true)).toBeNil()
+		expect(string.find(host, "service:GetTagged(tag)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "GetInstanceAddedSignal", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "GetInstanceRemovedSignal", 1, true) ~= nil).toBeTrue()
+		expect(string.find(host, "for _, descendant in ipairs(prompts)", 1, true) ~= nil).toBeTrue()
+		local _, taggedCount = string.gsub(host, "service:GetTagged%(tag%)", "")
+		expect(taggedCount).toEqual(1)
+		for _, path in ipairs({
+			"src/ServerScriptService/ShardfallServer/HavenBuilder.luau",
+			"src/ServerScriptService/ShardfallServer/PropService.luau",
+			"src/ServerScriptService/ShardfallServer/WaveArenaHost.luau",
+		}) do
+			expect(string.find(fs.readFile(path), "PartyGatherPrompt.tag", 1, true) ~= nil).toBeTrue()
+		end
 	end)
 
 	it("rejects a pad that covers the gate mouth", function()

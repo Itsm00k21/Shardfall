@@ -37,6 +37,7 @@ local HavenLife = require(ReplicatedStorage.Shared.HavenLife)
 local ShellLayout = require(ReplicatedStorage.Shared.ShellLayout)
 local Travel = require(ReplicatedStorage.Shared.Travel)
 local VerdantScatter = require(ReplicatedStorage.Shared.VerdantScatter)
+local PartyGatherPrompt = require(ReplicatedStorage.Shared.PartyGatherPrompt)
 
 local HavenBuilder = {}
 
@@ -321,6 +322,7 @@ local function promptOn(
 		prompt:SetAttribute("HavenDistrict", district)
 	end
 	prompt.Parent = host
+	PartyGatherPrompt.tag(prompt)
 end
 
 -- Keep overlapping faces this far apart. Coplanar tops flicker in Studio.

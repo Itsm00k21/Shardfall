@@ -7,7 +7,10 @@
 	Parts are a gray pad and four discs beside Rootvault. No
 	ProximityPrompt is created. A prompt with no HavenAction inside the
 	prompt-free radius is disabled while this host is running. Haven
-	portal prompts stay enabled. The flag-off path builds nothing.
+	portal prompts stay enabled. The watched set is a CollectionService
+	list: GetTagged once at startup, then added and removed signals.
+	The five-second pass does not walk Workspace. The flag-off path
+	builds nothing.
 
 	Party state stays in memory. No profile write and no teleport.
 	The wave arena has its own flag. A finished countdown locks the roster
@@ -23,6 +26,7 @@ local ServerScriptService: any
 local Workspace: any
 local DataService: any
 local LaunchGate: any
+local PartyGatherPrompt: any
 
 if studio then
 	Players = game:GetService("Players")
@@ -32,6 +36,7 @@ if studio then
 	Workspace = game:GetService("Workspace")
 	DataService = require(script.Parent.DataService)
 	LaunchGate = require(ReplicatedStorage.Shared.LaunchGate)
+	PartyGatherPrompt = require(ReplicatedStorage.Shared.PartyGatherPrompt)
 else
 	Players = {
 		PlayerAdded = { Connect = function() end },
@@ -44,6 +49,7 @@ else
 		Heartbeat = { Connect = function() end },
 	}
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
+	PartyGatherPrompt = require("../../ReplicatedStorage/Shared/PartyGatherPrompt")
 	DataService = {
 		get = function(_player)
 			return nil
@@ -56,6 +62,31 @@ local PartyGatherHost = {}
 local started = false
 local friendOf: { [number]: boolean } = {}
 local friendPending: { [number]: boolean } = {}
+local prompts: { any } = {}
+
+-- Tagged prompts only. Connect first so a tag added during the
+-- startup read is not missed, then copy GetTagged once.
+function PartyGatherHost.trackPrompts(service: any, tag: string): { any }
+	local list: { any } = {}
+	local function add(instance: any)
+		if instance == nil or table.find(list, instance) ~= nil then
+			return
+		end
+		table.insert(list, instance)
+	end
+	local function remove(instance: any)
+		local index = table.find(list, instance)
+		if index ~= nil then
+			table.remove(list, index)
+		end
+	end
+	service:GetInstanceAddedSignal(tag):Connect(add)
+	service:GetInstanceRemovedSignal(tag):Connect(remove)
+	for _, instance in ipairs(service:GetTagged(tag)) do
+		add(instance)
+	end
+	return list
+end
 
 local function colorOf(color: { number }): Color3
 	return Color3.fromRGB(color[1] or 176, color[2] or 168, color[3] or 198)
@@ -107,7 +138,7 @@ local function promptXZ(prompt: Instance): (number?, number?)
 end
 
 local function silencePrompts(gather: any, config: any)
-	for _, descendant in ipairs(Workspace:GetDescendants()) do
+	for _, descendant in ipairs(prompts) do
 		if descendant:IsA("ProximityPrompt") then
 			local x, z = promptXZ(descendant)
 			if gather.suppressPrompt(descendant:GetAttribute("HavenAction"), x, z, config) then
@@ -227,6 +258,8 @@ function PartyGatherHost.start(): Folder?
 		local part = makePart(piece, folder)
 		parts[part.Name] = part
 	end
+	local CollectionService = game:GetService("CollectionService")
+	prompts = PartyGatherHost.trackPrompts(CollectionService, PartyGatherPrompt.TAG)
 	silencePrompts(gather, config)
 	local state = gather.new(config)
 	local flashes: { [number]: number } = {}
