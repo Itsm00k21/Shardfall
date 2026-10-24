@@ -1,3 +1,5 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
 # Town / Hub: "Crater Square" (V1 hub cut down from the live Haven), Spec v1.1
 
 Owner: Prism (design, no code). Builders: Ghost (world + UI), Echo (server hooks, flags). Base: `cursor/live-build-9721` @ `9269e61`. Docs only.
@@ -39,7 +41,7 @@ Origin = Lumen Heart (0, 0), +z = south. All on floor y 120. Map: `mockups/01-to
 | Shard Gate arch | (0, 108) | arch 18 tall, 14 wide | live Rootvault slot | reskinned; subline `Lv 1 · Normal / Hard` |
 | Shard Gate pad | (0, 98) | Ø16 | new | dock trigger (existing EnterPad logic) |
 | Armory | (-38, -35.8) | live | live | equip stand |
-| Muster spot | (24, 90) | Ø18 | reserved | Phase 6, empty or gray-box (§11 Q3) |
+| Muster spot | (24, 90) | Ø18 | reserved | Phase 6, gray-box now (§11 Q3, decided) |
 | Hidden arch slots ×5 | crescent bearings 12°–60°, r 78 from spawn | | live, hidden | flag `sealedGates` off; slot left as plain floor (art pass may add rubble decor) |
 | Shard craters ×4 | (-60, 60) (52, -28) (-44, 104) (60, 40) | Ø8 | new | decor / orientation |
 | Paths | spawn↔Roll, Roll↔Gate pad, spawn↔Gate pad, spawn↔Armory, Gate pad↔Muster | 10 wide | new | lighter slate so the route reads |
@@ -114,10 +116,10 @@ Fake data. Original art: no reference game's art, layout or names.
 | 7 | Shard Gate arch | live Rootvault arch, recolor | 180,140,255 body / 255,196,64 edge |
 | 8 | Paths | 10-wide blocks, 0.05 above floor (`Haven.LAYER`) | 75,63,112 |
 | 9 | Craters | 4 × 8×0.5×8 + 1 small wedge | 124,111,176 |
-| 10 | Muster spot (if Q3 = gray-box) | 4 sockets 3×0.5×3 | 200,180,255 |
+| 10 | Muster spot (Q3 = gray-box) | 4 sockets 3×0.5×3 | 200,180,255 |
 Prompts: Crackstone "Roll", Armory (live), Gate pad touch zone (existing EnterPad logic).
 
-**Art pass (Phase S):** 1) Heart crack + floating shard meshes (≤ 400 tris each) · 2) Crackstone mesh + Wren model · 3) Shard Gate arch reskin with inner Neon swirl (Texture scroll) · 4) prismatic sky · 5) shard rain emitter + fall-event burst · 6) pull beam (`Beam` + 2 Attachments, Width 3, LightEmission 1) · 7) saturation ring re-color + lip fog · 8) crater meshes · 9) Lighting: `Atmosphere` Density 0.32, Color 150,130,200, Decay 90,80,120, Haze 1.5; `Lighting.Ambient` 70,60,100; ClockTime fixed 18.5 or day cycle (§11 Q1); `Bloom` Intensity 0.6, Threshold 1.6.
+**Art pass (Phase S):** 1) Heart crack + floating shard meshes (≤ 400 tris each) · 2) Crackstone mesh + Wren model · 3) Shard Gate arch reskin with inner Neon swirl (Texture scroll) · 4) prismatic sky · 5) shard rain emitter + fall-event burst · 6) pull beam (`Beam` + 2 Attachments, Width 3, LightEmission 1) · 7) saturation ring re-color + lip fog · 8) crater meshes · 9) Lighting: `Atmosphere` Density 0.32, Color 150,130,200, Decay 90,80,120, Haze 1.5; `Lighting.Ambient` 70,60,100; ClockTime fixed 18.5 (§11 Q1, decided); `Bloom` Intensity 0.6, Threshold 1.6.
 
 Roblox notes: everything is Parts/MeshParts, Lighting/Atmosphere, Sky, Beams and world ParticleEmitters. "Color draining" is per-part color, not a post effect (ColorCorrection is global and would gray the whole screen).
 
@@ -131,11 +133,15 @@ Roblox notes: everything is Parts/MeshParts, Lighting/Atmosphere, Sky, Beams and
 - [ ] Theme reads in a screenshot: crater, falling shards, cracked sky, gray lip.
 
 ## 11. Open questions (Kevin)
-1. Fixed evening time (ClockTime 18.5, best for the cracked sky) or keep the live day cycle? (Prism pick: evening) — **open**.
+1. ~~Fixed evening time or live day cycle?~~ **Fixed evening, ClockTime 18.5 (Ghost, Kevin pre-approved, Oct 23, 2026).** Board row: https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d
 2. ~~Rename the Lumen Heart to "Sundered Heart"?~~ **Settled by Ghost's decisions (Oct 23, 2026):** the hub identity is **Crater Square** (decision 2/3) and the hub is the live Haven cut down, so the landmark keeps its live name **Lumen Heart** with the new cracked look. Kevin can still rename it later.
-3. Muster spot: gray-box 4 sockets now (decor) so the space is reserved, or leave the spot empty until Phase 6? (Prism pick: gray-box) — **open**.
+3. ~~Muster spot gray-box now or empty?~~ **Gray-box the 4 sockets now (Ghost, Kevin pre-approved).** Decor only, no party logic until Phase 6.
 
 Not a Kevin question: Ghost to update `DUNGEON_GATE_PLAZA.md` (Hard Lv 5, no Nightmare) per decision 10.
 
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved): hub = Crater Square, small V1 hub cut down from the live Haven; parked districts + 5 sealed gates hidden behind LaunchGate flags (delete nothing); Spawn, Roll and Gate within ~10 s walk. Gate prompt = Normal + Hard (Lv 5), no Nightmare. Pull beams per-server only, not saved, Phase S. → v1.1.
+
+
+</cursor_untrusted_data_1337>
+- 2026-10-23 (Ghost, Kevin pre-approved): taste call 1 = fixed evening sky (ClockTime 18.5); taste call 3 = gray-box the Muster spot now. All §11 questions are now closed.
