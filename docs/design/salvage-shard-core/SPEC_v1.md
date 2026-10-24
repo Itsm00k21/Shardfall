@@ -102,7 +102,7 @@ Safe areas: obey the GUI inset and keep 12 px from the notch and home bar. No po
   - buttonDim 54,46,78 (0-count rows, Cancel in confirm) · danger 230,80,96 (rows with count > 0, Confirm, Turn on) · AutoAsk tray 60,34,30 · warn stroke 255,168,48 · ok 110,210,140 (perk check).
 - **Corners and spacing:** buttons 8 · popups 12 (gold stroke at 0.5 transparency, thickness 1) · card 10 · pill 18. Padding: popup 14/12 · AutoAsk 10/8. Gaps: PAD 8, ask list 6.
 - **Fonts and sizes:** BuilderSansBold for buttons and titles (popover title 18) · BuilderSans for body, 14 · help 13 · confirm body 15 · Auto pill BuilderSansExtraBold.
-- **Timings:** popup open 0.15 s fade+slide 12 px · Essence count-up 0.4 s · perk unlock flash 0.4 s · toast 2.5 s.
+- **Timings:** popup open 0.15 s tween (Position +12 px → 0, BackgroundTransparency 1 → 0; there is no blur behind it, just a 0.5 black dim `Frame`) · Essence count-up 0.4 s (tween a `NumberValue`, write the text on Changed) · perk unlock flash 0.4 s · toast 2.5 s.
 - **Exact text** (live strings):
   - Buttons and titles: "Salvage…" · "Salvage gear · Essence N" · "Cancel" · "Confirm" · "Select" · "Clear" · "Turn on" · "Auto-salvage" · "Shard Core  Lv N/5" · "Feed N Essence" · "Essence N".
   - Picker help: "Weapons and Armor in your Bag. Locked, favorite and equipped gear is never salvaged."
@@ -171,3 +171,42 @@ AI-drawn art notes:
 - Per-perk choice (V1 perks are fixed by level).
 - Respec or refund of core Essence.
 - Salvaging materials.
+
+## Roblox build notes
+Stock Roblox UI only.
+- **No backdrop effects:** no blur or glassmorphism behind popups. Use a black `Frame` dim at 0.5 transparency.
+- **No soft drop shadows:** for depth, put a 2 px darker `Frame` offset under the panel, or rely on the `UIStroke`.
+- **Mockups:** the mockups' painterly item art stands in for item icons, which are uploaded `ImageLabel` assets. Panels must be flat.
+- **Gradients:** the red gradient on the picker rows = `UIGradient` on the danger fill.
+
+| Element | Instances |
+|---|---|
+| Bag window | existing `InventoryHud` `ScreenGui` → `Frame` modal + `UICorner` 10 + `UIStroke`; collapse = TweenService Size to the tab-bar height |
+| GearRow | `Frame` + `UIListLayout` Horizontal Padding 8; `TextLabel` Essence + `ImageLabel` essence_icon; `TextButton` Auto pill (`UICorner` 18, `UIStroke` warn 2 when on); `TextButton` Select / Salvage… |
+| Item grid | `ScrollingFrame` (AutomaticCanvasSize Y) + `UIGridLayout` + `UIAspectRatioConstraint` 1.0 per card |
+| Card | `ImageButton` + `UICorner` 10 + `UIStroke` 2 (Rarities.rgb) + `ImageLabel` icon + `TextLabel` name + E badge / lock_icon / heart_icon `ImageLabel`s + select checkbox `ImageLabel` check_icon |
+| Dim | full-screen `Frame` BackgroundColor3 0,0,0, transparency 0.5, Active true (eats taps) |
+| BulkPicker / SalvageConfirm / AutoPopover | `Frame` + `UICorner` 12 + `UIStroke` gold 0.5/1 + `UIPadding` 14/12 + `UIListLayout` Vertical 8 + `UISizeConstraint` max width 360 |
+| Picker rows, Confirm, Turn on | `TextButton` (2-line text with RichText off, `\n`) + `UICorner` 8; danger fill + optional `UIGradient` |
+| AutoAsk tray | `Frame` 60,34,30 + `UICorner` 8 + `UIPadding` 10/8 + warn `ImageLabel` |
+| Cap dropdown | existing `Dropdown` module (popup list parented to the modal root) |
+| Shard Core card | `Frame` + `UICorner` 10 + `UIListLayout`; header `TextButton` (chevron `ImageLabel` rotates 0/180 on collapse) |
+| Level pips | 5 `Frame` 20×20 + `UICorner` (0.5 scale) ; lit = button purple, unlit = buttonDim |
+| Perk rows | `Frame` + `ImageLabel` check_icon / lock_icon + `TextLabel` |
+| Unlock flash | `ImageLabel` glow_soft_256 tinted gold behind the row, ImageTransparency 0.3→1 over 0.4 s |
+| Feed button | `TextButton` + `UICorner` 8, height 44, `ImageLabel` essence_icon |
+| Toasts | existing status toast (`Frame` + `UICorner` + `TextLabel`) |
+| Scaling | `UIScale` on the modal for desktop; phones use scale + offset sizes from §4 |
+
+### Image assets to upload (PNG, transparent)
+| Asset | Size | Use |
+|---|---|---|
+| essence_icon | 64×64 | Essence balance, Feed button (shard-style, not a coin) |
+| glow_soft_256 | 256×256 | shared with the roll spec; perk unlock flash |
+| lock_icon | 32×32 | locked card / perk |
+| heart_icon | 32×32 | favorite |
+| check_icon | 32×32 | selected card / unlocked perk |
+| warn_icon | 32×32 | AutoAsk, Auto pill |
+| chevron_icon | 32×32 | collapse |
+| core_crystal_icon | 64×64 | Shard Core header |
+| item icons | 256×256 each | existing item art pipeline |
