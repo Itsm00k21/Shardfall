@@ -61,6 +61,14 @@ its tag to merged and add the merge commit.
   telegraphed slam (`LEASH_WINDUP`, `LEASH_RADIUS`) the player can step out
   of. The boss does not heal. Flag `enemyTypes` stays off. No save fields.
   `schemaVersion` stays 26. Stacked on #419. (open)
+- Phase 3 enemy pool (flag `enemyTypes`, off): gray-box blocks go into
+  `EnemyPool` and are reused. A death parks the block. The next spawn
+  clears health, target, projectile, every attribute, and every child.
+  `WaveFlowService.stop` destroys that run's parts. clear, wipe,
+  PlayerRemoving, and BindToClose call it, so a finished run does not
+  keep the pool. This branch does not cap how many are alive. The alive
+  cap stays with #433 (`enemyPerf`). No HUD edit, no save write,
+  `schemaVersion` stays 26. Stacked on the wave-5 boss. (open)
 - Phase 3 wave-5 boss (flag `enemyTypes`, off): wave 5 is one boss plus
   4 adds drawn from chaser, ranged, and tank. Boss stats and the adds
   count live in `Shared/Config/Enemies.luau`. `WaveFlowService` spawns

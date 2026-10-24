@@ -436,6 +436,7 @@ describe("WaveFlowService", function()
 			expect(built[6].kind).toEqual("tank")
 			built[1].color[1] = 0
 			expect(Enemies.TYPES.chaser.color[1]).toEqual(paint)
+			WaveFlowService.wipe(run)
 		end)
 	end)
 
@@ -460,6 +461,7 @@ describe("WaveFlowService", function()
 			expect(WaveFlowService.hurt(run, -1, 100000, sink)).toEqual(0)
 			expect(WaveFlowService.counter(run).left).toEqual(5)
 			expect(#sent).toEqual(before)
+			WaveFlowService.wipe(run)
 		end)
 	end)
 
@@ -478,6 +480,7 @@ describe("WaveFlowService", function()
 			expect(WaveFlowService.counter(run).left).toEqual(6)
 			expect(#sent).toEqual(1)
 			expect(#built).toEqual(6)
+			WaveFlowService.wipe(run)
 		end)
 	end)
 

@@ -5,6 +5,8 @@
 	stuck-enemy watchdog (3.8). Wave sizes, the boss, the four adds,
 	and the stall clock come from Config/Enemies.luau. This module
 	does not create parts, fire a remote, read a profile, or spend Robux.
+	A wave spawns every enemy at once. This module does not cap how
+	many can be alive and does not queue the rest.
 
 	WaveFlowService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on. A client that requires this file can

@@ -29,25 +29,30 @@
 	absent on this branch, so the lookup is a no-op.
 
 	Studio can require the module. Lune loads the same file through the
-	relative path when `game` is not a DataModel. The service describes
-	gray blocks. It does not parent them.
+	relative path when `game` is not a DataModel. Gray blocks live in
+	EnemyPool. That module reuses them. This file does not create them.
+	stop destroys that run's parts. clear, wipe, PlayerRemoving, and
+	BindToClose all call stop. init.server does not require this module.
 ]]
 
 local LaunchGate
 local WaveFlow
 local Enemies
 local BossClearReward
+local EnemyPool
 if game ~= nil and game.GetService ~= nil then
 	local Shared = game:GetService("ReplicatedStorage").Shared
 	LaunchGate = require(Shared.LaunchGate)
 	WaveFlow = require(Shared.WaveFlow)
 	Enemies = require(Shared.Config.Enemies)
 	BossClearReward = require(Shared.BossClearReward)
+	EnemyPool = require(script.Parent.EnemyPool)
 else
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
 	WaveFlow = require("../../ReplicatedStorage/Shared/WaveFlow")
 	Enemies = require("../../ReplicatedStorage/Shared/Config/Enemies")
 	BossClearReward = require("../../ReplicatedStorage/Shared/BossClearReward")
+	EnemyPool = require("./EnemyPool")
 end
 
 local WaveFlowService = {}
@@ -236,12 +241,98 @@ function WaveFlowService.publish(player: any, run: WaveFlow.Run?, fire: ((any, P
 	return deliver(player, payload, fire)
 end
 
-local function pushBoxes(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
-	if build == nil then
+type Track = {
+	pool: EnemyPool.Pool,
+	shown: { [number]: boolean },
+	player: any,
+}
+
+local tracks: { [WaveFlow.Run]: Track } = {}
+
+local function track(run: WaveFlow.Run): Track
+	local found = tracks[run]
+	if found ~= nil then
+		return found
+	end
+	local created: Track = {
+		pool = EnemyPool.create(),
+		shown = {},
+		player = nil,
+	}
+	tracks[run] = created
+	return created
+end
+
+-- End of a run. Parts are destroyed and this entry is dropped, so the
+-- pool cannot outlive clear, wipe, PlayerRemoving, or BindToClose.
+function WaveFlowService.stop(run: WaveFlow.Run?)
+	if run == nil then
 		return
 	end
-	for _, box in ipairs(WaveFlow.boxes(run)) do
-		build(box)
+	local owned = tracks[run]
+	if owned == nil then
+		return
+	end
+	tracks[run] = nil
+	owned.pool.destroy()
+end
+
+function WaveFlowService.wipe(run: WaveFlow.Run?)
+	WaveFlowService.stop(run)
+end
+
+function WaveFlowService.entries(): number
+	local count = 0
+	for _ in pairs(tracks) do
+		count += 1
+	end
+	return count
+end
+
+function WaveFlowService.onPlayerRemoving(player: any)
+	if player == nil then
+		return
+	end
+	local ending = {}
+	for run, owned in pairs(tracks) do
+		if owned.player == player then
+			table.insert(ending, run)
+		end
+	end
+	for _, run in ipairs(ending) do
+		WaveFlowService.stop(run)
+	end
+end
+
+function WaveFlowService.onClose()
+	local ending = {}
+	for run in pairs(tracks) do
+		table.insert(ending, run)
+	end
+	for _, run in ipairs(ending) do
+		WaveFlowService.stop(run)
+	end
+end
+
+-- Bind a pooled block to each living enemy. Fresh ids are described
+-- once. Dead ids go back to the pool before the next bind, so a later
+-- wave reuses a block instead of making another.
+local function present(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
+	local owned = track(run)
+	local living: { [number]: boolean } = {}
+	local boxes = WaveFlow.boxes(run)
+	for _, box in ipairs(boxes) do
+		living[box.id] = true
+	end
+	owned.pool.releaseExcept(living)
+	for _, box in ipairs(boxes) do
+		owned.pool.bind(box.id, box.kind, box)
+		if owned.shown[box.id] ~= true then
+			owned.shown[box.id] = true
+			if build ~= nil then
+				build(box)
+			end
+		end
 	end
 end
 
@@ -278,8 +369,10 @@ function WaveFlowService.start(sink: Sink?): WaveFlow.Run?
 	if run == nil then
 		return nil
 	end
+	local owned = track(run)
+	owned.player = if sink ~= nil then sink.player else nil
 	local build = if sink ~= nil then sink.build else nil
-	pushBoxes(run, build)
+	present(run, build)
 	if sink ~= nil then
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
@@ -294,6 +387,10 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	local before = WaveFlow.counter(run)
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
+	local build = if sink ~= nil then sink.build else nil
+	if run.clear ~= true then
+		present(run, build)
+	end
 	local after = WaveFlow.counter(run)
 	local needsPay = sink ~= nil and sink.profile ~= nil and run.clear == true and run.rewarded ~= true
 	local paid = true
@@ -304,12 +401,12 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	end
 	local changed = after.wave ~= before.wave or after.left ~= before.left
 	if sink ~= nil and paid and (changed or needsPay) then
-		if after.wave ~= before.wave then
-			pushBoxes(run, sink.build)
-		end
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
 	noteBoss(sink, run, before.wave, wasBoss)
+	if run.clear == true then
+		WaveFlowService.stop(run)
+	end
 	return taken
 end
 
@@ -327,6 +424,37 @@ function WaveFlowService.step(
 		return nil
 	end
 	return WaveFlow.step(run, targetX, targetZ, dt, obstacles)
+end
+
+function WaveFlowService.body(run: WaveFlow.Run?, id: number): EnemyPool.Body?
+	if not WaveFlowService.open() or run == nil or type(id) ~= "number" then
+		return nil
+	end
+	local owned = tracks[run]
+	if owned == nil then
+		return nil
+	end
+	return owned.pool.body(id)
+end
+
+function WaveFlowService.pool(run: WaveFlow.Run?): EnemyPool.Stats?
+	if not WaveFlowService.open() or run == nil then
+		return nil
+	end
+	local owned = tracks[run]
+	if owned == nil then
+		return nil
+	end
+	return owned.pool.stats()
+end
+
+if game ~= nil and game.GetService ~= nil then
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		WaveFlowService.onPlayerRemoving(player)
+	end)
+	game:BindToClose(function()
+		WaveFlowService.onClose()
+	end)
 end
 
 return WaveFlowService

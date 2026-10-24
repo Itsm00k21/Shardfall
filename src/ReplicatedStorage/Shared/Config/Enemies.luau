@@ -13,7 +13,8 @@
 	LaunchGate.SHOW.enemyTypes stays false. Live rooms and
 	Dungeons.waveKinds do not spawn these ids. Waves and the boss are
 	read only by WaveFlow, which no-ops while the flag is off.
-	No Robux. No profile fields.
+	This file does not cap how many can be alive. No Robux.
+	No profile fields.
 
 	The wave-5 boss cannot be kited for free. Pressure arms after
 	PRESSURE_SECONDS with no damage dealt to its target, and a damaging
