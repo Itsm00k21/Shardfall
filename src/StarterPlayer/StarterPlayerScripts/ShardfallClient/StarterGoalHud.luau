@@ -24,6 +24,11 @@
 
 	The server sends the rows. This module does not count, and it
 	does not load the rules module. The frame starts hidden.
+
+	[Ghost] Oct 24 (Kevin's clip): this list stacked on the intro card's
+	top edge. setSuppressed(source, on) hides it while another goal
+	surface is up; init passes "onboard" while the intro card or its
+	goals show, so the two lists never sit on each other.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -69,6 +74,7 @@ local screenRef: ScreenGui? = nil
 local held: any = nil
 local heldSettings: any = nil
 local placing = false
+local suppressed: { [string]: boolean } = {}
 
 local function finite(value: any): number?
 	if type(value) ~= "number" then
@@ -258,8 +264,14 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	local box: Rect = { x = x, y = y, w = width, h = height }
 	local block = toastHost(viewportX, margin)
 	local prompt = equipPrompt(viewportX, margin)
-	local railFit =
-		HudLayout.railFit(viewportY, margin, HudLayout.RAIL_COUNT, UiTheme.TAP, UiTheme.TOUCH, viewportX)
+	local railFit = HudLayout.railFit(
+		viewportY,
+		margin,
+		HudLayout.RAIL_COUNT,
+		UiTheme.TAP,
+		UiTheme.TOUCH,
+		viewportX
+	)
 	local rail: Rect = { x = railFit.x, y = railFit.y, w = railFit.w, h = railFit.h }
 	local railRight = railFit.x + railFit.w + TOAST_GAP
 	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"
@@ -422,7 +434,7 @@ local function apply(rows: { Row })
 	local vx, vy = viewport()
 	local box = StarterGoalHud.place(vx, vy, count, textSize)
 	local show = StarterGoalHud.shown(#rows, heldSettings)
-	if box.collapsed == true then
+	if box.collapsed == true or StarterGoalHud.isSuppressed() then
 		show = false
 	end
 	frame.Visible = show
@@ -448,6 +460,21 @@ local function apply(rows: { Row })
 			end
 		end
 	end
+end
+
+-- True while any source asked the list to stay hidden.
+function StarterGoalHud.isSuppressed(): boolean
+	for _, on in pairs(suppressed) do
+		if on then
+			return true
+		end
+	end
+	return false
+end
+
+function StarterGoalHud.setSuppressed(source: string, on: boolean)
+	suppressed[source] = if on == true then true else nil
+	apply(StarterGoalHud.rows(held))
 end
 
 function StarterGoalHud.present(result: any)

@@ -21,7 +21,9 @@
 
 print((function(): string
 	local ok, line = pcall(function()
-		return require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Build")).line("client")
+		return require(
+			game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Build")
+		).line("client")
 	end)
 	return if ok then line else "[Shardfall] build unknown client"
 end)())
@@ -118,7 +120,8 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- GuiService.SelectedObject turns WASD into UI navigation. Gamepad keeps it.
 do
 	local GuiService = game:GetService("GuiService")
-	local UiSelection = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSelection"))
+	local UiSelection =
+		require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiSelection"))
 	local function dropSelection()
 		local lastInput = UserInputService:GetLastInputType().Name
 		if UiSelection.shouldClear(lastInput, GuiService.SelectedObject ~= nil) then
@@ -175,7 +178,10 @@ local function clearStaleGuis(gui: PlayerGui)
 			and (
 				ClientChrome.shouldClear(child.Name)
 				or LegacyChrome.shouldDestroy(child.Name)
-				or LegacyChrome.isPlaceCopy(child.Name, StarterGui:FindFirstChild(child.Name) ~= nil)
+				or LegacyChrome.isPlaceCopy(
+					child.Name,
+					StarterGui:FindFirstChild(child.Name) ~= nil
+				)
 			)
 		then
 			if LegacyChrome.shouldDestroy(child.Name) then
@@ -1021,7 +1027,9 @@ inventory = InventoryHud.start(playerGui, {
 			return result
 		end
 		applyResult(result)
-		local note = if type(result) == "table" and type(result.note) == "string" then result.note else nil
+		local note = if type(result) == "table" and type(result.note) == "string"
+			then result.note
+			else nil
 		ui.setStatus(if note ~= nil then "Upgraded " .. note else "Upgraded.", "ok")
 		return result
 	end,
@@ -1269,40 +1277,42 @@ inventory = InventoryHud.start(playerGui, {
 	end,
 })
 
-travel = if not LaunchGate.on("travel") then nil else TravelHud.start(playerGui, {
-	onVisible = function(open: boolean)
-		if open then
-			closePanels("travel")
-		end
-	end,
-	onTravel = function(destinationId: string)
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("Travel", destinationId)
-			end)
-			local message = remoteError(ok, result, "Could not travel.")
-			if message ~= nil then
-				ui.setStatus(message, "error")
-				return
+travel = if not LaunchGate.on("travel")
+	then nil
+	else TravelHud.start(playerGui, {
+		onVisible = function(open: boolean)
+			if open then
+				closePanels("travel")
 			end
-			applyResult(result)
-			ui.setStatus("Traveled.", "ok")
-		end)
-	end,
-	onBuyPass = function()
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return invoke("BuyTravelPass")
+		end,
+		onTravel = function(destinationId: string)
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return invoke("Travel", destinationId)
+				end)
+				local message = remoteError(ok, result, "Could not travel.")
+				if message ~= nil then
+					ui.setStatus(message, "error")
+					return
+				end
+				applyResult(result)
+				ui.setStatus("Traveled.", "ok")
 			end)
-			local message = remoteError(ok, result, "Could not buy a travel pass.")
-			if message ~= nil then
-				ui.setStatus(message, "info")
-				return
-			end
-			applyResult(result)
-		end)
-	end,
-})
+		end,
+		onBuyPass = function()
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return invoke("BuyTravelPass")
+				end)
+				local message = remoteError(ok, result, "Could not buy a travel pass.")
+				if message ~= nil then
+					ui.setStatus(message, "info")
+					return
+				end
+				applyResult(result)
+			end)
+		end,
+	})
 
 function cycleGraphics()
 	local order = Quality.ids()
@@ -1575,6 +1585,11 @@ retireChrome("ShardfallMenu")
 OnboardHud.start(function(action: string, ...: any)
 	return invoke(action, ...)
 end, applyResult)
+-- [Ghost] Oct 24: the starter-goal mini list hides while the intro card
+-- or its goals show, so the two goal lists never stack.
+OnboardHud.onShownChange(function(shown: boolean)
+	StarterGoalHud.setSuppressed("onboard", shown)
+end)
 -- [Ghost] Clip 9: the intro and goals came back over the open Bag. Covered
 -- is now read live from each menu's real visible state, so any open menu
 -- keeps them hidden however it was opened.

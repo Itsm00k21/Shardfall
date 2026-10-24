@@ -674,7 +674,15 @@ export type Onboard = {
 -- collapse is the card's chevron (inside the card). pill is where the
 -- collapsed card goes; goalsTab is where the collapsed goals go.
 -- Button rects are inside the card.
-function HudLayout.onboard(viewportX: number, viewportY: number): Onboard
+--
+-- [Ghost] Oct 24 (Kevin's clip): on a mouse screen the card sat right
+-- against the Hero/Bag rail and under the toast stack. When the view is
+-- not a phone and not touch, the card now drops to the lower left: right
+-- of the rail, on the action bar's top band, and left of the screen
+-- centre, so it never touches the rail, the toasts, the equip prompt, or
+-- the character. Phones and touch screens keep the top band (the
+-- thumbstick owns the lower left), still right of the rail.
+function HudLayout.onboard(viewportX: number, viewportY: number, touch: boolean?): Onboard
 	local margin = 16
 	local gap = 8
 	local vx = math.max(200, math.floor(axisWidth(viewportX)))
@@ -693,12 +701,11 @@ function HudLayout.onboard(viewportX: number, viewportY: number): Onboard
 	local trackH = 72
 	local tabW = 112
 	local tabH = 36
-	-- Clear of the mid-left rail when the card's band crosses it.
+	-- Always right of the mid-left rail's column (Oct 24): the rail's
+	-- hover tips open to its right, and a card above the rail still read
+	-- as sitting on it.
 	local railFit = HudLayout.railFit(vy, margin, HudLayout.RAIL_COUNT, 64, 44, vx)
-	local cardX = margin
-	if railFit.y < top + cardH and railFit.y + railFit.h > top then
-		cardX = railFit.x + railFit.w + gap
-	end
+	local cardX = railFit.x + railFit.w + gap
 	local cardY = top
 	local sideRoom = vx - margin - trackW - gap - cardX
 	local cardW = math.min(340, sideRoom)
@@ -717,6 +724,21 @@ function HudLayout.onboard(viewportX: number, viewportY: number): Onboard
 	end
 	if tracker.y + tracker.h > bottom then
 		tracker = rect(tracker.x, math.max(top, bottom - tracker.h), tracker.w, tracker.h)
+	end
+	local lowLane = touch ~= true and HudLayout.breakpoint(vx, vy) ~= "phone"
+	if lowLane then
+		local lowX = railFit.x + railFit.w + gap
+		local lowW = math.min(340, math.floor(vx / 2) - lowX)
+		local lowH = 120
+		local lowY = bar.y - gap - lowH
+		if lowW >= 220 and lowY >= top then
+			cardX = lowX
+			cardY = lowY
+			cardW = lowW
+			cardH = lowH
+			-- The goals keep the top-right lane under the pills.
+			tracker = rect(vx - margin - trackW, top, trackW, trackH)
+		end
 	end
 	local card = rect(cardX, cardY, cardW, cardH)
 	local buttonH = UiTheme.TOUCH
