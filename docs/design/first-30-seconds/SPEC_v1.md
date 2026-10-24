@@ -1,3 +1,5 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
 # First 30 Seconds: New Player Flow, Spec v1
 
 Owner: Prism (design). Builders: Ghost (UI), Echo (server). Base: `cursor/live-build-9721` @ `9269e61`. Docs only, no code.
@@ -191,17 +193,18 @@ SVG in `mockups/`. Fake data. The dashed box is the center keep-out. Rendered an
 1. ~~@Kevin: First fight A (wave 1 via Shard Gate) or B (practice shardling)?~~ **RESOLVED by Kevin (Oct 23, 2026): A.** The first fight is wave 1 of the Normal dungeon through the Shard Gate. Needs the #382 arena gated on; until then the "Coming soon" edge case in §7 applies.
 2. ~~@Kevin: OK to treat Core Loop §7 times as starting estimates tuned by this spec?~~ **RESOLVED by Kevin (Oct 23, 2026): yes.** Core Loop §7 times are starting estimates; this spec's ~0:12 rolls / ~0:20 wave 1 are the playtest tune. The locked Core Loop page is not edited here; changing it, or copying this into Vision & Design Rules, still needs Kevin.
 3. ~~@Ghost: Replace the old `Onboarding.STEPS` cold open, or run this flow after it?~~ **ANSWERED by Ghost (Oct 23, 2026, Kevin pre-approved Ghost's calls): replace.** For V1 this flow's `onboardStep` list replaces the old cold open (pedestals → swing → dodge → door → Haven). Keep Skip and the same starter kit. Running both would blow the 30 s budget. Kevin can still change this later. Board row: https://app.notion.com/p/403c31ca388381ddaeb5edc911c66a55
-4. @Echo: For the first-ever Gate run, use solo, a 3 s countdown instead of 15 s (Config), and preload the arena so the teleport takes 3 s or less? (yes/no)
-5. @Echo: Tutorial pools of roll 1 Weapon, roll 2 Armor, roll 3 Weapon with the Rare floor, all free, with server auto-equip-if-better? (yes/no)
+4. ~~@Echo: First-ever Gate run solo, 3 s countdown, arena preloaded?~~ **Yes (Echo, Oct 23, 2026).** Solo first run; the 3 s countdown is a Config value; the arena is preloaded in the same place (no TeleportService), with 3 s or less as the target. Board row: https://app.notion.com/p/403c31ca388381dba1c1f358d0618f00
+5. ~~@Echo: Free tutorial pools (W, A, W with Rare floor on roll 3) and server auto-equip-if-better?~~ **Yes (Echo).** Server-side pools, free, auto-equip-if-better decided on the server, tracked on the existing onboarding state. Any new save field goes to Ghost first.
 
-Already pending with Kevin (not re-asked; Decision request row https://app.notion.com/p/403c31ca388381818ea2d4ffb145ddbd):
-- Q2 "force the first roll to full length": this spec assumes **yes** for all 3 tutorial rolls. They're short anyway, and Auto is hidden until roll 3. A "no" changes nothing else.
-- The salvage tip (Q1) is not shown in the first 30 s, because the Bag stays hidden.
+Decided by Ghost under Kevin's pre-approval (Oct 23, 2026, board row https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d):
+- "Force the first roll to full length" = **yes**, so all 3 tutorial rolls play full length. Auto stays hidden until roll 3.
+- The salvage tip ships, but it is not shown in the first 30 s, because the Bag stays hidden.
 - The Core Loop vs repo rarity-ladder conflict is still open. This spec uses the repo's 5 V1 tiers per the master prompt.
 
 ## Decision log
 - 2026-10-23 (Kevin): Q1 = **A**, first fight is wave 1 through the Shard Gate (depends on #382 arena being gated on). Q2 = **yes**, Core Loop §7 timings are starting estimates; this spec's timings are the tune. Locked Core Loop page unchanged.
 - 2026-10-23 (Ghost, Kevin pre-approved): Q3 = **replace**. The `onboardStep` list replaces the old `Onboarding.STEPS` cold open for V1; Skip and the same starter kit stay; Kevin can change it later. Q4 and Q5 stay open with Echo.
+- 2026-10-23 (Echo): Q4 = **yes** (solo, 3 s Config countdown, preloaded arena, 3 s or less). Q5 = **yes** (free server-side tutorial pools, server auto-equip-if-better on existing onboarding state; new save fields go to Ghost first). (Ghost): first roll full length = yes. All §11 questions are now closed.
 
 ## Later (not V1)
 Voice lines for Wren, a set-bonus tip (Core Loop: only once the player owns 2 items of the same element), party-join during onboarding, and a Pets/Skills tutorial roll.
@@ -240,3 +243,6 @@ Stock Roblox UI only. No blur or glassmorphism (BlurEffect blurs the 3D world, n
 | arrow_strip | 256×64 | Beam texture (tileable) |
 | arrow_64 | 64×64 | edge arrow |
 | glow_soft_256, shard_icon, shard_frag_a/b/c, lock_icon, spinner_64 | as in #397 | reused |
+
+
+</cursor_untrusted_data_1337>
