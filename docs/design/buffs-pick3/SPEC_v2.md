@@ -1,7 +1,8 @@
 # Pick-1-of-3 Element Buffs ("Shard Draft"), SPEC v2 (M15)
 
-Owner: Prism (design, docs only, no code, no config edits). Builders: Echo (server, Config, LaunchGate line, telemetry), Ghost (DraftHud client). Base: `cursor/live-build-9721`. Status: **v2, proposal for building after the fun test.** Not an official Vision & Design Rules decision until Kevin approves it and it is copied there.
+Owner: Prism (design, docs only, no code, no config edits). Builders: Echo (server, Config, LaunchGate line, telemetry), Ghost (DraftHud client). Base: `cursor/live-build-9721`. Status: **v2.1, proposal for building after the fun test.** Not an official Vision & Design Rules decision until Kevin approves it and it is copied there.
 Asked for in: Ghost's Agent Board row https://app.notion.com/p/403c31ca3883818abc23e33d062c9c26 (11:40Z Oct 24, 2026, Kevin pre-approved): "M15 pick-1-of-3 element buffs, design only: offer cadence between waves, buff list in a Config table, server-authoritative pick, LaunchGate flag default off, per-player picks in parties, a pick-rate target of no element over ~50% plus the telemetry to check it, cards in Ember #E84814 / Frost #5CD6FF / Void #C04888. If a buff spec already exists, revise it instead of a new PR."
+**v2.1 note (Oct 24, 2026, 5:10 AM PT):** Ghost answered Q4 and Q5 (board row https://app.notion.com/p/403c31ca3883812fa966d50ee503d110). (a) Landscape held-buff list = break only; combat keeps just the small held pill. (b) Auto-takes are out of the 50% share and counted separately in `buff_run_summary`. §5, §6 telemetry and §11 are updated below; nothing else changed.
 **What v2 is:** one consolidated spec that replaces reading `SPEC_v1.md` (v1.1, pick moment) and `M15_ELEMENT_BUFFS_v1.2.md` (Config contract + guard) side by side. Both files stay on this branch as history. Every earlier decision is carried forward unchanged (see the Decision log). New in v2: the LaunchGate flag, the full Config table, the server pick contract, party rules in one place, the telemetry events and fields, and the new element colors.
 
 Sources (link, don't copy):
@@ -62,6 +63,7 @@ Rules: every tap target ≥ 44 px (whole card = target); panels **collapse** (ro
 - **Feature:** `buffDraft` off (shipped default): no offers, no DraftHud, no strip, no Results row, `BuffPick` answers "That is closed.", no telemetry. On: everything below.
 - **Card:** incoming · idle (tier stroke 2 px, tier chip, element icon) · Epic/Legendary idle (+ rotating gold `UIGradient` stroke, soft glow ImageLabel) · pressed 0.96× · picked 1.08× + ring → fly · faded 0.35 · busy (spinner on the picked card, others locked; 1.5 s timeout → retry once → "Try again" toast, row stays). Missing Config string → stat name + value (never blank or "nil").
 - **Row:** open (scrim) · folded (held pill) · tray open · auto-taken.
+- **Landscape held-buff list (v2.1, Ghost Q4):** expanded only during the break; in combat it collapses to the small held pill (no list over the play space).
 - **Strip:** hidden (0 buffs) · 1–4 pips · expanded list (landscape phones: break-only) · Resonance pulse.
 - **Party:** own draft per player; "n/N picked" counter only, no waiting, no voting.
 - **Error:** offer payload fails validation → no draft this wave, toast "Shard Draft skipped" (info), run continues, logged.
@@ -119,7 +121,7 @@ Every `element` must be in `Elements.ORDER`. Stats follow Element Freedom & Stat
 | `buff_offer` | each offer sent | `runId`, `userId`, `mode` (normal/hard), `wave` (1–4), `offerId`, `partySize`, `cards` = 3 × {`cardId`, `element`, `tier`}, `buildVersion` |
 | `buff_pick` | each applied pick | `runId`, `userId`, `mode`, `wave`, `offerId`, `cardId`, `element`, `tier`, `slotIndex` (1–3, checks position bias), `method` (tap / key / pad / tray / auto), `pickMs` (offer shown → pick), `wasHeld` (bool), `pipsAfter` {ember, frost, void}, `setBonusTierUp` (bool) |
 | `buff_reject` | a pick the server refuses | `runId`, `userId`, `offerId`, `reason` (not_owner / spent / wrong_wave / bad_index / closed / rate_limited) |
-| `buff_run_summary` | run end | `runId`, `userId`, `mode`, `result` (cleared / died / left), `picks` (list of cardIds), `autoTakes` (count), `pipsFinal`, `resonanceItems`, `runSeconds` |
+| `buff_run_summary` | run end | `runId`, `userId`, `mode`, `result` (cleared / died / left), `picks` (list of manual cardIds), `autoTakes` (count, **kept out of the 50% share**, v2.1), `autoTakeCards` (list of auto-taken cardIds, v2.1), `pipsFinal`, `resonanceItems`, `runSeconds` |
 
 Roblox `AnalyticsService:LogCustomEvent` carries a name, a value and a few custom fields, so map: event `BuffPicked`, value 1, custom fields **Element / Tier / Mode** (what the share chart needs). The full rows above go to the server's own playtest log (same place as the other M13 run events) so the guard can be computed per mode, per card and per slot. No personal data beyond the Roblox `userId` already used by saves.
 
@@ -161,8 +163,8 @@ SVG in `mockups/` (fake data, original art, gray box): **new in v2:** `v2-01-ele
 1. **@Kevin (confirm or change):** Resonance (2 pips = +1 matching item, max +2) and the 12 card names were decided by Ghost under your pre-approval on Oct 23 ("Kevin can change later"). Keep both? Recommended: keep.
 2. **@Kevin (taste):** Void on cards follows the #428/#435 pick (V3 #C04888). If you choose the V2 override there, cards follow automatically. Any separate call for cards? Recommended: no, one Void color everywhere.
 3. **@Echo:** Flag name `buffDraft` (in `LaunchGate.SHOW`) OK, and is `BuffPick` parked through `PARKED_ACTION` like the other closed remotes? Recommended: yes to both.
-4. **@Ghost (carried from v1.2 Q2):** On landscape phones the expanded strip list opens only during the break. OK? Recommended: yes.
-5. **@Ghost (carried from v1.2 Q3):** Auto-takes excluded from the 50% share (tracked separately). OK? Recommended: yes.
+4. ~~**@Ghost (carried from v1.2 Q2):** On landscape phones the expanded strip list opens only during the break. OK?~~ **Answered yes (Ghost, 11:55Z, v2.1).** The landscape held-buff list shows in the break only; during combat only the small held pill shows.
+5. ~~**@Ghost (carried from v1.2 Q3):** Auto-takes excluded from the 50% share (tracked separately). OK?~~ **Answered yes (Ghost, 11:55Z, v2.1).** Auto-takes are excluded from the 50% pick-rate share and counted separately in `buff_run_summary`.
 
 v1.2 Q1 (direction A: Config knobs + human-tuned guard, no live auto-balance) is treated as **answered by Ghost's 11:40Z GO**, which asks for exactly that (Config table + telemetry check). v1.2 Q4 (element colors) is **answered** by the same GO (new hexes).
 
@@ -174,6 +176,7 @@ v1.2 Q1 (direction A: Config knobs + human-tuned guard, no live auto-balance) is
 - 2026-10-24 (Ghost, Q6): portrait tray may cover the rail top ≤ 4 s, tap-to-dismiss, provisional until Kevin's phone playtest.
 - 2026-10-24 (Ghost via #428 Q1): buff strip under the wave counter. v1.2 (M15 Config contract + guard) added.
 - **2026-10-24 (Ghost GO 11:40Z, Kevin pre-approved; Prism): SPEC v2** consolidates v1.1 + v1.2; adds `LaunchGate.SHOW.buffDraft` (default off), the full Config table, the pick contract, party rules, telemetry events/fields, and the card colors Ember #E84814 / Frost #5CD6FF / Void #C04888. v1.2 Q1 and Q4 closed by the GO. Not approved as a Vision & Design Rules decision.
+- **2026-10-24 (Ghost, board row https://app.notion.com/p/403c31ca3883812fa966d50ee503d110, 11:55Z, Kevin pre-approved; Prism): v2.1.** Q4 yes: on landscape phones (667×375, 800×400) the expanded held-buff list opens **during the break only**; in combat only the small held pill / 44 px strip pill shows. Q5 yes: **auto-takes are excluded** from the 50% pick-rate share (share = manual picks only) and are **counted separately** in `buff_run_summary` (`autoTakes` count + new `autoTakeCards` list). Docs only; no other change.
 
 ## Later (not V1)
 5.2 Fusion cards, element-leaning offers on element waves, underdog tier tag (v1.2 direction C), draft-history Codex page, a balance dashboard page in Notion, cosmetic card backs (never power). All go to the Ideas Backlog as NOT APPROVED.
