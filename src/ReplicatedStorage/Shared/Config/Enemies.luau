@@ -4,14 +4,15 @@
 	V1 enemy types (roadmap 3.3 and 3.4). Chaser, ranged, and tank.
 
 	Every tunable lives here, including the arena a ranged enemy kites
-	inside and the shot ray. EnemyRoster and EnemyTypeService read this
-	file. Dungeons.ENEMIES copies the combat fields so Config.Enemies
-	(the index alias) carries the same three ids. Tuning means editing
-	this module, not the stepper.
+	inside and the shot ray. EnemyRoster, WaveFlow, and the server
+	services read this file. Dungeons.ENEMIES copies the combat fields
+	so Config.Enemies (the index alias) carries the same three ids.
+	Tuning means editing this module, not the stepper.
 
-	LaunchGate.SHOW.enemyTypes stays false. Nothing in a room or a wave
-	list spawns these ids, and the server service no-ops while the flag
-	is off. No Robux. No profile fields.
+	LaunchGate.SHOW.enemyTypes stays false. Live rooms and
+	Dungeons.waveKinds do not spawn these ids. The 6/8/10/12 list is
+	read only by WaveFlow, and that service no-ops while the flag is
+	off. No Robux. No profile fields.
 ]]
 
 local Enemies = {}
@@ -132,6 +133,21 @@ Enemies.TYPES = table.freeze({
 		size = table.freeze({ 4.8, 5.4, 4.4 }),
 	}),
 })
+
+-- Roadmap 3.5. Four waves, then stop. Each mix uses chaser, ranged, and
+-- tank, and those three counts add up to the wave size. Spawn order is
+-- WAVE_ORDER. The live crawl does not read this list.
+Enemies.WAVE_COUNTS = table.freeze({ 6, 8, 10, 12 })
+Enemies.WAVE_ORDER = table.freeze({ "chaser", "ranged", "tank" })
+Enemies.WAVE_MIXES = table.freeze({
+	table.freeze({ chaser = 4, ranged = 1, tank = 1 }),
+	table.freeze({ chaser = 4, ranged = 2, tank = 2 }),
+	table.freeze({ chaser = 5, ranged = 3, tank = 2 }),
+	table.freeze({ chaser = 6, ranged = 4, tank = 2 }),
+})
+-- Gray-box spacing for one wave. The service does not parent parts.
+Enemies.WAVE_GAP = 6
+Enemies.WAVE_LIFT = 3
 
 local REQUIRED = { "chaser", "ranged", "tank" }
 
@@ -269,8 +285,78 @@ local function checkRow(id: string, row: any): (boolean, string)
 	return true, ""
 end
 
--- Returns false and a reason when a roster breaks the V1 rules.
--- Pass nothing to check this module.
+local EXPECTED_COUNTS = { 6, 8, 10, 12 }
+
+local function keyCount(map: any): number
+	local total = 0
+	for _ in pairs(map) do
+		total += 1
+	end
+	return total
+end
+
+local function checkWaves(source: any): (boolean, string)
+	local counts = source.WAVE_COUNTS
+	if type(counts) ~= "table" or keyCount(counts) ~= #EXPECTED_COUNTS then
+		return false, "WAVE_COUNTS must be 6, 8, 10, 12"
+	end
+	for index, expected in ipairs(EXPECTED_COUNTS) do
+		if counts[index] ~= expected then
+			return false, "WAVE_COUNTS must be 6, 8, 10, 12"
+		end
+	end
+	local order = source.WAVE_ORDER
+	if type(order) ~= "table" or keyCount(order) ~= #REQUIRED then
+		return false, "WAVE_ORDER must be chaser, ranged, tank"
+	end
+	for index, id in ipairs(REQUIRED) do
+		if order[index] ~= id then
+			return false, "WAVE_ORDER must be chaser, ranged, tank"
+		end
+	end
+	local mixes = source.WAVE_MIXES
+	if type(mixes) ~= "table" or keyCount(mixes) ~= #EXPECTED_COUNTS then
+		return false, "WAVE_MIXES must have one row per wave"
+	end
+	for index, expected in ipairs(EXPECTED_COUNTS) do
+		local mix = mixes[index]
+		if type(mix) ~= "table" then
+			return false, "wave " .. index .. " mix is missing"
+		end
+		local sum = 0
+		local seen = {}
+		for key, value in pairs(mix) do
+			if table.find(REQUIRED, key) == nil then
+				return false, "wave " .. index .. " mix has " .. tostring(key)
+			end
+			if not finite(value) or value < 1 or value ~= math.floor(value) then
+				return false, "wave " .. index .. " " .. tostring(key) .. " count must be a positive integer"
+			end
+			seen[key] = true
+			sum += value
+		end
+		for _, id in ipairs(REQUIRED) do
+			if seen[id] ~= true then
+				return false, "wave " .. index .. " must mix in " .. id
+			end
+		end
+		if sum ~= expected then
+			return false, "wave " .. index .. " mix must add up to " .. tostring(expected)
+		end
+	end
+	local gapOk, gapErr = checkNumber("WAVE_GAP", source.WAVE_GAP, 1)
+	if not gapOk then
+		return false, gapErr
+	end
+	local liftOk, liftErr = checkNumber("WAVE_LIFT", source.WAVE_LIFT, 0)
+	if not liftOk then
+		return false, liftErr
+	end
+	return true, ""
+end
+
+-- Returns false and a reason when a roster or its wave list breaks the
+-- V1 rules. Pass nothing to check this module.
 function Enemies.validate(roster: any?): (boolean, string)
 	local source = if type(roster) == "table" then roster else Enemies
 	local order = source.ORDER
@@ -363,6 +449,10 @@ function Enemies.validate(roster: any?): (boolean, string)
 	end
 	if chaser.style ~= "melee" or tank.style ~= "melee" or ranged.style ~= "projectile" then
 		return false, "chaser and tank are melee; ranged is a projectile"
+	end
+	local waveOk, waveErr = checkWaves(source)
+	if not waveOk then
+		return false, waveErr
 	end
 	return true, ""
 end

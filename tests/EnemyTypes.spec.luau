@@ -67,6 +67,11 @@ local function fullRoster(): any
 		},
 		SHOT_Y = Enemies.SHOT_Y,
 		LOS_PAD = Enemies.LOS_PAD,
+		WAVE_COUNTS = Enemies.WAVE_COUNTS,
+		WAVE_ORDER = Enemies.WAVE_ORDER,
+		WAVE_MIXES = Enemies.WAVE_MIXES,
+		WAVE_GAP = Enemies.WAVE_GAP,
+		WAVE_LIFT = Enemies.WAVE_LIFT,
 	}
 end
 

@@ -13,6 +13,12 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Phase 3 wave flow (flag `enemyTypes`, off): waves of 6, 8, 10, and 12.
+  Each wave mixes chaser, ranged, and tank. Counts and mixes live in
+  `Shared/Config/Enemies.luau`. `WaveFlowService` pushes `{ wave, left }`
+  on `WaveCounter` only while the flag is on. Boot does not call it.
+  No HUD edit, no save write, `schemaVersion` stays 26. Stacked on the
+  enemy-type roster. (open)
 - Phase 3 enemy types (flag `enemyTypes`, off): chaser, ranged, and tank.
   Numbers live in `Shared/Config/Enemies.luau` and on `Config.Enemies`.
   `EnemyTypeService` steps them and describes gray boxes only while the
