@@ -80,7 +80,7 @@ Select → tap cards → the bar reads "Salvage N for +X Essence" → the same C
 2. The card shows: 5 pips (filled to the level), "Essence 147  ·  Next level: 40 Essence", the line "Core perks work while this weapon is equipped." (proposal; code applies perks only for the equipped weapon), the 5-row perk ladder, and **Feed 40 Essence** (gold) or **Feed 40 Essence  (have 12)** (dim) or **Core maxed** (dim).
 3. Tap **Feed 40 Essence**. An inline confirm opens under it: "Spend 40 Essence on Bramble Fang core?  Lv 2 → 3" with **Feed 40 Essence** / **Cancel** (code).
 4. Confirm: the button reads "Feeding..." (code) and ignores more taps. The client sends `FeedShardCore(uid)`.
-5. **Success:** the toast reads "Bramble Fang core Lv 3: +2% move speed" (code `fedText`). The new pip and the new perk row glow gold for 2.5 s (code `FRESH_SECONDS`), and the Essence chip counts down 0.4 s (proposal).
+5. **Success:** the toast reads "Bramble Fang core Lv 3: +2% move speed" (code `fedText`). It goes through the one toast lane (phone layout review D3: max 1 on screen, the rest queue) as an info toast, at the Bag's top inset + 4 while the Bag is open. The new pip and the new perk row glow gold for 2.5 s (code `FRESH_SECONDS`), and the Essence chip counts down 0.4 s (proposal).
 6. **Cancel or back:** Cancel hides the inline confirm. Tapping Feed again toggles it. Tapping the header collapses the card. ‹ Back (portrait) returns to the grid. Nothing is spent before step 4.
 
 ## 4. Layout
@@ -238,3 +238,4 @@ Echo decides: salvage at the Essence cap (refuse at 0 gain, or delete with clamp
 ## Decision log
 - 2026-10-23 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381c0bb72d75abab9bd4d): Q1 = **yes**, protect Shard Core Lv 1+ weapons from bulk salvage. Q2 = **yes**, keep "Salvage all Rare and below". Q4 = **A** cyan pips. Q7 = **A** help line once per session. The salvage tip ships (Ghost decision 1). Total core cost stays **410 Essence**, tuned in Config after playtest. All §11 questions are now closed.
 - 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F5: the core card collapses to its **44 px** header (the Scope line said 64, but §4 and the code say 44). F6: landscape sheets pin the Cancel / Salvage N footer while the body scrolls. No design change.
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838103a80ad21380d7f451; folded by Prism from the phone layout review rev 1.1, docs/design/phone-layout-review/REVIEW_v1.md §8/§10): D3: the feed-success toast goes through the one toast lane as an info toast (max 1 on screen, the rest queue) (§3 step 5). D1 and D2 don't touch this spec (the Bag is a full-screen menu).
