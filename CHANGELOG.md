@@ -87,6 +87,10 @@ its tag to merged and add the merge commit.
   a clear "is off" line. [#377] (open)
 
 ### Fixed
+- Bag details: the worn item reads "Equipped", other items say "Compared with
+  <worn item> (equipped)", stats mark = / + / - on shown values, the title
+  shows the forge level, and UPGRADE toasts its result ("Need 1,280 gold")
+  and repaints. [fix/bag-compare] (open)
 - Gnarl's weak spot sits at chest height, and every boss hit says Guarded or
   Weak!. [#359] (merged, e0bc15b)
 - Loot toasts read "Loot: Spore Cap x2" with no stray lead character. [#360]

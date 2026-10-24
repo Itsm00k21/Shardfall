@@ -48,6 +48,7 @@ local HeroBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild(
 local HeroView = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HeroView"))
 local HudLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudLayout"))
 local HubStyle = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HubStyle"))
+local BagCompare = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BagCompare"))
 local InventoryView =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("InventoryView"))
 local Keybinds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Keybinds"))
@@ -69,7 +70,6 @@ local RollScreen = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local RollConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollConfig"))
 local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShardBoard"))
 local Settings = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Settings"))
-local Stats = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Stats"))
 local UiIcons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiIcons"))
 local IconAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("IconAssets"))
 local UiMotion = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiMotion"))
@@ -2522,35 +2522,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return nil
 	end
 
-	function hubFn.statMap(item: any): { [string]: number }
-		local map: { [string]: number } = {}
-		if type(item) ~= "table" or type(item.stats) ~= "table" then
-			return map
-		end
-		for _, stat in ipairs(item.stats) do
-			if
-				type(stat) == "table"
-				and type(stat.id) == "string"
-				and type(stat.value) == "number"
-			then
-				map[stat.id] = stat.value
-			end
-		end
-		return map
-	end
-
-	function hubFn.formatStat(id: string, value: number): string
-		local definition = Stats.DEFS[id]
-		local name = if definition ~= nil then definition.name else id
-		if definition ~= nil and definition.unit == "percent" then
-			return string.format("%s  %.1f%%", name, value * 100)
-		end
-		if definition ~= nil and definition.decimals > 0 then
-			return string.format("%s  %." .. tostring(definition.decimals) .. "f", name, value)
-		end
-		return string.format("%s  %d", name, math.floor(value + 0.5))
-	end
-
 	function hubFn.itemWorn(uid: string): boolean
 		local profile = hubState.profile
 		if
@@ -2625,6 +2596,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if accepted then
 				if type(result.profile) == "table" then
 					hubState.profile = result.profile
+				end
+				-- Repaint so the pane names the new worn item at once.
+				if hubState.shownId == "bag" or hubState.shownId == "sets" then
+					hubFn.paintBag()
 				end
 				return
 			end
@@ -2743,71 +2718,42 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.mountWorn(hubState.detailList)
 		local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
 		local red, green, blue = UiTheme.rarityColor(rarity)
-		hubFn.line(hubState.detailList, tostring(item.name or "Item"), 1, rgb("text"))
+		hubFn.line(hubState.detailList, BagCompare.title(item), 1, rgb("text"))
 		hubFn.line(hubState.detailList, rarity, 2, Color3.fromRGB(red, green, blue))
 		hubFn.divider(hubState.detailList, 3)
-		local other = InventoryView.counterpart(hubState.profile, item)
-		local same = other ~= nil and other.uid == item.uid
-		if other == nil then
-			hubFn.line(hubState.detailList, "Nothing equipped to compare.", 4, rgb("muted"))
-		elseif same then
-			hubFn.line(hubState.detailList, "Equipped.", 4, rgb("ok"))
-		else
-			hubFn.line(
-				hubState.detailList,
-				"Compared with " .. tostring(other.name or "equipped"),
-				4,
-				rgb("muted")
-			)
-		end
-		local mine = hubFn.statMap(item)
-		local theirs = if other ~= nil and not same then hubFn.statMap(other) else {}
-		local ids = {}
-		local marked: { [string]: boolean } = {}
-		for id in pairs(mine) do
-			marked[id] = true
-			table.insert(ids, id)
-		end
-		for id in pairs(theirs) do
-			if marked[id] ~= true then
-				table.insert(ids, id)
+		-- The worn uid for this slot decides the header. The old counterpart
+		-- lookup hid the worn item itself, so "Equipped." never showed.
+		local detail = BagCompare.detail(hubState.profile, item, InventoryView.powerOf)
+		local same = detail.state == "equipped"
+		local headerTone = if same then rgb("ok") else rgb("muted")
+		local header = hubFn.line(hubState.detailList, detail.header, 4, headerTone)
+		header.Name = "CompareHeader"
+		local toneColor = function(tone: string): Color3
+			if tone == "gain" then
+				return rgb("ok")
+			elseif tone == "loss" then
+				return rgb("loss")
 			end
+			return rgb("text")
 		end
-		table.sort(ids)
 		local order = 10
-		for _, id in ipairs(ids) do
-			local value = mine[id] or 0
-			local text = hubFn.formatStat(id, value)
-			local color = rgb("text")
-			if other ~= nil and not same then
-				local delta = value - (theirs[id] or 0)
-				local tone = UiTheme.compareTone(delta)
-				if tone == "gain" then
-					color = rgb("ok")
-					text = text .. "  +"
-				elseif tone == "loss" then
-					color = rgb("loss")
-					text = text .. "  -"
-				end
-			end
-			hubFn.line(hubState.detailList, text, order, color)
+		for _, row in ipairs(detail.rows) do
+			local label = hubFn.line(hubState.detailList, row.text, order, toneColor(row.tone))
+			label.Name = "Stat_" .. row.id
 			order += 1
 		end
-		local power = InventoryView.powerOf(item)
-		local powerText = string.format("Power  %d", power)
-		local powerColor = rgb("text")
-		if other ~= nil and not same then
-			local delta = power - InventoryView.powerOf(other)
-			local tone = UiTheme.compareTone(delta)
-			if tone == "gain" then
-				powerColor = rgb("ok")
-				powerText = powerText .. "  +"
-			elseif tone == "loss" then
-				powerColor = rgb("loss")
-				powerText = powerText .. "  -"
-			end
+		local powerLabel =
+			hubFn.line(hubState.detailList, detail.power.text, 80, toneColor(detail.power.tone))
+		powerLabel.Name = "Stat_power"
+		if type(hubState.upgradeNote) == "table" and hubState.upgradeNote.uid == item.uid then
+			local note = hubFn.line(
+				hubState.detailList,
+				hubState.upgradeNote.text,
+				85,
+				if hubState.upgradeNote.ok then rgb("ok") else rgb("loss")
+			)
+			note.Name = "UpgradeNote"
 		end
-		hubFn.line(hubState.detailList, powerText, 80, powerColor)
 		if type(item.uid) == "string" then
 			local uid = item.uid
 			local equip = hubFn.row(
@@ -2831,10 +2777,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				91,
 				function()
 					task.spawn(function()
-						pcall(hooks.invoke, "UpgradeGear", uid)
+						hubFn.upgradeUid(uid)
 					end)
 				end
 			)
+			upgrade.Name = "Upgrade"
 			upgrade.BackgroundColor3 = rgb("gold")
 			upgrade.TextColor3 = rgb("ink")
 			hubFn.setRest(upgrade, rgb("gold"))
@@ -2843,6 +2790,38 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.detail.Visible = true
 		hubFn.fitBagList()
 		hubState.detailOpen = true
+	end
+
+	-- The server charges and levels in one mutate. Show its answer: apply
+	-- the returned profile, repaint, and toast the result either way.
+	function hubFn.upgradeUid(uid: string)
+		if hubState.upgradeBusy == uid then
+			return
+		end
+		hubState.upgradeBusy = uid
+		local before = hubFn.findItem(uid)
+		local ok, result = pcall(hooks.invoke, "UpgradeGear", uid)
+		hubState.upgradeBusy = nil
+		local accepted = ok and type(result) == "table" and result.ok == true
+		local message = nil
+		if accepted then
+			if type(result.profile) == "table" then
+				hubState.profile = result.profile
+			end
+			message = BagCompare.success(result.note, hubFn.findItem(uid) or before)
+		else
+			local reason = if ok and type(result) == "table" then result.error else nil
+			message = BagCompare.refusal(reason, before)
+		end
+		hubState.upgradeNote = { uid = uid, text = message, ok = accepted }
+		if hooks.onToast ~= nil then
+			hooks.onToast(message)
+		end
+		if hubState.shownId == "bag" or hubState.shownId == "sets" then
+			hubFn.paintBag()
+		elseif hubState.selectedUid == uid and hubState.detailOpen then
+			hubFn.paintDetail(hubFn.findItem(uid))
+		end
 	end
 
 	function hubFn.openItem(uid: string)
