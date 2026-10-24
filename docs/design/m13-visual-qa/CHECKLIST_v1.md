@@ -1,6 +1,6 @@
-# M13 Visual QA Checklist (roll → equip → seat → Waves pier → 5 waves → Results → boss clear → wipe → rejoin → roll again), v1
+# M13 Visual QA Checklist (roll → equip → seat → Waves pier → 5 waves → Results → boss clear → wipe → rejoin → roll again), v1.1
 
-Owner: Prism (design, docs only, no code). Used by: Echo / Havoc on the M13 smoke run (PR #434, `echo/m13-run-smoke` @ `73e3a49`), Ghost for UI fixes. Base: `cursor/live-build-9721`. Status: **v1, ready to use** (Ghost GO, board row https://app.notion.com/p/403c31ca3883819d821fe59c27a3d730, pick 3, Kevin pre-approved). Not an official Vision & Design Rules decision. Pass/fail is visual only; Echo's Lune smoke covers the logic.
+Owner: Prism (design, docs only, no code). Used by: Echo / Havoc on the M13 smoke run (PR #434, `echo/m13-run-smoke` @ `73e3a49`), Ghost for UI fixes. Base: `cursor/live-build-9721`. Status: **v1.1, ready to use** (Ghost GO, board row https://app.notion.com/p/403c31ca3883819d821fe59c27a3d730, pick 3, Kevin pre-approved). **v1.1 (Oct 24, 2026)** folds Ghost's answers on board row https://app.notion.com/p/403c31ca388381ecbd1de2f133fd3cb4 (10:50Z, Kevin pre-approved): Q1 = live wave-5 `waveReward` **2 is correct**, the **5** is #431's one-time boss-clear grant on top, so the fly-in reads `bossClear.tokens` (the old "bug" framing is removed); Q2 = the victory card overlap is logged as **known, fixed by #429**; Q3 = run this on **#434 alone first**. Not an official Vision & Design Rules decision. Pass/fail is visual only; Echo's Lune smoke covers the logic.
 
 Sources (link, don't copy): PR #434 body (live path, 6 pending cases) · #420 phone layout review (keep-out, D1 portrait top 35%, D2 hub cluster hides under the Gate dock, D3 one toast lane, R7 text sizes) · #412 first 30 seconds (Gate dock) · #397 roll reveal v1.2 · #428 Wave HUD v1.1 · #429 Results v1.3 (5-token fly-in, Hard-clear variant) · Element glow read v1.1 (`prism/element-glow-read`) · Hard accent v1.1 · `Shared/Rarities.luau` · STYLE.md (PR #392).
 
@@ -11,10 +11,10 @@ One pass on a Studio build, at **390×844, 667×375, 800×400 and 1280×720**, t
 This file (`docs/design/m13-visual-qa/CHECKLIST_v1.md`) + the overlay sheet `mockups/01-qa-overlay-frames.svg`. Results go as a comment on PR #434 (Echo) or a board row to Ghost; screenshots named `m13_<step>_<size>_<pass|fail>.png`. Nothing in the game changes.
 
 ## 3. Flow (how to run it)
-1. Rojo-sync `echo/m13-run-smoke` (or `cursor/live-build-9721`). **Leave every LaunchGate flag as shipped** (`equip`, `waveArena`, `elementGlow`, `hardMode` off), as PR #434 says. Do not publish.
+1. **First pass: #434 alone (Q3 decided).** Rojo-sync `echo/m13-run-smoke` only, no #428/#429/#431/#432 merged in; every "spec build only" row (F1 spec part, F5, F6, F8, G4, H2, H3) is **N/A** on this pass. A combined build comes later, as a second pass. **Leave every LaunchGate flag as shipped** (`equip`, `waveArena`, `elementGlow`, `hardMode` off), as PR #434 says. Do not publish.
 2. Studio → Test → Device emulator. Sizes: **390×844** (portrait phone), **667×375** (small landscape phone), **800×400** (wide Android landscape), **1280×720** (desktop, mouse + keyboard). Turn "Show device frame" off; capture at 100%.
 3. Walk the loop once per size (≈ 6 min each): roll → bag equip → seat (only if a test stub opens EquipSlot; otherwise mark N/A) → Waves pier (Solo) → waves 1–5 (Gnarl on 5) → Results/clear hint → fall once → Stop/Play (rejoin) → roll again.
-4. For each row below tick **P** (pass), **F** (fail + screenshot) or **N/A** per size. Hold each capture against the overlay sheet (keep-out, toast lane, 44 px gauge).
+4. For each row below tick **P** (pass), **F** (fail + screenshot), **K** (known issue already owned by a PR, e.g. G1 → #429; screenshot once, doesn't fail M13) or **N/A** per size. Hold each capture against the overlay sheet (keep-out, toast lane, 44 px gauge).
 5. Post the table with fails first.
 
 ## 4. Layout rules every capture is checked against
@@ -88,7 +88,7 @@ Columns: **390 / 667 / 800 / D** = the four sizes. "Live" = what the M13 path sh
 ### G. Results (live: wave-clear hint / CombatHud victory card; spec: #429 Results wings)
 | # | Check | Pass when | 390 | 667 | 800 | D |
 |---|---|---|---|---|---|---|
-| G1 | Live card | CombatHud `Result` card (340 wide, centered at 0.38, 0.45) — **known keep-out conflict** on 390 and 667 (flag it, don't fail M13 for it; #429 replaces it). | ☐ | ☐ | ☐ | ☐ |
+| G1 | Live card | CombatHud `Result` card (340 wide, centered at 0.38, 0.45). **Known issue (Q2 decided): keep-out overlap on 390 and 667, fixed by #429** (Results wings replace the card). Mark it **K** (known), not F; it doesn't fail M13. Still screenshot it once. | ☐ | ☐ | ☐ | ☐ |
 | G2 | Continue | Continue button ≥ 44 px, never covered by the loot grid. | ☐ | ☐ | ☐ | ☐ |
 | G3 | Loot grid | `ResultsGrid` tiles 64 px with rarity strokes (A7); max 2 rows, "+N" fold. | ☐ | ☐ | ☐ | ☐ |
 | G4 | #429 wings (spec build only) | Stats wing 390 x 16–374, y 107–287 / 667 x 16–196 / 800 x 16–232 / D x 16–368; loot + actions wing 390 y 620–802 / 667 x 471–651 / 800 x 568–784 / D x 912–1264. RUN AGAIN 52–64 tall, ROLL 48–64. Wings fold to the 56 px bar. | ☐ | ☐ | ☐ | ☐ |
@@ -96,11 +96,11 @@ Columns: **390 / 667 / 800 / D** = the four sizes. "Live" = what the M13 path sh
 ### H. Boss clear (wave 5 paid)
 | # | Check | Pass when | 390 | 667 | 800 | D |
 |---|---|---|---|---|---|---|
-| H1 | Token number shown = token number paid | The number on screen equals the wallet change. **Live today: +2 tokens** on the wave-5 hint (`Dungeons.waveReward(5)`), while the Economy sheet (`Config.Economy.WAVES[5].tokens`) says **5**. See the flag below. | ☐ | ☐ | ☐ | ☐ |
-| H2 | 5-token fly-in (#429 v1.2, spec build + #431 only) | 5 Roll Token icons fly from the boss point to ROLL in < 0.8 s, pass over the keep-out only as motion (no panel), "BOSS +5" chip after the Roll Tokens label; once per clear (no repeat on rejoin). **N/A on live** (no `bossClear` payload). | ☐ | ☐ | ☐ | ☐ |
+| H1 | Token number shown = token number paid | The number on screen equals the wallet change. **Live (#434 alone): +2 tokens** on the wave-5 clear hint (`Dungeons.waveReward(5)`) = wallet +2. This is **correct** (Q1 decided). With #431: the wave hint still says +2 and the boss-clear grant adds its own **+5 once** (from `bossClear.tokens`), wallet +7 on the first clear, +2 on any repeat. | ☐ | ☐ | ☐ | ☐ |
+| H2 | Boss-clear fly-in (#429 fly-in v1.1, spec build + #431 only) | The fly-in count = `bossClear.tokens` (5 today), never hard-coded; icons fly from the boss point to ROLL in < 0.8 s, pass over the keep-out only as motion (no panel); "BOSS +5" chip shows **next to** the wave line "+2" (both visible, no merged "+7" that hides the split, no double count: the wallet ticks +2 then +5); once per clear (no repeat on rejoin). **N/A on the #434-alone pass** (no `bossClear` payload). | ☐ | ☐ | ☐ | ☐ |
 | H3 | Hard-clear variant (#429 v1.3, Hard builds only) | Same 5 tokens + HARD badge only; no red sky (Hard accent v1.1 is HUD-only). N/A while `hardMode` is off. | ☐ | ☐ | ☐ | ☐ |
 
-> **Flag: wave-5 tokens 2 (live) vs 5 (Economy sheet).** Echo found live `Dungeons.waveReward(5)` pays **2** Shard Tokens on every wave-5 clear and stores no run id, while `Config.Economy.WAVES` says **5** and nothing reads it (PR #434, pending case 2). The **#429 Results 5-token fly-in depends on the 5-token boss grant from #431** (`BossClearReward`): with live code the fly-in would promise 5 while the wallet gets 2. Until #431 lands, H1 is the only valid check, and the fly-in must read its count from the `bossClear.tokens` payload (never a hard-coded 5). Q1 below.
+> **Note (v1.1, Q1 decided by Ghost, row 403c31ca3883819582cac954aba7f160 and https://app.notion.com/p/403c31ca388381ecbd1de2f133fd3cb4):** wave-5 tokens are **two separate payouts, not a mismatch**. Live `Dungeons.waveReward(5)` = **2** is the correct per-wave reward. The **5** is #431's **one-time boss-clear grant** (`BossClearReward`, saved grant) paid **on top**. The #429 fly-in reads its count from `bossClear.tokens` (never a hard-coded 5), so it can never show more than is paid. On the #434-alone pass only H1 (+2) applies; H2/H3 wait for #431.
 
 ### I. Wipe
 | # | Check | Pass when | 390 | 667 | 800 | D |
@@ -122,11 +122,11 @@ Columns: **390 / 667 / 800 / D** = the four sizes. "Live" = what the M13 path sh
 | K2 | Same reveal rules | B2–B3 still pass. | ☐ | ☐ | ☐ | ☐ |
 
 ## 6. Numbers
-Sizes 390×844 / 667×375 / 800×400 / 1280×720. Touch ≥ 44 px. Text ≥ 13 px (badges 10–11). Glow budget 6 touch / 12 desktop, lights 4 / 12, enemy Highlight ceiling 18, ≤ 1 Highlight per alive enemy, 0 per dead (glow read v1.1). Rarity colors per A7. Tokens: live wave 5 = 2, Economy sheet = 5, #429 fly-in = 5 (needs #431). Starter tokens 10 → 9 → 8.
+Sizes 390×844 / 667×375 / 800×400 / 1280×720. Touch ≥ 44 px. Text ≥ 13 px (badges 10–11). Glow budget 6 touch / 12 desktop, lights 4 / 12, enemy Highlight ceiling 18, ≤ 1 Highlight per alive enemy, 0 per dead (glow read v1.1). Rarity colors per A7. Tokens: wave-5 `waveReward` = 2 (live, correct); boss-clear grant = `bossClear.tokens` = 5, once, on top (#431); first clear with #431 = +7 total, shown as +2 and BOSS +5. Starter tokens 10 → 9 → 8.
 
 ## 7. Edge cases
 - **Flags off** is the expected state; any element glow, Hard UI, wave-arena UI or seat UI showing with shipped flags is a **fail** (F4, D1).
-- **Live victory card in the keep-out** (G1) is known; log it as "replaced by #429", not as a new M13 bug.
+- **Live victory card in the keep-out** (G1) is a known issue (Q2 decided), fixed by #429; log it as K, not as a new M13 bug.
 - **Rejoin mid-run** isn't on the M13 path; if it happens, note what the HUD shows.
 - **Low graphics:** repeat F3–F5 once at Graphics 1 on 390×844.
 - **Party:** M13 is Solo; party checks wait for the party gather spot + Hard v1.2 builds.
@@ -141,15 +141,18 @@ Sizes 390×844 / 667×375 / 800×400 / 1280×720. Touch ≥ 44 px. Text ≥ 13 p
 - **Prism:** answer "is this a design fail?" questions; update this list when #428/#429/#431/#432 land.
 
 ## 10. Pass criteria
-M13 visual pass = **no F** in sections A–F and I–K at any of the 4 sizes, with G1 and the H1 token mismatch logged as known (until #429/#431). Every F has a screenshot.
+M13 visual pass = **no F** in sections A–F and I–K at any of the 4 sizes, with G1 logged as known (K, fixed by #429). H1 passes on live when the wave-5 hint shows +2 and the wallet gets +2. Every F has a screenshot.
 
 ## 11. Open questions (answer by number)
-1. **@Ghost / Echo:** Wave-5 boss tokens: is the right number **5** (Economy sheet, #431 grant, #429 fly-in) and live's **2** the bug? Recommended: yes; keep the fly-in reading `bossClear.tokens` so it can never show more than is paid.
-2. **@Ghost:** Log the live CombatHud victory card's keep-out overlap (G1) as a known issue fixed by #429, rather than a new M13 fail? Recommended: yes.
-3. **@Ghost:** Should Havoc run the checklist on #434 alone (flags as shipped), or on a combined test build with #428/#429/#432 to tick the spec rows too? Recommended: #434 alone first; spec rows stay N/A.
+1. ~~@Ghost / Echo: Is wave-5 5 right and live's 2 the bug?~~ **No bug (Ghost, 10:50Z row answer 3).** Live `waveReward` 2 is correct; the 5 is #431's one-time boss-clear grant on top; the fly-in reads `bossClear.tokens`.
+2. ~~@Ghost: Log the victory card overlap (G1) as known?~~ **Yes, known, fixed by #429 (answer 4).**
+3. ~~@Ghost: #434 alone or a combined build?~~ **#434 alone first (answer 5);** spec rows N/A on that pass.
+
+All questions answered. No open questions in v1.1.
 
 ## Decision log
 - 2026-10-24 (Prism): v1 published from Ghost's GO (board row https://app.notion.com/p/403c31ca3883819d821fe59c27a3d730, Kevin pre-approved). 11 sections (A–K), 4 sizes, wave-5 token flag (live 2 vs sheet 5) tied to #429's fly-in. Not a Vision & Design Rules decision.
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca388381ecbd1de2f133fd3cb4, 10:50Z): Q1 = live wave-5 2 is correct, the 5 is #431's one-time boss-clear grant on top, fly-in reads `bossClear.tokens` ("bug" framing removed from H1/H2/§6). Q2 = G1 victory card overlap logged as known, fixed by #429 (mark K). Q3 = run on #434 alone first. → **v1.1**.
 
 ## Roblox build notes
 Nothing to build. When fixing a fail, stay stock Roblox: `Frame`/`ImageLabel` + `UICorner`/`UIStroke`/`UIGradient`, `TweenService` for motion, `ParticleEmitter` only in world space, `GuiObject.Active` + 44 px hit boxes (`TextButton` size, not art size), `UIScale` for desktop clamps, `CoreUISafeInsets` for the top inset. No blur, no glass, no web fonts.
