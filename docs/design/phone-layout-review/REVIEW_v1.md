@@ -77,7 +77,7 @@ Status: ✓ OK · **F#** fixed by this review · **C#/Q#** conflict or open ques
 | | Loot chip (#414) | through the toast lane (§4a) | **F14** → **D3** ✓ (outranks info toasts) |
 | Arena, draft | Header / row / Later (#416) | header y 250; row 3×116×196 at y 284–480; Later 120×44 at y 490–534 | **F19**: clear of the skill bar (top 566). The row is in the center only during the pick moment ✓ |
 | | Held pill (#416) | x 274–374, y 235–279 (100×44 "Buff ›") | **F18**: it was on the currency pill column |
-| | Tray (#416) | one row of 3 × 116×48 under the pill | **F15**. Rev 1.1 (**D1**): the tray opens in place of the held pill as one row x 16–374, y 235–283, bottom 283 < 296 ✓. While open (max 4 s) it covers the top 41 px of the rail and the toast lane waits |
+| | Tray (#416) | one row of 3 × 116×48 under the pill | **F15**. Rev 1.1 (**D1**): the tray opens in place of the held pill as one row x 16–374, y 235–283, bottom 283 < 296 ✓. While open (max 4 s) it covers the top 41 px of the rail and the toast lane waits. **Allowed (Q4, Ghost): tap-to-dismiss, never covers a combat button; provisional until Kevin's phone playtest** |
 | | Buff strip (#416, Q5) | (16, 179), ≤ 74 wide; list 93 wide | **F16**: (12, 52) sat on the live portrait |
 | | Resonance toast (#416) | through the toast lane (§4a) | **F17** → **D3** ✓ (info priority) |
 
@@ -222,6 +222,7 @@ The stray wrapper lines left by an earlier push were also removed from #397, #39
 1. ~~**@Ghost (R1):** OK to move the portrait keep-out top from 28% to 35% (y 296)?~~ **Answered (Ghost, Kevin pre-approved, Oct 24, 2026): yes, 35% (y 296), provisional until Kevin's phone playtest.** Landscape and desktop stay as they are. (D1)
 2. ~~**@Ghost (R2):** In the hub, may the attack/dodge/jump cluster and skill bar hide while the 56 px ROLL / collapse bar or the Gate dock is up?~~ **Answered: yes.** In the arena the collapse bar hides. (D2)
 3. ~~**@Ghost (R3):** Route all one-line transient notices through one lane?~~ **Answered: yes, one toast lane: max 1 on screen, the rest queue, loot/rarity toasts outrank info toasts.** Slots per viewport in §4a. (D3)
+4. ~~**@Ghost (follow-up from rev 1.1):** Is it OK that the portrait #416 tray covers the top of the mid-left rail for up to 4 s?~~ **Answered (Ghost, Kevin pre-approved, Oct 24, 2026): yes, if it's tap-to-dismiss and never covers a button needed in combat. Provisional until Kevin's phone playtest.** Folded into #416 §4/§11 (Q6). Board row: https://app.notion.com/p/403c31ca38838192b465db2fbca4fda1
 
 No questions for Kevin, except that D1 gets re-checked in Kevin's phone playtest.
 
@@ -235,3 +236,4 @@ No questions for Kevin, except that D1 gets re-checked in Kevin's phone playtest
 - 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838103a80ad21380d7f451): **D1** = Q1 yes. The portrait keep-out top is 35% (y 296 at 390×844), provisional until Kevin's phone playtest. Folded into #412 §2/§4 (keep-out table, goal chip), #416 §4 (tray) and #413 §4 (phone check line).
 - 2026-10-24 (Ghost, Kevin pre-approved, same row): **D2** = Q2 yes. In the hub the combat cluster (skill bar + attack/dodge/jump/heavy) hides while the ROLL/collapse bar or the Gate dock is up, and comes back when the bar slides down or the player leaves the pad. In the arena the collapse bar hides. Folded into #397 §4, #412 §2/§4 and #413 §11.
 - 2026-10-24 (Ghost, Kevin pre-approved, same row): **D3** = Q3 yes, with changes. One toast lane, max 1 on screen, the rest queue, and loot/rarity toasts outrank info toasts (§4a). Folded into #397 §4, #398 §3, #412 §4, #413 §6, #414 §6 and #416 §3/§4.
+- 2026-10-24 (Ghost, Kevin pre-approved, board row https://app.notion.com/p/403c31ca38838192b465db2fbca4fda1): §8 Q4 = **yes**. The portrait #416 tray may cover the top 41 px of the rail for up to 4 s, as long as it is tap-to-dismiss and never covers a combat button. Provisional until Kevin's phone playtest. Folded into #416 §4/§11 Q6 (§3.1 row updated).
