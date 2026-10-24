@@ -116,11 +116,13 @@ Prism does not edit `StarterGoalHud.luau`, `init.client.luau`, `HudLayout` or an
 - Mockups (PNG inside SVG, fake data): `mockups/01-portrait-390x844.svg` (live vs target, folded with a toast), `02-landscape-667x375-800x400.svg`, `03-desktop-1280x720-grant.svg`, `04-states-sheet.svg` (parked off/on, 4/5, 5/5).
 
 ## 11. Open questions (answer by number)
-1. **@Ghost:** counter T = reachable goals (**GOALS 0/3** while the arena is off, **0/5** when on), or a fixed **/5** as the brief says? Prism recommends **reachable**, so nobody sits at "3/5" with nothing they can do.
-2. **@Ghost:** auto-fold the unfolded tracker while a toast or the Equip/Keep prompt is up (phones), so it can sit in the top lane without a bigger move? Prism recommends **yes**.
-3. **@Ghost:** client short labels on landscape phones (§6), with "Beat the Warden" for the boss goal? Prism recommends **yes**; the full "Hollow Warden" name stays on portrait, desktop and the boss bar.
-4. **@Kevin (taste):** should the tracker show **"10 Shard Keys each"** under the counter (a visible reason to play the goals), or stay quiet and only show the "+10 Shard Keys" chip when one pays? Prism recommends showing it on portrait and desktop.
+**All 4 decided (Ghost, DP40P, Oct 24, 2026). Folded in `SPEC_v1.1.md`.**
+1. ~~**@Ghost:** counter T = reachable goals (**GOALS 0/3** while the arena is off, **0/5** when on), or a fixed **/5** as the brief says? Prism recommends **reachable**, so nobody sits at "3/5" with nothing they can do.~~ **Decided: reachable** (Ghost, DP40P).
+2. ~~**@Ghost:** auto-fold the unfolded tracker while a toast or the Equip/Keep prompt is up (phones), so it can sit in the top lane without a bigger move? Prism recommends **yes**.~~ **Decided yes** (Ghost, DP40P).
+3. ~~**@Ghost:** client short labels on landscape phones (§6), with "Beat the Warden" for the boss goal? Prism recommends **yes**; the full "Hollow Warden" name stays on portrait, desktop and the boss bar.~~ **Decided yes** (Ghost, DP40P).
+4. ~~**@Kevin (taste):** should the tracker show **"10 Shard Keys each"** under the counter (a visible reason to play the goals), or stay quiet and only show the "+10 Shard Keys" chip when one pays? Prism recommends showing it on portrait and desktop.~~ **Decided yes** (Ghost, DP40P; Kevin can veto), and it matches the live grant: `StarterGoals.CONFIG.shardKeys = 10` (StarterGoals.luau:47). See `SPEC_v1.1.md`.
 
 ## Decision log
+- 2026-10-24 (Ghost under Kevin's pre-approval, DP40P): Q1–Q4 decided as recommended. Folded in `SPEC_v1.1.md`.
 - 2026-10-24 (Ghost under Kevin's pre-approval, DP38P/DP39P): goals from live systems only (#459 Q5), slot 3 at wave 3 (#459 v1.1 Q2 yes); Havoc confirmed the picks.
 - 2026-10-24 (Prism, DP39P task 2): v1 tracker visual: live rects measured at `bcef573` (keep-out overlap at 390×844, 47 px squeeze at 667×375), target rects at 4 sizes, fold tab, counter rule, parked-hide rule, grant moment, 4 mockups. NOT APPROVED until copied into Vision & Design Rules.
