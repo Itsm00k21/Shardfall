@@ -102,6 +102,7 @@ its tag to merged and add the merge commit.
   a clear "is off" line. [#377] (open)
 
 ### Fixed
+- One inventory, flags-on: the Bag rail toggles the full Inventory (the next press closes it and does not reopen it), and skill keys stay blocked while that inventory is on screen. Small-Bag specs pin `oneInventory` off. Parked-remote checks allow GearSalvage while `gearSalvage` is on. Both flags stay off in `LaunchGate`. (open)
 - Bag details: the worn item reads "Equipped", other items say "Compared with
   <worn item> (equipped)", stats mark = / + / - on shown values, the title
   shows the forge level, and UPGRADE toasts its result ("Need 1,280 gold")

@@ -7,7 +7,7 @@
 
 local framework = require("./framework")
 local describe = framework.describe
-local it = framework.it
+local it = require("./oneInventoryOff")(framework.it)
 local expect = framework.expect
 
 local ActionSlots = require("../src/ReplicatedStorage/Shared/ActionSlots")
@@ -36,6 +36,7 @@ end
 type Rig = {
 	world: any,
 	hub: any,
+	inventory: { isShown: () -> boolean }?,
 	calls: { any },
 	toasts: { string },
 	reply: any,
@@ -71,9 +72,13 @@ local function boot(): Rig
 			end
 			return rig.reply
 		end,
-		-- Same wiring as init.client.luau.
+		-- Same wiring as init.client.luau: the hub, or the full inventory on screen.
 		menuOpen = function()
-			return rig.hub.isOpen()
+			if rig.hub.isOpen() then
+				return true
+			end
+			local bag = rig.inventory
+			return bag ~= nil and bag.isShown()
 		end,
 		onDodge = function() end,
 		onLight = function() end,
@@ -169,6 +174,28 @@ describe("Skill presses", function()
 		pressKey(rig, "Three")
 		expect(used(rig)).toEqual(1)
 		expect(rig.calls[1][2]).toEqual(3)
+	end)
+
+	it("a shown full inventory says to close the menu instead of casting", function()
+		local rig = boot()
+		rig.inventory = {
+			isShown = function()
+				return true
+			end,
+		}
+		pressKey(rig, "One")
+		expect(used(rig)).toEqual(0)
+		expect(lastToast(rig)).toEqual("Close the menu to use skills.")
+		GuiFake.pointerClick(slotButton(rig, 1), rig.world.userInput)
+		expect(used(rig)).toEqual(0)
+		rig.inventory = {
+			isShown = function()
+				return false
+			end,
+		}
+		pressKey(rig, "Two")
+		expect(used(rig)).toEqual(1)
+		expect(rig.calls[1][2]).toEqual(2)
 	end)
 
 	it("keys still cast after a roll, a reveal, and closing the hub mid-reveal", function()

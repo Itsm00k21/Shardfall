@@ -9,6 +9,9 @@
 	and "+ Slots" is for DevAccess owners only.
 ]]
 
+local fs = require("@lune/fs")
+local luau = require("@lune/luau")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -19,6 +22,8 @@ local GearSalvage = require("../src/ReplicatedStorage/Shared/GearSalvage")
 local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
 local GuiFake = require("./GuiFake")
+
+local CLIENT = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/init.client.luau"
 
 local VIEWS = {
 	{ 1482, 669, false },
@@ -531,10 +536,114 @@ describe("One inventory routing", function()
 	end)
 
 	it("keeps the small Bag while oneInventory is off", function()
-		expect(LaunchGate.SHOW.oneInventory).toEqual(false)
-		local hub, bags = hubWith(false)
-		hub.toggle("bag")
-		expect(bags[1]).toEqual(0)
-		expect(hub.current()).toEqual("bag")
+		local previous = LaunchGate.SHOW.oneInventory
+		LaunchGate.SHOW.oneInventory = false
+		local ok, err = pcall(function()
+			local hub, bags = hubWith(false)
+			hub.toggle("bag")
+			expect(bags[1]).toEqual(0)
+			expect(hub.current()).toEqual("bag")
+		end)
+		LaunchGate.SHOW.oneInventory = previous
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	it("rail Bag opens the inventory, and the next press closes it without reopening", function()
+		local previous = LaunchGate.SHOW.oneInventory
+		LaunchGate.SHOW.oneInventory = true
+		local ok, err = pcall(function()
+			local source = fs.readFile(CLIENT)
+			local startAt = string.find(source, "local function pressRailBag()", 1, true)
+			expect(startAt ~= nil).toBeTrue()
+			local callAt = string.find(source, 'openHub("bag")', startAt :: number, true)
+			expect(callAt ~= nil).toBeTrue()
+			local endAt = string.find(source, "end", callAt :: number, true)
+			expect(endAt ~= nil).toBeTrue()
+			local body = string.sub(source, startAt :: number, (endAt :: number) + 2)
+			local bytecode = luau.compile(body .. "\nreturn pressRailBag\n", { debugLevel = 2 })
+			local world = GuiFake.world()
+			local InventoryHud = world.load("InventoryHud")
+			local HudShell = world.load("HudShell")
+			local calls: { any } = {}
+			local function note(name: string)
+				return function(...)
+					table.insert(calls, { name, ... })
+				end
+			end
+			local profile = bag()
+			local inventory = InventoryHud.start(world.playerGui, {
+				onEquip = note("equip"),
+				onUnequip = note("unequip"),
+				onSalvage = note("salvage"),
+				onBulkSalvage = note("bulk"),
+				onLock = note("lock"),
+				onFavorite = note("favorite"),
+				onExpand = note("expand"),
+				onRemove = note("remove"),
+				onFeed = note("feed"),
+				onTonic = note("tonic"),
+				onStatus = note("status"),
+				onGear = function(action: string, payload: any): any
+					return GearSalvage.applyAction(profile, 42, action, payload, 100)
+				end,
+			})
+			inventory.setProfile(profile)
+			expect(inventory.isOpen()).toBeFalse()
+			local panels = {}
+			local hubs = 0
+			local chunk = luau.load(bytecode, {
+				debugName = "pressRailBag",
+				environment = {
+					LaunchGate = LaunchGate,
+					inventory = inventory,
+					closePanels = function(except: string)
+						table.insert(panels, except)
+					end,
+					openHub = function(_tab: string)
+						hubs += 1
+						-- The old rail path: closePanels already shut the bag,
+						-- then follow opens it again.
+						inventory.close()
+						inventory.open()
+					end,
+				},
+			})
+			local press = chunk()
+			HudShell.start(world.playerGui, {
+				onHero = function() end,
+				onBag = press,
+				onRoll = function() end,
+				onPets = function() end,
+				onShop = function() end,
+				onSettings = function() end,
+			})
+			local rail = world.playerGui:FindFirstChild("ShardfallRail")
+			local button = GuiFake.findNamed(rail, "Bag")
+			GuiFake.activate(button)
+			expect(inventory.isOpen()).toBeTrue()
+			expect(inventory.isShown()).toBeTrue()
+			expect(panels).toEqual({ "inventory" })
+			expect(hubs).toEqual(0)
+			GuiFake.activate(button)
+			expect(inventory.isOpen()).toBeFalse()
+			expect(inventory.isShown()).toBeFalse()
+			expect(panels).toEqual({ "inventory" })
+			expect(hubs).toEqual(0)
+		end)
+		LaunchGate.SHOW.oneInventory = previous
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	it("treats a shown inventory as menu-open for skills", function()
+		local source = fs.readFile(CLIENT)
+		local at = string.find(source, "menuOpen = function()", 1, true)
+		expect(at ~= nil).toBeTrue()
+		local body = string.sub(source, at :: number, (at :: number) + 220)
+		expect(string.find(body, "menuHub.isOpen()", 1, true) ~= nil).toBeTrue()
+		expect(string.find(body, "inventory.isShown()", 1, true) ~= nil).toBeTrue()
 	end)
 end)
