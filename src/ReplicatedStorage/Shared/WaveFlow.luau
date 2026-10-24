@@ -9,6 +9,11 @@
 	WaveFlowService is the gate. It calls these functions only while
 	LaunchGate.enemyTypes is on. A client that requires this file can
 	step a local table. It cannot grant loot or push the counter.
+
+	The run id is HttpService:GenerateGUID. A per-boot counter minted
+	run-1 on every server, and a save that already had that id refused
+	the next clear. Old run-N ids still load in BossClearReward. Lune
+	has no DataModel, so the test runner mints the same GUID shape.
 ]]
 
 local Enemies = require("./Config/Enemies")
@@ -51,11 +56,19 @@ export type Run = {
 	rewarded: boolean,
 }
 
-local nextRun = 0
+-- Lune only. A live server and Studio take HttpService below.
+local standIn = 0
+
+local function standInGuid(): string
+	standIn += 1
+	return string.format("00000000-0000-4000-8000-%012x", standIn)
+end
 
 local function mintRunId(): string
-	nextRun += 1
-	return string.format("run-%d", nextRun)
+	if game ~= nil and game.GetService ~= nil then
+		return game:GetService("HttpService"):GenerateGUID(false)
+	end
+	return standInGuid()
 end
 
 local function living(run: Run): number

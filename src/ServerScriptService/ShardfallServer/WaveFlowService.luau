@@ -11,9 +11,11 @@
 
 	A boss-wave clear can pay Roll Tokens when the caller passes a
 	profile and a persist callback. persist runs before the counter is
-	fired. The callback must save and must not tell the client. With
-	no profile, the counter behaves as before and nothing is paid.
-	The flag still has to be on. Boot does not call this module.
+	fired. The callback must save and must not tell the client. A
+	second clear for that run while the save is in flight does not pay
+	again and does not fire. With no profile, the counter behaves as
+	before and nothing is paid. The flag still has to be on. Boot does
+	not call this module.
 
 	bossEnter and bossDown go to an analytics hook when one exists.
 	That hook is ReplicatedStorage.Shared.Analytics.event, or the

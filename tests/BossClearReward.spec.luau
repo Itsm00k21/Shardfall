@@ -6,6 +6,8 @@
 	Disconnect and rejoin cannot pay the same run twice.
 ]]
 
+local fs = require("@lune/fs")
+
 local framework = require("./framework")
 local describe = framework.describe
 local it = framework.it
@@ -38,6 +40,7 @@ end
 describe("Boss clear reward", function()
 	it("keeps the flag off, schema 26, and the boss token row", function()
 		expect(LaunchGate.SHOW.enemyTypes).toEqual(false)
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
 		expect(Schema.VERSION).toEqual(26)
 		expect(Economy.BOSS_CLEAR_TOKENS).toEqual(5)
 		expect(Economy.BOSS_CLEAR_TOKENS < Economy.NORMAL_CLEAR_TOKENS).toBeTrue()
@@ -346,6 +349,233 @@ describe("Boss clear reward", function()
 
 			expect(WaveFlowService.hurt(run, 1, 1, sink)).toEqual(0)
 			expect(#sent).toEqual(fires + 1)
+			expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
+		end)
+	end)
+
+	it("pays a new server guid when a saved run-1 would have collided", function()
+		local source = fs.readFile("src/ReplicatedStorage/Shared/WaveFlow.luau")
+		expect(string.find(source, "GenerateGUID", 1, true) ~= nil).toBeTrue()
+		expect(string.find(source, "run-%d", 1, true)).toBeNil()
+
+		local disk = {}
+		local profile = Schema.template()
+		local before = profile.shardTokens
+		local firstServer = BossClearReward.commit(profile, "run-1", saveInto(disk))
+		expect(firstServer.granted).toEqual(true)
+		expect(firstServer.tokens).toEqual(Economy.BOSS_CLEAR_TOKENS)
+
+		local rejoined = Schema.migrate(disk[1])
+		assert(rejoined ~= nil)
+		expect(rejoined.schemaVersion).toEqual(26)
+		expect(BossClearReward.validId("run-1")).toEqual(true)
+		expect(BossClearReward.seen(rejoined, "run-1")).toEqual(true)
+		local collidedCalls = 0
+		local collided = BossClearReward.commit(rejoined, "run-1", function()
+			collidedCalls += 1
+			return true
+		end)
+		expect(collidedCalls).toEqual(0)
+		expect(collided.already).toEqual(true)
+		expect(collided.granted).toEqual(false)
+		expect(rejoined.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
+
+		local serverA = WaveFlow.start()
+		local serverB = WaveFlow.start()
+		expect(serverA ~= nil and serverB ~= nil).toBeTrue()
+		if serverA == nil or serverB == nil then
+			return
+		end
+		expect(serverA.id == serverB.id).toBeFalse()
+		expect(serverA.id == "run-1").toBeFalse()
+		expect(BossClearReward.validId(serverA.id)).toEqual(true)
+		expect(BossClearReward.validId(serverB.id)).toEqual(true)
+		expect(string.match(serverA.id, "^run%-%d+$")).toBeNil()
+		expect(string.match(serverB.id, "^run%-%d+$")).toBeNil()
+		expect(BossClearReward.validId(string.upper(serverA.id))).toEqual(true)
+
+		local paidA = BossClearReward.commit(rejoined, serverA.id, saveInto(disk))
+		expect(paidA.granted).toEqual(true)
+		expect(paidA.tokens).toEqual(Economy.BOSS_CLEAR_TOKENS)
+		local paidB = BossClearReward.commit(rejoined, serverB.id, saveInto(disk))
+		expect(paidB.granted).toEqual(true)
+		expect(rejoined.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS * 3)
+		expect(#rejoined.bossClearRuns).toEqual(3)
+		expect(#rejoined.bossClearRuns <= Economy.BOSS_CLEAR_RUNS).toBeTrue()
+
+		local mixed = Schema.migrate({
+			schemaVersion = 26,
+			bossClearRuns = { "run-3", serverA.id, "{" .. serverA.id .. "}", "robux" },
+		})
+		assert(mixed ~= nil)
+		expect(mixed.schemaVersion).toEqual(26)
+		expect(BossClearReward.seen(mixed, "run-3")).toEqual(true)
+		expect(BossClearReward.seen(mixed, serverA.id)).toEqual(true)
+		expect(#mixed.bossClearRuns).toEqual(2)
+	end)
+
+	it("does not double-grant while the same run is still saving", function()
+		local profile = Schema.template()
+		local before = profile.shardTokens
+		local id = "cccccccc-dddd-4eee-8fff-000000000001"
+		expect(BossClearReward.validId(id)).toEqual(true)
+		local calls = 0
+		local inner = nil
+		local outer = BossClearReward.commit(profile, id, function(data)
+			calls += 1
+			inner = BossClearReward.commit(profile, id, function()
+				calls += 1
+				return true
+			end)
+			expect(data.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
+			return true
+		end)
+		expect(inner ~= nil).toBeTrue()
+		if inner == nil then
+			return
+		end
+		expect(calls).toEqual(1)
+		expect(inner.granted).toEqual(false)
+		expect(inner.saved).toEqual(false)
+		expect(inner.already).toEqual(false)
+		expect(outer.granted).toEqual(true)
+		expect(outer.saved).toEqual(true)
+		expect(outer.tokens).toEqual(Economy.BOSS_CLEAR_TOKENS)
+		expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
+		expect(#profile.bossClearRuns).toEqual(1)
+	end)
+
+	it("keeps a grant that lands while a save is in flight", function()
+		local profile = Schema.template()
+		local before = profile.shardTokens
+		local first = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+		local second = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"
+		local disk = {}
+		local phase = 0
+		local innerCalls = 0
+		local inner = nil
+		local outer = BossClearReward.commit(profile, first, function(data)
+			phase += 1
+			if phase == 1 then
+				inner = BossClearReward.commit(profile, second, function()
+					innerCalls += 1
+					return true
+				end)
+				return false
+			end
+			disk[1] = Schema.deepCopy(data)
+			return true
+		end)
+		expect(inner ~= nil).toBeTrue()
+		if inner == nil then
+			return
+		end
+		expect(innerCalls).toEqual(0)
+		expect(phase).toEqual(2)
+		expect(inner.saved).toEqual(false)
+		expect(inner.granted).toEqual(false)
+		expect(inner.already).toEqual(false)
+		expect(outer.saved).toEqual(true)
+		expect(outer.granted).toEqual(true)
+		expect(outer.tokens).toEqual(Economy.BOSS_CLEAR_TOKENS)
+		expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS * 2)
+		expect(disk[1].shardTokens).toEqual(profile.shardTokens)
+		expect(BossClearReward.seen(disk[1], first)).toEqual(true)
+		expect(BossClearReward.seen(disk[1], second)).toEqual(true)
+		expect(disk[1].schemaVersion).toEqual(26)
+
+		local replayCalls = 0
+		local replay = BossClearReward.commit(profile, second, function()
+			replayCalls += 1
+			return true
+		end)
+		expect(replayCalls).toEqual(0)
+		expect(replay.already).toEqual(true)
+		expect(replay.granted).toEqual(false)
+		expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS * 2)
+
+		local staleCalls = 0
+		local staleDisk = {}
+		local early = BossClearReward.commit(Schema.template(), first, function(data)
+			staleCalls += 1
+			if staleCalls == 1 then
+				local stale = Schema.deepCopy(data)
+				local nestedCalls = 0
+				local nested = BossClearReward.commit(data, second, function()
+					nestedCalls += 1
+					return true
+				end)
+				expect(nestedCalls).toEqual(0)
+				expect(nested.saved).toEqual(false)
+				staleDisk[1] = stale
+				return true
+			end
+			staleDisk[1] = Schema.deepCopy(data)
+			return true
+		end)
+		expect(staleCalls).toEqual(2)
+		expect(early.saved).toEqual(true)
+		expect(BossClearReward.seen(staleDisk[1], first)).toEqual(true)
+		expect(BossClearReward.seen(staleDisk[1], second)).toEqual(true)
+		expect(staleDisk[1].shardTokens).toEqual(Schema.STARTER_TOKENS + Economy.BOSS_CLEAR_TOKENS * 2)
+	end)
+
+	it("does not tell the client while the boss-clear save is in flight", function()
+		withFlag(true, function()
+			local profile = Schema.template()
+			local before = profile.shardTokens
+			local sent = {}
+			local disk = {}
+			local run = nil
+			local nestedSaved = nil
+			local firesAtSave = nil
+			local sink = {
+				player = "hero",
+				profile = profile,
+				fire = function(_player, payload)
+					table.insert(sent, payload.left)
+				end,
+				persist = function(data)
+					if run == nil then
+						return false
+					end
+					firesAtSave = #sent
+					nestedSaved = BossClearReward.commit(profile, run.id, function()
+						return true
+					end).saved
+					expect(WaveFlowService.hurt(run, 1, 1, sink)).toEqual(0)
+					expect(#sent).toEqual(firesAtSave)
+					expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
+					disk[1] = Schema.deepCopy(data)
+					return true
+				end,
+			}
+			run = WaveFlowService.start(sink)
+			expect(run ~= nil).toBeTrue()
+			if run == nil then
+				return
+			end
+			local guard = 0
+			while run.clear ~= true and guard < 80 do
+				local boxes = WaveFlow.boxes(run)
+				expect(#boxes > 0).toBeTrue()
+				expect(WaveFlowService.hurt(run, boxes[1].id, 100000, sink) > 0).toBeTrue()
+				guard += 1
+			end
+			expect(run.clear).toEqual(true)
+			expect(run.rewarded).toEqual(true)
+			expect(nestedSaved).toEqual(false)
+			expect(firesAtSave ~= nil).toBeTrue()
+			expect(#sent).toEqual((firesAtSave :: number) + 1)
+			expect(sent[#sent]).toEqual(0)
+			expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
+			expect(disk[1].bossClearRuns[#disk[1].bossClearRuns]).toEqual(run.id)
+			expect(string.match(run.id, "^run%-%d+$")).toBeNil()
+			expect(BossClearReward.validId(run.id)).toEqual(true)
+
+			local fires = #sent
+			expect(WaveFlowService.hurt(run, 1, 1, sink)).toEqual(0)
+			expect(#sent).toEqual(fires)
 			expect(profile.shardTokens).toEqual(before + Economy.BOSS_CLEAR_TOKENS)
 		end)
 	end)

@@ -20,8 +20,9 @@
 	document before that list exists: a higher version looks newer, and a
 	v26 server refuses the load. #387 writes the same gearEssence field.
 
-	The wave-5 boss clear remembers run ids on bossClearRuns. That list
-	is bounded, defaults to {} when missing, and does not bump the version.
+	The wave-5 boss clear remembers run ids on bossClearRuns. New ids are
+	GUIDs. A save that already has run-N still loads. The list is bounded,
+	defaults to {} when missing, and does not bump the version.
 ]]
 
 local ActionSlots = require("./ActionSlots")

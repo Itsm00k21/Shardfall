@@ -20,6 +20,12 @@ its tag to merged and add the merge commit.
   validated in `Config/Economy`. Run ids live on `bossClearRuns` (bounded
   to 16, default `{}` on load). `schemaVersion` stays 26. No Robux.
   Flag `enemyTypes` stays off. Stacked on #427. (open)
+- Boss-clear run ids are `HttpService:GenerateGUID` values. A per-boot
+  `run-N` collided across servers, so a saved id refused the next clear.
+  Saves that already store `run-N` still load. An in-flight save cannot
+  pay the same run twice, tell the client early, or roll back a grant
+  that landed while it was writing. `bossClearRuns` stays capped at 16.
+  `schemaVersion` stays 26. No new save field. (open)
 - The leash slam cancels its mark when the dash path is blocked, so the
   boss does not cross that line. Shard Volley windup is `VOLLEY_WINDUP`
   0.9s in `Config/Enemies`. Flag `enemyTypes` stays off. (open)
