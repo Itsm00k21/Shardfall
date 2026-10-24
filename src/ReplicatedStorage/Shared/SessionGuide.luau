@@ -3,12 +3,16 @@
 --[[
 	T3 first-session guide. Config and the grant rules.
 
-	LaunchGate.firstSessionGuide ships false. While it is off, every
-	function here leaves the profile alone.
+	LaunchGate.firstSessionGuide ships false. While it is off, free rolls,
+	the pad, and Replay leave the profile alone. Skip still pays the saved
+	step's token count once, so a rollback cannot zero that debt or pay it
+	twice.
 
-	R1. Unused free rolls become Shard Tokens once, from the saved step
-	(roll1 = 3, roll2 = 2, roll3 = 1, anything else = 0), and only while
-	onboardDone is still false.
+	R1. Unused free rolls become Shard Tokens once, from the saved step,
+	and only while onboardDone is still false. roll1 = 3, roll2 = 2,
+	roll3 = 1, and anything else = 0. open owes 3 only while the flag is
+	on. With the flag off, open owes 0, so a fresh Skip does not grant
+	tokens. A saved roll step still pays its count.
 	R2. claimFree spends the free roll and moves onboardStep together.
 	A roll step does not move through note().
 	R3. Free or not is read from onboardDone and onboardStep. There is
@@ -25,15 +29,30 @@ local WaveArenaConfig = require("./Config/WaveArenaConfig")
 
 local SessionGuide = {}
 
+-- One source for the three free cracks. roll1 owes all of them. roll2
+-- and roll3 owe what is left. open stores the same 3 so a flag-on Skip
+-- can pay them. unusedRollTokens returns 0 for open while the flag is
+-- off. check() still locks freeRolls at 3.
+local FREE_ROLLS = 3
+
+local TOKEN_COUNT: { [string]: number } = {
+	open = FREE_ROLLS,
+	roll1 = FREE_ROLLS,
+	roll2 = FREE_ROLLS - 1,
+	roll3 = FREE_ROLLS - 2,
+}
+
 SessionGuide.PAD_RADIUS = 6
 SessionGuide.PAD_HEIGHT = 12
+SessionGuide.PAD_HZ = 5
+SessionGuide.FREE_ROLL_NOTICE = "use your free roll"
 
 SessionGuide.TIMING = table.freeze({
 	pointer = 4,
 	repeatIdle = 9,
 	edge = 6,
 	takeMe = 30,
-	freeRolls = 3,
+	freeRolls = FREE_ROLLS,
 })
 
 local STEPS = table.freeze({
@@ -42,7 +61,7 @@ local STEPS = table.freeze({
 		text = "Crack your first shard.",
 		hint = "",
 		short = "Welcome",
-		tokens = 0,
+		tokens = TOKEN_COUNT.open,
 		free = false,
 	}),
 	table.freeze({
@@ -52,7 +71,7 @@ local STEPS = table.freeze({
 		hint = "Crack shard 1",
 		short = "Crack a shard",
 		continueHint = "Tap ROLL at the bottom. Or press Skip intro.",
-		tokens = 3,
+		tokens = TOKEN_COUNT.roll1,
 		free = true,
 	}),
 	table.freeze({
@@ -61,7 +80,7 @@ local STEPS = table.freeze({
 		hint = "Crack shard 2",
 		short = "2 free shards left",
 		continueHint = "Tap ROLL at the bottom. Or press Skip intro.",
-		tokens = 2,
+		tokens = TOKEN_COUNT.roll2,
 		free = true,
 	}),
 	table.freeze({
@@ -70,7 +89,7 @@ local STEPS = table.freeze({
 		hint = "Crack shard 3",
 		short = "Last free shard",
 		continueHint = "Tap ROLL at the bottom. Or press Skip intro.",
-		tokens = 1,
+		tokens = TOKEN_COUNT.roll3,
 		free = true,
 		floor = "Rare",
 	}),
@@ -98,7 +117,6 @@ local STEPS = table.freeze({
 })
 
 local ORDER = { "open", "roll1", "roll2", "roll3", "gate", "wave1" }
-local TOKEN_COUNT: { [string]: number } = { roll1 = 3, roll2 = 2, roll3 = 1 }
 local LOG_CAP = 32
 local log: { { name: string, detail: string } } = {}
 
@@ -168,24 +186,44 @@ function SessionGuide.freeStep(id: any): boolean
 	return row ~= nil and row.free == true
 end
 
--- Tokens still owed for unused free rolls. 0 once the guide is finished,
--- off, or sitting on any step that is not roll1, roll2, or roll3.
+-- Tokens still owed for unused free rolls. 0 once the guide is finished
+-- or the saved step owes none. A saved roll step pays its count with the
+-- flag on or off, so a rollback cannot zero that debt or pay it twice.
+-- open pays its row only while the flag is on. Flag off, a fresh open
+-- card owes 0.
 function SessionGuide.unusedRollTokens(data: any): number
-	if not enabled() or type(data) ~= "table" or data.onboardDone == true then
+	if type(data) ~= "table" or data.onboardDone == true then
 		return 0
 	end
 	local row = find(data.onboardStep)
 	if row == nil or type(row.tokens) ~= "number" then
 		return 0
 	end
+	if row.id == "open" and not enabled() then
+		return 0
+	end
 	return row.tokens
+end
+
+-- The x10 press during roll1, roll2, or roll3. Nil when the guide is off,
+-- finished, or on any other step. The string is the roll result the client
+-- already shows.
+function SessionGuide.batchNotice(data: any): string?
+	if not enabled() or type(data) ~= "table" or data.onboardDone == true then
+		return nil
+	end
+	local row = find(data.onboardStep)
+	if row == nil or row.free ~= true then
+		return nil
+	end
+	return SessionGuide.FREE_ROLL_NOTICE
 end
 
 -- Pays `count` only when it is exactly the saved step's unused rolls
 -- and the guide is still open. A second call sees onboardDone or a
--- count that no longer matches, and pays 0.
+-- count that no longer matches, and pays 0. The flag is not a gate.
 function SessionGuide.grantTokens(data: any, count: any): number
-	if not enabled() or type(data) ~= "table" or data.onboardDone == true then
+	if type(data) ~= "table" or data.onboardDone == true then
 		return 0
 	end
 	local owed = SessionGuide.unusedRollTokens(data)
@@ -263,6 +301,35 @@ function SessionGuide.padHit(x: any, y: any, z: any): boolean
 		dy = -dy
 	end
 	return dy <= SessionGuide.PAD_HEIGHT
+end
+
+-- Gate-pad clock. One check per call, about PAD_HZ times a second.
+-- A short frame returns false and keeps the leftover. A long frame
+-- still checks once.
+function SessionGuide.padClock(carried: any, dt: any): (number, boolean)
+	local rate = SessionGuide.PAD_HZ
+	if type(rate) ~= "number" or rate ~= rate or rate <= 0 or rate == math.huge then
+		return 0, false
+	end
+	local interval = 1 / rate
+	local clock = 0
+	if type(carried) == "number" and carried == carried and carried >= 0 and carried < math.huge then
+		clock = carried
+	end
+	if type(dt) == "number" and dt == dt and dt > 0 and dt < math.huge then
+		clock += dt
+	end
+	if clock + 1e-6 < interval then
+		return clock, false
+	end
+	clock -= interval
+	if clock < 0 then
+		clock = 0
+	end
+	if clock + 1e-6 >= interval then
+		clock = clock % interval
+	end
+	return clock, true
 end
 
 -- Server pad check. Moves gate to wave1 only. No reward.
@@ -428,6 +495,12 @@ function SessionGuide.validate(): (boolean, string?)
 	end
 	if SessionGuide.PAD_RADIUS <= 0 or SessionGuide.PAD_HEIGHT <= 0 then
 		return false, "pad"
+	end
+	if SessionGuide.PAD_HZ ~= 5 then
+		return false, "rate"
+	end
+	if SessionGuide.FREE_ROLL_NOTICE ~= "use your free roll" then
+		return false, "notice"
 	end
 	return true, nil
 end
