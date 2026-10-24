@@ -641,7 +641,7 @@ function HudShell.start(playerGui: PlayerGui, callbacks: Callbacks)
 			label.Position = UDim2.fromOffset(0, (index - 1) * (card.h + UiTheme.PAD))
 			label.Size = UDim2.fromOffset(card.w, card.h)
 		end
-		local ask = HudLayout.equipPrompt(vx, margin)
+		local ask = HudLayout.equipPrompt(vx, margin, vy)
 		prompt.Position = UDim2.fromOffset(ask.x, ask.y)
 		prompt.Size = UDim2.fromOffset(ask.w, ask.h)
 	end
