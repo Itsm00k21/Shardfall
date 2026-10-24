@@ -236,5 +236,6 @@ require("./ShardCore.spec")
 require("./GearSalvage.spec")
 require("./GearPolish.spec")
 require("./BigRollBeam.spec")
+require("./PartyGather.spec")
 
 process.exit(framework.run())

@@ -231,6 +231,13 @@ begin("WaveArena", function()
 	end
 	require(script.WaveArenaHost).present()
 end)
+begin("PartyGather", function()
+	-- [ECHO hook] T4 Gate Ring. Builds nothing unless LaunchGate.parties is on.
+	if not LaunchGate.on("parties") then
+		return
+	end
+	require(script.PartyGatherHost).start()
+end)
 game:GetService("Players").PlayerAdded:Connect(function(player)
 	task.spawn(function()
 		local ok, err = pcall(function()
