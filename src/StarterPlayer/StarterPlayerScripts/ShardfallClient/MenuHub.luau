@@ -977,7 +977,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 					pad:Disable()
 				end)
 				hubState.controlsHeld = true
-			elseif not locked and (changed or hubState.controlsHeld == true) and type(pad.Enable) == "function" then
+			elseif
+				not locked
+				and (changed or hubState.controlsHeld == true)
+				and type(pad.Enable) == "function"
+			then
 				pcall(function()
 					pad:Enable()
 				end)
@@ -1586,7 +1590,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.paintCardFace(face: any, color: Color3)
 		local art = (IconAssets :: any)[face.icon]
-		hubState.revealIcon.Image = if type(art) == "string" then art else (IconAssets.ItemMisc or "")
+		hubState.revealIcon.Image = if type(art) == "string"
+			then art
+			else (IconAssets.ItemMisc or "")
 		hubState.revealIconStroke.Color = color
 		hubState.revealTitle.Text = face.title
 		hubState.revealRarity.Text = face.rarity
@@ -1735,7 +1741,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	-- player presses Salvage now.
 	function hubFn.askNudge(): any
 		local ok, answer = pcall(hooks.invoke, BagTools.REMOTE, "nudge", {})
-		if ok and type(answer) == "table" and answer.ok == true and type(answer.token) == "string" then
+		if
+			ok
+			and type(answer) == "table"
+			and answer.ok == true
+			and type(answer.token) == "string"
+		then
 			return {
 				token = answer.token,
 				count = answer.count,
@@ -1774,7 +1785,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			nudge = fresh
 		end
-		local ok, answer = pcall(hooks.invoke, BagTools.REMOTE, "salvageNow", { token = nudge.token })
+		local ok, answer =
+			pcall(hooks.invoke, BagTools.REMOTE, "salvageNow", { token = nudge.token })
 		hubState.salvageNowBusy = false
 		local message = "Could not salvage that."
 		if ok and type(answer) == "table" then
@@ -2359,7 +2371,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local tile = math.max(24, math.min(56, layout.card.h - 16))
 		local textX = 8 + tile + 10
 		hubState.revealIconTile.Size = UDim2.fromOffset(tile, tile)
-		hubState.revealIconTile.Position = UDim2.fromOffset(8, math.floor((layout.card.h - tile) / 2))
+		hubState.revealIconTile.Position =
+			UDim2.fromOffset(8, math.floor((layout.card.h - tile) / 2))
 		hubState.revealTitle.Position = UDim2.fromOffset(textX, layout.name.y)
 		hubState.revealTitle.Size = UDim2.new(1, -(textX + 108), 0, layout.name.h)
 		hubState.revealRarity.Visible = layout.rarity.visible
@@ -2544,6 +2557,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	end
 
 	function hubFn.classMissing(): boolean
+		-- [Ghost] Oct 24: with LaunchGate classes off the server refuses
+		-- SetClass ("That is closed"), so a missing class must never open
+		-- the picker. That was Kevin's pick-a-class loop.
+		if not LaunchGate.on("classes") then
+			return false
+		end
 		if type(hubState.profile) ~= "table" then
 			return false
 		end
@@ -2918,7 +2937,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		-- Leave room for the pinned BagFoot, or the last card row sits
 		-- under it and reads as cut off.
-		local footH = if list.Parent ~= nil and list.Parent:FindFirstChild("BagFoot") ~= nil
+		local footH = if list.Parent ~= nil
+				and list.Parent:FindFirstChild("BagFoot") ~= nil
 			then UiTheme.TOUCH + UiTheme.PAD * 2
 			else 0
 		if not hubState.detail.Visible then
@@ -3407,7 +3427,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			lock.BackgroundColor3 = lockFill
 			lock.Text = ""
 			lock:SetAttribute("Locked", lockedCard)
-			GearDetail.lockIcon(lock, lockedCard, math.max(12, math.min(parts.lock.w, parts.lock.h) - 10))
+			GearDetail.lockIcon(
+				lock,
+				lockedCard,
+				math.max(12, math.min(parts.lock.w, parts.lock.h) - 10)
+			)
 			lock.AutoButtonColor = false
 			lock.ZIndex = 7
 			lock.Parent = card
@@ -3694,9 +3718,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local tx = 12 + sheet.crest + 12
 		local textW = -(tx + sheet.avatarW + powerW + 16)
 		local big = UiTheme.MIN_TEXT + (if sheet.wide then 10 else 6)
+		local classesOpen = LaunchGate.on("classes")
 		label(
 			header,
-			if classDef ~= nil then classDef.name else "No class",
+			if classDef ~= nil then classDef.name elseif classesOpen then "No class" else "Hero",
 			tx,
 			12,
 			textW,
@@ -3708,7 +3733,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			"ClassName"
 		label(
 			header,
-			if classDef ~= nil then classDef.role else "Choose a class",
+			if classDef ~= nil
+				then classDef.role
+				elseif classesOpen then "Choose a class"
+				else "Skills come from your gear",
 			tx,
 			16 + big,
 			textW,
@@ -3885,7 +3913,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local classCard = Instance.new("Frame")
 		classCard.Name = "ClassCard"
 		classCard.BackgroundColor3 = rgb("body")
-		classCard.Size = UDim2.new(1, 0, 0, if classDef ~= nil then 52 else 128)
+		local offerPick = classDef == nil and classesOpen
+		classCard.Size = UDim2.new(1, 0, 0, if offerPick then 128 else 52)
 		classCard.BorderSizePixel = 0
 		classCard.LayoutOrder = 2
 		classCard.Parent = hubState.hero
@@ -3894,7 +3923,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			classCard,
 			if classDef ~= nil
 				then "Passive  ·  " .. classDef.passiveNote
-				else "Choose a class to take a kit.",
+				elseif classesOpen then "Choose a class to take a kit."
+				else "Classes open later. Your gear sets your skills for now.",
 			12,
 			6,
 			-24,
@@ -3905,7 +3935,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		classNote.TextWrapped = true
 		classNote.TextTruncate = Enum.TextTruncate.AtEnd
-		if classDef == nil then
+		if offerPick then
 			local choose = Instance.new("TextButton")
 			choose.Name = "ChooseClass"
 			choose.Position = UDim2.fromOffset(12, 74)
@@ -4007,15 +4037,25 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				end)
 			end
 		else
-			hubFn.line(hubState.hero, "No skills until a class is chosen.", 10, rgb("muted"))
+			hubFn.line(
+				hubState.hero,
+				if classesOpen
+					then "No skills until a class is chosen."
+					else "Skills come from your gear for now.",
+				10,
+				rgb("muted")
+			)
 		end
-		hubFn.row(hubState.hero, "Change class", 30, function()
-			if hubFn.classMissing() or hooks.onClassSheet == nil then
-				hubFn.showClassPrompt(true)
-			else
-				hooks.onClassSheet()
-			end
-		end)
+		-- Classes off: no Change class row. The server refuses SetClass.
+		if classesOpen then
+			hubFn.row(hubState.hero, "Change class", 30, function()
+				if hubFn.classMissing() or hooks.onClassSheet == nil then
+					hubFn.showClassPrompt(true)
+				else
+					hooks.onClassSheet()
+				end
+			end)
+		end
 		hubFn.hexify(hubState.hero)
 		hubFn.hold("hero")
 	end
@@ -4278,7 +4318,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if LaunchGate.on("gearSalvage") then
 			local autoText, autoOn = GearHooks.autoPill(hubState.profile)
 			if autoOn then
-				local warn = hubFn.line(actions, autoText .. "  (change it in Open full bag)", 1, rgb("gold"))
+				local warn = hubFn.line(
+					actions,
+					autoText .. "  (change it in Open full bag)",
+					1,
+					rgb("gold")
+				)
 				warn.Name = "AutoWarn"
 			end
 		end
@@ -4316,7 +4361,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		if #shown == 0 then
 			-- "Open full bag" is already in the actions above. The empty
 			-- line is copy only, so the button is not shown twice.
-			local empty = hubFn.line(hubState.bag, "The bag is empty. Roll a shard to fill it.", 9, rgb("muted"))
+			local empty = hubFn.line(
+				hubState.bag,
+				"The bag is empty. Roll a shard to fill it.",
+				9,
+				rgb("muted")
+			)
 			empty.Name = "Empty"
 		else
 			local listH = hubState.bag.AbsoluteSize.Y
@@ -4710,10 +4760,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		-- [Ghost] Clip 9: with no pick yet the detail opens on the
 		-- equipped pet, not whichever sorts first.
-		local equippedPet = if type(hubState.profile) == "table" and type(hubState.profile.equipped) == "table"
+		local equippedPet = if type(hubState.profile) == "table"
+				and type(hubState.profile.equipped) == "table"
 			then hubState.profile.equipped.pet
 			else nil
-		local picked = cards[HubStyle.petDefault(cards, equippedPet, hubState.petPick, hubState.petPickUid)]
+		local picked =
+			cards[HubStyle.petDefault(cards, equippedPet, hubState.petPick, hubState.petPickUid)]
 		local petDetail = Instance.new("Frame")
 		petDetail.Name = "PetDetail"
 		petDetail.BackgroundColor3 = rgb("header")
@@ -4928,7 +4980,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			art.BackgroundTransparency = 1
 			art.AnchorPoint = Vector2.new(0.5, 1)
 			art.Position = UDim2.new(0.5, 0, 1, -6)
-			local artSize = math.max(64, math.floor(math.min(spec.pedestal.w * 0.9, spec.pedestal.h - 12)))
+			local artSize =
+				math.max(64, math.floor(math.min(spec.pedestal.w * 0.9, spec.pedestal.h - 12)))
 			art.Size = UDim2.fromOffset(artSize, artSize)
 			art.ScaleType = Enum.ScaleType.Fit
 			art.Image = crystalArt
@@ -4944,7 +4997,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			shard.AnchorPoint = Vector2.new(0.5, 1)
 			shard.Position = UDim2.new(0.5, 0, 1, -28)
 			shard.Size = UDim2.fromOffset(crystal.w, crystal.h)
-			shard.BackgroundColor3 = Color3.fromRGB(crystal.fill[1], crystal.fill[2], crystal.fill[3])
+			shard.BackgroundColor3 =
+				Color3.fromRGB(crystal.fill[1], crystal.fill[2], crystal.fill[3])
 			shard.BorderSizePixel = 0
 			shard.Parent = pedestal
 			local shardCorner = Instance.new("UICorner")
@@ -5004,7 +5058,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			local details = Instance.new("TextButton")
 			details.Name = "Info"
 			details.Size = UDim2.fromOffset(math.max(40, spec.odds.w - 16), 32)
-			details.BackgroundColor3 = if hubState.infoOpen == true then rgb("button") else rgb("header")
+			details.BackgroundColor3 = if hubState.infoOpen == true
+				then rgb("button")
+				else rgb("header")
 			details.Font = headerFont()
 			details.TextSize = UiTheme.MIN_TEXT
 			details.TextColor3 = rgb("text")
@@ -5085,7 +5141,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		local screen = hubFn.rollScreen()
 		local tenOn = hubState.pendingCount > 1 or hubState.batching == true
-		local ten = hubFn.ctaButton("TimesTen", RollScreen.TEN_LABEL, if tenOn then "button" else "claim")
+		local ten =
+			hubFn.ctaButton("TimesTen", RollScreen.TEN_LABEL, if tenOn then "button" else "claim")
 		ten.TextXAlignment = Enum.TextXAlignment.Left
 		local tenPad = Instance.new("UIPadding")
 		tenPad.PaddingLeft = UDim.new(0, 10)
@@ -5137,7 +5194,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local autoOn = hubState.autoOn == true
 		hubFn.ctaButton("Auto", RollScreen.autoLabel(autoOn), if autoOn then "button" else "header")
 		if screen.phone then
-			hubFn.ctaButton("Info", RollScreen.ODDS_LABEL, if hubState.infoOpen == true then "button" else "header")
+			hubFn.ctaButton(
+				"Info",
+				RollScreen.ODDS_LABEL,
+				if hubState.infoOpen == true then "button" else "header"
+			)
 		end
 
 		-- Meters: tenth-crack luck pips (left / top) and the free Legendary
@@ -5161,7 +5222,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			dot.Position = UDim2.new(0, (index - 1) * (pip + 3), 0.5, 0)
 			dot.Size = UDim2.fromOffset(pip, pip)
 			dot.Rotation = 45
-			dot.BackgroundColor3 = if index <= lit then Color3.fromRGB(96, 210, 255) else rgb("header")
+			dot.BackgroundColor3 = if index <= lit
+				then Color3.fromRGB(96, 210, 255)
+				else rgb("header")
 			dot.BorderSizePixel = 0
 			dot.ZIndex = 6
 			dot.Parent = luck
@@ -5432,7 +5495,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				6,
 				rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
 			)
-			hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+			hubFn.line(
+				hubState.roll,
+				string.format("Rolls  %d", hubState.hype.rolls),
+				7,
+				rgb("text")
+			)
 		end
 		local bestText = "Best pull  —"
 		if type(hubState.bestPull) == "table" then
@@ -6029,10 +6097,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			else nil
 		local gone = type(extra) == "table" and extra.gone == true
 		local color = hubFn.rarityColor3(record.rarity)
-		hubFn.paintCardFace(
-			RollReveal.cardFace(item, record, InventoryView.statLines(item)),
-			color
-		)
+		hubFn.paintCardFace(RollReveal.cardFace(item, record, InventoryView.statLines(item)), color)
 		if gearNote ~= nil then
 			hubState.revealRarity.Text = hubState.revealRarity.Text .. " · " .. gearNote
 		end
@@ -6293,7 +6358,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						-- One outcome per tile, stars chained per copy through the batch.
 						local planned = RollSummary.batch(batch.items, ownedBefore)
 						for index, row in ipairs(batch.items) do
-							if type(row) == "table" and type(row.item) == "table" and planned[index] ~= nil then
+							if
+								type(row) == "table"
+								and type(row.item) == "table"
+								and planned[index] ~= nil
+							then
 								hubState.summaryMeta[row.item] = planned[index]
 							end
 						end

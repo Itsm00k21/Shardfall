@@ -6,6 +6,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Classes = require("../src/ReplicatedStorage/Shared/Classes")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local NotifyBadges = require("../src/ReplicatedStorage/Shared/NotifyBadges")
 
 describe("NotifyBadges", function()
@@ -18,9 +19,22 @@ describe("NotifyBadges", function()
 				a = { name = "Oak", obtainedAt = 5 },
 			},
 		}
+		-- Classes off (live): no "Choose class" badge.
+		local off = NotifyBadges.evaluate(profile, NotifyBadges.blank())
+		expect(off.hero.on).toEqual(false)
+		expect(off.hero.tip).toEqual("Hero")
+		local saved = LaunchGate.SHOW.classes
+		LaunchGate.SHOW.classes = true
+		local ok, err = pcall(function()
+			local on = NotifyBadges.evaluate(profile, NotifyBadges.blank())
+			expect(on.hero.on).toEqual(true)
+			expect(on.hero.tip).toEqual("Choose class")
+		end)
+		LaunchGate.SHOW.classes = saved
+		if not ok then
+			error(err, 0)
+		end
 		local badges = NotifyBadges.evaluate(profile, NotifyBadges.blank())
-		expect(badges.hero.on).toEqual(true)
-		expect(badges.hero.tip).toEqual("Choose class")
 		expect(badges.bag.on).toEqual(true)
 		expect(badges.pass.on).toEqual(true)
 		local seen = NotifyBadges.view(NotifyBadges.blank(), "hero", profile)
