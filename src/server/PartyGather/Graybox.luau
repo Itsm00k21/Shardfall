@@ -52,6 +52,18 @@ function Graybox.inPromptZone(x: number, z: number, config: any?): boolean
 	return dx * dx + dz * dz <= radius * radius
 end
 
+-- Haven portal prompts stay up. Only a prompt with no HavenAction is
+-- silenced, and only while it stands inside the prompt-free zone.
+function Graybox.suppressPrompt(havenAction: any, x: any, z: any, config: any?): boolean
+	if type(havenAction) == "string" and havenAction ~= "" then
+		return false
+	end
+	if type(x) ~= "number" or type(z) ~= "number" then
+		return false
+	end
+	return Graybox.inPromptZone(x, z, config)
+end
+
 function Graybox.pieces(config: any?): { Piece }
 	local cfg = cfgOf(config)
 	local pad = cfg.pad

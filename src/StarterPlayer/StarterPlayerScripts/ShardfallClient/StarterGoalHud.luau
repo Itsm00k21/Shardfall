@@ -17,8 +17,8 @@
 	an 18px line. HudLayout.place(viewportX, viewportY, rowCount)
 	supplies the rect when that function exists. Until then the
 	rect sits under the health bar and drops below the toast host
-	when they would overlap. On a phone it also stays off the
-	equip prompt. A viewport that cannot hold that rect collapses
+	when they would overlap. It also stays off the equip prompt
+	and the action bar. A viewport that cannot hold that rect collapses
 	the tracker instead of clamping it into the toast or off the
 	screen.
 
@@ -199,8 +199,8 @@ local function toastHost(viewportX: number, margin: number): Rect
 end
 
 -- Same frame HudShell places from HudLayout.equipPrompt.
-local function equipPrompt(viewportX: number, margin: number): Rect
-	local prompt = HudLayout.equipPrompt(viewportX, margin)
+local function equipPrompt(viewportX: number, margin: number, viewportY: number?): Rect
+	local prompt = HudLayout.equipPrompt(viewportX, margin, viewportY)
 	return { x = prompt.x, y = prompt.y, w = prompt.w, h = prompt.h }
 end
 
@@ -235,11 +235,15 @@ local function fitWidth(viewportX: number, margin: number, originX: number): num
 	return WIDTH
 end
 
-local function clearOf(box: Rect, block: Rect, prompt: Rect, rail: Rect): boolean
+local function clearOf(box: Rect, block: Rect, prompt: Rect, rail: Rect, bar: Rect?): boolean
 	if HudLayout.overlaps(box, block) or HudLayout.overlaps(box, prompt) then
 		return false
 	end
 	if HudLayout.overlaps(box, rail) then
+		return false
+	end
+	-- [Ghost] Oct 24: a landscape phone's thumb cluster rises this high.
+	if bar ~= nil and HudLayout.overlaps(box, bar) then
 		return false
 	end
 	return true
@@ -263,7 +267,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	end
 	local box: Rect = { x = x, y = y, w = width, h = height }
 	local block = toastHost(viewportX, margin)
-	local prompt = equipPrompt(viewportX, margin)
+	local prompt = equipPrompt(viewportX, margin, viewportY)
 	local railFit = HudLayout.railFit(
 		viewportY,
 		margin,
@@ -274,7 +278,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	)
 	local rail: Rect = { x = railFit.x, y = railFit.y, w = railFit.w, h = railFit.h }
 	local railRight = railFit.x + railFit.w + TOAST_GAP
-	local phone = HudLayout.breakpoint(viewportX, viewportY) == "phone"
+	local bar = HudLayout.actionCluster(viewportX, viewportY)
 
 	if HudLayout.overlaps(box, block) then
 		local nextX = x
@@ -287,9 +291,10 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 		end
 	end
 
-	-- Phones only. Prefer the full width just under the prompt. A short
-	-- phone that cannot hold that uses the gap beside the prompt instead.
-	if phone and HudLayout.overlaps(box, prompt) then
+	-- Prefer the full width just under the prompt. A short screen that
+	-- cannot hold that uses the gap beside the prompt instead. [Ghost]
+	-- Oct 24 (Havoc #482): every view now, not only phones (1024x600).
+	if HudLayout.overlaps(box, prompt) then
 		local moved = false
 		local originX = x
 		if originX < railRight then
@@ -305,7 +310,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 			}
 			if
 				onScreen(below, viewportX, viewportY, margin)
-				and clearOf(below, block, prompt, rail)
+				and clearOf(below, block, prompt, rail, bar)
 			then
 				box = below
 				moved = true
@@ -332,7 +337,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 			for _, slot in ipairs(slots) do
 				if
 					onScreen(slot, viewportX, viewportY, margin)
-					and clearOf(slot, block, prompt, rail)
+					and clearOf(slot, block, prompt, rail, bar)
 				then
 					box = slot
 					break
@@ -353,7 +358,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 		}
 		if
 			onScreen(dropped, viewportX, viewportY, margin)
-			and clearOf(dropped, block, prompt, rail)
+			and clearOf(dropped, block, prompt, rail, bar)
 			and not HudLayout.overlaps(dropped, banner)
 		then
 			box = dropped
@@ -363,7 +368,7 @@ local function fallback(viewportX: number, viewportY: number, rowCount: number, 
 	if not onScreen(box, viewportX, viewportY, margin) or HudLayout.overlaps(box, block) then
 		return hideRect()
 	end
-	if phone and HudLayout.overlaps(box, prompt) then
+	if HudLayout.overlaps(box, prompt) or HudLayout.overlaps(box, bar) then
 		return hideRect()
 	end
 	return box

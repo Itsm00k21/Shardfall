@@ -93,7 +93,7 @@ local function obstacles(vx: number, vy: number, margin: number): { Rect }
 		HudLayout.health(margin),
 		HudLayout.pills(vx, margin),
 		HudLayout.toastHost(vx, margin),
-		HudLayout.equipPrompt(vx, margin),
+		HudLayout.equipPrompt(vx, margin, vy),
 		{ x = banner.x, y = banner.y, w = banner.w, h = banner.h },
 		HudLayout.actionCluster(vx, vy),
 	}
@@ -114,7 +114,7 @@ function EchoChip.place(viewportX: any, viewportY: any, _extra: any?): Rect
 	local health = HudLayout.health(margin)
 	local pills = HudLayout.pills(vx, margin)
 	local toast = HudLayout.toastHost(vx, margin)
-	local prompt = HudLayout.equipPrompt(vx, margin)
+	local prompt = HudLayout.equipPrompt(vx, margin, vy)
 	local order = {
 		margin,
 		health.y + health.h + GAP,

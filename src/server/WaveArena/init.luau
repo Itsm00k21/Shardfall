@@ -176,7 +176,7 @@ end
 
 function WaveArena.hud(run: any, options: any?): any
 	local launchGate, config = resolve(options)
-	return Hud.snapshot(run, Gate.open(launchGate, config))
+	return Hud.snapshot(run, Gate.open(launchGate, config), config)
 end
 
 function WaveArena.camera(eye: any, center: any, size: { number }, config: any?): any

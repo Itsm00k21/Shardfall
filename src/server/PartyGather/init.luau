@@ -38,6 +38,10 @@ function Gather.inPromptZone(x: number, z: number, config: any?): boolean
 	return Graybox.inPromptZone(x, z, config)
 end
 
+function Gather.suppressPrompt(havenAction: any, x: any, z: any, config: any?): boolean
+	return Graybox.suppressPrompt(havenAction, x, z, config)
+end
+
 function Gather.problems(config: any): { string }
 	return Validate.problems(config)
 end
