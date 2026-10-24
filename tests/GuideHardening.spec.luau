@@ -5,9 +5,11 @@
 
 	P2-454-1  Flag off: advance treats a saved guide step as open, and
 	          Skip pays that step's token count once.
-	P3-454-2  The open step owes 3 tokens on Skip.
+	P3-454-2  The open step owes 3 tokens on Skip while the flag is on.
 	P3-454-3  x10 is refused on roll steps 1-3 with the free-roll notice.
 	P3-454-4  The gate pad is checked at about 5 Hz.
+	P2-457-1  Flag off: a fresh open step owes 0 tokens on Skip.
+	          roll1, roll2, and roll3 stay 3, 2, and 1.
 ]]
 
 local fs = require("@lune/fs")
@@ -135,6 +137,25 @@ describe("Guide hardening", function()
 		end)
 	end)
 
+	it("fresh template, flag off, applySkip -> tokens +0", function()
+		expect(LaunchGate.SHOW.firstSessionGuide).toEqual(false)
+		expect(LaunchGate.on("firstSessionGuide")).toEqual(false)
+		expect(Schema.VERSION).toEqual(26)
+		local data = Schema.template()
+		expect(data.onboardStep).toEqual("open")
+		expect(data.onboardDone).toEqual(false)
+		local tokens = data.shardTokens
+		expect(tokens).toEqual(Schema.STARTER_TOKENS)
+		expect(SessionGuide.unusedRollTokens(data)).toEqual(0)
+		OnboardingService.applySkip(data)
+		expect(data.shardTokens).toEqual(tokens + 0)
+		expect(data.onboardDone).toEqual(true)
+		expect(data.onboardStep).toEqual("haven")
+		expect(stepRow("roll1").tokens).toEqual(3)
+		expect(stepRow("roll2").tokens).toEqual(2)
+		expect(stepRow("roll3").tokens).toEqual(1)
+	end)
+
 	it("P3-454-2 the open step owes 3 tokens on Skip", function()
 		local openRow = stepRow("open")
 		expect(openRow.tokens).toEqual(3)
@@ -142,12 +163,12 @@ describe("Guide hardening", function()
 		expect(LaunchGate.on("firstSessionGuide")).toEqual(false)
 		local data = profile("open")
 		local tokens = data.shardTokens
-		expect(SessionGuide.unusedRollTokens(data)).toEqual(3)
+		expect(SessionGuide.unusedRollTokens(data)).toEqual(0)
 		OnboardingService.applySkip(data)
-		expect(data.shardTokens).toEqual(tokens + 3)
+		expect(data.shardTokens).toEqual(tokens + 0)
 		expect(data.onboardDone).toEqual(true)
 		OnboardingService.applySkip(data)
-		expect(data.shardTokens).toEqual(tokens + 3)
+		expect(data.shardTokens).toEqual(tokens + 0)
 
 		withGuide(function()
 			local guided = profile("open")
