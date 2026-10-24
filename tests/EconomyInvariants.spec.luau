@@ -178,7 +178,6 @@ local function rollShard(
 		end
 		local luck = RarityConfig.luckFromProfile(profile)
 		local counters = {
-			sinceEpic = profile.sinceEpic,
 			sinceLegendary = profile.sinceLegendary,
 		}
 		local rarity, _pityTriggered, floor = RarityConfig.pick(pool, luck, counters, draw)
@@ -193,13 +192,11 @@ local function rollShard(
 		}, draw)
 		Schema.insertItem(profile, item)
 		RarityConfig.advance(counters, item.rarity, floor)
-		profile.sinceEpic = counters.sinceEpic
 		profile.sinceLegendary = counters.sinceLegendary
 		profile.shardRolls = math.min(1000000000, (profile.shardRolls or 0) + 1)
 		StarterGoalPay.grant(profile, "rolls", nil)
 		captured = {
 			item = item,
-			sinceEpic = profile.sinceEpic,
 			sinceLegendary = profile.sinceLegendary,
 		}
 		return nil
@@ -216,9 +213,7 @@ local function rollShard(
 		ok = true,
 		item = captured.item,
 		pity = {
-			sinceEpic = captured.sinceEpic,
 			sinceLegendary = captured.sinceLegendary,
-			epicAt = RarityConfig.EPIC_PITY,
 			legendaryAt = RarityConfig.LEGENDARY_PITY,
 		},
 	},
@@ -558,33 +553,33 @@ describe("M1 economy invariants", function()
 		local hub =
 			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/MenuHub.luau")
 		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
-		expect(string.find(hub, "RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)", 1, true) ~= nil).toBeTrue()
+		-- Legendary pity only (Phase 1.3): no Epic meter or counter.
+		expect(string.find(hub, "EPIC_PITY", 1, true)).toBeNil()
+		expect(string.find(roll, "EPIC_PITY", 1, true)).toBeNil()
+		expect(string.find(roll, "data.sinceEpic", 1, true)).toBeNil()
+		expect(string.find(hub, "RollHype.pity(sinceLegendary, pityGoal)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "ShardBoard.pityPlace(progress.w, counter, goal)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(hub, "count.Text = place.text", 1, true) ~= nil).toBeTrue()
 		expect(
 			string.find(roll, "RarityConfig.advance(counters, item.rarity, floor)", 1, true) ~= nil
 		).toBeTrue()
-		expect(string.find(roll, "epicAt = RarityConfig.EPIC_PITY", 1, true) ~= nil).toBeTrue()
 		expect(string.find(roll, "legendaryAt = RarityConfig.LEGENDARY_PITY", 1, true) ~= nil).toBeTrue()
 
 		local data = Schema.template()
 		data.shardTokens = RarityConfig.LEGENDARY_PITY
 		data.inventoryBonus = RarityConfig.LEGENDARY_PITY
-		expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
+		-- An old save's Epic counter rides along untouched.
+		data.sinceEpic = 37
 		local openedSince, openedGoal = UiRouter.legendaryPity(data, nil)
 		expect(openedSince).toEqual(0)
 		expect(openedGoal).toEqual(RarityConfig.LEGENDARY_PITY)
-		expect(panelPity(openedSince, openedGoal)).toEqual("Pity 0/1000")
+		expect(panelPity(openedSince, openedGoal)).toEqual("Pity 0/150")
 
 		local now = 0
 		local last: Stamp? = nil
 		local draw = steadyRng(0.999)
 		for _ = 1, RarityConfig.LEGENDARY_PITY do
-			local beforeEpic = data.sinceEpic
 			local beforeLegendary = data.sinceLegendary
-			expect(panelPity(beforeEpic, RarityConfig.EPIC_PITY)).toEqual(
-				pityLine(beforeEpic, RarityConfig.EPIC_PITY)
-			)
 			expect(panelPity(beforeLegendary, RarityConfig.LEGENDARY_PITY)).toEqual(
 				pityLine(beforeLegendary, RarityConfig.LEGENDARY_PITY)
 			)
@@ -597,53 +592,33 @@ describe("M1 economy invariants", function()
 			local rank = Rarities.rank(result.item.rarity)
 			if beforeLegendary + 1 >= RarityConfig.LEGENDARY_PITY then
 				expect(rank >= Rarities.rank("Legendary")).toBeTrue()
-			elseif beforeEpic + 1 >= RarityConfig.EPIC_PITY then
-				expect(rank >= Rarities.rank("Epic")).toBeTrue()
 			end
 			if rank >= Rarities.rank("Legendary") then
-				expect(data.sinceEpic).toEqual(0)
 				expect(data.sinceLegendary).toEqual(0)
-			elseif rank >= Rarities.rank("Epic") then
-				expect(data.sinceEpic).toEqual(0)
-				expect(data.sinceLegendary).toEqual(beforeLegendary + 1)
 			else
-				expect(data.sinceEpic).toEqual(beforeEpic + 1)
 				expect(data.sinceLegendary).toEqual(beforeLegendary + 1)
 			end
+			expect(data.sinceEpic).toEqual(37)
 			local pity = result.pity
-			expect(pity.sinceEpic).toEqual(data.sinceEpic)
+			expect(pity.sinceEpic).toBeNil()
+			expect(pity.epicAt).toBeNil()
 			expect(pity.sinceLegendary).toEqual(data.sinceLegendary)
-			expect(pity.epicAt).toEqual(RarityConfig.EPIC_PITY)
 			expect(pity.legendaryAt).toEqual(RarityConfig.LEGENDARY_PITY)
 			local since, goal = UiRouter.legendaryPity(data, result)
 			expect(since).toEqual(data.sinceLegendary)
 			expect(goal).toEqual(RarityConfig.LEGENDARY_PITY)
-			expect(panelPity(pity.sinceEpic, pity.epicAt)).toEqual(
-				pityLine(data.sinceEpic, RarityConfig.EPIC_PITY)
-			)
 			expect(panelPity(since, goal)).toEqual(pityLine(data.sinceLegendary, goal))
 			expect(data.pity).toEqual({})
-			if data.shardRolls == 49 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 49/50")
-			elseif data.shardRolls == 50 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
-				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 50/1000")
-			elseif data.shardRolls == 99 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 49/50")
-			elseif data.shardRolls == 100 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
-				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 100/1000")
-			elseif data.shardRolls == 999 then
-				expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 49/50")
-				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 999/1000")
+			if data.shardRolls == 50 then
+				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 50/150")
+			elseif data.shardRolls == 149 then
+				expect(panelPity(data.sinceLegendary, goal)).toEqual("Pity 149/150")
 			end
 		end
 		expect(data.shardTokens).toEqual(0)
 		expect(data.shardRolls).toEqual(RarityConfig.LEGENDARY_PITY)
-		expect(data.sinceEpic).toEqual(0)
 		expect(data.sinceLegendary).toEqual(0)
-		expect(panelPity(data.sinceEpic, RarityConfig.EPIC_PITY)).toEqual("Pity 0/50")
-		expect(panelPity(data.sinceLegendary, RarityConfig.LEGENDARY_PITY)).toEqual("Pity 0/1000")
+		expect(panelPity(data.sinceLegendary, RarityConfig.LEGENDARY_PITY)).toEqual("Pity 0/150")
 		refuses(data, function()
 			local result = rollShard(data, POOL, now + 5, last, draw, false)
 			return result
@@ -652,16 +627,16 @@ describe("M1 economy invariants", function()
 		local secret = Schema.template()
 		secret.shardTokens = 1
 		secret.sinceEpic = 40
-		secret.sinceLegendary = 250
+		secret.sinceLegendary = 120
 		local dropped, _stamp = rollShard(secret, POOL, 0, nil, steadyRng(0), false)
 		expect(dropped.ok).toEqual(true)
 		assert(dropped.item ~= nil)
-		expect(Rarities.rank(dropped.item.rarity) >= Rarities.rank("Legendary")).toBeTrue()
-		expect(secret.sinceEpic).toEqual(0)
+		-- The top roll is Legendary: Mythic/Secret are parked.
+		expect(dropped.item.rarity).toEqual("Legendary")
+		expect(secret.sinceEpic).toEqual(40)
 		expect(secret.sinceLegendary).toEqual(0)
-		expect(panelPity(dropped.pity.sinceEpic, dropped.pity.epicAt)).toEqual("Pity 0/50")
 		expect(panelPity(dropped.pity.sinceLegendary, dropped.pity.legendaryAt)).toEqual(
-			"Pity 0/1000"
+			"Pity 0/150"
 		)
 		expect(secret.shardTokens).toEqual(0)
 	end)

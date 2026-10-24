@@ -724,7 +724,7 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = COLORS.muted,
-		Text = RarityConfig.pityLine(0, 0),
+		Text = RarityConfig.pityLine(0),
 		LayoutOrder = 5,
 	}, panel) :: TextLabel
 
@@ -1570,17 +1570,13 @@ function Ui.mount(playerGui: PlayerGui, callbacks: Callbacks)
 	end
 
 	local function renderPity(profile: any)
-		local epic = 0
 		local legendary = 0
 		if type(profile) == "table" then
-			if type(profile.sinceEpic) == "number" then
-				epic = profile.sinceEpic
-			end
 			if type(profile.sinceLegendary) == "number" then
 				legendary = profile.sinceLegendary
 			end
 		end
-		pityLabel.Text = RarityConfig.pityLine(epic, legendary)
+		pityLabel.Text = RarityConfig.pityLine(legendary)
 		local ratio = 0
 		if RarityConfig.LEGENDARY_PITY > 0 then
 			ratio = math.clamp(legendary / RarityConfig.LEGENDARY_PITY, 0, 1)

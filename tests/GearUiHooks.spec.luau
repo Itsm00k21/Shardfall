@@ -299,7 +299,11 @@ describe("Gear UI hooks: Roll tab", function()
 			crack(screen)
 			local rarity = GuiFake.findNamed(GuiFake.findNamed(screen, "Reveal"), "Rarity")
 			expect(rarity ~= nil).toBeTrue()
-			expect(rarity.Text).toEqual("Rare · ★ 2 -> ★ 3")
+			-- The face may append the base chance ("Rare · 6.6%"); the note goes last.
+			local suffix = " · ★ 2 -> ★ 3"
+			expect(string.sub(rarity.Text, 1, 4)).toEqual("Rare")
+			expect(string.sub(rarity.Text, -#suffix)).toEqual(suffix)
+			expect(string.find(rarity.Text, "Bramble", 1, true) == nil).toBeTrue()
 		end)
 	end)
 end)

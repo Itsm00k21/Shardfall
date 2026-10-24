@@ -64,12 +64,13 @@ Config.AREAS = table.freeze({
 	"Strings",
 })
 
--- What the game runs on today. Phase 1.3 moves rolls onto Config.Rarities,
--- and Phase 4.1 moves run pay onto Config.Economy.
+-- What the game runs on today. Rolls draw from Config.Rarities since
+-- Phase 1.3 (RarityConfig reads it); Phase 4.1 moves run pay onto
+-- Config.Economy.
 Config.Live = table.freeze({
-	Rarities = require("../Rarities"), -- 7-tier ladder, colors, luck exponents
-	RarityConfig = require("../RarityConfig"), -- 7-tier 1-in-N odds, pity, disclosure
-	RollConfig = require("../RollConfig"), -- roll costs, Epic/Legendary pity
+	Rarities = require("../Rarities"), -- 7-tier display ladder (owned items), colors, luck exponents
+	RarityConfig = require("../RarityConfig"), -- V1 5-tier draw, Legendary pity, disclosure
+	RollConfig = require("../RollConfig"), -- roll costs, Legendary pity
 	Economy = require("../Economy"), -- gold, farm, upgrade costs
 	Currencies = require("../Currencies"), -- wallets
 	Stats = require("../Stats"), -- gear stat ids and rarity scale

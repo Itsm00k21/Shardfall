@@ -28,6 +28,8 @@ its tag to merged and add the merge commit.
 - Stage B: salvage weapons and armor into `profile.gearEssence` (1/3/10/40/200).
   Lock uses `item.locked`. Auto-salvage is off and only converts a new drop.
   `LaunchGate.gearSalvage` is off. `BagTools.mount` is the client hook. [#388] (open)
+- x10 summary fixes (Ghost, playtest clip 4): every tile shows exactly one outcome (NEW only if the item was not owned before the batch; ★ up a -> b chained across repeats; ★ fed for a dupe that adds star progress; +N Essence at ★5; Copy; Salvaged) and the headline counts the same outcomes. Skip sits at the bottom right of the reveal card, off the Shards pill. The Roll page drops the Junk/Below row, the second Streak/Rolls lines and the plain "Odds" rows (`LaunchGate.rollMenuExtras`, off). Client only. (open)
+- x10 roll reveal (Ghost): each x10 card cracks in at most 0.3 s (`RollSummary.fast` scales the CrackReveal plan) with a Skip button on screen for the whole batch; Skip lands the rest at once. The batch ends on a 10-tile summary grid (`RollSummaryHud`) with NEW / ★ up / auto-salvaged badges, a headline, and "Roll again" / "Close"; it replaces the "Cracked" text list. The milestone banner is now a small toast at the top of the Roll page. Server, odds and prices unchanged. (open)
 - Phase 0.9: this changelog. [#372] (merged, 2b6f81f)
 - Phase 0.3: Config folder. One index (`Shared/Config/Index`) for Items,
   Rarities, Elements, SetBonuses, Dungeons, Enemies, Rewards, Economy and
@@ -39,6 +41,29 @@ its tag to merged and add the merge commit.
   broken cross-references. [#374] (merged, d37b2f1)
 
 ### Changed
+- Phase 1.1-1.3, 1.7: rolls core. The live roll now uses the 5-tier Rev 2
+  ladder from `Config/Rarities` (1/2, 1/4, 1/15, 1/100, 1/1000, checked
+  rarest first: Common 69%, Uncommon 23%, Rare 6.6%, Epic 1.00%, Legendary
+  0.10%). One free Legendary pity at 150 (saved in `sinceLegendary`, soft
+  pity +2%/roll from roll 101) with its meter; Epic pity removed (old
+  `sinceEpic` is kept in saves and ignored). Odds list and reveal show real
+  %. Mythic/Secret parked behind `LaunchGate.SHOW.extraTiers` (owned items
+  still load). New `tests/RollOdds.spec.luau` (100k seeded rolls + pity
+  150). Dev Tools: Rolls / Pity rows (+100 Shards, Set pity 149/120, Reset
+  pity). Branch `phase1/rolls-core`. (open)
+- Phase 1 follow-up: the roll reveal now freezes movement for the whole roll
+  (press and server wait, every x10 card, auto chains) and always frees it
+  after (finish, skip, close, error, 12s failsafe); new
+  `tests/RevealLock.spec.luau`. The every-10th-roll x2 luck milestone and its
+  "x2 Luck in N" meter are parked behind `LaunchGate.SHOW.luckMilestone`
+  (off; `shardRolls` still counts). Branch `phase1/rolls-core`. (open)
+- Phase 1 follow-up 2 (Oct 22 retest): the reveal lock now also zeroes the local
+  Humanoid's WalkSpeed/jump for the whole roll (x1, x10, auto) and restores the exact
+  old values on finish, skip, close, leaving the tab, error and the 12s failsafe, so
+  movement stops even when PlayerModule Disable() or the key sink is bypassed (e.g. a
+  server MoveTo). The crack no longer shows a blank "Shard" window/card: the crystal
+  stays visible and the reveal card always has an icon, title, rarity line and a
+  detail line ("Card 3 of 10" while cracking, first two stats once landed).
 - Phase 0: dev tools locked to Kevin's Roblox user id (10427235156,
   Damookie21) in `DevAccess.OWNER_IDS`. (open)
 - Docs: replaced the roadmap with the locked V1 roadmap (Phases 0-7, Phase S,
