@@ -100,11 +100,12 @@ All other toast rows in v1 fit 270 px with slack (largest: F20 `Duplicate %s bec
 - Studio check snippet (Ghost, Command Bar, not committed): `print(game:GetService("TextService"):GetTextSize("The Shard Gate is closed.", 16, Enum.Font.BuilderSansBold, Vector2.new(4000, 200)))` → expect X ≤ 243 (270 × 0.9).
 
 ## 8. Open questions
-None left from v1 (Q1–Q5 decided). New, small:
-1. **@Ghost:** D7: OK to drop the reward list from the wave-clear toast (it does not fit a phone) since the results card shows it? Prism recommends yes.
-2. **@Ghost:** Slot 3 goal at wave 3 (Prism) or wave 5 (the full clear, overlaps with slot 5 boss)? Prism recommends wave 3.
+None open. v1 Q1–Q5 and v1.1 Q1–Q2 are decided:
+1. ~~**@Ghost:** D7: OK to drop the reward list from the wave-clear toast (it does not fit a phone) since the results card shows it?~~ **Decided yes** (Ghost, DP39P): D7 reads `Wave %d clear!` only. The rewards show on the results card (`prism/results-card-pass` SPEC_v1.1).
+2. ~~**@Ghost:** Slot 3 goal at wave 3 or wave 5?~~ **Decided wave 3** (Ghost, DP39P). Havoc confirmed the 3 goal picks with no change. Tracker visual: `prism/starter-goals-tracker-v1` `docs/design/starter-goals-tracker/SPEC_v1.md`.
 
 ## Decision log
 - 2026-10-24 (Prism, v1): 122 rows from `1445560`. NOT APPROVED.
 - 2026-10-24 (Ghost under Kevin's pre-approval, DP38P): Q1 CRACK, Q2 Wren heading, Q3 Crater Square / Shard Crater, Q4 Hollow Warden, Q5 goals from live systems only (Prism picks 3).
 - 2026-10-24 (Prism, v1.1): folded Q1–Q5, re-pinned 20 refs and 4 validator pins to `728421a`, +2 rows (124), corrected toast box to the real banner and shortened 5 lines, added Studio text-fit list. NOT APPROVED until copied into Vision & Design Rules.
+- 2026-10-24 (Ghost under Kevin's pre-approval, DP39P https://app.notion.com/p/403c31ca38838185b713c8b940061349): v1.1 Q1 yes (drop rewards from the D7 wave toast), Q2 yes (goal at wave 3); Havoc confirmed the goal picks. Folded by Prism; no other row changes. NOT APPROVED until copied into Vision & Design Rules.
