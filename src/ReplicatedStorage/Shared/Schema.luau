@@ -19,6 +19,9 @@
 	one copy-first step for those three fields. Do not publish a v27
 	document before that list exists: a higher version looks newer, and a
 	v26 server refuses the load. #387 writes the same gearEssence field.
+
+	The wave-5 boss clear remembers run ids on bossClearRuns. That list
+	is bounded, defaults to {} when missing, and does not bump the version.
 ]]
 
 local ActionSlots = require("./ActionSlots")
@@ -35,6 +38,7 @@ local Settings = require("./Settings")
 local Stars = require("./Stars")
 local StarterGoalPay = require("./StarterGoalPay")
 local Travel = require("./Travel")
+local BossClearReward = require("./BossClearReward")
 
 local Schema = {}
 
@@ -340,6 +344,8 @@ export type ProfileData = {
 	gearEssence: number,
 	-- [ECHO hook] Core level per weapon uid. Missing uid is 0. Items are not written.
 	shardCores: { [string]: number },
+	-- Boss-clear run ids. Missing means none. Capped. schemaVersion stays 26.
+	bossClearRuns: { string },
 }
 
 function Schema.template(): ProfileData
@@ -369,6 +375,8 @@ function Schema.template(): ProfileData
 		gearEssence = 0,
 		-- [ECHO hook] Shard Core levels. Empty until the player feeds a weapon.
 		shardCores = {},
+		-- [ECHO hook] Boss-clear run ids. Empty until a wave-5 clear is saved.
+		bossClearRuns = {},
 		materials = Materials.empty(),
 		consumables = { [Materials.TONIC_ID] = 0 },
 		vouchers = { armory = 0, pets = 0 },
@@ -796,6 +804,8 @@ function Schema.reconcile(data: any): ProfileData
 	end
 	-- [ECHO hook] Keep stored core levels. Drop junk. Do not write the items.
 	data.shardCores = ShardCoreConfig.sanitize(data.shardCores)
+	-- [ECHO hook] Boss-clear run ids. Missing, junk, and overflow become a short list.
+	data.bossClearRuns = BossClearReward.remembered(data.bossClearRuns)
 	if data.materials == nil or type(data.materials) == "table" then
 		data.materials = Materials.sanitize(data.materials)
 	end
@@ -1447,6 +1457,7 @@ function Schema.snapshot(data: ProfileData)
 		equipLoadout = EquipSlots.publicCopy(data.equipLoadout),
 		gearEssence = data.gearEssence,
 		shardCores = ShardCoreConfig.sanitize(data.shardCores),
+		bossClearRuns = BossClearReward.remembered(data.bossClearRuns),
 		inventoryBonus = data.inventoryBonus,
 		petSlotBonus = data.petSlotBonus,
 		inventoryCap = Schema.inventoryCap(data),

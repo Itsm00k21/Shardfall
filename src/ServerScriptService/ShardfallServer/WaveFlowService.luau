@@ -8,12 +8,17 @@
 	and publish do nothing: no gray box, no damage, no counter push, no
 	boss event. init.server does not call this module, so a normal boot
 	never starts a run. The counter remote is server to client only.
-	There is no profile write.
+
+	A boss-wave clear can pay Roll Tokens when the caller passes a
+	profile and a persist callback. persist runs before the counter is
+	fired. The callback must save and must not tell the client. With
+	no profile, the counter behaves as before and nothing is paid.
+	The flag still has to be on. Boot does not call this module.
 
 	bossEnter and bossDown go to an analytics hook when one exists.
 	That hook is ReplicatedStorage.Shared.Analytics.event, or the
-	sink.analytics function a caller passes. Neither path writes a save.
-	The module is absent on this branch, so the lookup is a no-op.
+	sink.analytics function a caller passes. The analytics module is
+	absent on this branch, so the lookup is a no-op.
 
 	Studio can require the module. Lune loads the same file through the
 	relative path when `game` is not a DataModel. The service describes
@@ -23,15 +28,18 @@
 local LaunchGate
 local WaveFlow
 local Enemies
+local BossClearReward
 if game ~= nil and game.GetService ~= nil then
 	local Shared = game:GetService("ReplicatedStorage").Shared
 	LaunchGate = require(Shared.LaunchGate)
 	WaveFlow = require(Shared.WaveFlow)
 	Enemies = require(Shared.Config.Enemies)
+	BossClearReward = require(Shared.BossClearReward)
 else
 	LaunchGate = require("../../ReplicatedStorage/Shared/LaunchGate")
 	WaveFlow = require("../../ReplicatedStorage/Shared/WaveFlow")
 	Enemies = require("../../ReplicatedStorage/Shared/Config/Enemies")
+	BossClearReward = require("../../ReplicatedStorage/Shared/BossClearReward")
 end
 
 local WaveFlowService = {}
@@ -55,6 +63,11 @@ export type Sink = {
 	fire: ((any, Payload) -> ())?,
 	build: ((WaveFlow.Box) -> any)?,
 	analytics: ((string, EventDetail) -> ())?,
+	-- Server profile. Absent means the clear is not paid.
+	profile: any?,
+	-- Save the profile. Must return true only after the write sticks.
+	-- Must not tell the client. Called before fire on a boss clear.
+	persist: ((any) -> boolean)?,
 }
 
 function WaveFlowService.open(): boolean
@@ -174,6 +187,23 @@ local function pushBoxes(run: WaveFlow.Run, build: ((WaveFlow.Box) -> any)?)
 	end
 end
 
+-- Save the boss-clear grant before the caller fires the counter.
+-- No profile means there is nothing to pay and the counter may still go out.
+local function payClear(sink: Sink, run: WaveFlow.Run): boolean
+	if sink.profile == nil or run.clear ~= true or run.wave ~= Enemies.BOSS_WAVE then
+		return true
+	end
+	if run.rewarded == true then
+		return true
+	end
+	local result = BossClearReward.commit(sink.profile, run.id, sink.persist)
+	if result.saved == true then
+		run.rewarded = true
+		return true
+	end
+	return false
+end
+
 function WaveFlowService.counter(run: WaveFlow.Run?): WaveFlow.Counter?
 	if not WaveFlowService.open() or run == nil then
 		return nil
@@ -206,10 +236,16 @@ function WaveFlowService.hurt(run: WaveFlow.Run?, id: number, raw: number, sink:
 	local wasBoss = bossAlive(run)
 	local taken = WaveFlow.hurt(run, id, raw)
 	local after = WaveFlow.counter(run)
-	if after.wave ~= before.wave and sink ~= nil then
-		pushBoxes(run, sink.build)
+	local needsPay = sink ~= nil and sink.profile ~= nil and run.clear == true and run.rewarded ~= true
+	local paid = true
+	if needsPay and sink ~= nil then
+		paid = payClear(sink, run)
 	end
-	if sink ~= nil and (after.wave ~= before.wave or after.left ~= before.left) then
+	local changed = after.wave ~= before.wave or after.left ~= before.left
+	if sink ~= nil and paid and (changed or needsPay) then
+		if after.wave ~= before.wave then
+			pushBoxes(run, sink.build)
+		end
 		WaveFlowService.publish(sink.player, run, sink.fire)
 	end
 	noteBoss(sink, run, before.wave, wasBoss)

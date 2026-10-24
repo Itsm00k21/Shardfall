@@ -79,3 +79,14 @@ Stacked on #425. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). No new fla
 - `PRESSURE_SECONDS` (4) and `PRESSURE_DECAY` live in `Config/Enemies.luau`. The timer climbs while the boss deals no damage to its target. A damaging tick subtracts the decay. It does not snap to 0. `Enemies.validate` rejects a decay that would clear an armed timer.
 - Outside melee, once pressure is armed, the boss uses Shard Volley: `VOLLEY_WINDUP` (0.8s), then `VOLLEY_SHOTS` (3) shots that lead the target, then `VOLLEY_COOLDOWN` (5s). A line-of-sight block still stops a bolt.
 - The leash slam dashes to its mark at `LEASH_DASH` and finishes on that spot, clamped to `ARENA`. Chase is clamped the same way. The boss never regens.
+
+## What the boss-clear reward adds
+
+Stacked on #427. Same flag, `LaunchGate.SHOW.enemyTypes` (**false**). No new flag, no new remote, no HUD edit, no Robux. `schemaVersion` stays 26.
+
+- The wave-5 clear pays `Economy.BOSS_CLEAR_TOKENS` (5 Roll Tokens, the boss row, not the 11-token full clear) into `shardTokens`. `Economy.validate` rejects a mismatch, a non-positive amount, and any Robux price key.
+- The grant is server-only and keyed by the run id `WaveFlow` mints (`run-N`). It is written by the caller's save callback before `WaveCounter` is fired. A failed save rolls the wallet back and does not fire the clear. A second call for the same id pays nothing.
+- Remembered run ids are `profile.bossClearRuns`. A missing list loads as `{}`. The list keeps at most `BOSS_CLEAR_RUNS` (16) ids, newest last. This is the one new save field. It is bounded and it does not bump `schemaVersion`.
+- A wipe does not grant and does not remove a grant that was already saved.
+- A blocked line from the boss to the slam mark cancels the mark. The dash does not cross that line and the slam pays 0.
+- Shard Volley windup is `VOLLEY_WINDUP` **0.9s**. The 5s cooldown is unchanged.

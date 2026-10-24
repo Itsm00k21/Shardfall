@@ -13,6 +13,16 @@ its tag to merged and add the merge commit.
 ## [Unreleased]
 
 ### Added
+- Wave-5 boss clear pays `BOSS_CLEAR_TOKENS` (5 Roll Tokens) once per run
+  id. The server saves that grant before it tells the client. A failed
+  save pays nothing. Disconnect, rejoin, and a wipe cannot pay the same
+  run twice, and a wipe does not take a saved grant back. The amount is
+  validated in `Config/Economy`. Run ids live on `bossClearRuns` (bounded
+  to 16, default `{}` on load). `schemaVersion` stays 26. No Robux.
+  Flag `enemyTypes` stays off. Stacked on #427. (open)
+- The leash slam cancels its mark when the dash path is blocked, so the
+  boss does not cross that line. Shard Volley windup is `VOLLEY_WINDUP`
+  0.9s in `Config/Enemies`. Flag `enemyTypes` stays off. (open)
 - Wave-5 boss kite pressure (flag `enemyTypes`, off). After
   `PRESSURE_SECONDS` (4) with no damage dealt, the timer stays armed
   and a damaging tick shaves `PRESSURE_DECAY` instead of clearing it.

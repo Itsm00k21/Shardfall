@@ -41,11 +41,22 @@ export type Member = {
 }
 
 export type Run = {
+	-- Server mint. The boss-clear grant keys on this. Not a profile field.
+	id: string,
 	wave: number,
 	clear: boolean,
 	nextId: number,
 	members: { Member },
+	-- Session only. Set after the boss grant has been saved.
+	rewarded: boolean,
 }
+
+local nextRun = 0
+
+local function mintRunId(): string
+	nextRun += 1
+	return string.format("run-%d", nextRun)
+end
 
 local function living(run: Run): number
 	local left = 0
@@ -149,10 +160,12 @@ end
 
 function WaveFlow.start(): Run?
 	local run: Run = {
+		id = mintRunId(),
 		wave = 0,
 		clear = false,
 		nextId = 1,
 		members = {},
+		rewarded = false,
 	}
 	if not spawnWave(run, 1) then
 		return nil
