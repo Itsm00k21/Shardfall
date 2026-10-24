@@ -1,11 +1,13 @@
 --!strict
 
 --[[
-	Havoc audit of #455 (DP32).
+	Havoc audit of #455 (DP32) and the results-return re-entry (DP36).
 
 	Run Again must mint a server-unique id that still pays after forget.
 	The results clock must send the player home and clear that run.
 	Run Again must wait until the previous payout has settled.
+	A heartbeat during the return save must not start another save.
+	A failed return save keeps the run seated for the next try.
 ]]
 
 local fs = require("@lune/fs")
@@ -19,6 +21,12 @@ local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Loot = require("../src/server/WaveArena/Loot")
 local RunResults = require("../src/ReplicatedStorage/Shared/RunResults")
 local Schema = require("../src/ReplicatedStorage/Shared/Schema")
+local WaveArenaConfig = require("../src/ReplicatedStorage/Shared/Config/WaveArenaConfig")
+local WaveArenaHost = require("../src/ServerScriptService/ShardfallServer/WaveArenaHost")
+-- Load the arena modules on this thread. The first require from inside a
+-- coroutine yields in Lune, which would look like the save yield.
+require("../src/server/WaveArena")
+require("../src/server/WaveArena/Settle")
 
 local GUID = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
 
@@ -175,5 +183,117 @@ describe("Havoc DP31", function()
 		local host = fs.readFile("src/ServerScriptService/ShardfallServer/WaveArenaHost.luau")
 		expect(string.find(host, "RunResults.markPaid(run, status)", 1, true) ~= nil).toBeTrue()
 		expect(string.find(host, 'RunResults.markPaid(run, "again")', 1, true) ~= nil).toBeTrue()
+	end)
+
+	it("does not save again while a results return save is still yielding", function()
+		expect(LaunchGate.SHOW.m12Results).toEqual(false)
+		expect(LaunchGate.SHOW.waveArena).toEqual(false)
+		expect(WaveArenaConfig.enabled).toEqual(false)
+		expect(Schema.VERSION).toEqual(26)
+
+		local results = LaunchGate.SHOW.m12Results
+		local arena = LaunchGate.SHOW.waveArena
+		LaunchGate.SHOW.m12Results = true
+		LaunchGate.SHOW.waveArena = true
+		WaveArenaHost._open(true)
+		local player = { UserId = 36 }
+		local profile = Schema.template()
+		local saves = 0
+		local paused = false
+		WaveArenaHost._profile(function()
+			return profile
+		end, function()
+			saves += 1
+			if not paused then
+				paused = true
+				coroutine.yield()
+			end
+			return false
+		end)
+		local run = {
+			phase = "results",
+			reason = "clear",
+			settled = true,
+			receiptId = "recall-yield",
+			ownerId = 36,
+			grantList = {},
+			card = { returnAt = 100 },
+		}
+		WaveArenaHost._seat(player, run)
+		local thread = coroutine.create(function()
+			WaveArenaHost.recall(100)
+		end)
+		local resumed = coroutine.resume(thread)
+		local ok, err = pcall(function()
+			expect(resumed).toBeTrue()
+			expect(coroutine.status(thread)).toEqual("suspended")
+			expect(saves).toEqual(1)
+			WaveArenaHost.recall(100)
+			expect(saves).toEqual(1)
+		end)
+		if coroutine.status(thread) == "suspended" then
+			coroutine.resume(thread)
+		end
+		WaveArenaHost._seat(player, nil)
+		WaveArenaHost._profile(function()
+			return nil
+		end, function()
+			return false
+		end)
+		WaveArenaHost._open(false)
+		LaunchGate.SHOW.m12Results = results
+		LaunchGate.SHOW.waveArena = arena
+		expect(WaveArenaConfig.enabled).toEqual(false)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	it("keeps a results run seated when the return save fails", function()
+		local results = LaunchGate.SHOW.m12Results
+		local arena = LaunchGate.SHOW.waveArena
+		LaunchGate.SHOW.m12Results = true
+		LaunchGate.SHOW.waveArena = true
+		WaveArenaHost._open(true)
+		local player = { UserId = 37 }
+		local profile = Schema.template()
+		local saves = 0
+		WaveArenaHost._profile(function()
+			return profile
+		end, function()
+			saves += 1
+			return false
+		end)
+		WaveArenaHost._seat(player, {
+			phase = "results",
+			reason = "wipe",
+			settled = true,
+			receiptId = "recall-retry",
+			ownerId = 37,
+			grantList = {},
+			card = { returnAt = 40 },
+		})
+		local ok, err = pcall(function()
+			WaveArenaHost.recall(40)
+			local first = saves
+			expect(first).toBeGreaterThan(0)
+			WaveArenaHost.recall(40)
+			expect(saves).toBeGreaterThan(first)
+		end)
+		WaveArenaHost._seat(player, nil)
+		WaveArenaHost._profile(function()
+			return nil
+		end, function()
+			return false
+		end)
+		WaveArenaHost._open(false)
+		LaunchGate.SHOW.m12Results = results
+		LaunchGate.SHOW.waveArena = arena
+		expect(WaveArenaConfig.enabled).toEqual(false)
+		expect(Schema.VERSION).toEqual(26)
+		expect(Schema.template().settling).toBeNil()
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end)
