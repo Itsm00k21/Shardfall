@@ -1,5 +1,7 @@
 # Bag "Salvage…" Flow + Shard Core Panel: Spec v1
 
+> **Superseded by [`SPEC_v1.1.md`](SPEC_v1.1.md)** (Oct 23, 2026). Kept for history only; build from v1.1.
+
 
 > **Mockup images:** the GitHub connector can only commit text, so the image files named in §8 aren't in this commit yet. They'll be added to this folder (or attached to the PR) in a follow-up.
 
