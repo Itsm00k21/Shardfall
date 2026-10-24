@@ -263,6 +263,18 @@ function HudLayout.equipPrompt(viewportX: number, margin: number, viewportY: num
 	return box
 end
 
+-- Equip and Keep inside a prompt of width promptW (frame space), side by
+-- side. [Ghost] Oct 24: under PROMPT_MIN_W (390x844 portrait is 160 wide)
+-- both narrow to share the row instead of Keep running off the frame; the
+-- height stays, so nothing under the prompt moves.
+function HudLayout.promptButtons(promptW: number): (Rect, Rect)
+	local pad = 8
+	local top = HudLayout.PROMPT_LABEL
+	local w = math.min(UiTheme.TOUCH * 2, math.floor((math.max(0, promptW) - pad * 3) / 2))
+	w = math.max(0, w)
+	return rect(pad, top, w, UiTheme.TOUCH), rect(pad + w + pad, top, w, UiTheme.TOUCH)
+end
+
 -- Skills sit to the left and above the jump button. The jump rect is in
 -- the same space as the HUD (subtract the ScreenGui AbsolutePosition).
 function HudLayout.skills(

@@ -431,3 +431,94 @@ describe("Havoc #482: landscape phone prompt and toasts", function()
 		end
 	end)
 end)
+
+describe("Havoc P3-482-C: the roll reel wins over the goals", function()
+	local CLIENT = "src/StarterPlayer/StarterPlayerScripts/ShardfallClient/"
+
+	it("hides the card and goals while a roll shows, then brings them back", function()
+		local world = GuiFake.world()
+		world.playerGui.Parent = world.player
+		local OnboardHud = world.load("OnboardHud")
+		OnboardHud.start(function()
+			return { ok = true }
+		end)
+		OnboardHud.setCollapsed(false, false)
+		-- Onboarding.STEPS has no roll step today (open, class, swing, dodge,
+		-- door, haven); whatever step is showing, the reel wins.
+		OnboardHud.setProfile({ onboardDone = false, onboardStep = "class" })
+		local onboard = GuiFake.findNamed(world.playerGui, "ShardfallOnboard")
+		local goals = GuiFake.findNamed(onboard, "OnboardGoals")
+		local tab = GuiFake.findNamed(onboard, "GoalsTab")
+		local card = GuiFake.findNamed(onboard, "Continue").Parent
+		local function goalsOn(): boolean
+			return OnboardHud.shown(goals) or OnboardHud.shown(tab)
+		end
+		local rolling = false
+		OnboardHud.coverWhen("roll", function()
+			return rolling
+		end)
+		expect(goalsOn()).toBeTrue()
+		rolling = true
+		OnboardHud.setCovered("roll", true) -- RollReel's setBusy hook
+		expect(goalsOn()).toBeFalse()
+		expect(OnboardHud.shown(card)).toBeFalse()
+		-- busy ends but the result card is still up: still hidden.
+		OnboardHud.setCovered("roll", false)
+		expect(goalsOn()).toBeFalse()
+		-- The result card closes; the Heartbeat recheck restores them.
+		rolling = false
+		world.runService.Heartbeat:_emit(0.25)
+		expect(goalsOn()).toBeTrue()
+		local _, folded = OnboardHud.collapsed()
+		expect(folded).toEqual(false)
+		OnboardHud.coverWhen("roll", function()
+			return false
+		end)
+	end)
+
+	it("wires the reel's real on-screen state into OnboardHud", function()
+		local reel = fs.readFile(CLIENT .. "RollReel.luau")
+		expect(string.find(reel, "isShowing = isShowing", 1, true) ~= nil).toBeTrue()
+		local start = string.find(reel, "local function isShowing", 1, true)
+		expect(start ~= nil).toBeTrue()
+		local body = string.sub(reel, start :: number, (start :: number) + 400)
+		for _, part in ipairs({ "busy", "reel.Visible", "card.Visible", "chestFrame.Visible" }) do
+			expect(string.find(body, part, 1, true) ~= nil).toBeTrue()
+		end
+		local init = fs.readFile(CLIENT .. "init.client.luau")
+		expect(string.find(init, 'OnboardHud.coverWhen("roll"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(init, 'OnboardHud.setCovered("roll", isBusy)', 1, true) ~= nil).toBeTrue()
+	end)
+end)
+
+describe("Equip prompt buttons always fit", function()
+	it("narrows Equip and Keep to share the row under 200 wide", function()
+		for _, view in ipairs(VIEWS) do
+			local vx, vy = view[1], view[2]
+			local prompt = HudLayout.equipPrompt(vx, 16, vy)
+			local yes, no = HudLayout.promptButtons(prompt.w)
+			for _, button in ipairs({ yes, no }) do
+				expect(button.x >= 0 and button.x + button.w <= prompt.w).toBeTrue()
+				expect(button.y + button.h <= prompt.h).toBeTrue()
+				expect(button.h >= UiTheme.TOUCH).toBeTrue()
+			end
+			expect(HudLayout.overlaps(yes, no)).toBeFalse()
+		end
+		local portrait = HudLayout.equipPrompt(390, 16, 844)
+		expect(portrait.w < HudLayout.PROMPT_MIN_W).toBeTrue()
+		local yes, no = HudLayout.promptButtons(portrait.w)
+		expect(no.y).toEqual(yes.y)
+		expect(no.x + no.w <= portrait.w - 8).toBeTrue()
+		expect(yes.w >= 64).toBeTrue() -- "Equip" at MIN_TEXT fits
+		expect(portrait.h).toEqual(HudLayout.PROMPT_LABEL + UiTheme.TOUCH + UiTheme.PAD)
+		expect(HudLayout.promptButtons(420)).toEqual({
+			x = 8,
+			y = HudLayout.PROMPT_LABEL,
+			w = UiTheme.TOUCH * 2,
+			h = UiTheme.TOUCH,
+		})
+		local source =
+			fs.readFile("src/StarterPlayer/StarterPlayerScripts/ShardfallClient/HudShell.luau")
+		expect(string.find(source, "HudLayout.promptButtons(ask.w)", 1, true) ~= nil).toBeTrue()
+	end)
+end)
