@@ -216,9 +216,10 @@ local function hardRow(config: any): any
 	return WaveArenaConfig.hard
 end
 
--- Hard scales only while the shared check is true and this run is Hard.
+-- Hard scales from the boolean snapshotted in enter. A later flag flip
+-- or a write to run.tier does not resize this run.
 local function hardLive(run: any): boolean
-	return typeof(run) == "table" and run.tier == "hard" and HardMode.isHardReal()
+	return typeof(run) == "table" and run.hardReal == true
 end
 
 local function scaleCount(amount: number, multiplier: any, live: boolean): number
@@ -720,6 +721,7 @@ function Round.enter(options: any?): any
 		bestWave = 0,
 		kills = 0,
 		tier = "normal",
+		hardReal = false,
 		party = 1,
 		over = false,
 		cleared = false,
@@ -760,12 +762,20 @@ function Round.enter(options: any?): any
 		end
 		if type(options.tier) == "string" and options.tier ~= "" then
 			local requested = string.lower(options.tier)
-			-- A hard tag does not stick unless Hard is real, so the
-			-- purse cannot pay 2× for a Normal fight.
-			if requested == "hard" and not HardMode.isHardReal() then
-				requested = "normal"
+			-- Snapshot Hard once, before the first spawn. A hard tag
+			-- does not stick unless Hard is real, so the purse cannot
+			-- pay 2× for a Normal fight. Later flag or tier changes
+			-- leave hardReal where enter put it.
+			if requested == "hard" and HardMode.isHardReal() then
+				run.tier = "hard"
+				run.hardReal = true
+			else
+				if requested == "hard" then
+					requested = "normal"
+				end
+				run.tier = requested
+				run.hardReal = false
 			end
-			run.tier = requested
 		end
 		if finite(options.party) and options.party >= 1 then
 			run.party = math.floor(options.party)

@@ -7,8 +7,10 @@
 	reshuffle when someone leaves. The leader is the earliest joiner still
 	here. Friends-only blocks new people who are not the leader's friends
 	and does not kick anyone already in. Each member picks Normal or Hard
-	for themselves. The run is Hard only when Hard is real and every
-	member picked Hard at the configured level. Nothing here writes a profile.
+	for themselves. A joiner whose level qualifies takes the party's
+	current tier. The run is Hard only when Hard is real and every
+	member is Hard at the configured level. A Normal lock names the
+	member who kept it Normal. Nothing here writes a profile.
 ]]
 
 -- Shared modules. Studio walks script to the server folder. Lune uses ./SharedRoot.
@@ -70,6 +72,7 @@ export type Event = {
 	tier: string?,
 	mult: number?,
 	roster: { Member }?,
+	keptNormal: string?,
 }
 
 local function cfgOf(config: any): any
@@ -198,6 +201,44 @@ local function copyMember(member: Member): Member
 	}
 end
 
+-- A qualifying joiner takes the party's current tier. Hard sticks only
+-- while Hard is real, the party is already Hard, and the level clears
+-- the gate. Everyone else joins Normal, including the first player.
+local function joinTier(state: State, level: number, config: any): string
+	if state.tier ~= "Hard" or HardMode.isHardReal() ~= true then
+		return "Normal"
+	end
+	local need = config.party.hardLevel
+	if type(need) ~= "number" or level < need then
+		return "Normal"
+	end
+	return "Hard"
+end
+
+-- The first member who is not a qualifying Hard pick. A Normal lock
+-- names them. A Hard lock names nobody. So does a Normal lock where
+-- every member already qualifies, which is the flag closing Hard.
+local function normalKeeper(state: State, config: any): string?
+	if state.tier ~= "Normal" then
+		return nil
+	end
+	local need = config.party.hardLevel
+	for _, member in ipairs(state.members) do
+		local ready = member.tier == "Hard"
+			and type(member.level) == "number"
+			and type(need) == "number"
+			and member.level >= need
+		if not ready then
+			local name = member.name
+			if type(name) == "string" and name ~= "" then
+				return name
+			end
+			return "Player"
+		end
+	end
+	return nil
+end
+
 local function refreshTier(state: State, config: any, events: { Event })
 	local nextTier = runTier(state, config)
 	if state.tier == nextTier then
@@ -238,7 +279,12 @@ local function beginStart(state: State, now: number, config: any, events: { Even
 	state.startingEnds = now + config.party.startSweep
 	state.countdownEnds = nil
 	refreshTier(state, config, events)
-	table.insert(events, { kind = "lock", n = #state.members, tier = state.tier })
+	local lock: Event = { kind = "lock", n = #state.members, tier = state.tier }
+	local keeper = normalKeeper(state, config)
+	if keeper ~= nil then
+		lock.keptNormal = keeper
+	end
+	table.insert(events, lock)
 end
 
 function Party.observe(state: State, actor: Actor, now: number, config: any?): { Event }
@@ -291,7 +337,7 @@ function Party.observe(state: State, actor: Actor, now: number, config: any?): {
 		name = name,
 		slot = slotId,
 		level = level,
-		tier = "Normal",
+		tier = joinTier(state, level, cfg),
 		joinedAt = now,
 		pendingLeave = nil,
 	})

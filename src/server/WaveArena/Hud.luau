@@ -6,9 +6,10 @@
 
 	A fight snapshot also carries the wave HUD: living enemies and adds,
 	the boss name or a "Wave n/n" label, the difficulty tier, whether Hard
-	really scales, and the seconds left on the run clock. isHardReal is
-	HardMode.isHardReal(). The hardMode flag ships off, so the HARD chip
-	stays hidden. Nothing here is saved.
+	really scales, and the seconds left on the run clock. isHardReal
+	follows the run's hardReal snapshot when enter stored one, and
+	HardMode.isHardReal() otherwise. The hardMode flag ships off, so
+	the HARD chip stays hidden. Nothing here is saved.
 ]]
 
 -- Shared modules. Studio walks script to the server folder. Lune uses ./SharedRoot.
@@ -47,6 +48,16 @@ function Hud.bossBar(run: any): any
 		end
 	end
 	return { shown = false, hp = 0, maxHp = 0, ratio = 0 }
+end
+
+-- Enter stores hardReal once. The chip stays on that snapshot so a
+-- mid-run flag flip does not move it. A table with no snapshot still
+-- follows HardMode.isHardReal().
+local function hardChip(run: any): boolean
+	if typeof(run) == "table" and type(run.hardReal) == "boolean" then
+		return run.hardReal
+	end
+	return HardMode.isHardReal()
 end
 
 local function difficultyOf(run: any): string
@@ -124,7 +135,7 @@ local function outside(run: any): any
 		bossName = nil,
 		label = nil,
 		difficulty = difficulty,
-		isHardReal = HardMode.isHardReal(),
+		isHardReal = hardChip(run),
 		secondsLeft = nil,
 	}
 end
@@ -155,7 +166,7 @@ function Hud.snapshot(run: any, open: boolean, config: any?): any
 		bossName = bossName,
 		label = label,
 		difficulty = difficultyOf(run),
-		isHardReal = HardMode.isHardReal(),
+		isHardReal = hardChip(run),
 		secondsLeft = timeLeft(run, config),
 	}
 end
