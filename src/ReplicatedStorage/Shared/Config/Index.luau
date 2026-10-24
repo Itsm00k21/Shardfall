@@ -51,6 +51,9 @@ Config.EquipSlots = require("./EquipSlots")
 Config.EquipStats = require("./EquipStats")
 Config.GearLevels = require("./GearLevels")
 Config.ShardCore = require("./ShardCore")
+-- M10 alive cap and stuck clock. Not a tenth area. The server reads it
+-- only while LaunchGate.enemyPerf is on (off).
+Config.EnemyPerf = require("./EnemyPerf")
 
 Config.AREAS = table.freeze({
 	"Items",
