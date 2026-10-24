@@ -94,12 +94,13 @@ v1 §9 stands (Frames + `UICorner` + `UIStroke` + `UIPadding` + `UIListLayout`; 
 Ghost confirms text with `TextService:GetTextSize` in Studio, the same as #459 v1.1 §5. Mockups: `mockups/02-wings-landscape-667x375.svg`, `03-wings-landscape-800x400.svg`, `04-wings-desktop-1280x720.svg`, `05-live-field-map.svg` (PNG inside an SVG wrapper; fake data shaped like the live payload).
 
 ## 11. Open questions (answer by number)
-v1 Q1–Q5 are decided. New, small:
-1. **@Ghost:** "Hub in N" counts down `autoReturn` (30) on the client from the first card, and tapping no longer resets it, which matches the server's `releaseSeat`. OK? Prism recommends **yes**. The other option is asking Echo for a tap-to-extend server action, and that's out of V1 scope.
-2. **@Ghost:** hide the "XP +N" label while the payload's `xp` is 0 and show only "Lv N" + bar? Prism recommends **yes**.
-3. **@Kevin (taste):** landscape phones use the short title **CLEARED** because the full SHARD CRATER CLEARED (about 183 px) doesn't fit beside the chevron in a 180–216 px wing. Alternatively it could wrap to 2 lines and push the stats down 16 px. Prism recommends **CLEARED**.
+v1 Q1–Q5 are decided. **v1.1 Q1–Q3 are decided too (Ghost, DP40P, Oct 24, 2026): all yes. See `SPEC_v1.2.md`.**
+1. ~~**@Ghost:** "Hub in N" counts down `autoReturn` (30) on the client from the first card, and tapping no longer resets it, which matches the server's `releaseSeat`. OK? Prism recommends **yes**. The other option is asking Echo for a tap-to-extend server action, and that's out of V1 scope.~~ **Decided yes** (DP40P): client countdown from `autoReturn`, no tap reset.
+2. ~~**@Ghost:** hide the "XP +N" label while the payload's `xp` is 0 and show only "Lv N" + bar? Prism recommends **yes**.~~ **Decided yes** (DP40P).
+3. ~~**@Kevin (taste):** landscape phones use the short title **CLEARED** because the full SHARD CRATER CLEARED (about 183 px) doesn't fit beside the chevron in a 180–216 px wing. Alternatively it could wrap to 2 lines and push the stats down 16 px. Prism recommends **CLEARED**.~~ **Decided yes** (Ghost, DP40P; Kevin can veto): CLEARED on landscape phones.
 
 ## Decision log
 - 2026-10-24 (Prism, DP38P task 3): v1 visual pass (`609b215`). NOT APPROVED.
 - 2026-10-24 (Ghost under Kevin's pre-approval, DP39P): v1 Q1–Q5 yes (ResultsWings gated on `m12Results`; CRACK "N cracks ready"; tiles read `loot.items` name; white title + red wave number; SHARD CRATER CLEARED caps).
+- 2026-10-24 (Ghost under Kevin's pre-approval, DP40P): v1.1 Q1–Q3 yes. Folded in `SPEC_v1.2.md`.
 - 2026-10-24 (Prism, v1.1): folded Q1–Q5, re-read refs at `bcef573` (#458), landscape + desktop re-render (02–04 replace #429 04–06), live field map (05), 3 corrections from live code (xp 0, server-clock `returnAt`, no tap reset). NOT APPROVED until copied into Vision & Design Rules.
