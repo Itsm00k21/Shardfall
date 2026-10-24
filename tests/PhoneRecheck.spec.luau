@@ -8,7 +8,7 @@
 
 local framework = require("./framework")
 local describe = framework.describe
-local it = framework.it
+local it = require("./oneInventoryOff")(framework.it)
 local expect = framework.expect
 
 local ActionSlots = require("../src/ReplicatedStorage/Shared/ActionSlots")

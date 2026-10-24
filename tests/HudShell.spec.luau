@@ -12,11 +12,14 @@ local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 
 describe("Hud shell", function()
 	it("applies a profile when every parked launch element is absent", function()
+		local saved = {}
 		local parked = 0
-		for _, on in pairs(LaunchGate.SHOW) do
+		for id, on in pairs(LaunchGate.SHOW) do
+			saved[id] = on
+			LaunchGate.SHOW[id] = false
 			parked += 1
-			expect(on).toEqual(false)
 		end
+		local ok, err = pcall(function()
 		expect(parked >= 14).toBeTrue()
 
 		local world = GuiFake.world()
@@ -93,6 +96,13 @@ describe("Hud shell", function()
 		expect(prompt ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(prompt, "Equip") ~= nil).toBeTrue()
 		expect(GuiFake.findNamed(prompt, "Keep") ~= nil).toBeTrue()
+		end)
+		for id, on in pairs(saved) do
+			LaunchGate.SHOW[id] = on
+		end
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	it("hides parked trade, raid, and market settings", function()

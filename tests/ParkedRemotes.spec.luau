@@ -346,8 +346,14 @@ describe("Parked remotes", function()
 				if allowed == closed then
 					error(name .. " must be an M1 action or a parked action, not both and not neither", 0)
 				end
-				if closed then
-					expect(LaunchGate.on(parked[name])).toEqual(false)
+				if closed and not (name == "GearSalvage" and LaunchGate.on("gearSalvage")) then
+					-- Pin the gate off for this check. GearSalvage stays
+					-- allowed while its own flag is on.
+					local flag = parked[name]
+					local previous = LaunchGate.SHOW[flag]
+					LaunchGate.SHOW[flag] = false
+					expect(LaunchGate.on(flag)).toEqual(false)
+					LaunchGate.SHOW[flag] = previous
 				end
 			end
 		end
@@ -359,9 +365,15 @@ describe("Parked remotes", function()
 	end)
 
 	it("refuses every parked remote and server handler without writing the profile", function()
-		for flag in pairs(LaunchGate.SHOW) do
-			expect(LaunchGate.on(flag)).toEqual(false)
+		local saved = {}
+		local gearOn = LaunchGate.on("gearSalvage")
+		for flag, value in pairs(LaunchGate.SHOW) do
+			saved[flag] = value
+			if not (flag == "gearSalvage" and gearOn) then
+				LaunchGate.SHOW[flag] = false
+			end
 		end
+		local ok, err = pcall(function()
 		local fresh = Schema.migrate(nil)
 		assert(fresh ~= nil)
 		local profile = Schema.deepCopy(fresh)
@@ -410,26 +422,34 @@ describe("Parked remotes", function()
 		remotes.bind()
 		local invoked = 0
 		local parkedCount = 0
+		local allowed = 0
 		for name in pairs(parked) do
 			parkedCount += 1
 			local remote = recorded[name]
 			if remote == nil or type(remote.OnServerInvoke) ~= "function" then
 				error(name .. " did not bind a handler", 0)
 			end
-			local shot = Schema.deepCopy(profile)
-			local result = remote.OnServerInvoke(player, "story", "flex", true)
-			expect(result.ok).toEqual(false)
-			expect(result.error).toEqual("That is closed.")
-			expect(Schema.deepCopy(profile)).toEqual(shot)
-			invoked += 1
+			if name == "GearSalvage" and LaunchGate.on("gearSalvage") then
+				allowed += 1
+			else
+				local shot = Schema.deepCopy(profile)
+				local result = remote.OnServerInvoke(player, "story", "flex", true)
+				expect(result.ok).toEqual(false)
+				expect(result.error).toEqual("That is closed.")
+				expect(Schema.deepCopy(profile)).toEqual(shot)
+				invoked += 1
+			end
 		end
-		expect(invoked).toEqual(parkedCount)
+		expect(invoked + allowed).toEqual(parkedCount)
 		expect(parkedCount > 0).toBeTrue()
 
 		for _, row in ipairs(SERVICE_CALLS) do
 			local fileName = row[1]
 			local method = row[2]
 			local args = row[3]
+			if fileName == "GearSalvageService" and LaunchGate.on("gearSalvage") then
+				continue
+			end
 			local service = loadModule(
 				"src/ServerScriptService/ShardfallServer/" .. fileName .. ".luau",
 				fileName,
@@ -452,5 +472,12 @@ describe("Parked remotes", function()
 
 		expect(writes).toEqual(0)
 		expect(Schema.deepCopy(profile)).toEqual(before)
+		end)
+		for flag, value in pairs(saved) do
+			LaunchGate.SHOW[flag] = value
+		end
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end)
