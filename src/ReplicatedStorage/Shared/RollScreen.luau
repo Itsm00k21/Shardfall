@@ -112,6 +112,8 @@ function RollScreen.layout(pageW: any, pageH: any): Layout
 	local meterH = RollConfig.METER_H
 	local meterY = ctaY - 6 - meterH
 	local half = math.floor((inner - gap) / 2)
+	-- With the luck milestone parked the pity bar takes the whole row.
+	local milestone = RarityConfig.milestoneOn()
 	return {
 		phone = false,
 		crack = rect(edge, ctaY, crackW, ctaH),
@@ -119,8 +121,10 @@ function RollScreen.layout(pageW: any, pageH: any): Layout
 		auto = rect(edge + crackW + gap + tenW + gap, ctaY, autoW, ctaH),
 		odds = nil,
 		meter = rect(edge, meterY, inner, meterH),
-		luck = rect(0, 0, half, meterH),
-		pity = rect(half + gap, 0, inner - half - gap, meterH),
+		luck = if milestone then rect(0, 0, half, meterH) else rect(0, 0, 0, meterH),
+		pity = if milestone
+			then rect(half + gap, 0, inner - half - gap, meterH)
+			else rect(0, 0, inner, meterH),
 		reserved = height - meterY,
 	}
 end
@@ -135,7 +139,11 @@ function RollScreen.autoLabel(on: any): string
 end
 
 -- The tenth-crack x2 luck meter: lit pips out of BONUS_EVERY and its line.
+-- Parked (LaunchGate.luckMilestone off): no pips and no text.
 function RollScreen.luckPips(shardRolls: any): (number, string)
+	if not RarityConfig.milestoneOn() then
+		return 0, ""
+	end
 	local rolls = 0
 	if type(shardRolls) == "number" and shardRolls == shardRolls and shardRolls > 0 and shardRolls < math.huge then
 		rolls = math.floor(shardRolls)

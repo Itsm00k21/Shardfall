@@ -7,7 +7,7 @@
 	the math itself lives here so tests can run without Roblox.
 
 	The player sheet is RarityConfig.disclose. The live crack is
-	RarityConfig.pick (Epic at 100, Legendary at 1000). RollMath.odds is the
+	RarityConfig.pick (Legendary pity at 150 only). RollMath.odds is the
 	weight table, not that sheet. Pity on this table follows
 	pool.pityLegendaryAt. Live pools set that to RarityConfig.LEGENDARY_PITY.
 	There is no Legendary guarantee at 50. Pity is not baked into the

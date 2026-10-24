@@ -83,6 +83,38 @@ describe("Dev Tools messages", function()
 		expect(DebugTools.grant(data, "nope", 0)).toEqual(false)
 	end)
 
+	it("sets Legendary pity and adds 100 Shards with a clear line", function()
+		local data: any = profile()
+		data.sinceLegendary = 7
+		data.sinceEpic = 33
+		expect(select(2, DebugTools.grant(data, "tokens100", 0))).toEqual("+100 Shards (now 149).")
+		expect(data.shardTokens).toEqual(149)
+		expect(select(2, DebugTools.grant(data, "pity149", 0))).toEqual(
+			"Legendary pity 149/150 (was 7): next roll is a guaranteed Legendary."
+		)
+		expect(data.sinceLegendary).toEqual(149)
+		expect(select(2, DebugTools.grant(data, "pity120", 0))).toEqual(
+			"Legendary pity 120/150 (was 149): soft pity on: next roll +42% Legendary chance."
+		)
+		expect(data.sinceLegendary).toEqual(120)
+		local _, reset = DebugTools.grant(data, "pity0", 0)
+		expect(string.find(reset, "Legendary pity 0/150 (was 120)", 1, true) ~= nil).toBeTrue()
+		expect(data.sinceLegendary).toEqual(0)
+		-- An old Epic counter is never touched.
+		expect(data.sinceEpic).toEqual(33)
+		data.shardTokens = 9990
+		expect(select(2, DebugTools.grant(data, "tokens100", 0))).toEqual("+9 Shards (now 9999).")
+		local rows = {}
+		for _, section in ipairs(DevTools.SECTIONS) do
+			for _, item in ipairs(section.entries) do
+				rows[item.remote .. ":" .. item.arg] = item.label
+			end
+		end
+		expect(rows["DevGrant:pity149"]).toEqual("Set pity 149")
+		expect(rows["DevGrant:tokens100"]).toEqual("+100 Shards")
+		expect(rows["DevGrant:pity0"]).toEqual("Reset pity")
+	end)
+
 	it("lists the materials bundle and where to find it", function()
 		local data = profile()
 		local ok, text = DebugTools.grant(data, "materials", 0)

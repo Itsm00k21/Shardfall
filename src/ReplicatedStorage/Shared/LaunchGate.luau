@@ -38,8 +38,11 @@ LaunchGate.SHOW = {
 	doors = false, -- old Rootvault room doors
 	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
+	rollMenuExtras = false, -- [Ghost] old roll-page Junk/Below row, second Streak/Rolls lines, plain "Odds" rows
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
+	extraTiers = false, -- Mythic/Secret rolling (Phase 5). Owned items of those tiers still load and show
+	luckMilestone = false, -- every-10th-roll x2 luck boost and its "x2 Luck in N" meter. Parked Oct 22; shardRolls still counts
 }
 
 -- World prompt action to the switch that keeps it from being built.

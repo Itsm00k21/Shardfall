@@ -1,8 +1,8 @@
 --!strict
 
 --[[
-	RollConfig: the x10 discount and the free Epic+ pity meter that
-	Kevin approved on Oct 19 2026. The math is pure; the server batch is
+	RollConfig: the x10 discount and the free Legendary pity meter
+	(150, Rev 2; Epic pity removed in Phase 1). The math is pure; the server batch is
 	checked by a source lock because RollService needs Roblox services.
 ]]
 
@@ -127,51 +127,62 @@ describe("RollConfig discount", function()
 end)
 
 describe("RollConfig pity", function()
-	it("guarantees Epic+ at 50, inside Kevin's 40-50 range", function()
-		expect(RollConfig.EPIC_PITY).toEqual(50)
-		expect(RarityConfig.EPIC_PITY).toEqual(RollConfig.EPIC_PITY)
+	it("has one Legendary pity at 150 from Config.Rarities, and no Epic pity", function()
+		expect((RollConfig :: any).EPIC_PITY).toBeNil()
+		expect((RarityConfig :: any).EPIC_PITY).toBeNil()
+		expect(RollConfig.LEGENDARY_PITY).toEqual(150)
 		expect(RarityConfig.LEGENDARY_PITY).toEqual(RollConfig.LEGENDARY_PITY)
-		expect(RollConfig.EPIC_PITY >= 40 and RollConfig.EPIC_PITY <= 50).toBeTrue()
+		expect(RollConfig.SOFT_FROM).toEqual(100)
+		expect(RollConfig.SOFT_STEP).toEqual(0.02)
 	end)
 
-	it("counts down Epic+ guaranteed in N and fires on crack 50", function()
-		local counters = { sinceEpic = 0, sinceLegendary = 0 }
+	it("counts down Legendary guaranteed in N and fires on crack 150", function()
+		local counters = { sinceEpic = 12, sinceLegendary = 0 }
 		local rng = scripted(MISS)
-		expect(RollConfig.pityText(counters.sinceEpic)).toEqual("Epic+ guaranteed in 50")
-		for step = 1, 49 do
+		expect(RollConfig.pityText(counters.sinceLegendary)).toEqual("Legendary guaranteed in 150")
+		for step = 1, 149 do
 			local rarity, triggered = crack(counters, rng)
 			expect(rarity).toEqual("Common")
 			expect(triggered).toEqual(false)
-			expect(counters.sinceEpic).toEqual(step)
-			expect(RollConfig.pityLeft(counters.sinceEpic)).toEqual(50 - step)
+			expect(counters.sinceLegendary).toEqual(step)
+			expect(RollConfig.pityLeft(counters.sinceLegendary)).toEqual(150 - step)
 		end
-		expect(RollConfig.pityText(counters.sinceEpic)).toEqual("Epic+ guaranteed in 1")
-		expect(RollConfig.pityFill(counters.sinceEpic)).toEqual(49 / 50)
+		expect(RollConfig.pityText(counters.sinceLegendary)).toEqual("Legendary guaranteed next roll")
+		expect(RollConfig.pityFill(counters.sinceLegendary)).toEqual(149 / 150)
 		local forced, fired = crack(counters, rng)
 		expect(fired).toEqual(true)
-		expect(Rarities.rank(forced) >= Rarities.rank("Epic")).toBeTrue()
-		expect(counters.sinceEpic).toEqual(0)
-		expect(counters.sinceLegendary).toEqual(50)
-		expect(RollConfig.pityText(counters.sinceEpic)).toEqual("Epic+ guaranteed in 50")
+		expect(forced).toEqual("Legendary")
+		expect(counters.sinceLegendary).toEqual(0)
+		-- An old save's Epic counter is never touched.
+		expect(counters.sinceEpic).toEqual(12)
+		expect(RollConfig.pityText(counters.sinceLegendary)).toEqual("Legendary guaranteed in 150")
 	end)
 
-	it("resets on a natural Epic, and a Legendary resets both meters", function()
-		local counters = { sinceEpic = 20, sinceLegendary = 300 }
-		-- 1/250 (Epic) passes at 0.0039; rarer checks need smaller draws.
-		local epic = crack(counters, scripted(0.0039))
+	it("an Epic does not reset the meter; a natural Legendary does", function()
+		local counters = { sinceLegendary = 30 }
+		-- Epic is 1/100 after the 1/1000 Legendary check misses.
+		local epic = crack(counters, scripted(0.005))
 		expect(epic).toEqual("Epic")
-		expect(counters.sinceEpic).toEqual(0)
-		expect(counters.sinceLegendary).toEqual(301)
-
-		counters.sinceEpic = 33
-		local legendary = crack(counters, scripted(0.0003))
+		expect(counters.sinceLegendary).toEqual(31)
+		local legendary = crack(counters, scripted(0.0005))
 		expect(legendary).toEqual("Legendary")
-		expect(counters.sinceEpic).toEqual(0)
 		expect(counters.sinceLegendary).toEqual(0)
 	end)
 
-	it("fires mid-batch: an x10 from 45 forces crack 5, then counts again", function()
-		local counters = { sinceEpic = 45, sinceLegendary = 45 }
+	it("soft pity adds +2% Legendary chance per roll from roll 101", function()
+		expect(RollConfig.softBonus(0)).toEqual(0)
+		expect(RollConfig.softBonus(99)).toEqual(0)
+		expect(math.abs(RollConfig.softBonus(100) - 0.02) < 1e-9).toBeTrue()
+		expect(math.abs(RollConfig.softBonus(124) - 0.5) < 1e-9).toBeTrue()
+		expect(RollConfig.softBonus(149)).toEqual(1)
+		expect(RollConfig.softBonus(10000)).toEqual(1)
+		-- 0.015 misses Legendary at roll 100, hits it at roll 101 (0.1% + 2%).
+		expect(crack({ sinceLegendary = 99 }, scripted(0.015))).toEqual("Rare")
+		expect(crack({ sinceLegendary = 100 }, scripted(0.015))).toEqual("Legendary")
+	end)
+
+	it("fires mid-batch: an x10 from 145 forces crack 5, then counts again", function()
+		local counters = { sinceLegendary = 145 }
 		local rng = scripted(MISS)
 		local firedAt = nil
 		for index = 1, RollConfig.MULTI_COUNT do
@@ -181,41 +192,42 @@ describe("RollConfig pity", function()
 			end
 		end
 		expect(firedAt).toEqual(5)
-		expect(counters.sinceEpic).toEqual(5)
+		expect(counters.sinceLegendary).toEqual(5)
 	end)
 
 	it("clamps bad counters and never shows 0 left", function()
-		expect(RollConfig.pityLeft(nil)).toEqual(50)
-		expect(RollConfig.pityLeft(-3)).toEqual(50)
-		expect(RollConfig.pityLeft(0 / 0)).toEqual(50)
-		expect(RollConfig.pityLeft(80)).toEqual(1)
-		expect(RollConfig.pityFill(80)).toEqual(1)
+		expect(RollConfig.pityLeft(nil)).toEqual(150)
+		expect(RollConfig.pityLeft(-3)).toEqual(150)
+		expect(RollConfig.pityLeft(0 / 0)).toEqual(150)
+		expect(RollConfig.pityLeft(400)).toEqual(1)
+		expect(RollConfig.pityFill(400)).toEqual(1)
 		expect(RollConfig.pityFill(nil)).toEqual(0)
 	end)
 
-	it("saves the meter per player in the existing sinceEpic field", function()
+	it("saves the meter per player in the existing sinceLegendary field", function()
 		local fresh = Schema.template()
-		expect(fresh.sinceEpic).toEqual(0)
+		expect(fresh.sinceLegendary).toEqual(0)
 		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
-		expect(string.find(roll, "data.sinceEpic = counters.sinceEpic", 1, true) ~= nil).toBeTrue()
-		expect(string.find(roll, "left = RollConfig.pityLeft(captured.sinceEpic)", 1, true) ~= nil).toBeTrue()
+		expect(string.find(roll, "data.sinceLegendary = counters.sinceLegendary", 1, true) ~= nil).toBeTrue()
+		expect(string.find(roll, "data.sinceEpic", 1, true)).toBeNil()
+		expect(string.find(roll, "left = RollConfig.pityLeft(captured.sinceLegendary)", 1, true) ~= nil).toBeTrue()
 	end)
 
 	it("states the guarantee on the odds sheet, and it is never sold", function()
 		local sheet = RarityConfig.disclose(ladderPool(), 1, 12)
-		expect(string.find(sheet.notice, "Epic+ guaranteed in 38", 1, true) ~= nil).toBeTrue()
+		expect(string.find(sheet.notice, "Legendary guaranteed in 138", 1, true) ~= nil).toBeTrue()
 		expect(string.find(sheet.notice, "never sold", 1, true) ~= nil).toBeTrue()
-		expect(string.find(sheet.notice, "Epic+ at 50", 1, true) ~= nil).toBeTrue()
-		expect(sheet.pityLeft).toEqual(38)
+		expect(string.find(sheet.notice, "guaranteed by roll 150", 1, true) ~= nil).toBeTrue()
+		expect(string.find(sheet.notice, "Epic", 1, true)).toBeNil()
+		expect(sheet.pityLeft).toEqual(138)
 		local plain = RarityConfig.disclose(ladderPool(), 1)
 		expect(string.find(plain.notice, "guaranteed in", 1, true)).toBeNil()
 		local remotes = fs.readFile("src/ServerScriptService/ShardfallServer/Remotes.luau")
 		expect(
-			string.find(remotes, "RarityConfig.disclose(pool, luck, if data ~= nil then data.sinceEpic else nil)", 1, true)
+			string.find(remotes, "RarityConfig.disclose(pool, luck, if data ~= nil then data.sinceLegendary else nil)", 1, true)
 				~= nil
 		).toBeTrue()
 		local config = fs.readFile("src/ReplicatedStorage/Shared/RollConfig.luau")
-		expect(string.find(config, "Robux", 1, true) ~= nil).toBeTrue() -- only the "costs Robux" disclaimer
 		expect(string.find(config, "MarketplaceService", 1, true)).toBeNil()
 	end)
 end)

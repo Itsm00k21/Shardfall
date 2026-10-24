@@ -64,6 +64,7 @@ local RollLoop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local RollRefuse = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollRefuse"))
 local RollReveal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollReveal"))
 local RollSpot = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSpot"))
+local RollSummary = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollSummary"))
 local RollScreen = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollScreen"))
 local RollConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("RollConfig"))
 local ShardBoard = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShardBoard"))
@@ -77,6 +78,7 @@ local PadFocus = require(script.Parent:WaitForChild("PadFocus"))
 local UiRouter = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiRouter"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiTheme"))
 local ClassHud = require(script.Parent.ClassHud)
+local RollSummaryView = require(script.Parent:WaitForChild("RollSummaryHud"))
 
 local MenuHub = {}
 
@@ -343,6 +345,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.replayResult = nil
 	hubState.batchLeft = {}
 	hubState.summaryItems = {}
+	-- [Ghost] item -> RollSummary tile, filled as each x10 card lands.
+	hubState.summaryMeta = setmetatable({}, { __mode = "k" })
+	hubState.batchSkip = false
+	hubState.batchRows = setmetatable({}, { __mode = "k" })
 	hubState.batching = false
 	hubState.pendingFace = nil
 	hubState.crackNamed = false
@@ -379,18 +385,20 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.revealToken = 0
 	hubState.lastCrack = 0
 	hubState.pityTweens = {}
-	hubState.epicFillShown = 0
 	hubState.legendaryFillShown = 0
-	hubState.epicFlashRoll = -1
 	hubState.legendaryFlashRoll = -1
 	hubState.serverSince = nil
-	hubState.serverEpic = nil
 	hubState.lastMissed = false
 	hubState.lastLanded = nil
 	hubState.toastToken = 0
 	hubState.sessionRolls = {}
 	hubState.sessionTemplates = {}
 	hubState.activeReveal = nil
+	-- A roll session (x1, x10 batch or auto chain) holds the movement lock
+	-- from the press until its last reveal ends, so the server wait, the
+	-- cooldown and the gaps between x10 cards stay locked too. nil = free.
+	-- { since = os.clock(), token = revealToken }. See hubFn.holdRoll.
+	hubState.rollHold = nil
 	-- A newer roll bumps this and cancels the previous card tweens so a
 	-- late spin cannot paint the older name over the newer result.
 	hubState.cardGeneration = 0
@@ -868,6 +876,65 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 	end
 
+	-- The lock must not depend on PlayerModule alone: a forked or missing
+	-- ControlModule, keys outside the sink (arrows), or a server MoveTo
+	-- (auto-farm kiting) all move the Humanoid straight past Disable().
+	-- So "lock" also zeroes the local Humanoid's WalkSpeed and jump (the
+	-- client owns its character, so this stops every walk source) and
+	-- puts the exact old values back on release.
+	hubState.frozen = nil
+
+	function hubFn.localHumanoid(): any
+		local localPlayer = Players.LocalPlayer
+		local character = if localPlayer ~= nil then localPlayer.Character else nil
+		if character == nil then
+			return nil
+		end
+		return character:FindFirstChildOfClass("Humanoid")
+	end
+
+	function hubFn.freezeCharacter(on: boolean)
+		local frozen = hubState.frozen
+		if on then
+			local humanoid = hubFn.localHumanoid()
+			if humanoid == nil or (frozen ~= nil and frozen.humanoid == humanoid) then
+				return
+			end
+			if frozen ~= nil then
+				hubFn.freezeCharacter(false)
+			end
+			hubState.frozen = {
+				humanoid = humanoid,
+				walkSpeed = humanoid.WalkSpeed,
+				jumpPower = humanoid.JumpPower,
+				jumpHeight = humanoid.JumpHeight,
+			}
+			humanoid.WalkSpeed = 0
+			humanoid.JumpPower = 0
+			humanoid.JumpHeight = 0
+			pcall(function()
+				humanoid:Move(Vector3.zero)
+			end)
+			return
+		end
+		hubState.frozen = nil
+		if frozen == nil then
+			return
+		end
+		local humanoid = frozen.humanoid
+		-- Only undo our own zero: if something else changed it meanwhile,
+		-- that value wins. A saved zero falls back to Roblox defaults.
+		if humanoid.WalkSpeed == 0 then
+			humanoid.WalkSpeed = if frozen.walkSpeed > 0 then frozen.walkSpeed else 16
+		end
+		if humanoid.JumpPower == 0 then
+			humanoid.JumpPower = if frozen.jumpPower > 0 then frozen.jumpPower else 50
+		end
+		if humanoid.JumpHeight == 0 then
+			humanoid.JumpHeight = if frozen.jumpHeight > 0 then frozen.jumpHeight else 7.2
+		end
+	end
+
 	-- mode is Keybinds.worldMode: "free", "walk" or "lock". A boolean
 	-- still works (true = "lock", false = "free"). Only "lock" disables the
 	-- controls, so closing, or switching to a walk page, always releases them.
@@ -881,6 +948,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local locked = mode == "lock"
 		local changed = mode ~= previous
 		if not changed and not (locked and hubState.controlsHeld ~= true) then
+			if locked then
+				hubFn.freezeCharacter(true)
+			end
 			return
 		end
 		hubState.worldMode = mode
@@ -911,6 +981,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubState.controlsHeld = false
 			end
 		end
+		hubFn.freezeCharacter(locked)
 	end
 
 	function hubFn.worldModeFor(state: UiRouter.State): string
@@ -919,8 +990,30 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			state.open,
 			UiRouter.top(state),
 			gamepad,
-			hubState.activeReveal ~= nil
+			hubState.activeReveal ~= nil or hubState.rollHold ~= nil
 		)
+	end
+
+	-- Lock movement for a whole roll session. beginRoll calls this before
+	-- the server call; every end path calls releaseRoll. The Heartbeat
+	-- failsafe drops a hold older than Keybinds.REVEAL_HOLD_MAX seconds.
+	function hubFn.holdRoll(token: number)
+		hubState.rollHold = { since = os.clock(), token = token }
+		hubFn.syncRevealLock()
+	end
+
+	-- token (optional): only release the hold that roll took, so a stale
+	-- task cannot free a newer roll. No token releases any hold.
+	function hubFn.releaseRoll(token: number?)
+		local hold = hubState.rollHold
+		if hold == nil then
+			return
+		end
+		if token ~= nil and hold.token ~= token then
+			return
+		end
+		hubState.rollHold = nil
+		hubFn.syncRevealLock()
 	end
 
 	-- A reveal locks the hub while it plays; recompute when it starts and
@@ -1356,10 +1449,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealToken += 1
 		hubState.holdingRoll = false
 		hubState.activeReveal = nil
+		hubState.rollHold = nil
 		hubFn.syncRevealLock()
 		hubState.replayResult = nil
 		hubState.batchLeft = {}
 		hubState.batching = false
+		hubState.batchSkip = false
+		hubFn.paintSkip()
 		hubState.pendingCount = 1
 		hubState.pendingFace = nil
 		hubState.crackNamed = false
@@ -1419,6 +1515,56 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.revealRarity.Text = ""
 	hubState.revealRarity.ZIndex = 9
 	hubState.revealRarity.Parent = hubState.revealCard
+	-- Every face has an icon tile and a detail line: the shard while it
+	-- cracks, the gear kind and two stats once it lands.
+	hubState.revealIconTile = Instance.new("Frame")
+	hubState.revealIconTile.Name = "IconTile"
+	hubState.revealIconTile.Position = UDim2.fromOffset(8, 8)
+	hubState.revealIconTile.Size = UDim2.fromOffset(56, 56)
+	hubState.revealIconTile.BackgroundColor3 = rgb("body")
+	hubState.revealIconTile.BorderSizePixel = 0
+	hubState.revealIconTile.ZIndex = 9
+	hubState.revealIconTile.Parent = hubState.revealCard
+	hubState.revealIconCorner = Instance.new("UICorner")
+	hubState.revealIconCorner.CornerRadius = UDim.new(0, 8)
+	hubState.revealIconCorner.Parent = hubState.revealIconTile
+	hubState.revealIconStroke = Instance.new("UIStroke")
+	hubState.revealIconStroke.Thickness = UiTheme.STROKE
+	hubState.revealIconStroke.Color = rgb("accent")
+	hubState.revealIconStroke.Parent = hubState.revealIconTile
+	hubState.revealIcon = Instance.new("ImageLabel")
+	hubState.revealIcon.Name = "Icon"
+	hubState.revealIcon.BackgroundTransparency = 1
+	hubState.revealIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	hubState.revealIcon.Position = UDim2.fromScale(0.5, 0.5)
+	hubState.revealIcon.Size = UDim2.fromScale(0.8, 0.8)
+	hubState.revealIcon.ScaleType = Enum.ScaleType.Fit
+	hubState.revealIcon.Image = IconAssets.Shards or ""
+	hubState.revealIcon.ZIndex = 10
+	hubState.revealIcon.Parent = hubState.revealIconTile
+	hubState.revealDetail = Instance.new("TextLabel")
+	hubState.revealDetail.Name = "Detail"
+	hubState.revealDetail.BackgroundTransparency = 1
+	hubState.revealDetail.Position = UDim2.fromOffset(72, 64)
+	hubState.revealDetail.Size = UDim2.new(1, -200, 0, 20)
+	hubState.revealDetail.Font = bodyFont()
+	hubState.revealDetail.TextSize = UiTheme.MIN_TEXT
+	hubState.revealDetail.TextXAlignment = Enum.TextXAlignment.Left
+	hubState.revealDetail.TextTruncate = Enum.TextTruncate.AtEnd
+	hubState.revealDetail.TextColor3 = rgb("muted")
+	hubState.revealDetail.Text = ""
+	hubState.revealDetail.ZIndex = 9
+	hubState.revealDetail.Parent = hubState.revealCard
+
+	function hubFn.paintCardFace(face: any, color: Color3)
+		local art = (IconAssets :: any)[face.icon]
+		hubState.revealIcon.Image = if type(art) == "string" then art else (IconAssets.ItemMisc or "")
+		hubState.revealIconStroke.Color = color
+		hubState.revealTitle.Text = face.title
+		hubState.revealRarity.Text = face.rarity
+		hubState.revealDetail.Text = face.detail
+	end
+
 	hubState.revealNew = Instance.new("TextLabel")
 	hubState.revealNew.Name = "New"
 	hubState.revealNew.AnchorPoint = Vector2.new(1, 0)
@@ -1496,10 +1642,12 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		local face = RollReveal.face(nil)
 		hubFn.bumpCardGeneration()
 		hubState.activeReveal = nil
+		hubState.rollHold = nil
 		hubFn.syncRevealLock()
 		hubState.revealCard.Visible = face.visible
 		hubState.revealTitle.Text = face.name
 		hubState.revealRarity.Text = face.rarity
+		hubState.revealDetail.Text = ""
 		hubState.revealNew.Visible = false
 		hubState.revealEquip.Visible = false
 		hubState.revealBest.Visible = false
@@ -1640,21 +1788,85 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 	hubState.reelCenter = hubFn.reelWindow("Center", 0.28, 0.44)
 	hubState.reelRight = hubFn.reelWindow("Right", 0.72, 0.28)
 	hubState.reelCenter.Text = "Roll"
+	-- [Ghost] The milestone is a small toast at the top of the Roll page
+	-- (Kevin, Oct 23), not a banner over the reel.
 	hubState.reelMilestone = Instance.new("TextLabel")
 	hubState.reelMilestone.Name = "Milestone"
-	hubState.reelMilestone.Size = UDim2.fromScale(1, 1)
+	hubState.reelMilestone.AnchorPoint = Vector2.new(0.5, 0)
+	hubState.reelMilestone.Position = UDim2.new(0.5, 0, 0, 4)
+	hubState.reelMilestone.Size = UDim2.fromOffset(220, 26)
 	hubState.reelMilestone.BackgroundColor3 = rgb("gold")
+	hubState.reelMilestone.BackgroundTransparency = 0.05
 	hubState.reelMilestone.Font = headerFont()
-	hubState.reelMilestone.TextSize = 20
+	hubState.reelMilestone.TextSize = 14
 	hubState.reelMilestone.TextColor3 = rgb("ink")
+	hubState.reelMilestone.TextTruncate = Enum.TextTruncate.AtEnd
 	hubState.reelMilestone.Text = ""
 	hubState.reelMilestone.Visible = false
 	hubState.reelMilestone.Active = false
-	hubState.reelMilestone.ZIndex = 9
-	hubState.reelMilestone.Parent = hubState.reelHost
+	hubState.reelMilestone.ZIndex = 12
+	hubState.reelMilestone:SetAttribute("Toast", true)
+	hubState.reelMilestone.Parent = hubState.rollPage
 	hubState.milestoneCorner = Instance.new("UICorner")
-	hubState.milestoneCorner.CornerRadius = UDim.new(0, UiTheme.CORNER)
+	hubState.milestoneCorner.CornerRadius = UDim.new(0, 13)
 	hubState.milestoneCorner.Parent = hubState.reelMilestone
+
+	-- [Ghost] x10: Skip stays on screen for the whole batch; the batch ends
+	-- on the summary grid.
+	hubState.batchSkipButton = Instance.new("TextButton")
+	hubState.batchSkipButton.Name = "SkipBatch"
+	-- Bottom right of the reveal card (the card sits 96 px off the page
+	-- bottom), clear of the Shards wallet pill in the top right.
+	hubState.batchSkipButton.AnchorPoint = Vector2.new(1, 1)
+	hubState.batchSkipButton.Position = UDim2.new(1, -20, 1, -104)
+	hubState.batchSkipButton.Size = UDim2.fromOffset(72, 30)
+	hubState.batchSkipButton.BackgroundColor3 = rgb("body")
+	hubState.batchSkipButton.Font = headerFont()
+	hubState.batchSkipButton.TextSize = 15
+	hubState.batchSkipButton.TextColor3 = rgb("text")
+	hubState.batchSkipButton.Text = RollSummary.SKIP .. " »"
+	hubState.batchSkipButton.AutoButtonColor = true
+	hubState.batchSkipButton.Visible = false
+	hubState.batchSkipButton.ZIndex = 13
+	hubState.batchSkipButton.Parent = hubState.rollPage
+	local skipCorner = Instance.new("UICorner")
+	skipCorner.CornerRadius = UDim.new(0, 8)
+	skipCorner.Parent = hubState.batchSkipButton
+	hubState.rollSummary = RollSummaryView.mount(hubState.screen)
+	hubState.batchSkipButton.Activated:Connect(function()
+		hubFn.skipBatch()
+	end)
+
+	function hubFn.paintSkip()
+		hubState.batchSkipButton.Visible = hubState.batching == true
+	end
+
+	-- Skip the rest of the batch: every card left lands at once, then the
+	-- summary shows. Nothing is skipped on the server; the rolls already happened.
+	function hubFn.skipBatch()
+		if hubState.batching ~= true then
+			return
+		end
+		hubState.batchSkip = true
+		if hubState.activeReveal ~= nil then
+			hubFn.skipReveal()
+		end
+	end
+
+	function hubFn.showSummary()
+		if #hubState.summaryItems == 0 then
+			return
+		end
+		local tiles = RollSummary.tiles(hubState.summaryItems, hubState.summaryMeta)
+		local view = hubState.screen.AbsoluteSize
+		hubState.rollSummary.show(tiles, {
+			view = view,
+			phone = RollScreen.isPhone(view.X),
+			onAgain = function()
+				hubFn.applyControl("TimesTen")
+			end,
+		})
+	end
 	hubState.shardStone = Instance.new("Frame")
 	hubState.shardStone.Name = "Shard"
 	hubState.shardStone.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1832,7 +2044,9 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		local wide = caption ~= "Roll" and caption ~= "Miss"
+		-- "Shard" is the crack itself: the crystal must stay on screen.
+		-- Hiding it left a wide "Shard" window with an empty body.
+		local wide = caption ~= "Roll" and caption ~= "Miss" and caption ~= "Shard"
 		hubState.shardStone.Visible = not wide
 		hubFn.placeReelWindows(wide)
 		hubFn.paintWindow(hubState.reelLeft, "—", "Common", false)
@@ -1847,6 +2061,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.toastToken += 1
 		local token = hubState.toastToken
 		hubState.reelMilestone.Text = text
+		hubState.reelMilestone.Size =
+			UDim2.fromOffset(math.clamp(utf8.len(text) or #text, 8, 48) * 8 + 28, 26)
 		hubState.reelMilestone.Visible = true
 		hubFn.playUi("toast")
 		task.delay(1.8, function()
@@ -1983,11 +2199,19 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.revealCard.Size = UDim2.new(1, -24, 0, layout.card.h)
 		hubState.revealCard.Position = UDim2.new(0.5, 0, 0, layout.card.y + layout.card.h)
 		hubState.revealCard.AnchorPoint = Vector2.new(0.5, 1)
-		hubState.revealTitle.Position = UDim2.fromOffset(12, layout.name.y)
-		hubState.revealTitle.Size = UDim2.new(1, -120, 0, layout.name.h)
+		local tile = math.max(24, math.min(56, layout.card.h - 16))
+		local textX = 8 + tile + 10
+		hubState.revealIconTile.Size = UDim2.fromOffset(tile, tile)
+		hubState.revealIconTile.Position = UDim2.fromOffset(8, math.floor((layout.card.h - tile) / 2))
+		hubState.revealTitle.Position = UDim2.fromOffset(textX, layout.name.y)
+		hubState.revealTitle.Size = UDim2.new(1, -(textX + 108), 0, layout.name.h)
 		hubState.revealRarity.Visible = layout.rarity.visible
-		hubState.revealRarity.Position = UDim2.fromOffset(12, layout.rarity.y)
-		hubState.revealRarity.Size = UDim2.new(1, -120, 0, layout.rarity.h)
+		hubState.revealRarity.Position = UDim2.fromOffset(textX, layout.rarity.y)
+		hubState.revealRarity.Size = UDim2.new(1, -(textX + 108), 0, layout.rarity.h)
+		local detailY = layout.rarity.y + layout.rarity.h
+		hubState.revealDetail.Visible = layout.rarity.visible and detailY + 16 <= layout.card.h
+		hubState.revealDetail.Position = UDim2.fromOffset(textX, detailY)
+		hubState.revealDetail.Size = UDim2.new(1, -(textX + 136), 0, 18)
 		local aboveCard = height - layout.card.y + 6
 		hubState.closeBeat.Position = UDim2.new(1, -12, 1, -aboveCard)
 		hubState.revealFly.Visible = layout.fly
@@ -4440,7 +4664,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		return button
 	end
 
-	function hubFn.paintCta(sinceEpic: number)
+	function hubFn.paintCta(sinceLegendary: number)
 		for _, child in ipairs(hubState.ctaRow:GetChildren()) do
 			child:Destroy()
 		end
@@ -4504,13 +4728,15 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			hubFn.ctaButton("Info", RollScreen.ODDS_LABEL, if hubState.infoOpen == true then "button" else "header")
 		end
 
-		-- Meters: tenth-crack luck pips (left / top) and free pity (right /
-		-- bottom). Pity is never sold; it only counts cracks.
+		-- Meters: tenth-crack luck pips (left / top) and the free Legendary
+		-- pity (right / bottom). Pity is never sold; it only counts cracks.
 		local lit, luckText = RollScreen.luckPips(
 			if type(hubState.profile) == "table" then hubState.profile.shardRolls else 0
 		)
 		local luck = Instance.new("Frame")
 		luck.Name = "LuckMeter"
+		-- Parked milestone (LaunchGate.luckMilestone off): built but hidden.
+		luck.Visible = RarityConfig.milestoneOn()
 		luck.BackgroundTransparency = 1
 		luck.Position = UDim2.fromOffset(screen.luck.x, screen.luck.y)
 		luck.Size = UDim2.fromOffset(screen.luck.w, screen.luck.h)
@@ -4556,8 +4782,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pityCorner.Parent = pity
 		local pityFill = Instance.new("Frame")
 		pityFill.Name = "Fill"
-		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceEpic), 1)
-		pityFill.BackgroundColor3 = Color3.fromRGB(150, 92, 255)
+		pityFill.Size = UDim2.fromScale(RollConfig.pityFill(sinceLegendary), 1)
+		pityFill.BackgroundColor3 = hubFn.rarityColor3("Legendary")
 		pityFill.BorderSizePixel = 0
 		pityFill.ZIndex = 6
 		pityFill.Parent = pity
@@ -4573,7 +4799,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		pityLabel.TextColor3 = rgb("text")
 		pityLabel.TextStrokeTransparency = 0.5
 		pityLabel.TextTruncate = Enum.TextTruncate.AtEnd
-		pityLabel.Text = RollConfig.pityText(sinceEpic)
+		pityLabel.Text = RollConfig.pityText(sinceLegendary)
 		pityLabel.ZIndex = 7
 		pityLabel.Parent = pity
 		hubFn.placeCta(screen)
@@ -4741,8 +4967,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		)
 		toggle("Quick", if hubState.quickOn then "Quick On" else "Quick", hubState.quickOn)
 
+		-- [Ghost] Kevin, clip 4: the roll page reads streak bar, Gear/Pet tabs,
+		-- crystal + ODDS, pity bar, then the buttons. The old junk row and the
+		-- repeated Streak/Rolls/Odds lines stay behind rollMenuExtras (off).
+		local cleanMenu = not LaunchGate.on("rollMenuExtras")
 		local junkRow = Instance.new("Frame")
 		junkRow.Name = "Junk"
+		junkRow.Visible = not cleanMenu
 		junkRow.BackgroundTransparency = 1
 		junkRow.Size = UDim2.new(1, 0, 0, UiTheme.TOUCH)
 		junkRow.LayoutOrder = 5
@@ -4774,26 +5005,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		junkButton("JunkMode", "Junk  " .. hubState.draft.rolls.autoJunk)
 		junkButton("JunkBelow", "Below  " .. hubState.draft.rolls.junkBelow)
 
-		local sinceEpic = if hubState.serverEpic ~= nil
-			then hubState.serverEpic
-			elseif type(hubState.profile) == "table" then hubState.profile.sinceEpic or 0
-			else 0
 		local pityResult = if hubState.serverSince ~= nil
 			then { pity = { sinceLegendary = hubState.serverSince } }
 			else nil
 		local sinceLegendary, pityGoal = UiRouter.legendaryPity(hubState.profile, pityResult)
-		local epicMeter = RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)
 		local pityMeter = RollHype.pity(sinceLegendary, pityGoal)
 		hubState.reelStreak.Text = UiRouter.streakText(hubState.hype.streak, hubState.lastMissed)
 		hubState.reelStreak.TextColor3 =
 			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		hubFn.line(
-			hubState.roll,
-			UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
-			6,
-			rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
-		)
-		hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		if not cleanMenu then
+			hubFn.line(
+				hubState.roll,
+				UiRouter.streakText(hubState.hype.streak, hubState.lastMissed),
+				6,
+				rgb(UiRouter.streakTone(hubState.hype.streak, hubState.lastMissed))
+			)
+			hubFn.line(hubState.roll, string.format("Rolls  %d", hubState.hype.rolls), 7, rgb("text"))
+		end
 		local bestText = "Best pull  —"
 		if type(hubState.bestPull) == "table" then
 			bestText = string.format(
@@ -4845,9 +5073,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			infoPad.PaddingRight = UDim.new(0, UiTheme.GAP)
 			infoPad.Parent = info
 			hubFn.line(info, string.format("Luck  %d", luck + boost), 1, rgb("gold"))
-			hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
+			if RarityConfig.milestoneOn() then
+				hubFn.line(info, RarityConfig.bonusLabel(rolls), 2, rgb("text"))
+			end
 			local legendaryCount = if type(sinceLegendary) == "number" then sinceLegendary else 0
-			hubFn.line(info, RarityConfig.pityLine(sinceEpic, legendaryCount), 3, rgb("text"))
+			hubFn.line(info, RarityConfig.pityLine(legendaryCount), 3, rgb("text"))
 			local infoPool = if hubState.rollKind == "pets"
 				then Pools.get(hubFn.rollPoolId())
 				else Pools.get("verdant_armory")
@@ -4862,13 +5092,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			table.insert(hubState.pityTweens, tween)
 			tween:Play()
 		end
-		-- One host, absolute rows. A collapsed list cannot pile Epic,
-		-- Legendary, and Odds on top of each other when the kind switches.
+		-- One host, absolute rows. A collapsed list cannot pile Legendary
+		-- and Odds on top of each other when the kind switches. There is
+		-- no Epic pity row (Phase 1.3: Legendary pity only).
 		local progress = ShardBoard.stack(hubState.rollKind, {
-			Epic = {
-				counter = if epicMeter.ok == true then epicMeter.counter else sinceEpic,
-				goal = RarityConfig.EPIC_PITY,
-			},
 			Legendary = {
 				counter = if pityMeter.ok == true then pityMeter.counter else sinceLegendary,
 				goal = pityGoal,
@@ -4904,10 +5131,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold: boolean,
 			animate: string
 		)
-			local rowId = if name == "EpicPity"
-				then "Epic"
-				elseif name == "LegendaryPity" then "Legendary"
-				else name
+			local rowId = if name == "LegendaryPity" then "Legendary" else name
 			local row = progressRow(rowId)
 			if row == nil or row.bar ~= true then
 				return
@@ -5076,10 +5300,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			meter(name, tier, counter, goal, fill, order, fromFill, reset, animate)
 			return fill, nextSeen
 		end
-		-- stylua: ignore
-		local nextEpicFill, nextEpicSeen = paintPity("EpicPity", "Epic", epicMeter, "Epic", 4, hubState.epicFillShown, hubState.epicFlashRoll)
-		hubState.epicFillShown = nextEpicFill
-		hubState.epicFlashRoll = nextEpicSeen
 		local nextLegendaryFill, nextLegendarySeen = paintPity(
 			"LegendaryPity",
 			"Legendary",
@@ -5092,7 +5312,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubState.legendaryFillShown = nextLegendaryFill
 		hubState.legendaryFlashRoll = nextLegendarySeen
 		local oddsRow = progressRow("Odds")
-		if oddsRow ~= nil then
+		if oddsRow ~= nil and cleanMenu then
+			-- Only the pity bar: drop the reserved "Odds" strip under it.
+			progressHost.Size = UDim2.fromOffset(progress.w, math.max(0, oddsRow.y - 6))
+		end
+		if oddsRow ~= nil and not cleanMenu then
 			local oddsHost = Instance.new("Frame")
 			oddsHost.Name = "Odds"
 			oddsHost.BackgroundColor3 = rgb("header")
@@ -5128,6 +5352,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		oddsLines.Size = UDim2.fromScale(1, 0)
 		oddsLines.AutomaticSize = Enum.AutomaticSize.Y
 		oddsLines.LayoutOrder = 13
+		oddsLines.Visible = not cleanMenu
 		oddsLines.Parent = hubState.roll
 		local oddsLayout = Instance.new("UIListLayout")
 		oddsLayout.Padding = UDim.new(0, 4)
@@ -5140,8 +5365,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				hubFn.line(oddsLines, text, index, rgb("text"))
 			end
 		end
-		hubFn.paintOddsBars(oddsPane, nextEpicFill, nextLegendaryFill)
-		hubFn.paintCta(sinceEpic)
+		hubFn.paintOddsBars(oddsPane, 0, nextLegendaryFill)
+		hubFn.paintCta(if type(sinceLegendary) == "number" then sinceLegendary else 0)
 
 		local recent = if #hubState.sessionRolls > 0
 			then hubState.sessionRolls
@@ -5165,18 +5390,8 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		hubFn.line(hubState.roll, "Last 10", 31, rgb("gold"))
 		hubFn.divider(hubState.roll, 32)
-		if #hubState.summaryItems > 0 then
-			hubFn.line(hubState.roll, "Cracked", 40, rgb("gold"))
-			for index, item in ipairs(hubState.summaryItems) do
-				local rarity = if type(item.rarity) == "string" then item.rarity else "Common"
-				hubFn.line(
-					hubState.roll,
-					string.format("%s  %s", tostring(item.name or "Shard"), rarity),
-					40 + index,
-					hubFn.rarityColor3(rarity)
-				)
-			end
-		end
+		-- [Ghost] The x10 "Cracked" text list is gone: the batch ends on the
+		-- RollSummary grid instead.
 		if #recent == 0 then
 			hubFn.line(hubState.roll, "No rolls yet.", 33, rgb("muted"))
 		else
@@ -5268,6 +5483,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if hubState.rollBusy then
 				return
 			end
+			hubState.rollSummary.hide()
 			hubState.pendingCount = 10
 			hubState.summaryItems = {}
 			hubState.batchLeft = {}
@@ -5392,9 +5608,13 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		upgrade: boolean
 	)
 		hubState.revealCard.Visible = true
-		hubState.revealTitle.Text = record.name
-		hubState.revealRarity.Text = record.rarity
+		-- Icon, name, tier color plus the real base chance ("Rare · 6.6%")
+		-- and the first two stats, the same face the Bag card leads with.
 		local color = hubFn.rarityColor3(record.rarity)
+		hubFn.paintCardFace(
+			RollReveal.cardFace(item, record, InventoryView.statLines(item)),
+			color
+		)
 		hubState.revealRarity.TextColor3 = color
 		hubState.revealStroke.Color = color
 		hubState.revealNew.Visible = isNew
@@ -5464,8 +5684,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 
 	function hubFn.stageReveal()
 		hubState.revealCard.Visible = true
-		hubState.revealTitle.Text = ""
-		hubState.revealRarity.Text = ""
+		local total = 1
+		local index = 1
+		if hubState.batching then
+			index = #hubState.summaryItems
+			total = index + #hubState.batchLeft
+		end
+		hubFn.paintCardFace(RollReveal.pendingFace(index, total), rgb("accent"))
+		hubState.revealRarity.TextColor3 = rgb("text")
 		hubState.revealNew.Visible = false
 		hubState.revealBest.Visible = false
 		hubState.revealEquip.Visible = false
@@ -5515,10 +5741,14 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end
 		if hubState.batching then
 			hubState.batching = false
+			hubState.batchSkip = false
+			hubFn.paintSkip()
 			hubState.pendingCount = 1
 			hubState.loop = RollLoop.idle()
+			hubFn.releaseRoll()
 			hubFn.setPulse(true)
 			hubFn.paintRoll()
+			hubFn.showSummary()
 			return
 		end
 		local finished = RollLoop.finish(hubState.loop)
@@ -5528,6 +5758,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			return
 		end
 		hubState.loop = RollLoop.idle()
+		hubFn.releaseRoll()
 		hubFn.setPulse(true)
 		hubFn.paintCrackButton()
 	end
@@ -5557,6 +5788,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		hubFn.setPulse(false)
 		hubFn.paintCrackButton()
 		hubState.revealToken += 1
+		hubFn.holdRoll(hubState.revealToken)
 		hubFn.bumpCardGeneration()
 		-- Cancel leaves a flash or drip where it was. Snap them off so the
 		-- previous roll cannot sit on top of this one.
@@ -5581,22 +5813,28 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if generation ~= hubState.revealToken then
 					hubState.rollBusy = false
 					hubState.crackLocked = false
+					hubFn.releaseRoll(generation)
 					return
 				end
 				if RollFocus.chain(hubState.windowFocused) ~= true then
 					hubState.rollBusy = false
 					hubState.crackLocked = false
 					hubState.loop = RollLoop.idle()
+					hubFn.releaseRoll(generation)
 					hubFn.setPulse(true)
 					return
 				end
 				if hubState.pendingCount > 1 then
 					local count = hubState.pendingCount
 					hubState.pendingCount = 1
+					-- [Ghost] What Kevin owned BEFORE the batch: the reply's profile
+					-- already holds every drop, so NEW is judged against this.
+					local ownedBefore = RollLoop.ownedTemplates(hubState.profile, nil)
 					local batchOk, batch = pcall(hooks.invoke, "RollShards", poolId, count)
 					if generation ~= hubState.revealToken then
 						hubState.rollBusy = false
 						hubState.crackLocked = false
+						hubFn.releaseRoll(generation)
 						return
 					end
 					if
@@ -5606,7 +5844,23 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						and #batch.items > 0
 					then
 						hubState.batching = true
+						hubState.batchSkip = false
+						hubFn.paintSkip()
 						hubState.summaryItems = {}
+						-- The summary reads NEW / ★ up / auto-salvaged off the batch row.
+						hubState.batchRows = setmetatable({}, { __mode = "k" })
+						for _, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" then
+								hubState.batchRows[row.item] = row
+							end
+						end
+						-- One outcome per tile, stars chained per copy through the batch.
+						local planned = RollSummary.batch(batch.items, ownedBefore)
+						for index, row in ipairs(batch.items) do
+							if type(row) == "table" and type(row.item) == "table" and planned[index] ~= nil then
+								hubState.summaryMeta[row.item] = planned[index]
+							end
+						end
 						hubState.batchLeft = {}
 						for index = 2, #batch.items do
 							table.insert(hubState.batchLeft, batch.items[index])
@@ -5625,6 +5879,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						ok = true
 					else
 						hubState.batching = false
+						hubFn.paintSkip()
 						ok = batchOk
 						result = batch
 					end
@@ -5635,6 +5890,7 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			if generation ~= hubState.revealToken then
 				hubState.rollBusy = false
 				hubState.crackLocked = false
+				hubFn.releaseRoll(generation)
 				return
 			end
 			hubState.rollBusy = false
@@ -5737,6 +5993,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				if type(item.uid) == "string" then item.uid else nil
 			)
 			hubState.activeNew = RollLoop.isNew(item.templateId, owned)
+			local plannedTile = if hubState.batching then hubState.summaryMeta[item] else nil
+			if plannedTile ~= nil then
+				-- [Ghost] The reveal card agrees with the summary tile.
+				hubState.activeNew = plannedTile.isNew
+			end
 			hubState.activeUpgrade = RollLoop.isUpgrade(hubState.profile, item)
 			hubState.activeItem = item
 			hubState.bestPull = RollLoop.best(hubState.bestPull, item)
@@ -5749,9 +6010,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			end
 			hubState.slideHistory = true
 			if type(result.pity) == "table" then
-				if type(result.pity.sinceEpic) == "number" then
-					hubState.serverEpic = result.pity.sinceEpic
-				end
 				if type(result.pity.sinceLegendary) == "number" then
 					hubState.serverSince = result.pity.sinceLegendary
 				end
@@ -5794,6 +6052,10 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			}
 			if hubState.batching then
 				table.insert(hubState.summaryItems, item)
+				if hubState.summaryMeta[item] == nil then
+					local source = hubState.batchRows[item] or result
+					hubState.summaryMeta[item] = RollSummary.row(item, source, hubState.activeNew)
+				end
 			end
 			hubState.crackNamed = false
 			hubState.crackSounded = false
@@ -5815,7 +6077,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 				card.rarity,
 				hubFn.crackMode(card.rarity, quick or hubState.batching)
 			)
-			duration = plan.seconds
+			-- [Ghost] x10 cards take <= RollSummary.STEP each; Skip lands the rest now.
+			if hubState.batching then
+				plan = RollSummary.fast(plan)
+			end
+			duration = if hubState.batching and hubState.batchSkip then 0 else plan.seconds
 			if duration <= 0 then
 				hubFn.paintReel(slots, #slots)
 				hubState.revealCard.BackgroundColor3 = color
@@ -5842,9 +6108,11 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 						)
 					)
 				end
-				if RollLoop.stinger(card.rarity, reduced) then
+				-- Skipped x10 cards land silently; the summary says the rest.
+				local quiet = hubState.batchSkip == true
+				if not quiet and RollLoop.stinger(card.rarity, reduced) then
 					hubFn.playUi("stinger")
-				elseif not reduced and (pace.tier or 0) >= 3 then
+				elseif not quiet and not reduced and (pace.tier or 0) >= 3 then
 					hubFn.playUi("confirm")
 				end
 				hubFn.finishReveal()
@@ -5961,6 +6229,27 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		end)
 	end)
 	RunService.Heartbeat:Connect(function()
+		-- Failsafe: a hold or reveal that outlives REVEAL_HOLD_MAX (a hung
+		-- server call, a lost Heartbeat end) stops the roll and frees the
+		-- player. Nothing can leave the character frozen.
+		if hubState.worldMode == "lock" then
+			-- A respawn mid-lock brings a fresh Humanoid; freeze that too.
+			hubFn.freezeCharacter(true)
+		elseif hubState.frozen ~= nil then
+			hubFn.freezeCharacter(false)
+		end
+		local hold = hubState.rollHold
+		local stuck = hubState.activeReveal
+		if
+			(hold ~= nil and Keybinds.holdExpired(hold.since, os.clock()))
+			or (stuck ~= nil and Keybinds.holdExpired(stuck.started, os.clock()))
+		then
+			hubFn.stopRollChain()
+			hubState.crackLocked = false
+			hubFn.setPulse(true)
+			hubFn.paintCrackButton()
+			return
+		end
 		local active = hubState.activeReveal
 		if active == nil or active.generation ~= hubState.cardGeneration then
 			return
@@ -6324,7 +6613,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			gold = profile.gold,
 			shardTokens = profile.shardTokens,
 			shardRolls = profile.shardRolls,
-			sinceEpic = profile.sinceEpic,
 			sinceLegendary = profile.sinceLegendary,
 			ascension = profile.ascension,
 			inventory = profile.inventory,
@@ -6369,7 +6657,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 			extra.junk = if type(rolls) == "table" then rolls.autoJunk else nil
 			extra.below = if type(rolls) == "table" then rolls.junkBelow else nil
 			extra.anim = if type(rolls) == "table" then rolls.animation else nil
-			extra.epic = hubState.serverEpic
 			extra.since = hubState.serverSince
 			extra.rolls = if type(hubState.hype) == "table" then hubState.hype.rolls else 0
 			extra.streak = if type(hubState.hype) == "table" then hubState.hype.streak else 0
@@ -7419,7 +7706,6 @@ function MenuHub.start(playerGui: PlayerGui, hooks: Hooks)
 		setProfile = function(nextProfile: any)
 			hubState.profile = nextProfile
 			hubState.serverSince = nil
-			hubState.serverEpic = nil
 			if type(nextProfile) == "table" and type(nextProfile.uiSettings) == "table" then
 				hubState.draft = Settings.normalize(nextProfile.uiSettings)
 				hubState.uiScale.Scale = hubState.draft.hud.scale

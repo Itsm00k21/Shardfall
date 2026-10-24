@@ -298,4 +298,68 @@ function RollReveal.separated(a: Rect, b: Rect): boolean
 	return a.y + a.h <= b.y or b.y + b.h <= a.y or a.x + a.w <= b.x or b.x + b.w <= a.x
 end
 
+-- What the reveal card shows, so no state is ever a bare "Shard" title on
+-- an empty body (Kevin, Oct 22 9:55 PM). `icon` is an IconAssets key.
+export type CardFace = {
+	icon: string,
+	title: string,
+	rarity: string,
+	detail: string,
+}
+
+local KIND_ICON = {
+	Weapon = "ItemWeapon",
+	Armor = "ItemArmor",
+	Relic = "ItemRelic",
+	Accessory = "ItemAccessory",
+	Pet = "Pets",
+}
+
+-- The card while the crystal is still cracking: the shard itself, never a
+-- blank. index/total give "Card 3 of 10" on an x10 or auto batch.
+function RollReveal.pendingFace(index: any, total: any): CardFace
+	local detail = "Cracking for gear"
+	if type(total) == "number" and total > 1 and type(index) == "number" and index >= 1 then
+		detail = string.format("Card %d of %d", math.min(math.floor(index), math.floor(total)), math.floor(total))
+	end
+	return {
+		icon = "Shards",
+		title = "Shard",
+		rarity = "Cracking...",
+		detail = detail,
+	}
+end
+
+-- The landed card. Gear gets its kind icon and its first two stat lines.
+-- A currency result (no templateId, a numeric amount) reads "+N Shards".
+function RollReveal.cardFace(item: any, record: Record, statLines: { string }?): CardFace
+	local rarity = RarityConfig.revealText(record.rarity)
+	if type(item) == "table" and type(item.templateId) ~= "string" and type(item.amount) == "number" then
+		local amount = math.max(0, math.floor(item.amount))
+		return {
+			icon = "Shards",
+			title = string.format("+%d %s", amount, if amount == 1 then "Shard" else "Shards"),
+			rarity = rarity,
+			detail = "Added to your Shards",
+		}
+	end
+	local kind = if type(item) == "table" and type(item.kind) == "string" then item.kind else ""
+	local lines = {}
+	for _, line in ipairs(statLines or {}) do
+		if type(line) == "string" and line ~= "" and #lines < 2 then
+			table.insert(lines, line)
+		end
+	end
+	local detail = table.concat(lines, "  ·  ")
+	if detail == "" then
+		detail = if kind ~= "" then kind else "Gear"
+	end
+	return {
+		icon = KIND_ICON[kind] or "ItemMisc",
+		title = record.name,
+		rarity = rarity,
+		detail = detail,
+	}
+end
+
 return RollReveal

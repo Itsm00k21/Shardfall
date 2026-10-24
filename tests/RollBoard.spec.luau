@@ -15,12 +15,13 @@ local UiRouter = require("../src/ReplicatedStorage/Shared/UiRouter")
 describe("RollBoard", function()
 	it("fills pity, lists odds, and scales the celebration", function()
 		local bars = RollBoard.bars({
-			sinceEpic = RarityConfig.EPIC_PITY,
+			sinceEpic = 50,
 			sinceLegendary = RarityConfig.LEGENDARY_PITY / 2,
 		})
-		expect(bars.epic).toEqual(1)
+		-- Legendary is the only pity bar; an old Epic counter is ignored.
+		expect((bars :: any).epic).toBeNil()
 		expect(bars.legendary > 0.4 and bars.legendary < 0.6).toBeTrue()
-		expect(RollBoard.bars(nil).epic).toEqual(0)
+		expect(RollBoard.bars(nil).legendary).toEqual(0)
 		local lines = RollBoard.oddsLines(Pools.get("verdant_armory"), 0, 0, 0)
 		expect(#lines > 0).toBeTrue()
 		expect(string.find(lines[1], "%", 1, true) ~= nil).toBeTrue()
@@ -112,7 +113,8 @@ describe("RollBoard", function()
 			return expected
 		end
 		local serverLuck = RarityConfig.luckFromProfile(profile)
-		expect(serverLuck).toEqual((1 + 0.5) * 2)
+		-- 10th roll, but the x2 milestone is parked (LaunchGate.luckMilestone).
+		expect(serverLuck).toEqual(1 + 0.5)
 		local lines = RollBoard.oddsLines(pool, profile, 999, 99)
 		expect(lines).toEqual(sheet(RarityConfig.disclose(pool, serverLuck)))
 		local plain = {
@@ -130,7 +132,7 @@ describe("RollBoard", function()
 			vip = true,
 			paidLuck = true,
 		})
-		expect(paidLuck).toEqual((1 + 0.5) * 2 + 0.25)
+		expect(paidLuck).toEqual(1 + 0.5 + 0.25)
 		local paidLines = sheet(RarityConfig.disclose(pool, paidLuck))
 		local same = #paidLines == #lines
 		if same then
@@ -143,7 +145,7 @@ describe("RollBoard", function()
 		expect(same).toEqual(false)
 	end)
 
-	it("shows both server pity bars and leaves the odds sheet alone", function()
+	it("shows the one Legendary pity bar and leaves the odds sheet alone", function()
 		local pool = Pools.get("verdant_armory")
 		local base = RollBoard.oddsLines(pool, 0, 0, 0)
 		expect(UiRouter.oddsSince(99)).toEqual(0)
@@ -157,11 +159,9 @@ describe("RollBoard", function()
 		local rollAt = string.find(hub, "hubState.activeItem", paintAt or 1, true)
 		expect(paintAt ~= nil and rollAt ~= nil).toBeTrue()
 		local paint = string.sub(hub, paintAt or 1, (rollAt or 1) - 1)
-		expect(
-			string.find(paint, "RollHype.pity(sinceEpic, RarityConfig.EPIC_PITY)", 1, true) ~= nil
-		).toBeTrue()
+		expect(string.find(paint, "EPIC_PITY", 1, true)).toBeNil()
 		expect(string.find(paint, "RollHype.pity(sinceLegendary, pityGoal)", 1, true) ~= nil).toBeTrue()
-		expect(string.find(paint, 'paintPity("EpicPity"', 1, true) ~= nil).toBeTrue()
+		expect(string.find(paint, '"EpicPity"', 1, true)).toBeNil()
 		expect(string.find(paint, '"LegendaryPity"', 1, true) ~= nil).toBeTrue()
 		expect(string.find(paint, "RollBoard.payoff", 1, true) ~= nil).toBeTrue()
 		expect(string.find(paint, "RollBoard.pulse", 1, true) ~= nil).toBeTrue()
@@ -191,14 +191,15 @@ describe("RollBoard", function()
 		local schema = fs.readFile("src/ReplicatedStorage/Shared/Schema.luau")
 		expect(string.find(schema, "Schema.VERSION = 26", 1, true) ~= nil).toBeTrue()
 		local roll = fs.readFile("src/ServerScriptService/ShardfallServer/RollService.luau")
-		expect(string.find(roll, "sinceEpic = data.sinceEpic", 1, true) ~= nil).toBeTrue()
+		expect(string.find(roll, "sinceEpic = data.sinceEpic", 1, true)).toBeNil()
 		expect(string.find(roll, "RarityConfig.pick", 1, true) ~= nil).toBeTrue()
-		expect(string.find(roll, "data.sinceEpic = counters.sinceEpic", 1, true) ~= nil).toBeTrue()
+		expect(string.find(roll, "data.sinceEpic = counters.sinceEpic", 1, true)).toBeNil()
+		expect(string.find(roll, "sinceLegendary = data.sinceLegendary", 1, true) ~= nil).toBeTrue()
 		expect(string.find(roll, "Schema.pityBucket", 1, true)).toBeNil()
 		expect(string.find(roll, "bucket.rollsSinceLegendary", 1, true)).toBeNil()
 	end)
 
-	it("never prints 0.0% for Legendary, Mythic, or Secret, and matches the reel", function()
+	it("never prints 0.0% for Epic or Legendary, prints real %, and matches the reel", function()
 		local function assertSheet(poolId: string, luck: any)
 			local pool = Pools.get(poolId)
 			assert(pool ~= nil, poolId)
@@ -218,13 +219,15 @@ describe("RollBoard", function()
 				expect(string.find(text, "0.0%", 1, true)).toBeNil()
 			end
 			expect(math.abs(sum - 1) < 1e-9).toBeTrue()
-			for _, rarity in ipairs({ "Legendary", "Mythic", "Secret" }) do
+			-- Parked tiers (Mythic/Secret) are not on the sheet.
+			expect(seen.Mythic).toBeNil()
+			expect(seen.Secret).toBeNil()
+			for _, rarity in ipairs({ "Epic", "Legendary" }) do
 				local text = seen[rarity]
 				assert(text ~= nil, rarity)
-				expect(string.find(text, "(0.0%)", 1, true)).toBeNil()
-				expect(string.find(text, "(0.00%)", 1, true)).toBeNil()
-				expect(string.find(text, "(0.0000%)", 1, true)).toBeNil()
-				local shown = string.match(text, "%(([%d%.]+)%%%)")
+				expect(string.find(text, "1 in", 1, true)).toBeNil()
+				expect(string.find(text, " 0.00%", 1, true)).toBeNil()
+				local shown = string.match(text, "([%d%.]+)%%$")
 				local value = tonumber(shown)
 				assert(value ~= nil, text)
 				expect(value > 0).toBeTrue()

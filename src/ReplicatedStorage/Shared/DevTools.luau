@@ -48,6 +48,16 @@ DevTools.SECTIONS = table.freeze({
 		}),
 	}),
 	table.freeze({
+		id = "rolls",
+		title = "Rolls / Pity",
+		entries = table.freeze({
+			entry("shards100", "+100 Shards", "DevGrant", "tokens100"),
+			entry("pity149", "Set pity 149", "DevGrant", "pity149"),
+			entry("pitySoft", "Set pity 120", "DevGrant", "pity120"),
+			entry("pityReset", "Reset pity", "DevGrant", "pity0"),
+		}),
+	}),
+	table.freeze({
 		id = "progress",
 		title = "Progress",
 		entries = table.freeze({

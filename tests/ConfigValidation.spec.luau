@@ -313,9 +313,10 @@ describe("Config validation: odds", function()
 		end
 	end)
 
-	it("has positive whole live pity", function()
-		expect(isPositiveInt(Config.Live.RollConfig.EPIC_PITY)).toBeTrue()
+	it("has positive whole live pity, Legendary only, from Config.Rarities", function()
+		expect((Config.Live.RollConfig :: any).EPIC_PITY).toBeNil()
 		expect(isPositiveInt(Config.Live.RollConfig.LEGENDARY_PITY)).toBeTrue()
+		expect(Config.Live.RollConfig.LEGENDARY_PITY).toEqual(Config.Rarities.PITY.legendary.hard)
 	end)
 end)
 

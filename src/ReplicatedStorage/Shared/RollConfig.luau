@@ -11,20 +11,20 @@
 	Economy (approved by Kevin, Oct 19 2026):
 	  * x10 costs 10% less than ten singles. One crack is SINGLE_COST
 	    Shard Tokens, so x10 is 9 tokens instead of 10.
-	  * A free, visible pity meter guarantees Epic or better after
-	    EPIC_PITY cracks without one. It is per player, saved in the
-	    existing sinceEpic field, never sold, and any Epic+ (natural or
-	    forced) resets it.
 
-	Why EPIC_PITY = 50: genre roll games put their first guaranteed tier
-	at 50 (Anime Defenders and Anime Vanguards both guarantee Legendary at
-	50; Anime Last Stand at 60). Shardfall's natural Epic+ chance is about
-	0.44% a crack (0.48% with the x2 tenth roll), so only about 1 player in
-	5 meets Epic+ naturally inside 50. The guarantee is the real promise,
-	and 50 is exactly five x10 cracks, which reads cleanly on the meter.
+	Pity (Phase 1.3, Echo's economy rev 2, Kevin Oct 22 2026):
+	  * One free, visible meter: Legendary is guaranteed by roll
+	    LEGENDARY_PITY (150). It is per player, saved in the existing
+	    sinceLegendary field, never sold, and any Legendary or better
+	    (natural, soft or forced) resets it. The numbers come from
+	    Config/Rarities.PITY.legendary.
+	  * There is no Epic pity any more. Old saves still carry sinceEpic;
+	    nothing reads or writes it, so it is ignored harmlessly.
 
 	Nothing here costs Robux. No clock, no RNG, no services.
 ]]
+
+local V1 = require("./Config/Rarities")
 
 local RollConfig = {}
 
@@ -35,8 +35,11 @@ RollConfig.MULTI_DISCOUNT = 0.10
 RollConfig.MAX_BATCH = 10
 
 -- Pity and luck --------------------------------------------------------
-RollConfig.EPIC_PITY = 50
-RollConfig.LEGENDARY_PITY = 1000
+RollConfig.LEGENDARY_PITY = V1.PITY.legendary.hard
+-- Soft pity: from roll SOFT_FROM + 1 each roll adds SOFT_STEP (absolute)
+-- to the Legendary chance, so roll 101 is about 2.1% and 125 about 50%.
+RollConfig.SOFT_FROM = V1.PITY.legendary.softFrom
+RollConfig.SOFT_STEP = V1.PITY.legendary.softStep
 RollConfig.BONUS_EVERY = 10
 -- The meter glows "close" once this share of the bar is left.
 RollConfig.NEAR_SHARE = 0.1
@@ -127,24 +130,38 @@ function RollConfig.batchBlock(tokens: any, freeSlots: any, count: any): string?
 	return nil
 end
 
--- Cracks left before the free Epic+ guarantee fires. 1 means the next
--- crack is guaranteed Epic or better.
-function RollConfig.pityLeft(sinceEpic: any): number
-	local left = RollConfig.EPIC_PITY - whole(sinceEpic)
+-- Rolls left before the free Legendary guarantee fires. 1 means the
+-- next roll is guaranteed Legendary or better.
+function RollConfig.pityLeft(sinceLegendary: any): number
+	local left = RollConfig.LEGENDARY_PITY - whole(sinceLegendary)
 	if left < 1 then
 		return 1
 	end
 	return left
 end
 
-function RollConfig.pityText(sinceEpic: any): string
-	return string.format("Epic+ guaranteed in %d", RollConfig.pityLeft(sinceEpic))
+function RollConfig.pityText(sinceLegendary: any): string
+	local left = RollConfig.pityLeft(sinceLegendary)
+	if left == 1 then
+		return "Legendary guaranteed next roll"
+	end
+	return string.format("Legendary guaranteed in %d", left)
 end
 
 -- 0..1 fill for the pity bar.
-function RollConfig.pityFill(sinceEpic: any): number
-	local since = math.min(whole(sinceEpic), RollConfig.EPIC_PITY)
-	return since / RollConfig.EPIC_PITY
+function RollConfig.pityFill(sinceLegendary: any): number
+	local since = math.min(whole(sinceLegendary), RollConfig.LEGENDARY_PITY)
+	return since / RollConfig.LEGENDARY_PITY
+end
+
+-- Extra Legendary chance (0..1, absolute) on the next roll from soft
+-- pity. 0 until roll SOFT_FROM + 1.
+function RollConfig.softBonus(sinceLegendary: any): number
+	local past = whole(sinceLegendary) + 1 - RollConfig.SOFT_FROM
+	if past <= 0 then
+		return 0
+	end
+	return math.min(1, past * RollConfig.SOFT_STEP)
 end
 
 return table.freeze(RollConfig)
