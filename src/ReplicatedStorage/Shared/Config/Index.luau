@@ -39,6 +39,10 @@ Config.Rarities = require("./Rarities")
 Config.Elements = require("./Elements")
 Config.SetBonuses = require("../RelicSets")
 Config.Dungeons = Dungeons
+-- Includes the V1 chaser, ranged, tank, and wave-5 boss from
+-- Config/Enemies.luau. Wave sizes and the boss adds live in that file
+-- too. LaunchGate.enemyTypes stays off, so live waves do not spawn them
+-- and the counter stays quiet.
 Config.Enemies = Dungeons.ENEMIES
 Config.Rewards = require("../Drops")
 Config.Economy = require("./Economy")
@@ -51,6 +55,11 @@ Config.EquipSlots = require("./EquipSlots")
 Config.EquipStats = require("./EquipStats")
 Config.GearLevels = require("./GearLevels")
 Config.ShardCore = require("./ShardCore")
+-- Phase 3 wave arena. Extra table, not a tenth area. Ships with enabled false.
+Config.WaveArena = require("./WaveArenaConfig")
+-- M10 alive cap and stuck clock. Not a tenth area. The server reads it
+-- only while LaunchGate.enemyPerf is on (off).
+Config.EnemyPerf = require("./EnemyPerf")
 
 Config.AREAS = table.freeze({
 	"Items",

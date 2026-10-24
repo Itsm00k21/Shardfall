@@ -38,6 +38,7 @@ LaunchGate.SHOW = {
 	doors = false, -- old Rootvault room doors
 	mireoak = false, -- Mireoak boss waves (Gnarl takes those waves)
 	waveArena = false, -- V1 wave arena (declared; read by the arena module later)
+	enemyTypes = false, -- V1 chaser, ranged, tank. Off: no spawn, no gray box, no save.
 	rollMenuExtras = false, -- [Ghost] old roll-page Junk/Below row, second Streak/Rolls lines, plain "Odds" rows
 	loadingTips = false, -- join/teleport tips overlay (LoadingHud); a branded loading screen is Phase S
 	petCare = false, -- pet/feed a companion for free XP (PetCare). Parked for a future pets update (Oct 22)
@@ -48,7 +49,11 @@ LaunchGate.SHOW = {
 	gearSalvage = false, -- salvage gear into Essence (Stage B). Off until Kevin flips it.
 	oneInventory = false, -- [Ghost] Bag rail button and B key open the full Inventory; the small Bag is retired.
 	extraTiers = false, -- Mythic/Secret rolling (Phase 5). Owned items of those tiers still load and show
+	extraDifficulties = false, -- Medium, Nightmare, Insane. Rows stay in Config.
+	hardMode = false, -- Hard at the gate. Off: Normal only. The Hard row stays.
 	luckMilestone = false, -- every-10th-roll x2 luck boost and its "x2 Luck in N" meter. Parked Oct 22; shardRolls still counts
+	elementGlow = false, -- enemy body glow in the server-assigned element color (Config/Elements)
+	enemyPerf = false, -- M10 live-crawl pool, alive cap 22, 30s despawn-respawn, Humanoid state trim
 }
 
 -- World prompt action to the switch that keeps it from being built.

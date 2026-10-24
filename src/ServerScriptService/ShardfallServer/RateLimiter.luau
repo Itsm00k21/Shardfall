@@ -79,7 +79,9 @@ local RULES: { [string]: Rule } = {
 	RaidBuy = { capacity = 3, perSecond = 0.5 },
 	RaidLeave = { capacity = 3, perSecond = 0.5 },
 	RaidReady = { capacity = 3, perSecond = 0.5 },
-	Dungeon = { capacity = 4, perSecond = 1 },
+	-- One room per clear. Two covers the button and a follow-up. A wider
+	-- burst only lets a client stack advances across the stream yield.
+	Dungeon = { capacity = 2, perSecond = 1 },
 	Craft = { capacity = 4, perSecond = 1 },
 	Salvage = { capacity = 4, perSecond = 1 },
 	BulkSalvage = { capacity = 2, perSecond = 0.5 },
@@ -101,6 +103,8 @@ local RULES: { [string]: Rule } = {
 	SetShake = { capacity = 4, perSecond = 1 },
 	-- Refreshed while the player is holding a move key.
 	Steer = { capacity = 8, perSecond = 4 },
+	-- [ECHO hook] Client step plus a state poll. Closed while waveArena is off.
+	WaveArena = { capacity = 30, perSecond = 24 },
 }
 
 local buckets: { [string]: Bucket } = {}

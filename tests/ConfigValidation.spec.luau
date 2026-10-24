@@ -24,6 +24,7 @@ local it = framework.it
 local expect = framework.expect
 
 local Config = require("../src/ReplicatedStorage/Shared/Config/Index")
+local LaunchGate = require("../src/ReplicatedStorage/Shared/LaunchGate")
 local Materials = require("../src/ReplicatedStorage/Shared/Materials")
 local Pools = require("../src/ReplicatedStorage/Shared/Pools")
 local Stats = require("../src/ReplicatedStorage/Shared/Stats")
@@ -409,14 +410,31 @@ describe("Config validation: drop tables", function()
 		for _, wave in ipairs(Config.Economy.WAVES) do
 			expect(isPositiveInt(wave.tokens)).toBeTrue()
 		end
+		expect(LaunchGate.on("extraDifficulties")).toEqual(false)
 		local previous = 0
 		for _, id in ipairs(Config.Economy.DIFFICULTY_ORDER) do
 			local row = Config.Economy.DIFFICULTIES[id]
 			checkNumbers("Economy.DIFFICULTIES." .. id, row)
-			expect(row.tokenMultiplier).toBeGreaterThan(previous)
-			previous = row.tokenMultiplier
+			expect(row.tokenMultiplier).toBeGreaterThan(0)
+			expect(row.fragmentMultiplier).toBeGreaterThan(0)
+			expect(row.hpMultiplier).toBeGreaterThan(0)
+			expect(row.damageMultiplier).toBeGreaterThan(0)
 			expect(isPositiveInt(row.levelGate)).toBeTrue()
+			local parked = id == "medium" or id == "nightmare" or id == "insane"
+			if not parked or LaunchGate.on("extraDifficulties") then
+				expect(row.tokenMultiplier).toBeGreaterThan(previous)
+				previous = row.tokenMultiplier
+			end
 		end
+		local hard = Config.Economy.DIFFICULTIES.hard
+		expect(hard.levelGate).toEqual(5)
+		expect(hard.hpMultiplier).toEqual(2)
+		expect(hard.damageMultiplier).toEqual(1.5)
+		expect(hard.tokenMultiplier).toEqual(2)
+		expect(hard.fragmentMultiplier).toEqual(2)
+		expect(Config.Economy.DIFFICULTIES.medium.id).toEqual("medium")
+		expect(Config.Economy.DIFFICULTIES.nightmare.id).toEqual("nightmare")
+		expect(Config.Economy.DIFFICULTIES.insane.id).toEqual("insane")
 	end)
 end)
 
@@ -626,6 +644,38 @@ describe("Config validation: cross-references", function()
 		end
 	end)
 
+	it("gives every element a color a phone can read", function()
+		local glow = Config.Elements.GLOW
+		expect(type(glow) == "table").toBeTrue()
+		expect(glow.fillTransparency >= 0 and glow.fillTransparency <= 0.55).toBeTrue()
+		expect(glow.outlineTransparency >= 0 and glow.outlineTransparency <= 0.1).toBeTrue()
+		expect(glow.lightBrightness >= 1).toBeTrue()
+		expect(glow.lightRange >= Config.Dungeons.CAMERA_MAX_ZOOM).toBeTrue()
+		expect(glow.depthMode).toEqual("AlwaysOnTop")
+		local seen: { [string]: boolean } = {}
+		for _, id in ipairs(Config.Elements.ORDER) do
+			local color = Config.Elements.LIST[id].color
+			if type(color) ~= "table" or #color ~= 3 then
+				fail("Elements." .. id .. " needs a 3-channel color")
+			end
+			for _, channel in ipairs(color) do
+				local whole = isFinite(channel) and channel >= 0 and channel <= 255 and channel == math.floor(channel)
+				if not whole then
+					fail("Elements." .. id .. " has a color channel outside 0..255")
+				end
+			end
+			local peak = math.max(color[1], color[2], color[3])
+			if peak < 200 then
+				fail("Elements." .. id .. " color is too dim to read at phone zoom")
+			end
+			local key = string.format("%d,%d,%d", color[1], color[2], color[3])
+			if seen[key] then
+				fail("Elements." .. id .. " repeats color " .. key)
+			end
+			seen[key] = true
+		end
+	end)
+
 	it("pays a positive whole Essence amount for every live rarity", function()
 		local seen = {}
 		for _, id in ipairs(Config.Live.Rarities.ORDER) do
@@ -640,9 +690,67 @@ describe("Config validation: cross-references", function()
 		expect(Config.Essence.amount("nope")).toBeNil()
 	end)
 
+	it("caps live enemies at 22 and refuses a stuck clock over 30 seconds", function()
+		expect(Config.EnemyPerf.ALIVE_CAP).toEqual(22)
+		expect(Config.EnemyPerf.STUCK_SECONDS).toEqual(30)
+		local ok, err = Config.EnemyPerf.validate(Config.EnemyPerf)
+		expect(ok).toBeTrue()
+		expect(err).toBeNil()
+		local capped = {
+			ALIVE_CAP = 8,
+			STUCK_SECONDS = Config.EnemyPerf.STUCK_SECONDS,
+			STUCK_PROGRESS = Config.EnemyPerf.STUCK_PROGRESS,
+			DISABLED_STATES = Config.EnemyPerf.DISABLED_STATES,
+		}
+		local fine, reason = Config.EnemyPerf.validate(capped)
+		expect(fine).toBeFalse()
+		expect(reason).toEqual("ALIVE_CAP")
+	end)
+
 	it("keeps live difficulties inside the V1 difficulty list", function()
 		for id in pairs(Config.Live.Difficulties) do
 			expect(Config.Economy.DIFFICULTIES[id] ~= nil).toBeTrue()
 		end
+	end)
+end)
+
+describe("Config validation: wave arena", function()
+	it("ships a 90-stud arena with three gates and the economy purses", function()
+		local arena = Config.WaveArena
+		expect(arena.enabled).toEqual(false)
+		expect(arena.arena.diameter).toEqual(90)
+		expect(arena.minDiameter).toEqual(90)
+		expect(arena.arena.diameter >= arena.minDiameter).toBeTrue()
+		expect(arena.gates.count).toEqual(3)
+		expect(isFinite(arena.timeout) and arena.timeout > 0).toBeTrue()
+		expect(isPositiveInt(arena.loot.bagSlots)).toBeTrue()
+		expect(isPositiveInt(arena.loot.overflowCap)).toBeTrue()
+		local sum = 0
+		expect(#arena.loot.waveTokens).toEqual(#Config.Economy.WAVES)
+		for index, amount in ipairs(arena.loot.waveTokens) do
+			expect(isFinite(amount) and amount >= 0 and amount == math.floor(amount)).toBeTrue()
+			expect(amount).toEqual(Config.Economy.WAVES[index].tokens)
+			sum += amount
+		end
+		expect(sum).toEqual(Config.Economy.NORMAL_CLEAR_TOKENS)
+		for _, kind in ipairs({ "chaser", "ranged", "tank", "add", "boss" }) do
+			local profile = arena.profile(arena, kind)
+			checkId("WaveArena." .. kind, profile.id)
+			checkNumbers("WaveArena." .. kind, profile)
+			local drop = arena.loot.drops[kind]
+			checkId("WaveArena.loot." .. kind, drop.id)
+			checkNumbers("WaveArena.loot." .. kind, drop)
+			if Config.Essence.amount(drop.rarity) == nil then
+				fail("WaveArena.loot." .. kind .. " rarity is not a salvage rarity")
+			end
+		end
+		checkNumbers("WaveArena.arena", arena.arena)
+		checkNumbers("WaveArena.gates", arena.gates)
+	end)
+
+	it("caps remembered arena run ids at a positive whole number", function()
+		local keep = Config.WaveArena.settleKeep
+		expect(isPositiveInt(keep)).toBeTrue()
+		expect(keep).toEqual(50)
 	end)
 end)

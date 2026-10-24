@@ -132,6 +132,12 @@
         "CombatFx": {
           "$className": "RemoteEvent"
         },
+        "WaveCounter": {
+          "$className": "RemoteEvent"
+        },
+        "RunResults": {
+          "$className": "RemoteEvent"
+        },
         "Dungeon": {
           "$className": "RemoteFunction"
         },
@@ -195,6 +201,9 @@
         "HavenPrompt": {
           "$className": "RemoteEvent"
         },
+        "WaveArena": {
+          "$className": "RemoteFunction"
+        },
         "EquipSlot": {
           "$className": "RemoteFunction"
         },
@@ -240,6 +249,12 @@
         },
         "ShardCore": {
           "$path": "src/server/ShardCore"
+        }
+      },
+      "WaveArenaSrc": {
+        "$className": "Folder",
+        "server": {
+          "$path": "src/server"
         }
       }
     },

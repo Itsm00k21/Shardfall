@@ -854,6 +854,81 @@ function Dungeons.progressNote(ascension: any): string?
 	return nil
 end
 
+-- V1 types (Config/Enemies). Copied onto the catalog so Config.Enemies
+-- lists them, including the wave-5 boss. Rooms and waveKinds do not
+-- spawn them. The flag is LaunchGate.enemyTypes, and it stays off.
+do
+	local V1Enemies = require("./Config/Enemies")
+
+	local function v1Enemy(id: string): EnemyDef
+		local row = V1Enemies.TYPES[id]
+		assert(row ~= nil, "V1 enemy missing: " .. id)
+		local style: "melee" | "projectile" = "melee"
+		if row.style == "projectile" then
+			style = "projectile"
+		end
+		local shared = V1Enemies.SHARED
+		return {
+			id = row.id,
+			name = row.name,
+			maxHealth = row.maxHealth,
+			damage = row.damage,
+			defense = row.defense,
+			attackSpeed = row.attackSpeed,
+			moveSpeed = row.moveSpeed,
+			range = row.range,
+			style = style,
+			minDot = row.minDot,
+			projectileSpeed = row.projectileSpeed,
+			hover = shared.hover,
+			boss = shared.boss,
+			phase2At = shared.phase2At,
+			weakSeconds = shared.weakSeconds,
+			armoredMultiplier = shared.armoredMultiplier,
+			fogInterval = shared.fogInterval,
+			fogDamage = shared.fogDamage,
+			safeRadius = shared.safeRadius,
+			color = { row.color[1], row.color[2], row.color[3] },
+			size = { row.size[1], row.size[2], row.size[3] },
+		}
+	end
+
+	for _, id in ipairs(V1Enemies.ORDER) do
+		Dungeons.ENEMIES[id] = v1Enemy(id)
+	end
+
+	local bossRow = V1Enemies.BOSS
+	assert(bossRow ~= nil, "V1 boss missing")
+	local bossStyle: "melee" | "projectile" = "melee"
+	if bossRow.style == "projectile" then
+		bossStyle = "projectile"
+	end
+	local sharedBoss = V1Enemies.SHARED
+	Dungeons.ENEMIES[bossRow.id] = {
+		id = bossRow.id,
+		name = bossRow.name,
+		maxHealth = bossRow.maxHealth,
+		damage = bossRow.damage,
+		defense = bossRow.defense,
+		attackSpeed = bossRow.attackSpeed,
+		moveSpeed = bossRow.moveSpeed,
+		range = bossRow.range,
+		style = bossStyle,
+		minDot = bossRow.minDot,
+		projectileSpeed = bossRow.projectileSpeed,
+		hover = sharedBoss.hover,
+		boss = true,
+		phase2At = bossRow.phase2At,
+		weakSeconds = sharedBoss.weakSeconds,
+		armoredMultiplier = sharedBoss.armoredMultiplier,
+		fogInterval = sharedBoss.fogInterval,
+		fogDamage = sharedBoss.fogDamage,
+		safeRadius = sharedBoss.safeRadius,
+		color = { bossRow.color[1], bossRow.color[2], bossRow.color[3] },
+		size = { bossRow.size[1], bossRow.size[2], bossRow.size[3] },
+	}
+end
+
 for _, enemy in pairs(Dungeons.ENEMIES) do
 	table.freeze(enemy.color)
 	table.freeze(enemy.size)
