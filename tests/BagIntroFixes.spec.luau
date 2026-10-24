@@ -489,6 +489,62 @@ describe("Clip 9: Bag detail scroll", function()
 	end)
 end)
 
+describe("Bag intro: chest auto-salvage cap", function()
+	local function salvageButton(screen: any): any
+		for _, node in ipairs(screen:GetDescendants()) do
+			if node:IsA("TextButton") and string.sub(node.Text, 1, 12) == "Auto-salvage" then
+				return node
+			end
+		end
+		return nil
+	end
+
+	it("cycles chest auto-salvage only through Uncommon", function()
+		local previous = LaunchGate.SHOW.chests
+		LaunchGate.SHOW.chests = true
+		local ok, err = pcall(function()
+			local world = GuiFake.world()
+			local InventoryHud = world.load("InventoryHud")
+			local profile = Schema.template()
+			profile.chestSalvageBelow = ""
+			profile.chestDuplicates = "dust"
+			local sent = {}
+			local controller
+			controller = InventoryHud.start(world.playerGui, {
+				onStatus = function() end,
+				onChestOptions = function(mode: string, salvage: string)
+					table.insert(sent, salvage)
+					profile.chestDuplicates = mode
+					profile.chestSalvageBelow = salvage
+					controller.setProfile(profile)
+				end,
+			})
+			controller.setProfile(profile)
+			controller.openTab("chests")
+			local screen = GuiFake.findNamed(world.playerGui, "ShardfallInventory")
+			local function press()
+				GuiFake.activate(salvageButton(screen))
+			end
+			press()
+			press()
+			press()
+			press()
+			expect(sent).toEqual({ "Common", "Uncommon", "", "Common" })
+			profile.chestSalvageBelow = "Mythic"
+			controller.setProfile(profile)
+			press()
+			expect(sent[#sent]).toEqual("Uncommon")
+			for _, salvage in ipairs(sent) do
+				expect(salvage == "" or salvage == "Common" or salvage == "Uncommon").toBeTrue()
+			end
+		end)
+		LaunchGate.SHOW.chests = previous
+		if not ok then
+			error(err, 0)
+		end
+	end)
+end)
+
 describe("Clip 9: Pets list", function()
 	it("opens the detail on the equipped pet unless the player picked one", function()
 		local cards = { { uid = "a" }, { uid = "b" }, { uid = "c" } }
