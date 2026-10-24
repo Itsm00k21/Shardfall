@@ -51,21 +51,29 @@ First-ever draft (one time per account, saved flag via existing onboarding/tips)
 Cancel / back: Later and the tray chevron are the only "back". A pick can't be undone (1 tap = final, the fly-to-strip is the confirmation). Dead players can still pick (they respawn next wave).
 
 ## 4. Layout
-Viewport px with `ScreenInsets = CoreUISafeInsets`. **Center keep-out** (x 30–70%, y 28–73%) stays empty at all times **except the draft row during the pick moment** (scrim on, max 8 s). The tray, pills, toasts and strip never enter it.
+Full-screen px (see **Frame** below); build in `ScreenInsets = CoreUISafeInsets`. **Center keep-out** (x 30–70%, y 28–73%) stays empty at all times **except the draft row during the pick moment** (scrim on, max 8 s). The tray, pills, toasts and strip never enter it.
+
+**Frame (phone layout review F19):** the numbers below are **full-screen px**, the same frame as the keep-out box. (0,0) is the screen's top-left, including the Roblox top bar (52 px on phones, 58 on desktop; about 99 on a notched portrait phone). Build in `CoreUISafeInsets` by subtracting the top inset. The live HUD (portrait + HP top-left, currency pills top-right, mid-left rail, 2×4 skill bar + attack cluster bottom-right) is the computed `HudLayout` / `CombatCluster` layout at `581c995` (see the review).
 
 | Element | 390×844 | 667×375 | 800×400 | Desktop 1280×720 |
 |---|---|---|---|---|
-| Header + break bar | center, y 238, bar 300×6 | center, y 54, bar 300×6 | center, y 62, bar 360×6 | center, y 150, bar 480×6 |
-| Draft row | 3 × **116×196**, gap 8, y 286 | 3 × **136×190**, gap 12, y 92 | 3 × **150×214**, gap 14, y 108 | 3 × **200×280**, gap 20, y 196 (UIScale clamp) |
-| Later | 120×44, y 500 | 120×44, y 316 | 120×44, y 338 | 140×44 "Later (Esc)", y 500 |
-| Held pill | right edge, 158×44, y 52 | same | same | same |
-| Tray (from pill) | top band 366×(3×52), y 100, stacked | top band 547×58, y 46, 3 × 157×48 | top band 600×58, y 46 | top band 640×64, y 52 |
-| Buff strip pill | (12, 52), 44 tall | (12, 52) | (12, 52) | (12, 52); list 236 wide below |
-| Resonance toast | top center under header area, 300×52, y 120 | top-right, 300×52 | top-right | top-right 320×52 |
+| Header + break bar | center, y 250, bar 300×6 | center, y 56, bar 300×6 | center, y 56, bar 360×6 | center, y 208, bar 480×6 |
+| Draft row | 3 × **116×196**, gap 8, y 284 (bottom 480) | 3 × **136×132**, gap 12, y 86 (bottom 218, above the skill bar's top at 227) | 3 × **150×160**, gap 14, y 86 (bottom 246, above the jump button at 256) | 3 × **200×280**, gap 20, y 254 (UIScale clamp) |
+| Later | 120×44, centered, y 490 (above the skill bar's top at 566) | 120×44 at the right end of the header band, x 531, y 56 | 120×44 at the right end of the header band, x 664, y 56 | 140×44 "Later (Esc)", centered, y 552 |
+| Held pill | 100×44 "Buff ›", right edge, y 235, under the currency pills (x 274–374, clear of keep-out x ≤ 273) | 158×44, right edge, y 136 (4 px under the currency pills) | 158×44, right edge, y 136 | 158×44, right edge, y 150 |
+| Tray (from pill) | one row of 3 × 116×48 (gap 8), right under the pill. On notched phones it can't clear the keep-out; see the review, Q1 | one row of 3 × 157×48, 547×52, at y 52–104 (between the top bar and the keep-out). While open it covers the HP bar and currency pills; it folds after a pick, an outside tap or 4 s | 600×52 at y 52–104, same rule | top band 640×64, y 110 |
+| Buff strip pill | 8 px under the live HP block: (16, 179), compact ≤ 74 wide (✦ + count; pips show from 667 up). On a first run with the #412 Oracle pill there, x 184 | x 61 (8 px right of the live rail), y 132 (y 184 on a first run, under the #412 goal tab) | x 66, y 132 (184 on a first run) | x 88 (right of the rail), y 138 |
+| Strip list (expanded) | width = min(236, keep-out left − x − 8) = 93: icon + stack count rows, 44 tall | 131 wide | 166 wide | 236 wide |
+| Resonance toast | goes through the live toast host (top-center under the HP block); see the review, Q3 | notice column: x 475–651 (176×52), under the held pill | notice column: x 568–784 (216×52) | top-right 320×52, under the held pill |
 
 Dock rule (Q5, Ghost): (12, 52) is the default. If a live arena HUD item (wave counter, HP bar) occupies the top-left, the strip anchors 8 px under that item's bottom edge at the same x, and never moves into the center keep-out.
+- **Resolved with live numbers (F16):** the live portrait + HP block always sits at CoreUISafe (16,16) and is 56 tall, so (12, 52) overlapped it on every size. The strip therefore always docks 8 px under it. Where the mid-left rail crosses that band (landscape phones and desktop), it moves 8 px right of the rail.
+- A future wave counter (#417's `WaveCounter`, no client UI yet) joins that top-left stack above the strip.
+- The expanded list is never wider than `keep-out left − x − 8`. It folds on an outside tap or after 4 s.
 
-Rules: whole card is the tap target (≥ 116×196 on the smallest phone). Card text ≤ 3 short lines: name (15–18 px bold), main effect (12–14 px, tier-tinted), sub line (11–13 px muted). Footer chip "+1 <Element> pip". On landscape the draft row is clear of the attack button (bottom-right) and of the thumbstick (bottom-left); the tray sits in the top band for the same reason. Portrait tray stacks 3 rows of 366×48 under the pill, still above y 236.
+Rules: whole card is the tap target (≥ 116×196 on the smallest phone). Card text ≤ 3 short lines: name (15–18 px bold), main effect (12–14 px, tier-tinted), sub line (11–13 px muted). Footer chip "+1 <Element> pip". On landscape the draft row ends above the live 2×4 skill bar and jump button (bottom-right), and Later moves into the header band, so nothing covers the attack cluster or the thumbstick (bottom-left) (F19). The tray sits in the top band for the same reason. The portrait tray is one row of 3 mini cards (F15). The old stacked 3 × 52 version ended at y 256, inside the keep-out.
+
+**Notice column (landscape phones, F17):** from 8 px right of the keep-out to 16 px inside the safe right edge, under the currency pills. It holds the held pill plus one notice at a time (a #414 loot chip or the Resonance toast); a second notice waits 2 s.
 
 ## 5. States
 - **Card:** incoming (fly-in) · idle (tier stroke 2 px, tier chip, element icon) · Epic/Legendary idle (+ rotating gradient stroke, soft glow ImageLabel) · pressed (0.96×, 0.06 s) · picked (1.08× + 3 px ring, then fly) · faded (other two at 0.35) · disabled (server busy: spinner on the picked card, others locked; 1.5 s timeout → retry once, then "Try again" toast and the row stays).
@@ -157,6 +165,8 @@ All questions answered. This spec is closed (direction A, Shard Draft). Building
 - 2026-10-23 (Ghost, Kevin pre-approved): Prism specs pick-1-of-3 buffs (5.1) now, design only; building waits for the fun test. Prism recommends direction A (Shard Draft); not approved yet.
 - 2026-10-23 (Echo): Q3 = **yes** (8 s Config break; held offer auto-takes highest rarity, ties to first card, server-decided). Q4 = **yes** (run drops only, never RollService; Config cap + validation test). Q1, Q2 (Kevin) and Q5 (Ghost) are still open.
 - 2026-10-23 (Ghost, Kevin pre-approved; Kevin can change later): Q1 Resonance = **yes** (max +2). Q2 = **keep all 12 card names**. Q5 = (12, 52) OK provisionally; strip docks under any top-left arena HUD item (wave counter, HP), never in the keep-out. Spec closed → v1.1.
+
+- 2026-10-23 (Prism, phone layout review, docs/design/phone-layout-review/REVIEW_v1.md): F15: the portrait tray is a single row. F16: the strip docks under the live HP block (it overlapped at (12, 52)) and to the right of the rail on landscape and desktop, with the list width capped. F17: the Resonance toast and notices use the landscape notice column. F18: the held pill docks under the currency pills (it overlapped them on every size). F19: the §4 frame is now full-screen px, and the landscape draft row and Later are clear of the live skill bar and jump button. Layout numbers only; direction A is unchanged.
 
 ## Later (not V1)
 5.2 Fusion cards (two buffs combine, e.g. Ember + Frost = "Steam"), element-leaning offers matching the wave's element (would pair with decision 7's Config-only element waves), a draft-history Codex page, cosmetic card backs (never power).
