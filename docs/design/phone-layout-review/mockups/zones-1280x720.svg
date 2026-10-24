@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2620" height="830" viewBox="0 0 2620 830">
+<rect width="2620" height="830" fill="rgb(16,14,24)"/>
+<g transform="translate(10,40)">
+<rect x="0" y="0" width="1280" height="720" fill="rgb(22,18,34)" stroke="rgb(90,80,120)"/>
+<ellipse cx="640.0" cy="374.40000000000003" rx="36.0" ry="79.2" fill="rgb(60,52,90)"/>
+<rect x="0" y="0" width="1280" height="58" rx="6" fill="rgb(70,70,90)" fill-opacity="0.6" stroke="rgb(70,70,90)" stroke-width="1.5"/><text x="4" y="12" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">Roblox top bar</text>
+<rect x="384" y="202" width="512" height="324" fill="none" stroke="rgb(120,210,255)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="388" y="520" font-family="'Builder Sans',Arial,sans-serif" font-size="10" fill="rgb(120,210,255)">center keep-out</text>
+<rect x="24" y="62" width="420" height="112" rx="6" fill="rgb(255,196,64)" fill-opacity="0.28" stroke="rgb(255,196,64)" stroke-width="1.5"/><text x="28" y="74" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">#412 Oracle card</text>
+<rect x="24" y="182" width="240" height="44" rx="6" fill="rgb(255,196,64)" fill-opacity="0.28" stroke="rgb(255,196,64)" stroke-width="1.5"/><text x="28" y="194" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">goal chip</text>
+<rect x="480" y="632" width="320" height="64" rx="6" fill="rgb(108,78,196)" fill-opacity="0.28" stroke="rgb(108,78,196)" stroke-width="1.5"/><text x="484" y="644" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">ROLL bar 320×64</text>
+<rect x="816" y="576" width="420" height="120" rx="6" fill="rgb(255,196,64)" fill-opacity="0.18" stroke="rgb(255,196,64)" stroke-width="1.5"/><text x="820" y="588" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">mini stage</text>
+<rect x="480" y="66" width="320" height="36" rx="6" fill="rgb(255,150,40)" fill-opacity="0.35" stroke="rgb(255,150,40)" stroke-width="1.5"/><text x="484" y="78" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">toast lane (1 max)</text>
+<rect x="450" y="532" width="380" height="64" rx="6" fill="rgb(255,196,64)" fill-opacity="0.08" stroke="rgb(255,196,64)" stroke-width="1.5" stroke-dasharray="5 3"/><text x="454" y="544" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">Gate dock (above bar)</text>
+<rect x="356" y="604" width="568" height="100" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="360" y="615" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">live action bar</text>
+<text x="0" y="-10" font-family="'Builder Sans',Arial,sans-serif" font-size="14" font-weight="800" fill="rgb(255,196,64)">1280x720 · HUB (Focus mode / ROLL / Gate pad)</text>
+</g>
+<g transform="translate(1330,40)">
+<rect x="0" y="0" width="1280" height="720" fill="rgb(22,18,34)" stroke="rgb(90,80,120)"/>
+<ellipse cx="640.0" cy="374.40000000000003" rx="36.0" ry="79.2" fill="rgb(60,52,90)"/>
+<rect x="0" y="0" width="1280" height="58" rx="6" fill="rgb(70,70,90)" fill-opacity="0.6" stroke="rgb(70,70,90)" stroke-width="1.5"/><text x="4" y="12" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">Roblox top bar</text>
+<rect x="384" y="202" width="512" height="324" fill="none" stroke="rgb(120,210,255)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="388" y="520" font-family="'Builder Sans',Arial,sans-serif" font-size="10" fill="rgb(120,210,255)">center keep-out</text>
+<rect x="16" y="74" width="56" height="56" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="20" y="85" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">portrait</text>
+<rect x="80" y="74" width="220" height="56" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="84" y="85" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">hp</text>
+<rect x="924" y="110" width="340" height="36" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="928" y="121" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">pills</text>
+<rect x="16" y="177" width="64" height="424" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="20" y="188" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">rail</text>
+<rect x="356" y="604" width="568" height="100" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="360" y="615" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">skill bar</text>
+<rect x="1192" y="632" width="72" height="72" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="1196" y="643" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">attack</text>
+<rect x="1136" y="656" width="48" height="48" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="1140" y="667" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">dodge</text>
+<rect x="1216" y="576" width="48" height="48" rx="6" fill="rgb(150,150,170)" fill-opacity="0.18" stroke="rgb(150,150,170)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="1220" y="587" font-family="'Builder Sans',Arial,sans-serif" font-size="9" font-weight="700" fill="rgb(240,236,248)">jump</text>
+<rect x="88" y="138" width="140" height="44" rx="6" fill="rgb(110,210,140)" fill-opacity="0.28" stroke="rgb(110,210,140)" stroke-width="1.5"/><text x="92" y="150" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">#416 strip</text>
+<rect x="1106" y="150" width="158" height="44" rx="6" fill="rgb(110,210,140)" fill-opacity="0.28" stroke="rgb(110,210,140)" stroke-width="1.5"/><text x="1110" y="162" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">#416 held pill</text>
+<rect x="480" y="66" width="320" height="36" rx="6" fill="rgb(255,150,40)" fill-opacity="0.35" stroke="rgb(255,150,40)" stroke-width="1.5"/><text x="484" y="78" font-family="'Builder Sans',Arial,sans-serif" font-size="10" font-weight="700" fill="rgb(240,236,248)">toast lane (1 max, D3)</text>
+<text x="0" y="-10" font-family="'Builder Sans',Arial,sans-serif" font-size="14" font-weight="800" fill="rgb(255,196,64)">1280x720 · ARENA (wave, held draft)</text>
+</g>
+<rect x="10.0" y="780" width="12" height="12" fill="rgb(150,150,170)"/><text x="26.0" y="790" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">live HUD (Ghost, computed @581c995)</text>
+<rect x="665.0" y="780" width="12" height="12" fill="rgb(108,78,196)"/><text x="681.0" y="790" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">#397 roll</text>
+<rect x="1320.0" y="780" width="12" height="12" fill="rgb(255,196,64)"/><text x="1336.0" y="790" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">#412 first 30 s</text>
+<rect x="1975.0" y="780" width="12" height="12" fill="rgb(110,210,140)"/><text x="1991.0" y="790" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">#416 buffs</text>
+<rect x="10.0" y="798" width="12" height="12" fill="rgb(255,150,40)"/><text x="26.0" y="808" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">#414 dungeon / toast lane</text>
+<rect x="665.0" y="798" width="12" height="12" fill="rgb(70,70,90)"/><text x="681.0" y="808" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">Roblox / device</text>
+<rect x="1320.0" y="798" width="12" height="12" fill="rgb(120,210,255)"/><text x="1336.0" y="808" font-family="'Builder Sans',Arial,sans-serif" font-size="11" fill="rgb(176,168,198)">thumbstick</text>
+<text x="10" y="826" font-family="'Builder Sans',Arial,sans-serif" font-size="10" fill="rgb(120,110,150)">Prism phone layout review v1.1 (§8 decided) · zone map, full-screen px · fake data, original art</text>
+</svg>
