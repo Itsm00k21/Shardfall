@@ -1,0 +1,184 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+<Item class="Model" referent="RBX0"><Properties><string name="Name">UnicornCloudCat</string></Properties>
+<Item class="Script" referent="RBX1"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[-- UnicornCloudCat animator + effects. Put this Script inside the imported Model.
+-- Parts found by name at any depth: Cat, Eyes, Mane, Tail, Cloud, Rainbow, Heart1..Heart6.
+---------------------------------------------------------------- CONFIG
+local CONFIG = {
+	EYE_GLOW         = true,  -- Eyes part -> Neon pink, pink PointLight, gentle pulse
+	GLOW_LIGHTS      = true,  -- pastel PointLight on cloud, gold on horn
+	NEON_HEARTS      = true,  -- hearts use Neon material (glow)
+	HEART_PARTICLES  = true,  -- small hearts drifting up from each heart
+	CLOUD_SPARKLES   = true,
+	HORN_TWINKLE     = true,
+	RAINBOW_BEAM     = true,  -- shimmering Beam along the rainbow
+	HAPPY_MOMENT     = true,  -- every HAPPY_INTERVAL s: hop + heart burst
+	HAPPY_INTERVAL   = 8,
+	PET_PROMPT       = true,  -- ProximityPrompt "Pet"
+	PURR_SOUND_ID    = "",    -- e.g. "rbxassetid://123456" (empty = silent)
+	-- Roblox has no built-in heart particle; sparkles are used. Paste a heart decal id here for real hearts.
+	HEART_TEXTURE    = "rbxasset://textures/particles/sparkles_main.dds",
+	SPARKLE_TEXTURE  = "rbxasset://textures/particles/sparkles_main.dds",
+	LOW_QUALITY_MOBILE = true, -- halves particle rates on touch devices (client only)
+}
+----------------------------------------------------------------
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local model = script.Parent
+local created: {Instance} = {}
+local conns: {RBXScriptConnection} = {}
+local function make(class: string, props: {[string]: any}, parent: Instance?): any
+	local i = Instance.new(class)
+	for k, v in pairs(props) do (i :: any)[k] = v end
+	i.Parent = parent
+	table.insert(created, i)
+	return i
+end
+local function find(name: string): BasePart?
+	local p = model:FindFirstChild(name, true)
+	if p and p:IsA("BasePart") then p.Anchored = true; p.CanCollide = false; return p end
+	return nil
+end
+
+local rateMul = (CONFIG.LOW_QUALITY_MOBILE and RunService:IsClient() and UIS.TouchEnabled) and 0.5 or 1
+local cat, mane, tail = find("Cat"), find("Mane"), find("Tail")
+local eyes = find("Eyes")
+local cloud, rainbow = find("Cloud"), find("Rainbow")
+local hearts = {}
+for i = 1, 6 do
+	local h = find("Heart" .. i)
+	if h then table.insert(hearts, {part = h, base = h.CFrame, size = h.Size, phase = i * 1.047}) end
+end
+local base = {}
+for _, p in ipairs({cat, eyes, mane, tail, cloud} :: {any}) do if p then base[p] = p.CFrame end end
+local catSize = cat and cat.Size
+local pivot = cloud and cloud.Position or (cat and cat.Position) or Vector3.zero
+local rainbowT = rainbow and rainbow.Transparency or 0
+
+local PINK = Color3.fromRGB(255, 150, 200)
+local function particles(parent: Instance, props: {[string]: any})
+	local d = {
+		Texture = CONFIG.SPARKLE_TEXTURE, LightEmission = 0.8, Transparency = NumberSequence.new(0.15),
+		Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.3), NumberSequenceKeypoint.new(1, 0)}),
+		Lifetime = NumberRange.new(1.2, 2), Speed = NumberRange.new(0.3, 0.8), SpreadAngle = Vector2.new(180, 180),
+		Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-60, 60), Rate = 5,
+	}
+	for k, v in pairs(props) do d[k] = v end
+	d.Rate = d.Rate * rateMul
+	return make("ParticleEmitter", d, parent)
+end
+
+-- Horn tip attachment (top of the Cat part, slightly forward)
+local hornAtt = cat and make("Attachment", {Name = "HornTip", Position = Vector3.new(-cat.Size.X * 0.25, cat.Size.Y * 0.5, cat.Size.Z * 0.2)}, cat)
+
+-- Lights
+if CONFIG.GLOW_LIGHTS then
+	if cloud then make("PointLight", {Color = Color3.fromRGB(230, 200, 255), Brightness = 1.2, Range = 12, Shadows = false}, cloud) end
+	if hornAtt then make("PointLight", {Color = Color3.fromRGB(255, 215, 120), Brightness = 1.5, Range = 6, Shadows = false}, hornAtt) end
+end
+-- Pink glowing eyes
+local EYE_PINK = Color3.fromRGB(255, 80, 190)
+local eyeLight: PointLight? = nil
+if CONFIG.EYE_GLOW and eyes then
+	eyes.Material = Enum.Material.Neon
+	eyes.Color = EYE_PINK
+	eyeLight = make("PointLight", {Color = EYE_PINK, Brightness = 1, Range = 5, Shadows = false}, eyes)
+end
+-- Hearts glow + drifting hearts
+local heartBurst: ParticleEmitter? = nil
+for _, h in ipairs(hearts) do
+	if CONFIG.NEON_HEARTS then h.part.Material = Enum.Material.Neon end
+	if CONFIG.HEART_PARTICLES then
+		particles(h.part, {Texture = CONFIG.HEART_TEXTURE, Color = ColorSequence.new(PINK), Rate = 1.5,
+			Speed = NumberRange.new(0.6, 1.2), SpreadAngle = Vector2.new(20, 20), Acceleration = Vector3.new(0, 0.5, 0)})
+	end
+end
+if cat then
+	heartBurst = particles(cat, {Texture = CONFIG.HEART_TEXTURE, Color = ColorSequence.new(PINK, Color3.fromRGB(255, 90, 140)),
+		Rate = 0, Speed = NumberRange.new(2, 4), SpreadAngle = Vector2.new(60, 60), Acceleration = Vector3.new(0, 1.5, 0),
+		Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0)})})
+end
+if CONFIG.CLOUD_SPARKLES and cloud then
+	particles(cloud, {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 240, 200)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 240)), ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 220, 255))}), Rate = 6})
+end
+if CONFIG.HORN_TWINKLE and hornAtt then
+	particles(hornAtt, {Color = ColorSequence.new(Color3.fromRGB(255, 230, 150)), Rate = 2, Speed = NumberRange.new(0, 0.2),
+		Lifetime = NumberRange.new(0.4, 0.8), Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 0)})})
+end
+-- Rainbow shimmer beam (two arcs along the rainbow via curved Beam)
+local beam: Beam? = nil
+if CONFIG.RAINBOW_BEAM and rainbow then
+	local w = rainbow.Size.X * 0.42
+	local a0 = make("Attachment", {Position = Vector3.new(-w, -rainbow.Size.Y * 0.45, rainbow.Size.Z * 0.6)}, rainbow)
+	local a1 = make("Attachment", {Position = Vector3.new(w, -rainbow.Size.Y * 0.45, rainbow.Size.Z * 0.6)}, rainbow)
+	beam = make("Beam", {Attachment0 = a0, Attachment1 = a1, Texture = CONFIG.SPARKLE_TEXTURE, TextureMode = Enum.TextureMode.Wrap,
+		TextureLength = 2, TextureSpeed = 0.6, LightEmission = 1, Width0 = 0.6, Width1 = 0.6, Segments = 30,
+		CurveSize0 = rainbow.Size.Y * 1.3, CurveSize1 = -rainbow.Size.Y * 1.3, FaceCamera = true,
+		Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 180)), ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 240, 170)),
+			ColorSequenceKeypoint.new(0.66, Color3.fromRGB(170, 230, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(215, 175, 240))})}, rainbow)
+	-- Curve direction: flip CurveSize signs if the arc bends the wrong way after import.
+end
+-- Purr sound + Pet prompt
+local purr: Sound? = cat and make("Sound", {Name = "Purr", SoundId = CONFIG.PURR_SOUND_ID, Volume = 0.6}, cat) or nil
+local hopStart = -100
+local function happy()
+	hopStart = os.clock()
+	if heartBurst then heartBurst:Emit(18) end
+	if purr and purr.SoundId ~= "" then purr:Play() end
+end
+if CONFIG.PET_PROMPT and cat then
+	local prompt = make("ProximityPrompt", {ActionText = "Pet", ObjectText = "Unicorn Cat", HoldDuration = 0, MaxActivationDistance = 12, RequiresLineOfSight = false}, cat)
+	table.insert(conns, prompt.Triggered:Connect(happy))
+end
+
+local function ease(x: number): number local s = math.sin(x); return s * (1.5 - 0.5 * s * s) end
+local function around(cf: CFrame, p: Vector3, rot: CFrame): CFrame return CFrame.new(p) * rot * CFrame.new(-p) * cf end
+
+local t0 = os.clock()
+local nextHappy = t0 + CONFIG.HAPPY_INTERVAL
+table.insert(conns, RunService.Heartbeat:Connect(function()
+	local now = os.clock(); local t = now - t0
+	if CONFIG.HAPPY_MOMENT and now >= nextHappy then nextHappy = now + CONFIG.HAPPY_INTERVAL; happy() end
+	local hp = now - hopStart
+	local hop = (hp < 0.5) and math.sin(hp / 0.5 * math.pi) * 0.6 or 0
+	local bob = Vector3.new(0, ease(t * 1.1) * 0.35, 0)
+	local lift = CFrame.new(bob)
+	local catLift = CFrame.new(bob + Vector3.new(0, hop, 0))
+	if cloud then cloud.CFrame = lift * base[cloud] end
+	local tilt = CFrame.Angles(0, 0, math.rad(ease(t * 0.7) * 2.5))
+	local pv = pivot + bob
+	if cat then
+		cat.CFrame = around(catLift * base[cat], pv, tilt)
+		if catSize then
+			local b = 1 + ease(t * 1.8) * 0.02
+			cat.Size = Vector3.new(catSize.X * (1 + (b - 1) * 0.5), catSize.Y * b, catSize.Z)
+		end
+	end
+	if eyes then eyes.CFrame = around(catLift * base[eyes], pv, tilt) end
+	if eyeLight then eyeLight.Brightness = 0.8 + 0.6 * (math.sin(t * 2.2) * 0.5 + 0.5) end
+	if eyes and CONFIG.EYE_GLOW then eyes.Transparency = 0.08 * (math.sin(t * 2.2) * 0.5 + 0.5) end
+	if mane then mane.CFrame = around(catLift * base[mane], pv, tilt) * CFrame.Angles(math.rad(ease(t * 1.4 + 0.5) * 2), 0, 0) end
+	if tail then
+		local tb = around(catLift * base[tail], pv, tilt)
+		local root = tb.Position - tb.LookVector * (tail.Size.Z * 0.45)
+		tail.CFrame = around(tb, root, CFrame.Angles(0, math.rad(ease(t * 2.2) * (hop > 0 and 25 or 10)), 0))
+	end
+	for _, h in ipairs(hearts) do
+		local s = 1 + ease(t * 2.4 + h.phase) * 0.06
+		h.part.CFrame = h.base * CFrame.new(0, ease(t * 1.5 + h.phase) * 0.5, 0) * CFrame.Angles(0, t * 0.7 + h.phase, 0)
+		h.part.Size = h.size * s
+	end
+	if rainbow then rainbow.Transparency = rainbowT + (ease(t * 1.6) * 0.5 + 0.5) * 0.2 end
+	if beam then beam.Transparency = NumberSequence.new(0.35 + 0.25 * math.sin(t * 2)) end
+end))
+
+local done = false
+local function cleanup()
+	if done then return end; done = true
+	for _, c in ipairs(conns) do c:Disconnect() end
+	for _, i in ipairs(created) do i:Destroy() end
+end
+model.Destroying:Connect(cleanup)
+script.Destroying:Connect(cleanup)
+]]></ProtectedString></Properties></Item>
+</Item></roblox>
